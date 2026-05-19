@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page x:Class="Hoshi.Views.Pages.NovelLibraryPage"
+      x:Name="ThisPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:converters="using:Hoshi.Helpers.UI.Converters"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:vmc="using:Hoshi.ViewModels.Components"
+      mc:Ignorable="d">
+
+    <Page.Resources>
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+
+        <DataTemplate x:Key="NovelBookTemplate" x:DataType="vmc:NovelBookItemViewModel">
+            <Button Width="180"
+                    Height="280"
+                    Padding="0"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch"
+                    AutomationProperties.AutomationId="{x:Bind AutomationId, Mode=OneTime}"
+                    AutomationProperties.Name="{x:Bind Book.Title, Mode=OneTime}"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Click="NovelBookButton_Click">
+                <Button.ContextFlyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem Text="Delete"
+                                        Command="{Binding ViewModel.DeleteNovelCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                    </MenuFlyout>
+                </Button.ContextFlyout>
+                <Grid CornerRadius="8"
+                      Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="220" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!--  Cover Image  -->
+                    <Grid Grid.Row="0"
+                          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                          CornerRadius="8,8,0,0">
+                        <Image Stretch="Uniform"
+                               Source="{x:Bind CoverImage, Mode=OneTime}"
+                               Visibility="{x:Bind HasCover, Mode=OneTime, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <FontIcon FontSize="48"
+                                  Glyph="&#xE8B9;"
+                                  Opacity="0.3"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Visibility="{x:Bind HasCover, Mode=OneTime, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}" />
+                    </Grid>
+
+                    <!--  Book Info  -->
+                    <StackPanel Grid.Row="1" Padding="10,8" Spacing="2">
+                        <TextBlock Text="{x:Bind Book.Title, Mode=OneTime}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="{x:Bind Book.Author, Mode=OneTime}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Style="{StaticResource CaptionTextBlockStyle}" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+        </DataTemplate>
+    </Page.Resources>
+
+    <Grid RowDefinitions="Auto, *">
+        <Grid Grid.Row="0" Padding="20,14,36,16" ColumnDefinitions="Auto, *, Auto">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <FontIcon FontSize="24" Glyph="&#xE82D;" />
+                <TextBlock Margin="8,0,0,0"
+                           VerticalAlignment="Center"
+                           Style="{StaticResource TitleTextBlockStyle}"
+                           Text="Novels" />
+            </StackPanel>
+
+            <Button Grid.Column="2"
+                    AutomationProperties.AutomationId="ImportNovelButton"
+                    Command="{x:Bind ViewModel.ImportNovelCommand}"
+                    ToolTipService.ToolTip="Import EPUB">
+                <Button.Content>
+                    <FontIcon Glyph="&#xE8E5;" />
+                </Button.Content>
+            </Button>
+        </Grid>
+
+        <ProgressRing Grid.Row="1"
+                      Width="60"
+                      Height="60"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      IsActive="{x:Bind ViewModel.IsContentLoading, Mode=OneWay}"
+                      Visibility="{x:Bind ViewModel.IsContentLoading, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+
+        <TextBlock Grid.Row="1"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   Style="{StaticResource BodyLargeStrongTextBlockStyle}"
+                   Text="No novels imported."
+                   Visibility="{x:Bind ViewModel.NoNovels, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+
+        <GridView Grid.Row="1"
+                  AutomationProperties.AutomationId="NovelBookGridView"
+                  Padding="0,0,16,0"
+                  IsItemClickEnabled="True"
+                  ItemClick="GridView_ItemClick"
+                  ItemTemplate="{StaticResource NovelBookTemplate}"
+                  ItemsSource="{x:Bind ViewModel.NovelBooks, Mode=OneWay}"
+                  SelectionMode="None" />
+    </Grid>
+</Page>

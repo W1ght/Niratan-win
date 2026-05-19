@@ -1,0 +1,46 @@
+{
+  "env": {
+    "HOSHI_NOVEL_READER_ARTIFACT_DIR": "${projectDir}/docs/superpowers/artifacts/novel-reader"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(dotnet restore)",
+      "Bash(dotnet build)",
+      "Bash(dotnet test)",
+      "Bash(dotnet clean)",
+      "Bash(dotnet run)",
+      "Bash(ls)",
+      "Bash(dir)",
+      "Bash(mkdir *)",
+      "Bash(cd *)",
+      "Bash(cat *)",
+      "Bash(echo *)",
+      "Bash(which dotnet)",
+      "Bash(dotnet --version)",
+      "Bash(git status)",
+      "Bash(git diff)",
+      "Bash(git log)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git branch *)",
+      "Bash(git checkout *)",
+      "Bash(git stash *)",
+      "Bash(git pull *)",
+      "Bash(git fetch *)",
+      "Bash(git show *)",
+      "Bash(git blame *)",
+      "Bash(git remote *)",
+      "Bash(git worktree *)",
+      "Bash(gh *)",
+      "Bash(tasklist *)",
+      "Bash(where *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force *)",
+      "Bash(git reset --hard *)",
+      "Bash(shutdown *)",
+      "Bash(del /f /s *)"
+    ]
+  }
+}

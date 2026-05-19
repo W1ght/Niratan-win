@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog x:Class="Hoshi.Views.Dialogs.ReaderAppearanceDialog"
+               xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+               xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+               xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+               xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
+               xmlns:ui="using:CommunityToolkit.WinUI"
+               xmlns:vmd="using:Hoshi.ViewModels.Dialogs"
+               xmlns:helpers="using:Hoshi.Helpers.UI.Converters"
+               xmlns:enums="using:Hoshi.Enums"
+               mc:Ignorable="d"
+               Title="Reader Appearance"
+               PrimaryButtonText="Done"
+               DefaultButton="Primary"
+               FullSizeDesired="False"
+               MaxWidth="520">
+
+    <ContentDialog.Resources>
+        <x:Double x:Key="SettingsCardSpacing">4</x:Double>
+
+        <helpers:BooleanNegationConverter x:Key="BoolNegationConverter" />
+
+        <Style x:Key="AppearanceSectionHeaderStyle"
+               BasedOn="{StaticResource BodyStrongTextBlockStyle}"
+               TargetType="TextBlock">
+            <Style.Setters>
+                <Setter Property="Margin" Value="1,20,0,6" />
+            </Style.Setters>
+        </Style>
+    </ContentDialog.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="{StaticResource SettingsCardSpacing}">
+
+            <!-- Theme Section -->
+            <TextBlock Style="{StaticResource AppearanceSectionHeaderStyle}">
+                <Span><Bold>Theme</Bold></Span>
+            </TextBlock>
+            <toolkit:SettingsCard Header="Color Theme"
+                                  Description="Select the reading color theme"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE790;}">
+                <ComboBox ItemsSource="{x:Bind ViewModel.AvailableThemes}"
+                          SelectedItem="{x:Bind ViewModel.SelectedTheme, Mode=TwoWay}" />
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="E-Ink Mode"
+                                  Description="High-contrast black and white for e-ink displays"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE7F4;}">
+                <ToggleSwitch IsOn="{x:Bind ViewModel.EInkMode, Mode=TwoWay}" />
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="Use Sepia as Light Theme"
+                                  Description="When the system is in light mode, use sepia instead"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE790;}"
+                                  Visibility="{x:Bind ViewModel.IsSystemLightSepiaVisible, Mode=OneWay}">
+                <ToggleSwitch IsOn="{x:Bind ViewModel.SystemLightSepia, Mode=TwoWay}" />
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="Invert in System Dark"
+                                  Description="Invert sepia colors when the system is in dark mode"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE790;}"
+                                  Visibility="{x:Bind ViewModel.IsSepiaInvertVisible, Mode=OneWay}">
+                <ToggleSwitch IsOn="{x:Bind ViewModel.SepiaInvertInDark, Mode=TwoWay}" />
+            </toolkit:SettingsCard>
+
+            <!-- Text Section -->
+            <TextBlock Style="{StaticResource AppearanceSectionHeaderStyle}">
+                <Span><Bold>Text</Bold></Span>
+            </TextBlock>
+            <toolkit:SettingsCard Header="Text Orientation"
+                                  Description="Vertical (tate) or horizontal (yoko) writing"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE8B9;}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <RadioButton Content="Vertical"
+                                 IsChecked="{x:Bind ViewModel.VerticalWriting, Mode=TwoWay}"
+                                 GroupName="TextOrientation" />
+                    <RadioButton Content="Horizontal"
+                                 IsChecked="{x:Bind ViewModel.VerticalWriting, Mode=TwoWay, Converter={StaticResource BoolNegationConverter}}"
+                                 GroupName="TextOrientation" />
+                </StackPanel>
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="Font"
+                                  Description="Select the reader font family"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE8D4;}">
+                <ComboBox ItemsSource="{x:Bind ViewModel.AvailableFonts}"
+                          SelectedItem="{x:Bind ViewModel.SelectedFont, Mode=TwoWay}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="vmd:ReaderFontOption">
+                            <TextBlock Text="{x:Bind Name}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="Font Size"
+                                  Description="Adjust the text size (16–60 px)"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE8EC;}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="FontSizeDecrease" Content="-" Width="32"
+                            Click="FontSizeDecrease_Click" />
+                    <TextBlock x:Name="FontSizeValue" VerticalAlignment="Center"
+                               MinWidth="40" TextAlignment="Center"
+                               Text="{x:Bind ViewModel.FontSize, Mode=OneWay}" />
+                    <Button x:Name="FontSizeIncrease" Content="+" Width="32"
+                            Click="FontSizeIncrease_Click" />
+                </StackPanel>
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="Hide Furigana"
+                                  Description="Hide ruby text (furigana) above kanji"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE8D4;}">
+                <ToggleSwitch IsOn="{x:Bind ViewModel.HideFurigana, Mode=TwoWay}" />
+            </toolkit:SettingsCard>
+
+            <!-- Layout Section -->
+            <TextBlock Style="{StaticResource AppearanceSectionHeaderStyle}">
+                <Span><Bold>Layout</Bold></Span>
+            </TextBlock>
+            <toolkit:SettingsCard Header="Mode"
+                                  Description="Paginated (page-by-page) or continuous scrolling"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE8A9;}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <RadioButton Content="Paginated"
+                                 IsChecked="{x:Bind ViewModel.ContinuousMode, Mode=TwoWay, Converter={StaticResource BoolNegationConverter}}"
+                                 GroupName="LayoutMode" />
+                    <RadioButton Content="Continuous"
+                                 IsChecked="{x:Bind ViewModel.ContinuousMode, Mode=TwoWay}"
+                                 GroupName="LayoutMode" />
+                </StackPanel>
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="Chapter Swipe Distance"
+                                  Description="Swipe sensitivity for chapter transitions (10–60)"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE8B9;}"
+                                  Visibility="{x:Bind ViewModel.IsSwipeDistanceVisible, Mode=OneWay}">
+                <Slider Minimum="10" Maximum="60" SmallChange="5" StepFrequency="5"
+                        Width="160"
+                        Value="{x:Bind ViewModel.ChapterSwipeDistance, Mode=TwoWay}" />
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="Horizontal Padding"
+                                  Description="Padding on the left and right sides (0–50%)"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE91B;}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="HPaddingDecrease" Content="-" Width="32"
+                            Click="HPaddingDecrease_Click" />
+                    <TextBlock x:Name="HPaddingValue" VerticalAlignment="Center"
+                               MinWidth="40" TextAlignment="Center"
+                               Text="{x:Bind ViewModel.HorizontalPadding, Mode=OneWay}" />
+                    <TextBlock VerticalAlignment="Center" Text="%" />
+                    <Button x:Name="HPaddingIncrease" Content="+" Width="32"
+                            Click="HPaddingIncrease_Click" />
+                </StackPanel>
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="Vertical Padding"
+                                  Description="Padding on the top and bottom (0–50%)"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE91B;}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="VPaddingDecrease" Content="-" Width="32"
+                            Click="VPaddingDecrease_Click" />
+                    <TextBlock x:Name="VPaddingValue" VerticalAlignment="Center"
+                               MinWidth="40" TextAlignment="Center"
+                               Text="{x:Bind ViewModel.VerticalPadding, Mode=OneWay}" />
+                    <TextBlock VerticalAlignment="Center" Text="%" />
+                    <Button x:Name="VPaddingIncrease" Content="+" Width="32"
+                            Click="VPaddingIncrease_Click" />
+                </StackPanel>
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="Avoid Page Break"
+                                  Description="Prevent paragraphs from splitting across columns"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE8A9;}">
+                <ToggleSwitch IsOn="{x:Bind ViewModel.AvoidPageBreak, Mode=TwoWay}" />
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="Justify Text"
+                                  Description="Align text to both margins"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE8E4;}">
+                <ToggleSwitch IsOn="{x:Bind ViewModel.JustifyText, Mode=TwoWay}" />
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="Layout Advanced"
+                                  Description="Enable line height and character spacing controls"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE8EC;}">
+                <ToggleSwitch IsOn="{x:Bind ViewModel.LayoutAdvanced, Mode=TwoWay}" />
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="Line Height"
+                                  Description="Space between lines (1.0–2.5)"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE8EC;}"
+                                  Visibility="{x:Bind ViewModel.IsLineHeightVisible, Mode=OneWay}">
+                <Slider Minimum="1.0" Maximum="2.5" SmallChange="0.05" StepFrequency="0.05"
+                        Width="160"
+                        Value="{x:Bind ViewModel.LineHeight, Mode=TwoWay}" />
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="Character Spacing"
+                                  Description="Space between characters (−10% to +10%)"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE8EC;}"
+                                  Visibility="{x:Bind ViewModel.IsCharacterSpacingVisible, Mode=OneWay}">
+                <Slider Minimum="-10" Maximum="10" SmallChange="1" StepFrequency="1"
+                        Width="160"
+                        Value="{x:Bind ViewModel.CharacterSpacing, Mode=TwoWay}" />
+            </toolkit:SettingsCard>
+
+            <!-- Display Section -->
+            <TextBlock Style="{StaticResource AppearanceSectionHeaderStyle}">
+                <Span><Bold>Display</Bold></Span>
+            </TextBlock>
+            <toolkit:SettingsCard Header="Show Title"
+                                  Description="Show the book title in the reader"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE8B4;}">
+                <ToggleSwitch IsOn="{x:Bind ViewModel.ShowTitle, Mode=TwoWay}" />
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="Show Character Count"
+                                  Description="Show the character count in the progress bar"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE8D4;}">
+                <ToggleSwitch IsOn="{x:Bind ViewModel.ShowCharacters, Mode=TwoWay}" />
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="Show Percentage"
+                                  Description="Show reading progress percentage"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE8B4;}">
+                <ToggleSwitch IsOn="{x:Bind ViewModel.ShowPercentage, Mode=TwoWay}" />
+            </toolkit:SettingsCard>
+            <toolkit:SettingsCard Header="Progress Position"
+                                  Description="Show progress bar at the top or bottom"
+                                  HeaderIcon="{ui:FontIcon Glyph=&#xE8B9;}"
+                                  Visibility="{x:Bind ViewModel.IsProgressPositionVisible, Mode=OneWay}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <RadioButton Content="Top"
+                                 IsChecked="{x:Bind ViewModel.ShowProgressTop, Mode=TwoWay}"
+                                 GroupName="ProgressPosition" />
+                    <RadioButton Content="Bottom"
+                                 IsChecked="{x:Bind ViewModel.ShowProgressTop, Mode=TwoWay, Converter={StaticResource BoolNegationConverter}}"
+                                 GroupName="ProgressPosition" />
+                </StackPanel>
+            </toolkit:SettingsCard>
+
+            <!-- Bottom spacer for scroll comfort -->
+            <Rectangle Height="24" />
+
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>
