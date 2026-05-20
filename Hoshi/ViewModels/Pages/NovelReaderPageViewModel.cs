@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -34,6 +35,8 @@ public partial class NovelReaderPageViewModel : ObservableObject
     public string ChapterTitle => $"Chapter {CurrentChapterIndex + 1} of {ChapterCount}";
     public bool CanGoNext => CurrentChapterIndex < ChapterCount - 1;
     public bool CanGoPrevious => CurrentChapterIndex > 0;
+
+    private CancellationTokenSource? _saveCts;
 
     public NovelReaderPageViewModel(
         INovelLibraryService novelLibraryService,
@@ -76,7 +79,40 @@ public partial class NovelReaderPageViewModel : ObservableObject
         Progress = Math.Clamp(progress, 0, 1);
     }
 
+    public void SaveProgressDebounced()
+    {
+        if (CurrentBook == null) return;
+
+        _saveCts?.Cancel();
+        _saveCts = new CancellationTokenSource();
+        var token = _saveCts.Token;
+        var bookId = CurrentBook.Id;
+        var chapterIndex = CurrentChapterIndex;
+        var progress = Progress;
+
+        Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(500, token);
+                if (!token.IsCancellationRequested)
+                    await _novelLibraryService.SaveProgressAsync(bookId, chapterIndex, progress, token);
+            }
+            catch (OperationCanceledException) { }
+        }, token);
+    }
+
+    public async Task SaveProgressNowAsync()
+    {
+        if (CurrentBook == null) return;
+        _saveCts?.Cancel();
+        await _novelLibraryService.SaveProgressAsync(CurrentBook.Id, CurrentChapterIndex, Progress);
+    }
+
     [RelayCommand]
-    private void BackToLibrary() =>
+    private async Task BackToLibrary()
+    {
+        await SaveProgressNowAsync();
         _messenger.Send(new SwitchAppModeMessage(AppMode.Navigation, null));
+    }
 }

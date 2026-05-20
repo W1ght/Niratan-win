@@ -9,7 +9,7 @@
     <Grid RowDefinitions="Auto,*">
         <Grid Grid.Row="0"
               Padding="16,12"
-              ColumnDefinitions="Auto,Auto,*"
+              ColumnDefinitions="Auto,Auto,Auto,*"
               ColumnSpacing="8">
             <Button HorizontalAlignment="Left"
                     AutomationProperties.AutomationId="NovelReaderBackButton"
@@ -20,7 +20,16 @@
             </Button>
 
             <Button Grid.Column="1"
-                    Margin="4,0,0,0"
+                    HorizontalAlignment="Left"
+                    AutomationProperties.AutomationId="NovelReaderChapterButton"
+                    AutomationProperties.Name="Chapters"
+                    Click="ChapterListButton_Click">
+                <Button.Content>
+                    <FontIcon Glyph="&#xE8A4;" />
+                </Button.Content>
+            </Button>
+
+            <Button Grid.Column="2"
                     HorizontalAlignment="Left"
                     AutomationProperties.AutomationId="NovelReaderAppearanceButton"
                     AutomationProperties.Name="Reader Appearance"
@@ -30,7 +39,7 @@
                 </Button.Content>
             </Button>
 
-            <TextBlock Grid.Column="2"
+            <TextBlock Grid.Column="3"
                        Margin="12,0,0,0"
                        VerticalAlignment="Center"
                        Style="{StaticResource TitleTextBlockStyle}"
@@ -43,30 +52,6 @@
                       VerticalAlignment="Stretch"
                       DefaultBackgroundColor="White"
                       AutomationProperties.AutomationId="NovelWebView" />
-
-            <Grid ColumnDefinitions="*,2*,*"
-                  IsHitTestVisible="True">
-                <Button Grid.Column="0"
-                        Padding="0"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Opacity="0"
-                        HorizontalAlignment="Stretch"
-                        VerticalAlignment="Stretch"
-                        AutomationProperties.AutomationId="NovelReaderPreviousPageRegion"
-                        AutomationProperties.Name="Previous page"
-                        Click="PreviousPageButton_Click" />
-                <Button Grid.Column="2"
-                        Padding="0"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Opacity="0"
-                        HorizontalAlignment="Stretch"
-                        VerticalAlignment="Stretch"
-                        AutomationProperties.AutomationId="NovelReaderNextPageRegion"
-                        AutomationProperties.Name="Next page"
-                        Click="NextPageButton_Click" />
-            </Grid>
         </Grid>
     </Grid>
 </Page>

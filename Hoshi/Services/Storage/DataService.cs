@@ -32,7 +32,7 @@ internal class DataService : IDataService
     {
         using var connection = await GetOpenConnectionAsync();
         const string sql = """
-            SELECT Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount
+            SELECT Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount, CurrentChapterIndex, Progress
             FROM NovelBooks
             WHERE @QueryText IS NULL
                 OR TRIM(@QueryText) = ''
@@ -55,7 +55,7 @@ internal class DataService : IDataService
     {
         using var connection = await GetOpenConnectionAsync();
         const string sql = """
-            SELECT Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount
+            SELECT Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount, CurrentChapterIndex, Progress
             FROM NovelBooks
             WHERE Id = @BookId;
             """;
@@ -70,9 +70,9 @@ internal class DataService : IDataService
         using var connection = await GetOpenConnectionAsync();
         const string sql = """
             INSERT INTO NovelBooks
-                (Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount)
+                (Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount, CurrentChapterIndex, Progress)
             VALUES
-                (@Id, @Title, @Author, @FilePath, @CoverPath, @ImportedAt, @LastOpenedAt, @Language, @UniqueIdentifier, @ExtractedPath, @ChapterCount)
+                (@Id, @Title, @Author, @FilePath, @CoverPath, @ImportedAt, @LastOpenedAt, @Language, @UniqueIdentifier, @ExtractedPath, @ChapterCount, @CurrentChapterIndex, @Progress)
             ON CONFLICT(FilePath) DO UPDATE SET
                 Title = excluded.Title,
                 Author = excluded.Author,
@@ -109,6 +109,23 @@ internal class DataService : IDataService
             new CommandDefinition(
                 "DELETE FROM NovelBooks WHERE Id = @BookId;",
                 new { BookId = bookId },
+                cancellationToken: ct
+            )
+        );
+    }
+
+    public async Task SaveNovelProgressAsync(
+        string bookId,
+        int chapterIndex,
+        double progress,
+        CancellationToken ct = default
+    )
+    {
+        using var connection = await GetOpenConnectionAsync();
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                "UPDATE NovelBooks SET CurrentChapterIndex = @ChapterIndex, Progress = @Progress WHERE Id = @BookId;",
+                new { BookId = bookId, ChapterIndex = chapterIndex, Progress = progress },
                 cancellationToken: ct
             )
         );

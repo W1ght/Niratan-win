@@ -21,6 +21,7 @@ public sealed class EpubParserService : IEpubParserService
     private static readonly XNamespace NcxNs = "http://www.daisy.org/z3986/2005/ncx/";
     private static readonly XNamespace ContainerNs = "urn:oasis:names:tc:opendocument:xmlns:container";
     private static readonly XNamespace XhtmlNs = "http://www.w3.org/1999/xhtml";
+    private static readonly XNamespace EpubNs = "http://www.idpf.org/2007/ops";
 
     private readonly ILogger<EpubParserService> _logger;
 
@@ -229,7 +230,8 @@ public sealed class EpubParserService : IEpubParserService
             if (navMap == null)
                 return [];
 
-            return ParseNcxNavPoints(navMap, opfDirectory);
+            var ncxDirectory = Path.GetDirectoryName(ncxFilePath) ?? opfDirectory;
+            return ParseNcxNavPoints(navMap, ncxDirectory);
         }
         catch (Exception)
         {
@@ -273,9 +275,9 @@ public sealed class EpubParserService : IEpubParserService
                 .Concat(doc.Descendants("nav"))
                 .Where(e =>
                 {
-                    var type = e.Attribute(XhtmlNs + "type")?.Value
-                        ?? e.Attribute("type")?.Value
-                        ?? e.Attribute("epub:type")?.Value;
+                    var type = e.Attribute(EpubNs + "type")?.Value
+                        ?? e.Attribute(XhtmlNs + "type")?.Value
+                        ?? e.Attribute("type")?.Value;
                     return type == "toc";
                 });
 
@@ -287,7 +289,8 @@ public sealed class EpubParserService : IEpubParserService
             if (ol == null)
                 return [];
 
-            return ParseNavOl(ol, opfDirectory);
+            var navDirectory = Path.GetDirectoryName(navFilePath) ?? opfDirectory;
+            return ParseNavOl(ol, navDirectory);
         }
         catch (Exception)
         {

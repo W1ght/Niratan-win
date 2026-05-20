@@ -41,6 +41,7 @@
                         BackRequested="NavigationViewControl_BackRequested"
                         DisplayModeChanged="NavigationViewControl_DisplayModeChanged"
                         IsBackEnabled="{x:Bind ViewModel.IsBackEnabled, Mode=OneWay}"
+                        IsSettingsVisible="False"
                         ItemInvoked="NavigationViewControl_ItemInvoked"
                         OpenPaneLength="200"
                         PaneDisplayMode="Auto">
@@ -63,6 +64,18 @@
             </NavigationView.MenuItems>
 
             <NavigationView.FooterMenuItems>
+                <NavigationViewItem AutomationProperties.AutomationId="SettingsNavItem"
+                                    Content="设置"
+                                    Icon="Setting"
+                                    Tag="Hoshi.Views.Pages.SettingsPage" />
+                <NavigationViewItem AutomationProperties.AutomationId="NormalLogsNavItem"
+                                    Content="普通日志"
+                                    Icon="Document"
+                                    Tag="Hoshi.Views.Pages.NormalLogsPage" />
+                <NavigationViewItem AutomationProperties.AutomationId="ErrorLogsNavItem"
+                                    Content="错误日志"
+                                    Icon="ReportHacked"
+                                    Tag="Hoshi.Views.Pages.ErrorLogsPage" />
                 <NavigationViewItem Content="Help"
                                     Icon="Help"
                                     IsEnabled="False"

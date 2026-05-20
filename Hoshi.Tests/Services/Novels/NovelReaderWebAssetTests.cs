@@ -74,7 +74,7 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
-    public void ReaderPage_LoadsChaptersDirectlyThroughVirtualHostAndNavigateToString()
+    public void ReaderPage_LoadsChaptersDirectlyThroughVirtualHost()
     {
         var pageCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
@@ -83,8 +83,8 @@ public class NovelReaderWebAssetTests
         pageCode.Should().Contain("hoshi-novel-book.local");
         pageCode.Should().Contain("SetVirtualHostNameToFolderMapping");
         pageCode.Should().Contain("CoreWebView2HostResourceAccessKind.Allow");
-        pageCode.Should().Contain("NavigateToString");
-        pageCode.Should().Contain("InjectReaderAssets");
+        pageCode.Should().Contain("NovelWebView.CoreWebView2.Navigate(url)");
+        pageCode.Should().Contain("OnDomContentLoaded");
         pageCode.Should().Contain("LoadChapter");
     }
 
@@ -97,9 +97,10 @@ public class NovelReaderWebAssetTests
 
         pageCode.Should().Contain("NovelReaderContentStyles.GenerateCss(");
         pageCode.Should().Contain("reader-bridge.js");
-        pageCode.Should().Contain("<base href=");
-        pageCode.Should().Contain("<style>{css}</style>");
-        pageCode.Should().Contain("<script>{js}</script>");
+        pageCode.Should().Contain("selection.js");
+        pageCode.Should().Contain("GenerateScriptTag");
+        pageCode.Should().Contain("ExecuteScriptAsync(_readerJs)");
+        pageCode.Should().Contain("ExecuteScriptAsync(_selectionJs)");
     }
 
     [Fact]
@@ -123,7 +124,9 @@ public class NovelReaderWebAssetTests
         script.Should().Contain("ArrowLeft");
         script.Should().Contain("ArrowRight");
         script.Should().Contain("handleNavigate");
-        pageCode.Should().Contain("window.hoshiReaderNavigate");
+        pageCode.Should().Contain("result == \"limit\"");
+        pageCode.Should().Contain("LoadChapter(ViewModel.CurrentChapterIndex + 1)");
+        pageCode.Should().Contain("LoadChapter(ViewModel.CurrentChapterIndex - 1)");
     }
 
     [Fact]
@@ -154,19 +157,138 @@ public class NovelReaderWebAssetTests
         readerXaml
             .Should()
             .Contain("AutomationProperties.AutomationId=\"NovelReaderBackButton\"");
-        readerXaml
-            .Should()
-            .Contain(
-                "AutomationProperties.AutomationId=\"NovelReaderPreviousPageRegion\""
-            );
-        readerXaml
-            .Should()
-            .Contain(
-                "AutomationProperties.AutomationId=\"NovelReaderNextPageRegion\""
-            );
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderChapterButton\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderAppearanceButton\"");
+        readerXaml.Should().NotContain("NovelReaderPreviousPageRegion");
+        readerXaml.Should().NotContain("NovelReaderNextPageRegion");
         readerXaml
             .Should()
             .Contain("AutomationProperties.AutomationId=\"NovelWebView\"");
+    }
+
+    [Fact]
+    public void NavigationPage_ExposesLogsAsSettingsLevelFooterItems()
+    {
+        var navigationXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NavigationPage.xaml")
+        );
+
+        navigationXaml.Should().Contain("IsSettingsVisible=\"False\"");
+        navigationXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsNavItem\"");
+        navigationXaml.Should().Contain("Tag=\"Hoshi.Views.Pages.SettingsPage\"");
+        navigationXaml.Should().Contain("AutomationProperties.AutomationId=\"NormalLogsNavItem\"");
+        navigationXaml.Should().Contain("AutomationProperties.AutomationId=\"ErrorLogsNavItem\"");
+        navigationXaml.Should().Contain("Tag=\"Hoshi.Views.Pages.NormalLogsPage\"");
+        navigationXaml.Should().Contain("Tag=\"Hoshi.Views.Pages.ErrorLogsPage\"");
+    }
+
+    [Fact]
+    public void DictionaryPopupOverlay_IsHiddenUntilDetailsAreOpened()
+    {
+        var popupCss = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.css")
+        );
+
+        popupCss.Should().Contain(".overlay");
+        popupCss.Should().Contain("display: none");
+        popupCss.Should().Contain(".overlay-close");
+    }
+
+    [Fact]
+    public void SettingsPage_UsesVisibilityConvertersForBooleanVisibilityBindings()
+    {
+        var settingsXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "SettingsPage.xaml")
+        );
+
+        settingsXaml.Should().Contain("BooleanToVisibilityConverter");
+        settingsXaml.Should().NotContain("Visibility=\"{x:Bind ViewModel.IsSystemSepiaLightVisible, Mode=OneWay}\"");
+        settingsXaml.Should().NotContain("Visibility=\"{x:Bind ViewModel.IsSepiaInvertVisible, Mode=OneWay}\"");
+        settingsXaml.Should().NotContain("Visibility=\"{x:Bind ViewModel.IsSwipeDistanceVisible, Mode=OneWay}\"");
+        settingsXaml.Should().NotContain("Visibility=\"{x:Bind ViewModel.IsLineHeightVisible, Mode=OneWay}\"");
+        settingsXaml.Should().NotContain("Visibility=\"{x:Bind ViewModel.IsCharacterSpacingVisible, Mode=OneWay}\"");
+        settingsXaml.Should().NotContain("Visibility=\"{x:Bind ViewModel.IsProgressPositionVisible, Mode=OneWay}\"");
+        settingsXaml.Should().NotContain("Visibility=\"{x:Bind ViewModel.IsDictionaryListEmpty, Mode=OneWay}\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionarySettingsButton\"");
+        settingsXaml.Should().Contain("Shift Hover Delay");
+
+        var dictionaryXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "DictionarySettingsPage.xaml")
+        );
+        dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"ImportDictionaryButton\"");
+        dictionaryXaml.Should().Contain("AutomationProperties.Name=\"Import Dictionary\"");
+        dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"InstalledDictionaryList\"");
+        dictionaryXaml.Should().Contain("CanDragItems=\"True\"");
+        dictionaryXaml.Should().Contain("CanReorderItems=\"True\"");
+        dictionaryXaml.Should().Contain("DragItemsCompleted=\"DictionaryList_DragItemsCompleted\"");
+    }
+
+    [Fact]
+    public void SettingsPage_AssignsViewModelBeforeXBindInitializes()
+    {
+        var settingsCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "SettingsPage.xaml.cs")
+        );
+
+        settingsCode
+            .Replace("\r\n", "\n")
+            .Should()
+            .Contain("ViewModel = App.GetService<SettingsPageViewModel>();\n        InitializeComponent();");
+    }
+
+    [Fact]
+    public void DictionaryLookupPopup_IsAttachedToReaderXamlRootBeforeOpening()
+    {
+        var popupCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryLookupPopup.cs")
+        );
+        var overlayCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs")
+        );
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
+        );
+
+        overlayCode.Should().Contain("_overlayPopup.XamlRoot = xamlRoot;");
+        overlayCode.Should().Contain("PrewarmAsync");
+        popupCode.Should().Contain("WebView2");
+        popupCode.Should().Contain("PopupHtmlGenerator");
+        popupCode.Should().Contain("EnsureCoreWebView2Async");
+        popupCode.Should().Contain("WarmAsync");
+        readerCode.Should().Contain("ShowLookupAsync");
+        readerCode.Should().Contain("PrewarmAsync");
+        readerCode.Should().Contain("_lookupSemaphore.WaitAsync()");
+    }
+
+    [Fact]
+    public void SelectionScript_UsesConfigurableShiftHoverDelay()
+    {
+        var script = File.ReadAllText(Path.Combine(ReaderRoot, "selection.js"));
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
+        );
+        var settingsCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Models", "Settings", "ReaderSettings.cs")
+        );
+
+        script.Should().Contain("getShiftHoverDelayMs");
+        script.Should().Contain("window.__hoshiLookupSettings?.shiftHoverDelayMs");
+        readerCode.Should().Contain("window.__hoshiLookupSettings");
+        settingsCode.Should().Contain("ShiftHoverLookupDelayMs");
+    }
+
+    [Fact]
+    public void DictionaryLookupPopup_UsesXamlRootBoundsForPopupPlacement()
+    {
+        var overlayCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs")
+        );
+
+        overlayCode.Should().Contain("_overlayPopup.XamlRoot?.Size");
+        overlayCode.Should().Contain("Canvas.SetLeft");
+        overlayCode.Should().Contain("Canvas.SetTop");
+        overlayCode.Should().NotContain("App.MainWindow");
+        overlayCode.Should().NotContain("window.Bounds");
     }
 
     [Fact]

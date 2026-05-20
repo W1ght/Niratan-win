@@ -20,4 +20,11 @@ public interface INovelLibraryService
     Task<Result> MarkOpenedAsync(string bookId, CancellationToken ct = default);
 
     Task<Result> DeleteNovelAsync(string bookId, CancellationToken ct = default);
+
+    Task<Result> SaveProgressAsync(
+        string bookId,
+        int chapterIndex,
+        double progress,
+        CancellationToken ct = default
+    );
 }

@@ -34,6 +34,9 @@ public class ReaderSettings
     public bool ShowPercentage { get; set; } = true;
     public bool ShowProgressTop { get; set; } = true;
 
+    // --- Lookup ---
+    public int ShiftHoverLookupDelayMs { get; set; } = 300;
+
     // --- Computed CSS properties ---
 
     public int BottomOverlapPx => VerticalWriting ? FontSize : 0;

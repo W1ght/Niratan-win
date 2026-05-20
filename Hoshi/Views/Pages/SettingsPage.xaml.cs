@@ -1,6 +1,8 @@
+using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
+using Hoshi.Services.UI;
 using Hoshi.ViewModels.Pages;
 
 namespace Hoshi.Views.Pages;
@@ -11,9 +13,9 @@ public sealed partial class SettingsPage : Page
 
     public SettingsPage()
     {
+        ViewModel = App.GetService<SettingsPageViewModel>();
         InitializeComponent();
 
-        ViewModel = App.GetService<SettingsPageViewModel>();
         DataContext = ViewModel;
     }
 
@@ -57,5 +59,10 @@ public sealed partial class SettingsPage : Page
     {
         if (ViewModel.VerticalPadding < 50)
             ViewModel.VerticalPadding++;
+    }
+
+    private void DictionarySettings_Click(object sender, RoutedEventArgs e)
+    {
+        App.GetService<INavigationService>().Navigate(typeof(DictionarySettingsPage));
     }
 }

@@ -21,4 +21,10 @@ public interface IDataService
         DateTime lastOpenedAt,
         CancellationToken ct = default
     );
+    Task SaveNovelProgressAsync(
+        string bookId,
+        int chapterIndex,
+        double progress,
+        CancellationToken ct = default
+    );
 }

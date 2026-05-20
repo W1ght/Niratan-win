@@ -812,4 +812,14 @@ window.addEventListener("unhandledrejection", function (event) {
 });
 
 logDebug("bridge-loaded", { readyState: document.readyState });
-postToHost("readerReady", {});
+if (window.__hoshiChapterInfo) {
+  currentChapter = {
+    index: window.__hoshiChapterInfo.index ?? 0,
+    totalChapters: window.__hoshiChapterInfo.totalChapters ?? 0,
+  };
+  var initProgress = window.__hoshiChapterInfo.progress ?? 0;
+  logDebug("auto-initialize", { chapter: currentChapter, progress: initProgress });
+  window.hoshiReader.initialize(initProgress);
+} else {
+  postToHost("readerReady", {});
+}
