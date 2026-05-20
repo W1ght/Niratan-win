@@ -124,6 +124,29 @@ internal sealed class NovelLibraryService : INovelLibraryService
         }
     }
 
+    public async Task<Result> SaveProgressAsync(
+        string bookId,
+        int chapterIndex,
+        double progress,
+        CancellationToken ct = default
+    )
+    {
+        try
+        {
+            await _dataService.SaveNovelProgressAsync(bookId, chapterIndex, progress, ct);
+            return Result.Success();
+        }
+        catch (OperationCanceledException)
+        {
+            return Result.Cancelled();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error saving progress for {BookId}", bookId);
+            return Result.Failure(ex.Message, "Error saving progress");
+        }
+    }
+
     private async Task<Result<T>> ExecuteAsync<T>(
         Func<CancellationToken, Task<Result<T>>> action,
         string errorTitle,

@@ -39,8 +39,12 @@ public sealed partial class NavigationPage : Page
         var tag = args.IsSettingsInvoked
             ? "Hoshi.Views.Pages.SettingsPage"
             : args.InvokedItemContainer?.Tag?.ToString();
-        if (!string.IsNullOrEmpty(tag))
-            ViewModel.NavigateCommand.Execute(new NavigateMessage(Type.GetType(tag), null));
+        if (string.IsNullOrEmpty(tag))
+            return;
+
+        var pageType = Type.GetType(tag);
+        if (pageType != null)
+            ViewModel.NavigateCommand.Execute(new NavigateMessage(pageType, null));
     }
 
     private void NavigationViewControl_BackRequested(
@@ -50,12 +54,6 @@ public sealed partial class NavigationPage : Page
 
     private void ContentFrame_Navigated(object sender, NavigationEventArgs e)
     {
-        if (ContentFrame.SourcePageType == typeof(SettingsPage))
-        {
-            NavigationViewControl.SelectedItem = NavigationViewControl.SettingsItem;
-            return;
-        }
-
         var selectedMenuItem = NavigationViewControl
             .MenuItems.OfType<NavigationViewItem>()
             .Concat(NavigationViewControl.FooterMenuItems.OfType<NavigationViewItem>())

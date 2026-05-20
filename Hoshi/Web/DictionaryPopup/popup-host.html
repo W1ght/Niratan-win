@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ja" data-hoshi-color-scheme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Dictionary Lookup</title>
+    <link rel="stylesheet" href="popup.css" />
+    <style>
+      html, body {
+        --background-color: #fff;
+        --text-color: #000;
+        background-color: var(--background-color);
+        color: var(--text-color);
+      }
+      @media (prefers-color-scheme: dark) {
+        html, body {
+          --background-color: #1e1e1e;
+          --text-color: #e0e0e0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="entries-container"></div>
+    <div class="overlay">
+      <div class="overlay-close" onclick="closeOverlay()">x</div>
+      <div class="overlay-content"></div>
+    </div>
+    <script src="selection.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

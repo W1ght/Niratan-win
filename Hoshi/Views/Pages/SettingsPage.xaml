@@ -7,6 +7,7 @@
       xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
       xmlns:ui="using:CommunityToolkit.WinUI"
       xmlns:helpers="using:Hoshi.Helpers.UI.Converters"
+      xmlns:dictModels="using:Hoshi.Models.Dictionary"
       xmlns:vmp="using:Hoshi.ViewModels.Pages"
       mc:Ignorable="d">
 
@@ -14,6 +15,7 @@
 
         <x:Double x:Key="SettingsCardSpacing">4</x:Double>
         <helpers:BooleanNegationConverter x:Key="BoolNegationConverter" />
+        <helpers:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
 
         <Style x:Key="SettingsSectionHeaderTextBlockStyle" BasedOn="{StaticResource BodyStrongTextBlockStyle}" TargetType="TextBlock">
             <Style.Setters>
@@ -23,7 +25,7 @@
 
     </Page.Resources>
 
-    <Grid RowDefinitions="Auto, *">
+    <Grid x:Name="SettingsRoot" RowDefinitions="Auto, *">
         <StackPanel Grid.Column="0"
                     MaxWidth="1016"
                     Padding="20,14,36,16"
@@ -79,7 +81,7 @@
                                           Description="When the system is in light mode, use sepia instead"
                                           Header="Use Sepia as Light Theme"
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE790;}"
-                                          Visibility="{x:Bind ViewModel.IsSystemSepiaLightVisible, Mode=OneWay}">
+                                          Visibility="{x:Bind ViewModel.IsSystemSepiaLightVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <ToggleSwitch IsOn="{x:Bind ViewModel.SystemLightSepia, Mode=TwoWay}" />
                     </toolkit:SettingsCard>
                     <toolkit:SettingsCard HorizontalAlignment="Stretch"
@@ -87,7 +89,7 @@
                                           Description="Invert sepia colors when the system is in dark mode"
                                           Header="Invert in System Dark"
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE790;}"
-                                          Visibility="{x:Bind ViewModel.IsSepiaInvertVisible, Mode=OneWay}">
+                                          Visibility="{x:Bind ViewModel.IsSepiaInvertVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <ToggleSwitch IsOn="{x:Bind ViewModel.SepiaInvertInDark, Mode=TwoWay}" />
                     </toolkit:SettingsCard>
 
@@ -166,7 +168,7 @@
                                           Description="Swipe sensitivity for chapter transitions (10–60)"
                                           Header="Chapter Swipe Distance"
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE8B9;}"
-                                          Visibility="{x:Bind ViewModel.IsSwipeDistanceVisible, Mode=OneWay}">
+                                          Visibility="{x:Bind ViewModel.IsSwipeDistanceVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <Slider Minimum="10" Maximum="60" SmallChange="5" StepFrequency="5"
                                 Width="160"
                                 Value="{x:Bind ViewModel.ChapterSwipeDistance, Mode=TwoWay}" />
@@ -223,7 +225,7 @@
                                           Description="Space between lines (1.0–2.5)"
                                           Header="Line Height"
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE8EC;}"
-                                          Visibility="{x:Bind ViewModel.IsLineHeightVisible, Mode=OneWay}">
+                                          Visibility="{x:Bind ViewModel.IsLineHeightVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <Slider Minimum="1.0" Maximum="2.5" SmallChange="0.05" StepFrequency="0.05"
                                 Width="160"
                                 Value="{x:Bind ViewModel.LineHeight, Mode=TwoWay}" />
@@ -233,7 +235,7 @@
                                           Description="Space between characters (−10% to +10%)"
                                           Header="Character Spacing"
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE8EC;}"
-                                          Visibility="{x:Bind ViewModel.IsCharacterSpacingVisible, Mode=OneWay}">
+                                          Visibility="{x:Bind ViewModel.IsCharacterSpacingVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <Slider Minimum="-10" Maximum="10" SmallChange="1" StepFrequency="1"
                                 Width="160"
                                 Value="{x:Bind ViewModel.CharacterSpacing, Mode=TwoWay}" />
@@ -269,7 +271,7 @@
                                           Description="Show progress bar at the top or bottom"
                                           Header="Progress Position"
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE8B9;}"
-                                          Visibility="{x:Bind ViewModel.IsProgressPositionVisible, Mode=OneWay}">
+                                          Visibility="{x:Bind ViewModel.IsProgressPositionVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <RadioButton Content="Top"
                                          IsChecked="{x:Bind ViewModel.ShowProgressTop, Mode=TwoWay}"
@@ -278,6 +280,47 @@
                                          IsChecked="{x:Bind ViewModel.ShowProgressTop, Mode=TwoWay, Converter={StaticResource BoolNegationConverter}}"
                                          GroupName="ProgressPosition" />
                         </StackPanel>
+                    </toolkit:SettingsCard>
+
+                    <!-- Lookup Section -->
+                    <TextBlock Style="{StaticResource SettingsSectionHeaderTextBlockStyle}">
+                        <Span><Bold>Lookup</Bold></Span>
+                    </TextBlock>
+                    <toolkit:SettingsCard HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="Delay before Shift + hover starts dictionary lookup"
+                                          Header="Shift Hover Delay"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8B9;}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Slider Minimum="80"
+                                    Maximum="800"
+                                    SmallChange="20"
+                                    StepFrequency="20"
+                                    Width="180"
+                                    Value="{x:Bind ViewModel.ShiftHoverLookupDelayMs, Mode=TwoWay}" />
+                            <TextBlock VerticalAlignment="Center" MinWidth="52" TextAlignment="Right"
+                                       Text="{x:Bind ViewModel.ShiftHoverLookupDelayMs, Mode=OneWay}" />
+                            <TextBlock VerticalAlignment="Center" Text="ms" />
+                        </StackPanel>
+                    </toolkit:SettingsCard>
+
+                    <!-- Dictionary Section -->
+                    <TextBlock Style="{StaticResource SettingsSectionHeaderTextBlockStyle}">
+                        <Span><Bold>Dictionaries</Bold></Span>
+                    </TextBlock>
+                    <toolkit:SettingsCard HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="Manage Yomitan term, frequency, and pitch dictionaries"
+                                          Header="Dictionaries"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8F1;}">
+                        <Button AutomationProperties.AutomationId="DictionarySettingsButton"
+                                AutomationProperties.Name="Open Dictionary Settings"
+                                Click="DictionarySettings_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="Open" />
+                                <FontIcon Glyph="&#xE76C;" FontSize="14" />
+                            </StackPanel>
+                        </Button>
                     </toolkit:SettingsCard>
 
                     <!-- About Section -->

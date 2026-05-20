@@ -1,14 +1,20 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Hoshi.Enums;
 using Hoshi.Helpers;
+using Hoshi.Models.Dictionary;
 using Hoshi.Models.Settings;
+using Hoshi.Services.Dictionary;
 using Hoshi.Services.Settings;
+using Hoshi.Services.UI;
+using Serilog;
 
 namespace Hoshi.ViewModels.Pages;
 
@@ -124,6 +130,25 @@ public partial class SettingsPageViewModel : ObservableObject
 
     public bool IsProgressPositionVisible => ShowCharacters || ShowPercentage;
 
+    // --- Lookup ---
+    [ObservableProperty]
+    public partial int ShiftHoverLookupDelayMs { get; set; }
+
+    // --- Dictionaries ---
+    public ObservableCollection<InstalledDictionary> InstalledDictionaries { get; } = [];
+
+    [ObservableProperty]
+    public partial bool IsDictionaryListEmpty { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool IsDictionaryOperationInProgress { get; set; }
+
+    [ObservableProperty]
+    public partial string DictionaryStatusText { get; set; } = "";
+
+    public IAsyncRelayCommand ImportDictionaryCommand { get; }
+    public IAsyncRelayCommand<string?> DeleteDictionaryCommand { get; }
+
     public SettingsPageViewModel(
         ISettingsService settingsService,
         IReaderSettingsService readerSettingsService,
@@ -134,13 +159,37 @@ public partial class SettingsPageViewModel : ObservableObject
         _readerSettingsService = readerSettingsService;
         _messenger = messenger;
 
-        _ = LoadSettingsAsync();
+        ImportDictionaryCommand = new AsyncRelayCommand(ImportDictionaryAsync);
+        DeleteDictionaryCommand = new AsyncRelayCommand<string?>(DeleteDictionaryAsync);
+
+        _ = InitializeAsync();
     }
 
     public async Task OnNavigatedFromAsync()
     {
         await _settingsService.SaveAsync();
         await _readerSettingsService.SaveAsync();
+    }
+
+    private async Task InitializeAsync()
+    {
+        try
+        {
+            await LoadSettingsAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[Settings] Failed to load settings");
+        }
+
+        try
+        {
+            await RefreshDictionariesAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[Settings] Failed to refresh dictionaries");
+        }
     }
 
     private async Task LoadSettingsAsync()
@@ -174,6 +223,8 @@ public partial class SettingsPageViewModel : ObservableObject
         ShowCharacters = s.ShowCharacters;
         ShowPercentage = s.ShowPercentage;
         ShowProgressTop = s.ShowProgressTop;
+
+        ShiftHoverLookupDelayMs = s.ShiftHoverLookupDelayMs;
 
         _isInitializing = false;
     }
@@ -242,4 +293,140 @@ public partial class SettingsPageViewModel : ObservableObject
         OnPropertyChanged(nameof(IsProgressPositionVisible));
     }
     partial void OnShowProgressTopChanged(bool value) => ApplyReaderSetting(s => s.ShowProgressTop, value);
+    partial void OnShiftHoverLookupDelayMsChanged(int value) => ApplyReaderSetting(s => s.ShiftHoverLookupDelayMs, value);
+
+    public async Task RefreshDictionariesAsync()
+    {
+        try
+        {
+            var importService = App.GetService<IDictionaryImportService>();
+            var dicts = await importService.GetInstalledDictionariesAsync();
+
+            var dispatcher = App.MainWindow?.DispatcherQueue;
+            if (dispatcher == null) return;
+
+            dispatcher.TryEnqueue(() =>
+            {
+                try
+                {
+                    InstalledDictionaries.Clear();
+                    foreach (var d in dicts)
+                        InstalledDictionaries.Add(d);
+
+                    IsDictionaryListEmpty = InstalledDictionaries.Count == 0;
+                    DictionaryStatusText = IsDictionaryListEmpty
+                        ? "No dictionaries installed."
+                        : $"{InstalledDictionaries.Count} dictionaries installed.";
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "[Settings] Failed to update dictionary list UI");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[Settings] Failed to refresh dictionary list");
+        }
+    }
+
+    private async Task ImportDictionaryAsync()
+    {
+        try
+        {
+            var window = App.MainWindow;
+            if (window == null) return;
+
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+            var picker = new Windows.Storage.Pickers.FileOpenPicker();
+            picker.FileTypeFilter.Add(".zip");
+            picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Downloads;
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+
+            var file = await picker.PickSingleFileAsync();
+            if (file == null) return;
+
+            var notification = App.GetService<INotificationService>();
+            var importService = App.GetService<IDictionaryImportService>();
+
+            IsDictionaryOperationInProgress = true;
+            DictionaryStatusText = $"Importing {file.Name}...";
+            Log.Information("[Settings] Importing dictionary from {Path}", file.Path);
+
+            var result = await importService.ImportAsync(file.Path);
+            if (result.Success)
+            {
+                notification.ShowSuccess(
+                    $"Imported '{result.Title}': {result.TermCount} term banks, {result.FreqCount} freq banks",
+                    "Dictionary Imported");
+                await RefreshDictionariesAsync();
+            }
+            else
+            {
+                var errors = string.Join("\n", result.Errors);
+                notification.ShowError(
+                    $"Failed to import dictionary: {errors}",
+                    "Import Failed");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[Settings] Dictionary import failed");
+            App.GetService<INotificationService>()
+                .ShowError(ex.Message, "Import Error");
+        }
+        finally
+        {
+            IsDictionaryOperationInProgress = false;
+        }
+    }
+
+    private async Task DeleteDictionaryAsync(string? dictName)
+    {
+        if (string.IsNullOrEmpty(dictName)) return;
+
+        try
+        {
+            IsDictionaryOperationInProgress = true;
+            DictionaryStatusText = $"Deleting {dictName}...";
+            Log.Information("[Settings] Deleting dictionary '{Dict}'", dictName);
+
+            var importService = App.GetService<IDictionaryImportService>();
+            var deleted = await importService.DeleteAsync(dictName);
+            if (deleted)
+            {
+                App.GetService<INotificationService>()
+                    .ShowSuccess($"'{dictName}' removed", "Dictionary Deleted");
+                await RefreshDictionariesAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[Settings] Failed to delete dictionary '{Dict}'", dictName);
+            App.GetService<INotificationService>()
+                .ShowError(ex.Message, "Delete Error");
+        }
+        finally
+        {
+            IsDictionaryOperationInProgress = false;
+        }
+    }
+
+    public async Task SaveDictionaryOrderAsync()
+    {
+        try
+        {
+            var names = InstalledDictionaries.Select(d => d.Name).ToList();
+            await App.GetService<IDictionaryImportService>().SaveDictionaryOrderAsync(DictionaryType.Term, names);
+            DictionaryStatusText = "Dictionary order saved.";
+            Log.Information("[Settings] Dictionary order saved: {Order}", string.Join(", ", names));
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[Settings] Failed to save dictionary order");
+            App.GetService<INotificationService>()
+                .ShowError(ex.Message, "Dictionary Order");
+        }
+    }
+
 }
