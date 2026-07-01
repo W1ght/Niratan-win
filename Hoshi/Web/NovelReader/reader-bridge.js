@@ -92,6 +92,51 @@ window.hoshiReader = {
     this.paginationMetrics = null;
   },
 
+  isIgnoredWheelTarget: function (target) {
+    var element = target instanceof Element ? target : target?.parentElement;
+    if (!element) return false;
+
+    return !!element.closest([
+      "input",
+      "textarea",
+      "select",
+      "button",
+      "[contenteditable=\"true\"]",
+      "[data-hoshi-popup]",
+      ".popup",
+      ".dictionary-popup",
+      ".popover",
+      "[role=\"dialog\"]",
+    ].join(","));
+  },
+
+  registerWheelNavigation: function (enabled) {
+    window.hoshiWheelNavigationEnabled = !!enabled;
+    if (window.hoshiWheelNavigationRegistered) return;
+
+    window.hoshiWheelNavigationRegistered = true;
+    window.hoshiLastWheelNavigationTime = 0;
+
+    document.addEventListener("wheel", function (event) {
+      if (!window.hoshiWheelNavigationEnabled) return;
+      if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+      if (Math.abs(event.deltaX) > Math.abs(event.deltaY) || event.deltaY === 0) return;
+      if (window.hoshiReader.isIgnoredWheelTarget(event.target)) return;
+      if (window.getSelection && window.getSelection()?.isCollapsed === false) return;
+
+      var now = Date.now();
+      if (now - window.hoshiLastWheelNavigationTime < 170) {
+        event.preventDefault();
+        return;
+      }
+
+      var direction = event.deltaY > 0 ? "forward" : "backward";
+      window.hoshiLastWheelNavigationTime = now;
+      event.preventDefault();
+      handleNavigate(direction);
+    }, { passive: false });
+  },
+
   bottomOverlap: function () {
     return this.isVertical() ? 22 : 0;
   },
@@ -626,6 +671,9 @@ window.hoshiReader = {
       })
       .then(function () {
         self.buildNodeOffsets();
+        if (window.hoshiHighlights) {
+          window.hoshiHighlights.applyHighlights(window.__hoshiChapterHighlights || []);
+        }
         self.restoreProgress(progress).then(function () {
           self.lastProgress = self.calculateProgress();
           updateDiagnostics();
@@ -810,6 +858,161 @@ window.addEventListener("unhandledrejection", function (event) {
   var msg = event.reason instanceof Error ? event.reason.message : String(event.reason);
   postToHost("error", { message: "Unhandled rejection: " + msg });
 });
+
+// ── Sasayaki highlighting ──────────────────────────────────────────
+window.hoshiSasayaki = {
+  _currentHighlightNodes: [],
+  _highlightStyle: null,
+  _textColor: null,
+  _backgroundColor: null,
+
+  setColors: function (textColor, backgroundColor) {
+    this._textColor = textColor || null;
+    this._backgroundColor = backgroundColor || null;
+    document.documentElement.style.setProperty(
+      "--hoshi-sasayaki-text-color",
+      this._textColor || "inherit"
+    );
+    document.documentElement.style.setProperty(
+      "--hoshi-sasayaki-background-color",
+      this._backgroundColor || "rgba(255,235,59,0.45)"
+    );
+  },
+
+  _ensureStyle: function () {
+    if (this._highlightStyle) return;
+    this._highlightStyle = document.createElement("style");
+    this._highlightStyle.textContent =
+      ".hoshi-sasayaki-highlight { color: var(--hoshi-sasayaki-text-color, inherit); background-color: var(--hoshi-sasayaki-background-color, rgba(255,235,59,0.45)); border-radius: 2px; transition: background-color 0.15s; }" +
+      ".hoshi-sasayaki-highlight-active { outline: 2px solid rgba(255,152,0,0.5); outline-offset: 1px; }";
+    document.head.appendChild(this._highlightStyle);
+  },
+
+  clearHighlight: function () {
+    this._currentHighlightNodes.forEach(function (span) {
+      var parent = span.parentNode;
+      if (parent) {
+        while (span.firstChild) parent.insertBefore(span.firstChild, span);
+        parent.removeChild(span);
+        parent.normalize();
+      }
+    });
+    this._currentHighlightNodes = [];
+  },
+
+  highlightCue: function (startCodePoint, length, autoScroll) {
+    this.clearHighlight();
+    this._ensureStyle();
+
+    var walker = window.hoshiReader.createWalker();
+    var runningCount = 0;
+    var targetStartNode = null;
+    var targetStartOffset = 0;
+    var node;
+
+    while ((node = walker.nextNode())) {
+      var nodeLen = window.hoshiReader.countChars(node.textContent);
+      if (runningCount + nodeLen > startCodePoint) {
+        targetStartNode = node;
+        targetStartOffset = window.hoshiReader.textOffsetForCharCount(
+          node,
+          Math.max(0, startCodePoint - runningCount)
+        );
+        break;
+      }
+      runningCount += nodeLen;
+    }
+
+    if (!targetStartNode) return;
+
+    var endOffset = startCodePoint + length;
+    var targetEndNode = null;
+    var targetEndOffset = 0;
+    runningCount = 0;
+
+    walker = window.hoshiReader.createWalker();
+    while ((node = walker.nextNode())) {
+      var nodeLen = window.hoshiReader.countChars(node.textContent);
+      if (runningCount + nodeLen > endOffset) {
+        targetEndNode = node;
+        targetEndOffset = window.hoshiReader.textOffsetForCharCount(
+          node,
+          Math.max(0, endOffset - runningCount)
+        );
+        break;
+      }
+      runningCount += nodeLen;
+    }
+
+    if (!targetEndNode) {
+      targetEndNode = targetStartNode;
+      targetEndOffset = targetStartNode.textContent.length;
+    }
+
+    this._highlightRange(
+      targetStartNode,
+      targetStartOffset,
+      targetEndNode,
+      targetEndOffset,
+      autoScroll !== false
+    );
+  },
+
+  _highlightRange: function (startNode, startOffset, endNode, endOffset, autoScroll) {
+    var range = document.createRange();
+    range.setStart(startNode, Math.min(startOffset, startNode.textContent.length));
+    range.setEnd(endNode, Math.min(endOffset, endNode.textContent.length));
+
+    // Walk through text nodes in the range and wrap each with a highlight span
+    var self = this;
+    var treeWalker = document.createTreeWalker(
+      range.commonAncestorContainer,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode: function (n) {
+          return range.intersectsNode(n)
+            ? NodeFilter.FILTER_ACCEPT
+            : NodeFilter.FILTER_REJECT;
+        },
+      }
+    );
+
+    var spans = [];
+    var node;
+    while ((node = treeWalker.nextNode())) {
+      if (!node.textContent || node.textContent.trim() === "") continue;
+      if (window.hoshiReader.isFurigana(node)) continue;
+
+      var textRange = document.createRange();
+      textRange.selectNodeContents(node);
+
+      var nodeStart = node === startNode ? startOffset : 0;
+      var nodeEnd = node === endNode ? endOffset : node.textContent.length;
+      if (nodeStart >= nodeEnd) continue;
+
+      var span = document.createElement("span");
+      span.className = "hoshi-sasayaki-highlight";
+      textRange.setStart(node, nodeStart);
+      textRange.setEnd(node, nodeEnd);
+      try {
+        textRange.surroundContents(span);
+        spans.push(span);
+      } catch (e) {
+        // surroundContents fails if partial selection crosses elements — skip
+      }
+    }
+
+    // Mark the first span as active (for scrolling into view)
+    if (spans.length > 0) {
+      spans[0].classList.add("hoshi-sasayaki-highlight-active");
+      if (autoScroll) {
+        spans[0].scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+
+    this._currentHighlightNodes = spans;
+  },
+};
 
 logDebug("bridge-loaded", { readyState: document.readyState });
 if (window.__hoshiChapterInfo) {

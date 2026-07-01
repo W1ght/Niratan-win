@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -17,17 +15,40 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
 {
     private readonly ILogger<DictionaryLookupService> _logger;
     private readonly string _dictionaryStorageDir;
-    private Dictionary<string, List<IndexedTerm>> _termIndex = new(StringComparer.Ordinal);
-    private Dictionary<string, List<IndexedTerm>> _readingIndex = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _loadedDictDirs = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _displayNameByNativeName = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _nativeNameByDisplayName = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _styles = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, DictionaryData> _loadedDicts = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _rebuildLock = new(1, 1);
+    private IntPtr _session = IntPtr.Zero;
     private bool _indexReady;
+    private bool _nativeAvailable = true;
 
     public DictionaryLookupService(ILogger<DictionaryLookupService> logger, string? dictionaryStorageDir = null)
     {
         _logger = logger;
         _dictionaryStorageDir = dictionaryStorageDir ?? GetDictionaryStorageDir();
+        CreateSession();
+    }
+
+    private void CreateSession()
+    {
+        try
+        {
+            _session = HoshiDictsNative.hoshi_session_create();
+            _logger.LogInformation("[Lookup] Native session created: {SessionPtr}, DLL loaded successfully", _session);
+        }
+        catch (DllNotFoundException ex)
+        {
+            _logger.LogWarning(ex, "[Lookup] hoshidicts native library NOT FOUND; dictionary lookup unavailable");
+            _nativeAvailable = false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[Lookup] Failed to create native session (type={ExType}): {Message}",
+                ex.GetType().Name, ex.Message);
+            _nativeAvailable = false;
+        }
     }
 
     public async Task<List<DictionaryLookupResult>> LookupAsync(
@@ -36,42 +57,31 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
         if (string.IsNullOrWhiteSpace(text))
             return [];
 
-        await EnsureIndexAsync();
-
-        var termIndex = _termIndex;
-        var readingIndex = _readingIndex;
-        var resultMap = new Dictionary<string, DictionaryLookupResult>(StringComparer.Ordinal);
-        var deinflector = JapaneseDeinflector.Instance;
-
-        foreach (var candidate in EnumerateLookupCandidates(text, scanLength))
+        if (!_nativeAvailable)
         {
-            foreach (var deinflection in deinflector.Deinflect(candidate))
-            {
-                AddMatches(
-                    termIndex,
-                    deinflection.Text,
-                    candidate,
-                    deinflection,
-                    resultMap);
-
-                AddMatches(
-                    readingIndex,
-                    deinflection.Text,
-                    candidate,
-                    deinflection,
-                    resultMap);
-            }
+            _logger.LogWarning("[Lookup] Native DLL not available, returning empty for '{Text}'", text);
+            return [];
         }
 
-        return resultMap.Values
-            .OrderByDescending(r => r.Matched.EnumerateRunes().Count())
-            .ThenBy(r => r.PreprocessorSteps)
-            .ThenBy(r => r.Trace.Count)
-            .ThenByDescending(r => string.Equals(r.Term.Expression, r.Deinflected, StringComparison.Ordinal))
-            .ThenBy(r => r.Term.Glossaries.FirstOrDefault()?.DictName ?? "", StringComparer.Ordinal)
-            .ThenByDescending(r => r.Term.Glossaries.Count)
-            .Take(maxResults)
-            .ToList();
+        await EnsureIndexAsync();
+
+        _logger.LogInformation(
+            "[Lookup] Session={SessionPtr}, indexReady={IndexReady}, text='{Text}', max={Max}, scan={Scan}",
+            _session, _indexReady, text, maxResults, scanLength);
+
+        await _rebuildLock.WaitAsync();
+        try
+        {
+            var jsonPtr = HoshiDictsNative.hoshi_lookup(_session, text, maxResults, scanLength);
+            var json = HoshiDictsNative.ReadStringAndFree(jsonPtr);
+            _logger.LogInformation("[Lookup] Native returned JSON length={Len}, preview='{Preview}'",
+                json?.Length ?? 0, json?.Length > 200 ? json[..200] : (json ?? "null"));
+            return ApplyDictionaryDisplayTitles(HoshiDictsNative.DeserializeLookupResults(json));
+        }
+        finally
+        {
+            _rebuildLock.Release();
+        }
     }
 
     public static IEnumerable<string> EnumerateLookupCandidates(string text, int scanLength = 16)
@@ -92,50 +102,20 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
         }
     }
 
-    public Task<List<DictionaryStyle>> GetStylesAsync()
+    public async Task<List<DictionaryStyle>> GetStylesAsync()
     {
-        var styles = _styles.Select(kv => new DictionaryStyle(kv.Key, kv.Value)).ToList();
-        return Task.FromResult(styles);
-    }
+        if (!_nativeAvailable)
+            return [];
 
-    public Task<byte[]?> GetMediaFileAsync(string dictName, string mediaPath)
-    {
-        if (!_loadedDicts.TryGetValue(dictName, out var dictData))
-            return Task.FromResult<byte[]?>(null);
-
-        var mediaDir = Path.Combine(dictData.BasePath, "media");
-        var fullPath = Path.GetFullPath(Path.Combine(mediaDir, mediaPath));
-        if (!fullPath.StartsWith(mediaDir, StringComparison.OrdinalIgnoreCase))
-            return Task.FromResult<byte[]?>(null);
-
-        if (File.Exists(fullPath))
-            return Task.FromResult<byte[]?>(File.ReadAllBytes(fullPath));
-
-        return Task.FromResult<byte[]?>(null);
-    }
-
-    public async Task RebuildQueryAsync()
-    {
+        await EnsureIndexAsync();
         await _rebuildLock.WaitAsync();
         try
         {
-            var state = await Task.Run(BuildIndex);
-            _termIndex = state.TermIndex;
-            _readingIndex = state.ReadingIndex;
-
-            _styles.Clear();
-            foreach (var kv in state.Styles)
-                _styles[kv.Key] = kv.Value;
-
-            _loadedDicts.Clear();
-            foreach (var kv in state.LoadedDicts)
-                _loadedDicts[kv.Key] = kv.Value;
-
-            _indexReady = true;
-            _logger.LogInformation(
-                "Dictionary index rebuilt: {TermCount} unique expressions from {DictCount} dictionaries",
-                _termIndex.Count,
-                _loadedDicts.Count);
+            var jsonPtr = HoshiDictsNative.hoshi_get_styles(_session);
+            var json = HoshiDictsNative.ReadStringAndFree(jsonPtr);
+            return HoshiDictsNative.DeserializeStyles(json)
+                .Select(style => style with { DictName = ToDisplayDictionaryName(style.DictName) })
+                .ToList();
         }
         finally
         {
@@ -143,194 +123,91 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
         }
     }
 
-    private DictionaryIndexState BuildIndex()
+    public async Task<byte[]?> GetMediaFileAsync(string dictName, string mediaPath)
     {
-        var state = new DictionaryIndexState();
+        if (!_nativeAvailable)
+            return null;
+
+        await EnsureIndexAsync();
+        await _rebuildLock.WaitAsync();
+        try
+        {
+            var nativeDictName = ToNativeDictionaryName(dictName);
+            var dataPtr = HoshiDictsNative.hoshi_get_media_file(
+                _session, nativeDictName, mediaPath, out var size);
+            return HoshiDictsNative.ReadBufferAndFree(dataPtr, size);
+        }
+        finally
+        {
+            _rebuildLock.Release();
+        }
+    }
+
+    public async Task RebuildQueryAsync()
+    {
+        if (!_nativeAvailable)
+        {
+            _logger.LogDebug("[Rebuild] Skipped: native not available");
+            return;
+        }
 
         var dictDir = _dictionaryStorageDir;
         if (!Directory.Exists(dictDir))
-            return state;
-
-        foreach (var (subDir, order) in GetOrderedDictionaryDirectories(dictDir).Select((path, index) => (path, index)))
         {
-            try
-            {
-                LoadDictionary(subDir, order, state);
-            }
-            catch (Exception ex)
-            {
-                Serilog.Log.Warning(ex, "Failed to load dictionary from {Dir}", subDir);
-            }
-        }
-
-        return state;
-    }
-
-    private static void LoadDictionary(string dirPath, int dictionaryOrder, DictionaryIndexState state)
-    {
-        var indexFile = Path.Combine(dirPath, "index.json");
-        if (!File.Exists(indexFile)) return;
-
-        var indexJson = File.ReadAllText(indexFile);
-        using var indexDoc = JsonDocument.Parse(indexJson);
-        var title = indexDoc.RootElement.GetProperty("title").GetString() ?? Path.GetFileName(dirPath);
-
-        var dictData = new DictionaryData { Name = title, BasePath = dirPath };
-
-        // Load styles
-        var stylesPath = Path.Combine(dirPath, "styles.css");
-        if (File.Exists(stylesPath))
-            state.Styles[title] = File.ReadAllText(stylesPath);
-
-        // Load term banks
-        foreach (var termFile in Directory.EnumerateFiles(dirPath, "term_bank_*.json"))
-        {
-            LoadTermBank(termFile, title, dictionaryOrder, state);
-        }
-
-        state.LoadedDicts[title] = dictData;
-    }
-
-    private static void LoadTermBank(string filePath, string dictName, int dictionaryOrder, DictionaryIndexState state)
-    {
-        var json = File.ReadAllText(filePath);
-        using var document = JsonDocument.Parse(json);
-
-        foreach (var element in document.RootElement.EnumerateArray())
-        {
-            var arr = element.EnumerateArray().ToArray();
-            if (arr.Length < 6) continue;
-
-            var expression = arr[0].GetString() ?? "";
-            var reading = arr[1].GetString() ?? "";
-            var definitionTags = arr[2].GetString() ?? "";
-            var rules = arr[3].GetString() ?? "";
-            var score = arr.Length > 4 ? arr[4].GetInt32() : 0;
-            var glossaryList = arr[5];
-            var termTags = arr.Length > 7 ? arr[7].GetString() ?? "" : "";
-
-            var glossaries = ParseGlossaryList(glossaryList, dictName, definitionTags, termTags);
-
-            var term = new IndexedTerm
-            {
-                Expression = expression,
-                Reading = reading,
-                Rules = rules,
-                Score = score,
-                Glossaries = glossaries,
-                DictName = dictName,
-                DictionaryOrder = dictionaryOrder,
-            };
-
-            if (!state.TermIndex.TryGetValue(expression, out var list))
-            {
-                list = [];
-                state.TermIndex[expression] = list;
-            }
-            list.Add(term);
-
-            if (!string.IsNullOrEmpty(reading))
-            {
-                if (!state.ReadingIndex.TryGetValue(reading, out var readingList))
-                {
-                    readingList = [];
-                    state.ReadingIndex[reading] = readingList;
-                }
-                readingList.Add(term);
-            }
-        }
-    }
-
-    private static List<GlossaryEntry> ParseGlossaryList(
-        JsonElement glossaryElement, string dictName, string definitionTags, string termTags)
-    {
-        var entries = new List<GlossaryEntry>();
-
-        if (glossaryElement.ValueKind == JsonValueKind.String)
-        {
-            entries.Add(new GlossaryEntry(dictName, glossaryElement.GetString() ?? "", definitionTags, termTags));
-        }
-        else if (glossaryElement.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var item in glossaryElement.EnumerateArray())
-            {
-                if (item.ValueKind == JsonValueKind.String)
-                {
-                    entries.Add(new GlossaryEntry(dictName, item.GetString() ?? "", definitionTags, termTags));
-                }
-                else
-                {
-                    entries.Add(new GlossaryEntry(
-                        dictName,
-                        item.GetRawText(),
-                        definitionTags,
-                        termTags));
-                }
-            }
-        }
-
-        return entries;
-    }
-
-    private static DictionaryLookupResult TermToResult(
-        IndexedTerm term,
-        string matched,
-        string deinflected,
-        List<TransformGroup> trace,
-        int preprocessorSteps = 0)
-    {
-        return new DictionaryLookupResult(
-            Matched: matched,
-            Deinflected: deinflected,
-            Trace: trace,
-            Term: new TermResult(
-                Expression: term.Expression,
-                Reading: term.Reading,
-                Rules: term.Rules,
-                Glossaries: term.Glossaries,
-                Frequencies: [],
-                Pitches: []
-            ),
-            PreprocessorSteps: preprocessorSteps
-        );
-    }
-
-    private static void AddMatches(
-        Dictionary<string, List<IndexedTerm>> index,
-        string query,
-        string matched,
-        JapaneseDeinflectionResult deinflection,
-        Dictionary<string, DictionaryLookupResult> resultMap)
-    {
-        if (!index.TryGetValue(query, out var matches))
+            _logger.LogDebug("[Rebuild] Skipped: dict dir not found '{Dir}'", dictDir);
+            _indexReady = true;
             return;
-
-        foreach (var term in matches)
-        {
-            if (!MatchesPartOfSpeech(term, deinflection))
-                continue;
-
-            var key = $"{term.Expression}|{term.Reading}";
-            var next = TermToResult(term, matched, deinflection.Text, deinflection.Trace);
-            if (!resultMap.TryGetValue(key, out var existing)
-                || matched.EnumerateRunes().Count() > existing.Matched.EnumerateRunes().Count()
-                || (matched == existing.Matched && next.Trace.Count < existing.Trace.Count))
-            {
-                resultMap[key] = next;
-            }
         }
-    }
 
-    private static bool MatchesPartOfSpeech(IndexedTerm term, JapaneseDeinflectionResult deinflection)
-    {
-        if (deinflection.Conditions == JapaneseDeinflectionConditions.None)
-            return true;
+        // Sync config with filesystem before acquiring the rebuild lock
+        // so that file I/O does not block lookups.
+        DictionaryImportService.NormalizeConfig(dictDir);
 
-        var termConditions = JapaneseDeinflector.PosToConditions(term.Rules);
-        if (termConditions == JapaneseDeinflectionConditions.None)
-            return true;
+        await _rebuildLock.WaitAsync();
+        try
+        {
+            var termPaths = GetOrderedDictionaryDirectories(dictDir, DictionaryType.Term);
+            var freqPaths = GetOrderedDictionaryDirectories(dictDir, DictionaryType.Frequency);
+            var pitchPaths = GetOrderedDictionaryDirectories(dictDir, DictionaryType.Pitch);
 
-        return (termConditions & deinflection.Conditions) != 0;
+            _logger.LogInformation(
+                "[Rebuild] Passing paths to native: Term=[{TermPaths}], Freq=[{FreqPaths}], Pitch=[{PitchPaths}], Session={SessionPtr}",
+                string.Join(", ", termPaths), string.Join(", ", freqPaths), string.Join(", ", pitchPaths), _session);
+
+            HoshiDictsNative.HoshiSessionRebuild(
+                _session,
+                termPaths,
+                freqPaths,
+                pitchPaths);
+
+            _loadedDictDirs.Clear();
+            _displayNameByNativeName.Clear();
+            _nativeNameByDisplayName.Clear();
+            foreach (var path in termPaths.Concat(freqPaths).Concat(pitchPaths))
+            {
+                var name = Path.GetFileName(path);
+                if (string.IsNullOrEmpty(name))
+                    continue;
+
+                var displayName = ReadDisplayTitle(path) ?? name;
+                _loadedDictDirs[name] = path;
+                _displayNameByNativeName[name] = displayName;
+                _nativeNameByDisplayName.TryAdd(displayName, name);
+            }
+
+            _indexReady = true;
+            _logger.LogInformation(
+                "[Rebuild] Success: {TermCount} term, {FreqCount} freq, {PitchCount} pitch dictionaries loaded",
+                termPaths.Count, freqPaths.Count, pitchPaths.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to rebuild dictionary query");
+        }
+        finally
+        {
+            _rebuildLock.Release();
+        }
     }
 
     private async Task EnsureIndexAsync()
@@ -341,63 +218,111 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
 
     private static string GetDictionaryStorageDir()
     {
-        var appData = AppDataHelper.GetAppDataPath();
-        return Path.Combine(appData, "dictionaries");
+        return Path.Combine(AppDataHelper.GetAppDataPath(), "dictionaries");
     }
 
-    private static IReadOnlyList<string> GetOrderedDictionaryDirectories(string dictDir)
+    internal static IReadOnlyList<string> GetOrderedDictionaryDirectories(string dictDir, DictionaryType type)
     {
-        var directories = Directory.EnumerateDirectories(dictDir).ToList();
+        var typeDir = DictionaryImportService.GetDictionaryTypeStorageDir(dictDir, type);
+        var directories = Directory.Exists(typeDir)
+            ? Directory.EnumerateDirectories(typeDir).ToList()
+            : [];
+
         var byName = directories
             .Select(path => (Name: Path.GetFileName(path), Path: path))
             .Where(item => !string.IsNullOrEmpty(item.Name))
             .ToDictionary(item => item.Name!, item => item.Path, StringComparer.Ordinal);
+
         var config = DictionaryConfigurationStore.Load(dictDir);
-        var enabledTermEntries = DictionaryConfigurationStore
+        var installedForType = directories
+            .Select(Path.GetFileName)
+            .Where(name => !string.IsNullOrEmpty(name))
+            .Select(name => name!)
+            .ToList();
+
+        var enabledEntries = DictionaryConfigurationStore
             .MergeWithInstalled(
-                DictionaryConfigurationStore.GetEntries(config, DictionaryType.Term),
-                byName.Keys.Where(name => name != null).Select(name => name!).ToList())
+                DictionaryConfigurationStore.GetEntries(config, type),
+                installedForType)
             .Where(entry => entry.IsEnabled)
             .ToList();
 
-        return enabledTermEntries
+        return enabledEntries
             .Select(entry => byName.TryGetValue(entry.FileName, out var path) ? path : null)
             .Where(path => path != null)
             .Select(path => path!)
             .ToList();
     }
 
+    private List<DictionaryLookupResult> ApplyDictionaryDisplayTitles(List<DictionaryLookupResult> results)
+    {
+        if (_displayNameByNativeName.Count == 0 || results.Count == 0)
+            return results;
+
+        return results
+            .Select(result => result with
+            {
+                Term = result.Term with
+                {
+                    Glossaries = result.Term.Glossaries
+                        .Select(glossary => glossary with
+                        {
+                            DictName = ToDisplayDictionaryName(glossary.DictName),
+                        })
+                        .ToList(),
+                    Frequencies = result.Term.Frequencies
+                        .Select(frequency => frequency with
+                        {
+                            DictName = ToDisplayDictionaryName(frequency.DictName),
+                        })
+                        .ToList(),
+                    Pitches = result.Term.Pitches
+                        .Select(pitch => pitch with
+                        {
+                            DictName = ToDisplayDictionaryName(pitch.DictName),
+                        })
+                        .ToList(),
+                },
+            })
+            .ToList();
+    }
+
+    private string ToDisplayDictionaryName(string dictName) =>
+        _displayNameByNativeName.TryGetValue(dictName, out var displayName)
+            ? displayName
+            : dictName;
+
+    private string ToNativeDictionaryName(string dictName) =>
+        _nativeNameByDisplayName.TryGetValue(dictName, out var nativeName)
+            ? nativeName
+            : dictName;
+
+    private static string? ReadDisplayTitle(string dictionaryDir)
+    {
+        var indexPath = Path.Combine(dictionaryDir, "index.json");
+        if (!File.Exists(indexPath))
+            return null;
+
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(indexPath));
+            return doc.RootElement.TryGetProperty("title", out var titleElement)
+                ? titleElement.GetString()
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public void Dispose()
     {
-        _termIndex.Clear();
-        _readingIndex.Clear();
-        _loadedDicts.Clear();
-        _styles.Clear();
+        if (_session != IntPtr.Zero)
+        {
+            HoshiDictsNative.hoshi_session_destroy(_session);
+            _session = IntPtr.Zero;
+        }
         _rebuildLock.Dispose();
-    }
-
-    private sealed class DictionaryIndexState
-    {
-        public Dictionary<string, List<IndexedTerm>> TermIndex { get; } = new(StringComparer.Ordinal);
-        public Dictionary<string, List<IndexedTerm>> ReadingIndex { get; } = new(StringComparer.Ordinal);
-        public Dictionary<string, string> Styles { get; } = new(StringComparer.Ordinal);
-        public Dictionary<string, DictionaryData> LoadedDicts { get; } = new(StringComparer.Ordinal);
-    }
-
-    private sealed class DictionaryData
-    {
-        public string Name { get; set; } = "";
-        public string BasePath { get; set; } = "";
-    }
-
-    private sealed class IndexedTerm
-    {
-        public string Expression { get; set; } = "";
-        public string Reading { get; set; } = "";
-        public string Rules { get; set; } = "";
-        public int Score { get; set; }
-        public List<GlossaryEntry> Glossaries { get; set; } = [];
-        public string DictName { get; set; } = "";
-        public int DictionaryOrder { get; set; }
     }
 }

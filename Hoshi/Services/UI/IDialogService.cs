@@ -6,6 +6,6 @@ namespace Hoshi.Services.UI;
 public interface IDialogService
 {
     void Initialize(XamlRoot root);
-    Task<string?> OpenFilePickerAsync(string fileTypeFilter = "*");
+    Task<string?> OpenFilePickerAsync(params string[] fileTypeFilters);
     Task<bool> ConfirmAsync(string title, string message);
 }

@@ -14,7 +14,8 @@ public sealed record InstalledDictionary(
     DictionaryType Type = DictionaryType.Term,
     bool IsEnabled = true,
     int Order = 0,
-    string Revision = ""
+    string Revision = "",
+    string DisplayTitle = ""
 );
 
 public sealed record DictionaryConfig(

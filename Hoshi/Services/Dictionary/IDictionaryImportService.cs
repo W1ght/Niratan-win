@@ -8,6 +8,7 @@ public interface IDictionaryImportService
 {
     Task<DictionaryImportResult> ImportAsync(string zipPath);
     Task<bool> DeleteAsync(string dictName);
+    Task<bool> DeleteAsync(DictionaryType type, string dictName);
     Task<List<InstalledDictionary>> GetInstalledDictionariesAsync(DictionaryType? type = null);
     Task SaveDictionaryOrderAsync(DictionaryType type, IReadOnlyList<string> orderedNames);
     Task SetDictionaryEnabledAsync(DictionaryType type, string dictName, bool enabled);

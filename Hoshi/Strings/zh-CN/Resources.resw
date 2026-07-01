@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="GlobalSearchBox.PlaceholderText" xml:space="preserve"><value>搜索</value></data>
+  <data name="NovelNavItem.Content" xml:space="preserve"><value>小说</value></data>
+  <data name="NovelLookupNavItem.Content" xml:space="preserve"><value>查词</value></data>
+  <data name="SettingsNavItem.Content" xml:space="preserve"><value>设置</value></data>
+  <data name="NormalLogsNavItem.Content" xml:space="preserve"><value>普通日志</value></data>
+  <data name="ErrorLogsNavItem.Content" xml:space="preserve"><value>错误日志</value></data>
+  <data name="HelpNavItem.Content" xml:space="preserve"><value>帮助</value></data>
+  <data name="SettingsPageTitle.Text" xml:space="preserve"><value>设置</value></data>
+  <data name="SettingsApplicationSectionHeader.Text" xml:space="preserve"><value>应用</value></data>
+  <data name="SettingsApplicationThemeCard.Header" xml:space="preserve"><value>应用主题</value></data>
+  <data name="SettingsApplicationThemeCard.Description" xml:space="preserve"><value>选择应用界面主题</value></data>
+  <data name="SettingsAnkiCard.Header" xml:space="preserve"><value>Anki</value></data>
+  <data name="SettingsAnkiCard.Description" xml:space="preserve"><value>AnkiConnect 制卡和字段映射</value></data>
+  <data name="AnkiSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>打开 Anki 设置</value></data>
+  <data name="SettingsOpenAnkiText.Text" xml:space="preserve"><value>打开</value></data>
+  <data name="SettingsAdvancedCard.Header" xml:space="preserve"><value>高级</value></data>
+  <data name="SettingsAdvancedCard.Description" xml:space="preserve"><value>阅读音频、统计、Sasayaki、快捷键、同步和数据</value></data>
+  <data name="AdvancedSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>打开高级设置</value></data>
+  <data name="SettingsOpenAdvancedText.Text" xml:space="preserve"><value>打开</value></data>
+  <data name="SettingsSupportSectionHeader.Text" xml:space="preserve"><value>支持</value></data>
+  <data name="SettingsReportIssueCard.Header" xml:space="preserve"><value>反馈问题</value></data>
+  <data name="SettingsReportIssueCard.Description" xml:space="preserve"><value>打开 GitHub Issue 页面</value></data>
+  <data name="SettingsReportIssueLink.Content" xml:space="preserve"><value>反馈问题</value></data>
+  <data name="AdvancedSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>返回</value></data>
+  <data name="AdvancedSettingsPageTitle.Text" xml:space="preserve"><value>高级</value></data>
+  <data name="AdvancedReaderSectionHeader.Text" xml:space="preserve"><value>阅读器</value></data>
+  <data name="AdvancedAudioCard.Header" xml:space="preserve"><value>音频</value></data>
+  <data name="AdvancedAudioCard.Description" xml:space="preserve"><value>词典音频源、自动播放和本地音频数据库</value></data>
+  <data name="AudioSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>打开音频设置</value></data>
+  <data name="SettingsOpenAudioText.Text" xml:space="preserve"><value>打开</value></data>
+  <data name="AdvancedStatisticsCard.Header" xml:space="preserve"><value>统计</value></data>
+  <data name="AdvancedStatisticsCard.Description" xml:space="preserve"><value>阅读目标、自动开始和统计同步</value></data>
+  <data name="AdvancedSasayakiCard.Header" xml:space="preserve"><value>Sasayaki</value></data>
+  <data name="AdvancedSasayakiCard.Description" xml:space="preserve"><value>有声书跟读与文本高亮</value></data>
+  <data name="SettingsReaderSectionHeader.Text" xml:space="preserve"><value>阅读器</value></data>
+  <data name="SettingsAppearanceCard.Header" xml:space="preserve"><value>外观</value></data>
+  <data name="SettingsAppearanceCard.Description" xml:space="preserve"><value>阅读器主题、文字、布局、显示和查词交互</value></data>
+  <data name="ReaderAppearanceSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>打开阅读器外观设置</value></data>
+  <data name="SettingsOpenAppearanceText.Text" xml:space="preserve"><value>打开</value></data>
+  <data name="SettingsDictionarySectionHeader.Text" xml:space="preserve"><value>词典</value></data>
+  <data name="SettingsDictionariesCard.Header" xml:space="preserve"><value>词典</value></data>
+  <data name="SettingsDictionariesCard.Description" xml:space="preserve"><value>管理 Yomitan 词条、词频和音调词典</value></data>
+  <data name="DictionarySettingsButton.AutomationProperties.Name" xml:space="preserve"><value>打开词典设置</value></data>
+  <data name="SettingsOpenDictionaryText.Text" xml:space="preserve"><value>打开</value></data>
+  <data name="SettingsAboutSectionHeader.Text" xml:space="preserve"><value>关于</value></data>
+  <data name="SettingsAboutExpander.Description" xml:space="preserve"><value>© 2026 TXG0Fk3. All rights reserved.</value></data>
+  <data name="SettingsAboutVersionRun.Text" xml:space="preserve"><value>版本</value></data>
+  <data name="SettingsProjectRepositoryLink.Content" xml:space="preserve"><value>项目仓库</value></data>
+  <data name="SettingsSendFeedbackLink.Content" xml:space="preserve"><value>反馈问题</value></data>
+  <data name="NovelReaderChapterButton.AutomationProperties.Name" xml:space="preserve"><value>章节</value></data>
+  <data name="NovelReaderSearchButton.AutomationProperties.Name" xml:space="preserve"><value>搜索</value></data>
+  <data name="NovelReaderHighlightsButton.AutomationProperties.Name" xml:space="preserve"><value>高亮</value></data>
+  <data name="NovelReaderAppearanceButton.AutomationProperties.Name" xml:space="preserve"><value>外观</value></data>
+  <data name="ReaderAppearanceDialog.Title" xml:space="preserve"><value>外观</value></data>
+  <data name="ReaderAppearanceDialog.PrimaryButtonText" xml:space="preserve"><value>完成</value></data>
+  <data name="ReaderAppearancePageTitle.Text" xml:space="preserve"><value>外观</value></data>
+  <data name="ReaderThemeSectionHeader.Text" xml:space="preserve"><value>阅读主题</value></data>
+  <data name="ReaderColorThemeCard.Header" xml:space="preserve"><value>颜色主题</value></data>
+  <data name="ReaderColorThemeCard.Description" xml:space="preserve"><value>选择阅读颜色主题</value></data>
+  <data name="ReaderEInkModeCard.Header" xml:space="preserve"><value>电子墨水模式</value></data>
+  <data name="ReaderEInkModeCard.Description" xml:space="preserve"><value>适合电子墨水屏的高对比黑白显示</value></data>
+  <data name="ReaderSystemLightSepiaCard.Header" xml:space="preserve"><value>浅色系统使用棕褐色</value></data>
+  <data name="ReaderSystemLightSepiaCard.Description" xml:space="preserve"><value>系统处于浅色模式时改用棕褐色阅读主题</value></data>
+  <data name="ReaderSepiaInvertCard.Header" xml:space="preserve"><value>系统深色时反转棕褐色</value></data>
+  <data name="ReaderSepiaInvertCard.Description" xml:space="preserve"><value>系统处于深色模式时反转棕褐色主题</value></data>
+  <data name="ReaderTextSectionHeader.Text" xml:space="preserve"><value>阅读文字</value></data>
+  <data name="ReaderTextOrientationCard.Header" xml:space="preserve"><value>文字方向</value></data>
+  <data name="ReaderTextOrientationCard.Description" xml:space="preserve"><value>竖排或横排阅读</value></data>
+  <data name="ReaderTextOrientationVertical.Content" xml:space="preserve"><value>竖排</value></data>
+  <data name="ReaderTextOrientationHorizontal.Content" xml:space="preserve"><value>横排</value></data>
+  <data name="ReaderFontCard.Header" xml:space="preserve"><value>字体</value></data>
+  <data name="ReaderFontCard.Description" xml:space="preserve"><value>选择阅读字体</value></data>
+  <data name="ReaderFontSizeCard.Header" xml:space="preserve"><value>字号</value></data>
+  <data name="ReaderFontSizeCard.Description" xml:space="preserve"><value>调整正文大小</value></data>
+  <data name="ReaderHideFuriganaCard.Header" xml:space="preserve"><value>隐藏假名注音</value></data>
+  <data name="ReaderHideFuriganaCard.Description" xml:space="preserve"><value>隐藏汉字上方的 ruby 注音</value></data>
+  <data name="ReaderLayoutSectionHeader.Text" xml:space="preserve"><value>阅读布局</value></data>
+  <data name="ReaderLayoutModeCard.Header" xml:space="preserve"><value>模式</value></data>
+  <data name="ReaderLayoutModeCard.Description" xml:space="preserve"><value>分页或连续滚动</value></data>
+  <data name="ReaderLayoutPaginated.Content" xml:space="preserve"><value>分页</value></data>
+  <data name="ReaderLayoutContinuous.Content" xml:space="preserve"><value>连续</value></data>
+  <data name="ReaderMouseWheelPageTurnCard.Header" xml:space="preserve"><value>鼠标滚轮翻页</value></data>
+  <data name="ReaderMouseWheelPageTurnCard.Description" xml:space="preserve"><value>在分页模式下使用鼠标滚轮翻页</value></data>
+  <data name="ReaderChapterSwipeDistanceCard.Header" xml:space="preserve"><value>章节滑动距离</value></data>
+  <data name="ReaderChapterSwipeDistanceCard.Description" xml:space="preserve"><value>章节切换的滑动灵敏度</value></data>
+  <data name="ReaderHorizontalPaddingCard.Header" xml:space="preserve"><value>水平边距</value></data>
+  <data name="ReaderHorizontalPaddingCard.Description" xml:space="preserve"><value>左右两侧留白</value></data>
+  <data name="ReaderVerticalPaddingCard.Header" xml:space="preserve"><value>垂直边距</value></data>
+  <data name="ReaderVerticalPaddingCard.Description" xml:space="preserve"><value>顶部和底部留白</value></data>
+  <data name="ReaderAvoidPageBreakCard.Header" xml:space="preserve"><value>避免分页截断</value></data>
+  <data name="ReaderAvoidPageBreakCard.Description" xml:space="preserve"><value>尽量避免段落被跨栏切开</value></data>
+  <data name="ReaderJustifyTextCard.Header" xml:space="preserve"><value>两端对齐</value></data>
+  <data name="ReaderJustifyTextCard.Description" xml:space="preserve"><value>将正文对齐到两侧边界</value></data>
+  <data name="ReaderLayoutAdvancedCard.Header" xml:space="preserve"><value>高级布局</value></data>
+  <data name="ReaderLayoutAdvancedCard.Description" xml:space="preserve"><value>启用行高和字距控制</value></data>
+  <data name="ReaderLineHeightCard.Header" xml:space="preserve"><value>行高</value></data>
+  <data name="ReaderLineHeightCard.Description" xml:space="preserve"><value>行与行之间的距离</value></data>
+  <data name="ReaderCharacterSpacingCard.Header" xml:space="preserve"><value>字距</value></data>
+  <data name="ReaderCharacterSpacingCard.Description" xml:space="preserve"><value>字符之间的距离</value></data>
+  <data name="ReaderDisplaySectionHeader.Text" xml:space="preserve"><value>阅读显示</value></data>
+  <data name="ReaderShowTitleCard.Header" xml:space="preserve"><value>显示标题</value></data>
+  <data name="ReaderShowTitleCard.Description" xml:space="preserve"><value>在阅读器中显示书名</value></data>
+  <data name="ReaderShowCharactersCard.Header" xml:space="preserve"><value>显示字数</value></data>
+  <data name="ReaderShowCharactersCard.Description" xml:space="preserve"><value>在进度栏显示字数</value></data>
+  <data name="ReaderShowPercentageCard.Header" xml:space="preserve"><value>显示百分比</value></data>
+  <data name="ReaderShowPercentageCard.Description" xml:space="preserve"><value>显示阅读进度百分比</value></data>
+  <data name="ReaderProgressPositionCard.Header" xml:space="preserve"><value>进度位置</value></data>
+  <data name="ReaderProgressPositionCard.Description" xml:space="preserve"><value>在顶部或底部显示进度栏</value></data>
+  <data name="ReaderProgressTop.Content" xml:space="preserve"><value>顶部</value></data>
+  <data name="ReaderProgressBottom.Content" xml:space="preserve"><value>底部</value></data>
+  <data name="ReaderShowStatisticsToggleCard.Header" xml:space="preserve"><value>显示统计按钮</value></data>
+  <data name="ReaderShowStatisticsToggleCard.Description" xml:space="preserve"><value>启用统计时在阅读器工具栏显示统计按钮</value></data>
+  <data name="ReaderShowStatisticsToggleSwitch.AutomationProperties.Name" xml:space="preserve"><value>显示统计按钮</value></data>
+  <data name="ReaderShowReadingSpeedCard.Header" xml:space="preserve"><value>显示阅读速度</value></data>
+  <data name="ReaderShowReadingSpeedCard.Description" xml:space="preserve"><value>在阅读器界面显示本次阅读速度</value></data>
+  <data name="ReaderShowReadingSpeedToggle.AutomationProperties.Name" xml:space="preserve"><value>显示阅读速度</value></data>
+  <data name="ReaderShowReadingTimeCard.Header" xml:space="preserve"><value>显示阅读时间</value></data>
+  <data name="ReaderShowReadingTimeCard.Description" xml:space="preserve"><value>在阅读器界面显示本次阅读时间</value></data>
+  <data name="ReaderShowReadingTimeToggle.AutomationProperties.Name" xml:space="preserve"><value>显示阅读时间</value></data>
+  <data name="DictionarySettingsTitle.Text" xml:space="preserve"><value>词典</value></data>
+  <data name="DictionaryImportCard.Header" xml:space="preserve"><value>导入</value></data>
+  <data name="DictionaryImportCard.Description" xml:space="preserve"><value>导入 Yomitan 格式词典并用于阅读器查词</value></data>
+  <data name="ImportDictionaryButton.AutomationProperties.Name" xml:space="preserve"><value>导入词典</value></data>
+  <data name="ImportDictionaryButtonText.Text" xml:space="preserve"><value>导入 .zip</value></data>
+  <data name="DictionaryLookupSectionHeader.Text" xml:space="preserve"><value>查词</value></data>
+  <data name="ScanNonJapaneseTextCard.Header" xml:space="preserve"><value>扫描非日语文本</value></data>
+  <data name="ScanNonJapaneseTextCard.Description" xml:space="preserve"><value>允许查询英语和其他非日语文本</value></data>
+  <data name="DictionaryMaxResultsCard.Header" xml:space="preserve"><value>最大结果数</value></data>
+  <data name="DictionaryScanLengthCard.Header" xml:space="preserve"><value>扫描长度</value></data>
+  <data name="DictionaryCollapseSectionHeader.Text" xml:space="preserve"><value>折叠词典</value></data>
+  <data name="DictionaryCollapseModeCard.Header" xml:space="preserve"><value>模式</value></data>
+  <data name="DictionaryExpandFirstCard.Header" xml:space="preserve"><value>展开第一个词典</value></data>
+  <data name="DictionaryBehaviorSectionHeader.Text" xml:space="preserve"><value>行为</value></data>
+  <data name="DictionaryCompactGlossariesCard.Header" xml:space="preserve"><value>紧凑释义</value></data>
+  <data name="DictionaryShowExpressionTagsCard.Header" xml:space="preserve"><value>显示词形标签</value></data>
+  <data name="DictionaryHarmonicFrequencyCard.Header" xml:space="preserve"><value>调和词频</value></data>
+  <data name="DictionaryDeduplicatePitchCard.Header" xml:space="preserve"><value>去重音调</value></data>
+  <data name="DictionaryCompactPitchCard.Header" xml:space="preserve"><value>紧凑音调</value></data>
+  <data name="DictionaryTypeDescription.Text" xml:space="preserve"><value>支持 Yomitan 词条、词频和音调词典（.zip）</value></data>
+  <data name="DictionaryTypeTermButton.Content" xml:space="preserve"><value>词条</value></data>
+  <data name="DictionaryTypeFrequencyButton.Content" xml:space="preserve"><value>词频</value></data>
+  <data name="DictionaryTypePitchButton.Content" xml:space="preserve"><value>音调</value></data>
+  <data name="DictionaryInstalledSectionHeader.Text" xml:space="preserve"><value>已安装</value></data>
+  <data name="NoDictionariesCard.Header" xml:space="preserve"><value>没有词典</value></data>
+  <data name="NoDictionariesCard.Description" xml:space="preserve"><value>导入 Yomitan 词典 ZIP 后即可启用该分类查词</value></data>
+  <data name="NovelLookupPageTitle.Text" xml:space="preserve"><value>查词</value></data>
+  <data name="NovelLookupQueryBox.PlaceholderText" xml:space="preserve"><value>输入日语或英语文本</value></data>
+  <data name="NovelLookupSearchButtonText.Text" xml:space="preserve"><value>搜索</value></data>
+  <data name="NovelLookupPopupHint.Text" xml:space="preserve"><value>查词结果使用和阅读器相同的 WebView 弹窗渲染。</value></data>
+  <data name="ReaderChapterPanelTitle.Text" xml:space="preserve"><value>章节</value></data>
+  <data name="ReaderSearchPanelTitle.Text" xml:space="preserve"><value>搜索</value></data>
+  <data name="ReaderSearchQueryBox.PlaceholderText" xml:space="preserve"><value>在本书中搜索</value></data>
+  <data name="ReaderSearchPromptText.Text" xml:space="preserve"><value>输入文字以搜索本书</value></data>
+  <data name="ReaderSearchLoadingText.Text" xml:space="preserve"><value>正在搜索...</value></data>
+  <data name="ReaderSearchNoMatchesText.Text" xml:space="preserve"><value>没有匹配结果</value></data>
+  <data name="ReaderSearchFailedText.Text" xml:space="preserve"><value>无法搜索这本书</value></data>
+  <data name="ReaderHighlightsPanelTitle.Text" xml:space="preserve"><value>高亮</value></data>
+  <data name="ReaderHighlightsEmptyText.Text" xml:space="preserve"><value>暂无高亮</value></data>
+  <data name="ReaderHighlightDeleteMenuItem.Text" xml:space="preserve"><value>删除</value></data>
+  <data name="NovelReaderCharacterJumpNumberBox.PlaceholderText" xml:space="preserve"><value>字符数</value></data>
+  <data name="NovelReaderCharacterJumpButton.AutomationProperties.Name" xml:space="preserve"><value>跳转到字符数</value></data>
+  <data name="NovelReaderCharacterJumpButtonText.Text" xml:space="preserve"><value>前往</value></data>
+  <data name="NovelReaderCharacterJumpStatus.Text" xml:space="preserve"><value>当前字符位置</value></data>
+  <data name="NovelReaderStatisticsButton.AutomationProperties.Name" xml:space="preserve"><value>统计</value></data>
+  <data name="ReaderStatisticsStartStopButton.AutomationProperties.Name" xml:space="preserve"><value>开始或暂停阅读统计</value></data>
+  <data name="ReaderStatisticsPanelTitle.Text" xml:space="preserve"><value>统计</value></data>
+  <data name="ReaderStatisticsSessionHeader.Text" xml:space="preserve"><value>本次阅读</value></data>
+  <data name="ReaderStatisticsTodayHeader.Text" xml:space="preserve"><value>今天</value></data>
+  <data name="ReaderStatisticsAllTimeHeader.Text" xml:space="preserve"><value>全部时间</value></data>
+  <data name="ReaderStatisticsCharactersLabel.Text" xml:space="preserve"><value>已读字数</value></data>
+  <data name="ReaderStatisticsSpeedLabel.Text" xml:space="preserve"><value>阅读速度</value></data>
+  <data name="ReaderStatisticsTimeLabel.Text" xml:space="preserve"><value>阅读时间</value></data>
+  <data name="ReaderStatisticsBookRemainingLabel.Text" xml:space="preserve"><value>读完整本预计时间</value></data>
+  <data name="ReaderStatisticsChapterRemainingLabel.Text" xml:space="preserve"><value>读完本章预计时间</value></data>
+  <data name="NovelReaderHistoryBackButton.AutomationProperties.Name" xml:space="preserve"><value>上一个阅读位置</value></data>
+  <data name="NovelReaderHistoryForwardButton.AutomationProperties.Name" xml:space="preserve"><value>下一个阅读位置</value></data>
+  <data name="SettingsStatisticsCard.Header" xml:space="preserve"><value>统计</value></data>
+  <data name="SettingsStatisticsCard.Description" xml:space="preserve"><value>阅读目标、自动开始和统计同步</value></data>
+  <data name="StatisticsSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>打开统计设置</value></data>
+  <data name="SettingsOpenStatisticsText.Text" xml:space="preserve"><value>打开</value></data>
+  <data name="StatisticsSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>返回</value></data>
+  <data name="StatisticsSettingsPageTitle.Text" xml:space="preserve"><value>统计</value></data>
+  <data name="StatisticsGeneralSectionHeader.Text" xml:space="preserve"><value>常规</value></data>
+  <data name="StatisticsEnableToggle.Header" xml:space="preserve"><value>启用</value></data>
+  <data name="StatisticsEnableToggle.Description" xml:space="preserve"><value>显示统计控件并保存阅读历史 sidecar</value></data>
+  <data name="StatisticsAutostartModeComboBox.Header" xml:space="preserve"><value>自动开始</value></data>
+  <data name="StatisticsAutostartModeComboBox.Description" xml:space="preserve"><value>手动开始、翻页时开始或打开阅读器时开始统计</value></data>
+  <data name="StatisticsDailyGoalSectionHeader.Text" xml:space="preserve"><value>每日目标</value></data>
+  <data name="StatisticsDailyTargetTypeComboBox.Header" xml:space="preserve"><value>目标类型</value></data>
+  <data name="StatisticsDailyTargetTypeComboBox.Description" xml:space="preserve"><value>每日目标按字数或阅读时长计算</value></data>
+  <data name="StatisticsDailyCharacterTargetNumberBox.Header" xml:space="preserve"><value>字数目标</value></data>
+  <data name="StatisticsDailyCharacterTargetNumberBox.Description" xml:space="preserve"><value>每日阅读字数目标</value></data>
+  <data name="StatisticsDailyDurationTargetNumberBox.Header" xml:space="preserve"><value>时长目标</value></data>
+  <data name="StatisticsDailyDurationTargetNumberBox.Description" xml:space="preserve"><value>每日阅读时长目标（分钟）</value></data>
+  <data name="StatisticsWeeklyGoalSectionHeader.Text" xml:space="preserve"><value>每周目标</value></data>
+  <data name="StatisticsWeeklyTargetDaysNumberBox.Header" xml:space="preserve"><value>目标天数</value></data>
+  <data name="StatisticsWeeklyTargetDaysNumberBox.Description" xml:space="preserve"><value>每周需要达成每日目标的天数</value></data>
+  <data name="StatisticsSyncSectionHeader.Text" xml:space="preserve"><value>同步</value></data>
+  <data name="StatisticsEnableSyncToggle.Header" xml:space="preserve"><value>ッツ Sync</value></data>
+  <data name="StatisticsEnableSyncToggle.Description" xml:space="preserve"><value>启用统计同步元数据</value></data>
+  <data name="StatisticsSyncModeComboBox.Header" xml:space="preserve"><value>同步行为</value></data>
+  <data name="StatisticsSyncModeComboBox.Description" xml:space="preserve"><value>同步时逐条合并或整体替换统计</value></data>
+  <data name="NovelBookMatchSasayakiMenuItem.Text" xml:space="preserve"><value>匹配 Sasayaki</value></data>
+  <data name="SasayakiLoadAudioButton.AutomationProperties.Name" xml:space="preserve"><value>加载音频</value></data>
+  <data name="SasayakiSkipBackButton.AutomationProperties.Name" xml:space="preserve"><value>后退 15 秒</value></data>
+  <data name="SasayakiPreviousCueButton.AutomationProperties.Name" xml:space="preserve"><value>上一句</value></data>
+  <data name="SasayakiPlayPauseButton.AutomationProperties.Name" xml:space="preserve"><value>播放/暂停</value></data>
+  <data name="SasayakiNextCueButton.AutomationProperties.Name" xml:space="preserve"><value>下一句</value></data>
+  <data name="SasayakiSkipForwardButton.AutomationProperties.Name" xml:space="preserve"><value>前进 15 秒</value></data>
+  <data name="SasayakiPositionSlider.AutomationProperties.Name" xml:space="preserve"><value>播放位置</value></data>
+  <data name="SasayakiCueTextBlock.AutomationProperties.Name" xml:space="preserve"><value>当前句子</value></data>
+  <data name="SasayakiPlaybackRateComboBox.AutomationProperties.Name" xml:space="preserve"><value>播放速度</value></data>
+  <data name="SettingsSasayakiCard.Header" xml:space="preserve"><value>Sasayaki</value></data>
+  <data name="SettingsSasayakiCard.Description" xml:space="preserve"><value>有声书跟读与文本高亮</value></data>
+  <data name="SasayakiSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>打开 Sasayaki 设置</value></data>
+  <data name="SettingsOpenSasayakiText.Text" xml:space="preserve"><value>打开</value></data>
+  <data name="SasayakiSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>返回</value></data>
+  <data name="SasayakiSettingsPageTitle.Text" xml:space="preserve"><value>Sasayaki</value></data>
+  <data name="SasayakiGeneralSectionHeader.Text" xml:space="preserve"><value>常规</value></data>
+  <data name="SasayakiEnableToggle.Header" xml:space="preserve"><value>启用</value></data>
+  <data name="SasayakiEnableToggle.Description" xml:space="preserve"><value>播放有声书，并跟随文本高亮阅读</value></data>
+  <data name="SasayakiReaderToggleSwitch.Header" xml:space="preserve"><value>显示 Sasayaki 开关</value></data>
+  <data name="SasayakiReaderToggleSwitch.Description" xml:space="preserve"><value>音频加载前也在阅读器显示 Sasayaki 控件</value></data>
+  <data name="SasayakiPlaybackSectionHeader.Text" xml:space="preserve"><value>播放</value></data>
+  <data name="SasayakiAutoScrollToggle.Header" xml:space="preserve"><value>自动滚动</value></data>
+  <data name="SasayakiAutoScrollToggle.Description" xml:space="preserve"><value>播放时将当前高亮句滚动到可见位置</value></data>
+  <data name="SasayakiAutoPauseToggle.Header" xml:space="preserve"><value>查词时自动暂停</value></data>
+  <data name="SasayakiAutoPauseToggle.Description" xml:space="preserve"><value>打开查词弹窗时暂停有声书播放</value></data>
+  <data name="SasayakiSkipControlsToggle.Header" xml:space="preserve"><value>显示快进/快退控件</value></data>
+  <data name="SasayakiSkipControlsToggle.Description" xml:space="preserve"><value>用 15 秒媒体跳转替代上一句/下一句控件</value></data>
+  <data name="SasayakiPlaybackRateComboBox.Header" xml:space="preserve"><value>默认播放速度</value></data>
+  <data name="SasayakiPlaybackRateComboBox.Description" xml:space="preserve"><value>新加载书籍的初始有声书速度</value></data>
+  <data name="SasayakiMatchingSectionHeader.Text" xml:space="preserve"><value>匹配</value></data>
+  <data name="SasayakiSearchWindowNumberBox.Header" xml:space="preserve"><value>搜索窗口大小</value></data>
+  <data name="SasayakiSearchWindowNumberBox.Description" xml:space="preserve"><value>匹配 SRT 句子时在附近搜索的字符数</value></data>
+  <data name="SasayakiSyncSectionHeader.Text" xml:space="preserve"><value>同步</value></data>
+  <data name="SasayakiEnableSyncToggle.Header" xml:space="preserve"><value>ッツ Sync</value></data>
+  <data name="SasayakiEnableSyncToggle.Description" xml:space="preserve"><value>启用有声书进度同步元数据</value></data>
+  <data name="SasayakiThemeSectionHeader.Text" xml:space="preserve"><value>高亮颜色</value></data>
+  <data name="SasayakiLightTextColorCard.Header" xml:space="preserve"><value>浅色文本颜色</value></data>
+  <data name="SasayakiLightBackgroundColorCard.Header" xml:space="preserve"><value>浅色背景颜色</value></data>
+  <data name="SasayakiDarkTextColorCard.Header" xml:space="preserve"><value>深色文本颜色</value></data>
+  <data name="SasayakiDarkBackgroundColorCard.Header" xml:space="preserve"><value>深色背景颜色</value></data>
+</root>

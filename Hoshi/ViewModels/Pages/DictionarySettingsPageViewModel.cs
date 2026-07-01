@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Hoshi.Models.Dictionary;
+using Hoshi.Models.Settings;
+using Hoshi.Services.Settings;
 using Hoshi.Services.Dictionary;
 using Hoshi.Services.UI;
 using Serilog;
@@ -14,7 +16,9 @@ namespace Hoshi.ViewModels.Pages;
 
 public partial class DictionarySettingsPageViewModel : ObservableObject
 {
-    public DictionaryType[] AvailableDictionaryTypes { get; } = Enum.GetValues<DictionaryType>();
+    private readonly ISettingsService _settingsService;
+
+    public DictionaryCollapseMode[] AvailableCollapseModes { get; } = Enum.GetValues<DictionaryCollapseMode>();
 
     public ObservableCollection<InstalledDictionary> InstalledDictionaries { get; } = [];
 
@@ -30,20 +34,125 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
     [ObservableProperty]
     public partial string DictionaryStatusText { get; set; } = "";
 
+    [ObservableProperty]
+    public partial bool ScanNonJapaneseText { get; set; } = true;
+
+    [ObservableProperty]
+    public partial int MaxResults { get; set; } = 16;
+
+    [ObservableProperty]
+    public partial int ScanLength { get; set; } = 16;
+
+    [ObservableProperty]
+    public partial DictionaryCollapseMode CollapseMode { get; set; } = DictionaryCollapseMode.ExpandAll;
+
+    [ObservableProperty]
+    public partial bool ExpandFirstDictionary { get; set; }
+
+    [ObservableProperty]
+    public partial bool CompactGlossaries { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool ShowExpressionTags { get; set; }
+
+    [ObservableProperty]
+    public partial bool HarmonicFrequency { get; set; }
+
+    [ObservableProperty]
+    public partial bool DeduplicatePitchAccents { get; set; }
+
+    [ObservableProperty]
+    public partial bool CompactPitchAccents { get; set; } = true;
+
+    public bool IsTermSelected => SelectedDictionaryType == DictionaryType.Term;
+    public bool IsFrequencySelected => SelectedDictionaryType == DictionaryType.Frequency;
+    public bool IsPitchSelected => SelectedDictionaryType == DictionaryType.Pitch;
+    public bool IsExpandFirstDictionaryVisible => CollapseMode != DictionaryCollapseMode.ExpandAll;
+
     public IAsyncRelayCommand ImportDictionaryCommand { get; }
     public IAsyncRelayCommand<string?> DeleteDictionaryCommand { get; }
+    public IRelayCommand IncreaseMaxResultsCommand { get; }
+    public IRelayCommand DecreaseMaxResultsCommand { get; }
+    public IRelayCommand IncreaseScanLengthCommand { get; }
+    public IRelayCommand DecreaseScanLengthCommand { get; }
 
     public DictionarySettingsPageViewModel()
     {
+        _settingsService = App.GetService<ISettingsService>();
+        LoadDisplaySettings();
         ImportDictionaryCommand = new AsyncRelayCommand(ImportDictionaryAsync);
         DeleteDictionaryCommand = new AsyncRelayCommand<string?>(DeleteDictionaryAsync);
+        IncreaseMaxResultsCommand = new RelayCommand(() => MaxResults = Clamp(MaxResults + 1, 1, 50));
+        DecreaseMaxResultsCommand = new RelayCommand(() => MaxResults = Clamp(MaxResults - 1, 1, 50));
+        IncreaseScanLengthCommand = new RelayCommand(() => ScanLength = Clamp(ScanLength + 1, 1, 64));
+        DecreaseScanLengthCommand = new RelayCommand(() => ScanLength = Clamp(ScanLength - 1, 1, 64));
         _ = RefreshDictionariesAsync();
     }
 
     partial void OnSelectedDictionaryTypeChanged(DictionaryType value)
     {
+        OnPropertyChanged(nameof(IsTermSelected));
+        OnPropertyChanged(nameof(IsFrequencySelected));
+        OnPropertyChanged(nameof(IsPitchSelected));
         _ = RefreshDictionariesAsync();
     }
+
+    partial void OnScanNonJapaneseTextChanged(bool value) =>
+        UpdateDisplaySettings(current => current with { ScanNonJapaneseText = value });
+
+    partial void OnMaxResultsChanged(int value) =>
+        UpdateDisplaySettings(current => current with { MaxResults = Clamp(value, 1, 50) });
+
+    partial void OnScanLengthChanged(int value) =>
+        UpdateDisplaySettings(current => current with { ScanLength = Clamp(value, 1, 64) });
+
+    partial void OnCollapseModeChanged(DictionaryCollapseMode value)
+    {
+        OnPropertyChanged(nameof(IsExpandFirstDictionaryVisible));
+        UpdateDisplaySettings(current => current with { CollapseMode = value });
+    }
+
+    partial void OnExpandFirstDictionaryChanged(bool value) =>
+        UpdateDisplaySettings(current => current with { ExpandFirstDictionary = value });
+
+    partial void OnCompactGlossariesChanged(bool value) =>
+        UpdateDisplaySettings(current => current with { CompactGlossaries = value });
+
+    partial void OnShowExpressionTagsChanged(bool value) =>
+        UpdateDisplaySettings(current => current with { ShowExpressionTags = value });
+
+    partial void OnHarmonicFrequencyChanged(bool value) =>
+        UpdateDisplaySettings(current => current with { HarmonicFrequency = value });
+
+    partial void OnDeduplicatePitchAccentsChanged(bool value) =>
+        UpdateDisplaySettings(current => current with { DeduplicatePitchAccents = value });
+
+    partial void OnCompactPitchAccentsChanged(bool value) =>
+        UpdateDisplaySettings(current => current with { CompactPitchAccents = value });
+
+    private void LoadDisplaySettings()
+    {
+        var settings = _settingsService.Current.DictionaryDisplaySettings;
+        ScanNonJapaneseText = settings.ScanNonJapaneseText;
+        MaxResults = Clamp(settings.MaxResults, 1, 50);
+        ScanLength = Clamp(settings.ScanLength, 1, 64);
+        CollapseMode = settings.CollapseMode;
+        ExpandFirstDictionary = settings.ExpandFirstDictionary;
+        CompactGlossaries = settings.CompactGlossaries;
+        ShowExpressionTags = settings.ShowExpressionTags;
+        HarmonicFrequency = settings.HarmonicFrequency;
+        DeduplicatePitchAccents = settings.DeduplicatePitchAccents;
+        CompactPitchAccents = settings.CompactPitchAccents;
+    }
+
+    private void UpdateDisplaySettings(Func<DictionaryDisplaySettings, DictionaryDisplaySettings> update)
+    {
+        var current = _settingsService.Current.DictionaryDisplaySettings;
+        _settingsService.Set(s => s.DictionaryDisplaySettings, update(current));
+        _ = _settingsService.SaveAsync();
+    }
+
+    private static int Clamp(int value, int min, int max) => Math.Min(Math.Max(value, min), max);
 
     public async Task RefreshDictionariesAsync()
     {
@@ -125,9 +234,12 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
 
             IsDictionaryOperationInProgress = true;
             DictionaryStatusText = $"Importing {file.Name}...";
-            Log.Information("[DictionarySettings] Importing dictionary from {Path}", file.Path);
+            Log.Information("[DictionarySettings] Importing dictionary from {Path} (Name={FileName})", file.Path, file.Name);
 
             var result = await importService.ImportAsync(file.Path);
+            Log.Information("[DictionarySettings] ImportAsync returned Success={Success}, Title={Title}, Errors={Errors}",
+                result.Success, result.Title, string.Join("; ", result.Errors));
+
             if (result.Success)
             {
                 notification.ShowSuccess(
@@ -138,13 +250,17 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
             else
             {
                 var errors = string.Join("\n", result.Errors);
-                notification.ShowError($"Failed to import dictionary: {errors}", "Import Failed");
+                notification.ShowError($"Failed to import dictionary:\n{errors}", "Import Failed");
             }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "[DictionarySettings] Dictionary import failed");
-            App.GetService<INotificationService>().ShowError(ex.Message, "Import Error");
+            Log.Error(ex, "[DictionarySettings] Import failed: Type={ExceptionType}, Message={Message}",
+                ex.GetType().FullName, ex.Message);
+            if (ex.InnerException != null)
+                Log.Error(ex.InnerException, "[DictionarySettings] Inner exception: {InnerType}: {InnerMessage}",
+                    ex.InnerException.GetType().FullName, ex.InnerException.Message);
+            App.GetService<INotificationService>().ShowError($"[{ex.GetType().Name}] {ex.Message}", "Import Error");
         }
         finally
         {
@@ -163,7 +279,7 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
             Log.Information("[DictionarySettings] Deleting dictionary '{Dict}'", dictName);
 
             var importService = App.GetService<IDictionaryImportService>();
-            var deleted = await importService.DeleteAsync(dictName);
+            var deleted = await importService.DeleteAsync(SelectedDictionaryType, dictName);
             if (deleted)
             {
                 App.GetService<INotificationService>()

@@ -1,0 +1,254 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Hoshi.Models;
+using Hoshi.Models.Novel;
+using Hoshi.Models.Settings;
+
+namespace Hoshi.Services.Novels;
+
+public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardService
+{
+    private readonly INovelStatisticsSidecarService _statisticsSidecarService;
+
+    public NovelStatisticsDashboardService(INovelStatisticsSidecarService statisticsSidecarService)
+    {
+        _statisticsSidecarService = statisticsSidecarService;
+    }
+
+    public async Task<NovelStatisticsDashboardSnapshot> LoadSnapshotAsync(
+        IReadOnlyList<NovelBook> books,
+        CancellationToken ct = default)
+    {
+        var contributionsByDate = new Dictionary<DateOnly, List<NovelStatisticsBookContribution>>();
+
+        foreach (var book in books)
+        {
+            if (string.IsNullOrWhiteSpace(book.ExtractedPath))
+                continue;
+
+            var statistics = await _statisticsSidecarService.LoadAsync(book.ExtractedPath, ct);
+            foreach (var statistic in statistics)
+            {
+                if (statistic.CharactersRead <= 0 && statistic.ReadingTime <= 0)
+                    continue;
+                if (!DateOnly.TryParseExact(
+                    statistic.DateKey,
+                    "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var date))
+                {
+                    continue;
+                }
+
+                var contribution = new NovelStatisticsBookContribution(
+                    book.Id,
+                    string.IsNullOrWhiteSpace(book.Title) ? statistic.Title : book.Title,
+                    book.CoverPath,
+                    statistic.CharactersRead,
+                    statistic.ReadingTime);
+                contributionsByDate.GetOrAdd(date).Add(contribution);
+            }
+        }
+
+        var days = contributionsByDate
+            .Select(pair =>
+            {
+                var contributions = pair.Value
+                    .OrderBy(item => item.Title, StringComparer.CurrentCultureIgnoreCase)
+                    .ToList();
+                return new NovelStatisticsDayAggregate(
+                    pair.Key,
+                    contributions.Sum(item => item.Characters),
+                    contributions.Sum(item => item.ReadingTime),
+                    contributions);
+            })
+            .OrderBy(day => day.Date)
+            .ToList();
+
+        return new NovelStatisticsDashboardSnapshot(days, []);
+    }
+}
+
+public static class NovelStatisticsDashboardCalculator
+{
+    public static NovelStatisticsTodaySummary TodaySummary(
+        NovelStatisticsDashboardSnapshot snapshot,
+        DateOnly today,
+        NovelStatisticsDashboardTargetSettings settings)
+    {
+        var daysByDate = DictionaryByDate(snapshot.Days);
+        var aggregate = daysByDate.GetValueOrDefault(today) ?? EmptyDay(today);
+        return new NovelStatisticsTodaySummary(
+            today,
+            Percent(TargetRatio(aggregate, settings)),
+            aggregate.Characters,
+            aggregate.ReadingTime,
+            AverageSpeedPerHour(aggregate.Characters, aggregate.ReadingTime),
+            DailyGoalStreak(daysByDate, today, settings));
+    }
+
+    public static NovelStatisticsWeekSummary WeekSummary(
+        NovelStatisticsDashboardSnapshot snapshot,
+        DateOnly today,
+        NovelStatisticsDashboardTargetSettings settings)
+    {
+        var start = MondayStartOfWeek(today);
+        var range = new NovelStatisticsDateRange(start, today);
+        var daysByDate = DictionaryByDate(snapshot.Days);
+        var days = DatesInRange(range).Select(date => daysByDate.GetValueOrDefault(date) ?? EmptyDay(date)).ToList();
+        var characters = days.Sum(day => day.Characters);
+        var readingTime = days.Sum(day => day.ReadingTime);
+        var elapsedDays = Math.Max(days.Count, 1);
+
+        return new NovelStatisticsWeekSummary(
+            range,
+            characters,
+            readingTime,
+            AverageSpeedPerHour(characters, readingTime),
+            settings.WeeklyTargetDays,
+            days.Count(day => TargetRatio(day, settings) >= 1),
+            DailyGoalStreak(daysByDate, today, settings),
+            (int)Math.Round(characters / (double)elapsedDays),
+            readingTime / elapsedDays);
+    }
+
+    public static NovelStatisticsRangeSummary RangeSummary(
+        IEnumerable<NovelStatisticsDayAggregate> days,
+        NovelStatisticsDateRange range,
+        NovelStatisticsDashboardTargetSettings settings)
+    {
+        var rangeDays = days.Where(day => day.Date >= range.Start && day.Date <= range.End).ToList();
+        var characters = rangeDays.Sum(day => day.Characters);
+        var readingTime = rangeDays.Sum(day => day.ReadingTime);
+        return new NovelStatisticsRangeSummary(
+            characters,
+            readingTime,
+            AverageSpeedPerHour(characters, readingTime),
+            rangeDays.Count(day => TargetRatio(day, settings) >= 1),
+            range.Start == range.End && rangeDays.Count == 1 ? Percent(TargetRatio(rangeDays[0], settings)) : 0);
+    }
+
+    public static IReadOnlyList<NovelStatisticsDistributionRow> DistributionRows(
+        IEnumerable<NovelStatisticsDayAggregate> days,
+        NovelStatisticsDateRange range,
+        StatisticsDailyTargetType targetType)
+    {
+        var totals = days
+            .Where(day => day.Date >= range.Start && day.Date <= range.End)
+            .SelectMany(day => day.BookContributions)
+            .Where(contribution => contribution.Characters > 0 || contribution.ReadingTime > 0)
+            .GroupBy(contribution => contribution.BookId, StringComparer.Ordinal)
+            .Select(group =>
+            {
+                var first = group.First();
+                return new NovelStatisticsDistributionRow(
+                    first.BookId,
+                    first.Title,
+                    first.CoverPath,
+                    group.Sum(item => item.Characters),
+                    group.Sum(item => item.ReadingTime),
+                    Percent: 0);
+            })
+            .ToList();
+        var totalMetric = totals.Sum(row => MetricValue(row, targetType));
+
+        return totals
+            .Select(row => row with
+            {
+                Percent = totalMetric > 0 ? Percent(MetricValue(row, targetType) / totalMetric) : 0,
+            })
+            .OrderByDescending(row => MetricValue(row, targetType))
+            .ThenBy(row => row.Title, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+    }
+
+    public static DateOnly MondayStartOfWeek(DateOnly date)
+    {
+        var daysSinceMonday = ((int)date.DayOfWeek + 6) % 7;
+        return date.AddDays(-daysSinceMonday);
+    }
+
+    public static int AverageSpeedPerHour(int characters, double readingTime)
+    {
+        if (readingTime <= 0)
+            return 0;
+        return (int)Math.Round(characters / readingTime * 3600);
+    }
+
+    private static IReadOnlyList<DateOnly> DatesInRange(NovelStatisticsDateRange range)
+    {
+        var dates = new List<DateOnly>();
+        for (var cursor = range.Start; cursor <= range.End; cursor = cursor.AddDays(1))
+            dates.Add(cursor);
+        return dates;
+    }
+
+    private static int DailyGoalStreak(
+        IReadOnlyDictionary<DateOnly, NovelStatisticsDayAggregate> daysByDate,
+        DateOnly today,
+        NovelStatisticsDashboardTargetSettings settings)
+    {
+        var cursor = today;
+        if (TargetRatio(daysByDate.GetValueOrDefault(today) ?? EmptyDay(today), settings) < 1)
+            cursor = cursor.AddDays(-1);
+
+        var streak = 0;
+        while (TargetRatio(daysByDate.GetValueOrDefault(cursor) ?? EmptyDay(cursor), settings) >= 1)
+        {
+            streak++;
+            cursor = cursor.AddDays(-1);
+        }
+
+        return streak;
+    }
+
+    private static IReadOnlyDictionary<DateOnly, NovelStatisticsDayAggregate> DictionaryByDate(
+        IEnumerable<NovelStatisticsDayAggregate> days) =>
+        days.ToDictionary(day => day.Date);
+
+    private static NovelStatisticsDayAggregate EmptyDay(DateOnly date) =>
+        new(date, 0, 0, []);
+
+    private static double TargetRatio(
+        NovelStatisticsDayAggregate day,
+        NovelStatisticsDashboardTargetSettings settings)
+    {
+        return settings.DailyTargetType switch
+        {
+            StatisticsDailyTargetType.Duration when settings.DailyDurationTargetMinutes > 0 =>
+                day.ReadingTime / (settings.DailyDurationTargetMinutes * 60.0),
+            StatisticsDailyTargetType.Characters when settings.DailyCharacterTarget > 0 =>
+                day.Characters / (double)settings.DailyCharacterTarget,
+            _ => 0,
+        };
+    }
+
+    private static double MetricValue(NovelStatisticsDistributionRow row, StatisticsDailyTargetType targetType) =>
+        targetType == StatisticsDailyTargetType.Duration ? row.ReadingTime : row.Characters;
+
+    private static int Percent(double ratio) =>
+        (int)Math.Round(ratio * 100);
+}
+
+internal static class DictionaryExtensions
+{
+    public static TValue GetOrAdd<TKey, TValue>(
+        this IDictionary<TKey, TValue> dictionary,
+        TKey key)
+        where TKey : notnull
+        where TValue : new()
+    {
+        if (!dictionary.TryGetValue(key, out var value))
+        {
+            value = new TValue();
+            dictionary[key] = value;
+        }
+
+        return value;
+    }
+}

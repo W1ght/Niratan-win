@@ -25,44 +25,23 @@ public sealed partial class SettingsPage : Page
         await ViewModel.OnNavigatedFromAsync();
     }
 
-    private void FontSizeDecrease_Click(object sender, RoutedEventArgs e)
+    private void ReaderAppearanceSettings_Click(object sender, RoutedEventArgs e)
     {
-        if (ViewModel.FontSize > 16)
-            ViewModel.FontSize--;
-    }
-
-    private void FontSizeIncrease_Click(object sender, RoutedEventArgs e)
-    {
-        if (ViewModel.FontSize < 60)
-            ViewModel.FontSize++;
-    }
-
-    private void HPaddingDecrease_Click(object sender, RoutedEventArgs e)
-    {
-        if (ViewModel.HorizontalPadding > 0)
-            ViewModel.HorizontalPadding--;
-    }
-
-    private void HPaddingIncrease_Click(object sender, RoutedEventArgs e)
-    {
-        if (ViewModel.HorizontalPadding < 50)
-            ViewModel.HorizontalPadding++;
-    }
-
-    private void VPaddingDecrease_Click(object sender, RoutedEventArgs e)
-    {
-        if (ViewModel.VerticalPadding > 0)
-            ViewModel.VerticalPadding--;
-    }
-
-    private void VPaddingIncrease_Click(object sender, RoutedEventArgs e)
-    {
-        if (ViewModel.VerticalPadding < 50)
-            ViewModel.VerticalPadding++;
+        App.GetService<INavigationService>().Navigate(typeof(ReaderAppearanceSettingsPage));
     }
 
     private void DictionarySettings_Click(object sender, RoutedEventArgs e)
     {
         App.GetService<INavigationService>().Navigate(typeof(DictionarySettingsPage));
+    }
+
+    private void AnkiSettings_Click(object sender, RoutedEventArgs e)
+    {
+        App.GetService<INavigationService>().Navigate(typeof(AnkiSettingsPage));
+    }
+
+    private void AdvancedSettings_Click(object sender, RoutedEventArgs e)
+    {
+        App.GetService<INavigationService>().Navigate(typeof(AdvancedSettingsPage));
     }
 }

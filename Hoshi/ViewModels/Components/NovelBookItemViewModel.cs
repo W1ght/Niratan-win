@@ -9,6 +9,13 @@ public class NovelBookItemViewModel
 {
     public NovelBook Book { get; }
     public string AutomationId => $"NovelBookCard_{Book.Id}";
+    public double OverallProgress => Book.TotalCharacterCount > 0
+        ? Math.Clamp(Book.CurrentCharacterCount / (double)Book.TotalCharacterCount, 0, 1)
+        : Book.ChapterCount <= 0
+            ? Math.Clamp(Book.Progress, 0, 1)
+            : Math.Clamp((Book.CurrentChapterIndex + Book.Progress) / Book.ChapterCount, 0, 1);
+    public double OverallProgressPercent => OverallProgress * 100;
+    public string OverallProgressText => $"{OverallProgressPercent:0.0}%";
 
     public BitmapImage? CoverImage { get; }
     public bool HasCover => CoverImage != null;

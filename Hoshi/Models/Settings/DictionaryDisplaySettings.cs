@@ -11,6 +11,7 @@ public enum DictionaryCollapseMode
 }
 
 public sealed record DictionaryDisplaySettings(
+    bool DictionaryTabDefault = false,
     bool CompactGlossaries = true,
     bool ExpandFirstDictionary = false,
     DictionaryCollapseMode CollapseMode = DictionaryCollapseMode.ExpandAll,
@@ -20,7 +21,9 @@ public sealed record DictionaryDisplaySettings(
     bool HarmonicFrequency = false,
     bool ShowExpressionTags = false,
     string CustomCSS = "",
-    bool ScanNonJapaneseText = true
+    bool ScanNonJapaneseText = true,
+    int MaxResults = 16,
+    int ScanLength = 16
 )
 {
     [JsonIgnore]

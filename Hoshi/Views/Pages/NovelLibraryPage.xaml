@@ -6,6 +6,7 @@
       xmlns:converters="using:Hoshi.Helpers.UI.Converters"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:novel="using:Hoshi.Models.Novel"
       xmlns:vmc="using:Hoshi.ViewModels.Components"
       mc:Ignorable="d">
 
@@ -14,7 +15,6 @@
 
         <DataTemplate x:Key="NovelBookTemplate" x:DataType="vmc:NovelBookItemViewModel">
             <Button Width="180"
-                    Height="280"
                     Padding="0"
                     HorizontalContentAlignment="Stretch"
                     VerticalContentAlignment="Stretch"
@@ -25,49 +25,83 @@
                     Click="NovelBookButton_Click">
                 <Button.ContextFlyout>
                     <MenuFlyout>
+                        <MenuFlyoutItem x:Uid="NovelBookMatchSasayakiMenuItem"
+                                        Text="Match Sasayaki"
+                                        AutomationProperties.AutomationId="NovelBookMatchSasayakiMenuItem"
+                                        Command="{Binding ViewModel.MatchSasayakiCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                        <MenuFlyoutSeparator />
                         <MenuFlyoutItem Text="Delete"
                                         Command="{Binding ViewModel.DeleteNovelCommand, ElementName=ThisPage}"
                                         CommandParameter="{x:Bind}" />
                     </MenuFlyout>
                 </Button.ContextFlyout>
-                <Grid CornerRadius="8"
-                      Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="220" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-
-                    <!--  Cover Image  -->
-                    <Grid Grid.Row="0"
-                          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                          CornerRadius="8,8,0,0">
-                        <Image Stretch="Uniform"
-                               Source="{x:Bind CoverImage, Mode=OneTime}"
-                               Visibility="{x:Bind HasCover, Mode=OneTime, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                        <FontIcon FontSize="48"
-                                  Glyph="&#xE8B9;"
-                                  Opacity="0.3"
-                                  HorizontalAlignment="Center"
-                                  VerticalAlignment="Center"
-                                  Visibility="{x:Bind HasCover, Mode=OneTime, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}" />
-                    </Grid>
-
-                    <!--  Book Info  -->
-                    <StackPanel Grid.Row="1" Padding="10,8" Spacing="2">
+                <StackPanel Spacing="6">
+                    <Border Height="250"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            CornerRadius="8">
+                        <Grid>
+                            <Image Stretch="UniformToFill"
+                                   Source="{x:Bind CoverImage, Mode=OneTime}"
+                                   Visibility="{x:Bind HasCover, Mode=OneTime, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            <FontIcon FontSize="48"
+                                      Glyph="&#xE8B9;"
+                                      Opacity="0.3"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      Visibility="{x:Bind HasCover, Mode=OneTime, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}" />
+                        </Grid>
+                    </Border>
+                    <StackPanel Spacing="4">
+                        <Grid Margin="0,0,0,4"
+                              ColumnDefinitions="*,Auto"
+                              ColumnSpacing="8">
+                            <ProgressBar Height="4"
+                                         Minimum="0"
+                                         Maximum="100"
+                                         VerticalAlignment="Center"
+                                         Value="{x:Bind OverallProgressPercent, Mode=OneWay}" />
+                            <TextBlock Grid.Column="1"
+                                       VerticalAlignment="Center"
+                                       FontWeight="SemiBold"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="{x:Bind OverallProgressText, Mode=OneWay}" />
+                        </Grid>
                         <TextBlock Text="{x:Bind Book.Title, Mode=OneTime}"
-                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="Wrap"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <TextBlock Text="{x:Bind Book.Author, Mode=OneTime}"
-                                   TextTrimming="CharacterEllipsis"
-                                   Style="{StaticResource CaptionTextBlockStyle}" />
                     </StackPanel>
-                </Grid>
+                </StackPanel>
             </Button>
+        </DataTemplate>
+
+        <DataTemplate x:Key="StatisticsDistributionTemplate" x:DataType="novel:NovelStatisticsDistributionRow">
+            <Grid Padding="0,6"
+                  ColumnDefinitions="*,Auto"
+                  ColumnSpacing="8">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="{x:Bind Title, Mode=OneWay}"
+                               TextTrimming="CharacterEllipsis"
+                               Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock Text="{x:Bind CharactersText, Mode=OneWay}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+                <TextBlock Grid.Column="1"
+                           VerticalAlignment="Center"
+                           FontWeight="SemiBold"
+                           Text="{x:Bind PercentText, Mode=OneWay}" />
+            </Grid>
         </DataTemplate>
     </Page.Resources>
 
-    <Grid RowDefinitions="Auto, *">
-        <Grid Grid.Row="0" Padding="20,14,36,16" ColumnDefinitions="Auto, *, Auto">
+    <Grid RowDefinitions="Auto, Auto, *"
+          AllowDrop="True"
+          DragOver="NovelLibrary_DragOver"
+          Drop="NovelLibrary_Drop">
+        <Grid Grid.Row="0"
+              Padding="20,14,36,16"
+              ColumnDefinitions="Auto, *, Auto, Auto, Auto"
+              ColumnSpacing="12">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <FontIcon FontSize="24" Glyph="&#xE82D;" />
                 <TextBlock Margin="8,0,0,0"
@@ -76,7 +110,29 @@
                            Text="Novels" />
             </StackPanel>
 
-            <Button Grid.Column="2"
+            <ToggleButton Grid.Column="2"
+                          x:Name="NovelLibraryStatisticsButton"
+                          x:Uid="NovelLibraryStatisticsButton"
+                          AutomationProperties.AutomationId="NovelLibraryStatisticsButton"
+                          AutomationProperties.Name="Statistics"
+                          IsChecked="{x:Bind ViewModel.ShowStatisticsDashboard, Mode=TwoWay}"
+                          ToolTipService.ToolTip="Statistics">
+                <FontIcon Glyph="&#xE9D2;" />
+            </ToggleButton>
+
+            <ComboBox Grid.Column="3"
+                      Width="148"
+                      VerticalAlignment="Center"
+                      x:Uid="NovelLibrarySortComboBox"
+                      AutomationProperties.AutomationId="NovelLibrarySortComboBox"
+                      AutomationProperties.Name="Sort novels"
+                      ItemsSource="{x:Bind ViewModel.SortOptions, Mode=OneWay}"
+                      DisplayMemberPath="DisplayName"
+                      SelectedValuePath="Value"
+                      SelectedValue="{x:Bind ViewModel.SelectedSortOption, Mode=TwoWay}"
+                      ToolTipService.ToolTip="Sort novels" />
+
+            <Button Grid.Column="4"
                     AutomationProperties.AutomationId="ImportNovelButton"
                     Command="{x:Bind ViewModel.ImportNovelCommand}"
                     ToolTipService.ToolTip="Import EPUB">
@@ -86,7 +142,47 @@
             </Button>
         </Grid>
 
-        <ProgressRing Grid.Row="1"
+        <Border Grid.Row="1"
+                Margin="20,0,36,16"
+                Padding="16"
+                CornerRadius="8"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                AutomationProperties.AutomationId="NovelLibraryStatisticsDashboard"
+                Visibility="{x:Bind ViewModel.ShowStatisticsDashboard, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+            <Grid ColumnDefinitions="*,*,2*"
+                  ColumnSpacing="18">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Today"
+                               Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock x:Name="NovelLibraryTodayStatisticsText"
+                               AutomationProperties.AutomationId="NovelLibraryTodayStatisticsText"
+                               Text="{x:Bind ViewModel.StatisticsTodayText, Mode=OneWay}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1"
+                            Spacing="6">
+                    <TextBlock Text="This Week"
+                               Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock x:Name="NovelLibraryWeekStatisticsText"
+                               AutomationProperties.AutomationId="NovelLibraryWeekStatisticsText"
+                               Text="{x:Bind ViewModel.StatisticsWeekText, Mode=OneWay}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2"
+                            Spacing="6">
+                    <TextBlock Text="By Book"
+                               Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <ItemsControl x:Name="NovelLibraryByBookStatisticsList"
+                                  AutomationProperties.AutomationId="NovelLibraryByBookStatisticsList"
+                                  ItemTemplate="{StaticResource StatisticsDistributionTemplate}"
+                                  ItemsSource="{x:Bind ViewModel.StatisticsDistributionRows, Mode=OneWay}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <ProgressRing Grid.Row="2"
                       Width="60"
                       Height="60"
                       HorizontalAlignment="Center"
@@ -94,15 +190,19 @@
                       IsActive="{x:Bind ViewModel.IsContentLoading, Mode=OneWay}"
                       Visibility="{x:Bind ViewModel.IsContentLoading, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
 
-        <TextBlock Grid.Row="1"
+        <TextBlock Grid.Row="2"
                    HorizontalAlignment="Center"
                    VerticalAlignment="Center"
                    Style="{StaticResource BodyLargeStrongTextBlockStyle}"
                    Text="No novels imported."
                    Visibility="{x:Bind ViewModel.NoNovels, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
 
-        <GridView Grid.Row="1"
+        <GridView Grid.Row="2"
                   AutomationProperties.AutomationId="NovelBookGridView"
+                  AllowDrop="True"
+                  CanDragItems="True"
+                  CanReorderItems="True"
+                  DragItemsCompleted="NovelBookGridView_DragItemsCompleted"
                   Padding="0,0,16,0"
                   IsItemClickEnabled="True"
                   ItemClick="GridView_ItemClick"

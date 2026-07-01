@@ -32,7 +32,7 @@ internal class DataService : IDataService
     {
         using var connection = await GetOpenConnectionAsync();
         const string sql = """
-            SELECT Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount, CurrentChapterIndex, Progress
+            SELECT Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount, CurrentChapterIndex, Progress, CurrentCharacterCount, TotalCharacterCount, ManualSortOrder
             FROM NovelBooks
             WHERE @QueryText IS NULL
                 OR TRIM(@QueryText) = ''
@@ -55,7 +55,7 @@ internal class DataService : IDataService
     {
         using var connection = await GetOpenConnectionAsync();
         const string sql = """
-            SELECT Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount, CurrentChapterIndex, Progress
+            SELECT Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount, CurrentChapterIndex, Progress, CurrentCharacterCount, TotalCharacterCount, ManualSortOrder
             FROM NovelBooks
             WHERE Id = @BookId;
             """;
@@ -70,9 +70,9 @@ internal class DataService : IDataService
         using var connection = await GetOpenConnectionAsync();
         const string sql = """
             INSERT INTO NovelBooks
-                (Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount, CurrentChapterIndex, Progress)
+                (Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount, CurrentChapterIndex, Progress, CurrentCharacterCount, TotalCharacterCount, ManualSortOrder)
             VALUES
-                (@Id, @Title, @Author, @FilePath, @CoverPath, @ImportedAt, @LastOpenedAt, @Language, @UniqueIdentifier, @ExtractedPath, @ChapterCount, @CurrentChapterIndex, @Progress)
+                (@Id, @Title, @Author, @FilePath, @CoverPath, @ImportedAt, @LastOpenedAt, @Language, @UniqueIdentifier, @ExtractedPath, @ChapterCount, @CurrentChapterIndex, @Progress, @CurrentCharacterCount, @TotalCharacterCount, @ManualSortOrder)
             ON CONFLICT(FilePath) DO UPDATE SET
                 Title = excluded.Title,
                 Author = excluded.Author,
@@ -80,7 +80,11 @@ internal class DataService : IDataService
                 Language = excluded.Language,
                 UniqueIdentifier = excluded.UniqueIdentifier,
                 ExtractedPath = excluded.ExtractedPath,
-                ChapterCount = excluded.ChapterCount;
+                ChapterCount = excluded.ChapterCount,
+                TotalCharacterCount = CASE
+                    WHEN excluded.TotalCharacterCount > 0 THEN excluded.TotalCharacterCount
+                    ELSE NovelBooks.TotalCharacterCount
+                END;
             """;
 
         await connection.ExecuteAsync(new CommandDefinition(sql, book, cancellationToken: ct));
@@ -118,16 +122,59 @@ internal class DataService : IDataService
         string bookId,
         int chapterIndex,
         double progress,
+        int currentCharacterCount,
+        int totalCharacterCount,
         CancellationToken ct = default
     )
     {
         using var connection = await GetOpenConnectionAsync();
         await connection.ExecuteAsync(
             new CommandDefinition(
-                "UPDATE NovelBooks SET CurrentChapterIndex = @ChapterIndex, Progress = @Progress WHERE Id = @BookId;",
-                new { BookId = bookId, ChapterIndex = chapterIndex, Progress = progress },
+                """
+                UPDATE NovelBooks
+                SET CurrentChapterIndex = @ChapterIndex,
+                    Progress = @Progress,
+                    CurrentCharacterCount = @CurrentCharacterCount,
+                    TotalCharacterCount = @TotalCharacterCount
+                WHERE Id = @BookId;
+                """,
+                new
+                {
+                    BookId = bookId,
+                    ChapterIndex = chapterIndex,
+                    Progress = progress,
+                    CurrentCharacterCount = currentCharacterCount,
+                    TotalCharacterCount = totalCharacterCount,
+                },
                 cancellationToken: ct
             )
         );
+    }
+
+    public async Task SaveNovelBookOrderAsync(
+        IReadOnlyList<string> orderedBookIds,
+        CancellationToken ct = default
+    )
+    {
+        using var connection = await GetOpenConnectionAsync();
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+
+        for (var index = 0; index < orderedBookIds.Count; index++)
+        {
+            await connection.ExecuteAsync(
+                new CommandDefinition(
+                    """
+                    UPDATE NovelBooks
+                    SET ManualSortOrder = @ManualSortOrder
+                    WHERE Id = @BookId;
+                    """,
+                    new { BookId = orderedBookIds[index], ManualSortOrder = index },
+                    transaction,
+                    cancellationToken: ct
+                )
+            );
+        }
+
+        await transaction.CommitAsync(ct);
     }
 }

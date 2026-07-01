@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -34,17 +35,19 @@ internal class DialogService : IDialogService
         return result == ContentDialogResult.Primary;
     }
 
-    public async Task<string?> OpenFilePickerAsync(string fileTypeFilter = "*")
+    public async Task<string?> OpenFilePickerAsync(params string[] fileTypeFilters)
     {
         if (_xamlRoot == null)
             throw new InvalidOperationException("XamlRoot must be initialized.");
 
         var picker = new FileOpenPicker(_xamlRoot.ContentIslandEnvironment.AppWindowId)
         {
-            FileTypeFilter = { fileTypeFilter },
             SuggestedStartLocation = PickerLocationId.Downloads,
             ViewMode = PickerViewMode.List,
         };
+        var filters = fileTypeFilters.Length == 0 ? ["*"] : fileTypeFilters;
+        foreach (var filter in filters.Where(filter => !string.IsNullOrWhiteSpace(filter)).Distinct())
+            picker.FileTypeFilter.Add(filter);
 
         var file = await picker.PickSingleFileAsync();
         return file?.Path;

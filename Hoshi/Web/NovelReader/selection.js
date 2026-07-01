@@ -35,10 +35,23 @@
     });
   }
 
-  function getShiftHoverDelayMs() {
-    const configured = Number(window.__hoshiLookupSettings?.shiftHoverDelayMs);
-    if (!Number.isFinite(configured)) return 300;
-    return Math.min(800, Math.max(80, configured));
+  function getScanLength() {
+    const configured = Number(window.__hoshiLookupSettings?.scanLength);
+    if (!Number.isFinite(configured)) return 16;
+    return Math.min(64, Math.max(1, configured));
+  }
+
+  function scanNonJapaneseTextEnabled() {
+    if (window.scanNonJapaneseText === false) {
+      return false;
+    }
+
+    if (window.scanNonJapaneseText === true) {
+      return true;
+    }
+
+    const configured = window.__hoshiLookupSettings?.scanNonJapaneseText;
+    return typeof configured === 'boolean' ? configured : true;
   }
 
   const hoshiSelection = {
@@ -62,7 +75,7 @@
     isScanBoundary(char) {
       return /^[\s　]$/.test(char) ||
         this.scanDelimiters.includes(char) ||
-        !isCodePointJapanese(char.codePointAt(0));
+        (!scanNonJapaneseTextEnabled() && !this.isCodePointJapanese(char.codePointAt(0)));
     },
 
     isFurigana(node) {
@@ -261,6 +274,39 @@
       return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
     },
 
+    highlightSelection(charCount) {
+      if (!this.selection?.ranges.length) return;
+
+      const highlights = this.selectionCharacterRanges(charCount);
+      CSS.highlights?.set('hoshi-selection', new Highlight(...highlights));
+    },
+
+    selectionCharacterRanges(charCount) {
+      if (!this.selection?.ranges.length) return [];
+
+      const ranges = [];
+      let remaining = charCount;
+
+      for (const r of this.selection.ranges) {
+        if (remaining <= 0) break;
+
+        let start = r.start;
+        let end = start;
+        while (end < r.end && remaining > 0) {
+          const char = String.fromCodePoint(r.node.textContent.codePointAt(end));
+          end += char.length;
+          remaining--;
+        }
+
+        const range = document.createRange();
+        range.setStart(r.node, start);
+        range.setEnd(r.node, end);
+        ranges.push(range);
+      }
+
+      return ranges;
+    },
+
     selectText(x, y, maxLength) {
       if (document.elementFromPoint(x, y)?.closest('a')) {
         this.clearSelection();
@@ -367,34 +413,42 @@
 
   // Click handler for instant lookup
   document.addEventListener('click', (e) => {
-    hoshiSelection.selectText(e.clientX, e.clientY, 16);
+    if (window.__hoshiLookupPopupActive === true) {
+      hoshiSelection.clearSelection();
+      postToHost('lookupDismiss', {});
+      return;
+    }
+
+    hoshiSelection.selectText(e.clientX, e.clientY, getScanLength());
   });
 
-  // Hover + Shift handler (throttled)
-  let hoverThrottle = null;
+  // Hover + Shift handler (immediate)
   let lastHoverPoint = null;
-  function scheduleHoverLookup(x, y) {
-    if (hoverThrottle) return;
-    hoverThrottle = setTimeout(() => {
-      hoverThrottle = null;
-      hoshiSelection.selectText(x, y, 16);
-    }, getShiftHoverDelayMs());
+  let lastShiftHoverKey = '';
+  function lookupAtPoint(x, y) {
+    const hit = hoshiSelection.getCharacterAtPoint(x, y);
+    if (!hit) {
+      lastShiftHoverKey = '';
+      return;
+    }
+
+    const key = `${x}:${y}:${hit.offset}:${hit.node.textContent}`;
+    if (key === lastShiftHoverKey) return;
+    lastShiftHoverKey = key;
+    hoshiSelection.selectText(x, y, getScanLength());
   }
 
   document.addEventListener('mousemove', (e) => {
     lastHoverPoint = { x: e.clientX, y: e.clientY };
     if (!e.shiftKey) {
-      if (hoverThrottle) {
-        clearTimeout(hoverThrottle);
-        hoverThrottle = null;
-      }
+      lastShiftHoverKey = '';
       return;
     }
-    scheduleHoverLookup(e.clientX, e.clientY);
+    lookupAtPoint(e.clientX, e.clientY);
   });
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Shift' || !lastHoverPoint) return;
-    scheduleHoverLookup(lastHoverPoint.x, lastHoverPoint.y);
+    lookupAtPoint(lastHoverPoint.x, lastHoverPoint.y);
   });
 })();

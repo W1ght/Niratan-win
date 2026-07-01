@@ -1,5 +1,7 @@
+using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Hoshi.Models.Dictionary;
 using Hoshi.Services.UI;
 using Hoshi.ViewModels.Pages;
 
@@ -37,6 +39,18 @@ public sealed partial class DictionarySettingsPage : Page
             return;
 
         await ViewModel.SetDictionaryEnabledAsync(dictName, toggle.IsOn);
+    }
+
+    private void DictionaryType_Checked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not RadioButton { Tag: string tag })
+            return;
+
+        if (Enum.TryParse<DictionaryType>(tag, out var type)
+            && ViewModel.SelectedDictionaryType != type)
+        {
+            ViewModel.SelectedDictionaryType = type;
+        }
     }
 
     private async void DictionaryList_DragItemsCompleted(

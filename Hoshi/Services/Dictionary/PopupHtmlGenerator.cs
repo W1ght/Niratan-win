@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using Hoshi.Enums;
 using Hoshi.Models.Dictionary;
 using Hoshi.Models.Settings;
 
@@ -26,23 +27,30 @@ public sealed class PopupHtmlGenerator
             : "";
     }
 
-    public string GenerateShellHtml(DictionaryDisplaySettings? settings = null)
+    public string GenerateShellHtml(ThemeMode themeMode = ThemeMode.System, DictionaryDisplaySettings? settings = null, AudioSettings? audioSettings = null, AnkiSettings? ankiSettings = null, bool hidden = false)
     {
-        return GenerateHtml([], new Dictionary<string, string>(), settings);
+        return GenerateHtml([], new Dictionary<string, string>(), settings, themeMode, audioSettings: audioSettings, ankiSettings: ankiSettings, hidden: hidden);
     }
 
     public string GenerateHtml(
         List<DictionaryLookupResult> results,
         Dictionary<string, string> styles,
-        DictionaryDisplaySettings? displaySettings = null)
+        DictionaryDisplaySettings? displaySettings = null,
+        ThemeMode themeMode = ThemeMode.System,
+        long renderGeneration = 0,
+        AudioSettings? audioSettings = null,
+        AnkiSettings? ankiSettings = null,
+        bool hidden = false)
     {
         var settings = displaySettings ?? new DictionaryDisplaySettings();
         var entriesJson = SerializeLookupEntries(results);
         var stylesJson = SerializeStyles(styles);
         var collapsedDictionariesJson = SerializeCollapsedDictionaries(settings.CollapsedDictionariesOrDefault);
 
+        var (bgColor, textColor) = GetThemeColors(themeMode);
+
         return $@"<!doctype html>
-<html lang=""ja"">
+<html lang=""ja"" data-hoshi-color-scheme=""{(IsThemeDark(themeMode) ? "dark" : "light")}"" style=""visibility:{(hidden ? "hidden" : "visible")}"">
 <head>
 <meta charset=""utf-8"" />
 <meta name=""viewport"" content=""width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"" />
@@ -50,16 +58,10 @@ public sealed class PopupHtmlGenerator
 <style>{_popupCss}</style>
 <style>
 html, body {{
-    --background-color: #fff;
-    --text-color: #000;
-    background-color: var(--background-color);
+    --background-color: {bgColor};
+    --text-color: {textColor};
+    background-color: transparent;
     color: var(--text-color);
-}}
-@media (prefers-color-scheme: dark) {{
-    html, body {{
-        --background-color: #1e1e1e;
-        --text-color: #e0e0e0;
-    }}
 }}
 </style>
 </head>
@@ -83,15 +85,20 @@ window.collapseMode = '{settings.CollapseModeText}';
 window.collapsedDictionaries = {collapsedDictionariesJson};
 window.showExpressionTags = {BoolToJs(settings.ShowExpressionTags)};
 window.scanNonJapaneseText = {BoolToJs(settings.ScanNonJapaneseText)};
-window.audioSources = [];
-window.audioPlaybackMode = 'interrupt';
-window.audioEnableAutoplay = false;
+window.maxResults = {settings.MaxResults};
+window.scanLength = {settings.ScanLength};
+window.popupRenderGeneration = {renderGeneration};
+window.audioSources = {SerializeAudioSources(audioSettings)};
+window.audioPlaybackMode = '{PlaybackModeText(audioSettings)}';
+window.audioEnableAutoplay = {BoolToJs(audioSettings?.EnableAutoplay ?? false)};
+window.audioRequestEndpoint = '';
 window.customCSS = {JsonSerializer.Serialize(settings.CustomCSS)};
-window.dictionaryMediaRequestEndpoint = '';
-window.useAnkiConnect = false;
-window.embedMedia = false;
-window.allowDupes = false;
-window.needsAudio = false;
+window.dictionaryMediaRequestEndpoint = 'https://hoshi-dictionary-media.local/image';
+window.useAnkiConnect = {BoolToJs(ankiSettings?.PopupSettings.UseAnkiConnect ?? false)};
+window.embedMedia = {BoolToJs(ankiSettings?.PopupSettings.EmbedMedia ?? false)};
+window.allowDupes = {BoolToJs(ankiSettings?.PopupSettings.AllowDupes ?? false)};
+window.needsAudio = {BoolToJs(ankiSettings?.PopupSettings.NeedsAudio ?? false)};
+window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlossaries ?? false)};
 </script>
 <script>
 // Minimal hoshiSelection shim for popup.js
@@ -104,35 +111,146 @@ window.needsAudio = false;
   }}
   function isScanBoundary(ch) {{
     if (/^[\s　]$/.test(ch)) return true;
-    return '。、！？…※「」『』（）()【】〈〉《》〔〕｛｝{{}}[]・：；:;,─\n\r'.indexOf(ch) >= 0 || !isCodePointJapanese(ch.codePointAt(0));
+    return '。、！？…※「」『』（）()【】〈〉《》〔〕｛｝{{}}[]・：；:;,─\n\r'.indexOf(ch) >= 0 ||
+      (window.scanNonJapaneseText === false && !isCodePointJapanese(ch.codePointAt(0)));
+  }}
+  function isFurigana(node) {{
+    var el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+    return !!el?.closest('rt, rp');
+  }}
+  function createWalker(rootNode) {{
+    return document.createTreeWalker(rootNode || document.body, NodeFilter.SHOW_TEXT, {{
+      acceptNode: function (n) {{ return isFurigana(n) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT; }}
+    }});
+  }}
+  function inCharRange(range, x, y) {{
+    var rects = range.getClientRects();
+    if (rects.length) {{
+      for (var i = 0; i < rects.length; i++) {{
+        var rect = rects[i];
+        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) return true;
+      }}
+      return false;
+    }}
+    var box = range.getBoundingClientRect();
+    return x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
   }}
   var sel = null;
   window.hoshiSelection = {{
     get selection() {{ return sel; }},
     isCodePointJapanese: isCodePointJapanese,
-    selectText: function (x, y, maxLen) {{
-      maxLen = maxLen || 16;
+    getCaretRange: function (x, y) {{
       if (document.caretPositionFromPoint) {{
         var pos = document.caretPositionFromPoint(x, y);
-        if (!pos) {{ sel = null; return null; }}
-        var node = pos.offsetNode;
-        if (node.nodeType !== Node.TEXT_NODE) {{ sel = null; return null; }}
-        var offset = pos.offset, text = '', ranges = [];
-        while (text.length < maxLen && node) {{
-          var content = node.textContent;
-          for (var i = offset; i < content.length && text.length < maxLen; i++) {{
-            if (isScanBoundary(content[i])) break;
-            text += content[i];
-          }}
-          if (text.length >= maxLen || offset + text.length < content.length) break;
-          node = node.parentElement?.nextSibling?.firstChild || null;
-          offset = 0;
-        }}
-        if (!text) {{ sel = null; return null; }}
-        sel = {{ startNode: pos.offsetNode, startOffset: pos.offset, ranges: ranges, text: text }};
-        return text;
+        if (!pos) return null;
+        var range = document.createRange();
+        range.setStart(pos.offsetNode, pos.offset);
+        range.collapse(true);
+        return range;
       }}
-      sel = null; return null;
+
+      var element = document.elementFromPoint(x, y);
+      var container = element?.closest('p, div, span, ruby, a') || document.body;
+      var walker = createWalker(container);
+      var range = document.createRange();
+      var node;
+      while ((node = walker.nextNode())) {{
+        for (var i = 0; i < node.textContent.length; i++) {{
+          range.setStart(node, i);
+          range.setEnd(node, i + 1);
+          if (inCharRange(range, x, y)) {{
+            range.collapse(true);
+            return range;
+          }}
+        }}
+      }}
+
+      return document.caretRangeFromPoint?.(x, y) || null;
+    }},
+    getCharacterAtPoint: function (x, y) {{
+      var range = this.getCaretRange(x, y);
+      if (!range || range.startContainer.nodeType !== Node.TEXT_NODE) return null;
+      var node = range.startContainer;
+      if (isFurigana(node)) return null;
+      var text = node.textContent || '';
+      var caret = range.startOffset;
+      var offsets = [caret, caret - 1, caret + 1];
+      for (var i = 0; i < offsets.length; i++) {{
+        var offset = offsets[i];
+        if (offset < 0 || offset >= text.length) continue;
+        var charRange = document.createRange();
+        charRange.setStart(node, offset);
+        charRange.setEnd(node, offset + 1);
+        if (inCharRange(charRange, x, y)) {{
+          if (isScanBoundary(text[offset])) return null;
+          return {{ node: node, offset: offset }};
+        }}
+      }}
+      return null;
+    }},
+    getSelectionRect: function (x, y) {{
+      if (!sel?.ranges?.length) return null;
+      var first = sel.ranges[0];
+      var range = document.createRange();
+      range.setStart(first.node, first.start);
+      range.setEnd(first.node, Math.min(first.start + 1, first.end));
+      var rects = Array.from(range.getClientRects());
+      var rect = rects.find(function (r) {{ return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom; }}) || range.getBoundingClientRect();
+      return {{ x: rect.x, y: rect.y, width: rect.width, height: rect.height }};
+    }},
+    highlightSelection: function (charCount) {{
+      if (!sel?.ranges?.length) return;
+      var highlights = this.selectionCharacterRanges(charCount);
+      CSS.highlights?.set('hoshi-selection', new Highlight(...highlights));
+    }},
+    selectionCharacterRanges: function (charCount) {{
+      if (!sel?.ranges?.length) return [];
+      var ranges = [];
+      var remaining = charCount;
+      for (var i = 0; i < sel.ranges.length; i++) {{
+        if (remaining <= 0) break;
+        var r = sel.ranges[i];
+        var start = r.start;
+        var end = start;
+        while (end < r.end && remaining > 0) {{
+          var ch = String.fromCodePoint(r.node.textContent.codePointAt(end));
+          end += ch.length;
+          remaining--;
+        }}
+        var range = document.createRange();
+        range.setStart(r.node, start);
+        range.setEnd(r.node, end);
+        ranges.push(range);
+      }}
+      return ranges;
+    }},
+    selectText: function (x, y, maxLen) {{
+      maxLen = maxLen || 16;
+      var hit = this.getCharacterAtPoint(x, y);
+      if (!hit) {{ sel = null; return null; }}
+
+      var startNode = hit.node;
+      var node = startNode;
+      var offset = hit.offset;
+      var text = '', ranges = [];
+      while (text.length < maxLen && node) {{
+        var content = node.textContent;
+        var start = offset;
+        while (offset < content.length && text.length < maxLen) {{
+          if (isScanBoundary(content[offset])) break;
+          text += content[offset];
+          offset++;
+        }}
+        if (offset > start) ranges.push({{ node: node, start: start, end: offset }});
+        if (offset < content.length || text.length >= maxLen) break;
+        var nextWalker = createWalker(document.body);
+        nextWalker.currentNode = node;
+        node = nextWalker.nextNode();
+        offset = 0;
+      }}
+      if (!text) {{ sel = null; return null; }}
+      sel = {{ startNode: startNode, startOffset: hit.offset, ranges: ranges, text: text }};
+      return text;
     }}
   }};
 }})();
@@ -152,7 +270,8 @@ window.needsAudio = false;
         entryCount: window.entryCount || 0,
         renderedEntries: container ? container.querySelectorAll('.entry').length : 0,
         renderedGlossaries: container ? container.querySelectorAll('.glossary-content').length : 0,
-        textLength: container ? container.innerText.length : 0
+        textLength: container ? container.innerText.length : 0,
+        generation: window.popupRenderGeneration || 0
       }};
     }}
     function postReady() {{
@@ -212,14 +331,22 @@ window.needsAudio = false;
     public string GenerateInjectionScript(
         List<DictionaryLookupResult> results,
         Dictionary<string, string> styles,
-        DictionaryDisplaySettings? displaySettings = null)
+        DictionaryDisplaySettings? displaySettings = null,
+        ThemeMode themeMode = ThemeMode.System,
+        long renderGeneration = 0,
+        AudioSettings? audioSettings = null,
+        AnkiSettings? ankiSettings = null)
     {
         var settings = displaySettings ?? new DictionaryDisplaySettings();
         var entriesJson = SerializeLookupEntries(results);
         var stylesJson = SerializeStyles(styles);
         var collapsedDictionariesJson = SerializeCollapsedDictionaries(settings.CollapsedDictionariesOrDefault);
+        var (bgColor, textColor) = GetThemeColors(themeMode);
 
         return $@"
+document.documentElement.setAttribute('data-hoshi-color-scheme', '{(IsThemeDark(themeMode) ? "dark" : "light")}');
+document.documentElement.style.setProperty('--background-color', '{bgColor}');
+document.documentElement.style.setProperty('--text-color', '{textColor}');
 window.dictionaryStyles = {stylesJson};
 window.compactGlossaries = {BoolToJs(settings.CompactGlossaries)};
 window.compactPitchAccents = {BoolToJs(settings.CompactPitchAccents)};
@@ -230,7 +357,19 @@ window.collapseMode = '{settings.CollapseModeText}';
 window.collapsedDictionaries = {collapsedDictionariesJson};
 window.showExpressionTags = {BoolToJs(settings.ShowExpressionTags)};
 window.scanNonJapaneseText = {BoolToJs(settings.ScanNonJapaneseText)};
+window.maxResults = {settings.MaxResults};
+window.scanLength = {settings.ScanLength};
 window.customCSS = {JsonSerializer.Serialize(settings.CustomCSS)};
+window.popupRenderGeneration = {renderGeneration};
+window.audioSources = {SerializeAudioSources(audioSettings)};
+window.audioPlaybackMode = '{PlaybackModeText(audioSettings)}';
+window.audioEnableAutoplay = {BoolToJs(audioSettings?.EnableAutoplay ?? false)};
+window.audioRequestEndpoint = '';
+window.useAnkiConnect = {BoolToJs(ankiSettings?.PopupSettings.UseAnkiConnect ?? false)};
+window.embedMedia = {BoolToJs(ankiSettings?.PopupSettings.EmbedMedia ?? false)};
+window.allowDupes = {BoolToJs(ankiSettings?.PopupSettings.AllowDupes ?? false)};
+window.needsAudio = {BoolToJs(ankiSettings?.PopupSettings.NeedsAudio ?? false)};
+window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlossaries ?? false)};
 if (typeof window.hoshiInjectResults === 'function') {{
     window.hoshiInjectResults({entriesJson}, {results.Count});
 }} else {{
@@ -293,5 +432,35 @@ if (typeof window.hoshiInjectResults === 'function') {{
             return "{}";
 
         return JsonSerializer.Serialize(styles);
+    }
+
+    private static (string bgVar, string textColor) GetThemeColors(ThemeMode themeMode)
+    {
+        if (themeMode == ThemeMode.Dark)
+            return ("#2b2b2b", "#fff");
+        if (themeMode == ThemeMode.Light)
+            return ("#f3f3f3", "#000");
+        return ("#f3f3f3", "#000");
+    }
+
+    private static bool IsThemeDark(ThemeMode themeMode) => themeMode switch
+    {
+        ThemeMode.Dark => true,
+        ThemeMode.Light => false,
+        _ => false,
+    };
+
+    private static string SerializeAudioSources(AudioSettings? settings)
+    {
+        if (settings == null)
+            return "[]";
+
+        var urls = settings.EnabledAudioSourceUrls;
+        return JsonSerializer.Serialize(urls);
+    }
+
+    private static string PlaybackModeText(AudioSettings? settings)
+    {
+        return settings?.PlaybackModeText ?? "interrupt";
     }
 }

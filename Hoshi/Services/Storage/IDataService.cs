@@ -25,6 +25,12 @@ public interface IDataService
         string bookId,
         int chapterIndex,
         double progress,
+        int currentCharacterCount,
+        int totalCharacterCount,
+        CancellationToken ct = default
+    );
+    Task SaveNovelBookOrderAsync(
+        IReadOnlyList<string> orderedBookIds,
         CancellationToken ct = default
     );
 }

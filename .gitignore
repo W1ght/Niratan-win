@@ -366,3 +366,9 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Native hoshidicts build artifacts
+native/hoshidicts/build/
+native/hoshidicts_c_api/build/
+native/out/
+*.dll.recipe

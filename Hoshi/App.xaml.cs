@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,9 +10,12 @@ using Microsoft.UI.Xaml;
 using Serilog;
 using Hoshi.Helpers;
 using Hoshi.Services;
+using Hoshi.Services.Anki;
+using Hoshi.Services.Audio;
 using Hoshi.Services.Dictionary;
 using Hoshi.Services.Logging;
 using Hoshi.Services.Novels;
+using Hoshi.Services.Sasayaki;
 using Hoshi.Services.Settings;
 using Hoshi.Services.Storage;
 using Hoshi.Services.UI;
@@ -27,13 +31,15 @@ public partial class App : Application
 
     public App()
     {
-        InitializeComponent();
-        Microsoft.Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = "en-US";
+        // --- Step 1: Ensure Logs directory exists BEFORE configuring Serilog ---
+        var logsDir = Path.Combine(AppDataHelper.GetAppDataPath(), "Logs");
+        Directory.CreateDirectory(logsDir);
 
+        // --- Step 2: Configure Serilog before anything else ---
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
             .WriteTo.File(
-                path: Path.Combine(AppDataHelper.GetAppDataPath(), "Logs", "hoshi-.log"),
+                path: Path.Combine(logsDir, "hoshi-.log"),
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: 7,
                 encoding: Encoding.UTF8,
@@ -43,6 +49,71 @@ public partial class App : Application
 
         Log.Information("Hoshi starting — version {Version}", AppInfoHelper.Version);
 
+        // --- Step 3: WinUI-level unhandled exceptions (UI thread, XAML, compositor) ---
+        this.UnhandledException += (_, args) =>
+        {
+            try
+            {
+                Log.Fatal(args.Exception, "[Crash] WinUI UnhandledException — {Message}", args.Message);
+            }
+            catch { /* not much we can do */ }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
+        };
+
+        // --- Step 4: CLR-level unhandled exceptions on background threads ---
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            var ex = args.ExceptionObject as Exception;
+            try
+            {
+                Log.Fatal(ex ?? new Exception(args.ExceptionObject?.ToString()),
+                    "[Crash] CLR UnhandledException — app is about to terminate");
+            }
+            catch { /* not much we can do */ }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
+        };
+
+        // --- Step 5: Fire-and-forget tasks that throw and are never awaited ---
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            try
+            {
+                Log.Error(args.Exception.GetBaseException(),
+                    "[Crash] UnobservedTaskException — fire-and-forget task threw");
+            }
+            catch { /* not much we can do */ }
+            args.SetObserved();
+        };
+
+        // --- Step 6: Flush logs on normal process exit ---
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            try { Log.CloseAndFlush(); }
+            catch { /* not much we can do */ }
+        };
+
+        // --- Step 7: First-chance exception logging (Debug only, Hoshi code only) ---
+#if DEBUG
+        AppDomain.CurrentDomain.FirstChanceException += (_, args) =>
+        {
+            try
+            {
+                if (args.Exception.Source?.StartsWith("Hoshi", StringComparison.OrdinalIgnoreCase) == true)
+                    Log.Debug(args.Exception, "[FirstChance]");
+            }
+            catch { /* not much we can do */ }
+        };
+#endif
+
+        // --- Step 8: Initialize XAML (after logging is ready) ---
+        InitializeComponent();
+
         var services = new ServiceCollection();
         services.AddLogging(builder => builder.AddSerilog(dispose: true));
 
@@ -50,10 +121,14 @@ public partial class App : Application
         services.AddTransient<NavigationPageViewModel>();
         services.AddTransient<SettingsPageViewModel>();
         services.AddTransient<DictionarySettingsPageViewModel>();
+        services.AddTransient<AudioSettingsPageViewModel>();
+        services.AddTransient<SasayakiSettingsPageViewModel>();
+        services.AddTransient<StatisticsSettingsPageViewModel>();
+        services.AddTransient<AnkiSettingsPageViewModel>();
         services.AddTransient<NovelLibraryPageViewModel>();
+        services.AddTransient<NovelLookupPageViewModel>();
         services.AddTransient<NovelReaderPageViewModel>();
         services.AddTransient<ViewModels.Pages.LogsPageViewModel>();
-        services.AddTransient<ViewModels.Dialogs.ReaderAppearanceViewModel>();
 
         services.AddSingleton<IMessenger>(WeakReferenceMessenger.Default);
         services.AddSingleton<INotificationService, NotificationService>();
@@ -65,25 +140,35 @@ public partial class App : Application
         services.AddSingleton<IEpubParserService, EpubParserService>();
         services.AddSingleton<INovelEpubImportService, NovelEpubImportService>();
         services.AddSingleton<INovelLibraryService, NovelLibraryService>();
+        services.AddSingleton<INovelBookSidecarService, NovelBookSidecarService>();
+        services.AddSingleton<INovelStatisticsSidecarService, NovelStatisticsSidecarService>();
+        services.AddSingleton<INovelStatisticsDashboardService, NovelStatisticsDashboardService>();
+        services.AddSingleton<IReaderHighlightService, ReaderHighlightService>();
+        services.AddSingleton<ISasayakiSidecarService, SasayakiSidecarService>();
+        services.AddSingleton<ISasayakiMatchService, SasayakiMatchService>();
         services.AddSingleton<IDictionaryLookupService, DictionaryLookupService>();
         services.AddSingleton<IDictionaryImportService, DictionaryImportService>();
         services.AddSingleton<ILogReaderService, LogReaderService>();
+        services.AddSingleton<IAudioService, AudioService>();
+        services.AddSingleton<IAnkiService, AnkiService>();
         _services = services.BuildServiceProvider();
     }
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
-        var settings = GetService<ISettingsService>();
-        await settings.LoadAsync();
-
-        var readerSettings = GetService<IReaderSettingsService>();
-        await readerSettings.LoadAsync();
-
-        MainWindow = new MainWindow();
-        MainWindow.Activate();
-
         try
         {
+            var settings = GetService<ISettingsService>();
+            await settings.LoadAsync();
+
+            var readerSettings = GetService<IReaderSettingsService>();
+            await readerSettings.LoadAsync();
+
+            MainWindow = new MainWindow();
+            MainWindow.Activate();
+
+            StartHangWatchdog();
+
             var migrator = new DatabaseMigrator(
                 GetService<ILogger<DatabaseMigrator>>(),
                 $"Data Source={Path.Combine(AppDataHelper.GetDataPath(), "hoshi.db")}"
@@ -110,12 +195,27 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            Log.Fatal(ex, "Failed to initialize Hoshi — navigating to InitializationErrorPage");
-            MainWindow.NavigateToError(ex);
+            Log.Fatal(ex, "[Crash] OnLaunched failed — navigating to error page");
+            try
+            {
+                if (MainWindow != null)
+                    MainWindow.NavigateToError(ex);
+            }
+            catch (Exception navEx)
+            {
+                Log.Fatal(navEx, "[Crash] Even the error page navigation failed");
+            }
         }
         finally
         {
-            MainWindow.SetMicaBackdrop();
+            try
+            {
+                MainWindow?.SetMicaBackdrop();
+            }
+            catch (Exception finallyEx)
+            {
+                Log.Error(finallyEx, "[Crash] SetMicaBackdrop threw in finally");
+            }
         }
     }
 
@@ -125,5 +225,37 @@ public partial class App : Application
     private async Task InitializeAppAsync()
     {
         await Task.Delay(400);
+    }
+
+    private static void StartHangWatchdog()
+    {
+        if (MainWindow?.DispatcherQueue == null) return;
+
+        long lastUiTick = Environment.TickCount64;
+
+        var uiTimer = MainWindow.DispatcherQueue.CreateTimer();
+        uiTimer.Interval = TimeSpan.FromSeconds(1);
+        uiTimer.IsRepeating = true;
+        uiTimer.Tick += (_, _) => { Volatile.Write(ref lastUiTick, Environment.TickCount64); };
+        uiTimer.Start();
+
+        _ = Task.Run(async () =>
+        {
+            while (true)
+            {
+                await Task.Delay(3000);
+                var elapsed = Environment.TickCount64 - Volatile.Read(ref lastUiTick);
+                if (elapsed > 4000)
+                {
+                    try
+                    {
+                        Log.Warning("[Hang] UI thread unresponsive for {Seconds}s", elapsed / 1000);
+                    }
+                    catch { /* not much we can do */ }
+                }
+            }
+        });
+
+        Log.Information("[Watchdog] UI hang monitor started");
     }
 }
