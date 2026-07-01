@@ -17,4 +17,7 @@ public class NovelBook
     public int ChapterCount { get; set; }
     public int CurrentChapterIndex { get; set; }
     public double Progress { get; set; }
+    public int CurrentCharacterCount { get; set; }
+    public int TotalCharacterCount { get; set; }
+    public int ManualSortOrder { get; set; }
 }

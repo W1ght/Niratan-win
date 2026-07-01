@@ -748,6 +748,301 @@ function createTags(entry) {
   return container;
 }
 
+// === Button slots (audio, mine) ===
+
+function createButtonSlot(kind, entryIndex, enabled) {
+  if (enabled === undefined) enabled = true;
+  return el('span', {
+    className: 'button-slot',
+    'data-kind': kind,
+    'data-entry-index': entryIndex,
+    'data-enabled': String(enabled)
+  });
+}
+
+function getButtonSlot(kind, entryIndex) {
+  return document.querySelector('.button-slot[data-kind="' + kind + '"][data-entry-index="' + entryIndex + '"]');
+}
+
+function updateButtonSlot(slot, changes) {
+  if (!slot || !slot.isConnected) return;
+  if ('state' in changes) slot.dataset.state = changes.state;
+  if ('enabled' in changes) slot.dataset.enabled = String(changes.enabled);
+}
+
+// === Audio ===
+
+var audioUrls = {};
+
+function escapeUrlParam(s) {
+  return encodeURIComponent(s).replace(/%20/g, '+');
+}
+
+function expandAudioTemplate(template, term, reading) {
+  var escapedTerm = escapeUrlParam(term);
+  var escapedReading = escapeUrlParam(reading);
+  var result = template.replace('{term}', escapedTerm).replace('{reading}', escapedReading);
+  console.log('[Audio] expandAudioTemplate: template=' + template + ' term=' + term + ' reading=' + reading + ' -> ' + result);
+  return result;
+}
+
+async function fetchAudioUrl(expression, reading) {
+  try {
+    var sources = window.audioSources || [];
+    console.log('[Audio] fetchAudioUrl: expression=' + expression + ' reading=' + reading + ' sources=' + JSON.stringify(sources) + ' endpoint=' + (window.audioRequestEndpoint || '(direct)'));
+    for (var i = 0; i < sources.length; i++) {
+      var expandedUrl = expandAudioTemplate(sources[i], expression, reading);
+      var endpoint = window.audioRequestEndpoint || '';
+
+      if (!endpoint) {
+        // Direct mode: pass the URL to the native host for resolution.
+        // The native side has no CORS restrictions and can resolve audioSourceList JSON,
+        // download, and stream the audio. Avoids a wasted fetch() that fails on CORS
+        // in WebView2 (about:blank origin).
+        console.log('[Audio] fetchAudioUrl: direct mode, passing URL to native host ' + expandedUrl);
+        return expandedUrl;
+      }
+
+      // Proxy mode: ask the audio endpoint to resolve the source URL
+      var requestUrl = endpoint + '?url=' + encodeURIComponent(expandedUrl);
+      console.log('[Audio] fetchAudioUrl: proxy mode, fetching ' + requestUrl);
+      try {
+        var response = await fetch(requestUrl);
+        if (!response.ok) { console.log('[Audio] fetchAudioUrl: proxy returned ' + response.status); continue; }
+        var data = await response.json();
+        if (data.type === 'audioSourceList' && data.audioSources && data.audioSources[0] && data.audioSources[0].url) {
+          var resolved = data.audioSources[0].url.replace(/\\/g, '/');
+          console.log('[Audio] fetchAudioUrl: proxy resolved to ' + resolved);
+          return resolved;
+        }
+      } catch (e) {
+        console.log('[Audio] fetchAudioUrl: proxy error ' + e.message);
+        continue;
+      }
+    }
+    console.log('[Audio] fetchAudioUrl: no URL found');
+    return null;
+  } catch (e) {
+    console.error('[Audio] fetchAudioUrl CRASH: ' + e.message + ' stack=' + (e.stack || ''));
+    return null;
+  }
+}
+
+function playWordAudio(audioUrl) {
+  try {
+    if (!audioUrl) { console.log('[Audio] playWordAudio: empty URL'); return false; }
+    console.log('[Audio] playWordAudio: sending playWordAudio message with url=' + audioUrl + ' mode=' + (window.audioPlaybackMode || 'interrupt'));
+    postPopupMessage('playWordAudio', {
+      url: audioUrl,
+      mode: window.audioPlaybackMode || 'interrupt'
+    });
+    return true;
+  } catch (e) {
+    console.error('[Audio] playWordAudio CRASH: ' + e.message + ' stack=' + (e.stack || ''));
+    return false;
+  }
+}
+
+async function playEntryAudio(entryIndex) {
+  try {
+    var entry = window.lookupEntries && window.lookupEntries[entryIndex];
+    if (!entry) { console.log('[Audio] playEntryAudio: no entry at index ' + entryIndex); return; }
+    console.log('[Audio] playEntryAudio: index=' + entryIndex + ' expression=' + entry.expression + ' reading=' + entry.reading);
+    var audioSlot = getButtonSlot('audio', entryIndex);
+
+    if (!audioUrls[entryIndex]) {
+      audioUrls[entryIndex] = await fetchAudioUrl(entry.expression, entry.reading);
+    }
+    if (!audioUrls[entryIndex] || !playWordAudio(audioUrls[entryIndex])) {
+      console.log('[Audio] playEntryAudio: FAILED audioUrls[' + entryIndex + ']=' + audioUrls[entryIndex]);
+      updateButtonSlot(audioSlot, { state: 'error' });
+      setTimeout(function () { updateButtonSlot(audioSlot, { state: 'default' }); }, 1500);
+    }
+  } catch (e) {
+    console.error('[Audio] playEntryAudio CRASH: ' + e.message + ' stack=' + (e.stack || ''));
+  }
+}
+
+// === Anki mining ===
+
+function constructFuriganaPlain(expression, reading) {
+  if (!reading || reading === expression) return expression;
+  var segments = segmentFurigana(expression, reading);
+  var result = '';
+  for (var i = 0; i < segments.length; i++) {
+    var seg = segments[i];
+    if (seg[1]) {
+      result += ' ' + seg[0] + '[' + seg[1] + ']';
+    } else {
+      result += seg[0];
+    }
+  }
+  return result.trim();
+}
+
+function constructGlossaryHtml(entryIndex) {
+  var entry = window.lookupEntries && window.lookupEntries[entryIndex];
+  if (!entry) return '';
+  var container = document.createElement('div');
+  var grouped = {};
+  entry.glossaries.forEach(function (g) {
+    (grouped[g.dictionary] || (grouped[g.dictionary] = [])).push(g);
+  });
+  var dictNames = Object.keys(grouped);
+  for (var di = 0; di < dictNames.length; di++) {
+    var dictName = dictNames[di];
+    var glossaries = grouped[dictName];
+    for (var gi = 0; gi < glossaries.length; gi++) {
+      var g = glossaries[gi];
+      try {
+        renderStructuredContent(container, JSON.parse(g.content), null, dictName, true);
+      } catch (e) {
+        renderStructuredContent(container, g.content, null, dictName, true);
+      }
+    }
+  }
+  return container.innerHTML;
+}
+
+function constructSingleGlossaryHtml(entryIndex) {
+  var entry = window.lookupEntries && window.lookupEntries[entryIndex];
+  if (!entry) return {};
+  var grouped = {};
+  entry.glossaries.forEach(function (g) {
+    (grouped[g.dictionary] || (grouped[g.dictionary] = [])).push(g);
+  });
+  var result = {};
+  var dictNames = Object.keys(grouped);
+  for (var di = 0; di < dictNames.length; di++) {
+    var dictName = dictNames[di];
+    var glossaries = grouped[dictName];
+    var container = document.createElement('div');
+    for (var gi = 0; gi < glossaries.length; gi++) {
+      var g = glossaries[gi];
+      try {
+        renderStructuredContent(container, JSON.parse(g.content), null, dictName, true);
+      } catch (e) {
+        renderStructuredContent(container, g.content, null, dictName, true);
+      }
+    }
+    result[dictName] = container.innerHTML;
+  }
+  return result;
+}
+
+function constructPitchPositionHtml(entryIndex) {
+  var entry = window.lookupEntries && window.lookupEntries[entryIndex];
+  if (!entry || !entry.pitches || !entry.pitches.length) return '';
+  var parts = [];
+  for (var pi = 0; pi < entry.pitches.length; pi++) {
+    var pitch = entry.pitches[pi];
+    for (var ppi = 0; ppi < pitch.pitchPositions.length; ppi++) {
+      parts.push(pitch.dictionary + ': ' + pitch.pitchPositions[ppi]);
+    }
+  }
+  return parts.join(', ');
+}
+
+function constructPitchCategories(entryIndex) {
+  var entry = window.lookupEntries && window.lookupEntries[entryIndex];
+  if (!entry || !entry.pitches || !entry.pitches.length) return '';
+  var reading = entry.reading || '';
+  var verbOrAdjective = isVerbOrAdjective(entry.rules || []);
+  var parts = [];
+  for (var pi = 0; pi < entry.pitches.length; pi++) {
+    var pitch = entry.pitches[pi];
+    for (var ppi = 0; ppi < pitch.pitchPositions.length; ppi++) {
+      var category = getPitchCategory(reading, pitch.pitchPositions[ppi], verbOrAdjective);
+      if (category) parts.push(pitch.dictionary + ': ' + category);
+    }
+  }
+  return parts.join(', ');
+}
+
+function constructFrequencyHtml(entryIndex) {
+  var entry = window.lookupEntries && window.lookupEntries[entryIndex];
+  if (!entry || !entry.frequencies || !entry.frequencies.length) return '';
+  var container = document.createElement('div');
+  for (var fi = 0; fi < entry.frequencies.length; fi++) {
+    container.appendChild(createFrequencyGroup(entry.frequencies[fi]));
+  }
+  return container.innerHTML;
+}
+
+function mineEntryAtIndex(entryIndex) {
+  var entry = window.lookupEntries && window.lookupEntries[entryIndex];
+  if (!entry) return;
+
+  var expression = entry.expression || '';
+  var reading = entry.reading || '';
+  var matched = entry.matched || expression;
+
+  var glossaryHtml = constructGlossaryHtml(entryIndex);
+  var glossaryFirstHtml = '';
+  var firstDict = entry.glossaries && entry.glossaries[0];
+  if (firstDict) {
+    var firstContainer = document.createElement('div');
+    try {
+      renderStructuredContent(firstContainer, JSON.parse(firstDict.content), null, firstDict.dictionary, true);
+    } catch (e) {
+      renderStructuredContent(firstContainer, firstDict.content, null, firstDict.dictionary, true);
+    }
+    glossaryFirstHtml = firstContainer.innerHTML;
+  }
+
+  var singleGlossaries = constructSingleGlossaryHtml(entryIndex);
+  var pitchPositions = constructPitchPositionHtml(entryIndex);
+  var pitchCategories = constructPitchCategories(entryIndex);
+  var frequenciesHtml = constructFrequencyHtml(entryIndex);
+  var freqHarmonicRank = getFrequencyHarmonicRank(entry.frequencies || []);
+
+  var audio = audioUrls[entryIndex] || '';
+  var selectedDict = selectedDictionaries[entryIndex] ? selectedDictionaries[entryIndex].name : '';
+
+  var dictMedia = [];
+  if (currentDictionaryMedia && currentDictionaryMedia.size) {
+    currentDictionaryMedia.forEach(function (value) { dictMedia.push(value); });
+  }
+
+  var payload = {
+    expression: expression,
+    reading: reading,
+    matched: matched,
+    furiganaPlain: constructFuriganaPlain(expression, reading),
+    frequenciesHtml: frequenciesHtml,
+    freqHarmonicRank: freqHarmonicRank,
+    glossary: glossaryHtml,
+    glossaryFirst: glossaryFirstHtml,
+    singleGlossaries: JSON.stringify(singleGlossaries),
+    pitchPositions: pitchPositions,
+    pitchCategories: pitchCategories,
+    popupSelectionText: getPopupSelectionText(),
+    audio: audio,
+    selectedDictionary: selectedDict,
+    dictionaryMedia: JSON.stringify(dictMedia),
+  };
+
+  postPopupMessage('mineEntry', payload);
+
+  var mineSlot = getButtonSlot('mine', entryIndex);
+  if (mineSlot) updateButtonSlot(mineSlot, { state: 'pending' });
+}
+
+window.onMineComplete = function (success) {
+  // Update button states for all pending mine slots
+  var slots = document.querySelectorAll('.button-slot[data-kind="mine"][data-state="pending"]');
+  for (var i = 0; i < slots.length; i++) {
+    updateButtonSlot(slots[i], { state: success ? 'default' : 'error' });
+    if (!success) {
+      setTimeout((function (s) { return function () { updateButtonSlot(s, { state: 'default' }); }; })(slots[i]), 2000);
+    }
+  }
+};
+
+window.onDuplicateCheck = function (isDuplicate) {
+  // Could update UI based on duplicate status
+};
+
 // === Entry rendering ===
 
 function createEntryHeader(entry, idx) {
@@ -768,8 +1063,37 @@ function createEntryHeader(entry, idx) {
   } else {
     header.appendChild(expressionSpan);
   }
+
+  var buttonsContainer = el('div', { className: 'header-buttons' });
+
+  if ((window.audioSources || []).length) {
+    buttonsContainer.appendChild(createButtonSlot('audio', idx));
+  }
+
+  if (window.useAnkiConnect) {
+    buttonsContainer.appendChild(createButtonSlot('mine', idx));
+  }
+
+  header.appendChild(buttonsContainer);
   return header;
 }
+
+// === Button click handler ===
+
+(function () {
+  document.addEventListener('click', function (e) {
+    var slot = e.target.closest('.button-slot');
+    if (!slot) return;
+    e.stopPropagation();
+    var kind = slot.dataset.kind;
+    var entryIndex = Number(slot.dataset.entryIndex);
+    if (kind === 'audio') {
+      playEntryAudio(entryIndex);
+    } else if (kind === 'mine') {
+      mineEntryAtIndex(entryIndex);
+    }
+  });
+})();
 
 function createGlossarySection(dictName, contents, isFirst, entryIdx) {
   var details = el('details', { className: 'glossary-group' });
@@ -897,9 +1221,11 @@ function redirect(count) {
   flushPendingHistoryRestore();
   backStack.push(snapshot());
   forwardStack.length = 0;
+  document.documentElement.style.visibility = 'hidden';
   window.lookupEntries = undefined;
   window.entryCount = count;
   selectedDictionaries = {};
+  audioUrls = {};
   document.getElementById('entries-container').innerHTML = '';
   window.renderPopup();
   requestAnimationFrame(function () {
@@ -915,9 +1241,11 @@ window.replacePopupResults = function (count) {
   flushPendingHistoryRestore();
   backStack.length = 0;
   forwardStack.length = 0;
+  document.documentElement.style.visibility = 'hidden';
   window.lookupEntries = undefined;
   window.entryCount = count;
   selectedDictionaries = {};
+  audioUrls = {};
   var container = document.getElementById('entries-container');
   if (container) container.innerHTML = '';
   window.hoshiPopupObserveContentReady?.();
@@ -934,9 +1262,11 @@ window.hoshiInjectResults = function (entriesJson, count) {
   flushPendingHistoryRestore();
   backStack.length = 0;
   forwardStack.length = 0;
+  document.documentElement.style.visibility = 'hidden';
   window.lookupEntries = entriesJson;
   window.entryCount = count;
   selectedDictionaries = {};
+  audioUrls = {};
   var container = document.getElementById('entries-container');
   if (container) container.innerHTML = '';
   window.hoshiPopupObserveContentReady?.();
@@ -972,6 +1302,7 @@ function restore(snap) {
   window.lookupEntries = snap.lookupEntries;
   window.entryCount = snap.entryCount;
   selectedDictionaries = {};
+  audioUrls = {};
   requestAnimationFrame(function () {
     document.scrollingElement.scrollTop = snap.scrollTop;
   });
@@ -991,10 +1322,12 @@ window.navigateForward = function () { navigate(forwardStack, backStack); };
 window.renderPopup = function () {
   var container = document.getElementById('entries-container');
   if (!window.entryCount) return;
+  var generation = window.popupRenderGeneration || 0;
 
   (function () {
     var idx = 0;
     function next() {
+      if (generation !== (window.popupRenderGeneration || 0)) return;
       if (idx >= window.entryCount) {
         // Post-process: wrap ruby text nodes in spans
         var rubies = container.querySelectorAll('.glossary-content ruby');
@@ -1021,6 +1354,14 @@ window.renderPopup = function () {
       var entryDiv = el('div', { className: 'entry' });
       entryDiv.appendChild(createEntryHeader(entry, idx));
 
+      if (window.audioEnableAutoplay && (window.audioSources || []).length && idx === 0) {
+        var autoplayEntryIndex = idx;
+        setTimeout(function () {
+          if (generation !== (window.popupRenderGeneration || 0)) return;
+          playEntryAudio(autoplayEntryIndex);
+        }, 70);
+      }
+
       var tags = createTags(entry);
       if (tags) entryDiv.appendChild(tags);
 
@@ -1039,6 +1380,7 @@ window.renderPopup = function () {
       var dictIdx = 0;
 
       function nextDict() {
+        if (generation !== (window.popupRenderGeneration || 0)) return;
         if (dictIdx >= dictNames.length) { idx++; next(); return; }
         var dictName = dictNames[dictIdx];
         entryDiv.appendChild(createGlossarySection(dictName, grouped[dictName], dictIdx === 0, idx));
@@ -1050,6 +1392,7 @@ window.renderPopup = function () {
     }
 
     function applyPostStyles() {
+      if (generation !== (window.popupRenderGeneration || 0)) return;
       if (window.compactGlossaries && !document.getElementById('popup-compact-glossaries')) {
         var glossaryStyle = document.createElement('style');
         glossaryStyle.id = 'popup-compact-glossaries';
@@ -1071,28 +1414,79 @@ window.renderPopup = function () {
         document.body.appendChild(customStyle);
       }
 
-      postPopupMessage('contentReady', null);
+      document.documentElement.style.visibility = 'visible';
+      postPopupMessage('contentReady', { generation: generation });
     }
 
     next();
   })();
+
+  function popupScanLength() {
+    var configuredScanLength = Number(window.scanLength);
+    return Number.isFinite(configuredScanLength)
+      ? Math.min(64, Math.max(1, configuredScanLength))
+      : 16;
+  }
+
+  function lookupAtPopupPoint(x, y, dismissOnMiss, source) {
+    var selected = window.hoshiSelection?.selectText(x, y, popupScanLength());
+    if (!selected) {
+      if (dismissOnMiss) postPopupMessage('tapOutside', null);
+      return false;
+    }
+    if (source === 'shift') {
+      var now = Date.now();
+      if (selected === lastShiftLookupQuery) {
+        lastShiftLookupAt = now;
+        return true;
+      }
+      lastShiftLookupQuery = selected;
+      lastShiftLookupAt = now;
+    }
+    postPopupMessage('lookupRedirect', {
+      query: selected,
+      rect: window.hoshiSelection?.getSelectionRect?.(x, y) || null,
+    });
+    return true;
+  }
 
   if (container.clickAttached) return;
   container.clickAttached = true;
   container.addEventListener('click', function (e) {
     var target = e.target && e.target.nodeType === Node.TEXT_NODE ? e.target.parentElement : e.target;
     if (target && target.closest('summary')) return;
+    // Don't close popup when clicking audio/mine buttons
+    if (target && target.closest('.button-slot')) return;
     if (!target || (!target.closest('.glossary-content') && !target.closest('.expr-tag'))) {
       postPopupMessage('tapOutside', null);
       return;
     }
-    var selected = window.hoshiSelection?.selectText(e.clientX, e.clientY, 16);
-    if (!selected) {
-      postPopupMessage('tapOutside', null);
-      return;
-    }
-    postPopupMessage('lookupRedirect', selected);
+    lookupAtPopupPoint(e.clientX, e.clientY, true);
   });
+
+  if (!window.hoshiPopupShiftLookupAttached) {
+    window.hoshiPopupShiftLookupAttached = true;
+    var lastShiftLookupKey = '';
+    var lastShiftLookupQuery = '';
+    var lastShiftLookupAt = 0;
+    document.addEventListener('mousemove', function (e) {
+      if (!e.shiftKey) return;
+      var target = e.target && e.target.nodeType === Node.TEXT_NODE ? e.target.parentElement : e.target;
+      if (!target || (!target.closest('.glossary-content') && !target.closest('.expr-tag'))) return;
+      if (target.closest('.button-slot')) return;
+      var key = Math.round(e.clientX) + ':' + Math.round(e.clientY);
+      if (key === lastShiftLookupKey) return;
+      lastShiftLookupKey = key;
+      lookupAtPopupPoint(e.clientX, e.clientY, false, 'shift');
+    }, { passive: true });
+    document.addEventListener('keyup', function (e) {
+      if (e.key === 'Shift') {
+        lastShiftLookupKey = '';
+        lastShiftLookupQuery = '';
+        lastShiftLookupAt = 0;
+      }
+    });
+  }
 };
 
 document.addEventListener('scroll', function () {

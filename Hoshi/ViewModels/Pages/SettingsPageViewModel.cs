@@ -37,25 +37,8 @@ public partial class SettingsPageViewModel : ObservableObject
     public partial ThemeMode SelectedThemeMode { get; set; }
 
     // --- Reader settings: Theme ---
-    public List<ReaderTheme> AvailableReaderThemes { get; } = new()
-    {
-        ReaderTheme.System, ReaderTheme.Light, ReaderTheme.Dark, ReaderTheme.Sepia,
-    };
-
     [ObservableProperty]
-    public partial ReaderTheme SelectedReaderTheme { get; set; }
-
-    [ObservableProperty]
-    public partial bool EInkMode { get; set; }
-
-    [ObservableProperty]
-    public partial bool SystemLightSepia { get; set; }
-
-    [ObservableProperty]
-    public partial bool SepiaInvertInDark { get; set; }
-
-    public bool IsSystemSepiaLightVisible => SelectedReaderTheme == ReaderTheme.System;
-    public bool IsSepiaInvertVisible => SelectedReaderTheme == ReaderTheme.Sepia;
+    public partial bool SepiaMode { get; set; }
 
     // --- Reader settings: Text ---
     [ObservableProperty]
@@ -86,6 +69,9 @@ public partial class SettingsPageViewModel : ObservableObject
     // --- Reader settings: Layout ---
     [ObservableProperty]
     public partial bool ContinuousMode { get; set; }
+
+    [ObservableProperty]
+    public partial bool MouseWheelPageTurn { get; set; }
 
     [ObservableProperty]
     public partial int ChapterSwipeDistance { get; set; }
@@ -128,11 +114,16 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty]
     public partial bool ShowProgressTop { get; set; }
 
-    public bool IsProgressPositionVisible => ShowCharacters || ShowPercentage;
-
-    // --- Lookup ---
     [ObservableProperty]
-    public partial int ShiftHoverLookupDelayMs { get; set; }
+    public partial bool ShowStatisticsToggle { get; set; }
+
+    [ObservableProperty]
+    public partial bool ShowReadingSpeed { get; set; }
+
+    [ObservableProperty]
+    public partial bool ShowReadingTime { get; set; }
+
+    public bool IsProgressPositionVisible => ShowCharacters || ShowPercentage;
 
     // --- Dictionaries ---
     public ObservableCollection<InstalledDictionary> InstalledDictionaries { get; } = [];
@@ -198,10 +189,7 @@ public partial class SettingsPageViewModel : ObservableObject
 
         var s = _readerSettingsService.Current;
 
-        SelectedReaderTheme = s.Theme;
-        EInkMode = s.EInkMode;
-        SystemLightSepia = s.SystemLightSepia;
-        SepiaInvertInDark = s.SepiaInvertInDark;
+        SepiaMode = s.SepiaMode;
 
         VerticalWriting = s.VerticalWriting;
         SelectedReaderFont = AvailableReaderFonts.FirstOrDefault(f => f.CssValue == s.SelectedFont)
@@ -210,6 +198,7 @@ public partial class SettingsPageViewModel : ObservableObject
         HideFurigana = s.HideFurigana;
 
         ContinuousMode = s.ContinuousMode;
+        MouseWheelPageTurn = s.MouseWheelPageTurn;
         ChapterSwipeDistance = s.ChapterSwipeDistance;
         HorizontalPadding = s.HorizontalPadding;
         VerticalPadding = s.VerticalPadding;
@@ -223,8 +212,9 @@ public partial class SettingsPageViewModel : ObservableObject
         ShowCharacters = s.ShowCharacters;
         ShowPercentage = s.ShowPercentage;
         ShowProgressTop = s.ShowProgressTop;
-
-        ShiftHoverLookupDelayMs = s.ShiftHoverLookupDelayMs;
+        ShowStatisticsToggle = s.ShowStatisticsToggle;
+        ShowReadingSpeed = s.ShowReadingSpeed;
+        ShowReadingTime = s.ShowReadingTime;
 
         _isInitializing = false;
     }
@@ -243,16 +233,7 @@ public partial class SettingsPageViewModel : ObservableObject
 
     partial void OnSelectedThemeModeChanged(ThemeMode value) => ApplySetting(s => s.Theme, value);
 
-    partial void OnSelectedReaderThemeChanged(ReaderTheme value)
-    {
-        ApplyReaderSetting(s => s.Theme, value);
-        OnPropertyChanged(nameof(IsSystemSepiaLightVisible));
-        OnPropertyChanged(nameof(IsSepiaInvertVisible));
-    }
-
-    partial void OnEInkModeChanged(bool value) => ApplyReaderSetting(s => s.EInkMode, value);
-    partial void OnSystemLightSepiaChanged(bool value) => ApplyReaderSetting(s => s.SystemLightSepia, value);
-    partial void OnSepiaInvertInDarkChanged(bool value) => ApplyReaderSetting(s => s.SepiaInvertInDark, value);
+    partial void OnSepiaModeChanged(bool value) => ApplyReaderSetting(s => s.SepiaMode, value);
 
     partial void OnVerticalWritingChanged(bool value) => ApplyReaderSetting(s => s.VerticalWriting, value);
     partial void OnSelectedReaderFontChanged(ReaderFontOption value) => ApplyReaderSetting(s => s.SelectedFont, value.CssValue);
@@ -264,6 +245,8 @@ public partial class SettingsPageViewModel : ObservableObject
         ApplyReaderSetting(s => s.ContinuousMode, value);
         OnPropertyChanged(nameof(IsSwipeDistanceVisible));
     }
+
+    partial void OnMouseWheelPageTurnChanged(bool value) => ApplyReaderSetting(s => s.MouseWheelPageTurn, value);
 
     partial void OnChapterSwipeDistanceChanged(int value) => ApplyReaderSetting(s => s.ChapterSwipeDistance, value);
     partial void OnHorizontalPaddingChanged(int value) => ApplyReaderSetting(s => s.HorizontalPadding, value);
@@ -293,7 +276,9 @@ public partial class SettingsPageViewModel : ObservableObject
         OnPropertyChanged(nameof(IsProgressPositionVisible));
     }
     partial void OnShowProgressTopChanged(bool value) => ApplyReaderSetting(s => s.ShowProgressTop, value);
-    partial void OnShiftHoverLookupDelayMsChanged(int value) => ApplyReaderSetting(s => s.ShiftHoverLookupDelayMs, value);
+    partial void OnShowStatisticsToggleChanged(bool value) => ApplyReaderSetting(s => s.ShowStatisticsToggle, value);
+    partial void OnShowReadingSpeedChanged(bool value) => ApplyReaderSetting(s => s.ShowReadingSpeed, value);
+    partial void OnShowReadingTimeChanged(bool value) => ApplyReaderSetting(s => s.ShowReadingTime, value);
 
     public async Task RefreshDictionariesAsync()
     {
@@ -371,9 +356,13 @@ public partial class SettingsPageViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "[Settings] Dictionary import failed");
+            Log.Error(ex, "[Settings] Import failed: Type={ExceptionType}, Message={Message}",
+                ex.GetType().FullName, ex.Message);
+            if (ex.InnerException != null)
+                Log.Error(ex.InnerException, "[Settings] Inner exception: {InnerType}: {InnerMessage}",
+                    ex.InnerException.GetType().FullName, ex.InnerException.Message);
             App.GetService<INotificationService>()
-                .ShowError(ex.Message, "Import Error");
+                .ShowError($"[{ex.GetType().Name}] {ex.Message}", "Import Error");
         }
         finally
         {

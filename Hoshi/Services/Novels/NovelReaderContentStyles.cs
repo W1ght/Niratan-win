@@ -1,14 +1,15 @@
 using System.Text;
+using Hoshi.Enums;
 using Hoshi.Models.Settings;
 
 namespace Hoshi.Services.Novels;
 
 public static class NovelReaderContentStyles
 {
-    public static string GenerateCss(ReaderSettings settings, bool systemDark = false)
+    public static string GenerateCss(ReaderSettings settings, ThemeMode themeMode)
     {
-        var bg = ARGBToCssColor(settings.BackgroundColor(systemDark));
-        var fg = settings.TextColorCss(systemDark);
+        var bg = ARGBToCssColor(settings.BackgroundColor(themeMode));
+        var fg = settings.TextColorCss(themeMode);
         var writingMode = settings.WritingModeCss;
         var pagePadding = settings.PagePaddingCss;
         var bottomPadding = settings.BottomPaddingCss;
@@ -121,6 +122,10 @@ public static class NovelReaderContentStyles
             ruby > rt, ruby > rp {
                 -webkit-user-select: none;
                 user-select: none;
+            }
+            ::highlight(hoshi-selection) {
+                background-color: rgba(160, 160, 160, 0.4) !important;
+                color: inherit;
             }
             """));
         sb.Append('\n');
@@ -252,6 +257,10 @@ public static class NovelReaderContentStyles
             ruby > rt, ruby > rp {
                 -webkit-user-select: none;
                 user-select: none;
+            }
+            ::highlight(hoshi-selection) {
+                background-color: rgba(160, 160, 160, 0.4) !important;
+                color: inherit;
             }
             p {
                 break-inside: avoid !important;

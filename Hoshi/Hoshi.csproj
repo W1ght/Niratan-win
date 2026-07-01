@@ -39,6 +39,14 @@
     <Optimize>true</Optimize>
   </PropertyGroup>
 
+  <!-- Copy native hoshidicts DLL to output directory if it exists -->
+  <Target Name="CopyNativeHoshidicts" AfterTargets="Build" Condition="'$(Platform)' == 'x64'">
+    <ItemGroup>
+      <_NativeDll Include="$(MSBuildProjectDirectory)\..\native\out\hoshidicts_c_api.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_NativeDll)" DestinationFolder="$(TargetDir)" Condition="Exists('%(FullPath)')" SkipUnchangedFiles="true" />
+  </Target>
+
   <Target Name="CleanPublish" AfterTargets="Publish">
     <ItemGroup>
       <_AiFiles Include="$(PublishDir)Microsoft.Windows.AI.*" />
@@ -77,15 +85,13 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference
-      Include="CommunityToolkit.WinUI.Controls.SettingsControls"
-      Version="8.2.251219"
-    />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.2.251219" />
     <PackageReference Include="Dapper" Version="2.1.72" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.1839" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.0.1" />
+    <PackageReference Include="NAudio" Version="2.3.0" />
     <PackageReference Include="Serilog" Version="4.3.1" />
     <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />

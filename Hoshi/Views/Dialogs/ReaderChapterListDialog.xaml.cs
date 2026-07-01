@@ -3,11 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
-using Windows.UI;
 using Hoshi.Models.Novel;
 
 namespace Hoshi.Views.Dialogs;
@@ -18,9 +15,22 @@ public sealed class ChapterDisplayItem
     public string Subtitle { get; }
     public int SpineIndex { get; }
     public bool IsCurrent { get; }
+    public int? CharacterCount { get; }
     public double DisplayOpacity => IsCurrent ? 1.0 : 0.55;
+    public Visibility CurrentIndicatorVisibility => IsCurrent ? Visibility.Visible : Visibility.Collapsed;
+    public string CharacterCountText { get; }
+    public Visibility CharacterCountVisibility => string.IsNullOrEmpty(CharacterCountText)
+        ? Visibility.Collapsed
+        : Visibility.Visible;
 
-    public ChapterDisplayItem(string title, string subtitle, int spineIndex, int indentLevel, bool isCurrent)
+    public ChapterDisplayItem(
+        string title,
+        string subtitle,
+        int spineIndex,
+        int indentLevel,
+        bool isCurrent,
+        int? characterCount = null,
+        string characterCountText = "")
     {
         var indent = new string(' ', indentLevel * 4);
         DisplayTitle = (string.IsNullOrWhiteSpace(title) ? "Untitled" : title);
@@ -29,6 +39,8 @@ public sealed class ChapterDisplayItem
         Subtitle = subtitle;
         SpineIndex = spineIndex;
         IsCurrent = isCurrent;
+        CharacterCount = characterCount;
+        CharacterCountText = characterCountText;
     }
 }
 
@@ -41,7 +53,7 @@ public sealed partial class ReaderChapterListDialog : ContentDialog
 
     public ReaderChapterListDialog(List<EpubChapter> chapters, List<EpubTocItem> toc, int currentIndex)
     {
-        _items = BuildChapterRows(chapters, toc, currentIndex);
+        _items = BuildChapterRows(chapters, toc, currentIndex, [], null);
         InitializeComponent();
         ChapterListView.ItemsSource = _items;
 
@@ -78,53 +90,141 @@ public sealed partial class ReaderChapterListDialog : ContentDialog
         }
     }
 
-    private static List<ChapterDisplayItem> BuildChapterRows(
+    internal static List<ChapterDisplayItem> BuildChapterRows(
         List<EpubChapter> chapters,
         List<EpubTocItem> toc,
-        int currentIndex)
+        int currentIndex,
+        IReadOnlyList<int> chapterStartCharacterCounts,
+        int? currentCharacterCount)
     {
+        var selectedIndex = ResolveCurrentChapterIndex(
+            chapters.Count,
+            currentIndex,
+            chapterStartCharacterCounts,
+            currentCharacterCount);
+
         if (toc.Count > 0)
         {
             var rows = new List<ChapterDisplayItem>();
             foreach (var item in toc)
-                FlattenToc(item, chapters, currentIndex, 0, rows);
+                FlattenToc(item, chapters, selectedIndex, chapterStartCharacterCounts, 0, rows);
             if (rows.Count > 0)
-                return rows;
+                return SelectCurrentVisibleRowByCharacter(rows, currentCharacterCount);
         }
 
-        return chapters.Select((ch, i) =>
+        var chapterRows = chapters.Select((ch, i) =>
         {
             var filename = Path.GetFileNameWithoutExtension(ch.Href);
+            var characterCount = GetChapterStartCharacterCount(chapterStartCharacterCounts, i);
             return new ChapterDisplayItem(
-                string.IsNullOrWhiteSpace(filename) ? $"Chapter {i + 1}" : filename,
-                $"Chapter {i + 1}",
+                string.IsNullOrWhiteSpace(filename) ? $"章节 {i + 1}" : filename,
+                $"章节 {i + 1}",
                 i,
                 0,
-                i == currentIndex);
+                i == selectedIndex,
+                characterCount,
+                FormatCharacterCount(characterCount));
         }).ToList();
+
+        return SelectCurrentVisibleRowByCharacter(chapterRows, currentCharacterCount);
     }
 
     private static void FlattenToc(
         EpubTocItem item,
         List<EpubChapter> chapters,
         int currentIndex,
+        IReadOnlyList<int> chapterStartCharacterCounts,
         int indentLevel,
         List<ChapterDisplayItem> rows)
     {
         var spineIndex = FindSpineIndex(item.Href, chapters);
         if (spineIndex >= 0)
         {
+            var characterCount = GetChapterStartCharacterCount(chapterStartCharacterCounts, spineIndex);
             rows.Add(new ChapterDisplayItem(
                 item.Label,
-                $"Chapter {spineIndex + 1}",
+                $"章节 {spineIndex + 1}",
                 spineIndex,
                 indentLevel,
-                spineIndex == currentIndex));
+                spineIndex == currentIndex,
+                characterCount,
+                FormatCharacterCount(characterCount)));
         }
 
         foreach (var child in item.Children)
-            FlattenToc(child, chapters, currentIndex, indentLevel + 1, rows);
+            FlattenToc(child, chapters, currentIndex, chapterStartCharacterCounts, indentLevel + 1, rows);
     }
+
+    private static List<ChapterDisplayItem> SelectCurrentVisibleRowByCharacter(
+        List<ChapterDisplayItem> rows,
+        int? currentCharacterCount)
+    {
+        if (!currentCharacterCount.HasValue || rows.Count == 0)
+            return rows;
+
+        var target = Math.Max(0, currentCharacterCount.Value);
+        var currentRowIndex = -1;
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var characterCount = rows[i].CharacterCount;
+            if (!characterCount.HasValue)
+                continue;
+
+            if (characterCount.Value <= target)
+                currentRowIndex = i;
+            else
+                break;
+        }
+
+        if (currentRowIndex < 0)
+            return rows;
+
+        return rows.Select((row, index) => new ChapterDisplayItem(
+            row.DisplayTitle,
+            row.Subtitle,
+            row.SpineIndex,
+            0,
+            index == currentRowIndex,
+            row.CharacterCount,
+            row.CharacterCountText)).ToList();
+    }
+
+    private static int ResolveCurrentChapterIndex(
+        int chapterCount,
+        int fallbackIndex,
+        IReadOnlyList<int> chapterStartCharacterCounts,
+        int? currentCharacterCount)
+    {
+        if (chapterCount <= 0)
+            return 0;
+
+        var selected = Math.Clamp(fallbackIndex, 0, chapterCount - 1);
+        if (!currentCharacterCount.HasValue || chapterStartCharacterCounts.Count == 0)
+            return selected;
+
+        var target = Math.Max(0, currentCharacterCount.Value);
+        for (var i = 0; i < Math.Min(chapterCount, chapterStartCharacterCounts.Count); i++)
+        {
+            if (chapterStartCharacterCounts[i] <= target)
+                selected = i;
+            else
+                break;
+        }
+
+        return selected;
+    }
+
+    private static int? GetChapterStartCharacterCount(IReadOnlyList<int> chapterStartCharacterCounts, int index)
+    {
+        if (index < 0 || index >= chapterStartCharacterCounts.Count)
+            return null;
+
+        return chapterStartCharacterCounts[index];
+    }
+
+    private static string FormatCharacterCount(int? count) =>
+        count.HasValue ? count.Value.ToString("N0") : string.Empty;
 
     private static int FindSpineIndex(string? tocHref, List<EpubChapter> chapters)
     {

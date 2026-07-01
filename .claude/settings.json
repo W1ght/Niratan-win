@@ -33,7 +33,11 @@
       "Bash(git worktree *)",
       "Bash(gh *)",
       "Bash(tasklist *)",
-      "Bash(where *)"
+      "Bash(where *)",
+      "Bash(node *)",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(powershell *)"
     ],
     "deny": [
       "Bash(rm -rf *)",
@@ -41,6 +45,42 @@
       "Bash(git reset --hard *)",
       "Bash(shutdown *)",
       "Bash(del /f /s *)"
+    ]
+  },
+
+  "mcpServers": {
+    "github": {
+      "command": "${env:APPDATA}\\fnm\\node-versions\\v24.16.0\\installation\\npx.cmd",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${env:GITHUB_TOKEN}"
+      }
+    },
+    "sqlite": {
+      "command": "${env:APPDATA}\\fnm\\node-versions\\v24.16.0\\installation\\npx.cmd",
+      "args": ["-y", "@modelcontextprotocol/server-sqlite", "--db-path", "${env:APPDATA}\\Hoshi\\Data\\hoshi.db"]
+    },
+    "dotnet": {
+      "command": "${env:APPDATA}\\fnm\\node-versions\\v24.16.0\\installation\\npx.cmd",
+      "args": ["-y", "@paretools/dotnet"]
+    },
+    "nuget": {
+      "command": "${env:APPDATA}\\fnm\\node-versions\\v24.16.0\\installation\\npx.cmd",
+      "args": ["-y", "package-registry-mcp"]
+    }
+  },
+
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -Command \"$ext=[System.IO.Path]::GetExtension('${file}'); if ($ext -in '.cs','.xaml','.csproj') { dotnet build -p:Platform=x64 --no-restore 2>&1 | Select-Object -Last 5 }\""
+          }
+        ]
+      }
     ]
   }
 }

@@ -26,6 +26,7 @@
                        Style="{StaticResource CaptionTextBlockStyle}"
                        Text="Hoshi" />
             <AutoSuggestBox Grid.Column="2"
+                            x:Uid="GlobalSearchBox"
                             MaxWidth="300"
                             Margin="8,0,8,0"
                             HorizontalAlignment="Stretch"
@@ -50,33 +51,41 @@
                 <Thickness x:Key="NavigationViewMinimalContentMargin">0,48,0,0</Thickness>
                 <Thickness x:Key="NavigationViewContentGridBorderThickness">1,1,0,0</Thickness>
                 <Thickness x:Key="NavigationViewHeaderMargin">36,30,36,0</Thickness>
-                <!--  This is the rounded corner on the Top left of the L Pattern  -->
                 <CornerRadius x:Key="NavigationViewContentGridCornerRadius">8,0,0,0</CornerRadius>
             </NavigationView.Resources>
 
             <NavigationView.MenuItems>
                 <NavigationViewItem AutomationProperties.AutomationId="NovelNavItem"
+                                    x:Uid="NovelNavItem"
                                     Content="Novels"
                                     Icon="Library"
                                     IsSelected="True"
                                     Tag="Hoshi.Views.Pages.NovelLibraryPage" />
-
+                <NavigationViewItem AutomationProperties.AutomationId="NovelLookupNavItem"
+                                    x:Uid="NovelLookupNavItem"
+                                    Content="Lookup"
+                                    Icon="Find"
+                                    Tag="Hoshi.Views.Pages.NovelLookupPage" />
             </NavigationView.MenuItems>
 
             <NavigationView.FooterMenuItems>
                 <NavigationViewItem AutomationProperties.AutomationId="SettingsNavItem"
-                                    Content="设置"
+                                    x:Uid="SettingsNavItem"
+                                    Content="Settings"
                                     Icon="Setting"
                                     Tag="Hoshi.Views.Pages.SettingsPage" />
                 <NavigationViewItem AutomationProperties.AutomationId="NormalLogsNavItem"
-                                    Content="普通日志"
+                                    x:Uid="NormalLogsNavItem"
+                                    Content="Normal Logs"
                                     Icon="Document"
                                     Tag="Hoshi.Views.Pages.NormalLogsPage" />
                 <NavigationViewItem AutomationProperties.AutomationId="ErrorLogsNavItem"
-                                    Content="错误日志"
+                                    x:Uid="ErrorLogsNavItem"
+                                    Content="Error Logs"
                                     Icon="ReportHacked"
                                     Tag="Hoshi.Views.Pages.ErrorLogsPage" />
-                <NavigationViewItem Content="Help"
+                <NavigationViewItem x:Uid="HelpNavItem"
+                                    Content="Help"
                                     Icon="Help"
                                     IsEnabled="False"
                                     Tag="Hoshi.Views.Pages.HelpPage" />

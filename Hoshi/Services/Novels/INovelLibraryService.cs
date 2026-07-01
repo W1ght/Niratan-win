@@ -25,6 +25,13 @@ public interface INovelLibraryService
         string bookId,
         int chapterIndex,
         double progress,
+        int currentCharacterCount,
+        int totalCharacterCount,
+        CancellationToken ct = default
+    );
+
+    Task<Result> SaveNovelBookOrderAsync(
+        IReadOnlyList<string> orderedBookIds,
         CancellationToken ct = default
     );
 }

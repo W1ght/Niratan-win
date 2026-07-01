@@ -1,4 +1,7 @@
+using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -7,28 +10,59 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Hoshi.Enums;
 using Hoshi.Messages;
+using Hoshi.Models;
 using Hoshi.Models.DTO;
+using Hoshi.Models.Novel;
+using Hoshi.Services.Settings;
 using Hoshi.Services.Novels;
+using Hoshi.Services.Sasayaki;
 using Hoshi.Services.UI;
 using Hoshi.ViewModels.Components;
 
 namespace Hoshi.ViewModels.Pages;
 
 public partial class NovelLibraryPageViewModel : ObservableObject
+    , IRecipient<NovelLibraryChangedMessage>
 {
     private readonly INovelLibraryService _novelLibraryService;
     private readonly IDialogService _dialogService;
     private readonly INotificationService _notificationService;
     private readonly IMessenger _messenger;
+    private readonly ISasayakiMatchService _sasayakiMatchService;
+    private readonly ISettingsService _settingsService;
+    private readonly INovelStatisticsDashboardService _statisticsDashboardService;
     private CancellationTokenSource _cts = new();
+    private bool _suppressSortApplication;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NoNovels))]
-    public partial List<NovelBookItemViewModel> NovelBooks { get; set; } = new();
+    public partial ObservableCollection<NovelBookItemViewModel> NovelBooks { get; set; } = new();
+
+    [ObservableProperty]
+    public partial NovelLibrarySortOption SelectedSortOption { get; set; } = NovelLibrarySortOption.Recent;
+
+    [ObservableProperty]
+    public partial bool ShowStatisticsDashboard { get; set; }
+
+    [ObservableProperty]
+    public partial string StatisticsTodayText { get; set; } = "0 chars";
+
+    [ObservableProperty]
+    public partial string StatisticsWeekText { get; set; } = "0 chars";
+
+    [ObservableProperty]
+    public partial ObservableCollection<NovelStatisticsDistributionRow> StatisticsDistributionRows { get; set; } = new();
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NoNovels))]
     public partial bool IsContentLoading { get; set; }
+
+    public IReadOnlyList<NovelLibrarySortOptionItem> SortOptions { get; } =
+    [
+        new(NovelLibrarySortOption.Recent, "Recent"),
+        new(NovelLibrarySortOption.Title, "Title"),
+        new(NovelLibrarySortOption.Manual, "Manual"),
+    ];
 
     public bool NoNovels => !IsContentLoading && NovelBooks.Count == 0;
 
@@ -36,21 +70,30 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         INovelLibraryService novelLibraryService,
         IDialogService dialogService,
         INotificationService notificationService,
-        IMessenger messenger
+        IMessenger messenger,
+        ISasayakiMatchService sasayakiMatchService,
+        ISettingsService settingsService,
+        INovelStatisticsDashboardService statisticsDashboardService
     )
     {
         _novelLibraryService = novelLibraryService;
         _dialogService = dialogService;
         _notificationService = notificationService;
         _messenger = messenger;
+        _sasayakiMatchService = sasayakiMatchService;
+        _settingsService = settingsService;
+        _statisticsDashboardService = statisticsDashboardService;
+        SelectedSortOption = _settingsService.Current.NovelLibrarySortOption;
+        _messenger.RegisterAll(this);
     }
 
     public async Task InitializeAsync() => await LoadNovelsAsync();
 
+    public void Receive(NovelLibraryChangedMessage message) => _ = LoadNovelsAsync();
+
     public void OnNavigatedFrom()
     {
         _cts.Cancel();
-        _cts.Dispose();
     }
 
     [RelayCommand]
@@ -72,11 +115,110 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task ImportDroppedNovelsAsync(IEnumerable<string> filePaths)
+    {
+        var epubPaths = filePaths
+            .Where(path => string.Equals(Path.GetExtension(path), ".epub", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (epubPaths.Count == 0)
+            return;
+
+        var importedCount = 0;
+        foreach (var filePath in epubPaths)
+        {
+            var result = await _novelLibraryService.ImportEpubAsync(filePath, _cts.Token);
+            if (!result.IsSuccess)
+            {
+                if (!result.IsCancelled)
+                    _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+                continue;
+            }
+
+            importedCount++;
+        }
+
+        if (importedCount > 0)
+        {
+            _notificationService.ShowSuccess(
+                importedCount == 1 ? "EPUB imported." : $"{importedCount} EPUBs imported.",
+                "Novel imported");
+            await LoadNovelsAsync();
+        }
+    }
+
+    [RelayCommand]
     private void OpenNovel(NovelBookItemViewModel item)
     {
         _messenger.Send(
             new SwitchAppModeMessage(AppMode.NovelReader, new NovelReaderNavigationArgs(item.Book.Id))
         );
+    }
+
+    [RelayCommand]
+    private async Task MoveNovelBeforeAsync(NovelBookMoveRequest request)
+    {
+        if (request.SourceBookId == request.TargetBookId)
+            return;
+
+        var source = NovelBooks.FirstOrDefault(item => item.Book.Id == request.SourceBookId);
+        if (source == null)
+            return;
+
+        SetManualSortOptionWithoutReapplying();
+
+        var sourceIndex = NovelBooks.IndexOf(source);
+        NovelBooks.Remove(source);
+        var targetIndex = NovelBooks
+            .Select((item, index) => new { item.Book.Id, index })
+            .FirstOrDefault(item => item.Id == request.TargetBookId)
+            ?.index;
+        if (targetIndex == null)
+        {
+            NovelBooks.Insert(sourceIndex, source);
+            return;
+        }
+
+        NovelBooks.Insert(targetIndex.Value, source);
+        await SaveCurrentManualOrderCoreAsync();
+    }
+
+    [RelayCommand]
+    private async Task SaveCurrentManualOrderAsync()
+    {
+        SetManualSortOptionWithoutReapplying();
+        await SaveCurrentManualOrderCoreAsync();
+    }
+
+    [RelayCommand]
+    private async Task MatchSasayakiAsync(NovelBookItemViewModel item)
+    {
+        var audioPath = await _dialogService.OpenFilePickerAsync(".mp3", ".m4b", ".m4a", ".wav", ".flac", ".ogg");
+        if (audioPath == null)
+            return;
+
+        var subtitlePath = await _dialogService.OpenFilePickerAsync(".srt", ".vtt");
+        if (subtitlePath == null)
+            return;
+
+        try
+        {
+            var match = await _sasayakiMatchService.MatchAsync(
+                item.Book,
+                audioPath,
+                subtitlePath,
+                _settingsService.Current.SasayakiSettings.SearchWindowSize,
+                _cts.Token);
+            _notificationService.ShowSuccess(
+                $"{match.Matches.Count}/{match.Cues.Count} cues matched.",
+                "Sasayaki matched");
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError(ex.Message, "Sasayaki match failed");
+        }
     }
 
     [RelayCommand]
@@ -102,18 +244,130 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
     private async Task LoadNovelsAsync()
     {
-        _cts.Cancel();
-        _cts.Dispose();
+        try
+        {
+            _cts.Cancel();
+        }
+        finally
+        {
+            _cts.Dispose();
+        }
         _cts = new CancellationTokenSource();
 
         IsContentLoading = true;
         var result = await _novelLibraryService.GetNovelBooksAsync(ct: _cts.Token);
 
         if (result.IsSuccess)
-            NovelBooks = result.Value!.Select(book => new NovelBookItemViewModel(book)).ToList();
+        {
+            var books = result.Value!;
+            NovelBooks = new ObservableCollection<NovelBookItemViewModel>(
+                SortBooks(books).Select(book => new NovelBookItemViewModel(book)));
+            await LoadStatisticsDashboardAsync(books);
+        }
         else if (!result.IsCancelled)
             _notificationService.ShowError(result.Error!, result.ErrorTitle!);
 
         IsContentLoading = false;
     }
+
+    partial void OnSelectedSortOptionChanged(NovelLibrarySortOption value)
+    {
+        _settingsService.Set(settings => settings.NovelLibrarySortOption, value);
+        _ = _settingsService.SaveAsync();
+
+        if (!_suppressSortApplication)
+            ApplyCurrentSort();
+    }
+
+    private void ApplyCurrentSort()
+    {
+        if (NovelBooks.Count == 0)
+            return;
+
+        NovelBooks = new ObservableCollection<NovelBookItemViewModel>(
+            SortBookItems(NovelBooks));
+    }
+
+    private IEnumerable<NovelBook> SortBooks(IEnumerable<NovelBook> books) =>
+        SelectedSortOption switch
+        {
+            NovelLibrarySortOption.Title => books
+                .OrderBy(book => book.Title, StringComparer.CurrentCultureIgnoreCase)
+                .ThenByDescending(book => book.LastOpenedAt ?? book.ImportedAt),
+            NovelLibrarySortOption.Manual => books
+                .OrderBy(book => book.ManualSortOrder)
+                .ThenBy(book => book.Title, StringComparer.CurrentCultureIgnoreCase),
+            _ => books
+                .OrderByDescending(book => book.LastOpenedAt ?? book.ImportedAt)
+                .ThenBy(book => book.Title, StringComparer.CurrentCultureIgnoreCase),
+        };
+
+    private IEnumerable<NovelBookItemViewModel> SortBookItems(IEnumerable<NovelBookItemViewModel> items) =>
+        SortBooks(items.Select(item => item.Book)).Select(book => new NovelBookItemViewModel(book));
+
+    private void SetManualSortOptionWithoutReapplying()
+    {
+        _suppressSortApplication = true;
+        SelectedSortOption = NovelLibrarySortOption.Manual;
+        _suppressSortApplication = false;
+    }
+
+    private async Task SaveCurrentManualOrderCoreAsync()
+    {
+        var orderedBookIds = NovelBooks.Select(item => item.Book.Id).ToList();
+        var result = await _novelLibraryService.SaveNovelBookOrderAsync(orderedBookIds, _cts.Token);
+        if (!result.IsSuccess && !result.IsCancelled)
+            _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+    }
+
+    private async Task LoadStatisticsDashboardAsync(IReadOnlyList<NovelBook> books)
+    {
+        var snapshot = await _statisticsDashboardService.LoadSnapshotAsync(books, _cts.Token);
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var settings = _settingsService.Current.StatisticsSettings;
+        var targetSettings = new NovelStatisticsDashboardTargetSettings(
+            settings.DailyTargetType,
+            settings.DailyCharacterTarget,
+            settings.DailyDurationTargetMinutes,
+            settings.WeeklyTargetDays);
+
+        var todaySummary = NovelStatisticsDashboardCalculator.TodaySummary(
+            snapshot,
+            today,
+            targetSettings);
+        var weekSummary = NovelStatisticsDashboardCalculator.WeekSummary(
+            snapshot,
+            today,
+            targetSettings);
+        var range = new NovelStatisticsDateRange(today.AddYears(-1).AddDays(1), today);
+        var distribution = NovelStatisticsDashboardCalculator.DistributionRows(
+            snapshot.Days,
+            range,
+            targetSettings.DailyTargetType);
+
+        StatisticsTodayText = $"{FormatCharacters(todaySummary.Characters)} chars · {FormatDuration(todaySummary.ReadingTime)} · {todaySummary.TargetPercent}%";
+        StatisticsWeekText = $"{FormatCharacters(weekSummary.Characters)} chars · {weekSummary.MetTargetDays}/{weekSummary.TargetDays} days";
+        StatisticsDistributionRows = new ObservableCollection<NovelStatisticsDistributionRow>(
+            distribution.Take(6));
+    }
+
+    private static string FormatCharacters(int characters) =>
+        characters.ToString("N0");
+
+    private static string FormatDuration(double seconds)
+    {
+        var minutes = Math.Max((int)Math.Round(seconds / 60), 0);
+        if (minutes < 60)
+            return $"{minutes}m";
+
+        var hours = minutes / 60;
+        var remainder = minutes % 60;
+        return remainder == 0 ? $"{hours}h" : $"{hours}h {remainder}m";
+    }
 }
+
+public sealed record NovelBookMoveRequest(string SourceBookId, string TargetBookId);
+
+public sealed record NovelLibrarySortOptionItem(
+    NovelLibrarySortOption Value,
+    string DisplayName);

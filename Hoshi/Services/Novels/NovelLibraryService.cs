@@ -128,12 +128,20 @@ internal sealed class NovelLibraryService : INovelLibraryService
         string bookId,
         int chapterIndex,
         double progress,
+        int currentCharacterCount,
+        int totalCharacterCount,
         CancellationToken ct = default
     )
     {
         try
         {
-            await _dataService.SaveNovelProgressAsync(bookId, chapterIndex, progress, ct);
+            await _dataService.SaveNovelProgressAsync(
+                bookId,
+                chapterIndex,
+                progress,
+                currentCharacterCount,
+                totalCharacterCount,
+                ct);
             return Result.Success();
         }
         catch (OperationCanceledException)
@@ -144,6 +152,27 @@ internal sealed class NovelLibraryService : INovelLibraryService
         {
             _logger.LogError(ex, "Error saving progress for {BookId}", bookId);
             return Result.Failure(ex.Message, "Error saving progress");
+        }
+    }
+
+    public async Task<Result> SaveNovelBookOrderAsync(
+        IReadOnlyList<string> orderedBookIds,
+        CancellationToken ct = default
+    )
+    {
+        try
+        {
+            await _dataService.SaveNovelBookOrderAsync(orderedBookIds, ct);
+            return Result.Success();
+        }
+        catch (OperationCanceledException)
+        {
+            return Result.Cancelled();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error saving novel library order");
+            return Result.Failure(ex.Message, "Error saving novel order");
         }
     }
 

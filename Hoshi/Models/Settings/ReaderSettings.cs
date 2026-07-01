@@ -1,15 +1,13 @@
 using System.Globalization;
 using Hoshi.Enums;
+using Microsoft.UI.Xaml;
 
 namespace Hoshi.Models.Settings;
 
 public class ReaderSettings
 {
     // --- Theme ---
-    public ReaderTheme Theme { get; set; } = ReaderTheme.System;
-    public bool EInkMode { get; set; } = false;
-    public bool SystemLightSepia { get; set; } = false;
-    public bool SepiaInvertInDark { get; set; } = false;
+    public bool SepiaMode { get; set; } = false;
 
     // --- Text ---
     public bool VerticalWriting { get; set; } = true;
@@ -19,6 +17,7 @@ public class ReaderSettings
 
     // --- Layout ---
     public bool ContinuousMode { get; set; } = false;
+    public bool MouseWheelPageTurn { get; set; } = true;
     public int ChapterSwipeDistance { get; set; } = 20;
     public int HorizontalPadding { get; set; } = 5;
     public int VerticalPadding { get; set; } = 0;
@@ -33,9 +32,9 @@ public class ReaderSettings
     public bool ShowCharacters { get; set; } = true;
     public bool ShowPercentage { get; set; } = true;
     public bool ShowProgressTop { get; set; } = true;
-
-    // --- Lookup ---
-    public int ShiftHoverLookupDelayMs { get; set; } = 300;
+    public bool ShowStatisticsToggle { get; set; } = false;
+    public bool ShowReadingSpeed { get; set; } = false;
+    public bool ShowReadingTime { get; set; } = false;
 
     // --- Computed CSS properties ---
 
@@ -68,36 +67,27 @@ public class ReaderSettings
 
     // --- Color methods ---
 
-    public uint BackgroundColor(bool systemDark) => Theme switch
+    private static bool IsDark(ThemeMode themeMode)
     {
-        ReaderTheme.System => systemDark ? 0xFF000000 : (SystemLightSepia ? 0xFFF2E2C9 : 0xFFFFFFFF),
-        ReaderTheme.Dark => 0xFF000000,
-        ReaderTheme.Sepia => SepiaInvertInDark && systemDark ? 0xFF18150C : 0xFFF2E2C9,
-        ReaderTheme.Light => 0xFFFFFFFF,
-        _ => 0xFFFFFFFF,
-    };
+        if (themeMode == ThemeMode.Dark) return true;
+        if (themeMode == ThemeMode.Light) return false;
+        // System: follow OS
+        return Application.Current.RequestedTheme == ApplicationTheme.Dark;
+    }
 
-    public string TextColorCss(bool systemDark) => Theme switch
+    public uint BackgroundColor(ThemeMode themeMode)
     {
-        ReaderTheme.System => systemDark ? "#fff" : (SystemLightSepia ? "#332A1B" : "#000"),
-        ReaderTheme.Dark => "#fff",
-        ReaderTheme.Sepia => SepiaInvertInDark && systemDark ? "#F2E2C9" : "#332A1B",
-        ReaderTheme.Light => "#000",
-        _ => "#000",
-    };
+        if (SepiaMode) return 0xFFF2E2C9;
+        return IsDark(themeMode) ? 0xFF000000 : 0xFFFFFFFF;
+    }
 
-    public bool UsesDarkInterface(bool systemDark) => Theme switch
+    public string TextColorCss(ThemeMode themeMode)
     {
-        ReaderTheme.System => systemDark,
-        ReaderTheme.Light => false,
-        ReaderTheme.Dark => true,
-        ReaderTheme.Sepia => SepiaInvertInDark && systemDark,
-        _ => false,
-    };
+        if (SepiaMode) return "#332A1B";
+        return IsDark(themeMode) ? "#fff" : "#000";
+    }
 
-    public bool UsesSepiaLightContent(bool systemDark) =>
-        !EInkMode && (
-            Theme == ReaderTheme.Sepia && !(SepiaInvertInDark && systemDark) ||
-            Theme == ReaderTheme.System && SystemLightSepia && !systemDark
-        );
+    public bool UsesDarkInterface(ThemeMode themeMode) => IsDark(themeMode);
+
+    public bool UsesSepiaLightContent() => SepiaMode;
 }

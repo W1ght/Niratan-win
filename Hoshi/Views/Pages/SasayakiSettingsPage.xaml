@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page x:Class="Hoshi.Views.Pages.SasayakiSettingsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:helpers="using:Hoshi.Helpers.UI.Converters"
+      xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
+      xmlns:ui="using:CommunityToolkit.WinUI"
+      mc:Ignorable="d">
+
+    <Page.Resources>
+        <helpers:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <Style x:Key="SasayakiSectionHeaderStyle" BasedOn="{StaticResource BodyStrongTextBlockStyle}" TargetType="TextBlock">
+            <Style.Setters>
+                <Setter Property="Margin" Value="1,30,0,6" />
+            </Style.Setters>
+        </Style>
+    </Page.Resources>
+
+    <Grid RowDefinitions="Auto,*">
+        <StackPanel Padding="20,14,36,16"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center">
+            <Button Width="36"
+                    Height="36"
+                    Padding="0"
+                    AutomationProperties.AutomationId="SasayakiSettingsBackButton"
+                    x:Uid="SasayakiSettingsBackButton"
+                    Click="BackButton_Click">
+                <FontIcon Glyph="&#xE72B;" />
+            </Button>
+            <FontIcon FontSize="24" Glyph="&#xE767;" />
+            <TextBlock x:Uid="SasayakiSettingsPageTitle"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource TitleTextBlockStyle}"
+                       Text="Sasayaki" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1">
+            <Grid Padding="0,0,16,16">
+                <StackPanel MaxWidth="1000" HorizontalAlignment="Stretch" Spacing="4">
+                    <TextBlock x:Uid="SasayakiGeneralSectionHeader"
+                               Style="{StaticResource SasayakiSectionHeaderStyle}"
+                               Text="General" />
+
+                    <toolkit:SettingsCard x:Uid="SasayakiEnableToggle"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE768;}">
+                        <ToggleSwitch AutomationProperties.AutomationId="SasayakiEnableToggle"
+                                      IsOn="{x:Bind ViewModel.EnableSasayaki, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <StackPanel x:Name="SasayakiEnabledSettingsPanel"
+                                Spacing="4"
+                                Visibility="{x:Bind ViewModel.EnableSasayaki, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <toolkit:SettingsCard x:Uid="SasayakiReaderToggleSwitch"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8A7;}">
+                        <ToggleSwitch AutomationProperties.AutomationId="SasayakiReaderToggleSwitch"
+                                      IsOn="{x:Bind ViewModel.ReaderShowSasayakiToggle, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <TextBlock x:Uid="SasayakiPlaybackSectionHeader"
+                               Style="{StaticResource SasayakiSectionHeaderStyle}"
+                               Text="Playback" />
+
+                    <toolkit:SettingsCard x:Uid="SasayakiAutoScrollToggle"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8CB;}">
+                        <ToggleSwitch AutomationProperties.AutomationId="SasayakiAutoScrollToggle"
+                                      IsOn="{x:Bind ViewModel.AutoScroll, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="SasayakiAutoPauseToggle"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE769;}">
+                        <ToggleSwitch AutomationProperties.AutomationId="SasayakiAutoPauseToggle"
+                                      IsOn="{x:Bind ViewModel.AutoPauseOnLookup, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="SasayakiSkipControlsToggle"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE892;}">
+                        <ToggleSwitch AutomationProperties.AutomationId="SasayakiSkipControlsToggle"
+                                      IsOn="{x:Bind ViewModel.ShowSkipControls, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="SasayakiPlaybackRateComboBox"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE916;}">
+                        <ComboBox MinWidth="120"
+                                  AutomationProperties.AutomationId="SasayakiDefaultPlaybackRateComboBox"
+                                  ItemsSource="{x:Bind ViewModel.AvailablePlaybackRates}"
+                                  SelectedItem="{x:Bind ViewModel.SelectedPlaybackRate, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <TextBlock x:Uid="SasayakiMatchingSectionHeader"
+                               Style="{StaticResource SasayakiSectionHeaderStyle}"
+                               Text="Matching" />
+
+                    <toolkit:SettingsCard x:Uid="SasayakiSearchWindowNumberBox"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE721;}">
+                        <NumberBox Width="160"
+                                   AutomationProperties.AutomationId="SasayakiSearchWindowNumberBox"
+                                   Minimum="100"
+                                   Maximum="10000"
+                                   SmallChange="100"
+                                   LargeChange="500"
+                                   SpinButtonPlacementMode="Compact"
+                                   Value="{x:Bind ViewModel.SearchWindowSizeValue, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <TextBlock x:Uid="SasayakiSyncSectionHeader"
+                               Style="{StaticResource SasayakiSectionHeaderStyle}"
+                               Text="Sync" />
+
+                    <toolkit:SettingsCard x:Uid="SasayakiEnableSyncToggle"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE895;}">
+                        <ToggleSwitch AutomationProperties.AutomationId="SasayakiEnableSyncToggle"
+                                      IsOn="{x:Bind ViewModel.EnableSync, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <TextBlock x:Uid="SasayakiThemeSectionHeader"
+                               Style="{StaticResource SasayakiSectionHeaderStyle}"
+                               Text="Highlight Colors" />
+
+                    <toolkit:SettingsCard x:Uid="SasayakiLightTextColorCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE790;}">
+                        <ColorPicker AutomationProperties.AutomationId="SasayakiLightTextColorPicker"
+                                     IsAlphaEnabled="True"
+                                     IsMoreButtonVisible="False"
+                                     Color="{x:Bind ViewModel.LightTextColor, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="SasayakiLightBackgroundColorCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE790;}">
+                        <ColorPicker AutomationProperties.AutomationId="SasayakiLightBackgroundColorPicker"
+                                     IsAlphaEnabled="True"
+                                     IsMoreButtonVisible="False"
+                                     Color="{x:Bind ViewModel.LightBackgroundColor, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="SasayakiDarkTextColorCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE708;}">
+                        <ColorPicker AutomationProperties.AutomationId="SasayakiDarkTextColorPicker"
+                                     IsAlphaEnabled="True"
+                                     IsMoreButtonVisible="False"
+                                     Color="{x:Bind ViewModel.DarkTextColor, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="SasayakiDarkBackgroundColorCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE708;}">
+                        <ColorPicker AutomationProperties.AutomationId="SasayakiDarkBackgroundColorPicker"
+                                     IsAlphaEnabled="True"
+                                     IsMoreButtonVisible="False"
+                                     Color="{x:Bind ViewModel.DarkBackgroundColor, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</Page>

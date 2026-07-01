@@ -35,4 +35,15 @@
   <ItemGroup>
     <ProjectReference Include="..\Hoshi\Hoshi.csproj" />
   </ItemGroup>
+
+  <!-- Copy native hoshidicts DLL to test output -->
+  <Target Name="CopyNativeHoshidicts" AfterTargets="Build" Condition="'$(Platform)' == 'x64'">
+    <ItemGroup>
+      <_NativeDll Include="$(MSBuildProjectDirectory)\..\native\out\hoshidicts_c_api.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_NativeDll)"
+          DestinationFolder="$(TargetDir)"
+          Condition="Exists('%(FullPath)')"
+          SkipUnchangedFiles="true" />
+  </Target>
 </Project>
