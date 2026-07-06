@@ -115,4 +115,15 @@ public sealed class AnkiMiningContext
     public string? CoverPath { get; set; }
     public string? SasayakiAudioPath { get; set; }
     public int? SentenceOffset { get; set; }
+    public string? VideoFileName { get; set; }
+    public string? VideoTimestamp { get; set; }
+    public string? VideoCueStart { get; set; }
+    public string? VideoCueEnd { get; set; }
+    public string? VideoSubtitle { get; set; }
+    public string? VideoPreviousSubtitle { get; set; }
+    public string? VideoNextSubtitle { get; set; }
+    public string? VideoScreenshotPath { get; set; }
+    public string? VideoAudioClipPath { get; set; }
+    public string? VideoScreenshotTag { get; set; }
+    public string? VideoAudioClipTag { get; set; }
 }

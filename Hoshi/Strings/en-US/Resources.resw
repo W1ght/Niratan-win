@@ -6,6 +6,7 @@
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
   <data name="GlobalSearchBox.PlaceholderText" xml:space="preserve"><value>Search</value></data>
   <data name="NovelNavItem.Content" xml:space="preserve"><value>Novels</value></data>
+  <data name="VideoNavItem.Content" xml:space="preserve"><value>Videos</value></data>
   <data name="NovelLookupNavItem.Content" xml:space="preserve"><value>Lookup</value></data>
   <data name="SettingsNavItem.Content" xml:space="preserve"><value>Settings</value></data>
   <data name="NormalLogsNavItem.Content" xml:space="preserve"><value>Normal Logs</value></data>
@@ -153,6 +154,32 @@
   <data name="NovelLookupQueryBox.PlaceholderText" xml:space="preserve"><value>Enter Japanese or English text</value></data>
   <data name="NovelLookupSearchButtonText.Text" xml:space="preserve"><value>Search</value></data>
   <data name="NovelLookupPopupHint.Text" xml:space="preserve"><value>Dictionary popup results render in the same WebView overlay used by the reader.</value></data>
+  <data name="VideoLibraryPageTitle.Text" xml:space="preserve"><value>Videos</value></data>
+  <data name="ImportVideoButton.AutomationProperties.Name" xml:space="preserve"><value>Import video</value></data>
+  <data name="ImportVideoButton.ToolTipService.ToolTip" xml:space="preserve"><value>Import video</value></data>
+  <data name="NoVideosText.Text" xml:space="preserve"><value>No videos imported.</value></data>
+  <data name="VideoPlayerRewindButton.AutomationProperties.Name" xml:space="preserve"><value>Back 5 seconds</value></data>
+  <data name="VideoPlayerRewindButton.Label" xml:space="preserve"><value>Back</value></data>
+  <data name="VideoPlayerPlayPauseButton.AutomationProperties.Name" xml:space="preserve"><value>Play or pause</value></data>
+  <data name="VideoPlayerPlayPauseButton.Label" xml:space="preserve"><value>Play or pause</value></data>
+  <data name="VideoPlayerPlayPauseButton.ToolTipService.ToolTip" xml:space="preserve"><value>Play or pause</value></data>
+  <data name="VideoPlayerForwardButton.AutomationProperties.Name" xml:space="preserve"><value>Forward 5 seconds</value></data>
+  <data name="VideoPlayerForwardButton.Label" xml:space="preserve"><value>Forward</value></data>
+  <data name="VideoPlayerPreviousSubtitleButton.AutomationProperties.Name" xml:space="preserve"><value>Previous subtitle</value></data>
+  <data name="VideoPlayerPreviousSubtitleButton.Label" xml:space="preserve"><value>Previous</value></data>
+  <data name="VideoPlayerNextSubtitleButton.AutomationProperties.Name" xml:space="preserve"><value>Next subtitle</value></data>
+  <data name="VideoPlayerNextSubtitleButton.Label" xml:space="preserve"><value>Next</value></data>
+  <data name="VideoPlayerProgressSlider.AutomationProperties.Name" xml:space="preserve"><value>Playback position</value></data>
+  <data name="VideoPlayerVolumeSlider.AutomationProperties.Name" xml:space="preserve"><value>Volume</value></data>
+  <data name="VideoPlayerSubtitleStyleButton.AutomationProperties.Name" xml:space="preserve"><value>Subtitle settings</value></data>
+  <data name="VideoPlayerSubtitleStyleButton.Label" xml:space="preserve"><value>Subtitles</value></data>
+  <data name="VideoPlayerSubtitleSizeText.Text" xml:space="preserve"><value>Subtitle size</value></data>
+  <data name="VideoPlayerHardwareDecodingToggle.Header" xml:space="preserve"><value>Hardware decoding</value></data>
+  <data name="VideoPlayerFullScreenButton.AutomationProperties.Name" xml:space="preserve"><value>Full screen</value></data>
+  <data name="VideoPlayerFullScreenButton.Label" xml:space="preserve"><value>Full screen</value></data>
+  <data name="VideoPlayerLookupButton.AutomationProperties.Name" xml:space="preserve"><value>Lookup subtitle</value></data>
+  <data name="VideoPlayerLookupButton.Label" xml:space="preserve"><value>Lookup</value></data>
+  <data name="VideoPlayerLookupButton.ToolTipService.ToolTip" xml:space="preserve"><value>Lookup subtitle</value></data>
   <data name="ReaderChapterPanelTitle.Text" xml:space="preserve"><value>Chapters</value></data>
   <data name="ReaderSearchPanelTitle.Text" xml:space="preserve"><value>Search</value></data>
   <data name="ReaderSearchQueryBox.PlaceholderText" xml:space="preserve"><value>Search in this book</value></data>

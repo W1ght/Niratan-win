@@ -84,9 +84,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <MpvWindowsX64IncludeFiles Include="libmpv-2.dll" />
+    <MpvWindowsArm64IncludeFiles Include="libmpv-2.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.2.251219" />
     <PackageReference Include="Dapper" Version="2.1.72" />
+    <PackageReference Include="Endpne.LibMPV.Windows" Version="0.41.0" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.1839" />

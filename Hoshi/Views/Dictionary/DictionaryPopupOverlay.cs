@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Hoshi.Enums;
+using Hoshi.Models.Anki;
 using Hoshi.Models.Dictionary;
 using Hoshi.Models.Settings;
 using Hoshi.Services.Anki;
@@ -50,6 +51,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
     private ThemeMode _currentTheme;
     private AudioSettings _currentAudioSettings = new();
     private AnkiSettings _currentAnkiSettings = new();
+    private AnkiMiningContext _currentMiningContext = new();
     private Panel? _embeddedPanel;
     private XamlRoot? _currentXamlRoot;
 
@@ -116,7 +118,8 @@ public sealed class DictionaryPopupOverlay : IDisposable
         bool isVertical,
         ThemeMode themeMode = ThemeMode.System,
         AudioSettings? audioSettings = null,
-        AnkiSettings? ankiSettings = null)
+        AnkiSettings? ankiSettings = null,
+        AnkiMiningContext? miningContext = null)
     {
         if (results.Count == 0) return;
 
@@ -134,12 +137,14 @@ public sealed class DictionaryPopupOverlay : IDisposable
 
         var anki = ankiSettings ?? App.GetService<ISettingsService>().Current.AnkiSettings;
         _currentAnkiSettings = anki;
+        _currentMiningContext = miningContext ?? new AnkiMiningContext();
 
         await EnsureWarmAsync(xamlRoot);
 
         ResetRedirectDeduplication();
         ClearChildren();
 
+        _rootHost.SetMiningContext(_currentMiningContext);
         await _rootHost.ShowResultsWarmAsync(results, styles, displaySettings, themeMode, audio, anki);
 
         if (_embeddedPanel != null)
@@ -235,6 +240,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
                 _childHosts.Add(child);
             ApplyPopupZOrder();
 
+            child.SetMiningContext(_currentMiningContext);
             await child.ShowResultsWarmAsync(results, _currentStyles, _displaySettings, _currentTheme, _currentAudioSettings, _currentAnkiSettings);
 
             // Make sure canvas is visible for child popups
