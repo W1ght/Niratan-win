@@ -6,6 +6,7 @@
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
   <data name="GlobalSearchBox.PlaceholderText" xml:space="preserve"><value>搜索</value></data>
   <data name="NovelNavItem.Content" xml:space="preserve"><value>小说</value></data>
+  <data name="VideoNavItem.Content" xml:space="preserve"><value>视频</value></data>
   <data name="NovelLookupNavItem.Content" xml:space="preserve"><value>查词</value></data>
   <data name="SettingsNavItem.Content" xml:space="preserve"><value>设置</value></data>
   <data name="NormalLogsNavItem.Content" xml:space="preserve"><value>普通日志</value></data>
@@ -153,6 +154,32 @@
   <data name="NovelLookupQueryBox.PlaceholderText" xml:space="preserve"><value>输入日语或英语文本</value></data>
   <data name="NovelLookupSearchButtonText.Text" xml:space="preserve"><value>搜索</value></data>
   <data name="NovelLookupPopupHint.Text" xml:space="preserve"><value>查词结果使用和阅读器相同的 WebView 弹窗渲染。</value></data>
+  <data name="VideoLibraryPageTitle.Text" xml:space="preserve"><value>视频</value></data>
+  <data name="ImportVideoButton.AutomationProperties.Name" xml:space="preserve"><value>导入视频</value></data>
+  <data name="ImportVideoButton.ToolTipService.ToolTip" xml:space="preserve"><value>导入视频</value></data>
+  <data name="NoVideosText.Text" xml:space="preserve"><value>尚未导入视频。</value></data>
+  <data name="VideoPlayerRewindButton.AutomationProperties.Name" xml:space="preserve"><value>后退 5 秒</value></data>
+  <data name="VideoPlayerRewindButton.Label" xml:space="preserve"><value>后退</value></data>
+  <data name="VideoPlayerPlayPauseButton.AutomationProperties.Name" xml:space="preserve"><value>播放或暂停</value></data>
+  <data name="VideoPlayerPlayPauseButton.Label" xml:space="preserve"><value>播放或暂停</value></data>
+  <data name="VideoPlayerPlayPauseButton.ToolTipService.ToolTip" xml:space="preserve"><value>播放或暂停</value></data>
+  <data name="VideoPlayerForwardButton.AutomationProperties.Name" xml:space="preserve"><value>前进 5 秒</value></data>
+  <data name="VideoPlayerForwardButton.Label" xml:space="preserve"><value>前进</value></data>
+  <data name="VideoPlayerPreviousSubtitleButton.AutomationProperties.Name" xml:space="preserve"><value>上一句字幕</value></data>
+  <data name="VideoPlayerPreviousSubtitleButton.Label" xml:space="preserve"><value>上一句</value></data>
+  <data name="VideoPlayerNextSubtitleButton.AutomationProperties.Name" xml:space="preserve"><value>下一句字幕</value></data>
+  <data name="VideoPlayerNextSubtitleButton.Label" xml:space="preserve"><value>下一句</value></data>
+  <data name="VideoPlayerProgressSlider.AutomationProperties.Name" xml:space="preserve"><value>播放位置</value></data>
+  <data name="VideoPlayerVolumeSlider.AutomationProperties.Name" xml:space="preserve"><value>音量</value></data>
+  <data name="VideoPlayerSubtitleStyleButton.AutomationProperties.Name" xml:space="preserve"><value>字幕设置</value></data>
+  <data name="VideoPlayerSubtitleStyleButton.Label" xml:space="preserve"><value>字幕</value></data>
+  <data name="VideoPlayerSubtitleSizeText.Text" xml:space="preserve"><value>字幕大小</value></data>
+  <data name="VideoPlayerHardwareDecodingToggle.Header" xml:space="preserve"><value>硬件解码</value></data>
+  <data name="VideoPlayerFullScreenButton.AutomationProperties.Name" xml:space="preserve"><value>全屏</value></data>
+  <data name="VideoPlayerFullScreenButton.Label" xml:space="preserve"><value>全屏</value></data>
+  <data name="VideoPlayerLookupButton.AutomationProperties.Name" xml:space="preserve"><value>查询字幕</value></data>
+  <data name="VideoPlayerLookupButton.Label" xml:space="preserve"><value>查词</value></data>
+  <data name="VideoPlayerLookupButton.ToolTipService.ToolTip" xml:space="preserve"><value>查询字幕</value></data>
   <data name="ReaderChapterPanelTitle.Text" xml:space="preserve"><value>章节</value></data>
   <data name="ReaderSearchPanelTitle.Text" xml:space="preserve"><value>搜索</value></data>
   <data name="ReaderSearchQueryBox.PlaceholderText" xml:space="preserve"><value>在本书中搜索</value></data>

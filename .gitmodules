@@ -4,3 +4,6 @@
 [submodule "docs/reference/hoshi/Hoshi-Reader-Mac"]
 	path = docs/reference/hoshi/Hoshi-Reader-Mac
 	url = https://github.com/W1ght/Hoshi-Reader-Mac.git
+[submodule "docs/reference/hoshi/Niratan"]
+	path = docs/reference/hoshi/Niratan
+	url = https://github.com/W1ght/Niratan.git

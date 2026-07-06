@@ -16,9 +16,9 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.Web.WebView2.Core;
 using Hoshi.Enums;
+using Hoshi.Models.Anki;
 using Hoshi.Models.Dictionary;
 using Hoshi.Models.Settings;
-using Hoshi.Models.Anki;
 using Hoshi.Services.Anki;
 using Hoshi.Services.Audio;
 using Hoshi.Services.Dictionary;
@@ -42,6 +42,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     private readonly IDictionaryLookupService _lookupService;
     private readonly IAudioService _audioService;
     private readonly IAnkiService _ankiService;
+    private AnkiMiningContext _miningContext = new();
     private AudioSettings _audioSettings = new();
     private AnkiSettings _ankiSettings = new();
     private bool _webViewReady;
@@ -109,6 +110,11 @@ public sealed class DictionaryLookupPopup : IDisposable
         await WaitForShellReadyAsync();
         _isWarmed = true;
         Log.Information("[DictPopup] Warm root WebView2 initialized");
+    }
+
+    public void SetMiningContext(AnkiMiningContext? context)
+    {
+        _miningContext = context ?? new AnkiMiningContext();
     }
 
     public void SetTheme(ThemeMode themeMode)
@@ -728,8 +734,7 @@ public sealed class DictionaryLookupPopup : IDisposable
             try
             {
                 Log.Information("[Lifecycle] Anki mine started");
-                var context = new AnkiMiningContext();
-                var success = await _ankiService.MineEntryAsync(rawPayload, context);
+                var success = await _ankiService.MineEntryAsync(rawPayload, _miningContext);
 
                 var script = success
                     ? "if (typeof window.onMineComplete === 'function') window.onMineComplete(true);"

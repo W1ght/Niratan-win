@@ -126,6 +126,8 @@ public sealed class AnkiService : IAnkiService, IDisposable
             var uploads = new List<(string filename, byte[] data)>();
             // Track which upload indices correspond to what
             int? audioUploadIdx = null;
+            int? videoScreenshotUploadIdx = null;
+            int? videoAudioClipUploadIdx = null;
             var dictMediaIndices = new List<(int idx, string originalFilename)>();
 
             if (!string.IsNullOrWhiteSpace(context.CoverPath) && File.Exists(context.CoverPath))
@@ -151,6 +153,34 @@ public sealed class AnkiService : IAnkiService, IDisposable
                 catch (Exception ex)
                 {
                     Log.Warning(ex, "[Anki] Failed to read sasayaki audio");
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(context.VideoScreenshotPath) && File.Exists(context.VideoScreenshotPath))
+            {
+                try
+                {
+                    var bytes = await File.ReadAllBytesAsync(context.VideoScreenshotPath);
+                    videoScreenshotUploadIdx = uploads.Count;
+                    uploads.Add((Path.GetFileName(context.VideoScreenshotPath), bytes));
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "[Anki] Failed to read video screenshot");
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(context.VideoAudioClipPath) && File.Exists(context.VideoAudioClipPath))
+            {
+                try
+                {
+                    var bytes = await File.ReadAllBytesAsync(context.VideoAudioClipPath);
+                    videoAudioClipUploadIdx = uploads.Count;
+                    uploads.Add((Path.GetFileName(context.VideoAudioClipPath), bytes));
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "[Anki] Failed to read video audio clip");
                 }
             }
 
@@ -195,6 +225,12 @@ public sealed class AnkiService : IAnkiService, IDisposable
                     storedNames = uploads.Select(u => u.filename).ToList();
                 }
             }
+
+            if (videoScreenshotUploadIdx is int screenshotIdx && screenshotIdx < storedNames.Count)
+                context.VideoScreenshotTag = GetMediaTag(storedNames[screenshotIdx]);
+
+            if (videoAudioClipUploadIdx is int videoAudioIdx && videoAudioIdx < storedNames.Count)
+                context.VideoAudioClipTag = GetMediaTag(storedNames[videoAudioIdx]);
 
             // --- Phase 4: Build mediaPayload and dictionaryMediaTags from upload results ---
             var mediaPayload = payload;

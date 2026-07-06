@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Serilog;
 using Hoshi.Helpers;
+using Hoshi.Models;
 using Hoshi.Services;
 using Hoshi.Services.Anki;
 using Hoshi.Services.Audio;
@@ -19,6 +21,7 @@ using Hoshi.Services.Sasayaki;
 using Hoshi.Services.Settings;
 using Hoshi.Services.Storage;
 using Hoshi.Services.UI;
+using Hoshi.Services.Video;
 using Hoshi.ViewModels.Pages;
 
 namespace Hoshi;
@@ -126,8 +129,10 @@ public partial class App : Application
         services.AddTransient<StatisticsSettingsPageViewModel>();
         services.AddTransient<AnkiSettingsPageViewModel>();
         services.AddTransient<NovelLibraryPageViewModel>();
+        services.AddTransient<VideoLibraryPageViewModel>();
         services.AddTransient<NovelLookupPageViewModel>();
         services.AddTransient<NovelReaderPageViewModel>();
+        services.AddTransient<VideoPlayerViewModel>();
         services.AddTransient<ViewModels.Pages.LogsPageViewModel>();
 
         services.AddSingleton<IMessenger>(WeakReferenceMessenger.Default);
@@ -140,6 +145,11 @@ public partial class App : Application
         services.AddSingleton<IEpubParserService, EpubParserService>();
         services.AddSingleton<INovelEpubImportService, NovelEpubImportService>();
         services.AddSingleton<INovelLibraryService, NovelLibraryService>();
+        services.AddSingleton<IVideoLibraryService, VideoLibraryService>();
+        services.AddTransient<IVideoPlaybackEngine, MpvPlaybackEngine>();
+        services.AddSingleton<IVideoMiningMediaExtractor, LibMpvVideoMiningMediaExtractor>();
+        services.AddSingleton<IVideoPlayerWindowService, VideoPlayerWindowService>();
+        services.AddSingleton<SubtitleParserService>();
         services.AddSingleton<INovelBookSidecarService, NovelBookSidecarService>();
         services.AddSingleton<INovelStatisticsSidecarService, NovelStatisticsSidecarService>();
         services.AddSingleton<INovelStatisticsDashboardService, NovelStatisticsDashboardService>();
@@ -192,6 +202,7 @@ public partial class App : Application
             });
 
             MainWindow.NavigateToShell();
+            await OpenVideoFromLaunchArgumentsAsync(args.Arguments);
         }
         catch (Exception ex)
         {
@@ -221,6 +232,34 @@ public partial class App : Application
 
     public static T GetService<T>()
         where T : class => ((App)Current)._services.GetRequiredService<T>();
+
+    private async Task OpenVideoFromLaunchArgumentsAsync(string? arguments)
+    {
+        var options = VideoLaunchOptionsParser.Parse(arguments)
+            ?? VideoLaunchOptionsParser.Parse(Environment.GetCommandLineArgs().Skip(1));
+        if (options == null)
+            return;
+
+        if (!File.Exists(options.VideoPath))
+        {
+            Log.Warning("[Video] Launch video path does not exist: {Path}", options.VideoPath);
+            return;
+        }
+
+        var subtitlePath = !string.IsNullOrWhiteSpace(options.SubtitlePath) && File.Exists(options.SubtitlePath)
+            ? options.SubtitlePath
+            : VideoLibraryService.FindSidecarSubtitle(options.VideoPath);
+
+        var video = new VideoItem
+        {
+            Title = Path.GetFileNameWithoutExtension(options.VideoPath),
+            FilePath = options.VideoPath,
+            SubtitlePath = subtitlePath,
+            ImportedAt = DateTime.UtcNow,
+        };
+
+        await GetService<IVideoPlayerWindowService>().OpenAsync(video);
+    }
 
     private async Task InitializeAppAsync()
     {
