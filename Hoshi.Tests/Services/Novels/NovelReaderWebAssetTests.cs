@@ -622,10 +622,63 @@ public class NovelReaderWebAssetTests
         popupCode.Should().NotContain("_contentWebView.Visibility = Visibility.Collapsed");
         popupCode.Should().NotContain("VisualRoot.Visibility = Visibility.Collapsed;");
         popupCode.Should().Contain("VisualRoot.Opacity = 0");
-        popupCode.Should().Contain("VisualRoot.Opacity = 1");
+        popupCode.Should().Contain("VisualRoot.Opacity = 0.88");
         popupCode.Should().Contain("VisualRoot.IsHitTestVisible = false");
         popupCode.Should().Contain("VisualRoot.IsHitTestVisible = true");
         overlayCode.Should().Contain("await child.ShowResultsWarmAsync");
+    }
+
+    [Fact]
+    public void DictionaryLookupPopup_UsesFluentFloatingCardShell()
+    {
+        var popupCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryLookupPopup.cs")
+        );
+
+        popupCode.Should().Contain("AcrylicBrush");
+        popupCode.Should().Contain("AlwaysUseFallback = false");
+        popupCode.Should().Contain("TintOpacity = 0.04");
+        popupCode.Should().Contain("TintLuminosityOpacity = 0.06");
+        popupCode.Should().Contain("TintLuminosityOpacity");
+        popupCode.Should().Contain("Windows.UI.Color.FromArgb(0x70");
+        popupCode.Should().Contain("Windows.UI.Color.FromArgb(0x90");
+        popupCode.Should().Contain("ThemeShadow");
+        popupCode.Should().Contain("Translation = new Vector3");
+        popupCode.Should().Contain("CornerRadius = new CornerRadius(12)");
+        popupCode.Should().Contain("BorderThickness = new Thickness(1)");
+    }
+
+    [Fact]
+    public void NovelLookupPage_EmbedsPopupOverlayCanvasForNestedLookup()
+    {
+        var lookupXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelLookupPage.xaml")
+        );
+        var lookupCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelLookupPage.xaml.cs")
+        );
+
+        lookupXaml.Should().Contain("x:Name=\"DictionaryOverlayCanvas\"");
+        lookupCode.Should().Contain("_popupOverlay.UseCanvas(DictionaryOverlayCanvas)");
+        lookupCode.Should().Contain("DictionaryOverlayCanvas");
+        lookupCode.Should().Contain("_popupOverlay.Dismissed += OnPopupOverlayDismissed");
+        lookupCode.Should().Contain("DictionaryPanelRoot.Visibility = Visibility.Visible");
+        lookupCode.Should().Contain("DictionaryPanelRoot.Visibility = Visibility.Collapsed");
+    }
+
+    [Fact]
+    public void PopupScript_SupportsClickAndShiftNestedLookupInsideLookupWindow()
+    {
+        var popupJs = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.js")
+        );
+
+        popupJs.Should().Contain("container.addEventListener('click'");
+        popupJs.Should().Contain("lookupAtPopupPoint(e.clientX, e.clientY, true");
+        popupJs.Should().Contain("document.addEventListener('mousemove'");
+        popupJs.Should().Contain("lookupAtPopupPoint(e.clientX, e.clientY, false, 'shift')");
+        popupJs.Should().Contain("postPopupMessage('lookupRedirect', {");
+        popupJs.Should().Contain("rect: window.hoshiSelection?.getSelectionRect?.(x, y) || null");
     }
 
     [Fact]
@@ -1187,7 +1240,7 @@ public class NovelReaderWebAssetTests
         libraryService.Should().Contain("SaveNovelBookOrderAsync");
         dataService.Should().Contain("SaveNovelBookOrderAsync");
         appSettings.Should().Contain("NovelLibrarySortOption");
-        databaseMigrator.Should().Contain("new Migration_007()");
+        databaseMigrator.Should().Contain("new Migration_008()");
     }
 
     [Fact]
