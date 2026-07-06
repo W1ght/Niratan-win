@@ -44,11 +44,28 @@ public sealed partial class NovelLookupPage : Page, IDisposable
 
     private void NovelLookupPage_Loaded(object sender, RoutedEventArgs e)
     {
-        _popupOverlay ??= new DictionaryPopupOverlay();
-        _popupOverlay.EmbedRoot(DictionaryPanelRoot);
+        var popupOverlay = EnsurePopupOverlay();
         DictionaryPanelRoot.SizeChanged += OnDictionaryPanelSizeChanged;
         AddHandler(PointerPressedEvent, new PointerEventHandler(OnPagePointerPressed), true);
-        _ = _popupOverlay.PrewarmAsync(XamlRoot);
+        _ = popupOverlay.PrewarmAsync(XamlRoot);
+    }
+
+    private DictionaryPopupOverlay EnsurePopupOverlay()
+    {
+        if (_popupOverlay is null)
+        {
+            _popupOverlay = new DictionaryPopupOverlay();
+            _popupOverlay.Dismissed += OnPopupOverlayDismissed;
+        }
+
+        _popupOverlay.UseCanvas(DictionaryOverlayCanvas);
+        _popupOverlay.EmbedRoot(DictionaryOverlayCanvas);
+        return _popupOverlay;
+    }
+
+    private void OnPopupOverlayDismissed(object? sender, EventArgs e)
+    {
+        DictionaryPanelRoot.Visibility = Visibility.Collapsed;
     }
 
     private void OnPagePointerPressed(object sender, PointerRoutedEventArgs e)
@@ -100,6 +117,8 @@ public sealed partial class NovelLookupPage : Page, IDisposable
 
             if (results.Count == 0)
             {
+                _popupOverlay?.Dismiss();
+                DictionaryPanelRoot.Visibility = Visibility.Collapsed;
                 ViewModel.StatusText = "No results.";
                 return;
             }
@@ -109,10 +128,10 @@ public sealed partial class NovelLookupPage : Page, IDisposable
 
             var appTheme = App.GetService<ISettingsService>().Current.Theme;
 
-            _popupOverlay ??= new DictionaryPopupOverlay();
-            _popupOverlay.EmbedRoot(DictionaryPanelRoot);
-            _ = _popupOverlay.PrewarmAsync(XamlRoot);
-            await _popupOverlay.ShowLookupAsync(
+            var popupOverlay = EnsurePopupOverlay();
+            _ = popupOverlay.PrewarmAsync(XamlRoot);
+            DictionaryPanelRoot.Visibility = Visibility.Visible;
+            await popupOverlay.ShowLookupAsync(
                 results,
                 styleDict,
                 displaySettings,
@@ -140,7 +159,11 @@ public sealed partial class NovelLookupPage : Page, IDisposable
         Unloaded -= NovelLookupPage_Unloaded;
         RemoveHandler(PointerPressedEvent, new PointerEventHandler(OnPagePointerPressed));
         DictionaryPanelRoot.SizeChanged -= OnDictionaryPanelSizeChanged;
-        _popupOverlay?.Dispose();
-        _popupOverlay = null;
+        if (_popupOverlay != null)
+        {
+            _popupOverlay.Dismissed -= OnPopupOverlayDismissed;
+            _popupOverlay.Dispose();
+            _popupOverlay = null;
+        }
     }
 }
