@@ -33,4 +33,23 @@ public interface IDataService
         IReadOnlyList<string> orderedBookIds,
         CancellationToken ct = default
     );
+
+    Task<IReadOnlyList<VideoItem>> GetVideosAsync(
+        string? queryText = null,
+        CancellationToken ct = default
+    );
+    Task<VideoItem?> GetVideoAsync(string videoId, CancellationToken ct = default);
+    Task UpsertVideoAsync(VideoItem video, CancellationToken ct = default);
+    Task DeleteVideoAsync(string videoId, CancellationToken ct = default);
+    Task UpdateVideoLastOpenedAsync(
+        string videoId,
+        DateTime lastOpenedAt,
+        CancellationToken ct = default
+    );
+    Task SaveVideoProgressAsync(
+        string videoId,
+        double positionSeconds,
+        double durationSeconds,
+        CancellationToken ct = default
+    );
 }

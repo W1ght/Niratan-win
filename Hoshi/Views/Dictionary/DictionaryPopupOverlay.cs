@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Hoshi.Enums;
+using Hoshi.Models.Anki;
 using Hoshi.Models.Dictionary;
 using Hoshi.Models.Settings;
 using Hoshi.Services.Anki;
@@ -52,6 +53,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
     private AudioSettings _currentAudioSettings = new();
     private AnkiSettings _currentAnkiSettings = new();
     private string? _currentTraceId;
+    private AnkiMiningContext _currentMiningContext = new();
     private Panel? _embeddedPanel;
     private XamlRoot? _currentXamlRoot;
 
@@ -124,6 +126,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         ThemeMode themeMode = ThemeMode.System,
         AudioSettings? audioSettings = null,
         AnkiSettings? ankiSettings = null,
+        AnkiMiningContext? miningContext = null,
         string? traceId = null)
     {
         if (results.Count == 0) return;
@@ -144,6 +147,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
 
         var anki = ankiSettings ?? App.GetService<ISettingsService>().Current.AnkiSettings;
         _currentAnkiSettings = anki;
+        _currentMiningContext = miningContext ?? new AnkiMiningContext();
 
         await EnsureWarmAsync(xamlRoot);
         Log.Information(
@@ -153,6 +157,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         ResetRedirectDeduplication();
         ClearChildren();
 
+        _rootHost.SetMiningContext(_currentMiningContext);
         var injectSw = Stopwatch.StartNew();
         await _rootHost.ShowResultsWarmAsync(results, styles, displaySettings, themeMode, audio, anki, traceId: traceId);
         Log.Information(
@@ -258,6 +263,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
                 _childHosts.Add(child);
             ApplyPopupZOrder();
 
+            child.SetMiningContext(_currentMiningContext);
             var injectSw = Stopwatch.StartNew();
             await child.ShowResultsWarmAsync(results, _currentStyles, _displaySettings, _currentTheme, _currentAudioSettings, _currentAnkiSettings, traceId: traceId);
             Log.Information(

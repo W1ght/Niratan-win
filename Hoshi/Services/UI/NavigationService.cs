@@ -16,6 +16,7 @@ internal sealed class NavigationService : INavigationService
             : _frame.CurrentSourcePageType switch
             {
                 Type t when t == typeof(NovelLibraryPage) => AppPage.NovelLibraryPage,
+                Type t when t == typeof(VideoLibraryPage) => AppPage.VideoLibraryPage,
                 Type t when t == typeof(NovelLookupPage) => AppPage.NovelLookupPage,
                 Type t when t == typeof(ReaderAppearanceSettingsPage) => AppPage.ReaderAppearanceSettingsPage,
                 Type t when t == typeof(AdvancedSettingsPage) => AppPage.AdvancedSettingsPage,

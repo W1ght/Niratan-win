@@ -42,6 +42,15 @@ public static partial class AnkiHandlebarRenderer
             "{document-title}" => context.DocumentTitle ?? "",
             "{book-cover}" => context.CoverPath ?? "",
             "{sasayaki-audio}" => context.SasayakiAudioPath ?? "",
+            "{video-file-name}" => context.VideoFileName ?? "",
+            "{video-timestamp}" => context.VideoTimestamp ?? "",
+            "{video-cue-start}" => context.VideoCueStart ?? "",
+            "{video-cue-end}" => context.VideoCueEnd ?? "",
+            "{video-subtitle}" => context.VideoSubtitle ?? context.Sentence,
+            "{video-previous-subtitle}" => context.VideoPreviousSubtitle ?? "",
+            "{video-next-subtitle}" => context.VideoNextSubtitle ?? "",
+            "{video-screenshot}" => context.VideoScreenshotTag ?? context.VideoScreenshotPath ?? "",
+            "{video-audio-clip}" => context.VideoAudioClipTag ?? context.VideoAudioClipPath ?? "",
             _ => ResolveDynamicHandlebar(handlebar, payload),
         };
     }
@@ -125,6 +134,15 @@ public static partial class AnkiHandlebarRenderer
             "{document-title}",
             "{book-cover}",
             "{sasayaki-audio}",
+            "{video-file-name}",
+            "{video-timestamp}",
+            "{video-cue-start}",
+            "{video-cue-end}",
+            "{video-subtitle}",
+            "{video-previous-subtitle}",
+            "{video-next-subtitle}",
+            "{video-screenshot}",
+            "{video-audio-clip}",
         };
 
         if (dictionaryNames != null)
