@@ -177,4 +177,109 @@ internal class DataService : IDataService
 
         await transaction.CommitAsync(ct);
     }
+
+    public async Task<IReadOnlyList<VideoItem>> GetVideosAsync(
+        string? queryText = null,
+        CancellationToken ct = default
+    )
+    {
+        using var connection = await GetOpenConnectionAsync();
+        const string sql = """
+            SELECT Id, Title, FilePath, SubtitlePath, ImportedAt, LastOpenedAt, LastPositionSeconds, DurationSeconds, ManualSortOrder
+            FROM VideoItems
+            WHERE @QueryText IS NULL
+                OR TRIM(@QueryText) = ''
+                OR Title LIKE '%' || @QueryText || '%' COLLATE NOCASE
+            ORDER BY COALESCE(LastOpenedAt, ImportedAt) DESC, Title ASC;
+            """;
+
+        var result = await connection.QueryAsync<VideoItem>(
+            new CommandDefinition(
+                sql,
+                new { QueryText = queryText?.Trim() },
+                cancellationToken: ct
+            )
+        );
+        return result.ToList();
+    }
+
+    public async Task<VideoItem?> GetVideoAsync(string videoId, CancellationToken ct = default)
+    {
+        using var connection = await GetOpenConnectionAsync();
+        const string sql = """
+            SELECT Id, Title, FilePath, SubtitlePath, ImportedAt, LastOpenedAt, LastPositionSeconds, DurationSeconds, ManualSortOrder
+            FROM VideoItems
+            WHERE Id = @VideoId;
+            """;
+
+        return await connection.QueryFirstOrDefaultAsync<VideoItem>(
+            new CommandDefinition(sql, new { VideoId = videoId }, cancellationToken: ct)
+        );
+    }
+
+    public async Task UpsertVideoAsync(VideoItem video, CancellationToken ct = default)
+    {
+        using var connection = await GetOpenConnectionAsync();
+        const string sql = """
+            INSERT INTO VideoItems
+                (Id, Title, FilePath, SubtitlePath, ImportedAt, LastOpenedAt, LastPositionSeconds, DurationSeconds, ManualSortOrder)
+            VALUES
+                (@Id, @Title, @FilePath, @SubtitlePath, @ImportedAt, @LastOpenedAt, @LastPositionSeconds, @DurationSeconds, @ManualSortOrder)
+            ON CONFLICT(FilePath) DO UPDATE SET
+                Title = excluded.Title,
+                SubtitlePath = COALESCE(excluded.SubtitlePath, VideoItems.SubtitlePath);
+            """;
+
+        await connection.ExecuteAsync(new CommandDefinition(sql, video, cancellationToken: ct));
+    }
+
+    public async Task DeleteVideoAsync(string videoId, CancellationToken ct = default)
+    {
+        using var connection = await GetOpenConnectionAsync();
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                "DELETE FROM VideoItems WHERE Id = @VideoId;",
+                new { VideoId = videoId },
+                cancellationToken: ct
+            )
+        );
+    }
+
+    public async Task UpdateVideoLastOpenedAsync(
+        string videoId,
+        DateTime lastOpenedAt,
+        CancellationToken ct = default
+    )
+    {
+        using var connection = await GetOpenConnectionAsync();
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                "UPDATE VideoItems SET LastOpenedAt = @LastOpenedAt WHERE Id = @VideoId;",
+                new { VideoId = videoId, LastOpenedAt = lastOpenedAt },
+                cancellationToken: ct
+            )
+        );
+    }
+
+    public async Task SaveVideoProgressAsync(
+        string videoId,
+        double positionSeconds,
+        double durationSeconds,
+        CancellationToken ct = default
+    )
+    {
+        using var connection = await GetOpenConnectionAsync();
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                UPDATE VideoItems
+                SET LastPositionSeconds = @PositionSeconds,
+                    DurationSeconds = @DurationSeconds
+                WHERE Id = @VideoId;
+                """,
+                new { VideoId = videoId, PositionSeconds = positionSeconds, DurationSeconds = durationSeconds },
+                cancellationToken: ct
+            )
+        );
+    }
 }

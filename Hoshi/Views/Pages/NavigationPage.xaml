@@ -61,6 +61,11 @@
                                     Icon="Library"
                                     IsSelected="True"
                                     Tag="Hoshi.Views.Pages.NovelLibraryPage" />
+                <NavigationViewItem AutomationProperties.AutomationId="VideoNavItem"
+                                    x:Uid="VideoNavItem"
+                                    Content="Videos"
+                                    Icon="Video"
+                                    Tag="Hoshi.Views.Pages.VideoLibraryPage" />
                 <NavigationViewItem AutomationProperties.AutomationId="NovelLookupNavItem"
                                     x:Uid="NovelLookupNavItem"
                                     Content="Lookup"
