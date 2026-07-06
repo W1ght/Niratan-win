@@ -446,8 +446,8 @@ html[data-hoshi-color-scheme="dark"] .gloss-image-link[data-appearance="monochro
 @media (prefers-color-scheme: light) {
     html,
     body {
-        --background-color: #fff;
-        --background-color-light: #fff;
+        --background-color: rgba(248, 248, 248, 0.40);
+        --background-color-light: rgba(248, 248, 248, 0.40);
         --text-color: #000;
     }
 }
@@ -455,8 +455,8 @@ html[data-hoshi-color-scheme="dark"] .gloss-image-link[data-appearance="monochro
 @media (prefers-color-scheme: dark) {
     html,
     body {
-        --background-color: #000;
-        --background-color-light: #000;
+        --background-color: rgba(18, 18, 18, 0.24);
+        --background-color-light: rgba(18, 18, 18, 0.24);
         --text-color: #fff;
         --text-color-light1: #aaaaaa;
         --text-color-light2: #999999;
@@ -468,15 +468,15 @@ html[data-hoshi-color-scheme="dark"] .gloss-image-link[data-appearance="monochro
 
 html[data-hoshi-color-scheme="light"],
 html[data-hoshi-color-scheme="light"] body {
-    --background-color: #f3f3f3;
-    --background-color-light: #f3f3f3;
+    --background-color: rgba(248, 248, 248, 0.40);
+    --background-color-light: rgba(248, 248, 248, 0.40);
     --text-color: #000;
 }
 
 html[data-hoshi-color-scheme="dark"],
 html[data-hoshi-color-scheme="dark"] body {
-    --background-color: #2b2b2b;
-    --background-color-light: #2b2b2b;
+    --background-color: rgba(18, 18, 18, 0.24);
+    --background-color-light: rgba(18, 18, 18, 0.24);
     --text-color: #fff;
     --text-color-light1: #aaaaaa;
     --text-color-light2: #999999;

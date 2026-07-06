@@ -440,10 +440,10 @@ if (typeof window.hoshiInjectResults === 'function') {{
     private static (string bgVar, string textColor) GetThemeColors(ThemeMode themeMode)
     {
         if (themeMode == ThemeMode.Dark)
-            return ("#2b2b2b", "#fff");
+            return ("rgba(18, 18, 18, 0.24)", "#fff");
         if (themeMode == ThemeMode.Light)
-            return ("#f3f3f3", "#000");
-        return ("#f3f3f3", "#000");
+            return ("rgba(248, 248, 248, 0.40)", "#000");
+        return ("rgba(248, 248, 248, 0.40)", "#000");
     }
 
     private static bool IsThemeDark(ThemeMode themeMode) => themeMode switch

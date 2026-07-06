@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using FluentAssertions;
+using Hoshi.Enums;
 using Hoshi.Models.Dictionary;
 using Hoshi.Models.Settings;
 using Hoshi.Services.Dictionary;
@@ -60,6 +61,23 @@ public class DictionaryLookupServiceTests
         html.Should().Contain("window.dictionaryMediaRequestEndpoint = 'https://hoshi-dictionary-media.local/image';");
         html.Should().Contain("popupDiagnostic");
         html.Should().Contain("contentReady");
+    }
+
+    [Fact]
+    public void PopupHtmlGenerator_UsesTranslucentGlassBackgroundColors()
+    {
+        var generator = new PopupHtmlGenerator();
+
+        var darkHtml = generator.GenerateHtml([], [], themeMode: ThemeMode.Dark);
+        var darkInjection = generator.GenerateInjectionScript([], [], themeMode: ThemeMode.Dark);
+        var lightHtml = generator.GenerateHtml([], [], themeMode: ThemeMode.Light);
+
+        darkHtml.Should().Contain("--background-color: rgba(18, 18, 18, 0.24);");
+        darkHtml.Should().Contain("background-color: transparent;");
+        darkHtml.Should().NotContain("--background-color: #2b2b2b;");
+        darkInjection.Should().Contain("document.documentElement.style.setProperty('--background-color', 'rgba(18, 18, 18, 0.24)');");
+        lightHtml.Should().Contain("--background-color: rgba(248, 248, 248, 0.40);");
+        lightHtml.Should().NotContain("--background-color: #f3f3f3;");
     }
 
     [Fact]

@@ -73,11 +73,16 @@ public sealed class DictionaryPopupOverlay : IDisposable
     /// <summary>Use the given canvas as the overlay surface (reader page). Must be called before PrewarmAsync.</summary>
     public void UseCanvas(Canvas overlayCanvas)
     {
-        _canvas = overlayCanvas;
+        if (!ReferenceEquals(_canvas, overlayCanvas))
+        {
+            _canvas.PointerPressed -= OnOverlayPointerPressed;
+            _canvas = overlayCanvas;
+            _canvas.PointerPressed += OnOverlayPointerPressed;
+        }
+
         _canvas.Background = new SolidColorBrush(Colors.Transparent);
         _canvas.IsHitTestVisible = false;
         _canvas.Visibility = Visibility.Visible;
-        _canvas.PointerPressed += OnOverlayPointerPressed;
     }
 
     /// <summary>Embed the root popup directly in a page panel (standalone lookup).</summary>
