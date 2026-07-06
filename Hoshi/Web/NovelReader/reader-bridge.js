@@ -561,6 +561,29 @@ window.hoshiReader = {
     return true;
   },
 
+  scrollToRange: function (range) {
+    var context = this.getScrollContext();
+    if (context.pageSize <= 0) return false;
+
+    var rect = this.getRect(range);
+    if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+
+    var currentScroll = this.getPagePosition(context);
+    var anchor =
+      (context.vertical
+        ? (rect.top + rect.bottom) / 2
+        : (rect.left + rect.right) / 2) + currentScroll;
+    var targetScroll = this.alignToPage(context, anchor);
+    if (Math.abs(targetScroll - currentScroll) <= 1) return false;
+
+    this.setPagePosition(context, targetScroll);
+    requestAnimationFrame(function () {
+      var ctx = window.hoshiReader.getScrollContext();
+      window.hoshiReader.setPagePosition(ctx, targetScroll);
+    });
+    return true;
+  },
+
   reflow: function (progress) {
     var overlap = this.bottomOverlap();
     var pageHeight = window.innerHeight + overlap;
@@ -903,6 +926,7 @@ window.hoshiSasayaki = {
   highlightCue: function (startCodePoint, length, autoScroll) {
     this.clearHighlight();
     this._ensureStyle();
+    var beforeProgress = window.hoshiReader.calculateProgress();
 
     var walker = window.hoshiReader.createWalker();
     var runningCount = 0;
@@ -949,13 +973,19 @@ window.hoshiSasayaki = {
       targetEndOffset = targetStartNode.textContent.length;
     }
 
-    this._highlightRange(
+    var didScroll = this._highlightRange(
       targetStartNode,
       targetStartOffset,
       targetEndNode,
       targetEndOffset,
       autoScroll !== false
     );
+    if (didScroll) {
+      var afterProgress = window.hoshiReader.calculateProgress();
+      window.hoshiReader.lastProgress = afterProgress;
+      return Math.abs(afterProgress - beforeProgress) > 0.0001 ? afterProgress : null;
+    }
+    return null;
   },
 
   _highlightRange: function (startNode, startOffset, endNode, endOffset, autoScroll) {
@@ -1003,14 +1033,18 @@ window.hoshiSasayaki = {
     }
 
     // Mark the first span as active (for scrolling into view)
+    var didScroll = false;
     if (spans.length > 0) {
       spans[0].classList.add("hoshi-sasayaki-highlight-active");
       if (autoScroll) {
-        spans[0].scrollIntoView({ behavior: "smooth", block: "center" });
+        var scrollRange = document.createRange();
+        scrollRange.selectNodeContents(spans[0]);
+        didScroll = window.hoshiReader.scrollToRange(scrollRange);
       }
     }
 
     this._currentHighlightNodes = spans;
+    return didScroll;
   },
 };
 

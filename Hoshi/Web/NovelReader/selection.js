@@ -35,6 +35,12 @@
     });
   }
 
+  let lookupTraceSequence = 0;
+  function nextLookupTraceId() {
+    lookupTraceSequence += 1;
+    return 'reader-lookup-' + Date.now().toString(36) + '-' + lookupTraceSequence;
+  }
+
   function getScanLength() {
     const configured = Number(window.__hoshiLookupSettings?.scanLength);
     if (!Number.isFinite(configured)) return 16;
@@ -374,8 +380,11 @@
       const normalizedOffset = window.hoshiReader
         ? this.getNormalizedOffset(hit.node, hit.offset)
         : null;
+      const traceId = nextLookupTraceId();
 
       postToHost('lookupRequest', {
+        traceId,
+        clientNow: performance.now(),
         text,
         sentence: sentenceContext.sentence,
         x: rect.x,

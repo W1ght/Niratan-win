@@ -130,6 +130,24 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void ReaderPage_TreatsSasayakiAutoScrollAsPageTurnForStatistics()
+    {
+        var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
+        var pageCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
+        );
+
+        script.Should().Contain("var beforeProgress = window.hoshiReader.calculateProgress()");
+        script.Should().Contain("var afterProgress = window.hoshiReader.calculateProgress()");
+        script.Should().Contain("return Math.abs(afterProgress - beforeProgress) > 0.0001 ? afterProgress : null");
+
+        pageCode.Should().Contain("TryApplySasayakiAutoScrollProgress");
+        pageCode.Should().Contain("StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn)");
+        pageCode.Should().Contain("LoadChapterForSasayakiAutoScroll");
+        pageCode.Should().Contain("if (CurrentSasayakiSettings.AutoScroll)");
+    }
+
+    [Fact]
     public void NovelPages_DefineStableAutomationIdsForUiAutomation()
     {
         var navigationXaml = File.ReadAllText(
@@ -961,8 +979,73 @@ public class NovelReaderWebAssetTests
 
         popupJs.Should().Contain("window.audioEnableAutoplay && (window.audioSources || []).length && idx === 0");
         popupJs.Should().Contain("var autoplayEntryIndex = idx");
+        popupJs.Should().Contain("var autoplayAudioTraceId = nextAudioTraceId()");
+        popupJs.Should().Contain("postAudioTrace(autoplayAudioTraceId, 'autoplay-scheduled'");
         popupJs.Should().Contain("setTimeout(function () {");
-        popupJs.Should().Contain("playEntryAudio(autoplayEntryIndex);");
+        popupJs.Should().Contain("postAudioTrace(autoplayAudioTraceId, 'autoplay-fired'");
+        popupJs.Should().Contain("playEntryAudio(autoplayEntryIndex, autoplayAudioTraceId);");
+    }
+
+    [Fact]
+    public void DictionaryLookupAudioPath_EmitsEndToEndLatencyTraceLogs()
+    {
+        var selectionJs = File.ReadAllText(Path.Combine(ReaderRoot, "selection.js"));
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
+        );
+        var overlayCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs")
+        );
+        var popupCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryLookupPopup.cs")
+        );
+        var popupJs = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.js")
+        );
+        var lookupServiceCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Services", "Dictionary", "DictionaryLookupService.cs")
+        );
+        var lookupInterfaceCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Services", "Dictionary", "IDictionaryLookupService.cs")
+        );
+        var audioServiceCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Services", "Audio", "AudioService.cs")
+        );
+        var audioInterfaceCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Services", "Audio", "IAudioService.cs")
+        );
+
+        selectionJs.Should().Contain("nextLookupTraceId()");
+        selectionJs.Should().Contain("traceId");
+        selectionJs.Should().Contain("clientNow: performance.now()");
+
+        readerCode.Should().Contain("[LookupTrace] trace={TraceId} received");
+        readerCode.Should().Contain("[LookupTrace] trace={TraceId} native lookup finished");
+        readerCode.Should().Contain("[LookupTrace] trace={TraceId} styles loaded");
+        readerCode.Should().Contain("[LookupTrace] trace={TraceId} popup show completed");
+        readerCode.Should().Contain("lookupService.LookupAsync(");
+        readerCode.Should().Contain("traceId: traceId");
+        overlayCode.Should().Contain("string? traceId = null");
+        overlayCode.Should().Contain("[LookupTrace] trace={TraceId} root popup content injected");
+        popupCode.Should().Contain("string? traceId = null");
+        popupCode.Should().Contain("_currentTraceId = traceId");
+        popupCode.Should().Contain("[LookupTrace] trace={TraceId} popup ExecuteScriptAsync finished");
+        popupCode.Should().Contain("[AudioTrace] lookup={TraceId} audio={AudioTraceId} popup-js stage={Stage}");
+        popupCode.Should().Contain("[AudioTrace] lookup={TraceId} audio={AudioTraceId} native message received");
+        popupCode.Should().Contain("[AudioTrace] lookup={TraceId} audio={AudioTraceId} audio service returned");
+        popupJs.Should().Contain("nextAudioTraceId()");
+        popupJs.Should().Contain("postAudioTrace(");
+        popupJs.Should().Contain("audioTraceId");
+        popupJs.Should().Contain("lookupTraceId");
+        lookupInterfaceCode.Should().Contain("string? traceId = null");
+        lookupServiceCode.Should().Contain("[LookupTrace] trace={TraceId} ensure-index completed");
+        lookupServiceCode.Should().Contain("[LookupTrace] trace={TraceId} native lookup completed");
+        lookupServiceCode.Should().Contain("[LookupTrace] trace={TraceId} deserialize/display completed");
+        audioInterfaceCode.Should().Contain("string? traceId = null");
+        audioInterfaceCode.Should().Contain("string? audioTraceId = null");
+        audioServiceCode.Should().Contain("[AudioTrace] lookup={TraceId} audio={AudioTraceId} download completed");
+        audioServiceCode.Should().Contain("[AudioTrace] lookup={TraceId} audio={AudioTraceId} playback started");
+        audioServiceCode.Should().Contain("[AudioTrace] lookup={TraceId} audio={AudioTraceId} playback ended");
     }
 
     [Fact]

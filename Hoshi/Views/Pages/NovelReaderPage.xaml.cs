@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -933,6 +934,15 @@ public sealed partial class NovelReaderPage : Page
     private async System.Threading.Tasks.Task HandleLookupRequestAsync(
         System.Text.Json.JsonElement payload)
     {
+        var traceId = payload.TryGetProperty("traceId", out var traceElement)
+            ? traceElement.GetString() ?? $"reader-lookup-native-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}"
+            : $"reader-lookup-native-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+        var clientNow = payload.TryGetProperty("clientNow", out var clientNowElement)
+            && clientNowElement.TryGetDouble(out var parsedClientNow)
+                ? parsedClientNow
+                : (double?)null;
+        var totalSw = Stopwatch.StartNew();
+        var phaseSw = Stopwatch.StartNew();
         var text = payload.GetProperty("text").GetString() ?? "";
         var sentence = payload.GetProperty("sentence").GetString() ?? "";
         var x = payload.GetProperty("x").GetDouble();
@@ -940,6 +950,9 @@ public sealed partial class NovelReaderPage : Page
         var width = payload.GetProperty("width").GetDouble();
         var height = payload.GetProperty("height").GetDouble();
 
+        Log.Information(
+            "[LookupTrace] trace={TraceId} received textLen={TextLen} clientNow={ClientNow} point=({X:F0},{Y:F0}) rect=({Width:F0}x{Height:F0})",
+            traceId, text.Length, clientNow, x, y, width, height);
         Log.Information(
             "[NovelReader] Lookup request: '{Text}' (sentence: '{Sentence}') at ({X:F0},{Y:F0})",
             text, sentence, x, y);
@@ -955,35 +968,70 @@ public sealed partial class NovelReaderPage : Page
         var dictionaryDisplaySettings = App.GetService<Services.Settings.ISettingsService>()
             .Current.DictionaryDisplaySettings;
 
+        phaseSw.Restart();
         await _lookupSemaphore.WaitAsync();
+        Log.Information(
+            "[LookupTrace] trace={TraceId} lookup semaphore acquired in {Ms}ms total={TotalMs}ms requestVersion={RequestVersion}",
+            traceId, phaseSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, requestVersion);
         try
         {
             if (requestVersion != Volatile.Read(ref _lookupRequestVersion))
+            {
+                Log.Information(
+                    "[LookupTrace] trace={TraceId} abandoned before native lookup total={TotalMs}ms requestVersion={RequestVersion} currentVersion={CurrentVersion}",
+                    traceId, totalSw.ElapsedMilliseconds, requestVersion, Volatile.Read(ref _lookupRequestVersion));
                 return;
+            }
 
+            phaseSw.Restart();
             var results = await lookupService.LookupAsync(
                 text,
                 dictionaryDisplaySettings.MaxResults,
-                dictionaryDisplaySettings.ScanLength);
+                dictionaryDisplaySettings.ScanLength,
+                traceId: traceId);
+            Log.Information(
+                "[LookupTrace] trace={TraceId} native lookup finished in {Ms}ms total={TotalMs}ms results={Count}",
+                traceId, phaseSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, results.Count);
 
             Log.Information(
                 "[NovelReader] Lookup returned {Count} results for '{Text}'",
                 results.Count, text);
 
             if (requestVersion != Volatile.Read(ref _lookupRequestVersion))
+            {
+                Log.Information(
+                    "[LookupTrace] trace={TraceId} abandoned after native lookup total={TotalMs}ms requestVersion={RequestVersion} currentVersion={CurrentVersion}",
+                    traceId, totalSw.ElapsedMilliseconds, requestVersion, Volatile.Read(ref _lookupRequestVersion));
                 return;
+            }
 
             if (results.Count == 0)
             {
                 Log.Information("[NovelReader] No results, popup will not be shown");
+                Log.Information(
+                    "[LookupTrace] trace={TraceId} no results total={TotalMs}ms",
+                    traceId, totalSw.ElapsedMilliseconds);
                 return;
             }
 
+            phaseSw.Restart();
             await HighlightLookupSelectionAsync(results[0].Matched);
+            Log.Information(
+                "[LookupTrace] trace={TraceId} reader highlight finished in {Ms}ms total={TotalMs}ms matched='{Matched}'",
+                traceId, phaseSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, results[0].Matched);
 
+            phaseSw.Restart();
             var styles = await lookupService.GetStylesAsync();
+            Log.Information(
+                "[LookupTrace] trace={TraceId} styles loaded in {Ms}ms total={TotalMs}ms styles={Count}",
+                traceId, phaseSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, styles.Count);
             if (requestVersion != Volatile.Read(ref _lookupRequestVersion))
+            {
+                Log.Information(
+                    "[LookupTrace] trace={TraceId} abandoned after styles total={TotalMs}ms requestVersion={RequestVersion} currentVersion={CurrentVersion}",
+                    traceId, totalSw.ElapsedMilliseconds, requestVersion, Volatile.Read(ref _lookupRequestVersion));
                 return;
+            }
             var styleDict = styles.ToDictionary(s => s.DictName, s => s.Styles);
 
             // Convert WebView2-relative coordinates to the dictionary overlay canvas.
@@ -999,15 +1047,27 @@ public sealed partial class NovelReaderPage : Page
             var popupOverlay = EnsurePopupOverlay();
             _ = popupOverlay.PrewarmAsync(XamlRoot);
             PauseSasayakiForLookup();
+            phaseSw.Restart();
             await popupOverlay.ShowLookupAsync(
                 results, styleDict, dictionaryDisplaySettings,
                 windowX, windowY, width, height,
-                XamlRoot, isVertical, appTheme);
+                XamlRoot, isVertical, appTheme,
+                traceId: traceId);
+            Log.Information(
+                "[LookupTrace] trace={TraceId} popup show completed in {Ms}ms total={TotalMs}ms window=({X:F0},{Y:F0}) vertical={Vertical}",
+                traceId, phaseSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, windowX, windowY, isVertical);
+            phaseSw.Restart();
             await SetLookupPopupActiveAsync(true);
+            Log.Information(
+                "[LookupTrace] trace={TraceId} active flag set in {Ms}ms total={TotalMs}ms",
+                traceId, phaseSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds);
         }
         finally
         {
             _lookupSemaphore.Release();
+            Log.Information(
+                "[LookupTrace] trace={TraceId} completed total={TotalMs}ms",
+                traceId, totalSw.ElapsedMilliseconds);
         }
     }
 
@@ -2313,9 +2373,17 @@ public sealed partial class NovelReaderPage : Page
                 {
                     _lastHighlightedCue = match.CueIndex;
                     if (match.ChapterIndex == ViewModel.CurrentChapterIndex)
+                    {
                         _ = HighlightSasayakiCueAsync(match);
+                    }
+                    else if (CurrentSasayakiSettings.AutoScroll)
+                    {
+                        LoadChapterForSasayakiAutoScroll(match);
+                    }
                     else
+                    {
                         _ = ClearSasayakiHighlightAsync();
+                    }
                 }
             }
         });
@@ -2362,13 +2430,59 @@ public sealed partial class NovelReaderPage : Page
                 + ", "
                 + JsonSerializer.Serialize(backgroundColor)
                 + ");");
-            await NovelWebView.CoreWebView2.ExecuteScriptAsync(
+            var progressJson = await NovelWebView.CoreWebView2.ExecuteScriptAsync(
                 $"window.hoshiSasayaki.highlightCue({match.StartCodePoint}, {match.Length}, {JsonSerializer.Serialize(settings.AutoScroll)});");
+            TryApplySasayakiAutoScrollProgress(progressJson);
         }
         catch (Exception ex)
         {
             Log.Debug(ex, "[Sasayaki] Failed to highlight cue");
         }
+    }
+
+    private bool TryApplySasayakiAutoScrollProgress(string? progressJson)
+    {
+        if (string.IsNullOrWhiteSpace(progressJson)
+            || progressJson == "null"
+            || progressJson == "undefined")
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(progressJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Number
+                || !document.RootElement.TryGetDouble(out var progress)
+                || !double.IsFinite(progress))
+            {
+                return false;
+            }
+
+            progress = Math.Clamp(progress, 0, 1);
+            StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
+            _currentProgress = progress;
+            ViewModel.UpdateProgress(progress);
+            RefreshReaderDisplayChrome();
+            ViewModel.SaveProgressDebounced();
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private bool LoadChapterForSasayakiAutoScroll(SasayakiMatch match)
+    {
+        var target = ResolveSasayakiJumpTarget(match);
+        if (target == null)
+            return false;
+
+        StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
+        LoadChapter(target.ChapterIndex, target.ChapterProgress);
+        ViewModel.SaveProgressDebounced();
+        return true;
     }
 
     private async Task ClearSasayakiHighlightAsync()

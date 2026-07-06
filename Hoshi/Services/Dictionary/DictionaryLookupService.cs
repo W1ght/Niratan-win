@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -52,7 +53,7 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
     }
 
     public async Task<List<DictionaryLookupResult>> LookupAsync(
-        string text, int maxResults = 16, int scanLength = 16)
+        string text, int maxResults = 16, int scanLength = 16, string? traceId = null)
     {
         if (string.IsNullOrWhiteSpace(text))
             return [];
@@ -63,20 +64,38 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
             return [];
         }
 
+        var totalSw = Stopwatch.StartNew();
+        var phaseSw = Stopwatch.StartNew();
         await EnsureIndexAsync();
+        _logger.LogInformation(
+            "[LookupTrace] trace={TraceId} ensure-index completed in {Ms}ms total={TotalMs}ms indexReady={IndexReady}",
+            traceId ?? "-", phaseSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, _indexReady);
 
         _logger.LogInformation(
             "[Lookup] Session={SessionPtr}, indexReady={IndexReady}, text='{Text}', max={Max}, scan={Scan}",
             _session, _indexReady, text, maxResults, scanLength);
 
+        phaseSw.Restart();
         await _rebuildLock.WaitAsync();
+        _logger.LogInformation(
+            "[LookupTrace] trace={TraceId} rebuild-lock acquired in {Ms}ms total={TotalMs}ms",
+            traceId ?? "-", phaseSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds);
         try
         {
+            phaseSw.Restart();
             var jsonPtr = HoshiDictsNative.hoshi_lookup(_session, text, maxResults, scanLength);
             var json = HoshiDictsNative.ReadStringAndFree(jsonPtr);
+            _logger.LogInformation(
+                "[LookupTrace] trace={TraceId} native lookup completed in {Ms}ms total={TotalMs}ms jsonBytes={JsonLength}",
+                traceId ?? "-", phaseSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, json?.Length ?? 0);
             _logger.LogInformation("[Lookup] Native returned JSON length={Len}, preview='{Preview}'",
                 json?.Length ?? 0, json?.Length > 200 ? json[..200] : (json ?? "null"));
-            return ApplyDictionaryDisplayTitles(HoshiDictsNative.DeserializeLookupResults(json));
+            phaseSw.Restart();
+            var results = ApplyDictionaryDisplayTitles(HoshiDictsNative.DeserializeLookupResults(json));
+            _logger.LogInformation(
+                "[LookupTrace] trace={TraceId} deserialize/display completed in {Ms}ms total={TotalMs}ms results={Count}",
+                traceId ?? "-", phaseSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, results.Count);
+            return results;
         }
         finally
         {
