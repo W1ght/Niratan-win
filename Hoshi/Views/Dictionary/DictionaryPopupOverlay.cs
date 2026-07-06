@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI;
@@ -50,6 +51,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
     private ThemeMode _currentTheme;
     private AudioSettings _currentAudioSettings = new();
     private AnkiSettings _currentAnkiSettings = new();
+    private string? _currentTraceId;
     private Panel? _embeddedPanel;
     private XamlRoot? _currentXamlRoot;
 
@@ -116,10 +118,13 @@ public sealed class DictionaryPopupOverlay : IDisposable
         bool isVertical,
         ThemeMode themeMode = ThemeMode.System,
         AudioSettings? audioSettings = null,
-        AnkiSettings? ankiSettings = null)
+        AnkiSettings? ankiSettings = null,
+        string? traceId = null)
     {
         if (results.Count == 0) return;
 
+        var sw = Stopwatch.StartNew();
+        _currentTraceId = traceId;
         _currentStyles = styles;
         _displaySettings = displaySettings;
         _currentTheme = themeMode;
@@ -136,11 +141,18 @@ public sealed class DictionaryPopupOverlay : IDisposable
         _currentAnkiSettings = anki;
 
         await EnsureWarmAsync(xamlRoot);
+        Log.Information(
+            "[LookupTrace] trace={TraceId} overlay warmed in {Ms}ms embedded={Embedded}",
+            traceId ?? "-", sw.ElapsedMilliseconds, _embeddedPanel != null);
 
         ResetRedirectDeduplication();
         ClearChildren();
 
-        await _rootHost.ShowResultsWarmAsync(results, styles, displaySettings, themeMode, audio, anki);
+        var injectSw = Stopwatch.StartNew();
+        await _rootHost.ShowResultsWarmAsync(results, styles, displaySettings, themeMode, audio, anki, traceId: traceId);
+        Log.Information(
+            "[LookupTrace] trace={TraceId} root popup content injected in {Ms}ms total={TotalMs}ms entries={EntryCount}",
+            traceId ?? "-", injectSw.ElapsedMilliseconds, sw.ElapsedMilliseconds, results.Count);
 
         if (_embeddedPanel != null)
         {
@@ -217,10 +229,16 @@ public sealed class DictionaryPopupOverlay : IDisposable
             _lastRedirectParent = parent;
             _lastRedirectQuery = query;
 
+            var traceId = $"{_currentTraceId ?? "popup-redirect"}-child-{redirectVersion}";
+            var lookupSw = Stopwatch.StartNew();
             var results = await _lookupService.LookupAsync(
                 query,
                 _displaySettings.MaxResults,
-                _displaySettings.ScanLength);
+                _displaySettings.ScanLength,
+                traceId: traceId);
+            Log.Information(
+                "[LookupTrace] trace={TraceId} child redirect lookup finished in {Ms}ms query='{Query}' results={Count}",
+                traceId, lookupSw.ElapsedMilliseconds, query, results.Count);
             if (redirectVersion != Volatile.Read(ref _redirectVersion))
                 return;
             if (results.Count == 0) return;
@@ -235,7 +253,11 @@ public sealed class DictionaryPopupOverlay : IDisposable
                 _childHosts.Add(child);
             ApplyPopupZOrder();
 
-            await child.ShowResultsWarmAsync(results, _currentStyles, _displaySettings, _currentTheme, _currentAudioSettings, _currentAnkiSettings);
+            var injectSw = Stopwatch.StartNew();
+            await child.ShowResultsWarmAsync(results, _currentStyles, _displaySettings, _currentTheme, _currentAudioSettings, _currentAnkiSettings, traceId: traceId);
+            Log.Information(
+                "[LookupTrace] trace={TraceId} child popup content injected in {Ms}ms entries={EntryCount}",
+                traceId, injectSw.ElapsedMilliseconds, results.Count);
 
             // Make sure canvas is visible for child popups
             _canvas.Visibility = Visibility.Visible;

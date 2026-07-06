@@ -773,38 +773,59 @@ function updateButtonSlot(slot, changes) {
 // === Audio ===
 
 var audioUrls = {};
+var audioTraceSequence = 0;
+
+function nextAudioTraceId() {
+  audioTraceSequence += 1;
+  return 'popup-audio-' + Date.now().toString(36) + '-' + audioTraceSequence;
+}
+
+function postAudioTrace(audioTraceId, stage, details) {
+  postPopupMessage('popupDiagnostic', {
+    kind: 'audioTrace',
+    stage: stage,
+    lookupTraceId: window.lookupTraceId || '',
+    audioTraceId: audioTraceId || '',
+    now: performance.now(),
+    details: details || {}
+  });
+}
 
 function escapeUrlParam(s) {
   return encodeURIComponent(s).replace(/%20/g, '+');
 }
 
-function expandAudioTemplate(template, term, reading) {
+function expandAudioTemplate(template, term, reading, audioTraceId) {
   var escapedTerm = escapeUrlParam(term);
   var escapedReading = escapeUrlParam(reading);
   var result = template.replace('{term}', escapedTerm).replace('{reading}', escapedReading);
+  postAudioTrace(audioTraceId, 'template-expanded', { template: template, term: term, reading: reading, url: result });
   console.log('[Audio] expandAudioTemplate: template=' + template + ' term=' + term + ' reading=' + reading + ' -> ' + result);
   return result;
 }
 
-async function fetchAudioUrl(expression, reading) {
+async function fetchAudioUrl(expression, reading, audioTraceId) {
   try {
     var sources = window.audioSources || [];
+    postAudioTrace(audioTraceId, 'fetch-url-start', { expression: expression, reading: reading, sourceCount: sources.length, endpoint: window.audioRequestEndpoint || '' });
     console.log('[Audio] fetchAudioUrl: expression=' + expression + ' reading=' + reading + ' sources=' + JSON.stringify(sources) + ' endpoint=' + (window.audioRequestEndpoint || '(direct)'));
     for (var i = 0; i < sources.length; i++) {
-      var expandedUrl = expandAudioTemplate(sources[i], expression, reading);
+      var expandedUrl = expandAudioTemplate(sources[i], expression, reading, audioTraceId);
       var endpoint = window.audioRequestEndpoint || '';
 
       if (!endpoint) {
         // Direct mode: pass the URL to the native host for resolution.
         // The native side has no CORS restrictions and can resolve audioSourceList JSON,
-        // download, and stream the audio. Avoids a wasted fetch() that fails on CORS
+        // download, and play the audio. Avoids a wasted fetch() that fails on CORS
         // in WebView2 (about:blank origin).
+        postAudioTrace(audioTraceId, 'fetch-url-direct', { sourceIndex: i, url: expandedUrl });
         console.log('[Audio] fetchAudioUrl: direct mode, passing URL to native host ' + expandedUrl);
         return expandedUrl;
       }
 
       // Proxy mode: ask the audio endpoint to resolve the source URL
       var requestUrl = endpoint + '?url=' + encodeURIComponent(expandedUrl);
+      postAudioTrace(audioTraceId, 'fetch-url-proxy-start', { sourceIndex: i, url: requestUrl });
       console.log('[Audio] fetchAudioUrl: proxy mode, fetching ' + requestUrl);
       try {
         var response = await fetch(requestUrl);
@@ -812,53 +833,65 @@ async function fetchAudioUrl(expression, reading) {
         var data = await response.json();
         if (data.type === 'audioSourceList' && data.audioSources && data.audioSources[0] && data.audioSources[0].url) {
           var resolved = data.audioSources[0].url.replace(/\\/g, '/');
+          postAudioTrace(audioTraceId, 'fetch-url-proxy-resolved', { sourceIndex: i, url: resolved });
           console.log('[Audio] fetchAudioUrl: proxy resolved to ' + resolved);
           return resolved;
         }
       } catch (e) {
+        postAudioTrace(audioTraceId, 'fetch-url-proxy-error', { sourceIndex: i, message: e.message });
         console.log('[Audio] fetchAudioUrl: proxy error ' + e.message);
         continue;
       }
     }
+    postAudioTrace(audioTraceId, 'fetch-url-missing', { expression: expression, reading: reading });
     console.log('[Audio] fetchAudioUrl: no URL found');
     return null;
   } catch (e) {
+    postAudioTrace(audioTraceId, 'fetch-url-crash', { message: e.message, stack: e.stack || '' });
     console.error('[Audio] fetchAudioUrl CRASH: ' + e.message + ' stack=' + (e.stack || ''));
     return null;
   }
 }
 
-function playWordAudio(audioUrl) {
+function playWordAudio(audioUrl, audioTraceId) {
   try {
     if (!audioUrl) { console.log('[Audio] playWordAudio: empty URL'); return false; }
+    postAudioTrace(audioTraceId, 'native-message-send', { url: audioUrl, mode: window.audioPlaybackMode || 'interrupt' });
     console.log('[Audio] playWordAudio: sending playWordAudio message with url=' + audioUrl + ' mode=' + (window.audioPlaybackMode || 'interrupt'));
     postPopupMessage('playWordAudio', {
       url: audioUrl,
-      mode: window.audioPlaybackMode || 'interrupt'
+      mode: window.audioPlaybackMode || 'interrupt',
+      lookupTraceId: window.lookupTraceId || '',
+      audioTraceId: audioTraceId || ''
     });
     return true;
   } catch (e) {
+    postAudioTrace(audioTraceId, 'native-message-crash', { message: e.message, stack: e.stack || '' });
     console.error('[Audio] playWordAudio CRASH: ' + e.message + ' stack=' + (e.stack || ''));
     return false;
   }
 }
 
-async function playEntryAudio(entryIndex) {
+async function playEntryAudio(entryIndex, audioTraceId) {
   try {
+    audioTraceId = audioTraceId || nextAudioTraceId();
     var entry = window.lookupEntries && window.lookupEntries[entryIndex];
     if (!entry) { console.log('[Audio] playEntryAudio: no entry at index ' + entryIndex); return; }
+    postAudioTrace(audioTraceId, 'entry-start', { entryIndex: entryIndex, expression: entry.expression, reading: entry.reading });
     console.log('[Audio] playEntryAudio: index=' + entryIndex + ' expression=' + entry.expression + ' reading=' + entry.reading);
     var audioSlot = getButtonSlot('audio', entryIndex);
 
     if (!audioUrls[entryIndex]) {
-      audioUrls[entryIndex] = await fetchAudioUrl(entry.expression, entry.reading);
+      audioUrls[entryIndex] = await fetchAudioUrl(entry.expression, entry.reading, audioTraceId);
     }
-    if (!audioUrls[entryIndex] || !playWordAudio(audioUrls[entryIndex])) {
+    if (!audioUrls[entryIndex] || !playWordAudio(audioUrls[entryIndex], audioTraceId)) {
+      postAudioTrace(audioTraceId, 'entry-failed', { entryIndex: entryIndex, url: audioUrls[entryIndex] || '' });
       console.log('[Audio] playEntryAudio: FAILED audioUrls[' + entryIndex + ']=' + audioUrls[entryIndex]);
       updateButtonSlot(audioSlot, { state: 'error' });
       setTimeout(function () { updateButtonSlot(audioSlot, { state: 'default' }); }, 1500);
     }
   } catch (e) {
+    postAudioTrace(audioTraceId, 'entry-crash', { message: e.message, stack: e.stack || '' });
     console.error('[Audio] playEntryAudio CRASH: ' + e.message + ' stack=' + (e.stack || ''));
   }
 }
@@ -1356,9 +1389,12 @@ window.renderPopup = function () {
 
       if (window.audioEnableAutoplay && (window.audioSources || []).length && idx === 0) {
         var autoplayEntryIndex = idx;
+        var autoplayAudioTraceId = nextAudioTraceId();
+        postAudioTrace(autoplayAudioTraceId, 'autoplay-scheduled', { entryIndex: autoplayEntryIndex, delayMs: 70 });
         setTimeout(function () {
           if (generation !== (window.popupRenderGeneration || 0)) return;
-          playEntryAudio(autoplayEntryIndex);
+          postAudioTrace(autoplayAudioTraceId, 'autoplay-fired', { entryIndex: autoplayEntryIndex });
+          playEntryAudio(autoplayEntryIndex, autoplayAudioTraceId);
         }, 70);
       }
 

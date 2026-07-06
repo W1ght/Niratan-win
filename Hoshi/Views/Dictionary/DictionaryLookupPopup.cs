@@ -47,6 +47,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     private long _displayGeneration;
     private long? _pendingContentGeneration;
     private TaskCompletionSource<bool>? _shellReadyCompletion;
+    private string? _currentTraceId;
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> s_resolvedAudioUrls = new();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<string>> s_audioResolutionTasks = new();
@@ -118,8 +119,11 @@ public sealed class DictionaryLookupPopup : IDisposable
         DictionaryDisplaySettings displaySettings,
         ThemeMode themeMode,
         AudioSettings? audioSettings = null,
-        AnkiSettings? ankiSettings = null)
+        AnkiSettings? ankiSettings = null,
+        string? traceId = null)
     {
+        var sw = Stopwatch.StartNew();
+        _currentTraceId = traceId;
         _audioSettings = audioSettings ?? new AudioSettings();
         _ankiSettings = ankiSettings ?? new AnkiSettings();
         CancelPrefetch();
@@ -128,8 +132,11 @@ public sealed class DictionaryLookupPopup : IDisposable
 
         SetTheme(themeMode);
         var generation = PrepareForPendingContent();
-        var injectionScript = _htmlGenerator.GenerateInjectionScript(results, styles, displaySettings, themeMode, generation, _audioSettings, _ankiSettings);
+        var injectionScript = _htmlGenerator.GenerateInjectionScript(results, styles, displaySettings, themeMode, generation, _audioSettings, _ankiSettings, traceId: traceId);
         await _contentWebView.CoreWebView2.ExecuteScriptAsync(injectionScript);
+        Log.Information(
+            "[LookupTrace] trace={TraceId} popup ExecuteScriptAsync finished in {Ms}ms gen={Gen} entries={EntryCount}",
+            traceId ?? "-", sw.ElapsedMilliseconds, generation, results.Count);
         Log.Information("[Lifecycle] Popup content injected: entries={EntryCount} gen={Gen}", results.Count, generation);
         PrefetchAudioUrls(results);
     }
@@ -291,6 +298,9 @@ public sealed class DictionaryLookupPopup : IDisposable
 
                 case "contentReady":
                     Log.Information("[DictPopup] Content ready: {Payload}", payload.GetRawText());
+                    Log.Information(
+                        "[LookupTrace] trace={TraceId} popup contentReady message received gen={Gen}",
+                        _currentTraceId ?? "-", _pendingContentGeneration);
                     if (!IsCurrentContentReady(payload))
                     {
                         Log.Debug("[DictPopup] Ignored stale contentReady: {Payload}", payload.GetRawText());
@@ -305,7 +315,7 @@ public sealed class DictionaryLookupPopup : IDisposable
                     break;
 
                 case "popupDiagnostic":
-                    Log.Information("[DictPopup] Diagnostic: {Payload}", payload.GetRawText());
+                    LogPopupDiagnostic(payload);
                     break;
 
                 case "tapOutside":
@@ -357,8 +367,16 @@ public sealed class DictionaryLookupPopup : IDisposable
                             "mix" => AudioPlaybackMode.Mix,
                             _ => AudioPlaybackMode.Interrupt,
                         };
+                        var traceId = audioBody.ValueKind == JsonValueKind.Object
+                            && audioBody.TryGetProperty("lookupTraceId", out var traceEl)
+                            ? traceEl.GetString() ?? _currentTraceId
+                            : _currentTraceId;
+                        var audioTraceId = audioBody.ValueKind == JsonValueKind.Object
+                            && audioBody.TryGetProperty("audioTraceId", out var audioTraceEl)
+                            ? audioTraceEl.GetString() ?? "-"
+                            : "-";
                         _contentWebView.DispatcherQueue.TryEnqueue(() =>
-                            HandlePlayWordAudio(audioUrl, audioMode));
+                            HandlePlayWordAudio(audioUrl, audioMode, traceId, audioTraceId));
                     }
                     break;
 
@@ -375,6 +393,51 @@ public sealed class DictionaryLookupPopup : IDisposable
         {
             Log.Error(ex, "[DictPopup] Failed to process WebMessage");
         }
+    }
+
+    private void LogPopupDiagnostic(JsonElement payload)
+    {
+        if (!payload.TryGetProperty("body", out var body)
+            || body.ValueKind != JsonValueKind.Object)
+        {
+            Log.Information("[DictPopup] Diagnostic: {Payload}", payload.GetRawText());
+            return;
+        }
+
+        var kind = body.TryGetProperty("kind", out var kindElement)
+            ? kindElement.GetString()
+            : null;
+
+        if (kind != "audioTrace")
+        {
+            Log.Information("[DictPopup] Diagnostic: {Payload}", payload.GetRawText());
+            return;
+        }
+
+        var traceId = body.TryGetProperty("lookupTraceId", out var traceElement)
+            ? traceElement.GetString()
+            : _currentTraceId;
+        var audioTraceId = body.TryGetProperty("audioTraceId", out var audioTraceElement)
+            ? audioTraceElement.GetString()
+            : "-";
+        var stage = body.TryGetProperty("stage", out var stageElement)
+            ? stageElement.GetString()
+            : "-";
+        var clientNow = body.TryGetProperty("now", out var nowElement)
+            && nowElement.ValueKind == JsonValueKind.Number
+            ? nowElement.GetDouble()
+            : 0;
+        var details = body.TryGetProperty("details", out var detailsElement)
+            ? detailsElement.GetRawText()
+            : "{}";
+
+        Log.Information(
+            "[AudioTrace] lookup={TraceId} audio={AudioTraceId} popup-js stage={Stage} clientNow={ClientNow:F1} details={Details}",
+            string.IsNullOrWhiteSpace(traceId) ? _currentTraceId ?? "-" : traceId,
+            string.IsNullOrWhiteSpace(audioTraceId) ? "-" : audioTraceId,
+            stage ?? "-",
+            clientNow,
+            details);
     }
 
     private long PrepareForPendingContent()
@@ -453,7 +516,11 @@ public sealed class DictionaryLookupPopup : IDisposable
             : null;
     }
 
-    private void HandlePlayWordAudio(string url, AudioPlaybackMode mode)
+    private void HandlePlayWordAudio(
+        string url,
+        AudioPlaybackMode mode,
+        string? traceId = null,
+        string? audioTraceId = null)
     {
         try
         {
@@ -463,9 +530,12 @@ public sealed class DictionaryLookupPopup : IDisposable
                 return;
             }
 
+            Log.Information(
+                "[AudioTrace] lookup={TraceId} audio={AudioTraceId} native message received url='{Url}' mode={Mode}",
+                traceId ?? "-", audioTraceId ?? "-", url, mode);
             Log.Information("[AudioPlay] user-click: url='{Url}' mode={Mode}", url, mode);
 
-            _ = ResolveAndPlayAsync(url, mode);
+            _ = ResolveAndPlayAsync(url, mode, traceId, audioTraceId);
         }
         catch (Exception ex)
         {
@@ -473,16 +543,26 @@ public sealed class DictionaryLookupPopup : IDisposable
         }
     }
 
-    private async Task ResolveAndPlayAsync(string url, AudioPlaybackMode mode)
+    private async Task ResolveAndPlayAsync(
+        string url,
+        AudioPlaybackMode mode,
+        string? traceId = null,
+        string? audioTraceId = null)
     {
         try
         {
             var sw = Stopwatch.StartNew();
             var resolvedUrl = await ResolveAudioUrlAsync(url);
+            Log.Information(
+                "[AudioTrace] lookup={TraceId} audio={AudioTraceId} url resolve completed in {Ms}ms input='{InputUrl}' resolved='{ResolvedUrl}'",
+                traceId ?? "-", audioTraceId ?? "-", sw.ElapsedMilliseconds, url, resolvedUrl);
             Log.Information("[DictPopup] Audio resolve took {Ms}ms", sw.ElapsedMilliseconds);
 
             var playSw = Stopwatch.StartNew();
-            await _audioService.PlayAsync(resolvedUrl, mode);
+            await _audioService.PlayAsync(resolvedUrl, mode, traceId, audioTraceId);
+            Log.Information(
+                "[AudioTrace] lookup={TraceId} audio={AudioTraceId} audio service returned in {Ms}ms total={TotalMs}ms",
+                traceId ?? "-", audioTraceId ?? "-", playSw.ElapsedMilliseconds, sw.ElapsedMilliseconds);
             Log.Information("[DictPopup] Audio play took {Ms}ms (total {Total}ms)",
                 playSw.ElapsedMilliseconds, sw.ElapsedMilliseconds);
         }

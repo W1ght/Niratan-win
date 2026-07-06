@@ -18,24 +18,44 @@ public sealed class AudioService : IAudioService, IDisposable
 
     public AudioSettings Settings => _settings;
 
-    public async Task PlayAsync(string url, AudioPlaybackMode mode)
+    public async Task PlayAsync(
+        string url,
+        AudioPlaybackMode mode,
+        string? traceId = null,
+        string? audioTraceId = null)
     {
+        var totalSw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
+            Log.Information(
+                "[AudioTrace] lookup={TraceId} audio={AudioTraceId} play request received url='{Url}' mode={Mode}",
+                traceId ?? "-", audioTraceId ?? "-", url, mode);
+
             // Phase 1: Download on background thread
             byte[] audioBytes;
             try
             {
+                var downloadSw = System.Diagnostics.Stopwatch.StartNew();
                 audioBytes = await Task.Run(
                     () => s_audioDownloadClient.GetByteArrayAsync(url));
+                Log.Information(
+                    "[AudioTrace] lookup={TraceId} audio={AudioTraceId} download completed in {Ms}ms total={TotalMs}ms bytes={Bytes}",
+                    traceId ?? "-", audioTraceId ?? "-", downloadSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, audioBytes.Length);
             }
             catch (TaskCanceledException)
             {
+                Log.Warning(
+                    "[AudioTrace] lookup={TraceId} audio={AudioTraceId} download timeout total={TotalMs}ms url='{Url}'",
+                    traceId ?? "-", audioTraceId ?? "-", totalSw.ElapsedMilliseconds, url);
                 Log.Warning("[Audio] Download timeout: '{Url}'", url);
                 return;
             }
             catch (Exception ex)
             {
+                Log.Warning(
+                    ex,
+                    "[AudioTrace] lookup={TraceId} audio={AudioTraceId} download failed total={TotalMs}ms url='{Url}'",
+                    traceId ?? "-", audioTraceId ?? "-", totalSw.ElapsedMilliseconds, url);
                 Log.Warning(ex, "[Audio] Download failed: '{Url}'", url);
                 return;
             }
@@ -43,6 +63,9 @@ public sealed class AudioService : IAudioService, IDisposable
             // Phase 2: Validate — fail fast on obviously bad data
             if (audioBytes is not { Length: >= 1024 })
             {
+                Log.Warning(
+                    "[AudioTrace] lookup={TraceId} audio={AudioTraceId} validation failed too-small total={TotalMs}ms bytes={Bytes}",
+                    traceId ?? "-", audioTraceId ?? "-", totalSw.ElapsedMilliseconds, audioBytes?.Length ?? 0);
                 Log.Warning("[Audio] Skipping — too small ({Bytes} bytes): '{Url}'",
                     audioBytes?.Length ?? 0, url);
                 return;
@@ -50,6 +73,9 @@ public sealed class AudioService : IAudioService, IDisposable
 
             if (LooksLikeErrorResponse(audioBytes))
             {
+                Log.Warning(
+                    "[AudioTrace] lookup={TraceId} audio={AudioTraceId} validation failed html-response total={TotalMs}ms bytes={Bytes}",
+                    traceId ?? "-", audioTraceId ?? "-", totalSw.ElapsedMilliseconds, audioBytes.Length);
                 Log.Warning("[Audio] Skipping — looks like HTML error response ({Bytes} bytes): '{Url}'",
                     audioBytes.Length, url);
                 return;
@@ -64,18 +90,28 @@ public sealed class AudioService : IAudioService, IDisposable
                 oldCts.Cancel();
                 oldCts.Dispose();
             }
+            Log.Information(
+                "[AudioTrace] lookup={TraceId} audio={AudioTraceId} previous playback cancelled total={TotalMs}ms hadPrevious={HadPrevious}",
+                traceId ?? "-", audioTraceId ?? "-", totalSw.ElapsedMilliseconds, oldCts != null);
 
             // Phase 4: CreateReader + Init + Play ALL on background thread.
             // StreamMediaFoundationReader calls COM interop which can hang — it must
             // never run on the UI thread.  Waiting with await keeps timing logs accurate.
-            await Task.Run(() => PlayFromBytes(audioBytes, cts.Token, url, mode), cts.Token);
+            await Task.Run(() => PlayFromBytes(audioBytes, cts.Token, url, mode, traceId, audioTraceId), cts.Token);
         }
         catch (OperationCanceledException)
         {
+            Log.Information(
+                "[AudioTrace] lookup={TraceId} audio={AudioTraceId} playback cancelled total={TotalMs}ms url='{Url}'",
+                traceId ?? "-", audioTraceId ?? "-", totalSw.ElapsedMilliseconds, url);
             Log.Information("[Audio] Playback cancelled: '{Url}'", url);
         }
         catch (Exception ex)
         {
+            Log.Error(
+                ex,
+                "[AudioTrace] lookup={TraceId} audio={AudioTraceId} PlayAsync crashed total={TotalMs}ms url='{Url}'",
+                traceId ?? "-", audioTraceId ?? "-", totalSw.ElapsedMilliseconds, url);
             Log.Error(ex, "[Audio] PlayAsync crashed for '{Url}'", url);
         }
     }
@@ -116,8 +152,15 @@ public sealed class AudioService : IAudioService, IDisposable
     /// Runs entirely on the calling thread (which must be a background thread).
     /// CreateReader → WaveOutEvent.Init → Play → wait for completion → dispose.
     /// </summary>
-    private static void PlayFromBytes(byte[] audioBytes, CancellationToken ct, string url, AudioPlaybackMode mode)
+    private static void PlayFromBytes(
+        byte[] audioBytes,
+        CancellationToken ct,
+        string url,
+        AudioPlaybackMode mode,
+        string? traceId = null,
+        string? audioTraceId = null)
     {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         MemoryStream? ms = null;
         WaveStream? reader = null;
         WaveOutEvent? waveOut = null;
@@ -126,10 +169,21 @@ public sealed class AudioService : IAudioService, IDisposable
             Log.Information("[Audio] Playing '{Url}' ({Bytes} bytes) mode={Mode}", url, audioBytes.Length, mode);
 
             ms = new MemoryStream(audioBytes);
+            var readerSw = System.Diagnostics.Stopwatch.StartNew();
             reader = CreateReader(ms);
+            Log.Information(
+                "[AudioTrace] lookup={TraceId} audio={AudioTraceId} reader created in {Ms}ms playThreadTotal={TotalMs}ms reader={ReaderType}",
+                traceId ?? "-", audioTraceId ?? "-", readerSw.ElapsedMilliseconds, sw.ElapsedMilliseconds, reader.GetType().Name);
+            var initSw = System.Diagnostics.Stopwatch.StartNew();
             waveOut = new WaveOutEvent();
             waveOut.Init(reader);
+            Log.Information(
+                "[AudioTrace] lookup={TraceId} audio={AudioTraceId} waveOut initialized in {Ms}ms playThreadTotal={TotalMs}ms",
+                traceId ?? "-", audioTraceId ?? "-", initSw.ElapsedMilliseconds, sw.ElapsedMilliseconds);
             waveOut.Play();
+            Log.Information(
+                "[AudioTrace] lookup={TraceId} audio={AudioTraceId} playback started in {Ms}ms bytes={Bytes} mode={Mode}",
+                traceId ?? "-", audioTraceId ?? "-", sw.ElapsedMilliseconds, audioBytes.Length, mode);
 
             while (waveOut.PlaybackState == PlaybackState.Playing)
             {
@@ -137,14 +191,24 @@ public sealed class AudioService : IAudioService, IDisposable
                 Thread.Sleep(100);
             }
 
+            Log.Information(
+                "[AudioTrace] lookup={TraceId} audio={AudioTraceId} playback ended in {Ms}ms url='{Url}'",
+                traceId ?? "-", audioTraceId ?? "-", sw.ElapsedMilliseconds, url);
             Log.Information("[Audio] Playback ended: '{Url}'", url);
         }
         catch (OperationCanceledException)
         {
+            Log.Information(
+                "[AudioTrace] lookup={TraceId} audio={AudioTraceId} playback interrupted in {Ms}ms url='{Url}'",
+                traceId ?? "-", audioTraceId ?? "-", sw.ElapsedMilliseconds, url);
             Log.Information("[Audio] Playback interrupted: '{Url}'", url);
         }
         catch (Exception ex)
         {
+            Log.Error(
+                ex,
+                "[AudioTrace] lookup={TraceId} audio={AudioTraceId} playback crashed in {Ms}ms url='{Url}'",
+                traceId ?? "-", audioTraceId ?? "-", sw.ElapsedMilliseconds, url);
             Log.Error(ex, "[Audio] Playback crashed: '{Url}'", url);
         }
         finally

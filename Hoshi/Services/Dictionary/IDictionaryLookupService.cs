@@ -9,7 +9,8 @@ public interface IDictionaryLookupService
     Task<List<DictionaryLookupResult>> LookupAsync(
         string text,
         int maxResults = 16,
-        int scanLength = 16
+        int scanLength = 16,
+        string? traceId = null
     );
 
     Task<List<DictionaryStyle>> GetStylesAsync();

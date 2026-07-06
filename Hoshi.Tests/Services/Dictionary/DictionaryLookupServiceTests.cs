@@ -683,7 +683,7 @@ public class DictionaryLookupServiceTests
     {
         public int RebuildCount { get; private set; }
 
-        public Task<List<DictionaryLookupResult>> LookupAsync(string text, int maxResults = 16, int scanLength = 16) =>
+        public Task<List<DictionaryLookupResult>> LookupAsync(string text, int maxResults = 16, int scanLength = 16, string? traceId = null) =>
             Task.FromResult(new List<DictionaryLookupResult>());
 
         public Task<List<DictionaryStyle>> GetStylesAsync() =>
