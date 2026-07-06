@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Numerics;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -35,7 +36,8 @@ public sealed class DictionaryLookupPopup : IDisposable
     public event EventHandler? ContentReady;
 
     private readonly WebView2 _contentWebView;
-    private readonly SolidColorBrush _borderBrush;
+    private readonly AcrylicBrush _surfaceBrush;
+    private readonly SolidColorBrush _strokeBrush;
     private readonly PopupHtmlGenerator _htmlGenerator;
     private readonly IDictionaryLookupService _lookupService;
     private readonly IAudioService _audioService;
@@ -68,15 +70,26 @@ public sealed class DictionaryLookupPopup : IDisposable
             DefaultBackgroundColor = Colors.Transparent,
         };
 
-        _borderBrush = new SolidColorBrush(
-            Windows.UI.Color.FromArgb(0xD8, 0xF3, 0xF3, 0xF3));
+        _surfaceBrush = new AcrylicBrush
+        {
+            AlwaysUseFallback = false,
+            TintColor = Windows.UI.Color.FromArgb(0xFF, 0xF8, 0xF8, 0xF8),
+            TintOpacity = 0.04,
+            TintLuminosityOpacity = 0.06,
+            FallbackColor = Windows.UI.Color.FromArgb(0x90, 0xF8, 0xF8, 0xF8),
+        };
+        _strokeBrush = new SolidColorBrush(
+            Windows.UI.Color.FromArgb(0x66, 0x00, 0x00, 0x00));
 
         VisualRoot = new Border
         {
-            CornerRadius = new CornerRadius(8),
-            BorderThickness = new Thickness(0),
-            Background = _borderBrush,
+            CornerRadius = new CornerRadius(12),
+            BorderThickness = new Thickness(1),
+            BorderBrush = _strokeBrush,
+            Background = _surfaceBrush,
             Child = _contentWebView,
+            Shadow = new ThemeShadow(),
+            Translation = new Vector3(0, 0, 32),
             Visibility = Visibility.Visible,
             Opacity = 0,
             IsHitTestVisible = false,
@@ -100,9 +113,19 @@ public sealed class DictionaryLookupPopup : IDisposable
     public void SetTheme(ThemeMode themeMode)
     {
         var isDark = IsThemeDark(themeMode);
-        _borderBrush.Color = isDark
-            ? Windows.UI.Color.FromArgb(0xD8, 0x1E, 0x1E, 0x1E)
-            : Windows.UI.Color.FromArgb(0xD8, 0xF3, 0xF3, 0xF3);
+        _surfaceBrush.TintColor = isDark
+            ? Windows.UI.Color.FromArgb(0xFF, 0x24, 0x24, 0x24)
+            : Windows.UI.Color.FromArgb(0xFF, 0xF8, 0xF8, 0xF8);
+        _surfaceBrush.AlwaysUseFallback = false;
+        _surfaceBrush.TintOpacity = 0.04;
+        _surfaceBrush.TintLuminosityOpacity = 0.06;
+        _surfaceBrush.FallbackColor = isDark
+            ? Windows.UI.Color.FromArgb(0x70, 0x24, 0x24, 0x24)
+            : Windows.UI.Color.FromArgb(0x90, 0xF8, 0xF8, 0xF8);
+
+        _strokeBrush.Color = isDark
+            ? Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)
+            : Windows.UI.Color.FromArgb(0x66, 0x00, 0x00, 0x00);
     }
 
     private static bool IsThemeDark(ThemeMode themeMode) => themeMode switch
@@ -404,7 +427,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     {
         _pendingContentGeneration = null;
         VisualRoot.Visibility = Visibility.Visible;
-        VisualRoot.Opacity = 1;
+        VisualRoot.Opacity = 0.88;
         VisualRoot.IsHitTestVisible = true;
     }
 

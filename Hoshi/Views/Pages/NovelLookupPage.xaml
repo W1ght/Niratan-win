@@ -32,12 +32,15 @@
                        Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
         </StackPanel>
 
-        <Grid x:Name="DictionaryPanelRoot"
-              Grid.Row="1"
-              MinHeight="420"
-              BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-              BorderThickness="1"
-              CornerRadius="8"
-              Visibility="Collapsed" />
+        <Border x:Name="DictionaryPanelRoot"
+                Grid.Row="1"
+                MinHeight="420"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Visibility="Collapsed">
+            <Canvas x:Name="DictionaryOverlayCanvas"
+                    Background="Transparent" />
+        </Border>
     </Grid>
 </Page>
