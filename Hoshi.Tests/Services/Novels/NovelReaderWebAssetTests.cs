@@ -1086,10 +1086,19 @@ public class NovelReaderWebAssetTests
         popupCode.Should().Contain("[AudioTrace] lookup={TraceId} audio={AudioTraceId} popup-js stage={Stage}");
         popupCode.Should().Contain("[AudioTrace] lookup={TraceId} audio={AudioTraceId} native message received");
         popupCode.Should().Contain("[AudioTrace] lookup={TraceId} audio={AudioTraceId} audio service returned");
+        popupCode.Should().Contain("\"https://hoshi-audio-resolver.local/*\"");
+        popupCode.Should().Contain("HandleAudioResolverRequestAsync");
+        popupCode.Should().Contain("IsAllowedAudioResolverUrl");
+        popupCode.Should().Contain("NormalizeAudioSourceUrl");
+        popupCode.Should().Contain("using var response = await s_audioResolveHttpClient.GetAsync");
+        popupCode.Should().Contain("Access-Control-Allow-Origin: *");
         popupJs.Should().Contain("nextAudioTraceId()");
         popupJs.Should().Contain("postAudioTrace(");
         popupJs.Should().Contain("audioTraceId");
         popupJs.Should().Contain("lookupTraceId");
+        popupJs.Should().Contain("window.audioRequestEndpoint || ''");
+        popupJs.Should().Contain("fetch-url-proxy-resolved");
+        popupJs.Should().Contain("fetchAudioUrl(entry.expression, entry.reading || entry.expression");
         lookupInterfaceCode.Should().Contain("string? traceId = null");
         lookupServiceCode.Should().Contain("[LookupTrace] trace={TraceId} ensure-index completed");
         lookupServiceCode.Should().Contain("[LookupTrace] trace={TraceId} native lookup completed");
@@ -1129,6 +1138,24 @@ public class NovelReaderWebAssetTests
         overlayCode.Should().NotContain("oldest.Dispose();");
         popupJs.Should().Contain("lastShiftLookupQuery");
         popupJs.Should().Contain("lastShiftLookupAt");
+    }
+
+    [Fact]
+    public void DictionaryPopupMineButton_IgnoresClicksWhilePending()
+    {
+        var popupJs = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.js")
+        );
+
+        popupJs.Should().Contain("if (slot.dataset.state === 'pending' || slot.dataset.enabled === 'false') return;");
+        popupJs.Should().Contain("if (mineSlot && mineSlot.dataset.state === 'pending') return;");
+        popupJs.Should().Contain("let miningRequestPending = false;");
+        popupJs.Should().Contain("if (miningRequestPending) return;");
+        popupJs.Should().Contain("miningRequestPending = true;");
+        popupJs.Should().Contain("if (kind === 'mine' && miningRequestPending) return;");
+        popupJs.Should().Contain("finally {");
+        popupJs.Should().Contain("if (!submitted) miningRequestPending = false;");
+        popupJs.Should().Contain("window.onMineComplete = function (success) {\n  miningRequestPending = false;");
     }
 
     [Fact]

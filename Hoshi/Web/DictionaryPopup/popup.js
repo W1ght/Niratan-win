@@ -13,6 +13,7 @@ const NUMERIC_TAG = /^\d+$/;
 const POS_TAGS = new Set(['n', 'adj-i', 'adj-na', 'adj-no', 'v1', 'vk', 'vs', 'vs-i', 'vs-s', 'vz', 'vi', 'vt']);
 
 let selectedDictionaries = {};
+let miningRequestPending = false;
 
 function postPopupMessage(name, body) {
   window.chrome?.webview?.postMessage({
@@ -882,7 +883,7 @@ async function playEntryAudio(entryIndex, audioTraceId) {
     var audioSlot = getButtonSlot('audio', entryIndex);
 
     if (!audioUrls[entryIndex]) {
-      audioUrls[entryIndex] = await fetchAudioUrl(entry.expression, entry.reading, audioTraceId);
+      audioUrls[entryIndex] = await fetchAudioUrl(entry.expression, entry.reading || entry.expression, audioTraceId);
     }
     if (!audioUrls[entryIndex] || !playWordAudio(audioUrls[entryIndex], audioTraceId)) {
       postAudioTrace(audioTraceId, 'entry-failed', { entryIndex: entryIndex, url: audioUrls[entryIndex] || '' });
@@ -1002,66 +1003,89 @@ function constructFrequencyHtml(entryIndex) {
   return container.innerHTML;
 }
 
-function mineEntryAtIndex(entryIndex) {
+async function mineEntryAtIndex(entryIndex) {
   var entry = window.lookupEntries && window.lookupEntries[entryIndex];
   if (!entry) return;
+  if (miningRequestPending) return;
 
   var expression = entry.expression || '';
   var reading = entry.reading || '';
   var matched = entry.matched || expression;
-
-  var glossaryHtml = constructGlossaryHtml(entryIndex);
-  var glossaryFirstHtml = '';
-  var firstDict = entry.glossaries && entry.glossaries[0];
-  if (firstDict) {
-    var firstContainer = document.createElement('div');
-    try {
-      renderStructuredContent(firstContainer, JSON.parse(firstDict.content), null, firstDict.dictionary, true);
-    } catch (e) {
-      renderStructuredContent(firstContainer, firstDict.content, null, firstDict.dictionary, true);
-    }
-    glossaryFirstHtml = firstContainer.innerHTML;
-  }
-
-  var singleGlossaries = constructSingleGlossaryHtml(entryIndex);
-  var pitchPositions = constructPitchPositionHtml(entryIndex);
-  var pitchCategories = constructPitchCategories(entryIndex);
-  var frequenciesHtml = constructFrequencyHtml(entryIndex);
-  var freqHarmonicRank = getFrequencyHarmonicRank(entry.frequencies || []);
-
-  var audio = audioUrls[entryIndex] || '';
-  var selectedDict = selectedDictionaries[entryIndex] ? selectedDictionaries[entryIndex].name : '';
-
-  var dictMedia = [];
-  if (currentDictionaryMedia && currentDictionaryMedia.size) {
-    currentDictionaryMedia.forEach(function (value) { dictMedia.push(value); });
-  }
-
-  var payload = {
-    expression: expression,
-    reading: reading,
-    matched: matched,
-    furiganaPlain: constructFuriganaPlain(expression, reading),
-    frequenciesHtml: frequenciesHtml,
-    freqHarmonicRank: freqHarmonicRank,
-    glossary: glossaryHtml,
-    glossaryFirst: glossaryFirstHtml,
-    singleGlossaries: JSON.stringify(singleGlossaries),
-    pitchPositions: pitchPositions,
-    pitchCategories: pitchCategories,
-    popupSelectionText: getPopupSelectionText(),
-    audio: audio,
-    selectedDictionary: selectedDict,
-    dictionaryMedia: JSON.stringify(dictMedia),
-  };
-
-  postPopupMessage('mineEntry', payload);
-
   var mineSlot = getButtonSlot('mine', entryIndex);
+  if (mineSlot && mineSlot.dataset.state === 'pending') return;
+  miningRequestPending = true;
+  var submitted = false;
   if (mineSlot) updateButtonSlot(mineSlot, { state: 'pending' });
+
+  try {
+    var glossaryHtml = constructGlossaryHtml(entryIndex);
+    var glossaryFirstHtml = '';
+    var firstDict = entry.glossaries && entry.glossaries[0];
+    if (firstDict) {
+      var firstContainer = document.createElement('div');
+      try {
+        renderStructuredContent(firstContainer, JSON.parse(firstDict.content), null, firstDict.dictionary, true);
+      } catch (e) {
+        renderStructuredContent(firstContainer, firstDict.content, null, firstDict.dictionary, true);
+      }
+      glossaryFirstHtml = firstContainer.innerHTML;
+    }
+
+    var singleGlossaries = constructSingleGlossaryHtml(entryIndex);
+    var pitchPositions = constructPitchPositionHtml(entryIndex);
+    var pitchCategories = constructPitchCategories(entryIndex);
+    var frequenciesHtml = constructFrequencyHtml(entryIndex);
+    var freqHarmonicRank = getFrequencyHarmonicRank(entry.frequencies || []);
+
+    if (!audioUrls[entryIndex] && (window.audioSources || []).length && window.needsAudio) {
+      var audioTraceId = nextAudioTraceId();
+      postAudioTrace(audioTraceId, 'mine-fetch-audio-start', { entryIndex: entryIndex, expression: expression, reading: reading || expression });
+      audioUrls[entryIndex] = await fetchAudioUrl(expression, reading || expression, audioTraceId);
+      postAudioTrace(audioTraceId, 'mine-fetch-audio-finished', { entryIndex: entryIndex, url: audioUrls[entryIndex] || '' });
+    }
+
+    var audio = audioUrls[entryIndex] || '';
+    var selectedDict = selectedDictionaries[entryIndex] ? selectedDictionaries[entryIndex].name : '';
+
+    var dictMedia = [];
+    if (currentDictionaryMedia && currentDictionaryMedia.size) {
+      currentDictionaryMedia.forEach(function (value) { dictMedia.push(value); });
+    }
+
+    var payload = {
+      expression: expression,
+      reading: reading,
+      matched: matched,
+      furiganaPlain: constructFuriganaPlain(expression, reading),
+      frequenciesHtml: frequenciesHtml,
+      freqHarmonicRank: freqHarmonicRank,
+      glossary: glossaryHtml,
+      glossaryFirst: glossaryFirstHtml,
+      singleGlossaries: JSON.stringify(singleGlossaries),
+      pitchPositions: pitchPositions,
+      pitchCategories: pitchCategories,
+      popupSelectionText: getPopupSelectionText(),
+      audio: audio,
+      selectedDictionary: selectedDict,
+      dictionaryMedia: JSON.stringify(dictMedia),
+    };
+
+    postPopupMessage('mineEntry', payload);
+    submitted = true;
+  } catch (e) {
+    console.error('[Anki] mineEntry failed before native submit: ' + e.message);
+    postPopupMessage('popupError', 'mineEntry failed before native submit: ' + (e.message || e));
+    if (mineSlot) {
+      updateButtonSlot(mineSlot, { state: 'error' });
+      setTimeout(function () { updateButtonSlot(mineSlot, { state: 'default' }); }, 2000);
+    }
+  } finally {
+    if (!submitted) miningRequestPending = false;
+  }
 }
 
 window.onMineComplete = function (success) {
+  miningRequestPending = false;
   // Update button states for all pending mine slots
   var slots = document.querySelectorAll('.button-slot[data-kind="mine"][data-state="pending"]');
   for (var i = 0; i < slots.length; i++) {
@@ -1118,7 +1142,9 @@ function createEntryHeader(entry, idx) {
     var slot = e.target.closest('.button-slot');
     if (!slot) return;
     e.stopPropagation();
+    if (slot.dataset.state === 'pending' || slot.dataset.enabled === 'false') return;
     var kind = slot.dataset.kind;
+    if (kind === 'mine' && miningRequestPending) return;
     var entryIndex = Number(slot.dataset.entryIndex);
     if (kind === 'audio') {
       playEntryAudio(entryIndex);

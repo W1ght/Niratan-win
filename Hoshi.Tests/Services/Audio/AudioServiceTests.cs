@@ -86,7 +86,7 @@ public class AudioServiceTests
         var urls = settings.EnabledAudioSourceUrls;
 
         urls.Should().HaveCount(2);
-        urls[0].Should().Contain("localhost:8765");
+        urls[0].Should().Contain("localhost:18765");
     }
 
     [Fact]
