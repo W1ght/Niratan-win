@@ -2,9 +2,7 @@ using System.Collections;
 using FluentAssertions;
 using Moq;
 using Hoshi.Models;
-using Hoshi.Models.Settings;
 using Hoshi.Services.Dictionary;
-using Hoshi.Services.Settings;
 using Hoshi.Services.Video;
 using Hoshi.ViewModels.Pages;
 
@@ -86,7 +84,6 @@ public class VideoPlayerViewModelEpisodeTests
     {
         return new VideoPlayerViewModel(
             new SubtitleParserService(),
-            Mock.Of<IDictionaryLookupService>(),
-            Mock.Of<ISettingsService>(service => service.Current == new AppSettings()));
+            Mock.Of<IDictionaryPopupRequestService>());
     }
 }

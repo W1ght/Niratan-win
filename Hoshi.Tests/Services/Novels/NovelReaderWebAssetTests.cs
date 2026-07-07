@@ -1492,7 +1492,7 @@ public class NovelReaderWebAssetTests
         popupJs.Should().Contain("if (kind === 'mine' && miningRequestPending) return;");
         popupJs.Should().Contain("finally {");
         popupJs.Should().Contain("if (!submitted) miningRequestPending = false;");
-        popupJs.Should().Contain("window.onMineComplete = function (success) {\n  miningRequestPending = false;");
+        popupJs.Replace("\r\n", "\n").Should().Contain("window.onMineComplete = function (success) {\n  miningRequestPending = false;");
     }
 
     [Fact]
