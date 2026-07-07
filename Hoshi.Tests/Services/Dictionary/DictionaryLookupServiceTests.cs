@@ -59,6 +59,7 @@ public class DictionaryLookupServiceTests
         html.Should().Contain("generation: window.popupRenderGeneration || 0");
         html.Should().Contain("style=\"visibility:visible\"");
         html.Should().Contain("window.dictionaryMediaRequestEndpoint = 'https://hoshi-dictionary-media.local/image';");
+        html.Should().Contain("window.audioRequestEndpoint = 'https://hoshi-audio-resolver.local/resolve';");
         html.Should().Contain("popupDiagnostic");
         html.Should().Contain("contentReady");
     }
@@ -144,6 +145,16 @@ public class DictionaryLookupServiceTests
         script.Should().Contain("e.shiftKey");
         script.Should().Contain("lookupAtPopupPoint");
         script.Should().Contain("postPopupMessage('lookupRedirect'");
+    }
+
+    [Fact]
+    public void PopupScript_ResolvesAudioBeforeMiningWhenAudioIsRequired()
+    {
+        var script = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Web", "DictionaryPopup", "popup.js"));
+
+        script.Should().Contain("if (!audioUrls[entryIndex] && (window.audioSources || []).length && window.needsAudio)");
+        script.Should().Contain("audioUrls[entryIndex] = await fetchAudioUrl(expression, reading || expression");
+        script.Should().Contain("var audio = audioUrls[entryIndex] || '';");
     }
 
     [Fact]

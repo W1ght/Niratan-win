@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json.Serialization;
 
 namespace Hoshi.Models.Settings;
@@ -74,7 +75,8 @@ public sealed class AnkiSettings
                        && SelectedDeckId.HasValue
                        && SelectedNoteTypeId.HasValue,
         UseAnkiConnect = !string.IsNullOrWhiteSpace(AnkiConnectUrl),
-        NeedsAudio = false,
+        NeedsAudio = FieldMappings.Values.Any(static template =>
+            template?.Contains("{audio}", System.StringComparison.OrdinalIgnoreCase) == true),
         AllowDupes = AllowDupes,
         CompactGlossaries = CompactGlossaries,
         EmbedMedia = !string.IsNullOrWhiteSpace(AnkiConnectUrl),
