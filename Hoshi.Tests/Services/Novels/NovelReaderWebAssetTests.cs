@@ -225,6 +225,146 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void GlobalLookupPopupWindow_ReusesDictionaryPopupOverlayWithoutManualSearchUi()
+    {
+        var popupXamlPath = Path.Combine(ProjectRoot, "Views", "Dictionary", "GlobalLookupPopupWindow.xaml");
+        var popupCodePath = Path.Combine(ProjectRoot, "Views", "Dictionary", "GlobalLookupPopupWindow.xaml.cs");
+        var serviceCodePath = Path.Combine(ProjectRoot, "Services", "Dictionary", "GlobalLookupPopupService.cs");
+        var appCode = File.ReadAllText(Path.Combine(ProjectRoot, "App.xaml.cs"));
+
+        File.Exists(popupXamlPath).Should().BeTrue();
+        File.Exists(popupCodePath).Should().BeTrue();
+        File.Exists(serviceCodePath).Should().BeTrue();
+
+        var popupXaml = File.ReadAllText(popupXamlPath);
+        var popupCode = File.ReadAllText(popupCodePath);
+        var serviceCode = File.ReadAllText(serviceCodePath);
+
+        popupXaml.Should().Contain("x:Class=\"Hoshi.Views.Dictionary.GlobalLookupPopupWindow\"");
+        popupXaml.Should().Contain("x:Name=\"DictionaryOverlayCanvas\"");
+        popupXaml.Should().NotContain("<TextBox");
+        popupXaml.Should().NotContain("LookupQueryBox");
+        popupXaml.Should().NotContain("GlobalLookupSearchButton");
+        popupXaml.Should().NotContain("<ListView");
+        popupXaml.Should().NotContain("<ListBox");
+        popupXaml.Should().NotContain("ItemsRepeater");
+
+        popupCode.Should().Contain("DictionaryPopupOverlay");
+        popupCode.Should().Contain("UseCanvas(DictionaryOverlayCanvas)");
+        popupCode.Should().Contain("ShowLookupAsync(");
+        popupCode.Should().Contain("Hoshi Lookup Popup");
+        popupCode.Should().Contain("VirtualKey.Escape");
+        popupCode.Should().Contain("Activated +=");
+        popupCode.Should().Contain("WindowActivationState.Deactivated");
+
+        serviceCode.Should().Contain("DictionaryPopupRequestService");
+        serviceCode.Should().Contain("CreateAsync(query, traceId: $\"global-popup-{Guid.NewGuid():N}\"");
+        serviceCode.Should().Contain("GlobalLookupPopupWindow");
+
+        appCode.Should().Contain("IGlobalLookupPopupService, GlobalLookupPopupService");
+    }
+
+    [Fact]
+    public void GlobalLookupPopupWindow_UsesBorderlessPopupSizedHostForNakedPopup()
+    {
+        var overlayCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs")
+        );
+        var popupCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "GlobalLookupPopupWindow.xaml.cs")
+        );
+        var serviceCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Services", "Dictionary", "GlobalLookupPopupService.cs")
+        );
+        var placementCodePath = Path.Combine(
+            ProjectRoot,
+            "Services",
+            "Dictionary",
+            "GlobalLookupPopupWindowPlacement.cs"
+        );
+
+        File.Exists(placementCodePath).Should().BeTrue();
+
+        overlayCode.Should().Contain("SetRootReadyOpacity(");
+        overlayCode.Should().Contain("GetRootPopupBounds()");
+        overlayCode.Should().Contain("MoveRootPopupToOrigin()");
+        popupCode.Should().Contain("SetRootReadyOpacity(1)");
+        popupCode.Should().Contain("ApplyPopupSizedHostSurface(request.Theme)");
+        popupCode.Should().Contain("UseCanvas(DictionaryOverlayCanvas)");
+        popupCode.Should().Contain("UseStandaloneWindowVisuals()");
+        popupCode.Should().Contain("overlay.ShowLookupAsync(");
+        popupCode.Should().Contain("anchorPoint");
+        popupCode.Should().Contain("GetRootPopupBounds()");
+        popupCode.Should().Contain("MoveRootPopupToOrigin()");
+        popupCode.Should().Contain("RasterizationScale");
+        popupCode.Should().NotContain("UseNakedFloatingWindowVisuals()");
+        popupCode.Should().NotContain("ApplyHostSurface(request.Theme)");
+        popupCode.Should().Contain("ExtendsContentIntoTitleBar = true");
+        popupCode.Should().Contain("SystemBackdrop = null");
+        popupCode.Should().Contain("ApplyBorderlessHostChrome(");
+        popupCode.Should().Contain("ApplyNativeBorderlessHostStyles(");
+        popupCode.Should().Contain("ApplyDwmBorderlessChrome(");
+        popupCode.Should().Contain("ApplyRoundedHostRegion(");
+        popupCode.Should().Contain("ClearHostRegion(");
+        popupCode.Should().Contain("DwmSetWindowAttribute");
+        popupCode.Should().Contain("DwmwaNcRenderingPolicy");
+        popupCode.Should().Contain("DwmNcRenderingPolicyDisabled");
+        popupCode.Should().Contain("DwmwaWindowCornerPreference");
+        popupCode.Should().Contain("DwmWindowCornerPreferenceDoNotRound");
+        popupCode.Should().Contain("DwmwaBorderColor");
+        popupCode.Should().Contain("ToColorRef(hostSurfaceColor)");
+        popupCode.Should().Contain("GwlStyle");
+        popupCode.Should().Contain("WsBorder");
+        popupCode.Should().Contain("WsDlgFrame");
+        popupCode.Should().Contain("WsPopup");
+        popupCode.Should().Contain("WsExClientEdge");
+        popupCode.Should().Contain("WsExStaticEdge");
+        popupCode.Should().Contain("WsExToolWindow");
+        popupCode.Should().Contain("WsExNoActivate");
+        popupCode.Should().Contain("PopupCornerRadiusDip = 8");
+        popupCode.Should().Contain("CreateRoundRectRgn(");
+        popupCode.Should().Contain("SetWindowRgn(");
+        popupCode.Should().Contain("SetWindowPos(");
+        popupCode.Should().Contain("SwpFrameChanged");
+        popupCode.Should().NotContain("DwmColorNone");
+
+        serviceCode.Should().Contain("StagingSize = new(720, 560)");
+        serviceCode.Should().Contain("ResolveStagingRect(workArea, StagingSize)");
+        serviceCode.Should().Contain("window.ClearHostRegion()");
+        serviceCode.Should().Contain("window.AppWindow.MoveAndResize(stagingRect)");
+        serviceCode.Should().Contain("window.Activate()");
+        serviceCode.Should().Contain("ApplyBorderlessHostChrome()");
+        serviceCode.Should().Contain("cursorPoint.X - workArea.X");
+        serviceCode.Should().Contain("cursorPoint.Y - workArea.Y");
+        serviceCode.Should().Contain("window.GetRootPopupBounds()");
+        serviceCode.Should().Contain("window.RasterizationScale");
+        serviceCode.Should().Contain("ResolveFinalRect(");
+        serviceCode.Should().Contain("window.MoveRootPopupToOrigin()");
+        serviceCode.Should().Contain("window.AppWindow.MoveAndResize(finalRect)");
+        serviceCode.Should().NotContain("AppWindow.ResizeClient");
+        serviceCode.Should().Contain("window.ApplyRoundedHostRegion()");
+        serviceCode.Should().NotContain("GetDpiScaleForPoint(cursorPoint)");
+        serviceCode.Should().Contain("ReferenceEquals(window, _window)");
+    }
+
+    [Fact]
+    public void DictionaryPopupOverlay_GuardsConcurrentPrewarmForGlobalPopupWindow()
+    {
+        var overlayCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs")
+        );
+        var popupCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "GlobalLookupPopupWindow.xaml.cs")
+        );
+
+        overlayCode.Should().Contain("Task? _prewarmTask");
+        overlayCode.Should().Contain("PrewarmCoreAsync(");
+        overlayCode.Should().Contain("await _prewarmTask");
+
+        popupCode.Should().NotContain("_ = overlay.PrewarmAsync(RootGrid.XamlRoot);");
+    }
+
+    [Fact]
     public void SettingsPage_UsesVisibilityConvertersForBooleanVisibilityBindings()
     {
         var settingsXaml = File.ReadAllText(
@@ -622,7 +762,9 @@ public class NovelReaderWebAssetTests
         popupCode.Should().NotContain("_contentWebView.Visibility = Visibility.Collapsed");
         popupCode.Should().NotContain("VisualRoot.Visibility = Visibility.Collapsed;");
         popupCode.Should().Contain("VisualRoot.Opacity = 0");
-        popupCode.Should().Contain("VisualRoot.Opacity = 0.88");
+        popupCode.Should().Contain("double _readyOpacity = 0.88");
+        popupCode.Should().Contain("SetReadyOpacity(double opacity)");
+        popupCode.Should().Contain("VisualRoot.Opacity = _readyOpacity");
         popupCode.Should().Contain("VisualRoot.IsHitTestVisible = false");
         popupCode.Should().Contain("VisualRoot.IsHitTestVisible = true");
         overlayCode.Should().Contain("await child.ShowResultsWarmAsync");
@@ -832,6 +974,201 @@ public class NovelReaderWebAssetTests
         lookupCode.Should().Contain("ShowLookupAsync");
         lookupCode.Should().Contain("PrewarmAsync");
         lookupCode.Should().Contain("EmbedRoot");
+    }
+
+    [Fact]
+    public void GlobalLookupWindow_UsesSharedPopupOverlayAndNoCustomResultsList()
+    {
+        var windowXamlPath = Path.Combine(ProjectRoot, "Views", "Dictionary", "GlobalLookupWindow.xaml");
+        var windowCodePath = Path.Combine(ProjectRoot, "Views", "Dictionary", "GlobalLookupWindow.xaml.cs");
+
+        File.Exists(windowXamlPath).Should().BeTrue();
+        File.Exists(windowCodePath).Should().BeTrue();
+
+        var windowXaml = File.ReadAllText(windowXamlPath);
+        var windowCode = File.ReadAllText(windowCodePath);
+
+        windowXaml.Should().Contain("x:Class=\"Hoshi.Views.Dictionary.GlobalLookupWindow\"");
+        windowXaml.Should().Contain("AutomationProperties.AutomationId=\"GlobalLookupQueryBox\"");
+        windowXaml.Should().Contain("AutomationProperties.AutomationId=\"GlobalLookupSearchButton\"");
+        windowXaml.Should().Contain("AutomationProperties.AutomationId=\"GlobalLookupPasteButton\"");
+        windowXaml.Should().Contain("x:Name=\"DictionaryPanelRoot\"");
+        windowXaml.Should().Contain("x:Name=\"DictionaryOverlayCanvas\"");
+        windowXaml.Should().NotContain("ListView");
+        windowXaml.Should().NotContain("ItemsRepeater");
+
+        windowCode.Should().Contain("DictionaryPopupOverlay");
+        windowCode.Should().Contain("UseCanvas(DictionaryOverlayCanvas)");
+        windowCode.Should().Contain("EmbedRoot(DictionaryOverlayCanvas)");
+        windowCode.Should().Contain("LookupReady +=");
+        windowCode.Should().Contain("ShowLookupAsync");
+        windowCode.Should().Contain("Clipboard.GetContent()");
+        windowCode.Should().NotContain("IDictionaryLookupService");
+    }
+
+    [Fact]
+    public void GlobalLookup_IsRegisteredDisabledByDefaultAndExposedFromNavigation()
+    {
+        var projectCode = File.ReadAllText(Path.Combine(ProjectRoot, "Hoshi.csproj"));
+        var appCode = File.ReadAllText(Path.Combine(ProjectRoot, "App.xaml.cs"));
+        var appSettingsCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Models", "Settings", "AppSettings.cs")
+        );
+        var globalSettingsCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Models", "Settings", "GlobalLookupSettings.cs")
+        );
+        var navigationXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NavigationPage.xaml")
+        );
+        var navigationCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NavigationPage.xaml.cs")
+        );
+        var dictionarySettingsXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "DictionarySettingsPage.xaml")
+        );
+        var dictionarySettingsViewModel = File.ReadAllText(
+            Path.Combine(ProjectRoot, "ViewModels", "Pages", "DictionarySettingsPageViewModel.cs")
+        );
+        var enResources = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "en-US", "Resources.resw")
+        );
+        var zhResources = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw")
+        );
+
+        appSettingsCode.Should().Contain("GlobalLookupSettings GlobalLookup");
+        globalSettingsCode.Should().Contain("bool Enabled { get; set; }");
+        globalSettingsCode.Should().Contain("DefaultHotKey = \"Ctrl+Alt+D\"");
+        globalSettingsCode.Should().NotContain("Enabled { get; set; } = true");
+
+        appCode.Should().Contain("IDictionaryPopupRequestService, DictionaryPopupRequestService");
+        appCode.Should().Contain("GlobalLookupWindowViewModel");
+        appCode.Should().Contain("IGlobalLookupWindowService, GlobalLookupWindowService");
+        appCode.Should().Contain("IGlobalSelectionLookupService, GlobalSelectionLookupService");
+        appCode.Should().Contain("Win32GlobalLookupHotKeyRegistrar");
+        projectCode.Should().Contain("Microsoft.WindowsDesktop.App");
+        appCode.Should().Contain("UIAutomationSelectedTextReader");
+        appCode.Should().Contain("Win32FocusedEditSelectedTextReader");
+        appCode.Should().Contain("CascadingSelectedTextReader");
+        appCode.Should().NotContain("ClipboardFallbackSelectedTextReader");
+        appCode.Should().NotContain("ICopyShortcutSender");
+        var normalizedAppCode = appCode.Replace("\r\n", "\n");
+        normalizedAppCode.Should().Contain(
+            "MainWindow.NavigateToShell();\n            await GetService<IGlobalSelectionLookupService>().InitializeAsync();");
+
+        navigationXaml.Should().Contain("AutomationProperties.AutomationId=\"GlobalLookupButton\"");
+        navigationXaml.Should().Contain("x:Uid=\"GlobalLookupButton\"");
+        navigationCode.Should().Contain("OpenGlobalLookup_Click");
+        navigationCode.Should().Contain("IGlobalLookupWindowService");
+
+        dictionarySettingsXaml.Should().Contain("x:Uid=\"GlobalLookupEnabledCard\"");
+        dictionarySettingsXaml.Should().Contain("AutomationProperties.AutomationId=\"GlobalLookupEnabledToggle\"");
+        dictionarySettingsXaml.Should().Contain("IsOn=\"{x:Bind ViewModel.GlobalLookupEnabled, Mode=TwoWay}\"");
+        dictionarySettingsViewModel.Should().Contain("GlobalLookupEnabled");
+        dictionarySettingsViewModel.Should().Contain("GlobalLookup.Enabled = value");
+        dictionarySettingsViewModel.Should().Contain("IGlobalSelectionLookupService");
+
+        var globalLookupServiceCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Services", "Dictionary", "GlobalSelectionLookupService.cs")
+        );
+        globalLookupServiceCode.Should().Contain("GlobalLookup] {StatusText}");
+        globalLookupServiceCode.Should().Contain("Global lookup hotkey message received");
+        globalLookupServiceCode.Should().Contain("Hotkey handler failed");
+        globalLookupServiceCode.Should().Contain("class UIAutomationSelectedTextReader");
+        globalLookupServiceCode.Should().Contain("s_readGate");
+        globalLookupServiceCode.Should().Contain("AutomationElement.FocusedElement");
+        globalLookupServiceCode.Should().Contain("TextPattern.Pattern");
+        globalLookupServiceCode.Should().Contain("GetSelection()");
+        globalLookupServiceCode.Should().Contain("AutomationElement.FromHandle");
+        globalLookupServiceCode.Should().Contain("FindAll(TreeScope.Descendants");
+        globalLookupServiceCode.Should().Contain("IsTextPatternAvailableProperty");
+        globalLookupServiceCode.Should().Contain("class CascadingSelectedTextReader");
+        globalLookupServiceCode.Should().Contain("class Win32FocusedEditSelectedTextReader");
+        globalLookupServiceCode.Should().Contain("EM_GETSEL");
+        globalLookupServiceCode.Should().Contain("EM_GETSELTEXT");
+        globalLookupServiceCode.Should().Contain("WM_GETTEXT");
+        globalLookupServiceCode.Should().Contain("GetGUIThreadInfo");
+        globalLookupServiceCode.Should().Contain("SendMessageTimeout");
+        globalLookupServiceCode.Should().NotContain("ClipboardFallbackSelectedTextReader");
+        globalLookupServiceCode.Should().NotContain("keybd_event");
+        File.ReadAllText(
+                Path.Combine(ProjectRoot, "Services", "Dictionary", "GlobalLookupPopupService.cs")
+            )
+            .Should()
+            .Contain("Global lookup popup requested")
+            .And.Contain("ResolveStagingRect(workArea, StagingSize)")
+            .And.Contain("window.AppWindow.MoveAndResize(finalRect)")
+            .And.Contain("cursorPoint.X - workArea.X")
+            .And.NotContain("GetDpiForMonitor");
+        var globalLookupPopupWindowCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "GlobalLookupPopupWindow.xaml.cs")
+        );
+        globalLookupPopupWindowCode.Should().Contain("ApplyPopupSizedHostSurface");
+        globalLookupPopupWindowCode.Should().Contain("UseStandaloneWindowVisuals");
+        globalLookupPopupWindowCode.Should().Contain("SetRootReadyOpacity(1)");
+        globalLookupPopupWindowCode.Should().NotContain("UseNakedFloatingWindowVisuals");
+        globalLookupPopupWindowCode.Should().Contain("ApplyNativeBorderlessHostStyles");
+        globalLookupPopupWindowCode.Should().Contain("ApplyDwmBorderlessChrome");
+        globalLookupPopupWindowCode.Should().Contain("ApplyRoundedHostRegion");
+        globalLookupPopupWindowCode.Should().Contain("ClearHostRegion");
+        globalLookupPopupWindowCode.Should().Contain("DwmSetWindowAttribute");
+        globalLookupPopupWindowCode.Should().Contain("SetWindowRgn");
+        globalLookupPopupWindowCode.Should().NotContain("ApplyHostSurface(request.Theme)");
+        var dictionaryLookupPopupCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryLookupPopup.cs")
+        );
+        var popupCss = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.css")
+        );
+        dictionaryLookupPopupCode.Should().Contain("UseStandaloneWindowVisuals");
+        dictionaryLookupPopupCode.Should().Contain("UseNakedFloatingWindowVisuals");
+        dictionaryLookupPopupCode.Should().Contain("VisualRoot.Shadow = null");
+        dictionaryLookupPopupCode.Should().Contain("VisualRoot.Translation = Vector3.Zero");
+        dictionaryLookupPopupCode.Should().Contain("VisualRoot.BorderThickness = new Thickness(0)");
+        dictionaryLookupPopupCode.Should().Contain("VisualRoot.CornerRadius = new CornerRadius(0)");
+        dictionaryLookupPopupCode.Should().Contain("VisualRoot.Background = _windowSurfaceBrush");
+        dictionaryLookupPopupCode.Should().Contain("_contentWebView.DefaultBackgroundColor = Colors.Transparent");
+        dictionaryLookupPopupCode.Should().Contain("_contentWebView.Margin = new Thickness(-1)");
+        dictionaryLookupPopupCode.Should().Contain("IsTabStop = false");
+        dictionaryLookupPopupCode.Should().Contain("UseSystemFocusVisuals = false");
+        popupCss.Should().Contain("html:focus");
+        popupCss.Should().Contain("body:focus-visible");
+        popupCss.Should().Contain("outline: none");
+        File.ReadAllText(
+                Path.Combine(ProjectRoot, "Services", "Dictionary", "GlobalLookupWindowService.cs")
+            )
+            .Should()
+            .Contain("Manual lookup window requested");
+
+        foreach (var key in new[]
+        {
+            "GlobalLookupButton.AutomationProperties.Name",
+            "GlobalLookupWindow.Title",
+            "GlobalLookupQueryBox.PlaceholderText",
+            "GlobalLookupSearchButtonText.Text",
+            "GlobalLookupPasteButton.AutomationProperties.Name",
+            "GlobalLookupEnabledCard.Header",
+            "GlobalLookupEnabledCard.Description",
+        })
+        {
+            enResources.Should().Contain(key);
+            zhResources.Should().Contain(key);
+        }
+    }
+
+    [Fact]
+    public void GlobalLookupWindow_DoesNotAssignWindowTitleFromXaml()
+    {
+        var windowXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "GlobalLookupWindow.xaml")
+        );
+        var windowCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "GlobalLookupWindow.xaml.cs")
+        );
+
+        windowXaml.Should().NotContain("x:Uid=\"GlobalLookupWindow\"");
+        windowXaml.Should().NotContain("Title=\"Global Lookup\"");
+        windowCode.Should().Contain("Title =");
     }
 
     [Fact]

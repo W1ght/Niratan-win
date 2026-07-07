@@ -5,31 +5,18 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Hoshi.Enums;
 using Hoshi.Models;
 using Hoshi.Models.Anki;
 using Hoshi.Models.Dictionary;
-using Hoshi.Models.Settings;
 using Hoshi.Services.Dictionary;
-using Hoshi.Services.Settings;
 using Hoshi.Services.Video;
 
 namespace Hoshi.ViewModels.Pages;
 
-public sealed record VideoLookupPopupRequest(
-    List<DictionaryLookupResult> Results,
-    Dictionary<string, string> Styles,
-    DictionaryDisplaySettings DisplaySettings,
-    ThemeMode Theme,
-    AudioSettings AudioSettings,
-    AnkiSettings AnkiSettings,
-    AnkiMiningContext MiningContext);
-
 public partial class VideoPlayerViewModel : ObservableObject
 {
     private readonly SubtitleParserService _subtitleParserService;
-    private readonly IDictionaryLookupService _dictionaryLookupService;
-    private readonly ISettingsService _settingsService;
+    private readonly IDictionaryPopupRequestService _popupRequestService;
 
     private VideoSubtitleDocument _subtitleDocument = new([]);
 
@@ -82,12 +69,10 @@ public partial class VideoPlayerViewModel : ObservableObject
 
     public VideoPlayerViewModel(
         SubtitleParserService subtitleParserService,
-        IDictionaryLookupService dictionaryLookupService,
-        ISettingsService settingsService)
+        IDictionaryPopupRequestService popupRequestService)
     {
         _subtitleParserService = subtitleParserService;
-        _dictionaryLookupService = dictionaryLookupService;
-        _settingsService = settingsService;
+        _popupRequestService = popupRequestService;
     }
 
     public async Task LoadVideoAsync(VideoItem video, CancellationToken ct = default)
@@ -161,7 +146,7 @@ public partial class VideoPlayerViewModel : ObservableObject
     public TimeSpan? GetNextSubtitleStart() =>
         _subtitleDocument.FindNextCue(CurrentPosition)?.Start;
 
-    public async Task<VideoLookupPopupRequest?> CreateLookupRequestAsync(
+    public async Task<DictionaryPopupRequest?> CreateLookupRequestAsync(
         string query,
         string? screenshotPath,
         string? audioClipPath,
@@ -172,17 +157,6 @@ public partial class VideoPlayerViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(query))
             return null;
 
-        var displaySettings = _settingsService.Current.DictionaryDisplaySettings;
-        var results = await _dictionaryLookupService.LookupAsync(
-            query,
-            displaySettings.MaxResults,
-            displaySettings.ScanLength);
-        if (results.Count == 0)
-            return null;
-
-        var styles = (await _dictionaryLookupService.GetStylesAsync())
-            .ToDictionary(style => style.DictName, style => style.Styles);
-
         var cueContext = BuildCueContext(query);
         var context = VideoMiningContextFactory.Create(
             CurrentVideo?.FilePath ?? "",
@@ -192,14 +166,7 @@ public partial class VideoPlayerViewModel : ObservableObject
             audioClipPath,
             sentenceOffset);
 
-        return new VideoLookupPopupRequest(
-            results,
-            styles,
-            displaySettings,
-            _settingsService.Current.Theme,
-            _settingsService.Current.AudioSettings,
-            _settingsService.Current.AnkiSettings,
-            context);
+        return await _popupRequestService.CreateAsync(query, context, ct: ct);
     }
 
     private VideoSubtitleCueContext BuildCueContext(string fallbackText)

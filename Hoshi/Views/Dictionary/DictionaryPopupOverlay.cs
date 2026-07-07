@@ -19,6 +19,12 @@ using Serilog;
 
 namespace Hoshi.Views.Dictionary;
 
+public readonly record struct DictionaryPopupHostBounds(
+    double Left,
+    double Top,
+    double Width,
+    double Height);
+
 public sealed class DictionaryPopupOverlay : IDisposable
 {
     private const double PopupPadding = DictionaryPopupLayoutCalculator.PopupPadding;
@@ -56,6 +62,10 @@ public sealed class DictionaryPopupOverlay : IDisposable
     private AnkiMiningContext _currentMiningContext = new();
     private Panel? _embeddedPanel;
     private XamlRoot? _currentXamlRoot;
+    private Task? _prewarmTask;
+    private double _rootReadyOpacity = 0.88;
+    private bool _useStandaloneWindowVisuals;
+    private bool _useNakedFloatingWindowVisuals;
 
     public event EventHandler? Dismissed;
 
@@ -93,13 +103,56 @@ public sealed class DictionaryPopupOverlay : IDisposable
         _embeddedPanel = panel;
     }
 
+    public void UseStandaloneWindowVisuals()
+    {
+        _useStandaloneWindowVisuals = true;
+        if (_rootWarm)
+            _rootHost.UseStandaloneWindowVisuals();
+    }
+
+    public void UseNakedFloatingWindowVisuals()
+    {
+        _useNakedFloatingWindowVisuals = true;
+        if (_rootWarm)
+            _rootHost.UseNakedFloatingWindowVisuals();
+
+        foreach (var child in _childHostPool)
+            child.UseNakedFloatingWindowVisuals();
+    }
+
     public async Task PrewarmAsync(XamlRoot xamlRoot)
     {
-        if (_rootWarm) return;
+        if (_rootWarm)
+            return;
 
+        if (_prewarmTask is not null)
+        {
+            await _prewarmTask;
+            return;
+        }
+
+        _prewarmTask = PrewarmCoreAsync(xamlRoot);
+        try
+        {
+            await _prewarmTask;
+        }
+        finally
+        {
+            if (!_rootWarm)
+                _prewarmTask = null;
+        }
+    }
+
+    private async Task PrewarmCoreAsync(XamlRoot xamlRoot)
+    {
         _currentXamlRoot = xamlRoot;
         CollapseCanvasBounds();
         _rootHost = CreateHost();
+        if (_useStandaloneWindowVisuals)
+            _rootHost.UseStandaloneWindowVisuals();
+        else if (_useNakedFloatingWindowVisuals)
+            _rootHost.UseNakedFloatingWindowVisuals();
+        _rootHost.SetReadyOpacity(_rootReadyOpacity);
         _rootHost.RedirectRequested += OnRootRedirectRequested;
         _rootHost.TapOutsideRequested += OnRootTapOutsideRequested;
         _rootHost.Scrolled += OnRootScrolled;
@@ -363,6 +416,10 @@ public sealed class DictionaryPopupOverlay : IDisposable
         }
 
         var child = CreateHost();
+        if (_useStandaloneWindowVisuals)
+            child.UseStandaloneWindowVisuals();
+        else if (_useNakedFloatingWindowVisuals)
+            child.UseNakedFloatingWindowVisuals();
         child.RedirectRequested += OnChildRedirectRequested;
         child.TapOutsideRequested += OnChildTapOutsideRequested;
         child.Scrolled += OnChildScrolled;
@@ -662,6 +719,31 @@ public sealed class DictionaryPopupOverlay : IDisposable
                 width > 0 ? width : double.NaN,
                 height > 0 ? height : double.NaN);
         }
+    }
+
+    public DictionaryPopupHostBounds? GetRootPopupBounds()
+    {
+        if (!_rootWarm || !_rootVisible || _embeddedPanel != null)
+            return null;
+
+        var (left, top, width, height) = GetHostBounds(_rootHost);
+        return new DictionaryPopupHostBounds(left, top, width, height);
+    }
+
+    public void MoveRootPopupToOrigin()
+    {
+        if (!_rootWarm || _embeddedPanel != null)
+            return;
+
+        Canvas.SetLeft(_rootHost.VisualRoot, 0);
+        Canvas.SetTop(_rootHost.VisualRoot, 0);
+    }
+
+    public void SetRootReadyOpacity(double opacity)
+    {
+        _rootReadyOpacity = Math.Clamp(opacity, 0, 1);
+        if (_rootWarm)
+            _rootHost.SetReadyOpacity(_rootReadyOpacity);
     }
 
     public void Dispose()
