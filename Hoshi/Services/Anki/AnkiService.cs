@@ -105,24 +105,26 @@ public sealed class AnkiService : IAnkiService, IDisposable
 
             var client = GetClient();
 
-            // --- Phase 1: Download remote audio (separate HTTP, not AnkiConnect) ---
-            byte[]? remoteAudioBytes = null;
-            string? remoteAudioStoredName = null;
+            // --- Phase 1: Resolve/download remote audio (separate HTTP, not AnkiConnect) ---
+            var audioSw = System.Diagnostics.Stopwatch.StartNew();
+            AnkiAudioDownloadResult? remoteAudio = null;
             if (!string.IsNullOrWhiteSpace(payload.Audio))
             {
                 try
                 {
-                    remoteAudioBytes = await DownloadAudioAsync(payload.Audio);
-                    if (remoteAudioBytes != null)
-                        remoteAudioStoredName = $"hoshi_audio_{Math.Abs(payload.Audio.GetHashCode())}.mp3";
+                    remoteAudio = await s_audioDownloader.DownloadAsync(payload.Audio);
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning(ex, "[Anki] Failed to download audio");
+                    Log.Warning(ex, "[Anki] Failed to resolve/download audio");
                 }
             }
+            audioSw.Stop();
+            Log.Information("[Anki] audioResolve/download completed in {ElapsedMs}ms hasAudio={HasAudio}",
+                audioSw.ElapsedMilliseconds, remoteAudio != null);
 
             // --- Phase 2: Collect all media for batched upload ---
+            var mediaReadSw = System.Diagnostics.Stopwatch.StartNew();
             var uploads = new List<(string filename, byte[] data)>();
             // Track which upload indices correspond to what
             int? audioUploadIdx = null;
@@ -184,10 +186,10 @@ public sealed class AnkiService : IAnkiService, IDisposable
                 }
             }
 
-            if (remoteAudioBytes != null && remoteAudioStoredName != null)
+            if (remoteAudio != null)
             {
                 audioUploadIdx = uploads.Count;
-                uploads.Add((remoteAudioStoredName, remoteAudioBytes));
+                uploads.Add((remoteAudio.Filename, remoteAudio.Bytes));
             }
 
             if (_settings.EmbedMedia)
@@ -209,9 +211,12 @@ public sealed class AnkiService : IAnkiService, IDisposable
                     }
                 }
             }
+            mediaReadSw.Stop();
+            Log.Information("[Anki] mediaRead completed in {ElapsedMs}ms uploadCount={UploadCount}",
+                mediaReadSw.ElapsedMilliseconds, uploads.Count);
 
             // --- Phase 3: Batch upload all media in one request ---
-            var batchSw = System.Diagnostics.Stopwatch.StartNew();
+            var mediaUploadSw = System.Diagnostics.Stopwatch.StartNew();
             List<string> storedNames = [];
             if (uploads.Count > 0)
             {
@@ -222,9 +227,12 @@ public sealed class AnkiService : IAnkiService, IDisposable
                 catch (Exception ex)
                 {
                     Log.Warning(ex, "[Anki] Batch media upload failed ({Count} files)", uploads.Count);
-                    storedNames = uploads.Select(u => u.filename).ToList();
+                    storedNames = [];
                 }
             }
+            mediaUploadSw.Stop();
+            Log.Information("[Anki] mediaUpload completed in {ElapsedMs}ms uploadCount={UploadCount}",
+                mediaUploadSw.ElapsedMilliseconds, uploads.Count);
 
             if (videoScreenshotUploadIdx is int screenshotIdx && screenshotIdx < storedNames.Count)
                 context.VideoScreenshotTag = GetMediaTag(storedNames[screenshotIdx]);
@@ -234,27 +242,16 @@ public sealed class AnkiService : IAnkiService, IDisposable
 
             // --- Phase 4: Build mediaPayload and dictionaryMediaTags from upload results ---
             var mediaPayload = payload;
-            if (audioUploadIdx is int aIdx && aIdx < storedNames.Count)
+            if (!string.IsNullOrWhiteSpace(payload.Audio))
             {
-                var storedAudioName = storedNames[aIdx];
-                mediaPayload = new AnkiMiningPayload
+                var audioMarkup = "";
+                if (audioUploadIdx is int aIdx && aIdx < storedNames.Count && !string.IsNullOrWhiteSpace(storedNames[aIdx]))
                 {
-                    Expression = payload.Expression,
-                    Reading = payload.Reading,
-                    Matched = payload.Matched,
-                    FuriganaPlain = payload.FuriganaPlain,
-                    FrequenciesHtml = payload.FrequenciesHtml,
-                    FreqHarmonicRank = payload.FreqHarmonicRank,
-                    Glossary = payload.Glossary,
-                    GlossaryFirst = payload.GlossaryFirst,
-                    SingleGlossariesJson = payload.SingleGlossariesJson,
-                    PitchPositions = payload.PitchPositions,
-                    PitchCategories = payload.PitchCategories,
-                    PopupSelectionText = payload.PopupSelectionText,
-                    Audio = $"[sound:{storedAudioName}]",
-                    SelectedDictionary = payload.SelectedDictionary,
-                    DictionaryMediaJson = payload.DictionaryMediaJson,
-                };
+                    var storedAudioName = storedNames[aIdx];
+                    audioMarkup = $"[sound:{storedAudioName}]";
+                }
+
+                mediaPayload = WithAudio(payload, audioMarkup);
             }
 
             var dictionaryMediaTags = new Dictionary<string, string>();
@@ -290,11 +287,15 @@ public sealed class AnkiService : IAnkiService, IDisposable
             }
 
             // --- Phase 6: Add note (+ optional sync) ---
+            var addNoteSw = System.Diagnostics.Stopwatch.StartNew();
             var success = await client.AddNoteWithOptionalSyncAsync(
                 deck, noteType, renderedFields, _settings, _settings.AnkiConnectForceSync);
+            addNoteSw.Stop();
+            Log.Information("[Anki] addNote completed in {ElapsedMs}ms success={Success}",
+                addNoteSw.ElapsedMilliseconds, success);
 
-            Log.Information("[Anki] Mine completed: expression={Expression}, success={Success}, total={TotalMs}ms, batchUpload={BatchMs}ms, batchCount={BatchCount}",
-                payload.Expression, success, totalSw.ElapsedMilliseconds, batchSw.ElapsedMilliseconds, uploads.Count);
+            Log.Information("[Anki] Mine completed: expression={Expression}, success={Success}, total={TotalMs}ms, audioResolveDownload={AudioMs}ms, mediaRead={MediaReadMs}ms, mediaUpload={MediaUploadMs}ms, addNote={AddNoteMs}ms, batchCount={BatchCount}",
+                payload.Expression, success, totalSw.ElapsedMilliseconds, audioSw.ElapsedMilliseconds, mediaReadSw.ElapsedMilliseconds, mediaUploadSw.ElapsedMilliseconds, addNoteSw.ElapsedMilliseconds, uploads.Count);
             return success;
         }
         catch (Exception ex)
@@ -361,20 +362,7 @@ public sealed class AnkiService : IAnkiService, IDisposable
         Timeout = TimeSpan.FromSeconds(15),
     };
 
-    private static async Task<byte[]?> DownloadAudioAsync(string url)
-    {
-        try
-        {
-            var response = await s_audioHttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsByteArrayAsync();
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "[Anki] Failed to download audio from {Url}", url);
-            return null;
-        }
-    }
+    private static readonly AnkiAudioDownloader s_audioDownloader = new(s_audioHttpClient);
 
     private static async Task<byte[]?> ResolveDictionaryMediaAsync(DictionaryMedia media)
     {
@@ -382,6 +370,26 @@ public sealed class AnkiService : IAnkiService, IDisposable
             return null;
         return await File.ReadAllBytesAsync(media.Path);
     }
+
+    private static AnkiMiningPayload WithAudio(AnkiMiningPayload payload, string audio) =>
+        new()
+        {
+            Expression = payload.Expression,
+            Reading = payload.Reading,
+            Matched = payload.Matched,
+            FuriganaPlain = payload.FuriganaPlain,
+            FrequenciesHtml = payload.FrequenciesHtml,
+            FreqHarmonicRank = payload.FreqHarmonicRank,
+            Glossary = payload.Glossary,
+            GlossaryFirst = payload.GlossaryFirst,
+            SingleGlossariesJson = payload.SingleGlossariesJson,
+            PitchPositions = payload.PitchPositions,
+            PitchCategories = payload.PitchCategories,
+            PopupSelectionText = payload.PopupSelectionText,
+            Audio = audio,
+            SelectedDictionary = payload.SelectedDictionary,
+            DictionaryMediaJson = payload.DictionaryMediaJson,
+        };
 
     private static string GetMediaTag(string filename)
     {

@@ -36,8 +36,7 @@ public sealed class AudioService : IAudioService, IDisposable
             try
             {
                 var downloadSw = System.Diagnostics.Stopwatch.StartNew();
-                audioBytes = await Task.Run(
-                    () => s_audioDownloadClient.GetByteArrayAsync(url));
+                audioBytes = await LoadAudioBytesAsync(url);
                 Log.Information(
                     "[AudioTrace] lookup={TraceId} audio={AudioTraceId} download completed in {Ms}ms total={TotalMs}ms bytes={Bytes}",
                     traceId ?? "-", audioTraceId ?? "-", downloadSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, audioBytes.Length);
@@ -233,6 +232,32 @@ public sealed class AudioService : IAudioService, IDisposable
             stream.Seek(0, SeekOrigin.Begin);
             return new StreamMediaFoundationReader(stream);
         }
+    }
+
+    private static async Task<byte[]> LoadAudioBytesAsync(string url)
+    {
+        if (TryGetLocalPath(url, out var path))
+            return await File.ReadAllBytesAsync(path);
+
+        return await Task.Run(() => s_audioDownloadClient.GetByteArrayAsync(url));
+    }
+
+    private static bool TryGetLocalPath(string url, out string path)
+    {
+        path = "";
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.IsFile)
+        {
+            path = uri.LocalPath;
+            return true;
+        }
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out _) && File.Exists(url))
+        {
+            path = url;
+            return true;
+        }
+
+        return false;
     }
 
     public void Dispose()
