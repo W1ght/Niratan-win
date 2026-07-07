@@ -37,6 +37,7 @@ public sealed class DictionaryLookupPopup : IDisposable
 
     private readonly WebView2 _contentWebView;
     private readonly AcrylicBrush _surfaceBrush;
+    private readonly SolidColorBrush _windowSurfaceBrush;
     private readonly SolidColorBrush _strokeBrush;
     private readonly PopupHtmlGenerator _htmlGenerator;
     private readonly IDictionaryLookupService _lookupService;
@@ -47,10 +48,13 @@ public sealed class DictionaryLookupPopup : IDisposable
     private AnkiSettings _ankiSettings = new();
     private bool _webViewReady;
     private bool _isWarmed;
+    private bool _useStandaloneWindowVisuals;
+    private bool _useNakedFloatingWindowVisuals;
     private long _displayGeneration;
     private long? _pendingContentGeneration;
     private TaskCompletionSource<bool>? _shellReadyCompletion;
     private string? _currentTraceId;
+    private double _readyOpacity = 0.88;
 
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> s_resolvedAudioUrls = new();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<string>> s_audioResolutionTasks = new();
@@ -70,6 +74,8 @@ public sealed class DictionaryLookupPopup : IDisposable
         _contentWebView = new WebView2
         {
             DefaultBackgroundColor = Colors.Transparent,
+            IsTabStop = false,
+            UseSystemFocusVisuals = false,
         };
 
         _surfaceBrush = new AcrylicBrush
@@ -80,6 +86,8 @@ public sealed class DictionaryLookupPopup : IDisposable
             TintLuminosityOpacity = 0.06,
             FallbackColor = Windows.UI.Color.FromArgb(0x90, 0xF8, 0xF8, 0xF8),
         };
+        _windowSurfaceBrush = new SolidColorBrush(
+            Windows.UI.Color.FromArgb(0xFF, 0xF8, 0xF8, 0xF8));
         _strokeBrush = new SolidColorBrush(
             Windows.UI.Color.FromArgb(0x66, 0x00, 0x00, 0x00));
 
@@ -96,6 +104,32 @@ public sealed class DictionaryLookupPopup : IDisposable
             Opacity = 0,
             IsHitTestVisible = false,
         };
+    }
+
+    public void UseStandaloneWindowVisuals()
+    {
+        _useStandaloneWindowVisuals = true;
+        _contentWebView.DefaultBackgroundColor = Colors.Transparent;
+        _contentWebView.Margin = new Thickness(-1);
+        VisualRoot.Background = _windowSurfaceBrush;
+        VisualRoot.BorderThickness = new Thickness(0);
+        VisualRoot.BorderBrush = null;
+        VisualRoot.CornerRadius = new CornerRadius(0);
+        VisualRoot.Shadow = null;
+        VisualRoot.Translation = Vector3.Zero;
+    }
+
+    public void UseNakedFloatingWindowVisuals()
+    {
+        _useNakedFloatingWindowVisuals = true;
+        _contentWebView.DefaultBackgroundColor = Colors.Transparent;
+        _contentWebView.Margin = new Thickness(-1);
+        VisualRoot.Background = _windowSurfaceBrush;
+        VisualRoot.BorderThickness = new Thickness(0);
+        VisualRoot.BorderBrush = null;
+        VisualRoot.CornerRadius = new CornerRadius(8);
+        VisualRoot.Shadow = null;
+        VisualRoot.Translation = Vector3.Zero;
     }
 
     public async Task WarmAsync(ThemeMode themeMode = ThemeMode.System, AudioSettings? audioSettings = null, AnkiSettings? ankiSettings = null)
@@ -129,10 +163,22 @@ public sealed class DictionaryLookupPopup : IDisposable
         _surfaceBrush.FallbackColor = isDark
             ? Windows.UI.Color.FromArgb(0x70, 0x24, 0x24, 0x24)
             : Windows.UI.Color.FromArgb(0x90, 0xF8, 0xF8, 0xF8);
+        _windowSurfaceBrush.Color = isDark
+            ? Windows.UI.Color.FromArgb(0xFF, 0x24, 0x24, 0x24)
+            : Windows.UI.Color.FromArgb(0xFF, 0xF8, 0xF8, 0xF8);
+        if (_useStandaloneWindowVisuals || _useNakedFloatingWindowVisuals)
+            _contentWebView.DefaultBackgroundColor = Colors.Transparent;
 
         _strokeBrush.Color = isDark
             ? Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)
             : Windows.UI.Color.FromArgb(0x66, 0x00, 0x00, 0x00);
+    }
+
+    public void SetReadyOpacity(double opacity)
+    {
+        _readyOpacity = Math.Clamp(opacity, 0, 1);
+        if (VisualRoot.Opacity > 0)
+            VisualRoot.Opacity = _readyOpacity;
     }
 
     private static bool IsThemeDark(ThemeMode themeMode) => themeMode switch
@@ -208,6 +254,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         if (_webViewReady) return;
 
         await _contentWebView.EnsureCoreWebView2Async();
+        _contentWebView.DefaultBackgroundColor = Colors.Transparent;
         var coreWebView = _contentWebView.CoreWebView2;
         if (coreWebView == null)
             throw new InvalidOperationException("Dictionary popup WebView2 initialization was cancelled.");
@@ -496,7 +543,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     {
         _pendingContentGeneration = null;
         VisualRoot.Visibility = Visibility.Visible;
-        VisualRoot.Opacity = 0.88;
+        VisualRoot.Opacity = _readyOpacity;
         VisualRoot.IsHitTestVisible = true;
     }
 

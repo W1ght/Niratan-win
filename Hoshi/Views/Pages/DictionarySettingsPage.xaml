@@ -75,6 +75,23 @@
                                       IsOn="{x:Bind ViewModel.ScanNonJapaneseText, Mode=TwoWay}" />
                     </toolkit:SettingsCard>
 
+                    <toolkit:SettingsCard x:Uid="GlobalLookupEnabledCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="Enable the global lookup coordinator for selected text"
+                                          Header="Global Lookup"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE721;}">
+                        <StackPanel Spacing="6" HorizontalAlignment="Right">
+                            <ToggleSwitch AutomationProperties.AutomationId="GlobalLookupEnabledToggle"
+                                          IsOn="{x:Bind ViewModel.GlobalLookupEnabled, Mode=TwoWay}" />
+                            <TextBlock MaxWidth="360"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Text="{x:Bind ViewModel.GlobalLookupStatusText, Mode=OneWay}"
+                                       TextWrapping="WrapWholeWords" />
+                        </StackPanel>
+                    </toolkit:SettingsCard>
+
                     <toolkit:SettingsCard x:Uid="DictionaryMaxResultsCard"
                                           HorizontalAlignment="Stretch"
                                           HorizontalContentAlignment="Stretch"

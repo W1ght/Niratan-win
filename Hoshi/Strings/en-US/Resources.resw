@@ -274,4 +274,12 @@
   <data name="SasayakiLightBackgroundColorCard.Header" xml:space="preserve"><value>Light Background Color</value></data>
   <data name="SasayakiDarkTextColorCard.Header" xml:space="preserve"><value>Dark Text Color</value></data>
   <data name="SasayakiDarkBackgroundColorCard.Header" xml:space="preserve"><value>Dark Background Color</value></data>
+  <data name="GlobalLookupButton.AutomationProperties.Name" xml:space="preserve"><value>Open Global Lookup</value></data>
+  <data name="GlobalLookupWindow.Title" xml:space="preserve"><value>Global Lookup</value></data>
+  <data name="GlobalLookupQueryBox.PlaceholderText" xml:space="preserve"><value>Enter text to look up</value></data>
+  <data name="GlobalLookupSearchButton.AutomationProperties.Name" xml:space="preserve"><value>Search</value></data>
+  <data name="GlobalLookupSearchButtonText.Text" xml:space="preserve"><value>Search</value></data>
+  <data name="GlobalLookupPasteButton.AutomationProperties.Name" xml:space="preserve"><value>Paste from Clipboard</value></data>
+  <data name="GlobalLookupEnabledCard.Header" xml:space="preserve"><value>Global Lookup</value></data>
+  <data name="GlobalLookupEnabledCard.Description" xml:space="preserve"><value>Enable selected-text lookup. Hotkey availability is shown below.</value></data>
 </root>

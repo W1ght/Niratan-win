@@ -17,6 +17,8 @@ namespace Hoshi.ViewModels.Pages;
 public partial class DictionarySettingsPageViewModel : ObservableObject
 {
     private readonly ISettingsService _settingsService;
+    private readonly IGlobalSelectionLookupService _globalLookupService;
+    private bool _isLoadingDisplaySettings;
 
     public DictionaryCollapseMode[] AvailableCollapseModes { get; } = Enum.GetValues<DictionaryCollapseMode>();
 
@@ -36,6 +38,12 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
 
     [ObservableProperty]
     public partial bool ScanNonJapaneseText { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool GlobalLookupEnabled { get; set; }
+
+    [ObservableProperty]
+    public partial string GlobalLookupStatusText { get; set; } = "";
 
     [ObservableProperty]
     public partial int MaxResults { get; set; } = 16;
@@ -79,6 +87,8 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
     public DictionarySettingsPageViewModel()
     {
         _settingsService = App.GetService<ISettingsService>();
+        _globalLookupService = App.GetService<IGlobalSelectionLookupService>();
+        _globalLookupService.StatusChanged += OnGlobalLookupStatusChanged;
         LoadDisplaySettings();
         ImportDictionaryCommand = new AsyncRelayCommand(ImportDictionaryAsync);
         DeleteDictionaryCommand = new AsyncRelayCommand<string?>(DeleteDictionaryAsync);
@@ -99,6 +109,23 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
 
     partial void OnScanNonJapaneseTextChanged(bool value) =>
         UpdateDisplaySettings(current => current with { ScanNonJapaneseText = value });
+
+    partial void OnGlobalLookupEnabledChanged(bool value)
+    {
+        if (_isLoadingDisplaySettings)
+            return;
+
+        _ = ApplyGlobalLookupEnabledAsync(value);
+    }
+
+    private async Task ApplyGlobalLookupEnabledAsync(bool value)
+    {
+        _settingsService.Current.GlobalLookup.Enabled = value;
+        _settingsService.Set(s => s.GlobalLookup, _settingsService.Current.GlobalLookup);
+        await _settingsService.SaveAsync();
+        await _globalLookupService.InitializeAsync();
+        GlobalLookupStatusText = _globalLookupService.StatusText;
+    }
 
     partial void OnMaxResultsChanged(int value) =>
         UpdateDisplaySettings(current => current with { MaxResults = Clamp(value, 1, 50) });
@@ -132,17 +159,32 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
 
     private void LoadDisplaySettings()
     {
-        var settings = _settingsService.Current.DictionaryDisplaySettings;
-        ScanNonJapaneseText = settings.ScanNonJapaneseText;
-        MaxResults = Clamp(settings.MaxResults, 1, 50);
-        ScanLength = Clamp(settings.ScanLength, 1, 64);
-        CollapseMode = settings.CollapseMode;
-        ExpandFirstDictionary = settings.ExpandFirstDictionary;
-        CompactGlossaries = settings.CompactGlossaries;
-        ShowExpressionTags = settings.ShowExpressionTags;
-        HarmonicFrequency = settings.HarmonicFrequency;
-        DeduplicatePitchAccents = settings.DeduplicatePitchAccents;
-        CompactPitchAccents = settings.CompactPitchAccents;
+        _isLoadingDisplaySettings = true;
+        try
+        {
+            var settings = _settingsService.Current.DictionaryDisplaySettings;
+            GlobalLookupEnabled = _settingsService.Current.GlobalLookup.Enabled;
+            GlobalLookupStatusText = _globalLookupService.StatusText;
+            ScanNonJapaneseText = settings.ScanNonJapaneseText;
+            MaxResults = Clamp(settings.MaxResults, 1, 50);
+            ScanLength = Clamp(settings.ScanLength, 1, 64);
+            CollapseMode = settings.CollapseMode;
+            ExpandFirstDictionary = settings.ExpandFirstDictionary;
+            CompactGlossaries = settings.CompactGlossaries;
+            ShowExpressionTags = settings.ShowExpressionTags;
+            HarmonicFrequency = settings.HarmonicFrequency;
+            DeduplicatePitchAccents = settings.DeduplicatePitchAccents;
+            CompactPitchAccents = settings.CompactPitchAccents;
+        }
+        finally
+        {
+            _isLoadingDisplaySettings = false;
+        }
+    }
+
+    private void OnGlobalLookupStatusChanged(object? sender, EventArgs e)
+    {
+        GlobalLookupStatusText = _globalLookupService.StatusText;
     }
 
     private void UpdateDisplaySettings(Func<DictionaryDisplaySettings, DictionaryDisplaySettings> update)
