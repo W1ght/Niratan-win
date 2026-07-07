@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using Hoshi.Messages;
+using Hoshi.Services.Dictionary;
 using Hoshi.Services.UI;
 using Hoshi.ViewModels.Pages;
 
@@ -79,5 +80,10 @@ public sealed partial class NavigationPage : Page
     {
         if (args.Reason != AutoSuggestionBoxTextChangeReason.ProgrammaticChange)
             ViewModel.SearchTextChangedCommand.Execute(null);
+    }
+
+    private async void OpenGlobalLookup_Click(object sender, RoutedEventArgs e)
+    {
+        await App.GetService<IGlobalLookupWindowService>().OpenAsync();
     }
 }

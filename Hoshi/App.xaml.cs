@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Serilog;
 using Hoshi.Helpers;
@@ -22,6 +23,7 @@ using Hoshi.Services.Storage;
 using Hoshi.Services.UI;
 using Hoshi.Services.Video;
 using Hoshi.ViewModels.Pages;
+using Hoshi.ViewModels.Windowing;
 
 namespace Hoshi;
 
@@ -30,6 +32,7 @@ public partial class App : Application
     public static MainWindow? MainWindow { get; private set; }
 
     private readonly IServiceProvider _services;
+    private static DispatcherQueueTimer? s_hangWatchdogTimer;
 
     public App()
     {
@@ -132,6 +135,7 @@ public partial class App : Application
         services.AddTransient<NovelLookupPageViewModel>();
         services.AddTransient<NovelReaderPageViewModel>();
         services.AddTransient<VideoPlayerViewModel>();
+        services.AddTransient<GlobalLookupWindowViewModel>();
         services.AddTransient<ViewModels.Pages.LogsPageViewModel>();
 
         services.AddSingleton<IMessenger>(WeakReferenceMessenger.Default);
@@ -157,7 +161,17 @@ public partial class App : Application
         services.AddSingleton<ISasayakiSidecarService, SasayakiSidecarService>();
         services.AddSingleton<ISasayakiMatchService, SasayakiMatchService>();
         services.AddSingleton<IDictionaryLookupService, DictionaryLookupService>();
+        services.AddSingleton<IDictionaryPopupRequestService, DictionaryPopupRequestService>();
         services.AddSingleton<IDictionaryImportService, DictionaryImportService>();
+        services.AddSingleton<IGlobalLookupWindowService, GlobalLookupWindowService>();
+        services.AddSingleton<IGlobalLookupPopupService, GlobalLookupPopupService>();
+        services.AddSingleton<IGlobalSelectionLookupService, GlobalSelectionLookupService>();
+        services.AddSingleton<IGlobalLookupHotKeyRegistrar, Win32GlobalLookupHotKeyRegistrar>();
+        services.AddSingleton<UIAutomationSelectedTextReader>();
+        services.AddSingleton<Win32FocusedEditSelectedTextReader>();
+        services.AddSingleton<ISelectedTextReader>(provider => new CascadingSelectedTextReader(
+            provider.GetRequiredService<UIAutomationSelectedTextReader>(),
+            provider.GetRequiredService<Win32FocusedEditSelectedTextReader>()));
         services.AddSingleton<ILogReaderService, LogReaderService>();
         services.AddSingleton<IAudioService, AudioService>();
         services.AddSingleton<IAnkiService, AnkiService>();
@@ -176,6 +190,7 @@ public partial class App : Application
 
             MainWindow = new MainWindow();
             MainWindow.Activate();
+            MainWindow.SetMicaBackdrop();
 
             StartHangWatchdog();
 
@@ -202,6 +217,7 @@ public partial class App : Application
             });
 
             MainWindow.NavigateToShell();
+            await GetService<IGlobalSelectionLookupService>().InitializeAsync();
             await OpenVideoFromLaunchArgumentsAsync(args.Arguments);
         }
         catch (Exception ex)
@@ -215,17 +231,6 @@ public partial class App : Application
             catch (Exception navEx)
             {
                 Log.Fatal(navEx, "[Crash] Even the error page navigation failed");
-            }
-        }
-        finally
-        {
-            try
-            {
-                MainWindow?.SetMicaBackdrop();
-            }
-            catch (Exception finallyEx)
-            {
-                Log.Error(finallyEx, "[Crash] SetMicaBackdrop threw in finally");
             }
         }
     }
@@ -272,11 +277,11 @@ public partial class App : Application
 
         var watchdogState = new UiHangWatchdogState(Environment.TickCount64);
 
-        var uiTimer = MainWindow.DispatcherQueue.CreateTimer();
-        uiTimer.Interval = TimeSpan.FromSeconds(1);
-        uiTimer.IsRepeating = true;
-        uiTimer.Tick += (_, _) => watchdogState.RecordUiTick(Environment.TickCount64);
-        uiTimer.Start();
+        s_hangWatchdogTimer = MainWindow.DispatcherQueue.CreateTimer();
+        s_hangWatchdogTimer.Interval = TimeSpan.FromSeconds(1);
+        s_hangWatchdogTimer.IsRepeating = true;
+        s_hangWatchdogTimer.Tick += (_, _) => watchdogState.RecordUiTick(Environment.TickCount64);
+        s_hangWatchdogTimer.Start();
 
         _ = Task.Run(async () =>
         {

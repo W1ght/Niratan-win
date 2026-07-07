@@ -22,13 +22,24 @@ body {
     --background-color-dark1: #eeeeee;
     color: var(--text-color);
     background-color: transparent;
+    border: 0;
     font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif !important;
+    outline: none;
     overscroll-behavior-y: contain;
 }
 
 body {
     overflow-x: hidden;
     padding: 0 10px;
+}
+
+html:focus,
+html:focus-visible,
+body:focus,
+body:focus-visible,
+#entries-container:focus,
+#entries-container:focus-visible {
+    outline: none;
 }
 
 .entry {
