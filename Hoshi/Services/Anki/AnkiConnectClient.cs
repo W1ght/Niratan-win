@@ -25,9 +25,14 @@ public sealed class AnkiConnectClient : IDisposable
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
 
     public AnkiConnectClient(string endpoint)
+        : this(endpoint, new HttpClientHandler())
+    {
+    }
+
+    internal AnkiConnectClient(string endpoint, HttpMessageHandler handler)
     {
         _endpoint = endpoint.TrimEnd('/');
-        _http = new HttpClient
+        _http = new HttpClient(handler)
         {
             Timeout = DefaultTimeout,
         };
@@ -145,20 +150,34 @@ public sealed class AnkiConnectClient : IDisposable
             }
         )).ToList();
 
-        var results = await MultiRequestAsync(actions);
+        var results = await MultiRequestWithErrorsAsync(actions);
 
         var storedNames = new List<string>(files.Count);
         for (var i = 0; i < files.Count; i++)
         {
+            if (i >= results.Count)
+            {
+                storedNames.Add("");
+                continue;
+            }
+
+            var result = results[i];
+            if (!string.IsNullOrEmpty(result.Error))
+            {
+                Log.Warning("[AnkiConnect] storeMediaFile batch[{Index}] failed: {Error}", i, result.Error);
+                storedNames.Add("");
+                continue;
+            }
+
             try
             {
-                var name = results[i].Deserialize<string>() ?? files[i].filename;
+                var name = result.Result.Deserialize<string>() ?? StripDirectory(files[i].filename);
                 storedNames.Add(name);
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "[AnkiConnect] storeMediaFile batch[{Index}] failed: {Filename}", i, files[i].filename);
-                storedNames.Add(files[i].filename);
+                storedNames.Add("");
             }
         }
         return storedNames;
@@ -169,6 +188,20 @@ public sealed class AnkiConnectClient : IDisposable
     /// Returns one <see cref="JsonElement"/> per action, in order.
     /// </summary>
     public async Task<List<JsonElement>> MultiRequestAsync(List<(string action, object? parameters)> actions)
+    {
+        var actionResults = await MultiRequestWithErrorsAsync(actions);
+        var results = new List<JsonElement>(actionResults.Count);
+        foreach (var result in actionResults)
+        {
+            if (!string.IsNullOrEmpty(result.Error))
+                throw new AnkiConnectException(result.Error);
+            results.Add(result.Result);
+        }
+
+        return results;
+    }
+
+    private async Task<List<MultiActionResult>> MultiRequestWithErrorsAsync(List<(string action, object? parameters)> actions)
     {
         if (actions.Count == 0) return [];
 
@@ -184,10 +217,22 @@ public sealed class AnkiConnectClient : IDisposable
         }).ToList();
 
         var resultArray = await RequestAsync("multi", new { actions = actionList });
-        var results = new List<JsonElement>(actions.Count);
+        var results = new List<MultiActionResult>(actions.Count);
         foreach (var element in resultArray.EnumerateArray())
-            results.Add(element.Clone());
+            results.Add(UnwrapMultiActionResult(element));
         return results;
+    }
+
+    private static MultiActionResult UnwrapMultiActionResult(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty("result", out var result))
+            return new MultiActionResult(element.Clone(), null);
+
+        string? errorMessage = null;
+        if (element.TryGetProperty("error", out var error) && error.ValueKind != JsonValueKind.Null)
+            errorMessage = GetErrorMessage(error);
+
+        return new MultiActionResult(result.Clone(), errorMessage);
     }
 
     public async Task<bool> AddNoteWithOptionalSyncAsync(
@@ -206,14 +251,17 @@ public sealed class AnkiConnectClient : IDisposable
 
         try
         {
-            var results = await MultiRequestAsync(actions);
-            // addNote result is the first element
-            var addResult = results[0];
-            if (addResult.ValueKind == JsonValueKind.Object && addResult.TryGetProperty("error", out _))
+            var results = await MultiRequestWithErrorsAsync(actions);
+            var addResult = results.Count > 0 ? results[0] : new MultiActionResult(DefaultJsonElement(), "Missing addNote result");
+            if (!string.IsNullOrEmpty(addResult.Error))
             {
-                Log.Warning("[AnkiConnect] addNote failed in batch: {Result}", addResult.GetRawText());
+                Log.Warning("[AnkiConnect] addNote failed in batch: {Error}", addResult.Error);
                 return false;
             }
+
+            if (sync && results.Count > 1 && !string.IsNullOrEmpty(results[1].Error))
+                Log.Warning("[AnkiConnect] sync failed after addNote succeeded: {Error}", results[1].Error);
+
             return true;
         }
         catch (AnkiConnectException ex)
@@ -318,31 +366,59 @@ public sealed class AnkiConnectClient : IDisposable
             throw new AnkiConnectException($"Failed to connect to AnkiConnect at {_endpoint}: {ex.Message}", ex);
         }
 
-        var responseBody = await response.Content.ReadAsStringAsync();
-        JsonDocument doc;
+        using (response)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync();
+            JsonDocument doc;
+            try
+            {
+                doc = JsonDocument.Parse(responseBody);
+            }
+            catch (Exception ex)
+            {
+                throw new AnkiConnectException($"Invalid JSON response from AnkiConnect: {ex.Message}", ex);
+            }
+
+            using (doc)
+            {
+                var root = doc.RootElement;
+
+                if (root.TryGetProperty("error", out var error) && error.ValueKind != JsonValueKind.Null)
+                    throw new AnkiConnectException(GetErrorMessage(error));
+
+                if (root.TryGetProperty("result", out var result))
+                    return result.Clone();
+
+                throw new AnkiConnectException("AnkiConnect response missing 'result' field");
+            }
+        }
+    }
+
+    private static string GetErrorMessage(JsonElement error)
+    {
+        if (error.ValueKind == JsonValueKind.String)
+            return error.GetString() ?? "Unknown AnkiConnect error";
+
         try
         {
-            doc = JsonDocument.Parse(responseBody);
+            if (error.ValueKind == JsonValueKind.Object
+                && error.TryGetProperty("content", out var contentElem)
+                && contentElem.ValueKind == JsonValueKind.String)
+            {
+                return contentElem.GetString() ?? "Unknown AnkiConnect error";
+            }
         }
-        catch (Exception ex)
+        catch (InvalidOperationException)
         {
-            throw new AnkiConnectException($"Invalid JSON response from AnkiConnect: {ex.Message}", ex);
         }
 
-        var root = doc.RootElement;
+        return error.GetRawText();
+    }
 
-        if (root.TryGetProperty("error", out var error) && error.ValueKind != JsonValueKind.Null)
-        {
-            var errorMsg = error.TryGetProperty("content", out var contentElem)
-                ? contentElem.GetString()
-                : error.GetRawText();
-            throw new AnkiConnectException(errorMsg ?? "Unknown AnkiConnect error");
-        }
-
-        if (root.TryGetProperty("result", out var result))
-            return result.Clone();
-
-        throw new AnkiConnectException("AnkiConnect response missing 'result' field");
+    private static JsonElement DefaultJsonElement()
+    {
+        using var document = JsonDocument.Parse("null");
+        return document.RootElement.Clone();
     }
 
     private static string StripDirectory(string path)
@@ -361,4 +437,6 @@ public sealed class AnkiConnectClient : IDisposable
         [JsonPropertyName("canAdd")]
         public bool CanAdd { get; set; }
     }
+
+    private sealed record MultiActionResult(JsonElement Result, string? Error);
 }

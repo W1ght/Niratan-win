@@ -8,6 +8,7 @@ using System.Net.Http;
 using System.Numerics;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI;
@@ -52,9 +53,12 @@ public sealed class DictionaryLookupPopup : IDisposable
     private TaskCompletionSource<bool>? _shellReadyCompletion;
     private string? _currentTraceId;
 
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> s_resolvedAudioUrls = new();
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<string>> s_audioResolutionTasks = new();
+    private const int MaxResolvedAudioUrlCacheEntries = 512;
+    private const string AudioSourcePlaceholderPattern = "[^/?#&]+";
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> s_resolvedAudioUrls = new(StringComparer.Ordinal);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<Task<string?>>> s_audioResolutionTasks = new(StringComparer.Ordinal);
     private static readonly HttpClient s_audioResolveHttpClient = new() { Timeout = TimeSpan.FromSeconds(5) };
+    private static readonly LocalAudioSourceListResolver s_localAudioSourceListResolver = new();
     private CancellationTokenSource? _prefetchCts;
 
     public Border VisualRoot { get; }
@@ -218,6 +222,9 @@ public sealed class DictionaryLookupPopup : IDisposable
         coreWebView.AddWebResourceRequestedFilter(
             "https://hoshi-dictionary-media.local/*",
             CoreWebView2WebResourceContext.Image);
+        coreWebView.AddWebResourceRequestedFilter(
+            "https://hoshi-audio-resolver.local/*",
+            CoreWebView2WebResourceContext.All);
         coreWebView.WebResourceRequested += OnPopupWebResourceRequested;
 
         coreWebView.ProcessFailed += (_, args) =>
@@ -244,8 +251,26 @@ public sealed class DictionaryLookupPopup : IDisposable
         CoreWebView2 sender,
         CoreWebView2WebResourceRequestedEventArgs args)
     {
-        if (!Uri.TryCreate(args.Request.Uri, UriKind.Absolute, out var uri)
-            || !string.Equals(uri.Host, "hoshi-dictionary-media.local", StringComparison.OrdinalIgnoreCase)
+        if (!Uri.TryCreate(args.Request.Uri, UriKind.Absolute, out var uri))
+            return;
+
+        if (string.Equals(uri.Host, "hoshi-audio-resolver.local", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(uri.AbsolutePath, "/resolve", StringComparison.OrdinalIgnoreCase))
+        {
+            var audioDeferral = args.GetDeferral();
+            try
+            {
+                await HandleAudioResolverRequestAsync(sender, args, uri);
+            }
+            finally
+            {
+                audioDeferral.Complete();
+            }
+
+            return;
+        }
+
+        if (!string.Equals(uri.Host, "hoshi-dictionary-media.local", StringComparison.OrdinalIgnoreCase)
             || !string.Equals(uri.AbsolutePath, "/image", StringComparison.OrdinalIgnoreCase))
         {
             return;
@@ -297,6 +322,112 @@ public sealed class DictionaryLookupPopup : IDisposable
         {
             deferral.Complete();
         }
+    }
+
+    private async Task HandleAudioResolverRequestAsync(
+        CoreWebView2 sender,
+        CoreWebView2WebResourceRequestedEventArgs args,
+        Uri uri)
+    {
+        try
+        {
+            var url = GetQueryParameter(uri, "url");
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                args.Response = sender.Environment.CreateWebResourceResponse(
+                    Stream.Null.AsRandomAccessStream(),
+                    400,
+                    "Bad Request",
+                    "Content-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\n");
+                return;
+            }
+
+            url = NormalizeAudioSourceUrl(url);
+            if (!IsAllowedAudioResolverUrl(url))
+            {
+                Log.Warning("[DictPopup] Rejected audio resolver URL outside configured sources: {Url}", url);
+                args.Response = sender.Environment.CreateWebResourceResponse(
+                    Stream.Null.AsRandomAccessStream(),
+                    403,
+                    "Forbidden",
+                    "Content-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\n");
+                return;
+            }
+
+            var resolvedUrl = await TryResolveAudioUrlAsync(url);
+            if (string.IsNullOrWhiteSpace(resolvedUrl))
+            {
+                var emptyJson = """{"type":"audioSourceList","audioSources":[]}""";
+                var emptyBytes = Encoding.UTF8.GetBytes(emptyJson);
+                args.Response = sender.Environment.CreateWebResourceResponse(
+                    new MemoryStream(emptyBytes).AsRandomAccessStream(),
+                    200,
+                    "OK",
+                    "Content-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\n");
+                return;
+            }
+
+            var json = JsonSerializer.Serialize(new
+            {
+                type = "audioSourceList",
+                audioSources = new[] { new { url = resolvedUrl } },
+            });
+            var bytes = Encoding.UTF8.GetBytes(json);
+            args.Response = sender.Environment.CreateWebResourceResponse(
+                new MemoryStream(bytes).AsRandomAccessStream(),
+                200,
+                "OK",
+                "Content-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\n");
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "[DictPopup] Failed to resolve audio URL {Uri}", args.Request.Uri);
+            args.Response = sender.Environment.CreateWebResourceResponse(
+                Stream.Null.AsRandomAccessStream(),
+                500,
+                "Internal Server Error",
+                "Content-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\n");
+        }
+    }
+
+    private bool IsAllowedAudioResolverUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var candidate))
+            return false;
+
+        if (candidate.Scheme != Uri.UriSchemeHttp && candidate.Scheme != Uri.UriSchemeHttps)
+            return false;
+
+        if (_audioSettings.EnableLocalAudio && LocalAudioSourceListResolver.IsLocalAudioSourceListUrl(url))
+            return true;
+
+        foreach (var template in _audioSettings.EnabledAudioSourceUrls)
+        {
+            var normalizedTemplate = NormalizeAudioSourceUrl(template);
+            if (string.IsNullOrWhiteSpace(normalizedTemplate))
+                continue;
+
+            if (!normalizedTemplate.Contains("{term}", StringComparison.Ordinal)
+                && !normalizedTemplate.Contains("{reading}", StringComparison.Ordinal))
+            {
+                if (string.Equals(url, normalizedTemplate, StringComparison.OrdinalIgnoreCase))
+                    return true;
+                continue;
+            }
+
+            var escapedTemplate = Regex.Escape(normalizedTemplate)
+                .Replace("\\{term}", AudioSourcePlaceholderPattern, StringComparison.Ordinal)
+                .Replace("\\{reading}", AudioSourcePlaceholderPattern, StringComparison.Ordinal);
+            if (Regex.IsMatch(
+                    url,
+                    "^" + escapedTemplate + "$",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void OnPopupWebMessageReceived(
@@ -581,7 +712,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         try
         {
             var sw = Stopwatch.StartNew();
-            var resolvedUrl = await ResolveAudioUrlAsync(url);
+            var resolvedUrl = await TryResolveAudioUrlAsync(url) ?? url;
             Log.Information(
                 "[AudioTrace] lookup={TraceId} audio={AudioTraceId} url resolve completed in {Ms}ms input='{InputUrl}' resolved='{ResolvedUrl}'",
                 traceId ?? "-", audioTraceId ?? "-", sw.ElapsedMilliseconds, url, resolvedUrl);
@@ -632,7 +763,9 @@ public sealed class DictionaryLookupPopup : IDisposable
             {
                 ct.ThrowIfCancellationRequested();
                 var resolverUrl = ExpandAudioTemplate(sources[0], expression, reading);
-                await ResolveAudioUrlAsync(resolverUrl);
+                if (!IsAllowedAudioResolverUrl(resolverUrl))
+                    return;
+                await TryResolveAudioUrlAsync(resolverUrl);
                 Log.Information("[AudioPrefetch] auto: '{Expr}'/'{Reading}', entries={Count}",
                     expression, reading, results.Count);
             }
@@ -659,35 +792,61 @@ public sealed class DictionaryLookupPopup : IDisposable
     /// Returns a task that resolves <paramref name="url"/> to a playable MP3 URL.
     /// Only one HTTP request per URL is ever in-flight — concurrent callers await the same task.
     /// </summary>
-    private static Task<string> ResolveAudioUrlAsync(string url)
+    private static Task<string?> TryResolveAudioUrlAsync(string url)
     {
+        url = NormalizeAudioSourceUrl(url);
         if (s_resolvedAudioUrls.TryGetValue(url, out var cached))
-            return Task.FromResult(cached);
+            return Task.FromResult<string?>(cached);
 
-        return s_audioResolutionTasks.GetOrAdd(url, _ => ResolveAndCacheUrlAsync(url));
+        var operation = s_audioResolutionTasks.GetOrAdd(
+            url,
+            static key => new Lazy<Task<string?>>(() => ResolveAndCacheUrlAsync(key)));
+        return AwaitAudioResolutionAsync(url, operation);
     }
 
-    private static async Task<string> ResolveAndCacheUrlAsync(string url)
+    private static async Task<string?> AwaitAudioResolutionAsync(string url, Lazy<Task<string?>> operation)
     {
         try
         {
-            var result = await ResolveAudioUrlCoreAsync(url);
-            s_resolvedAudioUrls[url] = result;
-            return result;
+            return await operation.Value;
         }
         finally
         {
-            s_audioResolutionTasks.TryRemove(url, out _);
+            if (s_audioResolutionTasks.TryGetValue(url, out var current) && ReferenceEquals(current, operation))
+                s_audioResolutionTasks.TryRemove(url, out _);
         }
     }
 
-    private static async Task<string> ResolveAudioUrlCoreAsync(string url)
+    private static async Task<string?> ResolveAndCacheUrlAsync(string url)
     {
+        var result = await ResolveAudioUrlCoreAsync(url);
+        if (!string.IsNullOrWhiteSpace(result))
+        {
+            if (s_resolvedAudioUrls.Count >= MaxResolvedAudioUrlCacheEntries)
+                s_resolvedAudioUrls.Clear();
+
+            s_resolvedAudioUrls[url] = result;
+        }
+        return result;
+    }
+
+    private static async Task<string?> ResolveAudioUrlCoreAsync(string url)
+    {
+        if (LocalAudioSourceListResolver.IsLocalAudioSourceListUrl(url))
+        {
+            var localResult = await s_localAudioSourceListResolver.ResolveAsync(url);
+            if (localResult == null)
+                return null;
+
+            Log.Information("[DictPopup] Resolved local audioSourceList: '{Old}' -> '{New}'", url, localResult.AudioUrl);
+            return localResult.AudioUrl;
+        }
+
         try
         {
-            var response = await s_audioResolveHttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+            using var response = await s_audioResolveHttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
             if (!response.IsSuccessStatusCode)
-                return url;
+                return null;
 
             var contentType = response.Content.Headers.ContentType?.MediaType ?? "";
             var isJson = contentType.Contains("json", StringComparison.OrdinalIgnoreCase)
@@ -705,22 +864,43 @@ public sealed class DictionaryLookupPopup : IDisposable
                 || typeEl.GetString() != "audioSourceList"
                 || !root.TryGetProperty("audioSources", out var sources)
                 || sources.GetArrayLength() == 0)
-                return url;
+                return null;
 
             var first = sources[0];
             if (first.TryGetProperty("url", out var urlEl))
             {
-                var resolved = urlEl.GetString()?.Replace("\\", "/", StringComparison.Ordinal) ?? url;
+                var resolved = NormalizeAudioSourceUrl(urlEl.GetString() ?? url);
+                if (!Uri.TryCreate(resolved, UriKind.Absolute, out _)
+                    && response.RequestMessage?.RequestUri is Uri baseUri
+                    && Uri.TryCreate(baseUri, resolved, out var relative))
+                {
+                    resolved = relative.ToString();
+                }
+
                 Log.Information("[DictPopup] Resolved audioSourceList: '{Old}' -> '{New}'", url, resolved);
                 return resolved;
             }
         }
         catch (Exception ex)
         {
-            Log.Debug(ex, "[DictPopup] ResolveAudioUrlCore: resolution failed, using original URL");
+            Log.Debug(ex, "[DictPopup] ResolveAudioUrlCore: resolution failed");
         }
 
-        return url;
+        return null;
+    }
+
+    private static string NormalizeAudioSourceUrl(string url)
+    {
+        var normalized = url.Replace("\\", "/", StringComparison.Ordinal);
+        var schemeSeparator = normalized.IndexOf(":/", StringComparison.Ordinal);
+        if (schemeSeparator > 1
+            && schemeSeparator + 2 < normalized.Length
+            && normalized[schemeSeparator + 2] != '/')
+        {
+            normalized = normalized.Insert(schemeSeparator + 2, "/");
+        }
+
+        return normalized;
     }
 
     private void HandleMineEntry(JsonElement payload)

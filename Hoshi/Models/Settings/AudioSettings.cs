@@ -22,7 +22,8 @@ public sealed class AudioSource
 public sealed class AudioSettings
 {
     public const string DefaultAudioUrl = "https://hoshi-reader.manhhaoo-do.workers.dev/?term={term}&reading={reading}";
-    public const string LocalAudioUrl = "http://localhost:8765/localaudio/get/?term={term}&reading={reading}";
+    public const string LocalAudioUrl = "http://localhost:18765/localaudio/get/?term={term}&reading={reading}";
+    public const string LegacyLocalAudioUrl = "http://localhost:8765/localaudio/get/?term={term}&reading={reading}";
 
     public List<AudioSource> AudioSources { get; set; } = new()
     {
@@ -56,7 +57,7 @@ public sealed class AudioSettings
         var sources = new List<AudioSource>(AudioSources);
 
         // Remove local source entries that might be stale
-        sources.RemoveAll(s => s.Url == LocalAudioUrl);
+        sources.RemoveAll(s => s.Url == LocalAudioUrl || s.Url == LegacyLocalAudioUrl);
 
         if (EnableLocalAudio)
         {
