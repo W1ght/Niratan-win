@@ -35,31 +35,48 @@ public sealed class VideoSubtitleDocument
 
     public IReadOnlyList<VideoSubtitleCue> Cues => _cues;
 
-    public VideoSubtitleCue? FindCueAt(TimeSpan position)
+    public VideoSubtitleCue? FindCueAt(TimeSpan position) =>
+        FindCuesAt(position).FirstOrDefault();
+
+    public IReadOnlyList<VideoSubtitleCue> FindCuesAt(TimeSpan position)
     {
-        var low = 0;
-        var high = _cues.Count - 1;
+        if (_cues.Count == 0)
+            return Array.Empty<VideoSubtitleCue>();
 
-        while (low <= high)
+        var upperBound = FindFirstCueStartingAfter(position);
+        if (upperBound == 0)
+            return Array.Empty<VideoSubtitleCue>();
+
+        var activeCues = new List<VideoSubtitleCue>();
+        for (var index = upperBound - 1; index >= 0; index--)
         {
-            var mid = low + ((high - low) / 2);
-            var cue = _cues[mid];
-
-            if (position < cue.Start)
-            {
-                high = mid - 1;
-            }
-            else if (position >= cue.End)
-            {
-                low = mid + 1;
-            }
-            else
-            {
-                return cue;
-            }
+            var cue = _cues[index];
+            if (position < cue.End)
+                activeCues.Add(cue);
         }
 
-        return null;
+        activeCues.Reverse();
+        return activeCues;
+    }
+
+    private int FindFirstCueStartingAfter(TimeSpan position)
+    {
+        var low = 0;
+        var high = _cues.Count;
+
+        while (low < high)
+        {
+            var mid = low + ((high - low) / 2);
+            if (_cues[mid].Start <= position)
+            {
+                low = mid + 1;
+                continue;
+            }
+
+            high = mid;
+        }
+
+        return low;
     }
 
     public VideoSubtitleCueContext GetContext(VideoSubtitleCue cue)
@@ -75,9 +92,9 @@ public sealed class VideoSubtitleDocument
 
     public VideoSubtitleCue? FindPreviousCue(TimeSpan position)
     {
-        var current = FindCueAt(position);
-        if (current != null)
-            return current.Index > 0 ? _cues[current.Index - 1] : null;
+        var current = FindCuesAt(position);
+        if (current.Count > 0)
+            return current[0].Index > 0 ? _cues[current[0].Index - 1] : null;
 
         for (var i = _cues.Count - 1; i >= 0; i--)
         {
@@ -90,9 +107,12 @@ public sealed class VideoSubtitleDocument
 
     public VideoSubtitleCue? FindNextCue(TimeSpan position)
     {
-        var current = FindCueAt(position);
-        if (current != null)
-            return current.Index + 1 < _cues.Count ? _cues[current.Index + 1] : null;
+        var current = FindCuesAt(position);
+        if (current.Count > 0)
+        {
+            var last = current[^1];
+            return last.Index + 1 < _cues.Count ? _cues[last.Index + 1] : null;
+        }
 
         for (var i = 0; i < _cues.Count; i++)
         {
@@ -119,12 +139,17 @@ public sealed class SubtitleParserService
             return new VideoSubtitleDocument([]);
 
         var normalizedExtension = extension.TrimStart('.').ToLowerInvariant();
-        return normalizedExtension switch
+        var document = normalizedExtension switch
         {
             "ass" or "ssa" => ParseAss(subtitleText),
             "vtt" => ParseTextBlocks(subtitleText, isWebVtt: true),
             _ => ParseTextBlocks(subtitleText, isWebVtt: false),
         };
+
+        if (document.Cues.Count == 0)
+            throw new InvalidDataException("No valid subtitle cues found.");
+
+        return document;
     }
 
     public async Task<VideoSubtitleDocument> ParseFileAsync(string subtitlePath, CancellationToken ct = default)

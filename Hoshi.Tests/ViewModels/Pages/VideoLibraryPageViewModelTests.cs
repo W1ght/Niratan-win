@@ -73,6 +73,30 @@ public class VideoLibraryPageViewModelTests
         service.MarkedOpenedIds.Should().Equal("video-1");
     }
 
+    [Fact]
+    public async Task OpenVideoCommand_PassesVisibleVideosAsEpisodePlaylist()
+    {
+        var service = new RecordingVideoLibraryService
+        {
+            Videos =
+            [
+                new VideoItem { Id = "episode-1", Title = "Episode 1", FilePath = @"D:\Anime\episode1.mkv" },
+                new VideoItem { Id = "episode-2", Title = "Episode 2", FilePath = @"D:\Anime\episode2.mkv" },
+                new VideoItem { Id = "episode-3", Title = "Episode 3", FilePath = @"D:\Anime\episode3.mkv" },
+            ],
+        };
+        var player = new RecordingVideoPlayerWindowService();
+        var sut = CreateSut(videoService: service, playerService: player);
+
+        await sut.InitializeAsync();
+        await sut.OpenVideoCommand.ExecuteAsync(sut.Videos[1]);
+
+        player.OpenedVideos.Should().ContainSingle().Which.Id.Should().Be("episode-2");
+        player.OpenedPlaylists.Should().ContainSingle()
+            .Which.Select(video => video.Id)
+            .Should().Equal("episode-1", "episode-2", "episode-3");
+    }
+
     private static VideoLibraryPageViewModel CreateSut(
         IVideoLibraryService? videoService = null,
         IDialogService? dialogService = null,
@@ -131,10 +155,19 @@ public class VideoLibraryPageViewModelTests
     private sealed class RecordingVideoPlayerWindowService : IVideoPlayerWindowService
     {
         public List<VideoItem> OpenedVideos { get; } = [];
+        public List<IReadOnlyList<VideoItem>> OpenedPlaylists { get; } = [];
 
         public Task OpenAsync(VideoItem video, CancellationToken ct = default)
         {
             OpenedVideos.Add(video);
+            OpenedPlaylists.Add([video]);
+            return Task.CompletedTask;
+        }
+
+        public Task OpenAsync(VideoItem video, IReadOnlyList<VideoItem> playlist, CancellationToken ct = default)
+        {
+            OpenedVideos.Add(video);
+            OpenedPlaylists.Add(playlist);
             return Task.CompletedTask;
         }
     }

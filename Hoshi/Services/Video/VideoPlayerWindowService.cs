@@ -1,5 +1,6 @@
 using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using Hoshi.Models;
 using Hoshi.Views.Video;
 
@@ -9,7 +10,10 @@ internal sealed class VideoPlayerWindowService : IVideoPlayerWindowService
 {
     private VideoPlayerWindow? _window;
 
-    public async Task OpenAsync(VideoItem video, CancellationToken ct = default)
+    public Task OpenAsync(VideoItem video, CancellationToken ct = default) =>
+        OpenAsync(video, [video], ct);
+
+    public async Task OpenAsync(VideoItem video, IReadOnlyList<VideoItem> playlist, CancellationToken ct = default)
     {
         if (_window == null)
         {
@@ -18,6 +22,6 @@ internal sealed class VideoPlayerWindowService : IVideoPlayerWindowService
         }
 
         _window.Activate();
-        await _window.OpenVideoAsync(video, ct);
+        await _window.OpenVideoAsync(video, playlist, ct);
     }
 }

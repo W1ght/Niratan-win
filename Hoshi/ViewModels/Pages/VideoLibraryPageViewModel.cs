@@ -77,7 +77,10 @@ public partial class VideoLibraryPageViewModel : ObservableObject
             return;
         }
 
-        await _playerWindowService.OpenAsync(item.Video, _cts.Token);
+        await _playerWindowService.OpenAsync(
+            item.Video,
+            Videos.Select(video => video.Video).ToList(),
+            _cts.Token);
     }
 
     [RelayCommand]
