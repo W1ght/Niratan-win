@@ -171,8 +171,75 @@
   <data name="VideoPlayerNextSubtitleButton.Label" xml:space="preserve"><value>下一句</value></data>
   <data name="VideoPlayerProgressSlider.AutomationProperties.Name" xml:space="preserve"><value>播放位置</value></data>
   <data name="VideoPlayerVolumeSlider.AutomationProperties.Name" xml:space="preserve"><value>音量</value></data>
+  <data name="VideoPlayerInspectorButton.AutomationProperties.Name" xml:space="preserve"><value>检查器</value></data>
+  <data name="VideoPlayerInspectorButton.Label" xml:space="preserve"><value>检查器</value></data>
   <data name="VideoPlayerSubtitleStyleButton.AutomationProperties.Name" xml:space="preserve"><value>字幕设置</value></data>
   <data name="VideoPlayerSubtitleStyleButton.Label" xml:space="preserve"><value>字幕</value></data>
+  <data name="VideoInspectorTitleText.Text" xml:space="preserve"><value>检查器</value></data>
+  <data name="VideoInspectorCloseButton.AutomationProperties.Name" xml:space="preserve"><value>关闭检查器</value></data>
+  <data name="VideoInspectorEpisodesTabText.Text" xml:space="preserve"><value>选集</value></data>
+  <data name="VideoInspectorVideoTabText.Text" xml:space="preserve"><value>视频</value></data>
+  <data name="VideoInspectorAudioTabText.Text" xml:space="preserve"><value>音频</value></data>
+  <data name="VideoInspectorSubtitlesTabText.Text" xml:space="preserve"><value>字幕</value></data>
+  <data name="VideoInspectorCurrentVideoHeaderText.Text" xml:space="preserve"><value>当前视频</value></data>
+  <data name="VideoInspectorEpisodesHeaderText.Text" xml:space="preserve"><value>选集</value></data>
+  <data name="VideoInspectorNoEpisodesText.Text" xml:space="preserve"><value>没有选集</value></data>
+  <data name="VideoInspectorPlaybackHeaderText.Text" xml:space="preserve"><value>播放</value></data>
+  <data name="VideoInspectorAudioHeaderText.Text" xml:space="preserve"><value>音频</value></data>
+  <data name="VideoInspectorSubtitlesHeaderText.Text" xml:space="preserve"><value>字幕</value></data>
+  <data name="VideoInspectorPlaybackSpeedHeaderText.Text" xml:space="preserve"><value>播放速度</value></data>
+  <data name="VideoInspectorVideoEnhancementHeaderText.Text" xml:space="preserve"><value>画面增强</value></data>
+  <data name="VideoPlayerDeinterlaceToggle.Header" xml:space="preserve"><value>去交错</value></data>
+  <data name="VideoPlayerHdrEnhancementToggle.Header" xml:space="preserve"><value>HDR</value></data>
+  <data name="VideoInspectorBrightnessText.Text" xml:space="preserve"><value>亮度</value></data>
+  <data name="VideoInspectorContrastText.Text" xml:space="preserve"><value>对比度</value></data>
+  <data name="VideoInspectorSaturationText.Text" xml:space="preserve"><value>饱和度</value></data>
+  <data name="VideoInspectorGammaText.Text" xml:space="preserve"><value>Gamma</value></data>
+  <data name="VideoInspectorHueText.Text" xml:space="preserve"><value>色相</value></data>
+  <data name="VideoInspectorVideoTrackHeaderText.Text" xml:space="preserve"><value>视频轨</value></data>
+  <data name="VideoInspectorDefaultTrackText.Text" xml:space="preserve"><value>默认轨道</value></data>
+  <data name="VideoInspectorAspectRatioHeaderText.Text" xml:space="preserve"><value>画面比例</value></data>
+  <data name="VideoInspectorAspectRatioAutomaticItem.Content" xml:space="preserve"><value>自动</value></data>
+  <data name="VideoInspectorRotateClockwiseButton.AutomationProperties.Name" xml:space="preserve"><value>顺时针旋转</value></data>
+  <data name="VideoInspectorRotateClockwiseButtonText.Text" xml:space="preserve"><value>顺时针旋转</value></data>
+  <data name="VideoInspectorLoopHeaderText.Text" xml:space="preserve"><value>循环</value></data>
+  <data name="VideoPlayerLoopFileToggle.Header" xml:space="preserve"><value>循环文件</value></data>
+  <data name="VideoInspectorSetAPointButton.Content" xml:space="preserve"><value>设为 A 点</value></data>
+  <data name="VideoInspectorSetBPointButton.Content" xml:space="preserve"><value>设为 B 点</value></data>
+  <data name="VideoInspectorClearLoopButton.Content" xml:space="preserve"><value>清除</value></data>
+  <data name="VideoInspectorAudioTrackHeaderText.Text" xml:space="preserve"><value>音频轨</value></data>
+  <data name="VideoInspectorAudioTimingHeaderText.Text" xml:space="preserve"><value>音频延迟</value></data>
+  <data name="VideoInspectorAudioEarlierButton.Content" xml:space="preserve"><value>-0.5 秒</value></data>
+  <data name="VideoInspectorAudioResetButton.Content" xml:space="preserve"><value>重置</value></data>
+  <data name="VideoInspectorAudioLaterButton.Content" xml:space="preserve"><value>+0.5 秒</value></data>
+  <data name="VideoInspectorExternalSubtitlesHeaderText.Text" xml:space="preserve"><value>外挂字幕</value></data>
+  <data name="VideoInspectorOpenSubtitleButtonText.Text" xml:space="preserve"><value>打开字幕</value></data>
+  <data name="VideoInspectorClearSubtitleButton.AutomationProperties.Name" xml:space="preserve"><value>清除当前外挂字幕</value></data>
+  <data name="VideoInspectorPrimarySubtitleText.Text" xml:space="preserve"><value>主字幕</value></data>
+  <data name="VideoInspectorSubtitleTrackHeaderText.Text" xml:space="preserve"><value>字幕轨</value></data>
+  <data name="VideoInspectorOffText.Text" xml:space="preserve"><value>关闭</value></data>
+  <data name="VideoInspectorNoTracksText.Text" xml:space="preserve"><value>没有轨道</value></data>
+  <data name="VideoInspectorSubtitleTimingHeaderText.Text" xml:space="preserve"><value>字幕延迟</value></data>
+  <data name="VideoInspectorSubtitleTimingDescriptionText.Text" xml:space="preserve"><value>正数表示字幕延后，负数表示字幕提前。</value></data>
+  <data name="VideoInspectorSubtitleOffsetText.Text" xml:space="preserve"><value>偏移（ms）</value></data>
+  <data name="VideoInspectorSubtitleAppearanceHeaderText.Text" xml:space="preserve"><value>字幕外观</value></data>
+  <data name="VideoInspectorSubtitleFontText.Text" xml:space="preserve"><value>字幕字体</value></data>
+  <data name="VideoInspectorSystemDefaultText.Content" xml:space="preserve"><value>系统默认</value></data>
+  <data name="VideoInspectorSubtitleWeightText.Text" xml:space="preserve"><value>字幕字重</value></data>
+  <data name="VideoInspectorSubtitleShadowText.Text" xml:space="preserve"><value>阴影</value></data>
+  <data name="VideoInspectorVerticalPositionText.Text" xml:space="preserve"><value>垂直位置</value></data>
+  <data name="VideoInspectorSubtitleColorText.Text" xml:space="preserve"><value>字幕颜色</value></data>
+  <data name="VideoInspectorLookupHighlightColorText.Text" xml:space="preserve"><value>查词高亮颜色</value></data>
+  <data name="VideoInspectorLookupHighlightTextColorText.Text" xml:space="preserve"><value>查词高亮文字颜色</value></data>
+  <data name="VideoInspectorRestoreDefaultsButton.Content" xml:space="preserve"><value>恢复默认</value></data>
+  <data name="VideoInspectorSubtitleMaskHeaderText.Text" xml:space="preserve"><value>字幕遮罩</value></data>
+  <data name="VideoInspectorSubtitleMaskToggle.Header" xml:space="preserve"><value>悬停前遮罩字幕</value></data>
+  <data name="VideoInspectorMaskBlurModeButton.Content" xml:space="preserve"><value>模糊</value></data>
+  <data name="VideoInspectorMaskTransparentModeButton.Content" xml:space="preserve"><value>透明</value></data>
+  <data name="VideoInspectorBlurRadiusText.Text" xml:space="preserve"><value>模糊半径</value></data>
+  <data name="VideoInspectorHiddenOpacityText.Text" xml:space="preserve"><value>隐藏不透明度</value></data>
+  <data name="VideoInspectorTranscriptHeaderText.Text" xml:space="preserve"><value>字幕列表</value></data>
+  <data name="VideoInspectorOpenTranscriptButton.Content" xml:space="preserve"><value>打开字幕列表</value></data>
   <data name="VideoPlayerSubtitleSizeText.Text" xml:space="preserve"><value>字幕大小</value></data>
   <data name="VideoPlayerHardwareDecodingToggle.Header" xml:space="preserve"><value>硬件解码</value></data>
   <data name="VideoPlayerFullScreenButton.AutomationProperties.Name" xml:space="preserve"><value>全屏</value></data>

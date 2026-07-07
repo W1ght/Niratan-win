@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl x:Class="Hoshi.Views.Video.VideoTranscriptListControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:models="using:Hoshi.Models"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+    <UserControl.Resources>
+        <Style x:Key="VideoStudyListCardStyle" TargetType="Border">
+            <Setter Property="MinHeight" Value="58" />
+            <Setter Property="Margin" Value="0,4" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="#DDF8F8F8" />
+            <Setter Property="BorderBrush" Value="#80FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="14" />
+        </Style>
+        <Style x:Key="VideoInspectorSectionTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#99111111" />
+        </Style>
+        <Style x:Key="VideoInspectorPrimaryTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Foreground" Value="#D9111111" />
+        </Style>
+        <Style x:Key="VideoInspectorSecondaryTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="#80111111" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid x:Name="TranscriptRoot">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <StackPanel Spacing="8"
+                    Padding="0,0,4,8">
+            <Grid ColumnDefinitions="Auto,*"
+                  ColumnSpacing="8">
+                <FontIcon FontSize="13"
+                          Foreground="#99111111"
+                          Glyph="&#xE8C1;"
+                          VerticalAlignment="Center" />
+                <TextBlock x:Uid="VideoInspectorTranscriptHeaderText"
+                           Grid.Column="1"
+                           Text="字幕列表"
+                           Style="{StaticResource VideoInspectorSectionTitleStyle}" />
+            </Grid>
+            <TextBlock x:Name="TranscriptEmptyText"
+                       x:Uid="VideoInspectorTranscriptEmptyText"
+                       Text="加载字幕后可查看字幕列表。"
+                       TextWrapping="Wrap"
+                       Style="{StaticResource VideoInspectorSecondaryTextStyle}"
+                       Visibility="Visible" />
+        </StackPanel>
+        <ListView x:Name="TranscriptListView"
+                  AutomationProperties.AutomationId="VideoInspectorTranscriptList"
+                  Grid.Row="1"
+                  ItemsSource="{Binding TranscriptVisibleRows}"
+                  SelectionMode="None"
+                  ContainerContentChanging="TranscriptListView_ContainerContentChanging"
+                  ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                  Visibility="Collapsed">
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="Margin" Value="0" />
+                    <Setter Property="MinHeight" Value="0" />
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="models:VideoTranscriptRow">
+                    <Border Style="{StaticResource VideoStudyListCardStyle}"
+                            AutomationProperties.Name="{x:Bind AutomationName, Mode=OneWay}">
+                        <Grid>
+                            <Border Background="#2E3F8DFF"
+                                    CornerRadius="14"
+                                    Opacity="{x:Bind CurrentCardTintOpacity, Mode=OneWay}" />
+                                                <Grid ColumnDefinitions="4,*,Auto"
+                                                      ColumnSpacing="10"
+                                                      Padding="11,9"
+                                                      Tapped="TranscriptCardBody_Tapped">
+                                <Border Width="3"
+                                        Background="#3F8DFF"
+                                        CornerRadius="2"
+                                        Opacity="{x:Bind CurrentIndicatorOpacity, Mode=OneWay}"
+                                        VerticalAlignment="Stretch" />
+                                <StackPanel Grid.Column="1"
+                                            Spacing="3">
+                                    <TextBlock Text="{x:Bind StartText}"
+                                               FontSize="11"
+                                               FontFamily="Consolas"
+                                               Foreground="#80111111" />
+                                    <TextBlock Text="{x:Bind Text}"
+                                               TextWrapping="Wrap"
+                                               Style="{StaticResource VideoInspectorPrimaryTextStyle}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2"
+                                            Orientation="Horizontal"
+                                            Spacing="5"
+                                            VerticalAlignment="Center"
+                                            Tapped="TranscriptActions_Tapped">
+                                    <Button Width="26"
+                                            Height="26"
+                                            Padding="0"
+                                            Content="A"
+                                            FontSize="12"
+                                            FontWeight="SemiBold"
+                                            Opacity="{x:Bind ABLoopStartMarkerOpacity, Mode=OneWay}"
+                                            AutomationProperties.Name="Set A Point"
+                                            Click="TranscriptSetABLoopStartButton_Click" />
+                                    <Button Width="26"
+                                            Height="26"
+                                            Padding="0"
+                                            Content="B"
+                                            FontSize="12"
+                                            FontWeight="SemiBold"
+                                            Opacity="{x:Bind ABLoopEndMarkerOpacity, Mode=OneWay}"
+                                            AutomationProperties.Name="Set B Point"
+                                            Click="TranscriptSetABLoopEndButton_Click" />
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+    </Grid>
+</UserControl>

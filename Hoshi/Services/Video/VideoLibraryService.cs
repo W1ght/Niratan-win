@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Hoshi.Models;
@@ -143,6 +144,20 @@ internal sealed class VideoLibraryService : IVideoLibraryService
         {
             var candidate = stem + extension;
             if (File.Exists(candidate))
+                return candidate;
+        }
+
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+            return null;
+
+        foreach (var extension in SubtitleExtensions)
+        {
+            var prefix = Path.GetFileNameWithoutExtension(videoPath) + ".";
+            var matches = Directory.EnumerateFiles(directory, "*" + extension)
+                .Where(path => Path.GetFileName(path).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase);
+            var candidate = matches.FirstOrDefault();
+            if (candidate != null)
                 return candidate;
         }
 

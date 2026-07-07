@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Hoshi.Models;
 
 namespace Hoshi.Services.Video;
 
@@ -16,7 +18,33 @@ public interface IVideoPlaybackEngine : IDisposable
 
     Task SetVolumeAsync(double volume, CancellationToken ct = default);
 
+    Task SetPlaybackSpeedAsync(double speed, CancellationToken ct = default);
+
+    Task SetAudioDelayAsync(TimeSpan delay, CancellationToken ct = default);
+
+    Task SetSubtitleDelayAsync(TimeSpan delay, CancellationToken ct = default);
+
+    Task SetFileLoopEnabledAsync(bool enabled, CancellationToken ct = default);
+
+    Task SetABLoopAsync(VideoABLoop? loop, CancellationToken ct = default);
+
+    Task SetAspectRatioAsync(string value, CancellationToken ct = default);
+
+    Task SetVideoRotationAsync(int degrees, CancellationToken ct = default);
+
     Task SetHardwareDecodingAsync(bool enabled, CancellationToken ct = default);
+
+    Task SetDeinterlaceAsync(bool enabled, CancellationToken ct = default);
+
+    Task SetHDREnhancementAsync(bool enabled, CancellationToken ct = default);
+
+    Task SetVideoEqualizerAsync(string adjustment, double value, CancellationToken ct = default);
+
+    Task<IReadOnlyList<VideoTrackInfo>> GetTracksAsync(CancellationToken ct = default);
+
+    Task SelectTrackAsync(VideoTrackType type, int? trackId, CancellationToken ct = default);
+
+    Task<VideoSubtitleCue?> GetCurrentSubtitleCueAsync(CancellationToken ct = default);
 
     Task<TimeSpan> GetPositionAsync(CancellationToken ct = default);
 

@@ -92,6 +92,25 @@ internal static class MpvNative
         }
     }
 
+    internal static int GetPropertyString(IntPtr handle, string name, out string? value)
+    {
+        value = null;
+        var status = GetPropertyStringPointer(handle, name, MpvFormatString, out var pointer);
+        if (status < 0)
+            return status;
+
+        try
+        {
+            value = pointer == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(pointer);
+            return status;
+        }
+        finally
+        {
+            if (pointer != IntPtr.Zero)
+                Free(pointer);
+        }
+    }
+
     internal static string FormatSeconds(TimeSpan time) =>
         Math.Max(0, time.TotalSeconds).ToString("0.######", CultureInfo.InvariantCulture);
 
@@ -172,6 +191,30 @@ internal static class MpvNative
         [MarshalAs(UnmanagedType.LPUTF8Str)] string name,
         int format,
         out double data);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "mpv_get_property")]
+    internal static extern int GetPropertyInt64(
+        IntPtr handle,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string name,
+        int format,
+        out long data);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "mpv_get_property")]
+    internal static extern int GetPropertyFlag(
+        IntPtr handle,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string name,
+        int format,
+        out int data);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "mpv_get_property")]
+    private static extern int GetPropertyStringPointer(
+        IntPtr handle,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string name,
+        int format,
+        out IntPtr data);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "mpv_free")]
+    private static extern void Free(IntPtr data);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "mpv_wait_event")]
     internal static extern IntPtr WaitEvent(IntPtr handle, double timeout);

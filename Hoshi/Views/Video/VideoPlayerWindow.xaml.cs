@@ -1,12 +1,25 @@
 using System;
+using System.Collections.Specialized;
+using System.ComponentModel;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI.Windowing;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.Web.WebView2.Core;
+using Windows.Storage.Pickers;
+using Windows.Storage.Streams;
 using Windows.Graphics;
 using Windows.System;
 using Hoshi.Helpers;
@@ -27,12 +40,44 @@ public sealed partial class VideoPlayerWindow : Window
     private const int WS_CLIPCHILDREN = 0x02000000;
     private const uint SWP_NOZORDER = 0x0004;
     private const uint SWP_NOACTIVATE = 0x0010;
+    private const uint WM_SETFOCUS = 0x0007;
+    private const uint WM_KEYDOWN = 0x0100;
+    private const uint WM_SYSKEYDOWN = 0x0104;
+    private const uint WM_LBUTTONDOWN = 0x0201;
+    private const uint WM_RBUTTONDOWN = 0x0204;
+    private const uint WM_MBUTTONDOWN = 0x0207;
+    private const double DefaultSubtitleFontSize = 36;
+    private const int DefaultSubtitleFontWeight = 700;
+    private static readonly UIntPtr VideoHostSubclassId = new(1);
+
+    private delegate IntPtr SubclassProc(
+        IntPtr hWnd,
+        uint message,
+        UIntPtr wParam,
+        IntPtr lParam,
+        UIntPtr idSubclass,
+        UIntPtr refData);
+
+    private enum VideoInspectorTab
+    {
+        MiningHistory,
+        SubtitleList,
+        Chapters,
+        Video,
+        Audio,
+        Subtitles,
+    }
 
     private readonly IVideoPlaybackEngine _playbackEngine;
     private readonly IVideoMiningMediaExtractor _mediaExtractor;
+    private readonly IVideoSubtitleTranscriptExtractor _subtitleTranscriptExtractor;
+    private readonly VideoSubtitleTranscriptLoadCoordinator _subtitleTranscriptLoadCoordinator;
     private readonly DispatcherTimer _positionTimer = new();
+    private readonly HashSet<VideoTranscriptRow> _subscribedTranscriptRows = [];
+    private readonly SubclassProc _videoHostSubclassProc;
     private DictionaryPopupOverlay? _popupOverlay;
     private VideoItem? _pendingVideo;
+    private IReadOnlyList<VideoItem>? _pendingPlaylist;
     private IntPtr _parentHwnd;
     private IntPtr _videoHwnd;
     private bool _isLoaded;
@@ -40,9 +85,27 @@ public sealed partial class VideoPlayerWindow : Window
     private bool _isFullScreen;
     private bool _isScrubbing;
     private bool _isTicking;
-    private bool _isSubtitleSettingsOpen;
+    private bool _isInspectorOpen;
     private bool _isUpdatingVolume;
+    private bool _isUpdatingPlaybackSpeed;
+    private bool _isUpdatingAudioDelay;
+    private bool _isUpdatingSubtitleDelay;
     private bool _isUpdatingHardwareDecoding;
+    private bool _isUpdatingDeinterlace;
+    private bool _isUpdatingHdrEnhancement;
+    private bool _isUpdatingVideoEqualizer;
+    private bool _isUpdatingAspectRatio;
+    private bool _isUpdatingSubtitleAppearance;
+    private bool _isUpdatingVideoTrackSelection;
+    private bool _isUpdatingAudioTrackSelection;
+    private bool _isUpdatingSubtitleTrackSelection;
+    private bool _isSubtitlePointerOver;
+    private bool _isLookupPopupVisible;
+    private bool _isSubtitlePointerLookupRunning;
+    private bool _isSubtitleWebViewInitialized;
+    private bool _isSubtitleWebViewReady;
+    private int _subtitleMaskBlurRenderGeneration;
+    private VideoInspectorTab _selectedInspectorTab = VideoInspectorTab.SubtitleList;
 
     public VideoPlayerViewModel ViewModel { get; }
 
@@ -50,13 +113,24 @@ public sealed partial class VideoPlayerWindow : Window
     {
         InitializeComponent();
         ViewModel = App.GetService<VideoPlayerViewModel>();
+        InspectorSubtitleListContent.Initialize(ViewModel);
+        InspectorSubtitleListContent.TranscriptSelected += InspectorSubtitleListContent_TranscriptSelected;
+        InspectorSubtitleListContent.SetABLoopStartRequested += InspectorSubtitleListContent_SetABLoopStartRequested;
+        InspectorSubtitleListContent.SetABLoopEndRequested += InspectorSubtitleListContent_SetABLoopEndRequested;
         _playbackEngine = App.GetService<IVideoPlaybackEngine>();
         _mediaExtractor = App.GetService<IVideoMiningMediaExtractor>();
+        _subtitleTranscriptExtractor = App.GetService<IVideoSubtitleTranscriptExtractor>();
+        _subtitleTranscriptLoadCoordinator = new VideoSubtitleTranscriptLoadCoordinator(_subtitleTranscriptExtractor);
+        _videoHostSubclassProc = VideoHostSubclassProc;
+        ViewModel.PropertyChanged += ViewModel_PropertyChanged;
+        ViewModel.TranscriptVisibleRows.CollectionChanged += TranscriptVisibleRows_CollectionChanged;
         ProgressSlider.Minimum = 0;
         VolumeSlider.Minimum = 0;
         VolumeSlider.Maximum = 130;
-        SubtitleFontSizeSlider.Minimum = 14;
-        SubtitleFontSizeSlider.Maximum = 36;
+        InspectorVolumeSlider.Minimum = 0;
+        InspectorVolumeSlider.Maximum = 130;
+        SubtitleFontSizeSlider.Minimum = 12;
+        SubtitleFontSizeSlider.Maximum = 72;
 
         Title = "Hoshi Video";
         AppWindow.SetIcon("Assets/AppIcon.ico");
@@ -66,17 +140,48 @@ public sealed partial class VideoPlayerWindow : Window
         _positionTimer.Tick += OnPositionTimerTick;
 
         RootGrid.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(RootGrid_KeyDown), true);
-        RootGrid.AddHandler(UIElement.PointerWheelChangedEvent, new PointerEventHandler(RootGrid_PointerWheelChanged), true);
+        VideoSurface.AddHandler(UIElement.PointerWheelChangedEvent, new PointerEventHandler(VideoSurface_PointerWheelChanged), true);
+        BottomChrome.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(RootGrid_KeyDown), true);
+        BottomChrome.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(BottomChrome_PointerPressed), true);
+        SubtitlePanelBorder.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(SubtitlePanelBorder_PointerPressed), true);
+        SubtitleWebView.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(SubtitleWebView_PointerPressed), true);
+        SubtitleWebView.GotFocus += SubtitleWebView_GotFocus;
+        ProgressSlider.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(ProgressSlider_PointerPressed), true);
+        ProgressSlider.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(ProgressSlider_PointerReleased), true);
+        ProgressSlider.AddHandler(UIElement.PointerCanceledEvent, new PointerEventHandler(ProgressSlider_PointerCanceled), true);
+        ProgressSlider.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler(ProgressSlider_PointerCanceled), true);
         RootGrid.Loaded += OnLoaded;
-        RootGrid.SizeChanged += (_, _) => PositionSubtitleSettingsPopup();
-        BottomChrome.SizeChanged += (_, _) => PositionSubtitleSettingsPopup();
+        RootGrid.SizeChanged += (_, _) =>
+        {
+            PositionBottomChromeOverlay();
+            PositionVideoHost();
+        };
         Closed += OnClosed;
-        VideoSurface.SizeChanged += (_, _) => PositionVideoHost();
+        VideoSurface.SizeChanged += (_, _) =>
+        {
+            PositionBottomChromeOverlay();
+            PositionVideoHost();
+        };
+        SelectInspectorTab(_selectedInspectorTab);
+        UpdateSubtitleAppearanceControls();
+        ApplySubtitleAppearance();
+        UpdateAspectRatioSelection();
+        UpdateVideoEqualizerControls();
+        UpdateEpisodeListVisibility();
+        UpdateTranscriptListVisibility();
+        UpdateSubtitleControlAvailability();
+        UpdateVideoTrackSelection();
+        UpdateAudioTrackSelection();
+        UpdateSubtitleTrackSelection();
     }
 
-    public async Task OpenVideoAsync(VideoItem video, CancellationToken ct = default)
+    public Task OpenVideoAsync(VideoItem video, CancellationToken ct = default) =>
+        OpenVideoAsync(video, [video], ct);
+
+    public async Task OpenVideoAsync(VideoItem video, IReadOnlyList<VideoItem> playlist, CancellationToken ct = default)
     {
         _pendingVideo = video;
+        _pendingPlaylist = playlist.Count > 0 ? playlist.ToList() : [video];
         if (!_isLoaded)
             return;
 
@@ -88,6 +193,8 @@ public sealed partial class VideoPlayerWindow : Window
         try
         {
             _parentHwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            OpenBottomChromeOverlay();
+            await InitializeSubtitleWebViewAsync();
             _videoHwnd = CreateWindowExW(
                 0,
                 "STATIC",
@@ -101,10 +208,20 @@ public sealed partial class VideoPlayerWindow : Window
                 IntPtr.Zero,
                 IntPtr.Zero,
                 IntPtr.Zero);
+            SetWindowSubclass(_videoHwnd, _videoHostSubclassProc, VideoHostSubclassId, UIntPtr.Zero);
             PositionVideoHost();
 
             await _playbackEngine.InitializeAsync(_videoHwnd);
             await _playbackEngine.SetHardwareDecodingAsync(ViewModel.HardwareDecodingEnabled);
+            await _playbackEngine.SetDeinterlaceAsync(ViewModel.DeinterlaceEnabled);
+            await ApplyVideoEnhancementAsync();
+            await _playbackEngine.SetPlaybackSpeedAsync(ViewModel.PlaybackSpeed);
+            await _playbackEngine.SetAudioDelayAsync(TimeSpan.FromSeconds(ViewModel.AudioDelaySeconds));
+            await _playbackEngine.SetSubtitleDelayAsync(TimeSpan.FromMilliseconds(ViewModel.SubtitleDelayMilliseconds));
+            await _playbackEngine.SetFileLoopEnabledAsync(ViewModel.LoopFileEnabled);
+            await _playbackEngine.SetABLoopAsync(ViewModel.ABLoop);
+            await _playbackEngine.SetAspectRatioAsync(ViewModel.AspectRatioValue);
+            await _playbackEngine.SetVideoRotationAsync(ViewModel.VideoRotationDegrees);
             await _playbackEngine.SetVolumeAsync(ViewModel.Volume);
             _isLoaded = true;
             _positionTimer.Start();
@@ -123,222 +240,198 @@ public sealed partial class VideoPlayerWindow : Window
             return;
 
         var video = _pendingVideo;
+        var playlist = _pendingPlaylist ?? [video];
         _pendingVideo = null;
+        _pendingPlaylist = null;
         await ViewModel.LoadVideoAsync(video, ct);
+        MaximizeVideoWindowForTesting();
+        ViewModel.ReplaceEpisodes(playlist, video);
+        UpdateEpisodeListVisibility();
         await _playbackEngine.OpenAsync(video.FilePath, video.SubtitlePath, ct);
+        await _playbackEngine.SetPlaybackSpeedAsync(ViewModel.PlaybackSpeed, ct);
+        await _playbackEngine.SetAudioDelayAsync(TimeSpan.FromSeconds(ViewModel.AudioDelaySeconds), ct);
+        await _playbackEngine.SetSubtitleDelayAsync(TimeSpan.FromMilliseconds(ViewModel.SubtitleDelayMilliseconds), ct);
+        await _playbackEngine.SetFileLoopEnabledAsync(ViewModel.LoopFileEnabled, ct);
+        await _playbackEngine.SetABLoopAsync(ViewModel.ABLoop, ct);
+        await _playbackEngine.SetAspectRatioAsync(ViewModel.AspectRatioValue, ct);
+        await _playbackEngine.SetVideoRotationAsync(ViewModel.VideoRotationDegrees, ct);
+        await ApplyVideoEnhancementAsync(ct);
+        await RefreshMediaTracksAsync(string.IsNullOrWhiteSpace(video.SubtitlePath), ct);
+        if (string.IsNullOrWhiteSpace(video.SubtitlePath))
+            await SelectInitialEmbeddedSubtitleTrackAsync(ct);
+
         _isPaused = false;
+        _isLookupPopupVisible = false;
         PlayPauseIcon.Glyph = "\uE769";
+        ApplySubtitleAppearance();
+        UpdateSubtitleControlAvailability();
     }
 
-    private async void PlayPauseButton_Click(object sender, RoutedEventArgs e)
-    {
-        await TogglePlayPauseAsync();
-    }
-
-    private async Task TogglePlayPauseAsync()
-    {
-        try
-        {
-            _isPaused = !_isPaused;
-            await _playbackEngine.SetPausedAsync(_isPaused);
-            PlayPauseIcon.Glyph = _isPaused ? "\uE768" : "\uE769";
-            ViewModel.StatusText = _isPaused ? "Paused" : "Playing";
-        }
-        catch (Exception ex)
-        {
-            ViewModel.StatusText = ex.Message;
-        }
-    }
-
-    private async void RewindButton_Click(object sender, RoutedEventArgs e)
-    {
-        await SeekRelativeAsync(-SeekStepSeconds);
-    }
-
-    private async void ForwardButton_Click(object sender, RoutedEventArgs e)
-    {
-        await SeekRelativeAsync(SeekStepSeconds);
-    }
-
-    private async void PreviousSubtitleButton_Click(object sender, RoutedEventArgs e)
-    {
-        await SeekToSubtitleAsync(ViewModel.GetPreviousSubtitleStart());
-    }
-
-    private async void NextSubtitleButton_Click(object sender, RoutedEventArgs e)
-    {
-        await SeekToSubtitleAsync(ViewModel.GetNextSubtitleStart());
-    }
-
-    private async void FullScreenButton_Click(object sender, RoutedEventArgs e)
-    {
-        ToggleFullScreen();
-        await Task.CompletedTask;
-    }
-
-    private void SubtitleStyleButton_Click(object sender, RoutedEventArgs e)
-    {
-        _isSubtitleSettingsOpen = !_isSubtitleSettingsOpen;
-        if (_isSubtitleSettingsOpen)
-        {
-            PositionSubtitleSettingsPopup();
-            SubtitleSettingsPopup.IsOpen = true;
-        }
-        else
-        {
-            SubtitleSettingsPopup.IsOpen = false;
-        }
-
-        RootGrid.Focus(FocusState.Programmatic);
-    }
-
-    private void SubtitleSettingsPopup_Closed(object? sender, object e)
-    {
-        _isSubtitleSettingsOpen = false;
-    }
-
-    private void PositionSubtitleSettingsPopup()
-    {
-        if (!_isSubtitleSettingsOpen && !SubtitleSettingsPopup.IsOpen)
-            return;
-
-        SubtitleSettingsPanel.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
-        var desired = SubtitleSettingsPanel.DesiredSize;
-        var right = 16;
-        var bottom = Math.Max(12, BottomChrome.ActualHeight + 12);
-        SubtitleSettingsPopup.HorizontalOffset = Math.Max(16, RootGrid.ActualWidth - desired.Width - right);
-        SubtitleSettingsPopup.VerticalOffset = Math.Max(16, RootGrid.ActualHeight - desired.Height - bottom);
-    }
-
-    private async void VolumeSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
-    {
-        if (ViewModel == null || _isUpdatingVolume || !_isLoaded)
-            return;
-
-        await SetVolumeAsync(e.NewValue);
-    }
-
-    private void SubtitleFontSizeSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
-    {
-        if (ViewModel == null)
-            return;
-
-        SetSubtitleFontSize(e.NewValue);
-    }
-
-    private async void HardwareDecodingToggle_Toggled(object sender, RoutedEventArgs e)
-    {
-        if (ViewModel == null || !_isLoaded || _isUpdatingHardwareDecoding)
-            return;
-
-        await SetHardwareDecodingAsync(HardwareDecodingToggle.IsOn);
-    }
-
-    private async Task SeekRelativeAsync(double seconds)
-    {
-        var duration = ViewModel.Duration.TotalSeconds > 0 ? ViewModel.Duration.TotalSeconds : double.MaxValue;
-        var target = TimeSpan.FromSeconds(Math.Clamp(
-            ViewModel.CurrentPosition.TotalSeconds + seconds,
-            0,
-            duration));
-        await SeekToAsync(target);
-    }
-
-    private async Task SeekToSubtitleAsync(TimeSpan? target)
-    {
-        if (target == null)
-            return;
-
-        await SeekToAsync(target.Value);
-    }
-
-    private async Task SeekToAsync(TimeSpan target)
-    {
-        try
-        {
-            await _playbackEngine.SeekAsync(target);
-            ViewModel.UpdatePosition(target, ViewModel.Duration);
-            ViewModel.StatusText = $"Seeked to {ViewModel.PositionText}";
-        }
-        catch (Exception ex)
-        {
-            ViewModel.StatusText = ex.Message;
-        }
-    }
-
-    private async Task SetVolumeAsync(double volume)
-    {
-        try
-        {
-            var value = Math.Clamp(volume, 0, 130);
-            ViewModel.Volume = value;
-            _isUpdatingVolume = true;
-            VolumeSlider.Value = value;
-            _isUpdatingVolume = false;
-            await _playbackEngine.SetVolumeAsync(value);
-            ViewModel.StatusText = $"Volume {value:0}%";
-        }
-        catch (Exception ex)
-        {
-            _isUpdatingVolume = false;
-            ViewModel.StatusText = ex.Message;
-        }
-    }
-
-    private void SetSubtitleFontSize(double value)
-    {
-        var fontSize = Math.Clamp(value, 14, 36);
-        ViewModel.SubtitleFontSize = fontSize;
-        ViewModel.RefreshSubtitlePanelHeight();
-        SubtitleFontSizeSlider.Value = fontSize;
-        ViewModel.StatusText = $"Subtitle size {fontSize:0}";
-    }
-
-    private async Task SetHardwareDecodingAsync(bool enabled)
-    {
-        try
-        {
-            ViewModel.HardwareDecodingEnabled = enabled;
-            _isUpdatingHardwareDecoding = true;
-            HardwareDecodingToggle.IsOn = enabled;
-            _isUpdatingHardwareDecoding = false;
-            await _playbackEngine.SetHardwareDecodingAsync(enabled);
-            ViewModel.StatusText = enabled ? "Hardware decoding on" : "Hardware decoding off";
-        }
-        catch (Exception ex)
-        {
-            _isUpdatingHardwareDecoding = false;
-            ViewModel.StatusText = ex.Message;
-        }
-    }
-
-    private void ToggleFullScreen()
-    {
-        _isFullScreen = !_isFullScreen;
-        AppWindow.SetPresenter(_isFullScreen
-            ? AppWindowPresenterKind.FullScreen
-            : AppWindowPresenterKind.Overlapped);
-        FullScreenIcon.Glyph = _isFullScreen ? "\uE73F" : "\uE740";
-        ViewModel.StatusText = _isFullScreen ? "Full screen" : "Windowed";
-        RootGrid.Focus(FocusState.Programmatic);
-    }
-
-    private async void LookupButton_Click(object sender, RoutedEventArgs e)
+    private async void LookupCurrentSubtitleButton_Click(object sender, RoutedEventArgs e)
     {
         await LookupCurrentSubtitleAsync();
     }
 
-    private async Task LookupCurrentSubtitleAsync()
+    private async void EpisodeListView_ItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is not VideoEpisodeRow row)
+            return;
+
+        if (ViewModel.CurrentVideo != null
+            && string.Equals(
+                NormalizeVideoPath(ViewModel.CurrentVideo.FilePath),
+                NormalizeVideoPath(row.FilePath),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        await OpenVideoAsync(row.Video, ViewModel.EpisodeRows.Select(episode => episode.Video).ToList());
+    }
+
+    private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(VideoPlayerViewModel.CurrentSubtitleText):
+            case nameof(VideoPlayerViewModel.SubtitleFontSize):
+            case nameof(VideoPlayerViewModel.SubtitleFontWeight):
+            case nameof(VideoPlayerViewModel.SubtitleFontFamily):
+            case nameof(VideoPlayerViewModel.SubtitleShadowRadius):
+            case nameof(VideoPlayerViewModel.SubtitleVerticalPosition):
+            case nameof(VideoPlayerViewModel.SubtitleColorHex):
+            case nameof(VideoPlayerViewModel.SubtitleLookupHighlightColorHex):
+            case nameof(VideoPlayerViewModel.SubtitleLookupHighlightTextColorHex):
+            case nameof(VideoPlayerViewModel.SubtitleMaskEnabled):
+            case nameof(VideoPlayerViewModel.SubtitleMaskMode):
+            case nameof(VideoPlayerViewModel.SubtitleMaskBlurRadius):
+            case nameof(VideoPlayerViewModel.SubtitleMaskHiddenOpacity):
+                ApplySubtitleAppearance();
+                break;
+        }
+    }
+
+    private void UpdateEpisodeListVisibility()
+    {
+        var hasRows = ViewModel.EpisodeRows.Count > 0;
+        EpisodeListView.Visibility = hasRows
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        EpisodeEmptyText.Visibility = hasRows
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
+
+    private void ScrollCurrentEpisodeRowIntoView()
+    {
+        if (EpisodeListView.Visibility != Visibility.Visible)
+            return;
+
+        var currentRow = ViewModel.EpisodeRows.FirstOrDefault(row => row.IsCurrent);
+        if (currentRow != null)
+            DispatcherQueue.TryEnqueue(() => EpisodeListView.ScrollIntoView(currentRow, ScrollIntoViewAlignment.Leading));
+    }
+
+    private static string NormalizeVideoPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return "";
+
+        try
+        {
+            return Path.GetFullPath(path);
+        }
+        catch
+        {
+            return path;
+        }
+    }
+
+    private async void OpenSubtitleButton_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            var selected = SubtitleTextBox.SelectedText;
-            var query = string.IsNullOrWhiteSpace(selected)
+            var picker = new FileOpenPicker();
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, _parentHwnd != IntPtr.Zero
+                ? _parentHwnd
+                : WinRT.Interop.WindowNative.GetWindowHandle(this));
+            picker.FileTypeFilter.Add(".srt");
+            picker.FileTypeFilter.Add(".vtt");
+            picker.FileTypeFilter.Add(".ass");
+            picker.FileTypeFilter.Add(".ssa");
+
+            var file = await picker.PickSingleFileAsync();
+            if (file == null)
+                return;
+
+            if (_isLoaded)
+                await _playbackEngine.SelectTrackAsync(VideoTrackType.Subtitle, null);
+
+            await ViewModel.LoadSubtitleAsync(file.Path);
+            await RefreshMediaTracksAsync();
+            UpdateSubtitleControlAvailability();
+            ViewModel.StatusText = $"Loaded subtitles: {file.Name}";
+        }
+        catch (Exception ex)
+        {
+            ViewModel.StatusText = ex.Message;
+        }
+    }
+
+    private void ClearSubtitleButton_Click(object sender, RoutedEventArgs e)
+    {
+        _ = SelectSubtitleTrackAsync(null);
+    }
+
+    private async void SubtitleTrackOffButton_Click(object sender, RoutedEventArgs e)
+    {
+        await SelectSubtitleTrackAsync(null);
+    }
+
+    private async void SubtitleTrackListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingSubtitleTrackSelection)
+            return;
+
+        if (SubtitleTrackListView.SelectedItem is VideoTrackInfo track)
+            await SelectSubtitleTrackAsync(track);
+    }
+
+    private async void AudioTrackOffButton_Click(object sender, RoutedEventArgs e)
+    {
+        await SelectAudioTrackAsync(null);
+    }
+
+    private async void VideoTrackListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingVideoTrackSelection)
+            return;
+
+        if (VideoTrackListView.SelectedItem is VideoTrackInfo track)
+            await SelectVideoTrackAsync(track);
+    }
+
+    private async void AudioTrackListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingAudioTrackSelection)
+            return;
+
+        if (AudioTrackListView.SelectedItem is VideoTrackInfo track)
+            await SelectAudioTrackAsync(track);
+    }
+
+    private async Task LookupCurrentSubtitleAsync(
+        string? queryOverride = null,
+        int sentenceOffset = 0,
+        Windows.Foundation.Point? anchorPoint = null,
+        double? anchorWidth = null,
+        double? anchorHeight = null)
+    {
+        try
+        {
+            var query = string.IsNullOrWhiteSpace(queryOverride)
                 ? ViewModel.CurrentSubtitleText
-                : selected;
-            var sentenceOffset = string.IsNullOrWhiteSpace(selected)
-                ? 0
-                : SubtitleTextBox.SelectionStart;
+                : queryOverride;
             if (string.IsNullOrWhiteSpace(query))
                 return;
 
@@ -346,6 +439,7 @@ public sealed partial class VideoPlayerWindow : Window
             await _playbackEngine.SetPausedAsync(true);
             _isPaused = true;
             PlayPauseIcon.Glyph = "\uE768";
+            ApplySubtitleAppearance();
 
             var (screenshotPath, audioClipPath) = await CaptureMiningMediaAsync();
             var request = await ViewModel.CreateLookupRequestAsync(
@@ -359,8 +453,11 @@ public sealed partial class VideoPlayerWindow : Window
                 return;
             }
 
-            var point = LookupButton.TransformToVisual(PopupOverlayCanvas)
-                .TransformPoint(new Windows.Foundation.Point(0, 0));
+            await HighlightSubtitleWebSelectionAsync(request.Results[0].Matched);
+
+            var point = anchorPoint
+                ?? SubtitleWebView.TransformToVisual(PopupOverlayCanvas)
+                    .TransformPoint(new Windows.Foundation.Point(0, 0));
             var overlay = EnsurePopupOverlay();
             _ = overlay.PrewarmAsync(RootGrid.XamlRoot);
             ViewModel.StatusText = "Lookup opened";
@@ -370,14 +467,16 @@ public sealed partial class VideoPlayerWindow : Window
                 request.DisplaySettings,
                 point.X,
                 point.Y,
-                LookupButton.ActualWidth,
-                LookupButton.ActualHeight,
+                anchorWidth ?? Math.Max(1, SubtitleWebView.ActualWidth),
+                anchorHeight ?? Math.Max(1, SubtitleWebView.ActualHeight),
                 RootGrid.XamlRoot,
                 isVertical: false,
                 request.Theme,
                 request.AudioSettings,
                 request.AnkiSettings,
                 request.MiningContext);
+            _isLookupPopupVisible = true;
+            ApplySubtitleAppearance();
         }
         catch (Exception ex)
         {
@@ -425,189 +524,37 @@ public sealed partial class VideoPlayerWindow : Window
             return _popupOverlay;
 
         _popupOverlay = new DictionaryPopupOverlay();
+        _popupOverlay.Dismissed += PopupOverlay_Dismissed;
         _popupOverlay.UseCanvas(PopupOverlayCanvas);
         return _popupOverlay;
-    }
-
-    private async void OnPositionTimerTick(object? sender, object e)
-    {
-        if (_isTicking)
-            return;
-
-        _isTicking = true;
-        try
-        {
-            var position = await _playbackEngine.GetPositionAsync();
-            var duration = await _playbackEngine.GetDurationAsync();
-            if (!_isScrubbing)
-                ViewModel.UpdatePosition(position, duration);
-        }
-        catch
-        {
-        }
-        finally
-        {
-            _isTicking = false;
-        }
-    }
-
-    private void ProgressSlider_PointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        _isScrubbing = true;
-    }
-
-    private async void ProgressSlider_PointerReleased(object sender, PointerRoutedEventArgs e)
-    {
-        await CommitSeekAsync();
-    }
-
-    private async void ProgressSlider_PointerCanceled(object sender, PointerRoutedEventArgs e)
-    {
-        await CommitSeekAsync();
-    }
-
-    private async Task CommitSeekAsync()
-    {
-        if (!_isScrubbing)
-            return;
-
-        _isScrubbing = false;
-        try
-        {
-            var target = TimeSpan.FromSeconds(Math.Clamp(
-                ProgressSlider.Value,
-                0,
-                Math.Max(0, ViewModel.Duration.TotalSeconds)));
-            await _playbackEngine.SeekAsync(target);
-            ViewModel.UpdatePosition(target, ViewModel.Duration);
-            ViewModel.StatusText = $"Seeked to {ViewModel.PositionText}";
-        }
-        catch (Exception ex)
-        {
-            ViewModel.StatusText = ex.Message;
-        }
-    }
-
-    private void VideoSurface_PointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        RootGrid.Focus(FocusState.Pointer);
-    }
-
-    private async void RootGrid_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
-    {
-        var delta = e.GetCurrentPoint(RootGrid).Properties.MouseWheelDelta;
-        if (delta == 0)
-            return;
-
-        e.Handled = true;
-        await SetVolumeAsync(ViewModel.Volume + (delta > 0 ? VolumeStep : -VolumeStep));
-    }
-
-    private async void RootGrid_KeyDown(object sender, KeyRoutedEventArgs e)
-    {
-        switch (e.Key)
-        {
-            case VirtualKey.Space:
-                e.Handled = true;
-                await TogglePlayPauseAsync();
-                break;
-            case VirtualKey.Left:
-                e.Handled = true;
-                await SeekRelativeAsync(-SeekStepSeconds);
-                break;
-            case VirtualKey.Right:
-                e.Handled = true;
-                await SeekRelativeAsync(SeekStepSeconds);
-                break;
-            case VirtualKey.Up:
-                e.Handled = true;
-                await SetVolumeAsync(ViewModel.Volume + VolumeStep);
-                break;
-            case VirtualKey.Down:
-                e.Handled = true;
-                await SetVolumeAsync(ViewModel.Volume - VolumeStep);
-                break;
-            case VirtualKey.PageUp:
-                e.Handled = true;
-                await SeekToSubtitleAsync(ViewModel.GetPreviousSubtitleStart());
-                break;
-            case VirtualKey.PageDown:
-                e.Handled = true;
-                await SeekToSubtitleAsync(ViewModel.GetNextSubtitleStart());
-                break;
-            case VirtualKey.F:
-                e.Handled = true;
-                ToggleFullScreen();
-                break;
-            case VirtualKey.F2:
-            case VirtualKey.F9:
-                e.Handled = true;
-                await LookupCurrentSubtitleAsync();
-                break;
-            case VirtualKey.F8:
-                e.Handled = true;
-                await SetHardwareDecodingAsync(!ViewModel.HardwareDecodingEnabled);
-                break;
-            case VirtualKey.H:
-                e.Handled = true;
-                await SetHardwareDecodingAsync(!ViewModel.HardwareDecodingEnabled);
-                break;
-            case VirtualKey.L:
-                e.Handled = true;
-                await LookupCurrentSubtitleAsync();
-                break;
-            case VirtualKey.Add:
-                e.Handled = true;
-                SetSubtitleFontSize(ViewModel.SubtitleFontSize + 1);
-                break;
-            case VirtualKey.Subtract:
-                e.Handled = true;
-                SetSubtitleFontSize(ViewModel.SubtitleFontSize - 1);
-                break;
-            case VirtualKey.Escape:
-                if (_isSubtitleSettingsOpen)
-                {
-                    e.Handled = true;
-                    SubtitleSettingsPopup.IsOpen = false;
-                    break;
-                }
-
-                if (_isFullScreen)
-                {
-                    e.Handled = true;
-                    ToggleFullScreen();
-                }
-                break;
-        }
-    }
-
-    private void PositionVideoHost()
-    {
-        if (_videoHwnd == IntPtr.Zero || _parentHwnd == IntPtr.Zero)
-            return;
-
-        var point = VideoSurface.TransformToVisual(RootGrid)
-            .TransformPoint(new Windows.Foundation.Point(0, 0));
-        var scale = GetDpiForWindow(_parentHwnd) / 96.0;
-        SetWindowPos(
-            _videoHwnd,
-            IntPtr.Zero,
-            (int)Math.Round(point.X * scale),
-            (int)Math.Round(point.Y * scale),
-            Math.Max(1, (int)Math.Round(VideoSurface.ActualWidth * scale)),
-            Math.Max(1, (int)Math.Round(VideoSurface.ActualHeight * scale)),
-            SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
     private void OnClosed(object sender, WindowEventArgs args)
     {
         _positionTimer.Stop();
+        CancelEmbeddedTranscriptLoad();
+        InspectorSubtitleListContent.TranscriptSelected -= InspectorSubtitleListContent_TranscriptSelected;
+        InspectorSubtitleListContent.SetABLoopStartRequested -= InspectorSubtitleListContent_SetABLoopStartRequested;
+        InspectorSubtitleListContent.SetABLoopEndRequested -= InspectorSubtitleListContent_SetABLoopEndRequested;
+        ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
+        ViewModel.TranscriptVisibleRows.CollectionChanged -= TranscriptVisibleRows_CollectionChanged;
+        foreach (var row in _subscribedTranscriptRows)
+            row.PropertyChanged -= TranscriptRow_PropertyChanged;
+        _subscribedTranscriptRows.Clear();
+        BottomChromePopup.IsOpen = false;
+        SubtitleWebView.GotFocus -= SubtitleWebView_GotFocus;
+        if (SubtitleWebView.CoreWebView2 != null)
+            SubtitleWebView.CoreWebView2.WebMessageReceived -= OnSubtitleWebMessageReceived;
+        if (_popupOverlay != null)
+            _popupOverlay.Dismissed -= PopupOverlay_Dismissed;
         _popupOverlay?.Dispose();
         _popupOverlay = null;
+        _subtitleTranscriptLoadCoordinator.Dispose();
         _playbackEngine.Dispose();
 
         if (_videoHwnd != IntPtr.Zero)
         {
+            RemoveWindowSubclass(_videoHwnd, _videoHostSubclassProc, VideoHostSubclassId);
             DestroyWindow(_videoHwnd);
             _videoHwnd = IntPtr.Zero;
         }
@@ -643,4 +590,33 @@ public sealed partial class VideoPlayerWindow : Window
 
     [DllImport("user32.dll")]
     private static extern int GetDpiForWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetFocus(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("comctl32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowSubclass(
+        IntPtr hWnd,
+        SubclassProc subclassProc,
+        UIntPtr idSubclass,
+        UIntPtr refData);
+
+    [DllImport("comctl32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool RemoveWindowSubclass(
+        IntPtr hWnd,
+        SubclassProc subclassProc,
+        UIntPtr idSubclass);
+
+    [DllImport("comctl32.dll")]
+    private static extern IntPtr DefSubclassProc(
+        IntPtr hWnd,
+        uint message,
+        UIntPtr wParam,
+        IntPtr lParam);
 }

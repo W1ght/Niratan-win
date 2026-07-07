@@ -171,8 +171,75 @@
   <data name="VideoPlayerNextSubtitleButton.Label" xml:space="preserve"><value>Next</value></data>
   <data name="VideoPlayerProgressSlider.AutomationProperties.Name" xml:space="preserve"><value>Playback position</value></data>
   <data name="VideoPlayerVolumeSlider.AutomationProperties.Name" xml:space="preserve"><value>Volume</value></data>
+  <data name="VideoPlayerInspectorButton.AutomationProperties.Name" xml:space="preserve"><value>Inspector</value></data>
+  <data name="VideoPlayerInspectorButton.Label" xml:space="preserve"><value>Inspector</value></data>
   <data name="VideoPlayerSubtitleStyleButton.AutomationProperties.Name" xml:space="preserve"><value>Subtitle settings</value></data>
   <data name="VideoPlayerSubtitleStyleButton.Label" xml:space="preserve"><value>Subtitles</value></data>
+  <data name="VideoInspectorTitleText.Text" xml:space="preserve"><value>Inspector</value></data>
+  <data name="VideoInspectorCloseButton.AutomationProperties.Name" xml:space="preserve"><value>Close inspector</value></data>
+  <data name="VideoInspectorEpisodesTabText.Text" xml:space="preserve"><value>Episodes</value></data>
+  <data name="VideoInspectorVideoTabText.Text" xml:space="preserve"><value>Video</value></data>
+  <data name="VideoInspectorAudioTabText.Text" xml:space="preserve"><value>Audio</value></data>
+  <data name="VideoInspectorSubtitlesTabText.Text" xml:space="preserve"><value>Subtitles</value></data>
+  <data name="VideoInspectorCurrentVideoHeaderText.Text" xml:space="preserve"><value>Current Video</value></data>
+  <data name="VideoInspectorEpisodesHeaderText.Text" xml:space="preserve"><value>Episodes</value></data>
+  <data name="VideoInspectorNoEpisodesText.Text" xml:space="preserve"><value>No episodes</value></data>
+  <data name="VideoInspectorPlaybackHeaderText.Text" xml:space="preserve"><value>Playback</value></data>
+  <data name="VideoInspectorAudioHeaderText.Text" xml:space="preserve"><value>Audio</value></data>
+  <data name="VideoInspectorSubtitlesHeaderText.Text" xml:space="preserve"><value>Subtitles</value></data>
+  <data name="VideoInspectorPlaybackSpeedHeaderText.Text" xml:space="preserve"><value>Playback Speed</value></data>
+  <data name="VideoInspectorVideoEnhancementHeaderText.Text" xml:space="preserve"><value>Video Enhancement</value></data>
+  <data name="VideoPlayerDeinterlaceToggle.Header" xml:space="preserve"><value>Deinterlace</value></data>
+  <data name="VideoPlayerHdrEnhancementToggle.Header" xml:space="preserve"><value>HDR</value></data>
+  <data name="VideoInspectorBrightnessText.Text" xml:space="preserve"><value>Brightness</value></data>
+  <data name="VideoInspectorContrastText.Text" xml:space="preserve"><value>Contrast</value></data>
+  <data name="VideoInspectorSaturationText.Text" xml:space="preserve"><value>Saturation</value></data>
+  <data name="VideoInspectorGammaText.Text" xml:space="preserve"><value>Gamma</value></data>
+  <data name="VideoInspectorHueText.Text" xml:space="preserve"><value>Hue</value></data>
+  <data name="VideoInspectorVideoTrackHeaderText.Text" xml:space="preserve"><value>Video Track</value></data>
+  <data name="VideoInspectorDefaultTrackText.Text" xml:space="preserve"><value>Default track</value></data>
+  <data name="VideoInspectorAspectRatioHeaderText.Text" xml:space="preserve"><value>Aspect Ratio</value></data>
+  <data name="VideoInspectorAspectRatioAutomaticItem.Content" xml:space="preserve"><value>Automatic</value></data>
+  <data name="VideoInspectorRotateClockwiseButton.AutomationProperties.Name" xml:space="preserve"><value>Rotate clockwise</value></data>
+  <data name="VideoInspectorRotateClockwiseButtonText.Text" xml:space="preserve"><value>Rotate Clockwise</value></data>
+  <data name="VideoInspectorLoopHeaderText.Text" xml:space="preserve"><value>Loop</value></data>
+  <data name="VideoPlayerLoopFileToggle.Header" xml:space="preserve"><value>Loop File</value></data>
+  <data name="VideoInspectorSetAPointButton.Content" xml:space="preserve"><value>Set A</value></data>
+  <data name="VideoInspectorSetBPointButton.Content" xml:space="preserve"><value>Set B</value></data>
+  <data name="VideoInspectorClearLoopButton.Content" xml:space="preserve"><value>Clear</value></data>
+  <data name="VideoInspectorAudioTrackHeaderText.Text" xml:space="preserve"><value>Audio Track</value></data>
+  <data name="VideoInspectorAudioTimingHeaderText.Text" xml:space="preserve"><value>Audio Timing</value></data>
+  <data name="VideoInspectorAudioEarlierButton.Content" xml:space="preserve"><value>-0.5 s</value></data>
+  <data name="VideoInspectorAudioResetButton.Content" xml:space="preserve"><value>Reset</value></data>
+  <data name="VideoInspectorAudioLaterButton.Content" xml:space="preserve"><value>+0.5 s</value></data>
+  <data name="VideoInspectorExternalSubtitlesHeaderText.Text" xml:space="preserve"><value>External Subtitles</value></data>
+  <data name="VideoInspectorOpenSubtitleButtonText.Text" xml:space="preserve"><value>Open Subtitles</value></data>
+  <data name="VideoInspectorClearSubtitleButton.AutomationProperties.Name" xml:space="preserve"><value>Clear current external subtitles</value></data>
+  <data name="VideoInspectorPrimarySubtitleText.Text" xml:space="preserve"><value>Primary subtitle</value></data>
+  <data name="VideoInspectorSubtitleTrackHeaderText.Text" xml:space="preserve"><value>Subtitle Track</value></data>
+  <data name="VideoInspectorOffText.Text" xml:space="preserve"><value>Off</value></data>
+  <data name="VideoInspectorNoTracksText.Text" xml:space="preserve"><value>No tracks</value></data>
+  <data name="VideoInspectorSubtitleTimingHeaderText.Text" xml:space="preserve"><value>Subtitle Timing</value></data>
+  <data name="VideoInspectorSubtitleTimingDescriptionText.Text" xml:space="preserve"><value>Positive values delay subtitles; negative values show subtitles earlier.</value></data>
+  <data name="VideoInspectorSubtitleOffsetText.Text" xml:space="preserve"><value>Offset (ms)</value></data>
+  <data name="VideoInspectorSubtitleAppearanceHeaderText.Text" xml:space="preserve"><value>Subtitle Appearance</value></data>
+  <data name="VideoInspectorSubtitleFontText.Text" xml:space="preserve"><value>Subtitle Font</value></data>
+  <data name="VideoInspectorSystemDefaultText.Content" xml:space="preserve"><value>System Default</value></data>
+  <data name="VideoInspectorSubtitleWeightText.Text" xml:space="preserve"><value>Subtitle Weight</value></data>
+  <data name="VideoInspectorSubtitleShadowText.Text" xml:space="preserve"><value>Shadow</value></data>
+  <data name="VideoInspectorVerticalPositionText.Text" xml:space="preserve"><value>Vertical Position</value></data>
+  <data name="VideoInspectorSubtitleColorText.Text" xml:space="preserve"><value>Subtitle Color</value></data>
+  <data name="VideoInspectorLookupHighlightColorText.Text" xml:space="preserve"><value>Lookup Highlight Color</value></data>
+  <data name="VideoInspectorLookupHighlightTextColorText.Text" xml:space="preserve"><value>Lookup Highlight Text Color</value></data>
+  <data name="VideoInspectorRestoreDefaultsButton.Content" xml:space="preserve"><value>Restore Defaults</value></data>
+  <data name="VideoInspectorSubtitleMaskHeaderText.Text" xml:space="preserve"><value>Subtitle Mask</value></data>
+  <data name="VideoInspectorSubtitleMaskToggle.Header" xml:space="preserve"><value>Mask subtitles until hover</value></data>
+  <data name="VideoInspectorMaskBlurModeButton.Content" xml:space="preserve"><value>Blur</value></data>
+  <data name="VideoInspectorMaskTransparentModeButton.Content" xml:space="preserve"><value>Transparent</value></data>
+  <data name="VideoInspectorBlurRadiusText.Text" xml:space="preserve"><value>Blur Radius</value></data>
+  <data name="VideoInspectorHiddenOpacityText.Text" xml:space="preserve"><value>Hidden Opacity</value></data>
+  <data name="VideoInspectorTranscriptHeaderText.Text" xml:space="preserve"><value>Transcript</value></data>
+  <data name="VideoInspectorOpenTranscriptButton.Content" xml:space="preserve"><value>Open Transcript</value></data>
   <data name="VideoPlayerSubtitleSizeText.Text" xml:space="preserve"><value>Subtitle size</value></data>
   <data name="VideoPlayerHardwareDecodingToggle.Header" xml:space="preserve"><value>Hardware decoding</value></data>
   <data name="VideoPlayerFullScreenButton.AutomationProperties.Name" xml:space="preserve"><value>Full screen</value></data>

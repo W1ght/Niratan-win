@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
@@ -148,6 +147,7 @@ public partial class App : Application
         services.AddSingleton<IVideoLibraryService, VideoLibraryService>();
         services.AddTransient<IVideoPlaybackEngine, MpvPlaybackEngine>();
         services.AddSingleton<IVideoMiningMediaExtractor, LibMpvVideoMiningMediaExtractor>();
+        services.AddSingleton<IVideoSubtitleTranscriptExtractor, FfmpegVideoSubtitleTranscriptExtractor>();
         services.AddSingleton<IVideoPlayerWindowService, VideoPlayerWindowService>();
         services.AddSingleton<SubtitleParserService>();
         services.AddSingleton<INovelBookSidecarService, NovelBookSidecarService>();
@@ -270,12 +270,12 @@ public partial class App : Application
     {
         if (MainWindow?.DispatcherQueue == null) return;
 
-        long lastUiTick = Environment.TickCount64;
+        var watchdogState = new UiHangWatchdogState(Environment.TickCount64);
 
         var uiTimer = MainWindow.DispatcherQueue.CreateTimer();
         uiTimer.Interval = TimeSpan.FromSeconds(1);
         uiTimer.IsRepeating = true;
-        uiTimer.Tick += (_, _) => { Volatile.Write(ref lastUiTick, Environment.TickCount64); };
+        uiTimer.Tick += (_, _) => watchdogState.RecordUiTick(Environment.TickCount64);
         uiTimer.Start();
 
         _ = Task.Run(async () =>
@@ -283,12 +283,14 @@ public partial class App : Application
             while (true)
             {
                 await Task.Delay(3000);
-                var elapsed = Environment.TickCount64 - Volatile.Read(ref lastUiTick);
-                if (elapsed > 4000)
+                var now = Environment.TickCount64;
+                if (watchdogState.ShouldReportHang(now, thresholdMs: 4000))
                 {
                     try
                     {
-                        Log.Warning("[Hang] UI thread unresponsive for {Seconds}s", elapsed / 1000);
+                        Log.Warning(
+                            "[Hang] UI thread unresponsive for {Seconds}s",
+                            watchdogState.ElapsedSinceLastUiTickMs(now) / 1000);
                     }
                     catch { /* not much we can do */ }
                 }
