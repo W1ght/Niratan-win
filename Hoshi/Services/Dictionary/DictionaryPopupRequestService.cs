@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -6,6 +7,7 @@ using Hoshi.Models.Anki;
 using Hoshi.Models.Dictionary;
 using Hoshi.Models.Settings;
 using Hoshi.Services.Settings;
+using Serilog;
 
 namespace Hoshi.Services.Dictionary;
 
@@ -32,23 +34,40 @@ public sealed class DictionaryPopupRequestService : IDictionaryPopupRequestServi
         if (string.IsNullOrWhiteSpace(query))
             return null;
 
+        traceId ??= $"popup-request-{Stopwatch.GetTimestamp():x}";
+        var totalSw = Stopwatch.StartNew();
+        Log.Information(
+            "[LookupTrace] trace={TraceId} popup request start query='{Query}'",
+            traceId, query);
+
         ct.ThrowIfCancellationRequested();
 
         var settings = _settingsService.Current;
         var displaySettings = CloneDisplaySettings(settings.DictionaryDisplaySettings);
+        var lookupSw = Stopwatch.StartNew();
         var results = await _lookupService.LookupAsync(
             query,
             displaySettings.MaxResults,
             displaySettings.ScanLength,
             traceId);
+        Log.Information(
+            "[LookupTrace] trace={TraceId} popup request lookup finished in {Ms}ms total={TotalMs}ms results={Count}",
+            traceId, lookupSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, results.Count);
         if (results.Count == 0)
             return null;
 
         ct.ThrowIfCancellationRequested();
 
+        var stylesSw = Stopwatch.StartNew();
         var styles = (await _lookupService.GetStylesAsync())
             .ToDictionary(style => style.DictName, style => style.Styles);
+        Log.Information(
+            "[LookupTrace] trace={TraceId} popup request styles finished in {Ms}ms total={TotalMs}ms styles={StyleCount}",
+            traceId, stylesSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, styles.Count);
 
+        Log.Information(
+            "[LookupTrace] trace={TraceId} popup request finished in {TotalMs}ms",
+            traceId, totalSw.ElapsedMilliseconds);
         return new DictionaryPopupRequest(
             query,
             results,

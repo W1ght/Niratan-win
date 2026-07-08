@@ -14,6 +14,8 @@ public interface IAnkiService
     Task<List<AnkiDeck>> FetchDecksAsync();
     Task<List<AnkiNoteType>> FetchNoteTypesAsync();
     Task<List<string>> FetchModelFieldNamesAsync(string modelName);
+    Task<AnkiMiningPreflightResult> PreflightMiningAsync(string rawPayloadJson, AnkiMiningContext context);
     Task<bool> MineEntryAsync(string rawPayloadJson, AnkiMiningContext context);
     Task<bool> DuplicateCheckAsync(string rawPayloadJson);
+    Task<string?> GetWritableMediaDirectoryAsync();
 }

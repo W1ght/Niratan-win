@@ -23,6 +23,14 @@ public sealed partial class SasayakiSettingsPage : Page
         ViewModel.OnNavigatedFrom();
     }
 
+    protected override void OnNavigatedTo(NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        SasayakiSettingsBackButton.Visibility = e.Parameter is SettingsNavigationMode.Embedded
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
+
     private void BackButton_Click(object sender, RoutedEventArgs e)
     {
         var navigation = App.GetService<INavigationService>();

@@ -16,6 +16,12 @@ namespace Hoshi.ViewModels.Pages;
 
 public partial class DictionarySettingsPageViewModel : ObservableObject
 {
+    private const int PopupMaxWidthMin = 360;
+    private const int PopupMaxWidthMax = 900;
+    private const int PopupMaxHeightMin = 220;
+    private const int PopupMaxHeightMax = 820;
+    private const int PopupSizeStep = 20;
+
     private readonly ISettingsService _settingsService;
     private readonly IGlobalSelectionLookupService _globalLookupService;
     private bool _isLoadingDisplaySettings;
@@ -52,6 +58,12 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
     public partial int ScanLength { get; set; } = 16;
 
     [ObservableProperty]
+    public partial int PopupMaxWidth { get; set; } = 560;
+
+    [ObservableProperty]
+    public partial int PopupMaxHeight { get; set; } = 420;
+
+    [ObservableProperty]
     public partial DictionaryCollapseMode CollapseMode { get; set; } = DictionaryCollapseMode.ExpandAll;
 
     [ObservableProperty]
@@ -76,6 +88,8 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
     public bool IsFrequencySelected => SelectedDictionaryType == DictionaryType.Frequency;
     public bool IsPitchSelected => SelectedDictionaryType == DictionaryType.Pitch;
     public bool IsExpandFirstDictionaryVisible => CollapseMode != DictionaryCollapseMode.ExpandAll;
+    public string PopupMaxWidthText => $"{PopupMaxWidth} px";
+    public string PopupMaxHeightText => $"{PopupMaxHeight} px";
 
     public IAsyncRelayCommand ImportDictionaryCommand { get; }
     public IAsyncRelayCommand<string?> DeleteDictionaryCommand { get; }
@@ -83,6 +97,10 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
     public IRelayCommand DecreaseMaxResultsCommand { get; }
     public IRelayCommand IncreaseScanLengthCommand { get; }
     public IRelayCommand DecreaseScanLengthCommand { get; }
+    public IRelayCommand IncreasePopupMaxWidthCommand { get; }
+    public IRelayCommand DecreasePopupMaxWidthCommand { get; }
+    public IRelayCommand IncreasePopupMaxHeightCommand { get; }
+    public IRelayCommand DecreasePopupMaxHeightCommand { get; }
 
     public DictionarySettingsPageViewModel()
     {
@@ -96,6 +114,10 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
         DecreaseMaxResultsCommand = new RelayCommand(() => MaxResults = Clamp(MaxResults - 1, 1, 50));
         IncreaseScanLengthCommand = new RelayCommand(() => ScanLength = Clamp(ScanLength + 1, 1, 64));
         DecreaseScanLengthCommand = new RelayCommand(() => ScanLength = Clamp(ScanLength - 1, 1, 64));
+        IncreasePopupMaxWidthCommand = new RelayCommand(() => PopupMaxWidth = Clamp(PopupMaxWidth + PopupSizeStep, PopupMaxWidthMin, PopupMaxWidthMax));
+        DecreasePopupMaxWidthCommand = new RelayCommand(() => PopupMaxWidth = Clamp(PopupMaxWidth - PopupSizeStep, PopupMaxWidthMin, PopupMaxWidthMax));
+        IncreasePopupMaxHeightCommand = new RelayCommand(() => PopupMaxHeight = Clamp(PopupMaxHeight + PopupSizeStep, PopupMaxHeightMin, PopupMaxHeightMax));
+        DecreasePopupMaxHeightCommand = new RelayCommand(() => PopupMaxHeight = Clamp(PopupMaxHeight - PopupSizeStep, PopupMaxHeightMin, PopupMaxHeightMax));
         _ = RefreshDictionariesAsync();
     }
 
@@ -133,6 +155,24 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
     partial void OnScanLengthChanged(int value) =>
         UpdateDisplaySettings(current => current with { ScanLength = Clamp(value, 1, 64) });
 
+    partial void OnPopupMaxWidthChanged(int value)
+    {
+        OnPropertyChanged(nameof(PopupMaxWidthText));
+        UpdateDisplaySettings(current => current with
+        {
+            PopupMaxWidth = Clamp(value, PopupMaxWidthMin, PopupMaxWidthMax),
+        });
+    }
+
+    partial void OnPopupMaxHeightChanged(int value)
+    {
+        OnPropertyChanged(nameof(PopupMaxHeightText));
+        UpdateDisplaySettings(current => current with
+        {
+            PopupMaxHeight = Clamp(value, PopupMaxHeightMin, PopupMaxHeightMax),
+        });
+    }
+
     partial void OnCollapseModeChanged(DictionaryCollapseMode value)
     {
         OnPropertyChanged(nameof(IsExpandFirstDictionaryVisible));
@@ -168,6 +208,8 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
             ScanNonJapaneseText = settings.ScanNonJapaneseText;
             MaxResults = Clamp(settings.MaxResults, 1, 50);
             ScanLength = Clamp(settings.ScanLength, 1, 64);
+            PopupMaxWidth = Clamp(settings.PopupMaxWidth, PopupMaxWidthMin, PopupMaxWidthMax);
+            PopupMaxHeight = Clamp(settings.PopupMaxHeight, PopupMaxHeightMin, PopupMaxHeightMax);
             CollapseMode = settings.CollapseMode;
             ExpandFirstDictionary = settings.ExpandFirstDictionary;
             CompactGlossaries = settings.CompactGlossaries;

@@ -150,6 +150,12 @@ public class VideoLibraryPageViewModelTests
             double durationSeconds,
             CancellationToken ct = default) =>
             Task.FromResult(Result.Success());
+
+        public Task<Result> SavePlaybackStateAsync(
+            string videoId,
+            VideoPlaybackState state,
+            CancellationToken ct = default) =>
+            Task.FromResult(Result.Success());
     }
 
     private sealed class RecordingVideoPlayerWindowService : IVideoPlayerWindowService

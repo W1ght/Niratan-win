@@ -213,6 +213,32 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void DictionaryPopup_UsesPanningIndicatorScrollbarChrome()
+    {
+        var popupCss = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.css")
+        );
+        var popupJs = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.js")
+        );
+
+        popupCss.Should().Contain("--popup-scrollbar-size: 8px");
+        popupCss.Should().Contain("::-webkit-scrollbar-button");
+        popupCss.Should().Contain("display: none");
+        popupCss.Should().Contain("::-webkit-scrollbar-track");
+        popupCss.Should().Contain("background: transparent");
+        popupCss.Should().Contain("::-webkit-scrollbar-thumb");
+        popupCss.Should().Contain("background-color: transparent");
+        popupCss.Should().Contain("html.popup-scroll-active::-webkit-scrollbar-thumb");
+        popupCss.Should().Contain(".overlay.popup-scroll-active::-webkit-scrollbar-thumb");
+        popupCss.Should().Contain("--popup-scrollbar-thumb-active");
+
+        popupJs.Should().Contain("setPopupScrollIndicatorActive(event.target)");
+        popupJs.Should().Contain("popup-scroll-active");
+        popupJs.Should().Contain("capture: true");
+    }
+
+    [Fact]
     public void DictionaryPopupHide_KeepsWebView2InVisualTree()
     {
         var popupCode = File.ReadAllText(
@@ -300,7 +326,8 @@ public class NovelReaderWebAssetTests
         popupCode.Should().NotContain("UseNakedFloatingWindowVisuals()");
         popupCode.Should().NotContain("ApplyHostSurface(request.Theme)");
         popupCode.Should().Contain("ExtendsContentIntoTitleBar = true");
-        popupCode.Should().Contain("SystemBackdrop = null");
+        popupCode.Should().Contain("_desktopAcrylicThinBackdrop = DictionaryPopupMaterial.TryApplyDesktopAcrylicThin(this, RootGrid)");
+        popupCode.Should().NotContain("SystemBackdrop = null");
         popupCode.Should().Contain("ApplyBorderlessHostChrome(");
         popupCode.Should().Contain("ApplyNativeBorderlessHostStyles(");
         popupCode.Should().Contain("ApplyDwmBorderlessChrome(");
@@ -400,20 +427,27 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw")
         );
 
-        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"ReaderAppearanceSettingsButton\"");
+        settingsXaml.Should().Contain("x:Name=\"SettingsSecondaryNavigationView\"");
+        settingsXaml.Should().Contain("x:Name=\"SettingsContentFrame\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsAppearanceNavItem\"");
         settingsXaml.Should().NotContain("Visibility=\"{x:Bind ViewModel.IsDictionaryListEmpty, Mode=OneWay}\"");
-        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionarySettingsButton\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsDictionariesNavItem\"");
         settingsXaml.Should().NotContain("Shift Hover Delay");
-        settingsXaml.Should().Contain("x:Uid=\"SettingsPageTitle\"");
-        settingsXaml.Should().Contain("x:Uid=\"SettingsAppearanceCard\"");
-        settingsXaml.Should().Contain("x:Uid=\"SettingsAdvancedCard\"");
-        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"AdvancedSettingsButton\"");
-        settingsXaml.Should().Contain("x:Uid=\"SettingsReportIssueLink\"");
-        settingsXaml.Should().NotContain("AutomationProperties.AutomationId=\"AudioSettingsButton\"");
-        settingsXaml.Should().NotContain("AutomationProperties.AutomationId=\"SasayakiSettingsButton\"");
-        settingsXaml.Should().NotContain("AutomationProperties.AutomationId=\"StatisticsSettingsButton\"");
-        settingsCode.Should().Contain("AdvancedSettings_Click");
-        settingsCode.Should().Contain("Navigate(typeof(AdvancedSettingsPage))");
+        settingsXaml.Should().Contain("PaneTitle=\"Settings\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsReportIssueNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsProfilesNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsVideoNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsKeyboardShortcutsNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsGameControllerNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsSyncNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsBackupNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsAudioNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsSasayakiNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsStatisticsNavItem\"");
+        settingsXaml.Should().Contain("Tag=\"Hoshi.Views.Pages.ReaderAppearanceSettingsPage\"");
+        settingsCode.Should().Contain("SettingsContentFrame.Navigate(pageType, SettingsNavigationMode.Embedded)");
+        settingsCode.Should().Contain("SettingsNavigationMode.Embedded");
+        settingsCode.Should().NotContain("Navigate(typeof(AdvancedSettingsPage))");
 
         appearancePageXaml.Should().Contain("AutomationProperties.AutomationId=\"ReaderAppearanceBackButton\"");
         appearancePageXaml.Should().Contain("ReaderAppearanceSettingsContent");
@@ -445,6 +479,17 @@ public class NovelReaderWebAssetTests
         bridgeScript.Should().Contain("window.getSelection()?.isCollapsed === false");
         enResources.Should().Contain("ReaderMouseWheelPageTurnCard.Header");
         zhResources.Should().Contain("ReaderMouseWheelPageTurnCard.Header");
+        foreach (var resources in new[] { enResources, zhResources })
+        {
+            resources.Should().Contain("SettingsReaderSectionHeader.Content");
+            resources.Should().Contain("SettingsLibrarySectionHeader.Content");
+            resources.Should().Contain("SettingsShortcutsControlsSectionHeader.Content");
+            resources.Should().Contain("SettingsSyncDataSectionHeader.Content");
+            resources.Should().Contain("SettingsSupportSectionHeader.Content");
+            resources.Should().NotContain("SettingsReaderSectionHeader.Text");
+            resources.Should().NotContain("SettingsSupportSectionHeader.Text");
+        }
+
         appCode.Should().NotContain("ReaderAppearanceViewModel");
 
         var dictionaryXaml = File.ReadAllText(
@@ -459,6 +504,8 @@ public class NovelReaderWebAssetTests
         dictionaryXaml.Should().Contain("DictionaryType_Checked");
         dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryMaxResultsIncreaseButton\"");
         dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryScanLengthIncreaseButton\"");
+        dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryPopupMaxWidthIncreaseButton\"");
+        dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryPopupMaxHeightIncreaseButton\"");
         dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryCollapseModeComboBox\"");
         dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryCompactGlossariesToggle\"");
         dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryShowExpressionTagsToggle\"");
@@ -498,12 +545,18 @@ public class NovelReaderWebAssetTests
         var advancedXaml = File.ReadAllText(advancedXamlPath);
         var advancedCode = File.ReadAllText(advancedCodePath);
 
-        settingsXaml.Should().Contain("x:Uid=\"SettingsAdvancedCard\"");
-        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"AdvancedSettingsButton\"");
-        settingsXaml.Should().Contain("x:Uid=\"SettingsReportIssueLink\"");
-        settingsXaml.Should().NotContain("AutomationProperties.AutomationId=\"AudioSettingsButton\"");
-        settingsXaml.Should().NotContain("AutomationProperties.AutomationId=\"SasayakiSettingsButton\"");
-        settingsXaml.Should().NotContain("AutomationProperties.AutomationId=\"StatisticsSettingsButton\"");
+        settingsXaml.Should().NotContain("AutomationProperties.AutomationId=\"SettingsAdvancedNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsProfilesNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsVideoNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsKeyboardShortcutsNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsGameControllerNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsSyncNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsBackupNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsReportIssueNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsAudioNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsSasayakiNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsStatisticsNavItem\"");
+        settingsXaml.Should().Contain("NavigationViewItemHeader");
 
         advancedXaml.Should().Contain("x:Class=\"Hoshi.Views.Pages.AdvancedSettingsPage\"");
         advancedXaml.Should().Contain("AutomationProperties.AutomationId=\"AdvancedSettingsBackButton\"");
@@ -515,28 +568,173 @@ public class NovelReaderWebAssetTests
         advancedXaml.Should().Contain("AutomationProperties.AutomationId=\"StatisticsSettingsButton\"");
         advancedXaml.Should().Contain("x:Uid=\"AdvancedSasayakiCard\"");
         advancedXaml.Should().Contain("AutomationProperties.AutomationId=\"SasayakiSettingsButton\"");
+        advancedXaml.Should().Contain("x:Uid=\"AdvancedVideoSectionHeader\"");
+        advancedXaml.Should().Contain("x:Uid=\"AdvancedVideoCard\"");
+        advancedXaml.Should().Contain("AutomationProperties.AutomationId=\"VideoSettingsButton\"");
+        advancedXaml.Should().Contain("x:Uid=\"AdvancedShortcutsControlsSectionHeader\"");
+        advancedXaml.Should().Contain("x:Uid=\"AdvancedKeyboardShortcutsCard\"");
+        advancedXaml.Should().Contain("AutomationProperties.AutomationId=\"KeyboardShortcutsSettingsButton\"");
+        advancedXaml.Should().Contain("x:Uid=\"AdvancedGameControllerCard\"");
+        advancedXaml.Should().Contain("AutomationProperties.AutomationId=\"GameControllerSettingsButton\"");
+        advancedXaml.Should().Contain("x:Uid=\"AdvancedSyncDataSectionHeader\"");
+        advancedXaml.Should().Contain("x:Uid=\"AdvancedSyncCard\"");
+        advancedXaml.Should().Contain("AutomationProperties.AutomationId=\"SyncSettingsButton\"");
+        advancedXaml.Should().Contain("x:Uid=\"AdvancedBackupCard\"");
+        advancedXaml.Should().Contain("AutomationProperties.AutomationId=\"BackupSettingsButton\"");
 
         advancedCode.Should().Contain("AudioSettings_Click");
-        advancedCode.Should().Contain("Navigate(typeof(AudioSettingsPage))");
+        advancedCode.Should().Contain("NavigateSettingsSubpage(typeof(AudioSettingsPage))");
         advancedCode.Should().Contain("StatisticsSettings_Click");
-        advancedCode.Should().Contain("Navigate(typeof(StatisticsSettingsPage))");
+        advancedCode.Should().Contain("NavigateSettingsSubpage(typeof(StatisticsSettingsPage))");
         advancedCode.Should().Contain("SasayakiSettings_Click");
-        advancedCode.Should().Contain("Navigate(typeof(SasayakiSettingsPage))");
+        advancedCode.Should().Contain("NavigateSettingsSubpage(typeof(SasayakiSettingsPage))");
 
         appPageCode.Should().Contain("AdvancedSettingsPage");
         navigationCode.Should().Contain("typeof(AdvancedSettingsPage) => AppPage.AdvancedSettingsPage");
 
         foreach (var key in new[]
         {
-            "SettingsAdvancedCard.Header",
-            "SettingsAdvancedCard.Description",
-            "AdvancedSettingsButton.AutomationProperties.Name",
+            "SettingsAudioNavItem.Content",
+            "SettingsStatisticsNavItem.Content",
+            "SettingsSasayakiNavItem.Content",
+            "SettingsReportIssueNavItem.Content",
             "SettingsReportIssueLink.Content",
             "AdvancedSettingsPageTitle.Text",
             "AdvancedReaderSectionHeader.Text",
+            "AdvancedVideoSectionHeader.Text",
+            "AdvancedShortcutsControlsSectionHeader.Text",
+            "AdvancedSyncDataSectionHeader.Text",
             "AdvancedAudioCard.Header",
             "AdvancedStatisticsCard.Header",
             "AdvancedSasayakiCard.Header",
+            "AdvancedVideoCard.Header",
+            "AdvancedKeyboardShortcutsCard.Header",
+            "AdvancedGameControllerCard.Header",
+            "AdvancedSyncCard.Header",
+            "AdvancedBackupCard.Header",
+        })
+        {
+            enResources.Should().Contain(key);
+            zhResources.Should().Contain(key);
+        }
+    }
+
+    [Fact]
+    public void AudioSettingsPage_UsesLocalizedStringsForVisibleText()
+    {
+        var audioXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "AudioSettingsPage.xaml")
+        );
+        var audioViewModelCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "ViewModels", "Pages", "AudioSettingsPageViewModel.cs")
+        );
+        var enResources = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "en-US", "Resources.resw")
+        );
+        var zhResources = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw")
+        );
+
+        foreach (var uid in new[]
+        {
+            "AudioSettingsBackButton",
+            "AudioSettingsPageTitle",
+            "AudioSourcesSectionHeader",
+            "AudioMoveSourceUpButton",
+            "AudioMoveSourceDownButton",
+            "AudioDeleteSourceButton",
+            "AudioEnableSourceToggle",
+            "AudioAddSourceSectionHeader",
+            "AudioSourceNameCard",
+            "AudioSourceNameTextBox",
+            "AudioSourceUrlCard",
+            "AudioSourceUrlTextBox",
+            "AudioAddSourceButton",
+            "AudioAddSourceButtonText",
+            "AudioYomitanJsonHint",
+            "AudioPlaybackSectionHeader",
+            "AudioAutoplayCard",
+            "AudioAutoplayToggle",
+            "AudioPlaybackModeCard",
+            "AudioPlaybackModeComboBox",
+            "AudioLocalAudioSectionHeader",
+            "AudioLocalAudioEnabledCard",
+            "AudioLocalAudioToggle",
+            "AudioAndroidAudioDatabaseCard",
+            "AudioImportLocalAudioButton",
+            "AudioImportLocalAudioButtonText",
+            "AudioDeleteLocalAudioButton",
+            "AudioDeleteLocalAudioButtonText",
+            "AudioLocalAudioDatabaseHelpText",
+        })
+        {
+            audioXaml.Should().Contain($"x:Uid=\"{uid}\"");
+        }
+
+        audioXaml.Should().Contain("Header=\"{x:Bind DisplayName, Mode=OneWay}\"");
+        audioXaml.Should().Contain("DisplayMemberPath=\"Label\"");
+        audioXaml.Should().Contain("SelectedValuePath=\"Mode\"");
+        audioXaml.Should().NotContain("Text=\"Audio\"");
+        audioXaml.Should().NotContain("Header=\"Enable Autoplay\"");
+        audioXaml.Should().NotContain("Header=\"Playback Mode\"");
+        audioXaml.Should().NotContain("Text=\"Import .db\"");
+        audioXaml.Should().NotContain("Text=\"Delete\"");
+
+        audioViewModelCode.Should().Contain("AudioPlaybackModeOption");
+        audioViewModelCode.Should().Contain("ResourceStringHelper.GetString");
+
+        foreach (var key in new[]
+        {
+            "AudioSettingsBackButton.AutomationProperties.Name",
+            "AudioSettingsPageTitle.Text",
+            "AudioSourcesSectionHeader.Text",
+            "AudioMoveSourceUpButton.AutomationProperties.Name",
+            "AudioMoveSourceUpButton.ToolTipService.ToolTip",
+            "AudioMoveSourceDownButton.AutomationProperties.Name",
+            "AudioMoveSourceDownButton.ToolTipService.ToolTip",
+            "AudioDeleteSourceButton.AutomationProperties.Name",
+            "AudioDeleteSourceButton.ToolTipService.ToolTip",
+            "AudioEnableSourceToggle.AutomationProperties.Name",
+            "AudioAddSourceSectionHeader.Text",
+            "AudioSourceNameCard.Header",
+            "AudioSourceNameTextBox.AutomationProperties.Name",
+            "AudioSourceNameTextBox.PlaceholderText",
+            "AudioSourceUrlCard.Header",
+            "AudioSourceUrlCard.Description",
+            "AudioSourceUrlTextBox.AutomationProperties.Name",
+            "AudioAddSourceButton.AutomationProperties.Name",
+            "AudioAddSourceButtonText.Text",
+            "AudioYomitanJsonHint.Text",
+            "AudioPlaybackSectionHeader.Text",
+            "AudioAutoplayCard.Header",
+            "AudioAutoplayCard.Description",
+            "AudioAutoplayToggle.AutomationProperties.Name",
+            "AudioPlaybackModeCard.Header",
+            "AudioPlaybackModeCard.Description",
+            "AudioPlaybackModeComboBox.AutomationProperties.Name",
+            "AudioLocalAudioSectionHeader.Text",
+            "AudioLocalAudioEnabledCard.Header",
+            "AudioLocalAudioEnabledCard.Description",
+            "AudioLocalAudioToggle.AutomationProperties.Name",
+            "AudioAndroidAudioDatabaseCard.Header",
+            "AudioImportLocalAudioButton.AutomationProperties.Name",
+            "AudioImportLocalAudioButtonText.Text",
+            "AudioDeleteLocalAudioButton.AutomationProperties.Name",
+            "AudioDeleteLocalAudioButtonText.Text",
+            "AudioLocalAudioDatabaseHelpText.Text",
+            "AudioPlaybackModeInterrupt",
+            "AudioPlaybackModeDuck",
+            "AudioPlaybackModeMix",
+            "AudioDefaultSourceName",
+            "AudioLocalSourceName",
+            "AudioLocalAudioImportingStatus",
+            "AudioLocalAudioImportedStatus",
+            "AudioLocalAudioMissingStatus",
+            "AudioNotificationTitle",
+            "AudioLocalAudioImportedNotification",
+            "AudioImportErrorTitle",
+            "AudioLocalAudioDeletedNotification",
+            "AudioDeleteErrorTitle",
         })
         {
             enResources.Should().Contain(key);
@@ -567,7 +765,7 @@ public class NovelReaderWebAssetTests
         advancedXaml.Should().Contain("x:Uid=\"AdvancedSasayakiCard\"");
         advancedXaml.Should().Contain("AutomationProperties.AutomationId=\"SasayakiSettingsButton\"");
         advancedCode.Should().Contain("SasayakiSettings_Click");
-        advancedCode.Should().Contain("Navigate(typeof(SasayakiSettingsPage))");
+        advancedCode.Should().Contain("NavigateSettingsSubpage(typeof(SasayakiSettingsPage))");
 
         File.Exists(sasayakiXamlPath).Should().BeTrue();
         File.Exists(sasayakiCodePath).Should().BeTrue();
@@ -655,7 +853,7 @@ public class NovelReaderWebAssetTests
         advancedXaml.Should().Contain("x:Uid=\"AdvancedStatisticsCard\"");
         advancedXaml.Should().Contain("AutomationProperties.AutomationId=\"StatisticsSettingsButton\"");
         advancedCode.Should().Contain("StatisticsSettings_Click");
-        advancedCode.Should().Contain("Navigate(typeof(StatisticsSettingsPage))");
+        advancedCode.Should().Contain("NavigateSettingsSubpage(typeof(StatisticsSettingsPage))");
 
         File.Exists(statisticsXamlPath).Should().BeTrue();
         File.Exists(statisticsCodePath).Should().BeTrue();
@@ -776,18 +974,62 @@ public class NovelReaderWebAssetTests
         var popupCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryLookupPopup.cs")
         );
+        var materialPath = Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupMaterial.cs");
 
-        popupCode.Should().Contain("AcrylicBrush");
-        popupCode.Should().Contain("AlwaysUseFallback = false");
-        popupCode.Should().Contain("TintOpacity = 0.04");
-        popupCode.Should().Contain("TintLuminosityOpacity = 0.06");
-        popupCode.Should().Contain("TintLuminosityOpacity");
-        popupCode.Should().Contain("Windows.UI.Color.FromArgb(0x70");
-        popupCode.Should().Contain("Windows.UI.Color.FromArgb(0x90");
+        File.Exists(materialPath).Should().BeTrue();
+        var materialCode = File.ReadAllText(materialPath);
+
+        popupCode.Should().Contain("DictionaryPopupMaterial.CreateInAppAcrylicThinBrush");
+        popupCode.Should().Contain("DictionaryPopupMaterial.ApplyTheme");
+        popupCode.Should().Contain("_snapshotAcrylicImage");
+        popupCode.Should().Contain("SetSnapshotAcrylicBackgroundAsync");
+        popupCode.Should().Contain("DictionaryPopupSnapshotAcrylicRenderer.RenderPngAsync");
+        popupCode.Should().Contain("ApplySnapshotAcrylicWebBackgroundAsync");
+        popupCode.Should().Contain("ApplyPopupCornerRadiusToWebViewAsync");
+        popupCode.Should().Contain("_snapshotAcrylicImage.Opacity = 0");
+        popupCode.Should().Contain("has-snapshot-acrylic");
+        materialCode.Should().Contain("AcrylicBrush");
+        materialCode.Should().Contain("CreateInAppAcrylicThinBrush");
+        materialCode.Should().Contain("DesktopAcrylicController");
+        materialCode.Should().Contain("DesktopAcrylicKind.Thin");
+        materialCode.Should().Contain("AlwaysUseFallback = false");
+        materialCode.Should().Contain("TintOpacity = 0.12");
+        materialCode.Should().Contain("TintLuminosityOpacity = 0.18");
+        materialCode.Should().Contain("TintLuminosityOpacity");
+        materialCode.Should().Contain("Windows.UI.Color.FromArgb(0x58");
+        materialCode.Should().Contain("Windows.UI.Color.FromArgb(0x70");
+        materialCode.Should().Contain("DispatcherQueue.GetForCurrentThread()?.EnsureSystemDispatcherQueue()");
+        materialCode.Should().Contain("Windows.UI.Color.FromArgb(0x18");
+        materialCode.Should().Contain("Windows.UI.Color.FromArgb(0x22");
         popupCode.Should().Contain("ThemeShadow");
         popupCode.Should().Contain("Translation = new Vector3");
         popupCode.Should().Contain("CornerRadius = new CornerRadius(12)");
         popupCode.Should().Contain("BorderThickness = new Thickness(1)");
+
+        var snapshotRendererCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupSnapshotAcrylicRenderer.cs")
+        );
+        snapshotRendererCode.Should().Contain("CanvasBitmap.LoadAsync");
+        snapshotRendererCode.Should().Contain("GaussianBlurEffect");
+        snapshotRendererCode.Should().Contain("BlurAmount = 34");
+
+        var popupCss = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.css")
+        );
+        popupCss.Should().Contain("html.has-snapshot-acrylic");
+        popupCss.Should().Contain("--popup-corner-radius: 12px");
+        popupCss.Should().Contain("body::before");
+        popupCss.Should().Contain("border-radius: var(--popup-corner-radius)");
+        popupCss.Should().Contain("html.has-snapshot-acrylic body::before");
+        popupCss.Should().Contain("--snapshot-acrylic-background-image");
+
+        var overlayCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs")
+        );
+        overlayCode.Should().Contain("ApplySnapshotAcrylicBackground(_rootHost)");
+        overlayCode.Should().Contain("ApplySnapshotAcrylicBackground(child)");
+        overlayCode.Should().Contain("_currentMiningContext.VideoScreenshotPath");
+        overlayCode.Should().Contain("ThemeMode.Dark");
     }
 
     [Fact]
@@ -820,7 +1062,8 @@ public class NovelReaderWebAssetTests
         popupJs.Should().Contain("document.addEventListener('mousemove'");
         popupJs.Should().Contain("lookupAtPopupPoint(e.clientX, e.clientY, false, 'shift')");
         popupJs.Should().Contain("postPopupMessage('lookupRedirect', {");
-        popupJs.Should().Contain("rect: window.hoshiSelection?.getSelectionRect?.(x, y) || null");
+        popupJs.Should().Contain("var rect = window.hoshiSelection?.getSelectionRect?.(x, y) || null");
+        popupJs.Should().Contain("rectMs: rectMs");
     }
 
     [Fact]
@@ -1103,7 +1346,14 @@ public class NovelReaderWebAssetTests
         var globalLookupPopupWindowCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Dictionary", "GlobalLookupPopupWindow.xaml.cs")
         );
+        var globalLookupWindowCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "GlobalLookupWindow.xaml.cs")
+        );
         globalLookupPopupWindowCode.Should().Contain("ApplyPopupSizedHostSurface");
+        globalLookupPopupWindowCode.Should().Contain("_desktopAcrylicThinBackdrop = DictionaryPopupMaterial.TryApplyDesktopAcrylicThin(this, RootGrid)");
+        globalLookupPopupWindowCode.Should().Contain("DictionaryPopupMaterial.CreateTransparentBrush()");
+        globalLookupPopupWindowCode.Should().Contain("DictionaryPopupMaterial.GetOpaqueSurfaceColor(themeMode)");
+        globalLookupPopupWindowCode.Should().Contain("_desktopAcrylicThinBackdrop?.SetTheme(themeMode)");
         globalLookupPopupWindowCode.Should().Contain("UseStandaloneWindowVisuals");
         globalLookupPopupWindowCode.Should().Contain("SetRootReadyOpacity(1)");
         globalLookupPopupWindowCode.Should().NotContain("UseNakedFloatingWindowVisuals");
@@ -1114,6 +1364,8 @@ public class NovelReaderWebAssetTests
         globalLookupPopupWindowCode.Should().Contain("DwmSetWindowAttribute");
         globalLookupPopupWindowCode.Should().Contain("SetWindowRgn");
         globalLookupPopupWindowCode.Should().NotContain("ApplyHostSurface(request.Theme)");
+        globalLookupWindowCode.Should().Contain("_desktopAcrylicThinBackdrop = DictionaryPopupMaterial.TryApplyDesktopAcrylicThin(this, RootGrid)");
+        globalLookupWindowCode.Should().Contain("RootGrid.Background = DictionaryPopupMaterial.CreateWindowFallbackBrush");
         var dictionaryLookupPopupCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryLookupPopup.cs")
         );
@@ -1126,7 +1378,7 @@ public class NovelReaderWebAssetTests
         dictionaryLookupPopupCode.Should().Contain("VisualRoot.Translation = Vector3.Zero");
         dictionaryLookupPopupCode.Should().Contain("VisualRoot.BorderThickness = new Thickness(0)");
         dictionaryLookupPopupCode.Should().Contain("VisualRoot.CornerRadius = new CornerRadius(0)");
-        dictionaryLookupPopupCode.Should().Contain("VisualRoot.Background = _windowSurfaceBrush");
+        dictionaryLookupPopupCode.Should().Contain("VisualRoot.Background = _surfaceBrush");
         dictionaryLookupPopupCode.Should().Contain("_contentWebView.DefaultBackgroundColor = Colors.Transparent");
         dictionaryLookupPopupCode.Should().Contain("_contentWebView.Margin = new Thickness(-1)");
         dictionaryLookupPopupCode.Should().Contain("IsTabStop = false");
@@ -1149,6 +1401,11 @@ public class NovelReaderWebAssetTests
             "GlobalLookupPasteButton.AutomationProperties.Name",
             "GlobalLookupEnabledCard.Header",
             "GlobalLookupEnabledCard.Description",
+            "DictionaryPopupSizeSectionHeader.Text",
+            "DictionaryPopupMaxWidthCard.Header",
+            "DictionaryPopupMaxWidthCard.Description",
+            "DictionaryPopupMaxHeightCard.Header",
+            "DictionaryPopupMaxHeightCard.Description",
         })
         {
             enResources.Should().Contain(key);
@@ -1186,12 +1443,16 @@ public class NovelReaderWebAssetTests
 
         settingsCode.Should().Contain("int MaxResults = 16");
         settingsCode.Should().Contain("int ScanLength = 16");
+        settingsCode.Should().Contain("int PopupMaxWidth = 560");
+        settingsCode.Should().Contain("int PopupMaxHeight = 420");
         settingsCode.Should().Contain("bool DictionaryTabDefault = false");
         settingsCode.Should().Contain("DictionaryCollapseMode CollapseMode = DictionaryCollapseMode.ExpandAll");
         settingsCode.Should().Contain("bool ExpandFirstDictionary = false");
         overlayCode.Should().Contain("LookupAsync(");
         overlayCode.Should().Contain("_displaySettings.MaxResults");
         overlayCode.Should().Contain("_displaySettings.ScanLength");
+        overlayCode.Should().Contain("_displaySettings.PopupMaxWidth");
+        overlayCode.Should().Contain("_displaySettings.PopupMaxHeight");
         popupCode.Should().Contain("window.maxResults");
         popupCode.Should().Contain("window.scanLength");
     }
@@ -1373,7 +1634,8 @@ public class NovelReaderWebAssetTests
         popupJs.Should().Contain("postAudioTrace(autoplayAudioTraceId, 'autoplay-scheduled'");
         popupJs.Should().Contain("setTimeout(function () {");
         popupJs.Should().Contain("postAudioTrace(autoplayAudioTraceId, 'autoplay-fired'");
-        popupJs.Should().Contain("playEntryAudio(autoplayEntryIndex, autoplayAudioTraceId);");
+        popupJs.Should().Contain("playEntryAudio(autoplayEntryIndex, autoplayAudioTraceId, { deferResolutionToNative: true });");
+        popupJs.Should().Contain("fetch-url-deferred-to-native");
     }
 
     [Fact]
@@ -1463,6 +1725,12 @@ public class NovelReaderWebAssetTests
         overlayCode.Should().Contain("_redirectSemaphore");
         overlayCode.Should().Contain("_redirectVersion");
         overlayCode.Should().Contain("Interlocked.Increment(ref _redirectVersion)");
+        overlayCode.Should().Contain("PrewarmedChildHostCount = 1");
+        overlayCode.Should().Contain("await PrewarmChildHostPoolAsync(PrewarmedChildHostCount)");
+        overlayCode.Should().Contain("await child.WarmAsync()");
+        overlayCode.Should().Contain("NestedLookupMaxResults = 1");
+        overlayCode.Should().Contain("var nestedMaxResults = Math.Min(_displaySettings.MaxResults, NestedLookupMaxResults)");
+        overlayCode.Should().Contain("nestedMaxResults,");
         overlayCode.Should().Contain("GetReusableChildHost");
         overlayCode.Should().Contain("HideChildHost");
         overlayCode.Should().Contain("host.VisualRoot.Opacity <= 0");

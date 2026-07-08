@@ -23,6 +23,14 @@ public sealed partial class ReaderAppearanceSettingsPage : Page
         await ViewModel.OnNavigatedFromAsync();
     }
 
+    protected override void OnNavigatedTo(NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        ReaderAppearanceBackButton.Visibility = e.Parameter is SettingsNavigationMode.Embedded
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
+
     private void BackButton_Click(object sender, RoutedEventArgs e)
     {
         App.GetService<INavigationService>().GoBack();

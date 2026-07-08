@@ -50,7 +50,7 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
             MpvNative.SetOptionStringChecked(_handle, "sub-visibility", "no");
             MpvNative.SetOptionStringChecked(_handle, "keep-open", "yes");
             MpvNative.SetOptionStringChecked(_handle, "force-window", "yes");
-            MpvNative.SetOptionStringChecked(_handle, "panscan", "1.0");
+            MpvNative.SetOptionStringChecked(_handle, "panscan", "0.0");
             MpvNative.SetOptionStringChecked(_handle, "hwdec", "auto-safe");
             MpvNative.SetOptionStringChecked(_handle, "wid", hostHwnd.ToInt64().ToString());
 
@@ -457,6 +457,60 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
                     MpvNative.MpvFormatFlag,
                     ref visibility);
             }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<VideoChapter>> GetChaptersAsync(CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_syncRoot)
+        {
+            ThrowIfDisposed();
+            if (_handle == IntPtr.Zero)
+                return Task.FromResult<IReadOnlyList<VideoChapter>>([]);
+
+            var countStatus = MpvNative.GetPropertyInt64(
+                _handle,
+                "chapter-list/count",
+                MpvNative.MpvFormatInt64,
+                out var count);
+            if (countStatus < 0 || count <= 0)
+                return Task.FromResult<IReadOnlyList<VideoChapter>>([]);
+
+            var chapters = new List<VideoChapter>();
+            for (var index = 0; index < count; index++)
+            {
+                var prefix = FormattableString.Invariant($"chapter-list/{index}");
+                var time = TryGetDoubleProperty($"{prefix}/time");
+                if (!time.HasValue || time.Value < 0)
+                    continue;
+
+                var title = TryGetStringProperty($"{prefix}/title");
+                chapters.Add(new VideoChapter(
+                    index,
+                    string.IsNullOrWhiteSpace(title) ? $"Chapter {index + 1}" : title,
+                    TimeSpan.FromSeconds(time.Value)));
+            }
+
+            return Task.FromResult<IReadOnlyList<VideoChapter>>(chapters);
+        }
+    }
+
+    public Task SeekChapterAsync(int chapterId, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_syncRoot)
+        {
+            ThrowIfDisposed();
+            if (_handle == IntPtr.Zero)
+                return Task.CompletedTask;
+
+            var value = Math.Max(0, chapterId).ToString(CultureInfo.InvariantCulture);
+            var status = MpvNative.SetPropertyString(_handle, "chapter", value);
+            if (status < 0)
+                throw new InvalidOperationException($"Unable to seek chapter: {MpvNative.ErrorString(status)}");
         }
 
         return Task.CompletedTask;

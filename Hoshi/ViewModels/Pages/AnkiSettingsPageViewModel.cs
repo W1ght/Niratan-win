@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -76,9 +77,12 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
     public partial bool IsFetchingData { get; set; }
 
     public AnkiDuplicateScope[] AvailableDuplicateScopes { get; } = Enum.GetValues<AnkiDuplicateScope>();
+    public bool HasFieldMappingDefaults => SelectedNoteType != null && LapisPreset.HasDefaults(SelectedNoteType);
 
     public IAsyncRelayCommand TestConnectionCommand { get; }
     public IAsyncRelayCommand FetchDataCommand { get; }
+    public IRelayCommand ApplyNovelDefaultsCommand { get; }
+    public IRelayCommand ApplyAnimeDefaultsCommand { get; }
 
     public AnkiSettingsPageViewModel()
     {
@@ -86,6 +90,10 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
         _ankiService = App.GetService<IAnkiService>();
         TestConnectionCommand = new AsyncRelayCommand(TestConnectionAsync);
         FetchDataCommand = new AsyncRelayCommand(FetchDataAsync);
+        ApplyNovelDefaultsCommand = new RelayCommand(
+            () => ApplyFieldMappingDefaults(AnkiFieldMappingPreset.Novel));
+        ApplyAnimeDefaultsCommand = new RelayCommand(
+            () => ApplyFieldMappingDefaults(AnkiFieldMappingPreset.Anime));
 
         HandlebarOptions = new ObservableCollection<string>(
             AnkiHandlebarRenderer.GetHandlebarOptions());
@@ -118,7 +126,11 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
         SelectedDeck = AvailableDecks.FirstOrDefault(d => d.Id == anki.SelectedDeckId);
         SelectedNoteType = AvailableNoteTypes.FirstOrDefault(nt => nt.Id == anki.SelectedNoteTypeId);
 
-        RefreshFieldMappings();
+        if (SelectedNoteType != null)
+            AutofillFieldMappings(SelectedNoteType);
+        else
+            RefreshFieldMappings();
+        RefreshHandlebarOptions();
     }
 
     private void SaveSettings()
@@ -171,13 +183,31 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
     partial void OnSelectedNoteTypeChanged(AnkiNoteType? value)
     {
         if (value != null)
-            ApplyLapisDefaults(value);
-        RefreshFieldMappings();
+            AutofillFieldMappings(value);
+        else
+            RefreshFieldMappings();
         RefreshHandlebarOptions();
+        OnPropertyChanged(nameof(HasFieldMappingDefaults));
         SaveSettings();
     }
 
-    private void ApplyLapisDefaults(AnkiNoteType noteType)
+    private void AutofillFieldMappings(AnkiNoteType noteType)
+    {
+        var merged = LapisPreset.AutofillDefaults(noteType, CurrentFieldMappings());
+        RefreshFieldMappings(merged);
+    }
+
+    private void ApplyFieldMappingDefaults(AnkiFieldMappingPreset preset)
+    {
+        if (SelectedNoteType == null)
+            return;
+
+        var merged = LapisPreset.ApplyDefaults(SelectedNoteType, CurrentFieldMappings(), preset);
+        RefreshFieldMappings(merged);
+        SaveSettings();
+    }
+
+    private System.Collections.Generic.Dictionary<string, string> CurrentFieldMappings()
     {
         var currentMappings = new System.Collections.Generic.Dictionary<string, string>();
         foreach (var fm in FieldMappings)
@@ -186,8 +216,16 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
                 currentMappings[fm.FieldName] = fm.Template;
         }
 
-        var merged = LapisPreset.ApplyDefaults(noteType, currentMappings);
-        RefreshFieldMappings(merged);
+        if (currentMappings.Count == 0)
+        {
+            foreach (var (field, template) in _settingsService.Current.AnkiSettings.FieldMappings)
+            {
+                if (!string.IsNullOrWhiteSpace(template))
+                    currentMappings[field] = template;
+            }
+        }
+
+        return currentMappings;
     }
 
     private void RefreshFieldMappings(System.Collections.Generic.Dictionary<string, string>? mappings = null)
@@ -210,13 +248,8 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
 
     private void RefreshHandlebarOptions()
     {
-        var dictNames = AvailableNoteTypes
-            .SelectMany(nt => nt.Fields)
-            .Distinct()
-            .ToList();
-
         HandlebarOptions.Clear();
-        foreach (var option in AnkiHandlebarRenderer.GetHandlebarOptions(dictNames))
+        foreach (var option in AnkiHandlebarRenderer.GetHandlebarOptions())
             HandlebarOptions.Add(option);
     }
 
@@ -225,7 +258,10 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
         try
         {
             IsTestingConnection = true;
-            ConnectionStatusText = "Testing connection...";
+            ConnectionStatusText = LocalizedStatusText(
+                "AnkiConnectionTestingStatus",
+                "正在测试连接...",
+                "Testing connection...");
 
             // Save URL first so the client uses the right endpoint
             var anki = _settingsService.Current.AnkiSettings;
@@ -235,16 +271,23 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
             var available = await _ankiService.IsAvailableAsync();
             IsConnected = available;
             ConnectionStatusText = available
-                ? "Connected to AnkiConnect"
-                : "Failed to connect. Make sure Anki is running with the AnkiConnect plugin.";
-
-            if (available)
-                await FetchDataAsync();
+                ? LocalizedStatusText(
+                    "AnkiConnectionConnectedStatus",
+                    "已连接到 AnkiConnect",
+                    "Connected to AnkiConnect")
+                : LocalizedStatusText(
+                    "AnkiConnectionFailedStatus",
+                    "连接失败。请确认 Anki 已启动，并已启用 AnkiConnect 插件。",
+                    "Failed to connect. Make sure Anki is running with the AnkiConnect plugin.");
         }
         catch (Exception ex)
         {
             IsConnected = false;
-            ConnectionStatusText = $"Connection error: {ex.Message}";
+            ConnectionStatusText = FormatLocalizedStatusText(
+                "AnkiConnectionErrorStatus",
+                "连接错误：{0}",
+                "Connection error: {0}",
+                ex.Message);
             Log.Warning(ex, "[AnkiSettings] Connection test failed");
         }
         finally
@@ -281,7 +324,11 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            ConnectionStatusText = $"Failed to fetch data: {ex.Message}";
+            ConnectionStatusText = FormatLocalizedStatusText(
+                "AnkiFetchDataFailedStatus",
+                "获取数据失败：{0}",
+                "Failed to fetch data: {0}",
+                ex.Message);
             Log.Warning(ex, "[AnkiSettings] Fetch data failed");
         }
         finally
@@ -299,5 +346,26 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
     public void OnNavigatedFrom()
     {
         SaveSettings();
+    }
+
+    private static string LocalizedStatusText(string key, string zhCn, string enUs)
+    {
+        _ = key;
+        return CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.Equals("zh", StringComparison.OrdinalIgnoreCase)
+            ? zhCn
+            : enUs;
+    }
+
+    private static string FormatLocalizedStatusText(string key, string zhCn, string enUs, params object[] args)
+    {
+        var template = LocalizedStatusText(key, zhCn, enUs);
+        try
+        {
+            return string.Format(CultureInfo.CurrentCulture, template, args);
+        }
+        catch (FormatException)
+        {
+            return template;
+        }
     }
 }

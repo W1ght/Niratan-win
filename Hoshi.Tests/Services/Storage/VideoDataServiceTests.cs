@@ -53,13 +53,58 @@ public class VideoDataServiceTests
         await act.Should().ThrowAsync<SqliteException>();
     }
 
+    [Fact]
+    public async Task Migration009_AddsVideoPlaybackSubtitleStateColumns()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+
+        await InvokeMigrationAsync("Migration_008", connection, transaction);
+        await InvokeMigrationAsync("Migration_009", connection, transaction);
+        await transaction.CommitAsync(ct);
+
+        var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT name
+            FROM pragma_table_info('VideoItems')
+            WHERE name IN (
+                'SubtitleSelectionKind',
+                'SubtitleSelectionPath',
+                'SubtitleSelectionTrackId',
+                'SubtitleSelectionTrackName'
+            )
+            ORDER BY name;
+            """;
+
+        var names = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            names.Add(reader.GetString(0));
+
+        names.Should().Equal(
+            "SubtitleSelectionKind",
+            "SubtitleSelectionPath",
+            "SubtitleSelectionTrackId",
+            "SubtitleSelectionTrackName");
+    }
+
     private static async Task InvokeMigration008Async(
+        SqliteConnection connection,
+        DbTransaction transaction)
+    {
+        await InvokeMigrationAsync("Migration_008", connection, transaction);
+    }
+
+    private static async Task InvokeMigrationAsync(
+        string migrationName,
         SqliteConnection connection,
         DbTransaction transaction)
     {
         var appAssembly = typeof(Hoshi.Models.NovelBook).Assembly;
         var migrationType = appAssembly.GetType(
-            "Hoshi.Services.Storage.Migrations.Migration_008",
+            $"Hoshi.Services.Storage.Migrations.{migrationName}",
             throwOnError: true)!;
         var migration = Activator.CreateInstance(migrationType, nonPublic: true)!;
         var method = migrationType.GetMethod(

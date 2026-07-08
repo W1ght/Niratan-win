@@ -135,6 +135,27 @@ internal sealed class VideoLibraryService : IVideoLibraryService
         }
     }
 
+    public async Task<Result> SavePlaybackStateAsync(
+        string videoId,
+        VideoPlaybackState state,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            await _dataService.SaveVideoPlaybackStateAsync(videoId, state, ct);
+            return Result.Success();
+        }
+        catch (OperationCanceledException)
+        {
+            return Result.Cancelled();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error saving video playback state for {VideoId}", videoId);
+            return Result.Failure(ex.Message, "Error saving video playback state");
+        }
+    }
+
     public static string? FindSidecarSubtitle(string videoPath)
     {
         var directory = Path.GetDirectoryName(videoPath);

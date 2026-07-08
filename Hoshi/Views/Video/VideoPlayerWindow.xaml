@@ -78,8 +78,20 @@
                   PointerPressed="BottomChromePopupRoot_PointerPressed"
                   PointerWheelChanged="BottomChromePopupRoot_PointerWheelChanged"
                   DoubleTapped="BottomChromePopupRoot_DoubleTapped">
-                <Canvas x:Name="PopupOverlayCanvas"
-                        Canvas.ZIndex="100" />
+                <Border x:Name="VideoDictionaryPanelChrome"
+                        Canvas.ZIndex="100"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        Margin="16,16,16,120"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Visibility="Collapsed">
+                    <Canvas x:Name="PopupOverlayCanvas"
+                            HorizontalAlignment="Stretch"
+                            VerticalAlignment="Stretch"
+                            Background="Transparent"
+                            SizeChanged="PopupOverlayCanvas_SizeChanged" />
+                </Border>
 
                 <Border x:Name="SubtitlePanelBorder"
                         Canvas.ZIndex="20"
@@ -491,14 +503,77 @@
                                                            Style="{StaticResource VideoInspectorSectionTitleStyle}" />
                                             </Grid>
                                              <TextBlock x:Uid="VideoInspectorMiningHistoryEmptyText"
-                                                       Text="挖卡历史记录源接入后会显示在这里。"
+                                                       x:Name="MiningHistoryEmptyText"
+                                                       Text="暂无挖卡历史。保存当前字幕后会显示在这里。"
                                                        TextWrapping="Wrap"
                                                        Style="{StaticResource VideoInspectorSecondaryTextStyle}" />
-                                             <Button x:Uid="VideoInspectorMiningLookupButton"
-                                                     Content="查询当前字幕"
-                                                     IsEnabled="{x:Bind ViewModel.HasCurrentSubtitle, Mode=OneWay}"
+                                             <Grid ColumnDefinitions="*,*"
+                                                   ColumnSpacing="8">
+                                                 <Button x:Uid="VideoInspectorMiningLookupButton"
+                                                         Content="查询当前字幕"
+                                                         IsEnabled="{x:Bind ViewModel.HasCurrentSubtitle, Mode=OneWay}"
+                                                         HorizontalAlignment="Stretch"
+                                                         Click="LookupCurrentSubtitleButton_Click" />
+                                                 <Button x:Name="RecordMiningHistoryButton"
+                                                         Grid.Column="1"
+                                                         Content="保存字幕"
+                                                         IsEnabled="{x:Bind ViewModel.HasCurrentSubtitle, Mode=OneWay}"
+                                                         HorizontalAlignment="Stretch"
+                                                         Click="RecordMiningHistoryButton_Click" />
+                                             </Grid>
+                                             <ListView x:Name="MiningHistoryListView"
+                                                       AutomationProperties.AutomationId="VideoInspectorMiningHistoryList"
+                                                       ItemsSource="{x:Bind ViewModel.MiningHistoryRows, Mode=OneWay}"
+                                                       IsItemClickEnabled="True"
+                                                       ItemClick="MiningHistoryListView_ItemClick"
+                                                       SelectionMode="None"
+                                                       Visibility="Collapsed">
+                                                 <ListView.ItemContainerStyle>
+                                                     <Style TargetType="ListViewItem">
+                                                         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                                         <Setter Property="Padding" Value="0" />
+                                                         <Setter Property="Margin" Value="0,2" />
+                                                         <Setter Property="MinHeight" Value="0" />
+                                                     </Style>
+                                                 </ListView.ItemContainerStyle>
+                                                 <ListView.ItemTemplate>
+                                                     <DataTemplate x:DataType="models:VideoMiningHistoryRow">
+                                                         <StackPanel Spacing="4"
+                                                                     AutomationProperties.Name="{x:Bind AutomationName, Mode=OneWay}">
+                                                             <TextBlock Text="{x:Bind SourceHeader}"
+                                                                        Opacity="{x:Bind SourceHeaderOpacity, Mode=OneWay}"
+                                                                        TextTrimming="CharacterEllipsis"
+                                                                        Style="{StaticResource VideoInspectorSecondaryTextStyle}" />
+                                                             <Grid ColumnDefinitions="*,Auto,Auto"
+                                                                   ColumnSpacing="6"
+                                                                   Padding="8,6">
+                                                                 <StackPanel Spacing="2">
+                                                                     <TextBlock Text="{x:Bind SubtitleText}"
+                                                                                MaxLines="2"
+                                                                                TextWrapping="Wrap"
+                                                                                Style="{StaticResource VideoInspectorPrimaryTextStyle}" />
+                                                                     <TextBlock Text="{x:Bind TimeText}"
+                                                                                Style="{StaticResource VideoInspectorSecondaryTextStyle}" />
+                                                                 </StackPanel>
+                                                                 <Button Grid.Column="1"
+                                                                         Content="&#xE8C8;"
+                                                                         FontFamily="Segoe MDL2 Assets"
+                                                                         Tag="{Binding}"
+                                                                         Click="CopyMiningHistoryButton_Click" />
+                                                                 <Button Grid.Column="2"
+                                                                         Content="&#xE74D;"
+                                                                         FontFamily="Segoe MDL2 Assets"
+                                                                         Tag="{Binding}"
+                                                                         Click="DeleteMiningHistoryButton_Click" />
+                                                             </Grid>
+                                                         </StackPanel>
+                                                     </DataTemplate>
+                                                 </ListView.ItemTemplate>
+                                             </ListView>
+                                             <Button x:Name="ClearMiningHistoryButton"
+                                                     Content="清空挖卡历史"
                                                      HorizontalAlignment="Stretch"
-                                                     Click="LookupCurrentSubtitleButton_Click" />
+                                                     Click="ClearMiningHistoryButton_Click" />
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>
@@ -514,21 +589,21 @@
                                                           Foreground="#99111111"
                                                           Glyph="&#xE8FD;"
                                                           VerticalAlignment="Center" />
-                                                <TextBlock x:Uid="VideoInspectorEpisodesHeaderText"
+                                                <TextBlock x:Uid="VideoInspectorChaptersHeaderText"
                                                            Grid.Column="1"
                                                            Text="章节"
                                                            Style="{StaticResource VideoInspectorSectionTitleStyle}" />
                                             </Grid>
-                                            <TextBlock x:Name="EpisodeEmptyText"
-                                                       x:Uid="VideoInspectorNoEpisodesText"
-                                                       Text="没有章节"
+                                            <TextBlock x:Name="ChapterEmptyText"
+                                                       x:Uid="VideoInspectorNoChaptersText"
+                                                       Text="暂无章节"
                                                        Style="{StaticResource VideoInspectorSecondaryTextStyle}"
                                                        Visibility="Collapsed" />
-                                            <ListView x:Name="EpisodeListView"
-                                                      AutomationProperties.AutomationId="VideoInspectorEpisodeList"
-                                                      ItemsSource="{x:Bind ViewModel.EpisodeRows, Mode=OneWay}"
+                                            <ListView x:Name="ChapterListView"
+                                                      AutomationProperties.AutomationId="VideoInspectorChapterList"
+                                                      ItemsSource="{x:Bind ViewModel.ChapterRows, Mode=OneWay}"
                                                       IsItemClickEnabled="True"
-                                                      ItemClick="EpisodeListView_ItemClick"
+                                                      ItemClick="ChapterListView_ItemClick"
                                                       SelectionMode="None"
                                                       Visibility="Collapsed">
                                                 <ListView.ItemContainerStyle>
@@ -540,7 +615,7 @@
                                                     </Style>
                                                 </ListView.ItemContainerStyle>
                                                 <ListView.ItemTemplate>
-                                                    <DataTemplate x:DataType="models:VideoEpisodeRow">
+                                                    <DataTemplate x:DataType="models:VideoChapterRow">
                                                         <Grid AutomationProperties.Name="{x:Bind AutomationName, Mode=OneWay}"
                                                               ColumnDefinitions="4,Auto,*"
                                                               ColumnSpacing="8"
@@ -561,7 +636,7 @@
                                                                 <TextBlock Text="{x:Bind Title}"
                                                                            TextTrimming="CharacterEllipsis"
                                                                            Style="{StaticResource VideoInspectorPrimaryTextStyle}" />
-                                                                <TextBlock Text="{x:Bind DurationText}"
+                                                                <TextBlock Text="{x:Bind StartTimeText}"
                                                                            Style="{StaticResource VideoInspectorSecondaryTextStyle}" />
                                                             </StackPanel>
                                                         </Grid>
