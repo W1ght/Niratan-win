@@ -7,7 +7,7 @@
              xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
              xmlns:ui="using:CommunityToolkit.WinUI"
              xmlns:helpers="using:Hoshi.Helpers.UI.Converters"
-             xmlns:vmp="using:Hoshi.ViewModels.Pages"
+             xmlns:settings="using:Hoshi.Models.Settings"
              mc:Ignorable="d">
 
     <UserControl.Resources>
@@ -80,7 +80,7 @@
                     <ComboBox ItemsSource="{x:Bind ViewModel.AvailableReaderFonts}"
                               SelectedItem="{x:Bind ViewModel.SelectedReaderFont, Mode=TwoWay}">
                         <ComboBox.ItemTemplate>
-                            <DataTemplate x:DataType="vmp:ReaderFontOption">
+                            <DataTemplate x:DataType="settings:JapaneseFontOption">
                                 <TextBlock Text="{x:Bind Name}" />
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
