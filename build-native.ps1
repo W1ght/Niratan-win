@@ -28,8 +28,16 @@ $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.e
 if (Test-Path $vsWhere) {
     $vsPath = & $vsWhere -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
     if ($vsPath) {
+        $vsVersion = & $vsWhere -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationVersion 2>$null
+        $vsMajor = 17
+        if ($vsVersion -match '^(\d+)') {
+            $vsMajor = [int]$Matches[1]
+        } elseif ($vsPath -match '\\18\\') {
+            $vsMajor = 18
+        }
+
         Write-Host "Found Visual Studio at: $vsPath"
-        $generator = "Visual Studio 17 2022"
+        $generator = if ($vsMajor -ge 18) { "Visual Studio 18 2026" } else { "Visual Studio 17 2022" }
     }
 }
 
