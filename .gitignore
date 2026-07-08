@@ -68,6 +68,9 @@ artifacts/
 docs/reference/hoshi/Hoshi-Reader/
 docs/reference/hoshi/Hoshi-Reader-Android/
 
+# Local git worktrees for isolated Codex tasks.
+.worktrees/
+
 # ASP.NET Scaffolding
 ScaffoldingReadMe.txt
 
