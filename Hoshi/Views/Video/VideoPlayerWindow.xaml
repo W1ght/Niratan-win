@@ -1441,23 +1441,11 @@
                                                 <ComboBox x:Name="SubtitleFontFamilyComboBox"
                                                           AutomationProperties.AutomationId="VideoInspectorSubtitleFontFamilyComboBox"
                                                           Grid.Column="1"
-                                                          SelectedIndex="0"
                                                           HorizontalAlignment="Stretch"
-                                                          SelectionChanged="SubtitleFontFamilyComboBox_SelectionChanged">
-                                                    <ComboBoxItem x:Uid="VideoInspectorSystemDefaultText"
-                                                                  Tag=""
-                                                                  Content="System Default" />
-                                                    <ComboBoxItem Tag="Yu Gothic UI"
-                                                                  Content="Yu Gothic UI" />
-                                                    <ComboBoxItem Tag="Meiryo"
-                                                                  Content="Meiryo" />
-                                                    <ComboBoxItem Tag="BIZ UDPGothic"
-                                                                  Content="BIZ UDPGothic" />
-                                                    <ComboBoxItem Tag="MS Gothic"
-                                                                  Content="MS Gothic" />
-                                                    <ComboBoxItem Tag="Segoe UI"
-                                                                  Content="Segoe UI" />
-                                                </ComboBox>
+                                                          DisplayMemberPath="Name"
+                                                          ItemsSource="{x:Bind ViewModel.AvailableSubtitleFonts}"
+                                                          SelectedValuePath="SubtitleFontFamily"
+                                                          SelectedValue="{x:Bind ViewModel.SubtitleFontFamily, Mode=TwoWay}" />
                                             </Grid>
                                             <Grid ColumnDefinitions="Auto,*"
                                                   ColumnSpacing="12">

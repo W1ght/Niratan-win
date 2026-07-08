@@ -558,7 +558,7 @@
   <data name="VideoHueCard.Header" xml:space="preserve"><value>Hue</value></data>
   <data name="VideoSubtitleAppearanceSectionHeader.Text" xml:space="preserve"><value>Subtitle Appearance</value></data>
   <data name="VideoSubtitleFontFamilyCard.Header" xml:space="preserve"><value>Subtitle Font Family</value></data>
-  <data name="VideoSubtitleFontFamilyCard.Description" xml:space="preserve"><value>Leave empty to use the system default</value></data>
+  <data name="VideoSubtitleFontFamilyCard.Description" xml:space="preserve"><value>Choose a built-in subtitle font</value></data>
   <data name="VideoSubtitleFontSizeCard.Header" xml:space="preserve"><value>Subtitle Font Size</value></data>
   <data name="VideoSubtitleFontWeightCard.Header" xml:space="preserve"><value>Subtitle Font Weight</value></data>
   <data name="VideoSubtitleShadowRadiusCard.Header" xml:space="preserve"><value>Subtitle Shadow Radius</value></data>

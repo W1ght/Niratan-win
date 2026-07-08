@@ -11,7 +11,7 @@ public class ReaderSettings
 
     // --- Text ---
     public bool VerticalWriting { get; set; } = true;
-    public string SelectedFont { get; set; } = "system-ui, sans-serif";
+    public string SelectedFont { get; set; } = JapaneseFontCatalog.DefaultReaderCssValue;
     public int FontSize { get; set; } = 22;
     public bool HideFurigana { get; set; } = false;
 

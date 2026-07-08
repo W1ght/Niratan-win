@@ -14,6 +14,8 @@ public partial class VideoSettingsPageViewModel : ObservableObject
     private readonly ISettingsService _settingsService;
     private bool _isInitializing = true;
 
+    public IReadOnlyList<JapaneseFontOption> AvailableSubtitleFonts { get; } = JapaneseFontCatalog.Fonts;
+
     public IReadOnlyList<VideoSubtitleMaskModeOption> AvailableSubtitleMaskModes { get; } =
     [
         new(

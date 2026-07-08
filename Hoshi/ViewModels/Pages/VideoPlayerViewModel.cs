@@ -133,10 +133,12 @@ public partial class VideoPlayerViewModel : ObservableObject
     public partial string SubtitleFontWeightText { get; set; } = "700";
 
     [ObservableProperty]
-    public partial string SubtitleFontFamily { get; set; } = "";
+    public partial string SubtitleFontFamily { get; set; } = JapaneseFontCatalog.DefaultSubtitleFontFamily;
 
     [ObservableProperty]
-    public partial string SubtitleFontFamilyText { get; set; } = "System Default";
+    public partial string SubtitleFontFamilyText { get; set; } = JapaneseFontCatalog.DefaultFont.Name;
+
+    public IReadOnlyList<JapaneseFontOption> AvailableSubtitleFonts { get; } = JapaneseFontCatalog.Fonts;
 
     [ObservableProperty]
     public partial double SubtitleShadowRadius { get; set; } = 3;
@@ -1219,7 +1221,7 @@ public partial class VideoPlayerViewModel : ObservableObject
     {
         SubtitleFontSize = 36;
         SubtitleFontWeight = 700;
-        SubtitleFontFamily = "";
+        SubtitleFontFamily = JapaneseFontCatalog.DefaultSubtitleFontFamily;
         SubtitleShadowRadius = 3;
         SubtitleBackgroundOpacity = 0;
         SubtitleBackgroundDisabled = true;
@@ -1570,9 +1572,8 @@ public partial class VideoPlayerViewModel : ObservableObject
 
     partial void OnSubtitleFontFamilyChanged(string value)
     {
-        SubtitleFontFamilyText = string.IsNullOrWhiteSpace(value)
-            ? "System Default"
-            : value.Trim();
+        SubtitleFontFamilyText = JapaneseFontCatalog.FindBySubtitleFontFamily(value)?.Name
+            ?? (string.IsNullOrWhiteSpace(value) ? "System Default" : value.Trim());
     }
 
     partial void OnPrimarySubtitleNameChanged(string value)

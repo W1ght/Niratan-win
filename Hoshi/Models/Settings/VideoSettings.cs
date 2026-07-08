@@ -18,7 +18,7 @@ public sealed class VideoSettings
     private double _videoSaturation;
     private double _videoGamma;
     private double _videoHue;
-    private string _subtitleFontFamily = "";
+    private string _subtitleFontFamily = JapaneseFontCatalog.DefaultSubtitleFontFamily;
     private double _subtitleFontSize = 36;
     private int _subtitleFontWeight = 700;
     private double _subtitleShadowRadius = 3;

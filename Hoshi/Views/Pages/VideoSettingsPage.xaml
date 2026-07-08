@@ -233,9 +233,12 @@
                                           HorizontalAlignment="Stretch"
                                           HorizontalContentAlignment="Stretch"
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE8D2;}">
-                        <TextBox Width="240"
-                                 AutomationProperties.AutomationId="VideoSubtitleFontFamilyTextBox"
-                                 Text="{x:Bind ViewModel.SubtitleFontFamily, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <ComboBox Width="240"
+                                  AutomationProperties.AutomationId="VideoSubtitleFontFamilyComboBox"
+                                  DisplayMemberPath="Name"
+                                  ItemsSource="{x:Bind ViewModel.AvailableSubtitleFonts}"
+                                  SelectedValuePath="SubtitleFontFamily"
+                                  SelectedValue="{x:Bind ViewModel.SubtitleFontFamily, Mode=TwoWay}" />
                     </toolkit:SettingsCard>
 
                     <toolkit:SettingsCard x:Uid="VideoSubtitleFontSizeCard"
