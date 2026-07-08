@@ -22,7 +22,7 @@ public sealed class VideoSettingsTests
         settings.VideoSaturation.Should().Be(0);
         settings.VideoGamma.Should().Be(0);
         settings.VideoHue.Should().Be(0);
-        settings.SubtitleFontFamily.Should().Be("");
+        settings.SubtitleFontFamily.Should().Be("Klee One");
         settings.SubtitleFontSize.Should().Be(36);
         settings.SubtitleFontWeight.Should().Be(700);
         settings.SubtitleShadowRadius.Should().Be(3);

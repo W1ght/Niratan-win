@@ -18,8 +18,6 @@ using Serilog;
 
 namespace Hoshi.ViewModels.Pages;
 
-public sealed record ReaderFontOption(string Name, string CssValue);
-
 public partial class SettingsPageViewModel : ObservableObject
 {
     private readonly ISettingsService _settingsService;
@@ -44,21 +42,10 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty]
     public partial bool VerticalWriting { get; set; }
 
-    public List<ReaderFontOption> AvailableReaderFonts { get; } = new()
-    {
-        new ReaderFontOption("System Default", "system-ui, sans-serif"),
-        new ReaderFontOption("Noto Serif CJK JP", "'Noto Serif CJK JP', serif"),
-        new ReaderFontOption("Noto Sans CJK JP", "'Noto Sans CJK JP', sans-serif"),
-        new ReaderFontOption("Yu Mincho", "'Yu Mincho', serif"),
-        new ReaderFontOption("Yu Gothic", "'Yu Gothic', sans-serif"),
-        new ReaderFontOption("MS Mincho", "'MS Mincho', serif"),
-        new ReaderFontOption("MS Gothic", "'MS Gothic', sans-serif"),
-        new ReaderFontOption("SimSun", "SimSun, serif"),
-        new ReaderFontOption("Microsoft YaHei", "'Microsoft YaHei', sans-serif"),
-    };
+    public IReadOnlyList<JapaneseFontOption> AvailableReaderFonts { get; } = JapaneseFontCatalog.Fonts;
 
     [ObservableProperty]
-    public partial ReaderFontOption SelectedReaderFont { get; set; } = null!;
+    public partial JapaneseFontOption SelectedReaderFont { get; set; } = null!;
 
     [ObservableProperty]
     public partial int FontSize { get; set; }
@@ -192,7 +179,7 @@ public partial class SettingsPageViewModel : ObservableObject
         SepiaMode = s.SepiaMode;
 
         VerticalWriting = s.VerticalWriting;
-        SelectedReaderFont = AvailableReaderFonts.FirstOrDefault(f => f.CssValue == s.SelectedFont)
+        SelectedReaderFont = JapaneseFontCatalog.FindByReaderCssValue(s.SelectedFont)
                              ?? AvailableReaderFonts[0];
         FontSize = s.FontSize;
         HideFurigana = s.HideFurigana;
@@ -236,7 +223,7 @@ public partial class SettingsPageViewModel : ObservableObject
     partial void OnSepiaModeChanged(bool value) => ApplyReaderSetting(s => s.SepiaMode, value);
 
     partial void OnVerticalWritingChanged(bool value) => ApplyReaderSetting(s => s.VerticalWriting, value);
-    partial void OnSelectedReaderFontChanged(ReaderFontOption value) => ApplyReaderSetting(s => s.SelectedFont, value.CssValue);
+    partial void OnSelectedReaderFontChanged(JapaneseFontOption value) => ApplyReaderSetting(s => s.SelectedFont, value.ReaderCssValue);
     partial void OnFontSizeChanged(int value) => ApplyReaderSetting(s => s.FontSize, value);
     partial void OnHideFuriganaChanged(bool value) => ApplyReaderSetting(s => s.HideFurigana, value);
 

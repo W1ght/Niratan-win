@@ -515,7 +515,7 @@
   <data name="VideoHueCard.Header" xml:space="preserve"><value>色相</value></data>
   <data name="VideoSubtitleAppearanceSectionHeader.Text" xml:space="preserve"><value>字幕外观</value></data>
   <data name="VideoSubtitleFontFamilyCard.Header" xml:space="preserve"><value>字幕字体</value></data>
-  <data name="VideoSubtitleFontFamilyCard.Description" xml:space="preserve"><value>留空时使用系统默认字体</value></data>
+  <data name="VideoSubtitleFontFamilyCard.Description" xml:space="preserve"><value>选择内置字幕字体</value></data>
   <data name="VideoSubtitleFontSizeCard.Header" xml:space="preserve"><value>字幕字号</value></data>
   <data name="VideoSubtitleFontWeightCard.Header" xml:space="preserve"><value>字幕字重</value></data>
   <data name="VideoSubtitleShadowRadiusCard.Header" xml:space="preserve"><value>字幕阴影半径</value></data>

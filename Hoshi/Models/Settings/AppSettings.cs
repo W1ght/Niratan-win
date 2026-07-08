@@ -8,7 +8,7 @@ namespace Hoshi.Models.Settings;
 public class AppSettings
 {
     public ThemeMode Theme { get; set; } = ThemeMode.System;
-    public string ReaderFontFamily { get; set; } = "system-ui, sans-serif";
+    public string ReaderFontFamily { get; set; } = JapaneseFontCatalog.DefaultReaderCssValue;
     public WindowState MainWindowState { get; set; } = new();
     public DictionaryDisplaySettings DictionaryDisplaySettings { get; set; } = new();
     public GlobalLookupSettings GlobalLookup { get; set; } = new();
