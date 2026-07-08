@@ -342,6 +342,7 @@ public sealed partial class VideoPlayerWindow
         var y = GetJsonDouble(payload, "y", 0);
         var width = Math.Max(1, GetJsonDouble(payload, "width", 1));
         var height = Math.Max(1, GetJsonDouble(payload, "height", ViewModel.SubtitleFontSize));
+        EnsureVideoDictionaryOverlaySurfaceVisible(EnsurePopupOverlay());
         var anchor = SubtitleWebView.TransformToVisual(PopupOverlayCanvas)
             .TransformPoint(new Windows.Foundation.Point(x, y));
 
@@ -373,8 +374,14 @@ public sealed partial class VideoPlayerWindow
     private void PopupOverlay_Dismissed(object? sender, EventArgs e)
     {
         _isLookupPopupVisible = false;
+        VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
         ApplySubtitleAppearance();
         _ = ClearSubtitleWebSelectionAsync();
+    }
+
+    private void PopupOverlayCanvas_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        _popupOverlay?.UpdateRootSize(e.NewSize.Width, e.NewSize.Height);
     }
 
     private void SubtitlePanelBorder_PointerEntered(object sender, PointerRoutedEventArgs e)

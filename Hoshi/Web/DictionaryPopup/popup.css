@@ -15,6 +15,11 @@ body {
     --line-height: 1.4;
     --list-padding1: 1.4em;
     --list-padding2: var(--list-padding1);
+    --popup-corner-radius: 12px;
+    --popup-scrollbar-size: 8px;
+    --popup-scrollbar-inset: 2px;
+    --popup-scrollbar-thumb: rgba(80, 80, 80, 0.42);
+    --popup-scrollbar-thumb-active: rgba(80, 80, 80, 0.64);
     --text-color-light1: #555555;
     --text-color-light2: #666666;
     --text-color-light3: #777777;
@@ -29,8 +34,76 @@ body {
 }
 
 body {
+    position: relative;
+    isolation: isolate;
+    min-height: 100vh;
+    border-radius: var(--popup-corner-radius);
     overflow-x: hidden;
     padding: 0 10px;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    border-radius: var(--popup-corner-radius);
+    background: transparent;
+}
+
+::-webkit-scrollbar {
+    width: var(--popup-scrollbar-size);
+    height: var(--popup-scrollbar-size);
+    background: transparent;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-track-piece,
+::-webkit-scrollbar-corner {
+    background: transparent;
+    border: 0;
+}
+
+::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
+::-webkit-scrollbar-thumb {
+    min-height: 36px;
+    border: var(--popup-scrollbar-inset) solid transparent;
+    border-radius: 999px;
+    background-color: transparent;
+    background-clip: content-box;
+}
+
+html:hover::-webkit-scrollbar-thumb,
+html.popup-scroll-active::-webkit-scrollbar-thumb,
+body:hover::-webkit-scrollbar-thumb,
+body.popup-scroll-active::-webkit-scrollbar-thumb,
+.overlay:hover::-webkit-scrollbar-thumb,
+.overlay.popup-scroll-active::-webkit-scrollbar-thumb {
+    background-color: var(--popup-scrollbar-thumb);
+}
+
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+    background-color: var(--popup-scrollbar-thumb-active);
+    border-width: 2px;
+}
+
+html.has-snapshot-acrylic,
+html.has-snapshot-acrylic body {
+    background-image: none;
+}
+
+html.has-snapshot-acrylic body::before {
+    background-image: var(--snapshot-acrylic-background-image);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
 }
 
 html:focus,
@@ -474,6 +547,8 @@ html[data-hoshi-color-scheme="dark"] .gloss-image-link[data-appearance="monochro
         --text-color-light3: #888888;
         --text-color-light4: #777777;
         --background-color-dark1: #333333;
+        --popup-scrollbar-thumb: rgba(255, 255, 255, 0.34);
+        --popup-scrollbar-thumb-active: rgba(255, 255, 255, 0.56);
     }
 }
 
@@ -494,4 +569,6 @@ html[data-hoshi-color-scheme="dark"] body {
     --text-color-light3: #888888;
     --text-color-light4: #777777;
     --background-color-dark1: #333333;
+    --popup-scrollbar-thumb: rgba(255, 255, 255, 0.34);
+    --popup-scrollbar-thumb-active: rgba(255, 255, 255, 0.56);
 }

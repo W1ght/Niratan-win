@@ -16,6 +16,7 @@ namespace Hoshi.Views.Dictionary;
 public sealed partial class GlobalLookupWindow : Window, IDisposable
 {
     private DictionaryPopupOverlay? _popupOverlay;
+    private DictionaryDesktopAcrylicThinBackdrop? _desktopAcrylicThinBackdrop;
     private string? _pendingInitialQuery;
     private bool _isLoaded;
 
@@ -25,6 +26,8 @@ public sealed partial class GlobalLookupWindow : Window, IDisposable
     {
         InitializeComponent();
         Title = "Global Lookup";
+        _desktopAcrylicThinBackdrop = DictionaryPopupMaterial.TryApplyDesktopAcrylicThin(this, RootGrid);
+        RootGrid.Background = DictionaryPopupMaterial.CreateWindowFallbackBrush();
         ViewModel = App.GetService<GlobalLookupWindowViewModel>();
         ViewModel.LookupReady += OnLookupReady;
         ViewModel.LookupCleared += OnLookupCleared;
@@ -185,6 +188,8 @@ public sealed partial class GlobalLookupWindow : Window, IDisposable
         RootGrid.Loaded -= OnLoaded;
         DictionaryPanelRoot.SizeChanged -= OnDictionaryPanelSizeChanged;
         Closed -= OnClosed;
+        _desktopAcrylicThinBackdrop?.Dispose();
+        _desktopAcrylicThinBackdrop = null;
 
         if (_popupOverlay is not null)
         {

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -75,9 +76,17 @@ internal sealed class LocalAudioSourceListResolver
         if (!TryParseLocalAudioSourceListUrl(url, out var expression, out var reading))
             return null;
 
+        var sw = Stopwatch.StartNew();
         var cacheKey = $"{expression}\n{reading}\n{_databasePath()}\n{string.Join("|", _externalEntriesDatabasePaths())}";
         if (_cache.TryGetValue(cacheKey, out var cached) && File.Exists(new Uri(cached.AudioUrl).LocalPath))
+        {
+            Log.Information(
+                "[AudioTrace] local-audio cache hit in {Ms}ms expression='{Expression}' reading='{Reading}'",
+                sw.ElapsedMilliseconds,
+                expression,
+                reading);
             return cached;
+        }
 
         var operation = _inflight.GetOrAdd(
             cacheKey,
@@ -87,7 +96,14 @@ internal sealed class LocalAudioSourceListResolver
 
         try
         {
-            return await operation.Value;
+            var result = await operation.Value;
+            Log.Information(
+                "[AudioTrace] local-audio resolve completed in {Ms}ms expression='{Expression}' reading='{Reading}' hit={Hit}",
+                sw.ElapsedMilliseconds,
+                expression,
+                reading,
+                result != null);
+            return result;
         }
         finally
         {
@@ -210,6 +226,7 @@ internal sealed class LocalAudioSourceListResolver
         string where,
         IReadOnlyDictionary<string, object?> parameters)
     {
+        var sw = Stopwatch.StartNew();
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
             SELECT source, file
@@ -231,13 +248,27 @@ internal sealed class LocalAudioSourceListResolver
 
         await using var reader = await command.ExecuteReaderAsync();
         if (!await reader.ReadAsync())
+        {
+            Log.Information(
+                "[AudioTrace] local-audio sql entry query completed in {Ms}ms hit=false where='{Where}'",
+                sw.ElapsedMilliseconds,
+                where);
             return null;
+        }
 
-        return (reader.GetString(0), reader.GetString(1));
+        var result = (reader.GetString(0), reader.GetString(1));
+        Log.Information(
+            "[AudioTrace] local-audio sql entry query completed in {Ms}ms hit=true where='{Where}' source='{Source}' file='{File}'",
+            sw.ElapsedMilliseconds,
+            where,
+            result.Item1,
+            result.Item2);
+        return result;
     }
 
     private static async Task<byte[]?> ReadAudioBytesAsync(SqliteConnection connection, string source, string file)
     {
+        var sw = Stopwatch.StartNew();
         await using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT data
@@ -249,7 +280,14 @@ internal sealed class LocalAudioSourceListResolver
         command.Parameters.AddWithValue("$file", file);
 
         var value = await command.ExecuteScalarAsync();
-        return value as byte[];
+        var bytes = value as byte[];
+        Log.Information(
+            "[AudioTrace] local-audio sql blob query completed in {Ms}ms source='{Source}' file='{File}' bytes={Bytes}",
+            sw.ElapsedMilliseconds,
+            source,
+            file,
+            bytes?.Length ?? 0);
+        return bytes;
     }
 
     private static string? ResolveExternalAudioPath(string entriesDbPath, string source, string file)

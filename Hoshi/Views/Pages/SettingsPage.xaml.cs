@@ -1,8 +1,9 @@
 using System;
+using System.Linq;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
-using Hoshi.Services.UI;
+using Windows.System;
 using Hoshi.ViewModels.Pages;
 
 namespace Hoshi.Views.Pages;
@@ -15,8 +16,15 @@ public sealed partial class SettingsPage : Page
     {
         ViewModel = App.GetService<SettingsPageViewModel>();
         InitializeComponent();
-
         DataContext = ViewModel;
+
+        Loaded += SettingsPage_Loaded;
+    }
+
+    private void SettingsPage_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (SettingsContentFrame.Content == null)
+            NavigateEmbeddedSettingsPage(typeof(DictionarySettingsPage));
     }
 
     protected override async void OnNavigatedFrom(NavigationEventArgs e)
@@ -25,23 +33,54 @@ public sealed partial class SettingsPage : Page
         await ViewModel.OnNavigatedFromAsync();
     }
 
-    private void ReaderAppearanceSettings_Click(object sender, RoutedEventArgs e)
+    private void SettingsSecondaryNavigationView_ItemInvoked(
+        NavigationView sender,
+        NavigationViewItemInvokedEventArgs args)
     {
-        App.GetService<INavigationService>().Navigate(typeof(ReaderAppearanceSettingsPage));
+        if (args.InvokedItemContainer?.Tag is not string tag)
+            return;
+
+        if (Uri.TryCreate(tag, UriKind.Absolute, out var uri))
+        {
+            _ = Launcher.LaunchUriAsync(uri);
+            return;
+        }
+
+        var pageType = Type.GetType(tag);
+        if (pageType != null)
+            NavigateEmbeddedSettingsPage(pageType);
     }
 
-    private void DictionarySettings_Click(object sender, RoutedEventArgs e)
+    private void SettingsSecondaryNavigationView_BackRequested(
+        NavigationView sender,
+        NavigationViewBackRequestedEventArgs args)
     {
-        App.GetService<INavigationService>().Navigate(typeof(DictionarySettingsPage));
+        if (SettingsContentFrame.CanGoBack)
+            SettingsContentFrame.GoBack();
     }
 
-    private void AnkiSettings_Click(object sender, RoutedEventArgs e)
+    private void SettingsContentFrame_Navigated(object sender, NavigationEventArgs e)
     {
-        App.GetService<INavigationService>().Navigate(typeof(AnkiSettingsPage));
+        SettingsSecondaryNavigationView.IsBackEnabled = SettingsContentFrame.CanGoBack;
+        SelectNavigationItem(e.SourcePageType);
     }
 
-    private void AdvancedSettings_Click(object sender, RoutedEventArgs e)
+    private void NavigateEmbeddedSettingsPage(Type pageType)
     {
-        App.GetService<INavigationService>().Navigate(typeof(AdvancedSettingsPage));
+        if (SettingsContentFrame.CurrentSourcePageType != pageType)
+            SettingsContentFrame.Navigate(pageType, SettingsNavigationMode.Embedded);
+
+        SelectNavigationItem(pageType);
+    }
+
+    private void SelectNavigationItem(Type pageType)
+    {
+        var selectedItem = SettingsSecondaryNavigationView
+            .MenuItems
+            .OfType<NavigationViewItem>()
+            .FirstOrDefault(item => Type.GetType(item.Tag?.ToString() ?? "") == pageType);
+
+        if (selectedItem != null)
+            SettingsSecondaryNavigationView.SelectedItem = selectedItem;
     }
 }

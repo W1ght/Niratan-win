@@ -15,7 +15,9 @@ using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.Web.WebView2.Core;
+using Windows.Storage.Streams;
 using Hoshi.Enums;
 using Hoshi.Models.Anki;
 using Hoshi.Models.Dictionary;
@@ -27,7 +29,17 @@ using Serilog;
 
 namespace Hoshi.Views.Dictionary;
 
-public sealed record DictionaryPopupRedirectRequest(string Query, double? X = null, double? Y = null, double? Width = null, double? Height = null);
+public sealed record DictionaryPopupRedirectRequest(
+    string Query,
+    double? X = null,
+    double? Y = null,
+    double? Width = null,
+    double? Height = null,
+    string? Source = null,
+    double? ClientNow = null,
+    double? SelectMs = null,
+    double? RectMs = null,
+    int? SelectedLength = null);
 
 public sealed class DictionaryLookupPopup : IDisposable
 {
@@ -36,9 +48,10 @@ public sealed class DictionaryLookupPopup : IDisposable
     public event EventHandler? Scrolled;
     public event EventHandler? ContentReady;
 
+    private readonly Grid _surfaceRoot;
+    private readonly Image _snapshotAcrylicImage;
     private readonly WebView2 _contentWebView;
     private readonly AcrylicBrush _surfaceBrush;
-    private readonly SolidColorBrush _windowSurfaceBrush;
     private readonly SolidColorBrush _strokeBrush;
     private readonly PopupHtmlGenerator _htmlGenerator;
     private readonly IDictionaryLookupService _lookupService;
@@ -52,10 +65,13 @@ public sealed class DictionaryLookupPopup : IDisposable
     private bool _useStandaloneWindowVisuals;
     private bool _useNakedFloatingWindowVisuals;
     private long _displayGeneration;
+    private long _snapshotAcrylicGeneration;
     private long? _pendingContentGeneration;
+    private Stopwatch? _pendingContentStopwatch;
     private TaskCompletionSource<bool>? _shellReadyCompletion;
     private string? _currentTraceId;
     private double _readyOpacity = 0.88;
+    private double _popupCornerRadius = 12;
 
     private const int MaxResolvedAudioUrlCacheEntries = 512;
     private const string AudioSourcePlaceholderPattern = "[^/?#&]+";
@@ -75,6 +91,13 @@ public sealed class DictionaryLookupPopup : IDisposable
         _audioService = App.GetService<IAudioService>();
         _ankiService = App.GetService<IAnkiService>();
 
+        _snapshotAcrylicImage = new Image
+        {
+            Stretch = Stretch.UniformToFill,
+            Opacity = 0,
+            IsHitTestVisible = false,
+        };
+
         _contentWebView = new WebView2
         {
             DefaultBackgroundColor = Colors.Transparent,
@@ -82,16 +105,16 @@ public sealed class DictionaryLookupPopup : IDisposable
             UseSystemFocusVisuals = false,
         };
 
-        _surfaceBrush = new AcrylicBrush
+        _surfaceRoot = new Grid
         {
-            AlwaysUseFallback = false,
-            TintColor = Windows.UI.Color.FromArgb(0xFF, 0xF8, 0xF8, 0xF8),
-            TintOpacity = 0.04,
-            TintLuminosityOpacity = 0.06,
-            FallbackColor = Windows.UI.Color.FromArgb(0x90, 0xF8, 0xF8, 0xF8),
+            Children =
+            {
+                _snapshotAcrylicImage,
+                _contentWebView,
+            },
         };
-        _windowSurfaceBrush = new SolidColorBrush(
-            Windows.UI.Color.FromArgb(0xFF, 0xF8, 0xF8, 0xF8));
+
+        _surfaceBrush = DictionaryPopupMaterial.CreateInAppAcrylicThinBrush();
         _strokeBrush = new SolidColorBrush(
             Windows.UI.Color.FromArgb(0x66, 0x00, 0x00, 0x00));
 
@@ -101,7 +124,7 @@ public sealed class DictionaryLookupPopup : IDisposable
             BorderThickness = new Thickness(1),
             BorderBrush = _strokeBrush,
             Background = _surfaceBrush,
-            Child = _contentWebView,
+            Child = _surfaceRoot,
             Shadow = new ThemeShadow(),
             Translation = new Vector3(0, 0, 32),
             Visibility = Visibility.Visible,
@@ -115,7 +138,8 @@ public sealed class DictionaryLookupPopup : IDisposable
         _useStandaloneWindowVisuals = true;
         _contentWebView.DefaultBackgroundColor = Colors.Transparent;
         _contentWebView.Margin = new Thickness(-1);
-        VisualRoot.Background = _windowSurfaceBrush;
+        SetPopupCornerRadius(0);
+        VisualRoot.Background = _surfaceBrush;
         VisualRoot.BorderThickness = new Thickness(0);
         VisualRoot.BorderBrush = null;
         VisualRoot.CornerRadius = new CornerRadius(0);
@@ -128,7 +152,8 @@ public sealed class DictionaryLookupPopup : IDisposable
         _useNakedFloatingWindowVisuals = true;
         _contentWebView.DefaultBackgroundColor = Colors.Transparent;
         _contentWebView.Margin = new Thickness(-1);
-        VisualRoot.Background = _windowSurfaceBrush;
+        SetPopupCornerRadius(8);
+        VisualRoot.Background = _surfaceBrush;
         VisualRoot.BorderThickness = new Thickness(0);
         VisualRoot.BorderBrush = null;
         VisualRoot.CornerRadius = new CornerRadius(8);
@@ -139,15 +164,23 @@ public sealed class DictionaryLookupPopup : IDisposable
     public async Task WarmAsync(ThemeMode themeMode = ThemeMode.System, AudioSettings? audioSettings = null, AnkiSettings? ankiSettings = null)
     {
         if (_isWarmed) return;
+        var sw = Stopwatch.StartNew();
         _audioSettings = audioSettings ?? new AudioSettings();
         _ankiSettings = ankiSettings ?? new AnkiSettings();
 
         await EnsureWebViewAsync();
+        Log.Information(
+            "[LookupTrace] trace={TraceId} popup warm EnsureWebView2 completed in {Ms}ms",
+            _currentTraceId ?? "-", sw.ElapsedMilliseconds);
         _shellReadyCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         _contentWebView.CoreWebView2.NavigateToString(_htmlGenerator.GenerateShellHtml(themeMode, audioSettings: _audioSettings, ankiSettings: _ankiSettings, hidden: true));
+        Log.Information(
+            "[LookupTrace] trace={TraceId} popup warm NavigateToString returned in {Ms}ms",
+            _currentTraceId ?? "-", sw.ElapsedMilliseconds);
         await WaitForShellReadyAsync();
+        await ApplyPopupCornerRadiusToWebViewAsync();
         _isWarmed = true;
-        Log.Information("[DictPopup] Warm root WebView2 initialized");
+        Log.Information("[DictPopup] Warm WebView2 initialized in {Ms}ms", sw.ElapsedMilliseconds);
     }
 
     public void SetMiningContext(AnkiMiningContext? context)
@@ -157,19 +190,8 @@ public sealed class DictionaryLookupPopup : IDisposable
 
     public void SetTheme(ThemeMode themeMode)
     {
-        var isDark = IsThemeDark(themeMode);
-        _surfaceBrush.TintColor = isDark
-            ? Windows.UI.Color.FromArgb(0xFF, 0x24, 0x24, 0x24)
-            : Windows.UI.Color.FromArgb(0xFF, 0xF8, 0xF8, 0xF8);
-        _surfaceBrush.AlwaysUseFallback = false;
-        _surfaceBrush.TintOpacity = 0.04;
-        _surfaceBrush.TintLuminosityOpacity = 0.06;
-        _surfaceBrush.FallbackColor = isDark
-            ? Windows.UI.Color.FromArgb(0x70, 0x24, 0x24, 0x24)
-            : Windows.UI.Color.FromArgb(0x90, 0xF8, 0xF8, 0xF8);
-        _windowSurfaceBrush.Color = isDark
-            ? Windows.UI.Color.FromArgb(0xFF, 0x24, 0x24, 0x24)
-            : Windows.UI.Color.FromArgb(0xFF, 0xF8, 0xF8, 0xF8);
+        var isDark = DictionaryPopupMaterial.IsThemeDark(themeMode);
+        DictionaryPopupMaterial.ApplyTheme(_surfaceBrush, themeMode);
         if (_useStandaloneWindowVisuals || _useNakedFloatingWindowVisuals)
             _contentWebView.DefaultBackgroundColor = Colors.Transparent;
 
@@ -185,12 +207,11 @@ public sealed class DictionaryLookupPopup : IDisposable
             VisualRoot.Opacity = _readyOpacity;
     }
 
-    private static bool IsThemeDark(ThemeMode themeMode) => themeMode switch
+    private void SetPopupCornerRadius(double radius)
     {
-        ThemeMode.Dark => true,
-        ThemeMode.Light => false,
-        _ => Application.Current.RequestedTheme == ApplicationTheme.Dark,
-    };
+        _popupCornerRadius = Math.Max(0, radius);
+        _ = ApplyPopupCornerRadiusToWebViewAsync();
+    }
 
     public async Task ShowResultsWarmAsync(
         List<DictionaryLookupResult> results,
@@ -211,6 +232,7 @@ public sealed class DictionaryLookupPopup : IDisposable
 
         SetTheme(themeMode);
         var generation = PrepareForPendingContent();
+        _pendingContentStopwatch = Stopwatch.StartNew();
         var injectionScript = _htmlGenerator.GenerateInjectionScript(results, styles, displaySettings, themeMode, generation, _audioSettings, _ankiSettings, traceId: traceId);
         await _contentWebView.CoreWebView2.ExecuteScriptAsync(injectionScript);
         Log.Information(
@@ -226,6 +248,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         CancelPrefetch();
         _displayGeneration++;
         _pendingContentGeneration = null;
+        ClearSnapshotAcrylicBackground();
         VisualRoot.Opacity = 0;
         VisualRoot.IsHitTestVisible = false;
     }
@@ -234,6 +257,150 @@ public sealed class DictionaryLookupPopup : IDisposable
     {
         if (width > 0) VisualRoot.Width = width;
         if (height > 0) VisualRoot.Height = height;
+    }
+
+    public async Task SetSnapshotAcrylicBackgroundAsync(
+        string? screenshotPath,
+        ThemeMode themeMode,
+        string? traceId = null)
+    {
+        var generation = Interlocked.Increment(ref _snapshotAcrylicGeneration);
+        if (string.IsNullOrWhiteSpace(screenshotPath) || !File.Exists(screenshotPath))
+        {
+            ClearSnapshotAcrylicBackground(generation);
+            return;
+        }
+
+        var width = VisualRoot.ActualWidth > 0 ? VisualRoot.ActualWidth : VisualRoot.Width;
+        var height = VisualRoot.ActualHeight > 0 ? VisualRoot.ActualHeight : VisualRoot.Height;
+        if (width <= 1 || height <= 1)
+        {
+            ClearSnapshotAcrylicBackground(generation);
+            return;
+        }
+
+        try
+        {
+            var bytes = await DictionaryPopupSnapshotAcrylicRenderer.RenderPngAsync(
+                screenshotPath,
+                width,
+                height,
+                themeMode);
+            if (bytes is not { Length: > 0 }
+                || generation != Interlocked.Read(ref _snapshotAcrylicGeneration))
+            {
+                return;
+            }
+
+            using var stream = new InMemoryRandomAccessStream();
+            using (var writer = new DataWriter(stream))
+            {
+                writer.WriteBytes(bytes);
+                await writer.StoreAsync();
+                await writer.FlushAsync();
+                writer.DetachStream();
+            }
+
+            stream.Seek(0);
+            var bitmap = new BitmapImage();
+            await bitmap.SetSourceAsync(stream);
+
+            if (generation != Interlocked.Read(ref _snapshotAcrylicGeneration))
+                return;
+
+            _snapshotAcrylicImage.Source = bitmap;
+            _snapshotAcrylicImage.Opacity = 0;
+            await ApplySnapshotAcrylicWebBackgroundAsync(bytes, generation);
+            Log.Information(
+                "[DictPopup] Snapshot acrylic background applied trace={TraceId} size={Width:F0}x{Height:F0}",
+                traceId ?? "-",
+                width,
+                height);
+        }
+        catch (Exception ex)
+        {
+            if (generation == Interlocked.Read(ref _snapshotAcrylicGeneration))
+                ClearSnapshotAcrylicBackground(generation);
+
+            Log.Debug(ex, "[DictPopup] Snapshot acrylic background failed trace={TraceId}", traceId ?? "-");
+        }
+    }
+
+    public void ClearSnapshotAcrylicBackground()
+    {
+        var generation = Interlocked.Increment(ref _snapshotAcrylicGeneration);
+        ClearSnapshotAcrylicBackground(generation);
+    }
+
+    private void ClearSnapshotAcrylicBackground(long generation)
+    {
+        if (generation != Interlocked.Read(ref _snapshotAcrylicGeneration))
+            return;
+
+        _snapshotAcrylicImage.Opacity = 0;
+        _snapshotAcrylicImage.Source = null;
+        _ = ClearSnapshotAcrylicWebBackgroundAsync();
+    }
+
+    private async Task ApplySnapshotAcrylicWebBackgroundAsync(byte[] bytes, long generation)
+    {
+        if (!_webViewReady
+            || _contentWebView.CoreWebView2 == null
+            || generation != Interlocked.Read(ref _snapshotAcrylicGeneration))
+        {
+            return;
+        }
+
+        var dataUrl = "data:image/png;base64," + Convert.ToBase64String(bytes);
+        var backgroundValue = $"url(\"{dataUrl}\")";
+        var script = $$"""
+            (() => {
+                document.documentElement.classList.add('has-snapshot-acrylic');
+                document.documentElement.style.setProperty('--snapshot-acrylic-background-image', {{JsonSerializer.Serialize(backgroundValue)}});
+            })();
+            """;
+        await _contentWebView.CoreWebView2.ExecuteScriptAsync(script);
+    }
+
+    private async Task ApplyPopupCornerRadiusToWebViewAsync()
+    {
+        try
+        {
+            if (!_webViewReady || _contentWebView.CoreWebView2 == null)
+                return;
+
+            var radius = $"{_popupCornerRadius:0.###}px";
+            var script = $$"""
+                (() => {
+                    document.documentElement.style.setProperty('--popup-corner-radius', {{JsonSerializer.Serialize(radius)}});
+                })();
+                """;
+            await _contentWebView.CoreWebView2.ExecuteScriptAsync(script);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "[DictPopup] Applying popup corner radius failed");
+        }
+    }
+
+    private async Task ClearSnapshotAcrylicWebBackgroundAsync()
+    {
+        try
+        {
+            if (!_webViewReady || _contentWebView.CoreWebView2 == null)
+                return;
+
+            await _contentWebView.CoreWebView2.ExecuteScriptAsync("""
+                (() => {
+                    document.documentElement.classList.remove('has-snapshot-acrylic');
+                    document.documentElement.style.removeProperty('--snapshot-acrylic-background-image');
+                })();
+                """);
+        }
+        catch
+        {
+            // Best-effort visual cleanup; the next shell render resets the document.
+        }
     }
 
     public async Task HighlightSelectionAsync(string matchedText)
@@ -324,6 +491,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         }
 
         var deferral = args.GetDeferral();
+        var sw = Stopwatch.StartNew();
         try
         {
             var dictionary = GetQueryParameter(uri, "dictionary");
@@ -341,6 +509,9 @@ public sealed class DictionaryLookupPopup : IDisposable
             var bytes = await _lookupService.GetMediaFileAsync(dictionary, path);
             if (bytes is not { Length: > 0 })
             {
+                Log.Information(
+                    "[LookupTrace] trace={TraceId} dictionary media miss in {Ms}ms dictionary='{Dictionary}' path='{Path}'",
+                    _currentTraceId ?? "-", sw.ElapsedMilliseconds, dictionary, path);
                 args.Response = sender.Environment.CreateWebResourceResponse(
                     Stream.Null.AsRandomAccessStream(),
                     404,
@@ -355,6 +526,9 @@ public sealed class DictionaryLookupPopup : IDisposable
                 200,
                 "OK",
                 $"Content-Type: {GetImageMimeType(path)}\r\nAccess-Control-Allow-Origin: *\r\n");
+            Log.Information(
+                "[LookupTrace] trace={TraceId} dictionary media served in {Ms}ms bytes={Bytes} dictionary='{Dictionary}' path='{Path}'",
+                _currentTraceId ?? "-", sw.ElapsedMilliseconds, bytes.Length, dictionary, path);
         }
         catch (Exception ex)
         {
@@ -376,6 +550,9 @@ public sealed class DictionaryLookupPopup : IDisposable
         CoreWebView2WebResourceRequestedEventArgs args,
         Uri uri)
     {
+        var sw = Stopwatch.StartNew();
+        var traceId = GetQueryParameter(uri, "lookupTraceId") ?? _currentTraceId ?? "-";
+        var audioTraceId = GetQueryParameter(uri, "audioTraceId") ?? "-";
         try
         {
             var url = GetQueryParameter(uri, "url");
@@ -390,6 +567,11 @@ public sealed class DictionaryLookupPopup : IDisposable
             }
 
             url = NormalizeAudioSourceUrl(url);
+            Log.Information(
+                "[AudioTrace] lookup={TraceId} audio={AudioTraceId} resolver request received url='{Url}'",
+                traceId,
+                audioTraceId,
+                url);
             if (!IsAllowedAudioResolverUrl(url))
             {
                 Log.Warning("[DictPopup] Rejected audio resolver URL outside configured sources: {Url}", url);
@@ -401,7 +583,7 @@ public sealed class DictionaryLookupPopup : IDisposable
                 return;
             }
 
-            var resolvedUrl = await TryResolveAudioUrlAsync(url);
+            var resolvedUrl = await TryResolveAudioUrlAsync(url, traceId, audioTraceId);
             if (string.IsNullOrWhiteSpace(resolvedUrl))
             {
                 var emptyJson = """{"type":"audioSourceList","audioSources":[]}""";
@@ -411,6 +593,11 @@ public sealed class DictionaryLookupPopup : IDisposable
                     200,
                     "OK",
                     "Content-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\n");
+                Log.Information(
+                    "[AudioTrace] lookup={TraceId} audio={AudioTraceId} resolver request completed in {Ms}ms hit=false",
+                    traceId,
+                    audioTraceId,
+                    sw.ElapsedMilliseconds);
                 return;
             }
 
@@ -425,6 +612,12 @@ public sealed class DictionaryLookupPopup : IDisposable
                 200,
                 "OK",
                 "Content-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\n");
+            Log.Information(
+                "[AudioTrace] lookup={TraceId} audio={AudioTraceId} resolver request completed in {Ms}ms hit=true resolved='{ResolvedUrl}'",
+                traceId,
+                audioTraceId,
+                sw.ElapsedMilliseconds,
+                resolvedUrl);
         }
         catch (Exception ex)
         {
@@ -506,8 +699,8 @@ public sealed class DictionaryLookupPopup : IDisposable
                 case "contentReady":
                     Log.Information("[DictPopup] Content ready: {Payload}", payload.GetRawText());
                     Log.Information(
-                        "[LookupTrace] trace={TraceId} popup contentReady message received gen={Gen}",
-                        _currentTraceId ?? "-", _pendingContentGeneration);
+                        "[LookupTrace] trace={TraceId} popup contentReady message received gen={Gen} elapsedSinceInject={Ms}ms",
+                        _currentTraceId ?? "-", _pendingContentGeneration, _pendingContentStopwatch?.ElapsedMilliseconds ?? -1);
                     if (!IsCurrentContentReady(payload))
                     {
                         Log.Debug("[DictPopup] Ignored stale contentReady: {Payload}", payload.GetRawText());
@@ -532,6 +725,15 @@ public sealed class DictionaryLookupPopup : IDisposable
 
                 case "lookupRedirect":
                     var request = ParseRedirectRequest(payload);
+                    Log.Information(
+                        "[LookupTrace] trace={TraceId} popup lookupRedirect received query='{Query}' source={Source} selectedLength={SelectedLength} selectMs={SelectMs:F1} rectMs={RectMs:F1} clientNow={ClientNow:F1}",
+                        _currentTraceId ?? "-",
+                        request.Query,
+                        request.Source ?? "-",
+                        request.SelectedLength,
+                        request.SelectMs,
+                        request.RectMs,
+                        request.ClientNow);
                     _contentWebView.DispatcherQueue.TryEnqueue(() =>
                         RedirectRequested?.Invoke(this, request));
                     break;
@@ -615,6 +817,31 @@ public sealed class DictionaryLookupPopup : IDisposable
             ? kindElement.GetString()
             : null;
 
+        if (kind == "popupTrace")
+        {
+            var popupTraceId = body.TryGetProperty("lookupTraceId", out var popupTraceElement)
+                ? popupTraceElement.GetString()
+                : _currentTraceId;
+            var popupStage = body.TryGetProperty("stage", out var popupStageElement)
+                ? popupStageElement.GetString()
+                : "-";
+            var popupClientNow = body.TryGetProperty("now", out var popupNowElement)
+                && popupNowElement.ValueKind == JsonValueKind.Number
+                ? popupNowElement.GetDouble()
+                : 0;
+            var popupDetails = body.TryGetProperty("details", out var popupDetailsElement)
+                ? popupDetailsElement.GetRawText()
+                : "{}";
+
+            Log.Information(
+                "[LookupTrace] trace={TraceId} popup-js stage={Stage} clientNow={ClientNow:F1} details={Details}",
+                string.IsNullOrWhiteSpace(popupTraceId) ? _currentTraceId ?? "-" : popupTraceId,
+                popupStage ?? "-",
+                popupClientNow,
+                popupDetails);
+            return;
+        }
+
         if (kind != "audioTrace")
         {
             Log.Information("[DictPopup] Diagnostic: {Payload}", payload.GetRawText());
@@ -651,6 +878,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     {
         var generation = ++_displayGeneration;
         _pendingContentGeneration = generation;
+        _pendingContentStopwatch = null;
         VisualRoot.Visibility = Visibility.Visible;
         VisualRoot.Opacity = 0;
         VisualRoot.IsHitTestVisible = false;
@@ -673,6 +901,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     private void ShowReadyContent()
     {
         _pendingContentGeneration = null;
+        _pendingContentStopwatch = null;
         VisualRoot.Visibility = Visibility.Visible;
         VisualRoot.Opacity = _readyOpacity;
         VisualRoot.IsHitTestVisible = true;
@@ -706,19 +935,45 @@ public sealed class DictionaryLookupPopup : IDisposable
             ? queryElement.GetString() ?? ""
             : "";
         if (!body.TryGetProperty("rect", out var rect) || rect.ValueKind != JsonValueKind.Object)
-            return new DictionaryPopupRedirectRequest(query);
+            return new DictionaryPopupRedirectRequest(
+                query,
+                Source: TryGetString(body, "source"),
+                ClientNow: TryGetDouble(body, "clientNow"),
+                SelectMs: TryGetDouble(body, "selectMs"),
+                RectMs: TryGetDouble(body, "rectMs"),
+                SelectedLength: TryGetInt(body, "selectedLength"));
 
         return new DictionaryPopupRedirectRequest(
             query,
             TryGetDouble(rect, "x"),
             TryGetDouble(rect, "y"),
             TryGetDouble(rect, "width"),
-            TryGetDouble(rect, "height"));
+            TryGetDouble(rect, "height"),
+            TryGetString(body, "source"),
+            TryGetDouble(body, "clientNow"),
+            TryGetDouble(body, "selectMs"),
+            TryGetDouble(body, "rectMs"),
+            TryGetInt(body, "selectedLength"));
     }
 
     private static double? TryGetDouble(JsonElement element, string property)
     {
         return element.TryGetProperty(property, out var value) && value.TryGetDouble(out var result)
+            ? result
+            : null;
+    }
+
+    private static string? TryGetString(JsonElement element, string property)
+    {
+        return element.TryGetProperty(property, out var value)
+            && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+    }
+
+    private static int? TryGetInt(JsonElement element, string property)
+    {
+        return element.TryGetProperty(property, out var value) && value.TryGetInt32(out var result)
             ? result
             : null;
     }
@@ -759,7 +1014,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         try
         {
             var sw = Stopwatch.StartNew();
-            var resolvedUrl = await TryResolveAudioUrlAsync(url) ?? url;
+            var resolvedUrl = await TryResolveAudioUrlAsync(url, traceId, audioTraceId) ?? url;
             Log.Information(
                 "[AudioTrace] lookup={TraceId} audio={AudioTraceId} url resolve completed in {Ms}ms input='{InputUrl}' resolved='{ResolvedUrl}'",
                 traceId ?? "-", audioTraceId ?? "-", sw.ElapsedMilliseconds, url, resolvedUrl);
@@ -812,7 +1067,7 @@ public sealed class DictionaryLookupPopup : IDisposable
                 var resolverUrl = ExpandAudioTemplate(sources[0], expression, reading);
                 if (!IsAllowedAudioResolverUrl(resolverUrl))
                     return;
-                await TryResolveAudioUrlAsync(resolverUrl);
+                await TryResolveAudioUrlAsync(resolverUrl, _currentTraceId ?? "prefetch", "prefetch");
                 Log.Information("[AudioPrefetch] auto: '{Expr}'/'{Reading}', entries={Count}",
                     expression, reading, results.Count);
             }
@@ -839,23 +1094,40 @@ public sealed class DictionaryLookupPopup : IDisposable
     /// Returns a task that resolves <paramref name="url"/> to a playable MP3 URL.
     /// Only one HTTP request per URL is ever in-flight — concurrent callers await the same task.
     /// </summary>
-    private static Task<string?> TryResolveAudioUrlAsync(string url)
+    private static Task<string?> TryResolveAudioUrlAsync(
+        string url,
+        string? traceId = null,
+        string? audioTraceId = null)
     {
         url = NormalizeAudioSourceUrl(url);
         if (s_resolvedAudioUrls.TryGetValue(url, out var cached))
+        {
+            Log.Information(
+                "[AudioTrace] lookup={TraceId} audio={AudioTraceId} url resolve cache hit input='{InputUrl}' resolved='{ResolvedUrl}'",
+                traceId ?? "-", audioTraceId ?? "-", url, cached);
             return Task.FromResult<string?>(cached);
+        }
 
         var operation = s_audioResolutionTasks.GetOrAdd(
             url,
-            static key => new Lazy<Task<string?>>(() => ResolveAndCacheUrlAsync(key)));
-        return AwaitAudioResolutionAsync(url, operation);
+            key => new Lazy<Task<string?>>(() => ResolveAndCacheUrlAsync(key, traceId, audioTraceId)));
+        return AwaitAudioResolutionAsync(url, operation, traceId, audioTraceId);
     }
 
-    private static async Task<string?> AwaitAudioResolutionAsync(string url, Lazy<Task<string?>> operation)
+    private static async Task<string?> AwaitAudioResolutionAsync(
+        string url,
+        Lazy<Task<string?>> operation,
+        string? traceId,
+        string? audioTraceId)
     {
+        var sw = Stopwatch.StartNew();
         try
         {
-            return await operation.Value;
+            var result = await operation.Value;
+            Log.Information(
+                "[AudioTrace] lookup={TraceId} audio={AudioTraceId} url resolve task awaited in {Ms}ms input='{InputUrl}' hit={Hit}",
+                traceId ?? "-", audioTraceId ?? "-", sw.ElapsedMilliseconds, url, result != null);
+            return result;
         }
         finally
         {
@@ -864,9 +1136,12 @@ public sealed class DictionaryLookupPopup : IDisposable
         }
     }
 
-    private static async Task<string?> ResolveAndCacheUrlAsync(string url)
+    private static async Task<string?> ResolveAndCacheUrlAsync(
+        string url,
+        string? traceId,
+        string? audioTraceId)
     {
-        var result = await ResolveAudioUrlCoreAsync(url);
+        var result = await ResolveAudioUrlCoreAsync(url, traceId, audioTraceId);
         if (!string.IsNullOrWhiteSpace(result))
         {
             if (s_resolvedAudioUrls.Count >= MaxResolvedAudioUrlCacheEntries)
@@ -877,15 +1152,26 @@ public sealed class DictionaryLookupPopup : IDisposable
         return result;
     }
 
-    private static async Task<string?> ResolveAudioUrlCoreAsync(string url)
+    private static async Task<string?> ResolveAudioUrlCoreAsync(
+        string url,
+        string? traceId,
+        string? audioTraceId)
     {
+        var sw = Stopwatch.StartNew();
         if (LocalAudioSourceListResolver.IsLocalAudioSourceListUrl(url))
         {
             var localResult = await s_localAudioSourceListResolver.ResolveAsync(url);
             if (localResult == null)
+            {
+                Log.Information(
+                    "[AudioTrace] lookup={TraceId} audio={AudioTraceId} local audioSourceList resolve completed in {Ms}ms hit=false input='{InputUrl}'",
+                    traceId ?? "-", audioTraceId ?? "-", sw.ElapsedMilliseconds, url);
                 return null;
+            }
 
-            Log.Information("[DictPopup] Resolved local audioSourceList: '{Old}' -> '{New}'", url, localResult.AudioUrl);
+            Log.Information(
+                "[AudioTrace] lookup={TraceId} audio={AudioTraceId} local audioSourceList resolve completed in {Ms}ms hit=true input='{InputUrl}' resolved='{ResolvedUrl}'",
+                traceId ?? "-", audioTraceId ?? "-", sw.ElapsedMilliseconds, url, localResult.AudioUrl);
             return localResult.AudioUrl;
         }
 
@@ -893,17 +1179,32 @@ public sealed class DictionaryLookupPopup : IDisposable
         {
             using var response = await s_audioResolveHttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
             if (!response.IsSuccessStatusCode)
+            {
+                Log.Information(
+                    "[AudioTrace] lookup={TraceId} audio={AudioTraceId} remote audioSourceList headers completed in {Ms}ms status={StatusCode} input='{InputUrl}'",
+                    traceId ?? "-", audioTraceId ?? "-", sw.ElapsedMilliseconds, (int)response.StatusCode, url);
                 return null;
+            }
 
             var contentType = response.Content.Headers.ContentType?.MediaType ?? "";
             var isJson = contentType.Contains("json", StringComparison.OrdinalIgnoreCase)
                       || contentType.Contains("text/", StringComparison.OrdinalIgnoreCase);
             if (!isJson)
+            {
+                Log.Information(
+                    "[AudioTrace] lookup={TraceId} audio={AudioTraceId} remote audio direct content-type='{ContentType}' in {Ms}ms input='{InputUrl}'",
+                    traceId ?? "-", audioTraceId ?? "-", contentType, sw.ElapsedMilliseconds, url);
                 return url;
+            }
 
             var body = await response.Content.ReadAsStringAsync();
             if (string.IsNullOrWhiteSpace(body) || body[0] != '{')
+            {
+                Log.Information(
+                    "[AudioTrace] lookup={TraceId} audio={AudioTraceId} remote audio text response read in {Ms}ms input='{InputUrl}' json=false bytes={Bytes}",
+                    traceId ?? "-", audioTraceId ?? "-", sw.ElapsedMilliseconds, url, body?.Length ?? 0);
                 return url;
+            }
 
             using var doc = JsonDocument.Parse(body);
             var root = doc.RootElement;
@@ -911,7 +1212,12 @@ public sealed class DictionaryLookupPopup : IDisposable
                 || typeEl.GetString() != "audioSourceList"
                 || !root.TryGetProperty("audioSources", out var sources)
                 || sources.GetArrayLength() == 0)
+            {
+                Log.Information(
+                    "[AudioTrace] lookup={TraceId} audio={AudioTraceId} remote audioSourceList empty in {Ms}ms input='{InputUrl}' bytes={Bytes}",
+                    traceId ?? "-", audioTraceId ?? "-", sw.ElapsedMilliseconds, url, body.Length);
                 return null;
+            }
 
             var first = sources[0];
             if (first.TryGetProperty("url", out var urlEl))
@@ -924,7 +1230,9 @@ public sealed class DictionaryLookupPopup : IDisposable
                     resolved = relative.ToString();
                 }
 
-                Log.Information("[DictPopup] Resolved audioSourceList: '{Old}' -> '{New}'", url, resolved);
+                Log.Information(
+                    "[AudioTrace] lookup={TraceId} audio={AudioTraceId} remote audioSourceList resolved in {Ms}ms input='{InputUrl}' resolved='{ResolvedUrl}'",
+                    traceId ?? "-", audioTraceId ?? "-", sw.ElapsedMilliseconds, url, resolved);
                 return resolved;
             }
         }
@@ -938,16 +1246,7 @@ public sealed class DictionaryLookupPopup : IDisposable
 
     private static string NormalizeAudioSourceUrl(string url)
     {
-        var normalized = url.Replace("\\", "/", StringComparison.Ordinal);
-        var schemeSeparator = normalized.IndexOf(":/", StringComparison.Ordinal);
-        if (schemeSeparator > 1
-            && schemeSeparator + 2 < normalized.Length
-            && normalized[schemeSeparator + 2] != '/')
-        {
-            normalized = normalized.Insert(schemeSeparator + 2, "/");
-        }
-
-        return normalized;
+        return AudioSourceUrlNormalizer.Normalize(url);
     }
 
     private void HandleMineEntry(JsonElement payload)

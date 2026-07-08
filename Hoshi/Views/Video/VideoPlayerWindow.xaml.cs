@@ -140,6 +140,7 @@ public sealed partial class VideoPlayerWindow : Window
         _positionTimer.Tick += OnPositionTimerTick;
 
         RootGrid.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(RootGrid_KeyDown), true);
+        RootGrid.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(RootGrid_PointerPressed), true);
         VideoSurface.AddHandler(UIElement.PointerWheelChangedEvent, new PointerEventHandler(VideoSurface_PointerWheelChanged), true);
         BottomChrome.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(RootGrid_KeyDown), true);
         BottomChrome.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(BottomChrome_PointerPressed), true);
@@ -449,17 +450,21 @@ public sealed partial class VideoPlayerWindow : Window
                 sentenceOffset);
             if (request == null)
             {
+                _popupOverlay?.Dismiss();
+                VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
+                _isLookupPopupVisible = false;
                 ViewModel.StatusText = "No dictionary results";
                 return;
             }
 
             await HighlightSubtitleWebSelectionAsync(request.Results[0].Matched);
 
+            var overlay = EnsurePopupOverlay();
+            _ = overlay.PrewarmAsync(RootGrid.XamlRoot);
+            EnsureVideoDictionaryOverlaySurfaceVisible(overlay);
             var point = anchorPoint
                 ?? SubtitleWebView.TransformToVisual(PopupOverlayCanvas)
                     .TransformPoint(new Windows.Foundation.Point(0, 0));
-            var overlay = EnsurePopupOverlay();
-            _ = overlay.PrewarmAsync(RootGrid.XamlRoot);
             ViewModel.StatusText = "Lookup opened";
             await overlay.ShowLookupAsync(
                 request.Results,
@@ -480,6 +485,10 @@ public sealed partial class VideoPlayerWindow : Window
         }
         catch (Exception ex)
         {
+            _popupOverlay?.Dismiss();
+            VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
+            _isLookupPopupVisible = false;
+            ApplySubtitleAppearance();
             ViewModel.StatusText = ex.Message;
         }
     }
@@ -527,6 +536,13 @@ public sealed partial class VideoPlayerWindow : Window
         _popupOverlay.Dismissed += PopupOverlay_Dismissed;
         _popupOverlay.UseCanvas(PopupOverlayCanvas);
         return _popupOverlay;
+    }
+
+    private void EnsureVideoDictionaryOverlaySurfaceVisible(DictionaryPopupOverlay? overlay = null)
+    {
+        VideoDictionaryPanelChrome.Visibility = Visibility.Visible;
+        VideoDictionaryPanelChrome.UpdateLayout();
+        (overlay ?? _popupOverlay)?.UpdateRootSize(PopupOverlayCanvas.ActualWidth, PopupOverlayCanvas.ActualHeight);
     }
 
     private void OnClosed(object sender, WindowEventArgs args)

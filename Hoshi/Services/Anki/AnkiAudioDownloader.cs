@@ -37,6 +37,7 @@ internal sealed class AnkiAudioDownloader
         if (string.IsNullOrWhiteSpace(url))
             return null;
 
+        url = NormalizeAudioSourceUrl(url);
         if (_cache.TryGetValue(url, out var cached))
             return CloneResult(cached);
 
@@ -183,16 +184,7 @@ internal sealed class AnkiAudioDownloader
 
     private static string NormalizeAudioSourceUrl(string url)
     {
-        var normalized = url.Replace("\\", "/", StringComparison.Ordinal);
-        var schemeSeparator = normalized.IndexOf(":/", StringComparison.Ordinal);
-        if (schemeSeparator > 1
-            && schemeSeparator + 2 < normalized.Length
-            && normalized[schemeSeparator + 2] != '/')
-        {
-            normalized = normalized.Insert(schemeSeparator + 2, "/");
-        }
-
-        return normalized;
+        return AudioSourceUrlNormalizer.Normalize(url);
     }
 
     private static string InferExtension(string url, string? contentType)

@@ -18,6 +18,15 @@ namespace Hoshi.Views.Video;
 public sealed partial class VideoPlayerWindow
 {
     private const uint WM_LBUTTONDBLCLK = 0x0203;
+    private const uint WM_SYSCOMMAND = 0x0112;
+    private const uint SC_SIZE = 0xF000;
+    private const double VideoResizeCornerGutter = 24;
+
+    private enum VideoWindowResizeDirection
+    {
+        BottomLeft = 7,
+        BottomRight = 8,
+    }
 
     private void OpenBottomChromeOverlay()
     {
@@ -742,6 +751,9 @@ public sealed partial class VideoPlayerWindow
 
     private void VideoSurface_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        if (TryBeginWindowResizeFromRootElementPointer(e, VideoSurface))
+            return;
+
         var point = e.GetCurrentPoint(VideoSurface);
         if (point.Properties.IsLeftButtonPressed)
         {
@@ -755,6 +767,12 @@ public sealed partial class VideoPlayerWindow
 
     private void BottomChromePopupRoot_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        if (TryBeginWindowResizeFromPopupPointer(e, BottomChromePopupRoot))
+            return;
+
+        if (TryDismissLookupPopupFromOutsidePointer(e))
+            return;
+
         if (IsVideoOverlayInteractiveSource(e.OriginalSource))
             return;
 
@@ -777,6 +795,9 @@ public sealed partial class VideoPlayerWindow
 
     private void BottomChrome_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        if (TryBeginWindowResizeFromPopupPointer(e, BottomChrome))
+            return;
+
         RestoreVideoKeyboardFocus(FocusState.Pointer);
         e.Handled = true;
     }
@@ -798,7 +819,24 @@ public sealed partial class VideoPlayerWindow
 
         return IsDescendantOf(dependencyObject, BottomChrome)
             || IsDescendantOf(dependencyObject, SubtitlePanelBorder)
+            || IsDescendantOf(dependencyObject, VideoDictionaryPanelChrome)
             || IsDescendantOf(dependencyObject, PopupOverlayCanvas);
+    }
+
+    private bool TryDismissLookupPopupFromOutsidePointer(PointerRoutedEventArgs e)
+    {
+        if (!_isLookupPopupVisible || _popupOverlay is null)
+            return false;
+
+        if (e.OriginalSource is DependencyObject source
+            && IsDescendantOf(source, VideoDictionaryPanelChrome))
+        {
+            return false;
+        }
+
+        _popupOverlay.Dismiss();
+        e.Handled = true;
+        return true;
     }
 
     private static bool IsDescendantOf(DependencyObject source, DependencyObject ancestor)
@@ -905,6 +943,134 @@ public sealed partial class VideoPlayerWindow
             return false;
         }
     }
+
+    private void RootGrid_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        _ = TryBeginWindowResizeFromRootElementPointer(e, RootGrid);
+    }
+
+    private bool TryBeginWindowResizeFromRootElementPointer(
+        PointerRoutedEventArgs e,
+        FrameworkElement element)
+    {
+        var point = e.GetCurrentPoint(element);
+        if (!point.Properties.IsLeftButtonPressed)
+            return false;
+
+        var rootPoint = ReferenceEquals(element, RootGrid)
+            ? point.Position
+            : element.TransformToVisual(RootGrid)
+                .TransformPoint(point.Position);
+        return TryBeginWindowResizeFromRootPoint(rootPoint.X, rootPoint.Y, e);
+    }
+
+    private bool TryBeginWindowResizeFromPopupPointer(
+        PointerRoutedEventArgs e,
+        FrameworkElement element)
+    {
+        var point = e.GetCurrentPoint(element);
+        if (!point.Properties.IsLeftButtonPressed)
+            return false;
+
+        var popupPoint = ReferenceEquals(element, BottomChromePopupRoot)
+            ? point.Position
+            : element.TransformToVisual(BottomChromePopupRoot)
+                .TransformPoint(point.Position);
+        return TryBeginWindowResizeFromRootPoint(
+            BottomChromePopup.HorizontalOffset + popupPoint.X,
+            BottomChromePopup.VerticalOffset + popupPoint.Y,
+            e);
+    }
+
+    private bool TryBeginWindowResizeFromRootPoint(
+        double pointerX,
+        double pointerY,
+        PointerRoutedEventArgs? e = null)
+    {
+        if (!TryGetBottomCornerResizeDirection(
+                pointerX,
+                pointerY,
+                RootGrid.ActualWidth,
+                RootGrid.ActualHeight,
+                VideoResizeCornerGutter,
+                out var direction))
+        {
+            return false;
+        }
+
+        if (!BeginWindowResize(direction))
+            return false;
+
+        if (e != null)
+            e.Handled = true;
+
+        return true;
+    }
+
+    private static bool TryGetBottomCornerResizeDirection(
+        double pointerX,
+        double pointerY,
+        double width,
+        double height,
+        double gutter,
+        out VideoWindowResizeDirection direction)
+    {
+        direction = default;
+        if (width <= 0 || height <= 0 || gutter <= 0)
+            return false;
+
+        var cornerGutter = Math.Min(gutter, Math.Min(width, height) / 2);
+        if (pointerY < height - cornerGutter || pointerY > height)
+            return false;
+
+        if (pointerX >= 0 && pointerX <= cornerGutter)
+        {
+            direction = VideoWindowResizeDirection.BottomLeft;
+            return true;
+        }
+
+        if (pointerX >= width - cornerGutter && pointerX <= width)
+        {
+            direction = VideoWindowResizeDirection.BottomRight;
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool TryBeginWindowResizeFromVideoHostLParam(IntPtr lParam)
+    {
+        if (_parentHwnd == IntPtr.Zero)
+            return false;
+
+        var scale = GetDpiForWindow(_parentHwnd) / 96.0;
+        if (scale <= 0)
+            scale = 1;
+
+        return TryBeginWindowResizeFromRootPoint(
+            GetSignedLoWord(lParam) / scale,
+            GetSignedHiWord(lParam) / scale);
+    }
+
+    private bool BeginWindowResize(VideoWindowResizeDirection direction)
+    {
+        if (_parentHwnd == IntPtr.Zero || _isFullScreen)
+            return false;
+
+        ReleaseCapture();
+        _ = SendMessageW(
+            _parentHwnd,
+            WM_SYSCOMMAND,
+            new UIntPtr(SC_SIZE + (uint)direction),
+            IntPtr.Zero);
+        return true;
+    }
+
+    private static int GetSignedLoWord(IntPtr value) =>
+        (short)((long)value & 0xFFFF);
+
+    private static int GetSignedHiWord(IntPtr value) =>
+        (short)(((long)value >> 16) & 0xFFFF);
 
     private async void RootGrid_KeyDown(object sender, KeyRoutedEventArgs e)
     {
@@ -1070,6 +1236,9 @@ public sealed partial class VideoPlayerWindow
                 DispatcherQueue.TryEnqueue(() => RestoreVideoKeyboardFocus(FocusState.Pointer));
                 break;
             case WM_LBUTTONDOWN:
+                if (TryBeginWindowResizeFromVideoHostLParam(lParam))
+                    return IntPtr.Zero;
+
                 DispatcherQueue.TryEnqueue(RunVideoSurfaceSingleClick);
                 return IntPtr.Zero;
             case WM_LBUTTONDBLCLK:
@@ -1110,4 +1279,15 @@ public sealed partial class VideoPlayerWindow
     {
         RestoreVideoKeyboardFocusAfterSubtitleInteraction();
     }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessageW(
+        IntPtr hWnd,
+        uint message,
+        UIntPtr wParam,
+        IntPtr lParam);
 }

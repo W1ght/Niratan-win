@@ -91,6 +91,38 @@ public class AnkiAudioDownloaderTests
     }
 
     [Fact]
+    public async Task DownloadAsync_NormalizesLocalhostBeforeHttpRequest()
+    {
+        var expectedResolverUri = new Uri("http://127.0.0.1:5050/resolve?term=星");
+        var mp3Uri = new Uri("http://audio.test/media/word.mp3");
+        var mp3Bytes = new byte[] { 0x49, 0x44, 0x33, 0x05, 0x00, 0x03 };
+        var sawLoopbackResolver = false;
+        using var http = new HttpClient(new MapHttpMessageHandler(request =>
+        {
+            if (request.RequestUri == expectedResolverUri)
+            {
+                sawLoopbackResolver = true;
+                return JsonResponse(
+                    """
+                    { "type":"audioSourceList", "audioSources":[{"url":"http://audio.test/media/word.mp3"}] }
+                    """);
+            }
+
+            if (request.RequestUri == mp3Uri)
+                return BytesResponse(mp3Bytes, "audio/mpeg");
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        }));
+        var downloader = new AnkiAudioDownloader(http);
+
+        var result = await downloader.DownloadAsync("http://localhost:5050/resolve?term=星");
+
+        result.Should().NotBeNull();
+        result!.Bytes.Should().Equal(mp3Bytes);
+        sawLoopbackResolver.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task DownloadAsync_CachesResolvedAudioSourceListResults()
     {
         var resolverUri = new Uri("http://audio.test/resolve?term=deru");
