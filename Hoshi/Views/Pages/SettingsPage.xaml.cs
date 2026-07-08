@@ -24,7 +24,7 @@ public sealed partial class SettingsPage : Page
     private void SettingsPage_Loaded(object sender, RoutedEventArgs e)
     {
         if (SettingsContentFrame.Content == null)
-            NavigateEmbeddedSettingsPage(typeof(DictionarySettingsPage));
+            NavigateEmbeddedSettingsPage(typeof(ReaderAppearanceSettingsPage));
     }
 
     protected override async void OnNavigatedFrom(NavigationEventArgs e)

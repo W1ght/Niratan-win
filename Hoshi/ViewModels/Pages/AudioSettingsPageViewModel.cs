@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Hoshi.Helpers;
 using Hoshi.Models.Settings;
 using Hoshi.Services.Audio;
 using Hoshi.Services.Settings;
@@ -19,7 +21,21 @@ public partial class AudioSettingsPageViewModel : ObservableObject
     private readonly ISettingsService _settingsService;
     private bool _isInitializing = true;
 
-    public AudioPlaybackMode[] AvailablePlaybackModes { get; } = Enum.GetValues<AudioPlaybackMode>();
+    public IReadOnlyList<AudioPlaybackModeOption> AvailablePlaybackModes { get; } =
+    [
+        new(
+            AudioPlaybackMode.Interrupt,
+            ResourceStringHelper.GetString("AudioPlaybackModeInterrupt", "Interrupt other audio")
+        ),
+        new(
+            AudioPlaybackMode.Duck,
+            ResourceStringHelper.GetString("AudioPlaybackModeDuck", "Duck other audio")
+        ),
+        new(
+            AudioPlaybackMode.Mix,
+            ResourceStringHelper.GetString("AudioPlaybackModeMix", "Mix with other audio")
+        ),
+    ];
 
     public ObservableCollection<AudioSourceViewModel> AudioSources { get; } = [];
 
@@ -198,7 +214,10 @@ public partial class AudioSettingsPageViewModel : ObservableObject
             if (file == null) return;
 
             IsImporting = true;
-            LocalAudioStatusText = "Importing audio database...";
+            LocalAudioStatusText = ResourceStringHelper.GetString(
+                "AudioLocalAudioImportingStatus",
+                "Importing audio database..."
+            );
 
             var dataPath = Helpers.AppDataHelper.GetDataPath();
             var destPath = System.IO.Path.Combine(dataPath, "Audio", "android.db");
@@ -213,12 +232,21 @@ public partial class AudioSettingsPageViewModel : ObservableObject
 
             RefreshLocalAudioStatus();
             Log.Information("[AudioSettings] Local audio database imported to {Path}", destPath);
-            App.GetService<INotificationService>().ShowSuccess("Local audio database imported", "Audio");
+            App.GetService<INotificationService>().ShowSuccess(
+                ResourceStringHelper.GetString(
+                    "AudioLocalAudioImportedNotification",
+                    "Local audio database imported"
+                ),
+                ResourceStringHelper.GetString("AudioNotificationTitle", "Audio")
+            );
         }
         catch (Exception ex)
         {
             Log.Error(ex, "[AudioSettings] Failed to import local audio database");
-            App.GetService<INotificationService>().ShowError(ex.Message, "Import Error");
+            App.GetService<INotificationService>().ShowError(
+                ex.Message,
+                ResourceStringHelper.GetString("AudioImportErrorTitle", "Import Error")
+            );
         }
         finally
         {
@@ -237,12 +265,21 @@ public partial class AudioSettingsPageViewModel : ObservableObject
 
             RefreshLocalAudioStatus();
             Log.Information("[AudioSettings] Local audio database deleted");
-            App.GetService<INotificationService>().ShowSuccess("Local audio database deleted", "Audio");
+            App.GetService<INotificationService>().ShowSuccess(
+                ResourceStringHelper.GetString(
+                    "AudioLocalAudioDeletedNotification",
+                    "Local audio database deleted"
+                ),
+                ResourceStringHelper.GetString("AudioNotificationTitle", "Audio")
+            );
         }
         catch (Exception ex)
         {
             Log.Error(ex, "[AudioSettings] Failed to delete local audio database");
-            App.GetService<INotificationService>().ShowError(ex.Message, "Delete Error");
+            App.GetService<INotificationService>().ShowError(
+                ex.Message,
+                ResourceStringHelper.GetString("AudioDeleteErrorTitle", "Delete Error")
+            );
         }
     }
 
@@ -255,11 +292,18 @@ public partial class AudioSettingsPageViewModel : ObservableObject
         if (IsLocalAudioImported)
         {
             var info = new System.IO.FileInfo(dbPath);
-            LocalAudioStatusText = $"Database: {FormatFileSize(info.Length)}";
+            LocalAudioStatusText = ResourceStringHelper.FormatString(
+                "AudioLocalAudioImportedStatus",
+                "Database: {0}",
+                FormatFileSize(info.Length)
+            );
         }
         else
         {
-            LocalAudioStatusText = "No audio database imported. Import an Android audio .db file to use local audio.";
+            LocalAudioStatusText = ResourceStringHelper.GetString(
+                "AudioLocalAudioMissingStatus",
+                "No audio database imported. Import an Android audio .db file to use local audio."
+            );
         }
     }
 
@@ -297,5 +341,31 @@ public partial class AudioSourceViewModel : ObservableObject
     [ObservableProperty]
     public partial bool CanMoveDown { get; set; }
 
+    public string DisplayName
+    {
+        get
+        {
+            if (IsDefault)
+            {
+                return ResourceStringHelper.GetString("AudioDefaultSourceName", "Default");
+            }
+
+            if (Url == AudioSettings.LocalAudioUrl || Url == AudioSettings.LegacyLocalAudioUrl)
+            {
+                return ResourceStringHelper.GetString("AudioLocalSourceName", "Local");
+            }
+
+            return Name;
+        }
+    }
+
     public bool CanDelete => !IsDefault && Url != AudioSettings.LocalAudioUrl;
+
+    partial void OnNameChanged(string value) => OnPropertyChanged(nameof(DisplayName));
+
+    partial void OnUrlChanged(string value) => OnPropertyChanged(nameof(DisplayName));
+
+    partial void OnIsDefaultChanged(bool value) => OnPropertyChanged(nameof(DisplayName));
 }
+
+public sealed record AudioPlaybackModeOption(AudioPlaybackMode Mode, string Label);

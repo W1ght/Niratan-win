@@ -62,6 +62,7 @@ public sealed partial class VideoPlayerWindow
                 await RefreshMediaTracksAsync(ct: ct);
                 UpdateSubtitleControlAvailability();
                 ViewModel.StatusText = "Subtitles off";
+                await SaveCurrentVideoProgressAsync(ct);
                 return;
             }
 
@@ -73,6 +74,7 @@ public sealed partial class VideoPlayerWindow
             await Task.Delay(120, ct);
             await RefreshMediaTracksAsync(ct: ct);
             ViewModel.UpdateEmbeddedSubtitleCue(await _playbackEngine.GetCurrentSubtitleCueAsync(ct));
+            await SaveCurrentVideoProgressAsync(ct);
         }
         catch (Exception ex)
         {

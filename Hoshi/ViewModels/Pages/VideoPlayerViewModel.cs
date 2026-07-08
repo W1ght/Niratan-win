@@ -10,7 +10,9 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Hoshi.Models;
 using Hoshi.Models.Anki;
 using Hoshi.Models.Dictionary;
+using Hoshi.Models.Settings;
 using Hoshi.Services.Dictionary;
+using Hoshi.Services.Settings;
 using Hoshi.Services.Video;
 
 namespace Hoshi.ViewModels.Pages;
@@ -25,8 +27,11 @@ public partial class VideoPlayerViewModel : ObservableObject
     private IReadOnlyList<VideoSubtitleCue> _currentExternalCues = [];
     private IReadOnlyList<VideoSubtitleCue> _currentEmbeddedTranscriptCues = [];
     private int? _lastSelectedSubtitleTrackId;
+    private string? _primarySubtitlePath;
+    private bool _subtitleSelectionOff;
     private bool _hasCompleteEmbeddedTranscript;
     private readonly VideoTranscriptWindow _transcriptWindow = new();
+    private IReadOnlyList<VideoChapter> _chapters = [];
 
     [ObservableProperty]
     public partial string Title { get; set; } = "Video";
@@ -89,6 +94,24 @@ public partial class VideoPlayerViewModel : ObservableObject
     public partial bool HasEpisodes { get; set; }
 
     [ObservableProperty]
+    public partial bool HasChapters { get; set; }
+
+    [ObservableProperty]
+    public partial bool HasMiningHistory { get; set; }
+
+    [ObservableProperty]
+    public partial bool AutoPlayNextEpisode { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool RememberPlaybackState { get; set; } = true;
+
+    [ObservableProperty]
+    public partial int SeekIntervalSeconds { get; set; } = 5;
+
+    [ObservableProperty]
+    public partial int MiningHistoryLimit { get; set; } = 25;
+
+    [ObservableProperty]
     public partial int? SelectedSubtitleTrackId { get; set; }
 
     [ObservableProperty]
@@ -120,6 +143,15 @@ public partial class VideoPlayerViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string SubtitleShadowRadiusText { get; set; } = "3.0";
+
+    [ObservableProperty]
+    public partial double SubtitleBackgroundOpacity { get; set; }
+
+    [ObservableProperty]
+    public partial string SubtitleBackgroundOpacityText { get; set; } = "0%";
+
+    [ObservableProperty]
+    public partial bool SubtitleBackgroundDisabled { get; set; } = true;
 
     [ObservableProperty]
     public partial string SubtitleColorHex { get; set; } = "#FFFFFFFF";
@@ -257,16 +289,21 @@ public partial class VideoPlayerViewModel : ObservableObject
     public ObservableCollection<VideoTranscriptRow> TranscriptRows { get; } = [];
     public ObservableCollection<VideoTranscriptRow> TranscriptVisibleRows { get; } = [];
     public ObservableCollection<VideoEpisodeRow> EpisodeRows { get; } = [];
+    public ObservableCollection<VideoChapterRow> ChapterRows { get; } = [];
+    public ObservableCollection<VideoMiningHistoryRow> MiningHistoryRows { get; } = [];
     public bool IsEmbeddedSubtitleActive => SelectedSubtitleTrackId.HasValue
         && string.IsNullOrWhiteSpace(PrimarySubtitleName);
     public bool HasCompleteEmbeddedTranscript => _hasCompleteEmbeddedTranscript;
 
     public VideoPlayerViewModel(
         SubtitleParserService subtitleParserService,
-        IDictionaryPopupRequestService popupRequestService)
+        IDictionaryPopupRequestService popupRequestService,
+        ISettingsService? settingsService = null)
     {
         _subtitleParserService = subtitleParserService;
         _popupRequestService = popupRequestService;
+        if (settingsService != null)
+            ApplySettings(settingsService.Current.VideoSettings);
     }
 
     public async Task LoadVideoAsync(VideoItem video, CancellationToken ct = default)
@@ -289,15 +326,18 @@ public partial class VideoPlayerViewModel : ObservableObject
         _currentExternalCues = [];
         _currentEmbeddedTranscriptCues = [];
         PrimarySubtitleName = "";
+        _primarySubtitlePath = null;
         EmbeddedSubtitleName = "";
         SelectedSubtitleTrackId = null;
         SelectedAudioTrackId = null;
         SelectedVideoTrackId = null;
         _embeddedSubtitleCue = null;
         _lastSelectedSubtitleTrackId = null;
+        _subtitleSelectionOff = false;
         SetHasCompleteEmbeddedTranscript(false);
         ClearABLoop();
         ReplaceTranscriptRows([]);
+        ReplaceChapters([]);
 
         if (!string.IsNullOrWhiteSpace(video.SubtitlePath) && File.Exists(video.SubtitlePath))
         {
@@ -315,10 +355,12 @@ public partial class VideoPlayerViewModel : ObservableObject
                 _currentExternalCues = [];
                 _currentEmbeddedTranscriptCues = [];
                 PrimarySubtitleName = "";
+                _primarySubtitlePath = null;
                 EmbeddedSubtitleName = "";
                 SelectedSubtitleTrackId = null;
                 _embeddedSubtitleCue = null;
                 _lastSelectedSubtitleTrackId = null;
+                _subtitleSelectionOff = false;
                 SetHasCompleteEmbeddedTranscript(false);
                 ReplaceTranscriptRows([]);
                 StatusText = $"Failed to load subtitles: {ex.Message}";
@@ -343,6 +385,33 @@ public partial class VideoPlayerViewModel : ObservableObject
         HasEpisodes = EpisodeRows.Count > 0;
     }
 
+    public void ReplaceChapters(IEnumerable<VideoChapter> chapters)
+    {
+        _chapters = chapters
+            .OrderBy(chapter => chapter.StartTime)
+            .ThenBy(chapter => chapter.Id)
+            .ToList();
+        HasChapters = _chapters.Count > 0;
+        RefreshChapterRows(CurrentPosition);
+    }
+
+    public void ReplaceMiningHistoryItems(IEnumerable<VideoMiningHistoryItem> items)
+    {
+        MiningHistoryRows.Clear();
+        string? previousSource = null;
+        foreach (var item in items)
+        {
+            var showHeader = !string.Equals(
+                previousSource,
+                item.SubtitleSourceName,
+                StringComparison.Ordinal);
+            MiningHistoryRows.Add(new VideoMiningHistoryRow(item, showHeader));
+            previousSource = item.SubtitleSourceName;
+        }
+
+        HasMiningHistory = MiningHistoryRows.Count > 0;
+    }
+
     public async Task LoadSubtitleAsync(string subtitlePath, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(subtitlePath) || !File.Exists(subtitlePath))
@@ -351,11 +420,13 @@ public partial class VideoPlayerViewModel : ObservableObject
         _subtitleDocument = await _subtitleParserService.ParseFileAsync(subtitlePath, ct);
         _currentExternalCues = [];
         _currentEmbeddedTranscriptCues = [];
+        _primarySubtitlePath = subtitlePath;
         PrimarySubtitleName = Path.GetFileName(subtitlePath);
         EmbeddedSubtitleName = "";
         SelectedSubtitleTrackId = null;
         _embeddedSubtitleCue = null;
         _lastSelectedSubtitleTrackId = null;
+        _subtitleSelectionOff = false;
         SetHasCompleteEmbeddedTranscript(false);
         AreSubtitlesVisible = true;
         ReplaceTranscriptRows(_subtitleDocument.Cues);
@@ -368,11 +439,13 @@ public partial class VideoPlayerViewModel : ObservableObject
         _subtitleDocument = new VideoSubtitleDocument([]);
         _currentExternalCues = [];
         _currentEmbeddedTranscriptCues = [];
+        _primarySubtitlePath = null;
         PrimarySubtitleName = "";
         EmbeddedSubtitleName = "";
         SelectedSubtitleTrackId = null;
         _embeddedSubtitleCue = null;
         CurrentCue = null;
+        _subtitleSelectionOff = true;
         SetHasCompleteEmbeddedTranscript(false);
         AreSubtitlesVisible = true;
         HideSubtitleDisplay();
@@ -442,10 +515,12 @@ public partial class VideoPlayerViewModel : ObservableObject
         _currentExternalCues = [];
         _currentEmbeddedTranscriptCues = [];
         _embeddedSubtitleCue = null;
+        _primarySubtitlePath = null;
         PrimarySubtitleName = "";
         EmbeddedSubtitleName = track.DisplayName;
         SelectedSubtitleTrackId = track.Id;
         _lastSelectedSubtitleTrackId = track.Id;
+        _subtitleSelectionOff = false;
         CurrentCue = null;
         SetHasCompleteEmbeddedTranscript(false);
         AreSubtitlesVisible = true;
@@ -606,6 +681,7 @@ public partial class VideoPlayerViewModel : ObservableObject
         DurationText = VideoMiningContextFactory.FormatTimestamp(duration);
         ProgressMaximum = Math.Max(1, duration.TotalSeconds);
         ProgressValue = Math.Clamp(position.TotalSeconds, 0, ProgressMaximum);
+        RefreshChapterRows(position);
 
         if (IsEmbeddedSubtitleActive)
         {
@@ -654,6 +730,22 @@ public partial class VideoPlayerViewModel : ObservableObject
         var subtitleDelay = TimeSpan.FromMilliseconds(SubtitleDelayMilliseconds);
         var subtitlePosition = position - subtitleDelay;
         return subtitlePosition < TimeSpan.Zero ? TimeSpan.Zero : subtitlePosition;
+    }
+
+    private void RefreshChapterRows(TimeSpan position)
+    {
+        ChapterRows.Clear();
+        if (_chapters.Count == 0)
+            return;
+
+        var currentId = _chapters
+            .Where(chapter => chapter.StartTime <= position)
+            .OrderByDescending(chapter => chapter.StartTime)
+            .ThenByDescending(chapter => chapter.Id)
+            .FirstOrDefault()
+            ?.Id;
+        foreach (var chapter in _chapters)
+            ChapterRows.Add(new VideoChapterRow(chapter, chapter.Id == currentId));
     }
 
     private void DisplayEmbeddedCue(VideoSubtitleCue? cue)
@@ -864,6 +956,71 @@ public partial class VideoPlayerViewModel : ObservableObject
         return null;
     }
 
+    public VideoSubtitleSelection GetCurrentSubtitleSelection()
+    {
+        if (_subtitleSelectionOff)
+            return VideoSubtitleSelection.Off();
+
+        if (!string.IsNullOrWhiteSpace(_primarySubtitlePath))
+            return VideoSubtitleSelection.ExternalFile(_primarySubtitlePath);
+
+        if (SelectedSubtitleTrackId.HasValue)
+        {
+            var track = GetSubtitleTrackById(SelectedSubtitleTrackId);
+            return VideoSubtitleSelection.EmbeddedTrack(
+                SelectedSubtitleTrackId.Value,
+                track?.DisplayName ?? EmbeddedSubtitleName);
+        }
+
+        return VideoSubtitleSelection.None();
+    }
+
+    public VideoMiningHistoryCapture? CreateMiningHistoryCapture()
+    {
+        if (CurrentVideo == null)
+            return null;
+
+        var cues = GetCurrentMiningHistoryCues();
+        if (cues.Count == 0)
+            return null;
+
+        var text = string.Join("\n", cues.Select(cue => cue.Text).Where(value => !string.IsNullOrWhiteSpace(value)));
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        var selection = GetCurrentSubtitleSelection();
+        var sourceName = !string.IsNullOrWhiteSpace(PrimarySubtitleName)
+            ? PrimarySubtitleName
+            : !string.IsNullOrWhiteSpace(EmbeddedSubtitleName)
+                ? EmbeddedSubtitleName
+                : Path.GetFileName(CurrentVideo.FilePath);
+        return new VideoMiningHistoryCapture(
+            text,
+            CurrentVideo.FilePath,
+            sourceName,
+            selection.Kind == VideoSubtitleSelectionKind.ExternalFile ? selection.ExternalPath : null,
+            selection.Kind,
+            selection.Kind == VideoSubtitleSelectionKind.EmbeddedTrack ? selection.TrackId : null,
+            cues.Min(cue => cue.Start),
+            cues.Max(cue => cue.End));
+    }
+
+    private IReadOnlyList<VideoSubtitleCue> GetCurrentMiningHistoryCues()
+    {
+        if (IsEmbeddedSubtitleActive)
+        {
+            if (_currentEmbeddedTranscriptCues.Count > 0)
+                return _currentEmbeddedTranscriptCues;
+
+            return CurrentCue == null ? [] : [CurrentCue];
+        }
+
+        if (_currentExternalCues.Count > 0)
+            return _currentExternalCues;
+
+        return CurrentCue == null ? [] : [CurrentCue];
+    }
+
     private int? FindNearestTranscriptRowIndex(TimeSpan position)
     {
         if (TranscriptRows.Count == 0)
@@ -914,6 +1071,40 @@ public partial class VideoPlayerViewModel : ObservableObject
 
     public bool ShouldRestartABLoopPlayback(VideoABLoop loop) =>
         CurrentPosition >= loop.End;
+
+    public void ApplySettings(VideoSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        AutoPlayNextEpisode = settings.AutoPlayNextEpisode;
+        RememberPlaybackState = settings.RememberPlaybackState;
+        SeekIntervalSeconds = settings.SeekIntervalSeconds;
+        MiningHistoryLimit = settings.MiningHistoryLimit;
+        HardwareDecodingEnabled = settings.HardwareDecodingEnabled;
+        DeinterlaceEnabled = settings.DeinterlacingEnabled;
+        HdrEnhancementEnabled = settings.HdrEnhancementEnabled;
+        SetVideoEqualizer("brightness", settings.VideoBrightness);
+        SetVideoEqualizer("contrast", settings.VideoContrast);
+        SetVideoEqualizer("saturation", settings.VideoSaturation);
+        SetVideoEqualizer("gamma", settings.VideoGamma);
+        SetVideoEqualizer("hue", settings.VideoHue);
+        SetSubtitleFontFamily(settings.SubtitleFontFamily);
+        SubtitleFontSize = settings.SubtitleFontSize;
+        SubtitleFontWeight = settings.SubtitleFontWeight;
+        SetSubtitleShadowRadius(settings.SubtitleShadowRadius);
+        SubtitleBackgroundOpacity = settings.SubtitleBackgroundOpacity;
+        SubtitleBackgroundDisabled = settings.SubtitleBackgroundDisabled;
+        SubtitleVerticalPosition = settings.SubtitleVerticalPosition;
+        SetSubtitleColor(settings.SubtitleColorHex);
+        SetSubtitleLookupHighlightColor(settings.SubtitleLookupHighlightColorHex);
+        SetSubtitleLookupHighlightTextColor(settings.SubtitleLookupHighlightTextColorHex);
+        SubtitleMaskEnabled = settings.SubtitleMaskEnabled;
+        SetSubtitleMaskMode(settings.SubtitleMaskMode == VideoSubtitleMaskMode.Transparent
+            ? "Transparent"
+            : "Blur");
+        SetSubtitleMaskBlurRadius(settings.SubtitleMaskBlurRadius);
+        SubtitleMaskHiddenOpacity = settings.SubtitleMaskHiddenOpacity;
+    }
 
     public void SetHDREnhancementEnabled(bool enabled)
     {
@@ -1030,10 +1221,16 @@ public partial class VideoPlayerViewModel : ObservableObject
         SubtitleFontWeight = 700;
         SubtitleFontFamily = "";
         SubtitleShadowRadius = 3;
+        SubtitleBackgroundOpacity = 0;
+        SubtitleBackgroundDisabled = true;
         SubtitleVerticalPosition = 0;
         SubtitleColorHex = "#FFFFFFFF";
         SubtitleLookupHighlightColorHex = "#3EB5C1CB";
         SubtitleLookupHighlightTextColorHex = "#FFFFFFFF";
+        SubtitleMaskEnabled = false;
+        SetSubtitleMaskMode("Blur");
+        SetSubtitleMaskBlurRadius(10);
+        SubtitleMaskHiddenOpacity = 0;
     }
 
     public void SetAspectRatio(string value)
@@ -1288,9 +1485,8 @@ public partial class VideoPlayerViewModel : ObservableObject
 
     public async Task<DictionaryPopupRequest?> CreateLookupRequestAsync(
         string query,
-        string? screenshotPath,
-        string? audioClipPath,
         int? sentenceOffset,
+        VideoMiningMediaProvider? mediaProvider = null,
         CancellationToken ct = default)
     {
         query = query.Trim();
@@ -1302,9 +1498,10 @@ public partial class VideoPlayerViewModel : ObservableObject
             CurrentVideo?.FilePath ?? "",
             CurrentPosition,
             cueContext,
-            screenshotPath,
-            audioClipPath,
+            null,
+            null,
             sentenceOffset);
+        context.VideoMediaProvider = mediaProvider;
 
         return await _popupRequestService.CreateAsync(query, context, ct: ct);
     }
@@ -1341,6 +1538,11 @@ public partial class VideoPlayerViewModel : ObservableObject
     partial void OnSubtitleMaskHiddenOpacityChanged(double value)
     {
         SubtitleMaskHiddenOpacityText = $"{Math.Clamp(value, 0, 1) * 100:0}%";
+    }
+
+    partial void OnSubtitleBackgroundOpacityChanged(double value)
+    {
+        SubtitleBackgroundOpacityText = $"{Math.Clamp(value, 0, 1) * 100:0}%";
     }
 
     partial void OnSubtitleMaskBlurRadiusChanged(double value)

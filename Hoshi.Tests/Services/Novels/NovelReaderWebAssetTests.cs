@@ -435,6 +435,12 @@ public class NovelReaderWebAssetTests
         settingsXaml.Should().NotContain("Shift Hover Delay");
         settingsXaml.Should().Contain("PaneTitle=\"Settings\"");
         settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsReportIssueNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsProfilesNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsVideoNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsKeyboardShortcutsNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsGameControllerNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsSyncNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsBackupNavItem\"");
         settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsAudioNavItem\"");
         settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsSasayakiNavItem\"");
         settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsStatisticsNavItem\"");
@@ -476,6 +482,9 @@ public class NovelReaderWebAssetTests
         foreach (var resources in new[] { enResources, zhResources })
         {
             resources.Should().Contain("SettingsReaderSectionHeader.Content");
+            resources.Should().Contain("SettingsLibrarySectionHeader.Content");
+            resources.Should().Contain("SettingsShortcutsControlsSectionHeader.Content");
+            resources.Should().Contain("SettingsSyncDataSectionHeader.Content");
             resources.Should().Contain("SettingsSupportSectionHeader.Content");
             resources.Should().NotContain("SettingsReaderSectionHeader.Text");
             resources.Should().NotContain("SettingsSupportSectionHeader.Text");
@@ -536,7 +545,13 @@ public class NovelReaderWebAssetTests
         var advancedXaml = File.ReadAllText(advancedXamlPath);
         var advancedCode = File.ReadAllText(advancedCodePath);
 
-        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsAdvancedNavItem\"");
+        settingsXaml.Should().NotContain("AutomationProperties.AutomationId=\"SettingsAdvancedNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsProfilesNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsVideoNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsKeyboardShortcutsNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsGameControllerNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsSyncNavItem\"");
+        settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsBackupNavItem\"");
         settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsReportIssueNavItem\"");
         settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsAudioNavItem\"");
         settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsSasayakiNavItem\"");
@@ -553,6 +568,19 @@ public class NovelReaderWebAssetTests
         advancedXaml.Should().Contain("AutomationProperties.AutomationId=\"StatisticsSettingsButton\"");
         advancedXaml.Should().Contain("x:Uid=\"AdvancedSasayakiCard\"");
         advancedXaml.Should().Contain("AutomationProperties.AutomationId=\"SasayakiSettingsButton\"");
+        advancedXaml.Should().Contain("x:Uid=\"AdvancedVideoSectionHeader\"");
+        advancedXaml.Should().Contain("x:Uid=\"AdvancedVideoCard\"");
+        advancedXaml.Should().Contain("AutomationProperties.AutomationId=\"VideoSettingsButton\"");
+        advancedXaml.Should().Contain("x:Uid=\"AdvancedShortcutsControlsSectionHeader\"");
+        advancedXaml.Should().Contain("x:Uid=\"AdvancedKeyboardShortcutsCard\"");
+        advancedXaml.Should().Contain("AutomationProperties.AutomationId=\"KeyboardShortcutsSettingsButton\"");
+        advancedXaml.Should().Contain("x:Uid=\"AdvancedGameControllerCard\"");
+        advancedXaml.Should().Contain("AutomationProperties.AutomationId=\"GameControllerSettingsButton\"");
+        advancedXaml.Should().Contain("x:Uid=\"AdvancedSyncDataSectionHeader\"");
+        advancedXaml.Should().Contain("x:Uid=\"AdvancedSyncCard\"");
+        advancedXaml.Should().Contain("AutomationProperties.AutomationId=\"SyncSettingsButton\"");
+        advancedXaml.Should().Contain("x:Uid=\"AdvancedBackupCard\"");
+        advancedXaml.Should().Contain("AutomationProperties.AutomationId=\"BackupSettingsButton\"");
 
         advancedCode.Should().Contain("AudioSettings_Click");
         advancedCode.Should().Contain("NavigateSettingsSubpage(typeof(AudioSettingsPage))");
@@ -566,7 +594,6 @@ public class NovelReaderWebAssetTests
 
         foreach (var key in new[]
         {
-            "SettingsAdvancedNavItem.Content",
             "SettingsAudioNavItem.Content",
             "SettingsStatisticsNavItem.Content",
             "SettingsSasayakiNavItem.Content",
@@ -574,9 +601,140 @@ public class NovelReaderWebAssetTests
             "SettingsReportIssueLink.Content",
             "AdvancedSettingsPageTitle.Text",
             "AdvancedReaderSectionHeader.Text",
+            "AdvancedVideoSectionHeader.Text",
+            "AdvancedShortcutsControlsSectionHeader.Text",
+            "AdvancedSyncDataSectionHeader.Text",
             "AdvancedAudioCard.Header",
             "AdvancedStatisticsCard.Header",
             "AdvancedSasayakiCard.Header",
+            "AdvancedVideoCard.Header",
+            "AdvancedKeyboardShortcutsCard.Header",
+            "AdvancedGameControllerCard.Header",
+            "AdvancedSyncCard.Header",
+            "AdvancedBackupCard.Header",
+        })
+        {
+            enResources.Should().Contain(key);
+            zhResources.Should().Contain(key);
+        }
+    }
+
+    [Fact]
+    public void AudioSettingsPage_UsesLocalizedStringsForVisibleText()
+    {
+        var audioXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "AudioSettingsPage.xaml")
+        );
+        var audioViewModelCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "ViewModels", "Pages", "AudioSettingsPageViewModel.cs")
+        );
+        var enResources = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "en-US", "Resources.resw")
+        );
+        var zhResources = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw")
+        );
+
+        foreach (var uid in new[]
+        {
+            "AudioSettingsBackButton",
+            "AudioSettingsPageTitle",
+            "AudioSourcesSectionHeader",
+            "AudioMoveSourceUpButton",
+            "AudioMoveSourceDownButton",
+            "AudioDeleteSourceButton",
+            "AudioEnableSourceToggle",
+            "AudioAddSourceSectionHeader",
+            "AudioSourceNameCard",
+            "AudioSourceNameTextBox",
+            "AudioSourceUrlCard",
+            "AudioSourceUrlTextBox",
+            "AudioAddSourceButton",
+            "AudioAddSourceButtonText",
+            "AudioYomitanJsonHint",
+            "AudioPlaybackSectionHeader",
+            "AudioAutoplayCard",
+            "AudioAutoplayToggle",
+            "AudioPlaybackModeCard",
+            "AudioPlaybackModeComboBox",
+            "AudioLocalAudioSectionHeader",
+            "AudioLocalAudioEnabledCard",
+            "AudioLocalAudioToggle",
+            "AudioAndroidAudioDatabaseCard",
+            "AudioImportLocalAudioButton",
+            "AudioImportLocalAudioButtonText",
+            "AudioDeleteLocalAudioButton",
+            "AudioDeleteLocalAudioButtonText",
+            "AudioLocalAudioDatabaseHelpText",
+        })
+        {
+            audioXaml.Should().Contain($"x:Uid=\"{uid}\"");
+        }
+
+        audioXaml.Should().Contain("Header=\"{x:Bind DisplayName, Mode=OneWay}\"");
+        audioXaml.Should().Contain("DisplayMemberPath=\"Label\"");
+        audioXaml.Should().Contain("SelectedValuePath=\"Mode\"");
+        audioXaml.Should().NotContain("Text=\"Audio\"");
+        audioXaml.Should().NotContain("Header=\"Enable Autoplay\"");
+        audioXaml.Should().NotContain("Header=\"Playback Mode\"");
+        audioXaml.Should().NotContain("Text=\"Import .db\"");
+        audioXaml.Should().NotContain("Text=\"Delete\"");
+
+        audioViewModelCode.Should().Contain("AudioPlaybackModeOption");
+        audioViewModelCode.Should().Contain("ResourceStringHelper.GetString");
+
+        foreach (var key in new[]
+        {
+            "AudioSettingsBackButton.AutomationProperties.Name",
+            "AudioSettingsPageTitle.Text",
+            "AudioSourcesSectionHeader.Text",
+            "AudioMoveSourceUpButton.AutomationProperties.Name",
+            "AudioMoveSourceUpButton.ToolTipService.ToolTip",
+            "AudioMoveSourceDownButton.AutomationProperties.Name",
+            "AudioMoveSourceDownButton.ToolTipService.ToolTip",
+            "AudioDeleteSourceButton.AutomationProperties.Name",
+            "AudioDeleteSourceButton.ToolTipService.ToolTip",
+            "AudioEnableSourceToggle.AutomationProperties.Name",
+            "AudioAddSourceSectionHeader.Text",
+            "AudioSourceNameCard.Header",
+            "AudioSourceNameTextBox.AutomationProperties.Name",
+            "AudioSourceNameTextBox.PlaceholderText",
+            "AudioSourceUrlCard.Header",
+            "AudioSourceUrlCard.Description",
+            "AudioSourceUrlTextBox.AutomationProperties.Name",
+            "AudioAddSourceButton.AutomationProperties.Name",
+            "AudioAddSourceButtonText.Text",
+            "AudioYomitanJsonHint.Text",
+            "AudioPlaybackSectionHeader.Text",
+            "AudioAutoplayCard.Header",
+            "AudioAutoplayCard.Description",
+            "AudioAutoplayToggle.AutomationProperties.Name",
+            "AudioPlaybackModeCard.Header",
+            "AudioPlaybackModeCard.Description",
+            "AudioPlaybackModeComboBox.AutomationProperties.Name",
+            "AudioLocalAudioSectionHeader.Text",
+            "AudioLocalAudioEnabledCard.Header",
+            "AudioLocalAudioEnabledCard.Description",
+            "AudioLocalAudioToggle.AutomationProperties.Name",
+            "AudioAndroidAudioDatabaseCard.Header",
+            "AudioImportLocalAudioButton.AutomationProperties.Name",
+            "AudioImportLocalAudioButtonText.Text",
+            "AudioDeleteLocalAudioButton.AutomationProperties.Name",
+            "AudioDeleteLocalAudioButtonText.Text",
+            "AudioLocalAudioDatabaseHelpText.Text",
+            "AudioPlaybackModeInterrupt",
+            "AudioPlaybackModeDuck",
+            "AudioPlaybackModeMix",
+            "AudioDefaultSourceName",
+            "AudioLocalSourceName",
+            "AudioLocalAudioImportingStatus",
+            "AudioLocalAudioImportedStatus",
+            "AudioLocalAudioMissingStatus",
+            "AudioNotificationTitle",
+            "AudioLocalAudioImportedNotification",
+            "AudioImportErrorTitle",
+            "AudioLocalAudioDeletedNotification",
+            "AudioDeleteErrorTitle",
         })
         {
             enResources.Should().Contain(key);

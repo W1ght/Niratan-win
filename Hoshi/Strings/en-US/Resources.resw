@@ -81,6 +81,56 @@
   <data name="AdvancedAudioCard.Description" xml:space="preserve"><value>Dictionary audio sources, autoplay, and local audio database</value></data>
   <data name="AudioSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>Open Audio Settings</value></data>
   <data name="SettingsOpenAudioText.Text" xml:space="preserve"><value>Open</value></data>
+  <data name="AudioSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>Back</value></data>
+  <data name="AudioSettingsPageTitle.Text" xml:space="preserve"><value>Audio</value></data>
+  <data name="AudioSourcesSectionHeader.Text" xml:space="preserve"><value>Audio Sources</value></data>
+  <data name="AudioMoveSourceUpButton.AutomationProperties.Name" xml:space="preserve"><value>Move up</value></data>
+  <data name="AudioMoveSourceUpButton.ToolTipService.ToolTip" xml:space="preserve"><value>Move up</value></data>
+  <data name="AudioMoveSourceDownButton.AutomationProperties.Name" xml:space="preserve"><value>Move down</value></data>
+  <data name="AudioMoveSourceDownButton.ToolTipService.ToolTip" xml:space="preserve"><value>Move down</value></data>
+  <data name="AudioDeleteSourceButton.AutomationProperties.Name" xml:space="preserve"><value>Delete source</value></data>
+  <data name="AudioDeleteSourceButton.ToolTipService.ToolTip" xml:space="preserve"><value>Delete source</value></data>
+  <data name="AudioEnableSourceToggle.AutomationProperties.Name" xml:space="preserve"><value>Enable source</value></data>
+  <data name="AudioAddSourceSectionHeader.Text" xml:space="preserve"><value>Add Source</value></data>
+  <data name="AudioSourceNameCard.Header" xml:space="preserve"><value>Name</value></data>
+  <data name="AudioSourceNameTextBox.AutomationProperties.Name" xml:space="preserve"><value>Source name</value></data>
+  <data name="AudioSourceNameTextBox.PlaceholderText" xml:space="preserve"><value>Source name</value></data>
+  <data name="AudioSourceUrlCard.Header" xml:space="preserve"><value>URL</value></data>
+  <data name="AudioSourceUrlCard.Description" xml:space="preserve"><value>URL with {term} and {reading} placeholders</value></data>
+  <data name="AudioSourceUrlTextBox.AutomationProperties.Name" xml:space="preserve"><value>Source URL</value></data>
+  <data name="AudioAddSourceButton.AutomationProperties.Name" xml:space="preserve"><value>Add source</value></data>
+  <data name="AudioAddSourceButtonText.Text" xml:space="preserve"><value>Add</value></data>
+  <data name="AudioYomitanJsonHint.Text" xml:space="preserve"><value>Yomitan JSON format supported for audio sources.</value></data>
+  <data name="AudioPlaybackSectionHeader.Text" xml:space="preserve"><value>Playback</value></data>
+  <data name="AudioAutoplayCard.Header" xml:space="preserve"><value>Enable Autoplay</value></data>
+  <data name="AudioAutoplayCard.Description" xml:space="preserve"><value>Automatically play audio for the first result on lookup</value></data>
+  <data name="AudioAutoplayToggle.AutomationProperties.Name" xml:space="preserve"><value>Enable autoplay</value></data>
+  <data name="AudioPlaybackModeCard.Header" xml:space="preserve"><value>Playback Mode</value></data>
+  <data name="AudioPlaybackModeCard.Description" xml:space="preserve"><value>Controls how audio playback interacts with other media</value></data>
+  <data name="AudioPlaybackModeComboBox.AutomationProperties.Name" xml:space="preserve"><value>Playback mode</value></data>
+  <data name="AudioLocalAudioSectionHeader.Text" xml:space="preserve"><value>Local Audio</value></data>
+  <data name="AudioLocalAudioEnabledCard.Header" xml:space="preserve"><value>Enable Local Audio</value></data>
+  <data name="AudioLocalAudioEnabledCard.Description" xml:space="preserve"><value>Enable local audio from an imported Android audio database</value></data>
+  <data name="AudioLocalAudioToggle.AutomationProperties.Name" xml:space="preserve"><value>Enable local audio</value></data>
+  <data name="AudioAndroidAudioDatabaseCard.Header" xml:space="preserve"><value>Android Audio Database</value></data>
+  <data name="AudioImportLocalAudioButton.AutomationProperties.Name" xml:space="preserve"><value>Import local audio database</value></data>
+  <data name="AudioImportLocalAudioButtonText.Text" xml:space="preserve"><value>Import .db</value></data>
+  <data name="AudioDeleteLocalAudioButton.AutomationProperties.Name" xml:space="preserve"><value>Delete local audio database</value></data>
+  <data name="AudioDeleteLocalAudioButtonText.Text" xml:space="preserve"><value>Delete</value></data>
+  <data name="AudioLocalAudioDatabaseHelpText.Text" xml:space="preserve"><value>The Android audio database is a SQLite .db file containing audio recordings for dictionary entries. Import it to use local pronunciation audio.</value></data>
+  <data name="AudioPlaybackModeInterrupt" xml:space="preserve"><value>Interrupt other audio</value></data>
+  <data name="AudioPlaybackModeDuck" xml:space="preserve"><value>Duck other audio</value></data>
+  <data name="AudioPlaybackModeMix" xml:space="preserve"><value>Mix with other audio</value></data>
+  <data name="AudioDefaultSourceName" xml:space="preserve"><value>Default</value></data>
+  <data name="AudioLocalSourceName" xml:space="preserve"><value>Local</value></data>
+  <data name="AudioLocalAudioImportingStatus" xml:space="preserve"><value>Importing audio database...</value></data>
+  <data name="AudioLocalAudioImportedStatus" xml:space="preserve"><value>Database: {0}</value></data>
+  <data name="AudioLocalAudioMissingStatus" xml:space="preserve"><value>No audio database imported. Import an Android audio .db file to use local audio.</value></data>
+  <data name="AudioNotificationTitle" xml:space="preserve"><value>Audio</value></data>
+  <data name="AudioLocalAudioImportedNotification" xml:space="preserve"><value>Local audio database imported</value></data>
+  <data name="AudioImportErrorTitle" xml:space="preserve"><value>Import Error</value></data>
+  <data name="AudioLocalAudioDeletedNotification" xml:space="preserve"><value>Local audio database deleted</value></data>
+  <data name="AudioDeleteErrorTitle" xml:space="preserve"><value>Delete Error</value></data>
   <data name="AdvancedStatisticsCard.Header" xml:space="preserve"><value>Statistics</value></data>
   <data name="AdvancedStatisticsCard.Description" xml:space="preserve"><value>Reading goals, autostart, and statistics sync</value></data>
   <data name="AdvancedSasayakiCard.Header" xml:space="preserve"><value>Sasayaki</value></data>
@@ -234,6 +284,8 @@
   <data name="VideoInspectorCurrentVideoHeaderText.Text" xml:space="preserve"><value>Current Video</value></data>
   <data name="VideoInspectorEpisodesHeaderText.Text" xml:space="preserve"><value>Episodes</value></data>
   <data name="VideoInspectorNoEpisodesText.Text" xml:space="preserve"><value>No episodes</value></data>
+  <data name="VideoInspectorChaptersHeaderText.Text" xml:space="preserve"><value>Chapters</value></data>
+  <data name="VideoInspectorNoChaptersText.Text" xml:space="preserve"><value>No chapters</value></data>
   <data name="VideoInspectorPlaybackHeaderText.Text" xml:space="preserve"><value>Playback</value></data>
   <data name="VideoInspectorAudioHeaderText.Text" xml:space="preserve"><value>Audio</value></data>
   <data name="VideoInspectorSubtitlesHeaderText.Text" xml:space="preserve"><value>Subtitles</value></data>
@@ -401,17 +453,128 @@
   <data name="GlobalLookupEnabledCard.Description" xml:space="preserve"><value>Enable selected-text lookup. Hotkey availability is shown below.</value></data>
   <data name="SettingsSecondaryNavigationView.PaneTitle" xml:space="preserve"><value>Settings</value></data>
   <data name="SettingsLibrarySectionHeader.Content" xml:space="preserve"><value>Library</value></data>
+  <data name="SettingsProfilesNavItem.Content" xml:space="preserve"><value>Profiles</value></data>
+  <data name="SettingsAppearanceNavItem.Content" xml:space="preserve"><value>Appearance</value></data>
   <data name="SettingsDictionariesNavItem.Content" xml:space="preserve"><value>Dictionaries</value></data>
   <data name="SettingsAnkiNavItem.Content" xml:space="preserve"><value>Anki</value></data>
   <data name="SettingsReaderSectionHeader.Content" xml:space="preserve"><value>Reader</value></data>
-  <data name="SettingsAppearanceNavItem.Content" xml:space="preserve"><value>Appearance</value></data>
   <data name="SettingsAudioNavItem.Content" xml:space="preserve"><value>Audio</value></data>
   <data name="SettingsStatisticsNavItem.Content" xml:space="preserve"><value>Statistics</value></data>
-  <data name="SettingsSasayakiNavItem.Content" xml:space="preserve"><value>Sasayaki</value></data>
+  <data name="SettingsSasayakiNavItem.Content" xml:space="preserve"><value>Sasayaki (Audiobooks)</value></data>
+  <data name="SettingsVideoSectionHeader.Content" xml:space="preserve"><value>Video</value></data>
+  <data name="SettingsVideoNavItem.Content" xml:space="preserve"><value>Video</value></data>
+  <data name="SettingsShortcutsControlsSectionHeader.Content" xml:space="preserve"><value>Shortcuts &amp; Controls</value></data>
+  <data name="SettingsKeyboardShortcutsNavItem.Content" xml:space="preserve"><value>Keyboard Shortcuts</value></data>
+  <data name="SettingsGameControllerNavItem.Content" xml:space="preserve"><value>Game Controller</value></data>
+  <data name="SettingsSyncDataSectionHeader.Content" xml:space="preserve"><value>Sync &amp; Data</value></data>
+  <data name="SettingsSyncNavItem.Content" xml:space="preserve"><value>ッツ Sync</value></data>
+  <data name="SettingsBackupNavItem.Content" xml:space="preserve"><value>Backup</value></data>
   <data name="SettingsAdvancedSectionHeader.Content" xml:space="preserve"><value>Advanced</value></data>
   <data name="SettingsAdvancedNavItem.Content" xml:space="preserve"><value>Advanced</value></data>
   <data name="SettingsSupportSectionHeader.Content" xml:space="preserve"><value>Support</value></data>
   <data name="SettingsAboutNavItem.Content" xml:space="preserve"><value>About</value></data>
   <data name="SettingsReportIssueNavItem.Content" xml:space="preserve"><value>Report an Issue</value></data>
+  <data name="AdvancedVideoSectionHeader.Text" xml:space="preserve"><value>Video</value></data>
+  <data name="AdvancedVideoCard.Header" xml:space="preserve"><value>Video</value></data>
+  <data name="AdvancedVideoCard.Description" xml:space="preserve"><value>Playback defaults and video learning options</value></data>
+  <data name="AdvancedShortcutsControlsSectionHeader.Text" xml:space="preserve"><value>Shortcuts &amp; Controls</value></data>
+  <data name="AdvancedKeyboardShortcutsCard.Header" xml:space="preserve"><value>Keyboard Shortcuts</value></data>
+  <data name="AdvancedKeyboardShortcutsCard.Description" xml:space="preserve"><value>Global, reader, Sasayaki, and video shortcut bindings</value></data>
+  <data name="AdvancedGameControllerCard.Header" xml:space="preserve"><value>Game Controller</value></data>
+  <data name="AdvancedGameControllerCard.Description" xml:space="preserve"><value>Controller mappings for reading and playback</value></data>
+  <data name="AdvancedSyncDataSectionHeader.Text" xml:space="preserve"><value>Sync &amp; Data</value></data>
+  <data name="AdvancedSyncCard.Header" xml:space="preserve"><value>ッツ Sync</value></data>
+  <data name="AdvancedSyncCard.Description" xml:space="preserve"><value>Cloud sync for books, settings, and playback positions</value></data>
+  <data name="AdvancedBackupCard.Header" xml:space="preserve"><value>Backup</value></data>
+  <data name="AdvancedBackupCard.Description" xml:space="preserve"><value>Export and restore app data</value></data>
+  <data name="VideoSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>Open Video Settings</value></data>
+  <data name="SettingsOpenVideoText.Text" xml:space="preserve"><value>Open</value></data>
+  <data name="VideoSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>Back</value></data>
+  <data name="VideoSettingsPageTitle.Text" xml:space="preserve"><value>Video Settings</value></data>
+  <data name="VideoPlaybackSectionHeader.Text" xml:space="preserve"><value>Playback</value></data>
+  <data name="VideoAutoPlayNextCard.Header" xml:space="preserve"><value>Auto-Play Next Episode</value></data>
+  <data name="VideoAutoPlayNextCard.Description" xml:space="preserve"><value>Start the next item in the episode list when playback reaches the end</value></data>
+  <data name="VideoRememberPlaybackStateCard.Header" xml:space="preserve"><value>Remember Playback Position</value></data>
+  <data name="VideoRememberPlaybackStateCard.Description" xml:space="preserve"><value>Restore and save video progress for each imported item</value></data>
+  <data name="VideoSeekIntervalCard.Header" xml:space="preserve"><value>Seek Interval</value></data>
+  <data name="VideoSeekIntervalCard.Description" xml:space="preserve"><value>Seconds skipped by the forward and rewind controls</value></data>
+  <data name="VideoMiningHistoryLimitCard.Header" xml:space="preserve"><value>Mining History Limit</value></data>
+  <data name="VideoMiningHistoryLimitCard.Description" xml:space="preserve"><value>Number of recent subtitle mining entries to keep visible</value></data>
+  <data name="VideoEngineSectionHeader.Text" xml:space="preserve"><value>Engine</value></data>
+  <data name="VideoHardwareDecodingCard.Header" xml:space="preserve"><value>Hardware Decoding</value></data>
+  <data name="VideoHardwareDecodingCard.Description" xml:space="preserve"><value>Use GPU video decoding when available</value></data>
+  <data name="VideoDeinterlacingCard.Header" xml:space="preserve"><value>Deinterlacing</value></data>
+  <data name="VideoDeinterlacingCard.Description" xml:space="preserve"><value>Apply deinterlacing for interlaced source video</value></data>
+  <data name="VideoHdrEnhancementCard.Header" xml:space="preserve"><value>HDR Enhancement</value></data>
+  <data name="VideoHdrEnhancementCard.Description" xml:space="preserve"><value>Enable HDR-oriented video enhancement defaults</value></data>
+  <data name="VideoEqualizerSectionHeader.Text" xml:space="preserve"><value>Equalizer</value></data>
+  <data name="VideoBrightnessCard.Header" xml:space="preserve"><value>Brightness</value></data>
+  <data name="VideoContrastCard.Header" xml:space="preserve"><value>Contrast</value></data>
+  <data name="VideoSaturationCard.Header" xml:space="preserve"><value>Saturation</value></data>
+  <data name="VideoGammaCard.Header" xml:space="preserve"><value>Gamma</value></data>
+  <data name="VideoHueCard.Header" xml:space="preserve"><value>Hue</value></data>
+  <data name="VideoSubtitleAppearanceSectionHeader.Text" xml:space="preserve"><value>Subtitle Appearance</value></data>
+  <data name="VideoSubtitleFontFamilyCard.Header" xml:space="preserve"><value>Subtitle Font Family</value></data>
+  <data name="VideoSubtitleFontFamilyCard.Description" xml:space="preserve"><value>Leave empty to use the system default</value></data>
+  <data name="VideoSubtitleFontSizeCard.Header" xml:space="preserve"><value>Subtitle Font Size</value></data>
+  <data name="VideoSubtitleFontWeightCard.Header" xml:space="preserve"><value>Subtitle Font Weight</value></data>
+  <data name="VideoSubtitleShadowRadiusCard.Header" xml:space="preserve"><value>Subtitle Shadow Radius</value></data>
+  <data name="VideoSubtitleBackgroundOpacityCard.Header" xml:space="preserve"><value>Subtitle Background Opacity</value></data>
+  <data name="VideoSubtitleBackgroundDisabledCard.Header" xml:space="preserve"><value>Disable Subtitle Background</value></data>
+  <data name="VideoSubtitleBackgroundDisabledCard.Description" xml:space="preserve"><value>Keep subtitle text on a transparent background by default</value></data>
+  <data name="VideoSubtitleVerticalPositionCard.Header" xml:space="preserve"><value>Subtitle Vertical Position</value></data>
+  <data name="VideoSubtitleColorsSectionHeader.Text" xml:space="preserve"><value>Subtitle Colors</value></data>
+  <data name="VideoSubtitleColorCard.Header" xml:space="preserve"><value>Subtitle Text Color</value></data>
+  <data name="VideoSubtitleLookupHighlightColorCard.Header" xml:space="preserve"><value>Lookup Highlight Color</value></data>
+  <data name="VideoSubtitleLookupHighlightTextColorCard.Header" xml:space="preserve"><value>Lookup Highlight Text Color</value></data>
+  <data name="VideoSubtitleMaskSectionHeader.Text" xml:space="preserve"><value>Subtitle Mask</value></data>
+  <data name="VideoSubtitleMaskCard.Header" xml:space="preserve"><value>Enable Subtitle Mask</value></data>
+  <data name="VideoSubtitleMaskModeCard.Header" xml:space="preserve"><value>Mask Mode</value></data>
+  <data name="VideoSubtitleMaskBlurRadiusCard.Header" xml:space="preserve"><value>Mask Blur Radius</value></data>
+  <data name="VideoSubtitleMaskHiddenOpacityCard.Header" xml:space="preserve"><value>Hidden Subtitle Opacity</value></data>
+  <data name="VideoSubtitleMaskModeBlur" xml:space="preserve"><value>Blur</value></data>
+  <data name="VideoSubtitleMaskModeTransparent" xml:space="preserve"><value>Transparent</value></data>
+  <data name="VideoKeyboardShortcutsCard.Header" xml:space="preserve"><value>Keyboard Shortcuts</value></data>
+  <data name="VideoKeyboardShortcutsCard.Description" xml:space="preserve"><value>Edit video playback shortcuts in the unified shortcut editor</value></data>
+  <data name="VideoKeyboardShortcutsButton.AutomationProperties.Name" xml:space="preserve"><value>Open Keyboard Shortcuts</value></data>
+  <data name="SettingsUnavailableText.Text" xml:space="preserve"><value>Unavailable</value></data>
+  <data name="SettingsOpenText.Text" xml:space="preserve"><value>Open</value></data>
+  <data name="KeyboardShortcutsBackButton.AutomationProperties.Name" xml:space="preserve"><value>Back</value></data>
+  <data name="KeyboardShortcutsPageTitle.Text" xml:space="preserve"><value>Keyboard Shortcuts</value></data>
+  <data name="KeyboardShortcutResetButton.Content" xml:space="preserve"><value>Reset</value></data>
+  <data name="KeyboardShortcutsRecordingHint" xml:space="preserve"><value>Press a shortcut for {0}. Esc cancels.</value></data>
+  <data name="KeyboardShortcutsUnassignedText" xml:space="preserve"><value>Unassigned</value></data>
+  <data name="KeyboardShortcutsConflictText" xml:space="preserve"><value>Conflicts with {0}</value></data>
+  <data name="KeyboardShortcutsShadowedText" xml:space="preserve"><value>Shadowed by {0}</value></data>
+  <data name="ShortcutCategoryGlobal" xml:space="preserve"><value>Global</value></data>
+  <data name="ShortcutCategoryReader" xml:space="preserve"><value>Reader</value></data>
+  <data name="ShortcutCategoryDictionaryPopup" xml:space="preserve"><value>Dictionary Popup</value></data>
+  <data name="ShortcutCategorySasayaki" xml:space="preserve"><value>Sasayaki</value></data>
+  <data name="ShortcutCategoryVideo" xml:space="preserve"><value>Video</value></data>
+  <data name="ShortcutActionReaderPreviousPage" xml:space="preserve"><value>Previous Page</value></data>
+  <data name="ShortcutActionReaderNextPage" xml:space="preserve"><value>Next Page</value></data>
+  <data name="ShortcutActionReaderClose" xml:space="preserve"><value>Close Reader</value></data>
+  <data name="ShortcutActionReaderToggleFocusMode" xml:space="preserve"><value>Toggle Focus Mode</value></data>
+  <data name="ShortcutActionReaderToggleStatistics" xml:space="preserve"><value>Toggle Reading Timer</value></data>
+  <data name="ShortcutActionSasayakiPreviousCue" xml:space="preserve"><value>Previous Cue</value></data>
+  <data name="ShortcutActionSasayakiPlayPause" xml:space="preserve"><value>Play/Pause</value></data>
+  <data name="ShortcutActionSasayakiNextCue" xml:space="preserve"><value>Next Cue</value></data>
+  <data name="ShortcutActionSasayakiReplayCue" xml:space="preserve"><value>Replay Cue</value></data>
+  <data name="ShortcutActionSasayakiJumpCue" xml:space="preserve"><value>Jump Cue</value></data>
+  <data name="ShortcutActionVideoPlayPause" xml:space="preserve"><value>Play/Pause</value></data>
+  <data name="ShortcutActionVideoSeekBackward" xml:space="preserve"><value>Seek Backward</value></data>
+  <data name="ShortcutActionVideoSeekForward" xml:space="preserve"><value>Seek Forward</value></data>
+  <data name="ShortcutActionVideoVolumeUp" xml:space="preserve"><value>Volume Up</value></data>
+  <data name="ShortcutActionVideoVolumeDown" xml:space="preserve"><value>Volume Down</value></data>
+  <data name="ShortcutActionVideoPreviousSubtitle" xml:space="preserve"><value>Previous Subtitle</value></data>
+  <data name="ShortcutActionVideoNextSubtitle" xml:space="preserve"><value>Next Subtitle</value></data>
+  <data name="ShortcutActionVideoToggleSubtitles" xml:space="preserve"><value>Toggle Subtitles</value></data>
+  <data name="ShortcutActionVideoCycleSubtitleTrack" xml:space="preserve"><value>Cycle Subtitle Track</value></data>
+  <data name="ShortcutActionVideoToggleFullscreen" xml:space="preserve"><value>Toggle Full Screen</value></data>
+  <data name="ShortcutActionVideoLookupSubtitle" xml:space="preserve"><value>Lookup Current Subtitle</value></data>
+  <data name="ShortcutActionVideoToggleHardwareDecoding" xml:space="preserve"><value>Toggle Hardware Decoding</value></data>
+  <data name="ShortcutActionVideoIncreaseSubtitleSize" xml:space="preserve"><value>Increase Subtitle Size</value></data>
+  <data name="ShortcutActionVideoDecreaseSubtitleSize" xml:space="preserve"><value>Decrease Subtitle Size</value></data>
+  <data name="ShortcutActionVideoCloseOverlayOrFullscreen" xml:space="preserve"><value>Close Overlay or Full Screen</value></data>
   <data name="AboutSettingsPageTitle.Text" xml:space="preserve"><value>About</value></data>
 </root>

@@ -44,6 +44,10 @@ public interface IVideoPlaybackEngine : IDisposable
 
     Task SelectTrackAsync(VideoTrackType type, int? trackId, CancellationToken ct = default);
 
+    Task<IReadOnlyList<VideoChapter>> GetChaptersAsync(CancellationToken ct = default);
+
+    Task SeekChapterAsync(int chapterId, CancellationToken ct = default);
+
     Task<VideoSubtitleCue?> GetCurrentSubtitleCueAsync(CancellationToken ct = default);
 
     Task<TimeSpan> GetPositionAsync(CancellationToken ct = default);

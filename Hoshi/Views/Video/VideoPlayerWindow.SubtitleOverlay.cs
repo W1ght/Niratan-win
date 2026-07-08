@@ -408,7 +408,16 @@ public sealed partial class VideoPlayerWindow
             return;
 
         SubtitlePanelTransform.Y = -ViewModel.SubtitleVerticalPosition;
-        SubtitlePanelBorder.Background = new SolidColorBrush(Colors.Transparent);
+        var backgroundOpacity = ViewModel.SubtitleBackgroundDisabled
+            ? 0
+            : Math.Clamp(ViewModel.SubtitleBackgroundOpacity, 0, 1);
+        SubtitlePanelBorder.Background = backgroundOpacity <= 0
+            ? new SolidColorBrush(Colors.Transparent)
+            : new SolidColorBrush(Windows.UI.Color.FromArgb(
+                (byte)Math.Round(backgroundOpacity * 255),
+                0,
+                0,
+                0));
         SubtitlePanelBorder.BorderThickness = new Thickness(0);
         UpdateSubtitleNativeTextAppearance();
         _ = UpdateSubtitleWebViewAsync();

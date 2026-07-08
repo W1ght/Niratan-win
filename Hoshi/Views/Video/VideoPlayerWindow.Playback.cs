@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,6 +13,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.System;
 using Hoshi.Models;
+using Hoshi.Models.Shortcuts;
 using Hoshi.Services.Video;
 
 namespace Hoshi.Views.Video;
@@ -84,12 +87,12 @@ public sealed partial class VideoPlayerWindow
 
     private async void RewindButton_Click(object sender, RoutedEventArgs e)
     {
-        await SeekRelativeAsync(-SeekStepSeconds);
+        await SeekRelativeAsync(-ViewModel.SeekIntervalSeconds);
     }
 
     private async void ForwardButton_Click(object sender, RoutedEventArgs e)
     {
-        await SeekRelativeAsync(SeekStepSeconds);
+        await SeekRelativeAsync(ViewModel.SeekIntervalSeconds);
     }
 
     private async void PreviousSubtitleButton_Click(object sender, RoutedEventArgs e)
@@ -699,6 +702,8 @@ public sealed partial class VideoPlayerWindow
                 ViewModel.UpdatePosition(position, duration);
                 if (ViewModel.IsEmbeddedSubtitleActive && !ViewModel.HasCompleteEmbeddedTranscript)
                     ViewModel.UpdateEmbeddedSubtitleCue(await _playbackEngine.GetCurrentSubtitleCueAsync());
+                await SaveCurrentVideoProgressIfDueAsync();
+                await TryAutoPlayNextEpisodeAsync();
             }
         }
         catch
@@ -708,6 +713,155 @@ public sealed partial class VideoPlayerWindow
         {
             _isTicking = false;
         }
+    }
+
+    private async Task<bool> RestorePlaybackStateIfNeededAsync(VideoItem video, CancellationToken ct = default)
+    {
+        if (!ViewModel.RememberPlaybackState)
+            return false;
+
+        var latest = await _videoLibraryService.GetVideoAsync(video.Id, ct);
+        var state = latest.Value != null
+            ? VideoPlaybackState.FromVideoItem(latest.Value)
+            : VideoPlaybackState.FromVideoItem(video);
+
+        var restoredSubtitle = await RestoreSubtitleSelectionAsync(state.SubtitleSelection, ct);
+        var duration = await _playbackEngine.GetDurationAsync(ct);
+        var target = state.ResolveRestorePosition(duration);
+        if (target == null)
+            return restoredSubtitle;
+
+        await _playbackEngine.SeekAsync(target.Value, ct);
+        ViewModel.UpdatePosition(target.Value, duration);
+        ViewModel.StatusText = $"Restored to {ViewModel.PositionText}";
+        return restoredSubtitle;
+    }
+
+    private async Task<bool> RestoreSubtitleSelectionAsync(
+        VideoSubtitleSelection selection,
+        CancellationToken ct = default)
+    {
+        switch (selection.Kind)
+        {
+            case VideoSubtitleSelectionKind.Off:
+                await SelectSubtitleTrackAsync(null, ct);
+                return true;
+            case VideoSubtitleSelectionKind.ExternalFile:
+                if (!string.IsNullOrWhiteSpace(selection.ExternalPath) && File.Exists(selection.ExternalPath))
+                {
+                    await LoadExternalSubtitleAsync(selection.ExternalPath, ct);
+                    return true;
+                }
+
+                return false;
+            case VideoSubtitleSelectionKind.EmbeddedTrack:
+                var track = ViewModel.SubtitleTracks.FirstOrDefault(item => item.Id == selection.TrackId)
+                            ?? ViewModel.SubtitleTracks.FirstOrDefault(item =>
+                                !string.IsNullOrWhiteSpace(selection.TrackName)
+                                && string.Equals(item.DisplayName, selection.TrackName, StringComparison.OrdinalIgnoreCase));
+                if (track != null)
+                {
+                    await SelectSubtitleTrackAsync(track, ct);
+                    return true;
+                }
+
+                return false;
+            default:
+                return false;
+        }
+    }
+
+    private async Task SaveCurrentVideoProgressIfDueAsync(CancellationToken ct = default)
+    {
+        if (!ViewModel.RememberPlaybackState || ViewModel.CurrentVideo == null)
+            return;
+
+        var now = DateTimeOffset.UtcNow;
+        if (now - _lastProgressSaveAt < TimeSpan.FromSeconds(5))
+            return;
+
+        _lastProgressSaveAt = now;
+        await SaveCurrentVideoProgressAsync(ct);
+    }
+
+    private async Task SaveCurrentVideoProgressAsync(CancellationToken ct = default)
+    {
+        if (!ViewModel.RememberPlaybackState || ViewModel.CurrentVideo == null)
+            return;
+
+        var selection = ViewModel.GetCurrentSubtitleSelection();
+        var shouldPersistProgress = VideoPlaybackState.ShouldPersistProgress(
+            ViewModel.CurrentPosition,
+            ViewModel.Duration);
+        var positionSeconds = ViewModel.CurrentPosition.TotalSeconds;
+        var durationSeconds = ViewModel.Duration.TotalSeconds;
+        if (!shouldPersistProgress && selection.Kind == VideoSubtitleSelectionKind.None)
+            return;
+
+        if (!shouldPersistProgress)
+        {
+            var latest = await _videoLibraryService.GetVideoAsync(ViewModel.CurrentVideo.Id, ct);
+            positionSeconds = latest.Value?.LastPositionSeconds ?? 0;
+            durationSeconds = latest.Value?.DurationSeconds ?? 0;
+        }
+        else if (!double.IsFinite(durationSeconds) || durationSeconds < 0)
+        {
+            durationSeconds = 0;
+        }
+
+        await _videoLibraryService.SavePlaybackStateAsync(
+            ViewModel.CurrentVideo.Id,
+            new VideoPlaybackState(
+                positionSeconds,
+                durationSeconds,
+                selection),
+            ct);
+    }
+
+    private async Task TryAutoPlayNextEpisodeAsync(CancellationToken ct = default)
+    {
+        if (!ViewModel.AutoPlayNextEpisode
+            || _isAutoPlayingNextEpisode
+            || ViewModel.CurrentVideo == null
+            || ViewModel.LoopFileEnabled
+            || ViewModel.ABLoop != null)
+        {
+            return;
+        }
+
+        var durationSeconds = ViewModel.Duration.TotalSeconds;
+        if (durationSeconds <= 0)
+            return;
+
+        if (ViewModel.CurrentPosition.TotalSeconds < Math.Max(0, durationSeconds - 0.75))
+            return;
+
+        var next = FindNextEpisodeRow();
+        if (next == null)
+            return;
+
+        _isAutoPlayingNextEpisode = true;
+        await SaveCurrentVideoProgressAsync(ct);
+        var playlist = new List<VideoItem>();
+        foreach (var row in ViewModel.EpisodeRows)
+            playlist.Add(row.Video);
+
+        await OpenVideoAsync(next.Video, playlist, ct);
+    }
+
+    private VideoEpisodeRow? FindNextEpisodeRow()
+    {
+        for (var i = 0; i < ViewModel.EpisodeRows.Count; i++)
+        {
+            if (!ViewModel.EpisodeRows[i].IsCurrent)
+                continue;
+
+            return i + 1 < ViewModel.EpisodeRows.Count
+                ? ViewModel.EpisodeRows[i + 1]
+                : null;
+        }
+
+        return null;
     }
 
     private void ProgressSlider_PointerPressed(object sender, PointerRoutedEventArgs e)
@@ -1074,87 +1228,68 @@ public sealed partial class VideoPlayerWindow
 
     private async void RootGrid_KeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (!IsVideoShortcutKey(e.Key))
+        if (!TryResolveVideoShortcut(e.Key, out var action))
             return;
 
         e.Handled = true;
-        await HandleVideoShortcutKeyAsync(e.Key);
+        await HandleVideoShortcutActionAsync(action!.Id);
     }
 
-    private static bool IsVideoShortcutKey(VirtualKey key) =>
-        key is VirtualKey.Space
-            or VirtualKey.Left
-            or VirtualKey.Right
-            or VirtualKey.Up
-            or VirtualKey.Down
-            or VirtualKey.PageUp
-            or VirtualKey.PageDown
-            or VirtualKey.V
-            or VirtualKey.S
-            or VirtualKey.F
-            or VirtualKey.F2
-            or VirtualKey.F8
-            or VirtualKey.F9
-            or VirtualKey.H
-            or VirtualKey.L
-            or VirtualKey.Add
-            or VirtualKey.Subtract
-            or VirtualKey.Escape;
-
-    private async Task HandleVideoShortcutKeyAsync(VirtualKey key)
+    private bool TryResolveVideoShortcut(VirtualKey key, out ShortcutAction? action)
     {
-        switch (key)
+        var binding = KeyboardShortcutBinding.FromVirtualKey(
+            key,
+            ShortcutInputMapper.GetCurrentModifiers());
+        return _shortcutService.TryResolve(ShortcutScope.Video, binding, out action);
+    }
+
+    private async Task HandleVideoShortcutActionAsync(string actionId)
+    {
+        switch (actionId)
         {
-            case VirtualKey.Space:
+            case VideoShortcutActions.PlayPauseId:
                 await TogglePlayPauseAsync();
                 break;
-            case VirtualKey.Left:
-                await SeekRelativeAsync(-SeekStepSeconds);
+            case VideoShortcutActions.SeekBackwardId:
+                await SeekRelativeAsync(-ViewModel.SeekIntervalSeconds);
                 break;
-            case VirtualKey.Right:
-                await SeekRelativeAsync(SeekStepSeconds);
+            case VideoShortcutActions.SeekForwardId:
+                await SeekRelativeAsync(ViewModel.SeekIntervalSeconds);
                 break;
-            case VirtualKey.Up:
+            case VideoShortcutActions.VolumeUpId:
                 await SetVolumeAsync(ViewModel.Volume + VolumeStep);
                 break;
-            case VirtualKey.Down:
+            case VideoShortcutActions.VolumeDownId:
                 await SetVolumeAsync(ViewModel.Volume - VolumeStep);
                 break;
-            case VirtualKey.PageUp:
+            case VideoShortcutActions.PreviousSubtitleId:
                 await SeekToSubtitleAsync(ViewModel.GetPreviousSubtitleStart());
                 break;
-            case VirtualKey.PageDown:
+            case VideoShortcutActions.NextSubtitleId:
                 await SeekToSubtitleAsync(ViewModel.GetNextSubtitleStart());
                 break;
-            case VirtualKey.V:
+            case VideoShortcutActions.ToggleSubtitlesId:
                 ToggleSubtitlesVisible();
                 break;
-            case VirtualKey.S:
+            case VideoShortcutActions.CycleSubtitleTrackId:
                 await CycleSubtitleTrackAsync();
                 break;
-            case VirtualKey.F:
+            case VideoShortcutActions.ToggleFullscreenId:
                 ToggleFullScreen();
                 break;
-            case VirtualKey.F2:
-            case VirtualKey.F9:
+            case VideoShortcutActions.LookupSubtitleId:
                 await LookupCurrentSubtitleAsync();
                 break;
-            case VirtualKey.F8:
+            case VideoShortcutActions.ToggleHardwareDecodingId:
                 await SetHardwareDecodingAsync(!ViewModel.HardwareDecodingEnabled);
                 break;
-            case VirtualKey.H:
-                await SetHardwareDecodingAsync(!ViewModel.HardwareDecodingEnabled);
-                break;
-            case VirtualKey.L:
-                await LookupCurrentSubtitleAsync();
-                break;
-            case VirtualKey.Add:
+            case VideoShortcutActions.IncreaseSubtitleSizeId:
                 SetSubtitleFontSize(ViewModel.SubtitleFontSize + 1);
                 break;
-            case VirtualKey.Subtract:
+            case VideoShortcutActions.DecreaseSubtitleSizeId:
                 SetSubtitleFontSize(ViewModel.SubtitleFontSize - 1);
                 break;
-            case VirtualKey.Escape:
+            case VideoShortcutActions.CloseOverlayOrFullscreenId:
                 if (_isInspectorOpen)
                 {
                     _isInspectorOpen = false;
@@ -1247,9 +1382,9 @@ public sealed partial class VideoPlayerWindow
             case WM_KEYDOWN:
             case WM_SYSKEYDOWN:
                 var key = (VirtualKey)wParam.ToUInt32();
-                if (IsVideoShortcutKey(key))
+                if (TryResolveVideoShortcut(key, out var action))
                 {
-                    DispatcherQueue.TryEnqueue(async () => await HandleVideoShortcutKeyAsync(key));
+                    DispatcherQueue.TryEnqueue(async () => await HandleVideoShortcutActionAsync(action!.Id));
                     return IntPtr.Zero;
                 }
 

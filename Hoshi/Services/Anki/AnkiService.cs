@@ -19,6 +19,7 @@ public sealed class AnkiService : IAnkiService, IDisposable
     private readonly IDictionaryLookupService _dictionaryLookupService;
     private AnkiConnectClient? _client;
     private AnkiSettings _settings;
+    private string? _cachedWritableMediaDirectory;
 
     public AnkiSettings Settings => _settings;
 
@@ -34,6 +35,7 @@ public sealed class AnkiService : IAnkiService, IDisposable
         _settings = settings;
         _client?.Dispose();
         _client = null;
+        _cachedWritableMediaDirectory = null;
     }
 
     private AnkiConnectClient GetClient()
@@ -73,6 +75,48 @@ public sealed class AnkiService : IAnkiService, IDisposable
     public async Task<List<string>> FetchModelFieldNamesAsync(string modelName)
     {
         return await GetClient().FetchModelFieldNamesAsync(modelName);
+    }
+
+    public async Task<AnkiMiningPreflightResult> PreflightMiningAsync(
+        string rawPayloadJson,
+        AnkiMiningContext context)
+    {
+        try
+        {
+            if (!_settings.IsConfigured)
+                return AnkiMiningPreflightResult.Failure("Anki is not configured.");
+
+            var payload = AnkiMiningPayload.FromJson(rawPayloadJson);
+            var deck = ResolveDeck();
+            var noteType = ResolveNoteType();
+            if (deck == null || noteType == null)
+                return AnkiMiningPreflightResult.Failure("Anki deck or note type is not configured.");
+
+            var renderedFields = RenderFieldsForDuplicateCheck(noteType, payload, context);
+            if (renderedFields.Count == 0)
+                return AnkiMiningPreflightResult.Failure("No Anki fields rendered.");
+
+            if (!_settings.AllowDupes)
+            {
+                var canAdd = await GetClient().CanAddNotesAsync(deck, noteType, renderedFields, _settings);
+                if (!canAdd)
+                    return AnkiMiningPreflightResult.Duplicate();
+            }
+
+            var needs = AnkiFieldMappingResolver.ResolveMediaNeedsForMining(
+                noteType,
+                _settings.FieldMappings,
+                context);
+            var directMediaDirectory = needs.NeedsVideoMedia
+                ? await GetWritableMediaDirectoryAsync()
+                : null;
+            return new AnkiMiningPreflightResult(true, false, null, needs, directMediaDirectory);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[Anki] PreflightMiningAsync failed");
+            return AnkiMiningPreflightResult.Failure(ex.Message);
+        }
     }
 
     public async Task<bool> MineEntryAsync(string rawPayloadJson, AnkiMiningContext context)
@@ -326,20 +370,7 @@ public sealed class AnkiService : IAnkiService, IDisposable
             if (deck == null || noteType == null)
                 return false;
 
-            var renderedFields = new Dictionary<string, string>();
-            var fieldMappings = AnkiFieldMappingResolver.ResolveForMining(
-                noteType,
-                _settings.FieldMappings,
-                new AnkiMiningContext());
-            foreach (var (fieldName, template) in fieldMappings)
-            {
-                if (string.IsNullOrWhiteSpace(template) || template == "-")
-                    continue;
-
-                var rendered = AnkiHandlebarRenderer.Render(template, payload, new AnkiMiningContext());
-                if (!string.IsNullOrWhiteSpace(rendered))
-                    renderedFields[fieldName] = rendered;
-            }
+            var renderedFields = RenderFieldsForDuplicateCheck(noteType, payload, new AnkiMiningContext());
 
             var canAdd = await GetClient().CanAddNotesAsync(deck, noteType, renderedFields, _settings);
             return !canAdd; // Return true if duplicate exists
@@ -347,6 +378,76 @@ public sealed class AnkiService : IAnkiService, IDisposable
         catch (Exception ex)
         {
             Log.Error(ex, "[Anki] DuplicateCheckAsync failed");
+            return false;
+        }
+    }
+
+    public async Task<string?> GetWritableMediaDirectoryAsync()
+    {
+        if (IsWritableDirectory(_cachedWritableMediaDirectory))
+            return _cachedWritableMediaDirectory;
+
+        try
+        {
+            var mediaDirectory = await GetClient().GetMediaDirPathAsync();
+            if (!IsWritableDirectory(mediaDirectory))
+                return null;
+
+            _cachedWritableMediaDirectory = mediaDirectory;
+            return mediaDirectory;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "[Anki] Could not resolve writable collection.media directory");
+            return null;
+        }
+    }
+
+    private Dictionary<string, string> RenderFieldsForDuplicateCheck(
+        AnkiNoteType noteType,
+        AnkiMiningPayload payload,
+        AnkiMiningContext context)
+    {
+        var renderedFields = new Dictionary<string, string>();
+        var fieldMappings = AnkiFieldMappingResolver.ResolveForMining(
+            noteType,
+            _settings.FieldMappings,
+            context);
+        foreach (var (fieldName, template) in fieldMappings)
+        {
+            if (string.IsNullOrWhiteSpace(template) || template == "-")
+                continue;
+
+            var rendered = AnkiHandlebarRenderer.Render(template, payload, context);
+            if (!string.IsNullOrWhiteSpace(rendered))
+                renderedFields[fieldName] = rendered;
+        }
+
+        return renderedFields;
+    }
+
+    private static bool IsWritableDirectory(string? directory)
+    {
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+            return false;
+
+        var probe = Path.Combine(directory, $".hoshi-write-test-{Guid.NewGuid():N}.tmp");
+        try
+        {
+            File.WriteAllText(probe, "");
+            File.Delete(probe);
+            return true;
+        }
+        catch
+        {
+            try
+            {
+                File.Delete(probe);
+            }
+            catch
+            {
+            }
+
             return false;
         }
     }

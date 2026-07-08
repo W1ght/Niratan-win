@@ -21,9 +21,14 @@ using Microsoft.Web.WebView2.Core;
 using Windows.Storage.Pickers;
 using Windows.Storage.Streams;
 using Windows.Graphics;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.System;
 using Hoshi.Helpers;
 using Hoshi.Models;
+using Hoshi.Models.Anki;
+using Hoshi.Models.Shortcuts;
+using Hoshi.Services.Anki;
+using Hoshi.Services.Shortcuts;
 using Hoshi.Services.Video;
 using Hoshi.ViewModels.Pages;
 using Hoshi.Views.Dictionary;
@@ -32,7 +37,6 @@ namespace Hoshi.Views.Video;
 
 public sealed partial class VideoPlayerWindow : Window
 {
-    private const double SeekStepSeconds = 5;
     private const double VolumeStep = 5;
     private const int WS_CHILD = 0x40000000;
     private const int WS_VISIBLE = 0x10000000;
@@ -69,8 +73,11 @@ public sealed partial class VideoPlayerWindow : Window
     }
 
     private readonly IVideoPlaybackEngine _playbackEngine;
+    private readonly IVideoLibraryService _videoLibraryService;
+    private readonly IVideoMiningHistoryStore _miningHistoryStore;
     private readonly IVideoMiningMediaExtractor _mediaExtractor;
     private readonly IVideoSubtitleTranscriptExtractor _subtitleTranscriptExtractor;
+    private readonly IShortcutService _shortcutService;
     private readonly VideoSubtitleTranscriptLoadCoordinator _subtitleTranscriptLoadCoordinator;
     private readonly DispatcherTimer _positionTimer = new();
     private readonly HashSet<VideoTranscriptRow> _subscribedTranscriptRows = [];
@@ -104,6 +111,8 @@ public sealed partial class VideoPlayerWindow : Window
     private bool _isSubtitlePointerLookupRunning;
     private bool _isSubtitleWebViewInitialized;
     private bool _isSubtitleWebViewReady;
+    private bool _isAutoPlayingNextEpisode;
+    private DateTimeOffset _lastProgressSaveAt = DateTimeOffset.MinValue;
     private int _subtitleMaskBlurRenderGeneration;
     private VideoInspectorTab _selectedInspectorTab = VideoInspectorTab.SubtitleList;
 
@@ -118,8 +127,11 @@ public sealed partial class VideoPlayerWindow : Window
         InspectorSubtitleListContent.SetABLoopStartRequested += InspectorSubtitleListContent_SetABLoopStartRequested;
         InspectorSubtitleListContent.SetABLoopEndRequested += InspectorSubtitleListContent_SetABLoopEndRequested;
         _playbackEngine = App.GetService<IVideoPlaybackEngine>();
+        _videoLibraryService = App.GetService<IVideoLibraryService>();
+        _miningHistoryStore = App.GetService<IVideoMiningHistoryStore>();
         _mediaExtractor = App.GetService<IVideoMiningMediaExtractor>();
         _subtitleTranscriptExtractor = App.GetService<IVideoSubtitleTranscriptExtractor>();
+        _shortcutService = App.GetService<IShortcutService>();
         _subtitleTranscriptLoadCoordinator = new VideoSubtitleTranscriptLoadCoordinator(_subtitleTranscriptExtractor);
         _videoHostSubclassProc = VideoHostSubclassProc;
         ViewModel.PropertyChanged += ViewModel_PropertyChanged;
@@ -168,12 +180,13 @@ public sealed partial class VideoPlayerWindow : Window
         ApplySubtitleAppearance();
         UpdateAspectRatioSelection();
         UpdateVideoEqualizerControls();
-        UpdateEpisodeListVisibility();
+        UpdateChapterListVisibility();
         UpdateTranscriptListVisibility();
         UpdateSubtitleControlAvailability();
         UpdateVideoTrackSelection();
         UpdateAudioTrackSelection();
         UpdateSubtitleTrackSelection();
+        RefreshMiningHistoryRows();
     }
 
     public Task OpenVideoAsync(VideoItem video, CancellationToken ct = default) =>
@@ -244,10 +257,13 @@ public sealed partial class VideoPlayerWindow : Window
         var playlist = _pendingPlaylist ?? [video];
         _pendingVideo = null;
         _pendingPlaylist = null;
+        await SaveCurrentVideoProgressAsync(ct);
         await ViewModel.LoadVideoAsync(video, ct);
         MaximizeVideoWindowForTesting();
         ViewModel.ReplaceEpisodes(playlist, video);
-        UpdateEpisodeListVisibility();
+        await _videoLibraryService.MarkOpenedAsync(video.Id, ct);
+        _isAutoPlayingNextEpisode = false;
+        _lastProgressSaveAt = DateTimeOffset.MinValue;
         await _playbackEngine.OpenAsync(video.FilePath, video.SubtitlePath, ct);
         await _playbackEngine.SetPlaybackSpeedAsync(ViewModel.PlaybackSpeed, ct);
         await _playbackEngine.SetAudioDelayAsync(TimeSpan.FromSeconds(ViewModel.AudioDelaySeconds), ct);
@@ -257,8 +273,10 @@ public sealed partial class VideoPlayerWindow : Window
         await _playbackEngine.SetAspectRatioAsync(ViewModel.AspectRatioValue, ct);
         await _playbackEngine.SetVideoRotationAsync(ViewModel.VideoRotationDegrees, ct);
         await ApplyVideoEnhancementAsync(ct);
+        await RefreshChaptersAsync(ct);
         await RefreshMediaTracksAsync(string.IsNullOrWhiteSpace(video.SubtitlePath), ct);
-        if (string.IsNullOrWhiteSpace(video.SubtitlePath))
+        var restoredSubtitle = await RestorePlaybackStateIfNeededAsync(video, ct);
+        if (!restoredSubtitle && string.IsNullOrWhiteSpace(video.SubtitlePath))
             await SelectInitialEmbeddedSubtitleTrackAsync(ct);
 
         _isPaused = false;
@@ -273,21 +291,144 @@ public sealed partial class VideoPlayerWindow : Window
         await LookupCurrentSubtitleAsync();
     }
 
-    private async void EpisodeListView_ItemClick(object sender, ItemClickEventArgs e)
+    private async void RecordMiningHistoryButton_Click(object sender, RoutedEventArgs e)
     {
-        if (e.ClickedItem is not VideoEpisodeRow row)
-            return;
+        await RecordCurrentMiningHistoryAsync();
+    }
 
-        if (ViewModel.CurrentVideo != null
-            && string.Equals(
-                NormalizeVideoPath(ViewModel.CurrentVideo.FilePath),
-                NormalizeVideoPath(row.FilePath),
-                StringComparison.OrdinalIgnoreCase))
+    private async Task RecordCurrentMiningHistoryAsync()
+    {
+        await _miningHistoryStore.UpdateLimitAsync(ViewModel.MiningHistoryLimit);
+        var capture = ViewModel.CreateMiningHistoryCapture();
+        if (capture == null)
         {
+            ViewModel.StatusText = "No subtitle to save";
             return;
         }
 
-        await OpenVideoAsync(row.Video, ViewModel.EpisodeRows.Select(episode => episode.Video).ToList());
+        var id = await _miningHistoryStore.RecordAsync(capture);
+        if (id == null)
+        {
+            ViewModel.StatusText = "Mining History disabled";
+            RefreshMiningHistoryRows();
+            return;
+        }
+
+        RefreshMiningHistoryRows();
+        ViewModel.StatusText = "Saved to Mining History";
+    }
+
+    private async void MiningHistoryListView_ItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is VideoMiningHistoryRow row)
+            await JumpToMiningHistoryItemAsync(row.Item);
+    }
+
+    private async Task JumpToMiningHistoryItemAsync(VideoMiningHistoryItem item)
+    {
+        if (string.IsNullOrWhiteSpace(item.VideoPath))
+        {
+            ViewModel.StatusText = "Open the matching video before using this history item";
+            return;
+        }
+
+        if (!File.Exists(item.VideoPath))
+        {
+            ViewModel.StatusText = "The saved video file is no longer available";
+            return;
+        }
+
+        var currentPath = ViewModel.CurrentVideo?.FilePath;
+        if (!string.Equals(NormalizeVideoPath(currentPath ?? ""), NormalizeVideoPath(item.VideoPath), StringComparison.OrdinalIgnoreCase))
+        {
+            await OpenVideoAsync(new VideoItem
+            {
+                Id = item.Id,
+                Title = Path.GetFileNameWithoutExtension(item.VideoPath),
+                FilePath = item.VideoPath,
+                SubtitlePath = item.SubtitleSourcePath,
+                ImportedAt = item.CreatedAt,
+            });
+        }
+
+        if (item.SubtitleSelectionKind == VideoSubtitleSelectionKind.ExternalFile
+            && !string.IsNullOrWhiteSpace(item.SubtitleSourcePath))
+        {
+            if (!File.Exists(item.SubtitleSourcePath))
+            {
+                ViewModel.StatusText = "The saved subtitle file is no longer available";
+                return;
+            }
+
+            await LoadExternalSubtitleAsync(item.SubtitleSourcePath);
+        }
+        else if (item.SubtitleSelectionKind == VideoSubtitleSelectionKind.EmbeddedTrack && item.EmbeddedSubtitleTrackId.HasValue)
+        {
+            var track = ViewModel.SubtitleTracks.FirstOrDefault(track => track.Id == item.EmbeddedSubtitleTrackId.Value);
+            if (track != null)
+                await SelectSubtitleTrackAsync(track);
+        }
+
+        await SeekToAsync(item.CueStart);
+        ViewModel.StatusText = "Restored Mining History item";
+    }
+
+    private void CopyMiningHistoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not VideoMiningHistoryRow row)
+            return;
+
+        var package = new DataPackage();
+        package.SetText(row.Item.SubtitleText);
+        Clipboard.SetContent(package);
+        ViewModel.StatusText = "Copied subtitle";
+    }
+
+    private async void DeleteMiningHistoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not VideoMiningHistoryRow row)
+            return;
+
+        await _miningHistoryStore.DeleteAsync(row.Id);
+        RefreshMiningHistoryRows();
+        ViewModel.StatusText = "Deleted Mining History item";
+    }
+
+    private async void ClearMiningHistoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        await _miningHistoryStore.ClearAsync();
+        RefreshMiningHistoryRows();
+        ViewModel.StatusText = "Cleared Mining History";
+    }
+
+    private void RefreshMiningHistoryRows()
+    {
+        ViewModel.ReplaceMiningHistoryItems(_miningHistoryStore.Items);
+        MiningHistoryListView.Visibility = ViewModel.HasMiningHistory
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        MiningHistoryEmptyText.Visibility = ViewModel.HasMiningHistory
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+        ClearMiningHistoryButton.IsEnabled = ViewModel.HasMiningHistory;
+    }
+
+    private async void ChapterListView_ItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is not VideoChapterRow row)
+            return;
+
+        try
+        {
+            await _playbackEngine.SeekChapterAsync(row.Id);
+            ViewModel.UpdatePosition(row.StartTime, ViewModel.Duration);
+            ViewModel.StatusText = $"Chapter: {row.Title}";
+            ScrollCurrentChapterRowIntoView();
+        }
+        catch (Exception ex)
+        {
+            ViewModel.StatusText = ex.Message;
+        }
     }
 
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -299,6 +440,8 @@ public sealed partial class VideoPlayerWindow : Window
             case nameof(VideoPlayerViewModel.SubtitleFontWeight):
             case nameof(VideoPlayerViewModel.SubtitleFontFamily):
             case nameof(VideoPlayerViewModel.SubtitleShadowRadius):
+            case nameof(VideoPlayerViewModel.SubtitleBackgroundOpacity):
+            case nameof(VideoPlayerViewModel.SubtitleBackgroundDisabled):
             case nameof(VideoPlayerViewModel.SubtitleVerticalPosition):
             case nameof(VideoPlayerViewModel.SubtitleColorHex):
             case nameof(VideoPlayerViewModel.SubtitleLookupHighlightColorHex):
@@ -312,25 +455,32 @@ public sealed partial class VideoPlayerWindow : Window
         }
     }
 
-    private void UpdateEpisodeListVisibility()
+    private async Task RefreshChaptersAsync(CancellationToken ct = default)
     {
-        var hasRows = ViewModel.EpisodeRows.Count > 0;
-        EpisodeListView.Visibility = hasRows
+        var chapters = await _playbackEngine.GetChaptersAsync(ct);
+        ViewModel.ReplaceChapters(chapters);
+        UpdateChapterListVisibility();
+    }
+
+    private void UpdateChapterListVisibility()
+    {
+        var hasRows = ViewModel.ChapterRows.Count > 0;
+        ChapterListView.Visibility = hasRows
             ? Visibility.Visible
             : Visibility.Collapsed;
-        EpisodeEmptyText.Visibility = hasRows
+        ChapterEmptyText.Visibility = hasRows
             ? Visibility.Collapsed
             : Visibility.Visible;
     }
 
-    private void ScrollCurrentEpisodeRowIntoView()
+    private void ScrollCurrentChapterRowIntoView()
     {
-        if (EpisodeListView.Visibility != Visibility.Visible)
+        if (ChapterListView.Visibility != Visibility.Visible)
             return;
 
-        var currentRow = ViewModel.EpisodeRows.FirstOrDefault(row => row.IsCurrent);
+        var currentRow = ViewModel.ChapterRows.FirstOrDefault(row => row.IsCurrent);
         if (currentRow != null)
-            DispatcherQueue.TryEnqueue(() => EpisodeListView.ScrollIntoView(currentRow, ScrollIntoViewAlignment.Leading));
+            DispatcherQueue.TryEnqueue(() => ChapterListView.ScrollIntoView(currentRow, ScrollIntoViewAlignment.Leading));
     }
 
     private static string NormalizeVideoPath(string path)
@@ -365,18 +515,25 @@ public sealed partial class VideoPlayerWindow : Window
             if (file == null)
                 return;
 
-            if (_isLoaded)
-                await _playbackEngine.SelectTrackAsync(VideoTrackType.Subtitle, null);
-
-            await ViewModel.LoadSubtitleAsync(file.Path);
-            await RefreshMediaTracksAsync();
-            UpdateSubtitleControlAvailability();
+            await LoadExternalSubtitleAsync(file.Path);
             ViewModel.StatusText = $"Loaded subtitles: {file.Name}";
         }
         catch (Exception ex)
         {
             ViewModel.StatusText = ex.Message;
         }
+    }
+
+    private async Task LoadExternalSubtitleAsync(string path, CancellationToken ct = default)
+    {
+        CancelEmbeddedTranscriptLoad();
+        if (_isLoaded)
+            await _playbackEngine.SelectTrackAsync(VideoTrackType.Subtitle, null, ct);
+
+        await ViewModel.LoadSubtitleAsync(path, ct);
+        await RefreshMediaTracksAsync(ct: ct);
+        UpdateSubtitleControlAvailability();
+        await SaveCurrentVideoProgressAsync(ct);
     }
 
     private void ClearSubtitleButton_Click(object sender, RoutedEventArgs e)
@@ -442,12 +599,10 @@ public sealed partial class VideoPlayerWindow : Window
             PlayPauseIcon.Glyph = "\uE768";
             ApplySubtitleAppearance();
 
-            var (screenshotPath, audioClipPath) = await CaptureMiningMediaAsync();
             var request = await ViewModel.CreateLookupRequestAsync(
                 query,
-                screenshotPath,
-                audioClipPath,
-                sentenceOffset);
+                sentenceOffset,
+                RequestVideoMiningMediaAsync);
             if (request == null)
             {
                 _popupOverlay?.Dismiss();
@@ -493,38 +648,154 @@ public sealed partial class VideoPlayerWindow : Window
         }
     }
 
-    private async Task<(string? screenshotPath, string? audioClipPath)> CaptureMiningMediaAsync()
+    private async Task<VideoMiningMediaResult> RequestVideoMiningMediaAsync(
+        VideoMiningMediaRequest request,
+        CancellationToken ct)
     {
         if (ViewModel.CurrentVideo == null)
-            return (null, null);
+            return new VideoMiningMediaResult();
 
+        var videoPath = ViewModel.CurrentVideo.FilePath;
+        var position = ViewModel.CurrentPosition;
+        var cue = ViewModel.CurrentCue;
+        var audioRange = cue == null
+            ? null
+            : ResolveVideoAudioClipRange(cue.Start, cue.End);
+        if (!string.IsNullOrWhiteSpace(request.DirectMediaDirectory))
+        {
+            var screenshotFilename = request.CaptureScreenshot
+                ? VideoMiningMediaNaming.CreateScreenshotFilename(videoPath, position)
+                : null;
+            var audioFilename = request.CaptureAudioClip && audioRange != null
+                ? VideoMiningMediaNaming.CreateAudioClipFilename(videoPath, audioRange.Value.Start, audioRange.Value.End)
+                : null;
+            if (screenshotFilename != null || audioFilename != null)
+            {
+                _ = GenerateDirectVideoMiningMediaAsync(
+                    request.DirectMediaDirectory,
+                    screenshotFilename,
+                    audioFilename,
+                    videoPath,
+                    position,
+                    audioRange);
+            }
+
+            return new VideoMiningMediaResult(
+                ScreenshotTag: screenshotFilename == null ? null : AnkiMediaMarkup.ForFieldPlaceholder(screenshotFilename),
+                AudioClipTag: audioFilename == null ? null : AnkiMediaMarkup.ForFieldPlaceholder(audioFilename),
+                AudioClipErrorMessage: request.CaptureAudioClip && audioRange == null
+                    ? "Unable to capture the subtitle audio clip."
+                    : null);
+        }
+
+        return await CaptureFallbackVideoMiningMediaAsync(request, videoPath, position, audioRange, ct);
+    }
+
+    private async Task<VideoMiningMediaResult> CaptureFallbackVideoMiningMediaAsync(
+        VideoMiningMediaRequest request,
+        string videoPath,
+        TimeSpan position,
+        (TimeSpan Start, TimeSpan End)? audioRange,
+        CancellationToken ct)
+    {
         var mediaDir = Path.Combine(AppDataHelper.GetDataPath(), "VideoMining");
         Directory.CreateDirectory(mediaDir);
 
-        var screenshotPath = Path.Combine(
-            mediaDir,
-            VideoMiningMediaNaming.CreateScreenshotFilename(
-                ViewModel.CurrentVideo.FilePath,
-                ViewModel.CurrentPosition));
-        screenshotPath = await _playbackEngine.CaptureScreenshotAsync(screenshotPath);
-
-        string? audioClipPath = null;
-        if (ViewModel.CurrentCue != null)
+        string? screenshotPath = null;
+        if (request.CaptureScreenshot)
         {
             var target = Path.Combine(
                 mediaDir,
-                VideoMiningMediaNaming.CreateAudioClipFilename(
-                    ViewModel.CurrentVideo.FilePath,
-                    ViewModel.CurrentCue.Start,
-                    ViewModel.CurrentCue.End));
-            audioClipPath = await _mediaExtractor.ExportAudioClipAsync(
-                ViewModel.CurrentVideo.FilePath,
-                target,
-                ViewModel.CurrentCue.Start,
-                ViewModel.CurrentCue.End);
+                VideoMiningMediaNaming.CreateScreenshotFilename(videoPath, position));
+            screenshotPath = await _playbackEngine.CaptureScreenshotAsync(target, ct);
         }
 
-        return (screenshotPath, audioClipPath);
+        string? audioClipPath = null;
+        string? audioClipErrorMessage = null;
+        if (request.CaptureAudioClip)
+        {
+            if (audioRange == null)
+            {
+                audioClipErrorMessage = "Unable to capture the subtitle audio clip.";
+            }
+            else
+            {
+                var target = Path.Combine(
+                    mediaDir,
+                    VideoMiningMediaNaming.CreateAudioClipFilename(videoPath, audioRange.Value.Start, audioRange.Value.End));
+                audioClipPath = await _mediaExtractor.ExportAudioClipAsync(
+                    videoPath,
+                    target,
+                    audioRange.Value.Start,
+                    audioRange.Value.End);
+            }
+        }
+
+        return new VideoMiningMediaResult(screenshotPath, audioClipPath, AudioClipErrorMessage: audioClipErrorMessage);
+    }
+
+    private async Task GenerateDirectVideoMiningMediaAsync(
+        string mediaDirectory,
+        string? screenshotFilename,
+        string? audioFilename,
+        string videoPath,
+        TimeSpan position,
+        (TimeSpan Start, TimeSpan End)? audioRange)
+    {
+        try
+        {
+            Directory.CreateDirectory(mediaDirectory);
+            var tempDir = Path.Combine(AppDataHelper.GetDataPath(), "VideoMining", "Temp");
+            Directory.CreateDirectory(tempDir);
+
+            if (screenshotFilename != null)
+            {
+                var temp = Path.Combine(tempDir, $".{Guid.NewGuid():N}-{screenshotFilename}");
+                var captured = await _playbackEngine.CaptureScreenshotAsync(temp);
+                if (!string.IsNullOrWhiteSpace(captured) && File.Exists(captured))
+                    ReplaceFile(captured, Path.Combine(mediaDirectory, screenshotFilename));
+            }
+
+            if (audioFilename != null && audioRange != null)
+            {
+                var temp = Path.Combine(tempDir, $".{Guid.NewGuid():N}-{audioFilename}");
+                var exported = await _mediaExtractor.ExportAudioClipAsync(
+                    videoPath,
+                    temp,
+                    audioRange.Value.Start,
+                    audioRange.Value.End);
+                if (!string.IsNullOrWhiteSpace(exported) && File.Exists(exported))
+                    ReplaceFile(exported, Path.Combine(mediaDirectory, audioFilename));
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private (TimeSpan Start, TimeSpan End)? ResolveVideoAudioClipRange(TimeSpan cueStart, TimeSpan cueEnd)
+    {
+        var delay = TimeSpan.FromMilliseconds(ViewModel.SubtitleDelayMilliseconds);
+        var start = cueStart + delay;
+        var end = cueEnd + delay;
+        if (ViewModel.Duration > TimeSpan.Zero)
+            end = end > ViewModel.Duration ? ViewModel.Duration : end;
+
+        if (start < TimeSpan.Zero)
+            start = TimeSpan.Zero;
+        if (end <= start)
+            return null;
+
+        return (start, end);
+    }
+
+    private static void ReplaceFile(string sourcePath, string destinationPath)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
+        if (File.Exists(destinationPath))
+            File.Delete(destinationPath);
+        File.Copy(sourcePath, destinationPath, overwrite: true);
+        File.Delete(sourcePath);
     }
 
     private DictionaryPopupOverlay EnsurePopupOverlay()
@@ -548,6 +819,7 @@ public sealed partial class VideoPlayerWindow : Window
     private void OnClosed(object sender, WindowEventArgs args)
     {
         _positionTimer.Stop();
+        _ = SaveCurrentVideoProgressAsync();
         CancelEmbeddedTranscriptLoad();
         InspectorSubtitleListContent.TranscriptSelected -= InspectorSubtitleListContent_TranscriptSelected;
         InspectorSubtitleListContent.SetABLoopStartRequested -= InspectorSubtitleListContent_SetABLoopStartRequested;

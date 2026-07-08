@@ -46,6 +46,16 @@ public sealed partial class AdvancedSettingsPage : Page
         NavigateSettingsSubpage(typeof(SasayakiSettingsPage));
     }
 
+    private void VideoSettings_Click(object sender, RoutedEventArgs e)
+    {
+        NavigateSettingsSubpage(typeof(VideoSettingsPage));
+    }
+
+    private void KeyboardShortcutsSettings_Click(object sender, RoutedEventArgs e)
+    {
+        NavigateSettingsSubpage(typeof(KeyboardShortcutsSettingsPage));
+    }
+
     private void NavigateSettingsSubpage(Type pageType)
     {
         if (_isEmbedded)

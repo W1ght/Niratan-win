@@ -9,5 +9,7 @@ public enum AppPage
     AdvancedSettingsPage,
     SasayakiSettingsPage,
     StatisticsSettingsPage,
+    VideoSettingsPage,
+    KeyboardShortcutsSettingsPage,
     Other,
 }
