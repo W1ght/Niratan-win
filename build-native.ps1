@@ -24,6 +24,7 @@ Write-Host "Using CMake: $cmake"
 
 # Detect available C++ toolchain
 $generator = $null
+$vsToolset = $null
 $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (Test-Path $vsWhere) {
     $vsPath = & $vsWhere -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
@@ -38,6 +39,29 @@ if (Test-Path $vsWhere) {
 
         Write-Host "Found Visual Studio at: $vsPath"
         $generator = if ($vsMajor -ge 18) { "Visual Studio 18 2026" } else { "Visual Studio 17 2022" }
+
+        $clangClPath = $null
+        $clangCl = Get-Command clang-cl -ErrorAction SilentlyContinue
+        if ($clangCl) {
+            $clangClPath = $clangCl.Source
+        } else {
+            $clangClPaths = @(
+                "C:\Program Files\LLVM\bin\clang-cl.exe",
+                "$vsPath\VC\Tools\Llvm\x64\bin\clang-cl.exe"
+            )
+            foreach ($p in $clangClPaths) {
+                if (Test-Path $p) { $clangClPath = $p; break }
+            }
+        }
+
+        if ($clangClPath) {
+            $clangClDir = Split-Path $clangClPath -Parent
+            if ($clangClDir -notin $env:Path.Split(';')) {
+                $env:Path = "$clangClDir;$env:Path"
+            }
+            $vsToolset = "ClangCL"
+            Write-Host "Using Visual Studio ClangCL toolset: $clangClPath"
+        }
     }
 }
 
@@ -122,8 +146,12 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 Write-Host "Configuring CMake with generator: $generator..."
 Push-Location $buildDir
 try {
-    if ($generator -eq "Visual Studio 17 2022") {
-        & $cmake .. -G $generator -A x64
+    if ($generator -like "Visual Studio *") {
+        $configureArgs = @("..", "-G", $generator, "-A", "x64")
+        if ($vsToolset) {
+            $configureArgs += @("-T", $vsToolset)
+        }
+        & $cmake @configureArgs
     } else {
         & $cmake .. -G $generator -DCMAKE_BUILD_TYPE=Release
     }
