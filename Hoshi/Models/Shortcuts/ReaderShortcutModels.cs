@@ -89,6 +89,11 @@ public static class ReaderShortcutActions
         "Toggle Reading Timer",
         new ReaderKeyboardShortcut("t"));
 
+    public static readonly ReaderShortcutAction ToggleLyricsMode = new(
+        "reader.toggleLyricsMode",
+        "Lyrics Mode",
+        new ReaderKeyboardShortcut("l"));
+
     public static IReadOnlyList<ReaderShortcutAction> All =>
     [
         PreviousPage,
@@ -96,6 +101,7 @@ public static class ReaderShortcutActions
         Close,
         ToggleFocusMode,
         ToggleStatistics,
+        ToggleLyricsMode,
     ];
 }
 

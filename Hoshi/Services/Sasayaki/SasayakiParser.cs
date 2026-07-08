@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Hoshi.Models.Sasayaki;
 
@@ -18,7 +19,10 @@ public sealed class SasayakiParser
     public List<SasayakiCue> Parse(string srtContent)
     {
         var cues = new List<SasayakiCue>();
-        var blocks = srtContent.Trim().Split("\n\n");
+        var normalizedContent = srtContent
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n');
+        var blocks = Regex.Split(normalizedContent.Trim(), @"\n\s*\n");
 
         foreach (var block in blocks)
         {
@@ -30,7 +34,7 @@ public sealed class SasayakiParser
             if (lines.Length < 3)
                 continue;
 
-            if (!int.TryParse(lines[0].Trim(), out var id))
+            if (!int.TryParse(lines[0].Trim().Trim('\uFEFF'), out var id))
                 continue;
 
             var timestampLine = lines[1].Trim();

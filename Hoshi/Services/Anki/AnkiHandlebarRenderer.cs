@@ -41,7 +41,7 @@ public static partial class AnkiHandlebarRenderer
             "{pitch-accent-categories}" => payload.PitchCategories,
             "{document-title}" => context.DocumentTitle ?? "",
             "{book-cover}" => context.CoverPath ?? "",
-            "{sasayaki-audio}" => context.SasayakiAudioPath ?? "",
+            "{sasayaki-audio}" => context.SasayakiAudioTag ?? context.SasayakiAudioPath ?? "",
             "{video-file-name}" => context.VideoFileName ?? "",
             "{video-timestamp}" => context.VideoTimestamp ?? "",
             "{video-cue-start}" => context.VideoCueStart ?? "",

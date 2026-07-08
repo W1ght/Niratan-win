@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -114,6 +116,7 @@ public sealed class AnkiMiningContext
     public string? DocumentTitle { get; set; }
     public string? CoverPath { get; set; }
     public string? SasayakiAudioPath { get; set; }
+    public string? SasayakiAudioTag { get; set; }
     public int? SentenceOffset { get; set; }
     public string? VideoFileName { get; set; }
     public string? VideoTimestamp { get; set; }
@@ -129,4 +132,17 @@ public sealed class AnkiMiningContext
 
     [JsonIgnore]
     public VideoMiningMediaProvider? VideoMediaProvider { get; set; }
+
+    [JsonIgnore]
+    public SasayakiMiningAudioProvider? SasayakiAudioProvider { get; set; }
+
+    [JsonIgnore]
+    public SasayakiPopupControls? SasayakiPopupControls { get; set; }
 }
+
+public sealed record SasayakiPopupControls(
+    Func<Task> TogglePlaybackAsync,
+    Func<Task> ReplayCueAsync,
+    Func<Task> JumpToCueAsync,
+    Func<bool>? IsPlaying = null,
+    Func<bool>? CanControl = null);

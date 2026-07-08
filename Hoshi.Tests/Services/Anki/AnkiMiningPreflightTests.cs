@@ -30,6 +30,7 @@ public class AnkiMiningPreflightTests
 
         needs.NeedsVideoScreenshot.Should().BeTrue();
         needs.NeedsVideoAudioClip.Should().BeTrue();
+        needs.NeedsSasayakiAudio.Should().BeFalse();
     }
 
     [Fact]
@@ -49,5 +50,26 @@ public class AnkiMiningPreflightTests
 
         needs.NeedsVideoScreenshot.Should().BeFalse();
         needs.NeedsVideoAudioClip.Should().BeFalse();
+        needs.NeedsSasayakiAudio.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ResolveMediaNeedsForMining_RequestsSasayakiAudioForNovelSentenceAudioMapping()
+    {
+        var noteType = new AnkiNoteType
+        {
+            Id = 1,
+            Name = "Lapis",
+            Fields = ["Sentence", "SentenceAudio"],
+        };
+
+        var needs = AnkiFieldMappingResolver.ResolveMediaNeedsForMining(
+            noteType,
+            new Dictionary<string, string> { ["SentenceAudio"] = "{sasayaki-audio}" },
+            new AnkiMiningContext { DocumentTitle = "化物語" });
+
+        needs.NeedsVideoScreenshot.Should().BeFalse();
+        needs.NeedsVideoAudioClip.Should().BeFalse();
+        needs.NeedsSasayakiAudio.Should().BeTrue();
     }
 }

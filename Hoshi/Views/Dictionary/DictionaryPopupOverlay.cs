@@ -159,6 +159,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         _rootHost.SetReadyOpacity(_rootReadyOpacity);
         _rootHost.RedirectRequested += OnRootRedirectRequested;
         _rootHost.TapOutsideRequested += OnRootTapOutsideRequested;
+        _rootHost.DismissRequested += OnPopupDismissRequested;
         _rootHost.Scrolled += OnRootScrolled;
 
         if (_embeddedPanel != null)
@@ -304,6 +305,11 @@ public sealed class DictionaryPopupOverlay : IDisposable
     private void OnRootScrolled(object? sender, EventArgs e)
     {
         ClearChildren();
+    }
+
+    private void OnPopupDismissRequested(object? sender, EventArgs e)
+    {
+        Dismiss();
     }
 
     private async Task HandleRedirectAsync(DictionaryPopupRedirectRequest request, DictionaryLookupPopup? parentHost)
@@ -500,6 +506,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
             child.UseNakedFloatingWindowVisuals();
         child.RedirectRequested += OnChildRedirectRequested;
         child.TapOutsideRequested += OnChildTapOutsideRequested;
+        child.DismissRequested += OnPopupDismissRequested;
         child.Scrolled += OnChildScrolled;
         _childHostPool.Add(child);
         return child;
@@ -866,6 +873,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         {
             _rootHost.RedirectRequested -= OnRootRedirectRequested;
             _rootHost.TapOutsideRequested -= OnRootTapOutsideRequested;
+            _rootHost.DismissRequested -= OnPopupDismissRequested;
             _rootHost.Scrolled -= OnRootScrolled;
             if (_embeddedPanel != null)
                 _embeddedPanel.Children.Remove(_rootHost.VisualRoot);
@@ -877,6 +885,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         {
             pooledHost.RedirectRequested -= OnChildRedirectRequested;
             pooledHost.TapOutsideRequested -= OnChildTapOutsideRequested;
+            pooledHost.DismissRequested -= OnPopupDismissRequested;
             pooledHost.Scrolled -= OnChildScrolled;
             if (_canvas.Children.Contains(pooledHost.VisualRoot))
                 _canvas.Children.Remove(pooledHost.VisualRoot);

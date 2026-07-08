@@ -181,6 +181,10 @@ public sealed partial class SasayakiMatcher
 
     private static string ExtractVisibleText(string html)
     {
+        var bodyMatch = BodyRegex().Match(html);
+        if (bodyMatch.Success)
+            html = bodyMatch.Groups["body"].Value;
+
         // Remove script and style elements
         html = ScriptOrStyleRegex().Replace(html, "");
         // Remove ruby annotations (rt/rp)
@@ -199,16 +203,46 @@ public sealed partial class SasayakiMatcher
         for (var i = 0; i < text.Length;)
         {
             var cp = char.ConvertToUtf32(text, i);
-            codePoints.Add(cp);
+            if (IsReaderMatchableCodePoint(cp))
+                codePoints.Add(cp);
             i += char.IsSurrogatePair(text, i) ? 2 : 1;
         }
 
-        // Filter whitespace
-        return codePoints.Where(cp => !char.IsWhiteSpace(char.ConvertFromUtf32(cp), 0)).ToArray();
+        return codePoints.ToArray();
     }
+
+    private static bool IsReaderMatchableCodePoint(int cp) =>
+        cp is >= '0' and <= '9'
+            or >= 'A' and <= 'Z'
+            or >= 'a' and <= 'z'
+            or 0x25CB
+            or 0x25EF
+            or >= 0x3005 and <= 0x3007
+            or 0x303B
+            or >= 0x3041 and <= 0x3096
+            or >= 0x309D and <= 0x309E
+            or >= 0x30A1 and <= 0x30FA
+            or 0x30FC
+            or >= 0xFF10 and <= 0xFF19
+            or >= 0xFF21 and <= 0xFF3A
+            or >= 0xFF41 and <= 0xFF5A
+            or >= 0xFF66 and <= 0xFF9D
+            or >= 0x2E80 and <= 0x2EFF
+            or >= 0x2F00 and <= 0x2FDF
+            or >= 0x3400 and <= 0x4DBF
+            or >= 0x4E00 and <= 0x9FFF
+            or >= 0x20000 and <= 0x2A6DF
+            or >= 0x2A700 and <= 0x2B73F
+            or >= 0x2B740 and <= 0x2B81F
+            or >= 0x2B820 and <= 0x2CEAF
+            or >= 0x2CEB0 and <= 0x2EBEF
+            or >= 0x30000 and <= 0x323AF;
 
     [GeneratedRegex(@"<(script|style)\b[^>]*>.*?</\1>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex ScriptOrStyleRegex();
+
+    [GeneratedRegex(@"<body\b[^>]*>(?<body>.*?)</body>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex BodyRegex();
 
     [GeneratedRegex(@"<(rt|rp)\b[^>]*>.*?</\1>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex RubyRegex();

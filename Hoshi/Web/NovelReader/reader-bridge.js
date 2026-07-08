@@ -50,17 +50,15 @@ window.hoshiReader = {
     var text = node.textContent || "";
     var count = 0;
     var offset = 0;
-    var fallbackOffset = 0;
     while (offset < text.length) {
       var ch = String.fromCodePoint(text.codePointAt(offset));
       if (this.isMatchableChar(ch)) {
         if (count >= targetCount) return offset;
-        fallbackOffset = offset;
         count += 1;
       }
       offset += ch.length;
     }
-    return fallbackOffset;
+    return text.length;
   },
 
   createWalker: function (rootNode) {
@@ -720,6 +718,65 @@ function postToHost(type, payload) {
   });
 }
 
+var defaultShortcutBindings = {
+  "reader.previousPage": { key: "LeftArrow", control: false, shift: false, alt: false, windows: false },
+  "reader.nextPage": { key: "RightArrow", control: false, shift: false, alt: false, windows: false },
+  "reader.close": { key: "Escape", control: false, shift: false, alt: false, windows: false },
+  "reader.toggleFocusMode": { key: "f", control: false, shift: false, alt: false, windows: false },
+  "reader.toggleStatistics": { key: "t", control: false, shift: false, alt: false, windows: false },
+  "reader.toggleLyricsMode": { key: "l", control: false, shift: false, alt: false, windows: false },
+  "sasayaki.previousCue": { key: "[", control: false, shift: false, alt: false, windows: false },
+  "sasayaki.playPause": { key: "p", control: false, shift: false, alt: false, windows: false },
+  "sasayaki.nextCue": { key: "]", control: false, shift: false, alt: false, windows: false },
+  "sasayaki.replayCue": { key: "r", control: false, shift: false, alt: false, windows: false },
+  "sasayaki.jumpCue": { key: "j", control: false, shift: false, alt: false, windows: false },
+};
+
+function keyboardEventToShortcutKey(event) {
+  switch (event.key) {
+    case "ArrowLeft": return "LeftArrow";
+    case "ArrowRight": return "RightArrow";
+    case "ArrowUp": return "UpArrow";
+    case "ArrowDown": return "DownArrow";
+    case "PageUp": return "PageUp";
+    case "PageDown": return "PageDown";
+    case "Escape": return "Escape";
+    case " ": return "Space";
+  }
+
+  switch (event.code) {
+    case "BracketLeft": return "[";
+    case "BracketRight": return "]";
+  }
+
+  return event.key && event.key.length === 1
+    ? event.key.toLowerCase()
+    : event.key;
+}
+
+function modifiersMatch(event, binding) {
+  return !!event.ctrlKey === !!binding.control
+    && !!event.shiftKey === !!binding.shift
+    && !!event.altKey === !!binding.alt
+    && !!event.metaKey === !!binding.windows;
+}
+
+function shortcutActionForKeyboardEvent(event) {
+  var bindings = window.__hoshiReaderShortcutBindings || defaultShortcutBindings;
+  var key = keyboardEventToShortcutKey(event);
+  if (!key) return null;
+
+  for (var actionId in bindings) {
+    if (!Object.prototype.hasOwnProperty.call(bindings, actionId)) continue;
+    var binding = bindings[actionId];
+    if (binding && binding.key === key && modifiersMatch(event, binding)) {
+      return actionId;
+    }
+  }
+
+  return null;
+}
+
 function updateDiagnostics() {
   var context = window.hoshiReader.getScrollContext();
   var metrics =
@@ -843,13 +900,25 @@ window.chrome?.webview?.addEventListener("message", handleMessage);
 window.hoshiReaderNavigate = handleNavigate;
 
 document.addEventListener("keydown", function (event) {
-  if (event.key === "ArrowLeft") {
+  if (event.defaultPrevented) return;
+
+  var actionId = shortcutActionForKeyboardEvent(event);
+  if (!actionId) return;
+
+  if (actionId === "reader.previousPage") {
     event.preventDefault();
     handleNavigate("backward");
-  } else if (event.key === "ArrowRight") {
+    return;
+  }
+
+  if (actionId === "reader.nextPage") {
     event.preventDefault();
     handleNavigate("forward");
+    return;
   }
+
+  event.preventDefault();
+  postToHost("shortcut", { actionId: actionId });
 });
 
 window.__hoshiReaderState.bridgeReady = true;
@@ -888,6 +957,7 @@ window.hoshiSasayaki = {
   _highlightStyle: null,
   _textColor: null,
   _backgroundColor: null,
+  _highlightName: "hoshi-sasayaki",
 
   setColors: function (textColor, backgroundColor) {
     this._textColor = textColor || null;
@@ -906,12 +976,16 @@ window.hoshiSasayaki = {
     if (this._highlightStyle) return;
     this._highlightStyle = document.createElement("style");
     this._highlightStyle.textContent =
-      ".hoshi-sasayaki-highlight { color: var(--hoshi-sasayaki-text-color, inherit); background-color: var(--hoshi-sasayaki-background-color, rgba(255,235,59,0.45)); border-radius: 2px; transition: background-color 0.15s; }" +
-      ".hoshi-sasayaki-highlight-active { outline: 2px solid rgba(255,152,0,0.5); outline-offset: 1px; }";
+      "::highlight(hoshi-sasayaki) { color: var(--hoshi-sasayaki-text-color, inherit); background-color: var(--hoshi-sasayaki-background-color, rgba(255,235,59,0.45)); }" +
+      ".hoshi-sasayaki-highlight { color: var(--hoshi-sasayaki-text-color, inherit); background-color: var(--hoshi-sasayaki-background-color, rgba(255,235,59,0.45)); box-decoration-break: slice; -webkit-box-decoration-break: slice; transition: background-color 0.15s; }";
     document.head.appendChild(this._highlightStyle);
   },
 
   clearHighlight: function () {
+    if (typeof CSS !== "undefined" && CSS.highlights) {
+      CSS.highlights.delete(this._highlightName);
+    }
+    var hadWrappedNodes = this._currentHighlightNodes.length > 0;
     this._currentHighlightNodes.forEach(function (span) {
       var parent = span.parentNode;
       if (parent) {
@@ -921,63 +995,42 @@ window.hoshiSasayaki = {
       }
     });
     this._currentHighlightNodes = [];
+    if (hadWrappedNodes) window.hoshiReader.buildNodeOffsets?.();
+  },
+
+  _clearReaderSelection: function () {
+    try {
+      window.hoshiSelection?.clearSelection?.();
+    } catch (e) {
+      // Selection cleanup is cosmetic; keep audio/read-along moving if WebView
+      // reports a transient selection state.
+    }
+
+    try {
+      window.getSelection()?.removeAllRanges?.();
+    } catch (e) {
+      // Ignore stale native selections.
+    }
   },
 
   highlightCue: function (startCodePoint, length, autoScroll) {
     this.clearHighlight();
+    this._clearReaderSelection();
     this._ensureStyle();
+    if (length <= 0) return null;
     var beforeProgress = window.hoshiReader.calculateProgress();
 
-    var walker = window.hoshiReader.createWalker();
-    var runningCount = 0;
-    var targetStartNode = null;
-    var targetStartOffset = 0;
-    var node;
-
-    while ((node = walker.nextNode())) {
-      var nodeLen = window.hoshiReader.countChars(node.textContent);
-      if (runningCount + nodeLen > startCodePoint) {
-        targetStartNode = node;
-        targetStartOffset = window.hoshiReader.textOffsetForCharCount(
-          node,
-          Math.max(0, startCodePoint - runningCount)
-        );
-        break;
-      }
-      runningCount += nodeLen;
-    }
-
-    if (!targetStartNode) return;
-
     var endOffset = startCodePoint + length;
-    var targetEndNode = null;
-    var targetEndOffset = 0;
-    runningCount = 0;
+    var startBoundary = this._findBoundary(startCodePoint, false);
+    var endBoundary = this._findBoundary(endOffset, true);
 
-    walker = window.hoshiReader.createWalker();
-    while ((node = walker.nextNode())) {
-      var nodeLen = window.hoshiReader.countChars(node.textContent);
-      if (runningCount + nodeLen > endOffset) {
-        targetEndNode = node;
-        targetEndOffset = window.hoshiReader.textOffsetForCharCount(
-          node,
-          Math.max(0, endOffset - runningCount)
-        );
-        break;
-      }
-      runningCount += nodeLen;
-    }
-
-    if (!targetEndNode) {
-      targetEndNode = targetStartNode;
-      targetEndOffset = targetStartNode.textContent.length;
-    }
+    if (!startBoundary || !endBoundary) return null;
 
     var didScroll = this._highlightRange(
-      targetStartNode,
-      targetStartOffset,
-      targetEndNode,
-      targetEndOffset,
+      startBoundary.node,
+      startBoundary.offset,
+      endBoundary.node,
+      endBoundary.offset,
       autoScroll !== false
     );
     if (didScroll) {
@@ -988,63 +1041,111 @@ window.hoshiSasayaki = {
     return null;
   },
 
-  _highlightRange: function (startNode, startOffset, endNode, endOffset, autoScroll) {
-    var range = document.createRange();
-    range.setStart(startNode, Math.min(startOffset, startNode.textContent.length));
-    range.setEnd(endNode, Math.min(endOffset, endNode.textContent.length));
-
-    // Walk through text nodes in the range and wrap each with a highlight span
-    var self = this;
-    var treeWalker = document.createTreeWalker(
-      range.commonAncestorContainer,
-      NodeFilter.SHOW_TEXT,
-      {
-        acceptNode: function (n) {
-          return range.intersectsNode(n)
-            ? NodeFilter.FILTER_ACCEPT
-            : NodeFilter.FILTER_REJECT;
-        },
-      }
-    );
-
-    var spans = [];
+  _findBoundary: function (targetCodePoint, isEndBoundary) {
+    var walker = window.hoshiReader.createWalker();
+    var runningCount = 0;
     var node;
-    while ((node = treeWalker.nextNode())) {
+
+    while ((node = walker.nextNode())) {
+      var nodeLen = window.hoshiReader.countChars(node.textContent);
+      var containsBoundary = isEndBoundary
+        ? runningCount + nodeLen >= targetCodePoint
+        : runningCount + nodeLen > targetCodePoint;
+
+      if (containsBoundary) {
+        return {
+          node: node,
+          offset: window.hoshiReader.textOffsetForCharCount(
+            node,
+            Math.max(0, targetCodePoint - runningCount)
+          ),
+        };
+      }
+
+      runningCount += nodeLen;
+    }
+
+    return null;
+  },
+
+  _collectHighlightNodes: function (startNode, endNode) {
+    var nodes = [];
+    var walker = window.hoshiReader.createWalker();
+    var started = false;
+    var node;
+
+    while ((node = walker.nextNode())) {
+      if (node === startNode) started = true;
+      if (started) nodes.push(node);
+      if (node === endNode) break;
+    }
+
+    return nodes;
+  },
+
+  _highlightRange: function (startNode, startOffset, endNode, endOffset, autoScroll) {
+    var ranges = this._createHighlightRanges(startNode, startOffset, endNode, endOffset);
+    var didScroll = false;
+    if (ranges.length <= 0) return false;
+
+    if (autoScroll) {
+      didScroll = window.hoshiReader.scrollToRange(ranges[0]);
+    }
+
+    if (typeof CSS !== "undefined" && CSS.highlights && typeof Highlight !== "undefined") {
+      CSS.highlights.set("hoshi-sasayaki", new Highlight(...ranges));
+      return didScroll;
+    }
+
+    this._currentHighlightNodes = this._wrapHighlightRanges(ranges);
+    window.hoshiReader.buildNodeOffsets?.();
+    return didScroll;
+  },
+
+  _createHighlightRanges: function (startNode, startOffset, endNode, endOffset) {
+    var nodesToHighlight = this._collectHighlightNodes(startNode, endNode);
+    var ranges = [];
+    for (var i = 0; i < nodesToHighlight.length; i++) {
+      var node = nodesToHighlight[i];
       if (!node.textContent || node.textContent.trim() === "") continue;
       if (window.hoshiReader.isFurigana(node)) continue;
 
-      var textRange = document.createRange();
-      textRange.selectNodeContents(node);
-
-      var nodeStart = node === startNode ? startOffset : 0;
-      var nodeEnd = node === endNode ? endOffset : node.textContent.length;
+      var nodeStart = Math.max(0, Math.min(node === startNode ? startOffset : 0, node.textContent.length));
+      var nodeEnd = Math.max(nodeStart, Math.min(node === endNode ? endOffset : node.textContent.length, node.textContent.length));
       if (nodeStart >= nodeEnd) continue;
 
-      var span = document.createElement("span");
-      span.className = "hoshi-sasayaki-highlight";
-      textRange.setStart(node, nodeStart);
-      textRange.setEnd(node, nodeEnd);
+      var range = document.createRange();
+      range.setStart(node, nodeStart);
+      range.setEnd(node, nodeEnd);
+      ranges.push(range);
+    }
+
+    return ranges;
+  },
+
+  _wrapHighlightRanges: function (ranges) {
+    var wrappers = [];
+    for (var i = ranges.length - 1; i >= 0; i--) {
+      var range = ranges[i];
+      if (range.collapsed) continue;
+
+      var wrapper = document.createElement("span");
+      wrapper.className = "hoshi-sasayaki-highlight";
       try {
-        textRange.surroundContents(span);
-        spans.push(span);
+        range.surroundContents(wrapper);
+        wrappers.unshift(wrapper);
       } catch (e) {
-        // surroundContents fails if partial selection crosses elements — skip
+        try {
+          wrapper.appendChild(range.extractContents());
+          range.insertNode(wrapper);
+          wrappers.unshift(wrapper);
+        } catch (inner) {
+          // Skip stale ranges if content changed underneath an async highlight.
+        }
       }
     }
 
-    // Mark the first span as active (for scrolling into view)
-    var didScroll = false;
-    if (spans.length > 0) {
-      spans[0].classList.add("hoshi-sasayaki-highlight-active");
-      if (autoScroll) {
-        var scrollRange = document.createRange();
-        scrollRange.selectNodeContents(spans[0]);
-        didScroll = window.hoshiReader.scrollToRange(scrollRange);
-      }
-    }
-
-    this._currentHighlightNodes = spans;
-    return didScroll;
+    return wrappers;
   },
 };
 

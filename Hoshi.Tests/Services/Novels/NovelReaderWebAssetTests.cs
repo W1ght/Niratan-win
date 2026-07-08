@@ -121,9 +121,17 @@ public class NovelReaderWebAssetTests
         );
 
         script.Should().Contain("window.hoshiReaderNavigate");
-        script.Should().Contain("ArrowLeft");
-        script.Should().Contain("ArrowRight");
+        script.Should().Contain("window.__hoshiReaderShortcutBindings");
+        script.Should().Contain("shortcutActionForKeyboardEvent");
+        script.Should().Contain("BracketLeft");
+        script.Should().Contain("BracketRight");
+        script.Should().Contain("\"reader.previousPage\"");
+        script.Should().Contain("\"reader.nextPage\"");
         script.Should().Contain("handleNavigate");
+        script.Should().Contain("postToHost(\"shortcut\"");
+        pageCode.Should().Contain("BuildReaderWebShortcutBindingsJson");
+        pageCode.Should().Contain("window.__hoshiReaderShortcutBindings");
+        pageCode.Should().Contain("case \"shortcut\":");
         pageCode.Should().Contain("result == \"limit\"");
         pageCode.Should().Contain("LoadChapter(ViewModel.CurrentChapterIndex + 1)");
         pageCode.Should().Contain("LoadChapter(ViewModel.CurrentChapterIndex - 1)");
@@ -2094,7 +2102,8 @@ public class NovelReaderWebAssetTests
 
         readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSearchButton\"");
         readerXaml.Should().Contain("x:Uid=\"NovelReaderSearchButton\"");
-        readerXaml.Should().Contain("x:Name=\"ReaderSearchPanelPopup\"");
+        readerXaml.Should().Contain("x:Name=\"ReaderSearchPanelDialog\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSearchPanelDialog\"");
         readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSearchQueryBox\"");
         readerXaml.Should().Contain("x:Uid=\"ReaderSearchQueryBox\"");
         readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSearchResultsList\"");
@@ -2116,12 +2125,16 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw")
         );
         enResources.Should().Contain("NovelReaderSearchButton.AutomationProperties.Name");
+        enResources.Should().Contain("ReaderSearchPanelDialog.Title");
+        enResources.Should().Contain("ReaderSearchPanelDialog.CloseButtonText");
         enResources.Should().Contain("ReaderSearchQueryBox.PlaceholderText");
         enResources.Should().Contain("ReaderSearchPromptText.Text");
         enResources.Should().Contain("ReaderSearchLoadingText.Text");
         enResources.Should().Contain("ReaderSearchNoMatchesText.Text");
         enResources.Should().Contain("ReaderSearchFailedText.Text");
         zhResources.Should().Contain("NovelReaderSearchButton.AutomationProperties.Name");
+        zhResources.Should().Contain("ReaderSearchPanelDialog.Title");
+        zhResources.Should().Contain("ReaderSearchPanelDialog.CloseButtonText");
         zhResources.Should().Contain("ReaderSearchQueryBox.PlaceholderText");
         zhResources.Should().Contain("ReaderSearchPromptText.Text");
         zhResources.Should().Contain("ReaderSearchLoadingText.Text");
@@ -2205,7 +2218,8 @@ public class NovelReaderWebAssetTests
 
         readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderHighlightsButton\"");
         readerXaml.Should().Contain("x:Uid=\"NovelReaderHighlightsButton\"");
-        readerXaml.Should().Contain("x:Name=\"ReaderHighlightsPanelPopup\"");
+        readerXaml.Should().Contain("x:Name=\"ReaderHighlightsPanelDialog\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderHighlightsPanelDialog\"");
         readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderHighlightsList\"");
         readerXaml.Should().Contain("ReaderHighlightDeleteMenuItem_Click");
         readerXaml.Should().Contain("SolidColorBrush Color=\"{x:Bind SwatchColor}\"");
@@ -2218,8 +2232,12 @@ public class NovelReaderWebAssetTests
         viewModelCode.Should().Contain("GetHighlightListItems");
         viewModelCode.Should().Contain("DeleteHighlightAsync");
         enResources.Should().Contain("NovelReaderHighlightsButton.AutomationProperties.Name");
+        enResources.Should().Contain("ReaderHighlightsPanelDialog.Title");
+        enResources.Should().Contain("ReaderHighlightsPanelDialog.CloseButtonText");
         enResources.Should().Contain("ReaderHighlightsPanelTitle.Text");
         zhResources.Should().Contain("NovelReaderHighlightsButton.AutomationProperties.Name");
+        zhResources.Should().Contain("ReaderHighlightsPanelDialog.Title");
+        zhResources.Should().Contain("ReaderHighlightsPanelDialog.CloseButtonText");
         zhResources.Should().Contain("ReaderHighlightsPanelTitle.Text");
     }
 
@@ -2244,7 +2262,8 @@ public class NovelReaderWebAssetTests
 
         readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderStatisticsButton\"");
         readerXaml.Should().Contain("x:Uid=\"NovelReaderStatisticsButton\"");
-        readerXaml.Should().Contain("x:Name=\"ReaderStatisticsPanelPopup\"");
+        readerXaml.Should().Contain("x:Name=\"ReaderStatisticsPanelDialog\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderStatisticsPanelDialog\"");
         readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderStatisticsStartStopButton\"");
         readerXaml.Should().Contain("StatisticsButton_Click");
         readerXaml.Should().Contain("StatisticsStartStopButton_Click");
@@ -2257,9 +2276,13 @@ public class NovelReaderWebAssetTests
         viewModelCode.Should().Contain("FlushStatisticsAsync");
         viewModelCode.Should().Contain("INovelStatisticsSidecarService");
         enResources.Should().Contain("NovelReaderStatisticsButton.AutomationProperties.Name");
+        enResources.Should().Contain("ReaderStatisticsPanelDialog.Title");
+        enResources.Should().Contain("ReaderStatisticsPanelDialog.CloseButtonText");
         enResources.Should().Contain("ReaderStatisticsPanelTitle.Text");
         enResources.Should().Contain("ReaderStatisticsSessionHeader.Text");
         zhResources.Should().Contain("NovelReaderStatisticsButton.AutomationProperties.Name");
+        zhResources.Should().Contain("ReaderStatisticsPanelDialog.Title");
+        zhResources.Should().Contain("ReaderStatisticsPanelDialog.CloseButtonText");
         zhResources.Should().Contain("ReaderStatisticsPanelTitle.Text");
         zhResources.Should().Contain("ReaderStatisticsSessionHeader.Text");
     }
@@ -2365,7 +2388,7 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
-    public void ReaderPage_ExposesMacAlignedReaderKeyboardShortcuts()
+    public void ReaderPage_ExposesNiratanAlignedReaderKeyboardShortcuts()
     {
         var readerXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml")
@@ -2379,13 +2402,8 @@ public class NovelReaderWebAssetTests
 
         readerXaml.Should().Contain("x:Name=\"ReaderTopChrome\"");
         readerXaml.Should().Contain("x:Name=\"ReaderBottomChrome\"");
-        readerXaml.Should().Contain("<Page.KeyboardAccelerators>");
-        readerXaml.Should().Contain("Key=\"Escape\"");
-        readerXaml.Should().Contain("Invoked=\"ReaderCloseKeyboardAccelerator_Invoked\"");
-        readerXaml.Should().Contain("Key=\"F\"");
-        readerXaml.Should().Contain("Invoked=\"ReaderFocusKeyboardAccelerator_Invoked\"");
-        readerXaml.Should().Contain("Key=\"T\"");
-        readerXaml.Should().Contain("Invoked=\"ReaderStatisticsKeyboardAccelerator_Invoked\"");
+        readerXaml.Should().NotContain("<Page.KeyboardAccelerators>");
+        readerXaml.Should().Contain("CharacterReceived=\"NovelReaderPage_CharacterReceived\"");
         readerXaml.Should().Contain("x:Name=\"NovelReaderBackButton\"");
         readerXaml.Should().Contain("x:Name=\"NovelReaderSearchButton\"");
 
@@ -2396,27 +2414,44 @@ public class NovelReaderWebAssetTests
         shortcutModels.Should().Contain("reader.close");
         shortcutModels.Should().Contain("reader.toggleFocusMode");
         shortcutModels.Should().Contain("reader.toggleStatistics");
+        shortcutModels.Should().Contain("reader.toggleLyricsMode");
 
+        readerCode.Should().Contain("IShortcutService");
+        readerCode.Should().Contain("_shortcutService = App.GetService<IShortcutService>();");
+        readerCode.Should().Contain("_shortcutService.ShortcutsChanged += OnReaderShortcutsChanged;");
+        readerCode.Should().Contain("_shortcutService.TryResolve(ShortcutScope.Reader");
         readerCode.Should().Contain("ApplyReaderShortcutLabels");
-        readerCode.Should().Contain("ReaderShortcutActions.Close.DefaultShortcut.Label");
-        readerCode.Should().Contain("ReaderShortcutActions.ToggleStatistics.DefaultShortcut.Label");
+        readerCode.Should().Contain("_shortcutService.GetBinding(shortcutAction).Label");
+        readerCode.Should().NotContain("ReaderShortcutActions.Close.DefaultShortcut.Label");
+        readerCode.Should().NotContain("ReaderShortcutActions.ToggleStatistics.DefaultShortcut.Label");
         readerCode.Should().Contain("ToolTipService.SetToolTip");
         readerCode.Should().Contain("AutomationProperties.SetHelpText");
-        readerCode.Should().Contain("ReaderCloseKeyboardAccelerator_Invoked");
+        readerCode.Should().Contain("RegisterReaderKeyboardAccelerators");
+        readerCode.Should().Contain("ReaderKeyboardAccelerator_Invoked");
+        readerCode.Should().Contain("NovelReaderPage_KeyDown");
+        readerCode.Should().Contain("AddHandler(UIElement.KeyDownEvent");
+        readerCode.Should().Contain("IsReaderKeyDownFallbackBinding");
+        readerCode.Should().Contain("KeyboardShortcutBinding.FromVirtualKey");
+        readerCode.Should().Contain("WasRecentlyHandledByReaderKeyDownFallback");
+        readerCode.Should().Contain("HandleReaderShortcutActionAsync");
+        readerCode.Should().Contain("ReaderShortcutActions.PreviousPage.Id");
+        readerCode.Should().Contain("NavigateReaderPageAsync(\"backward\")");
+        readerCode.Should().Contain("ReaderShortcutActions.NextPage.Id");
+        readerCode.Should().Contain("NavigateReaderPageAsync(\"forward\")");
         readerCode.Should().Contain("ViewModel.BackToLibraryCommand.Execute");
-        readerCode.Should().Contain("ReaderFocusKeyboardAccelerator_Invoked");
         readerCode.Should().Contain("ToggleReaderFocusMode");
         readerCode.Should().Contain("_readerFocusMode");
         readerCode.Should().Contain("ReaderTopChrome.Visibility");
         readerCode.Should().Contain("ReaderBottomChrome.Visibility");
         readerCode.Should().Contain("CloseReaderPanels();");
-        readerCode.Should().Contain("ReaderStatisticsKeyboardAccelerator_Invoked");
         readerCode.Should().Contain("ToggleStatisticsTrackingAsync");
+        readerCode.Should().Contain("ReaderShortcutActions.ToggleLyricsMode.Id");
+        readerCode.Should().Contain("ToggleReaderLyricsModeShortcutAsync");
         readerCode.Should().Contain("CurrentStatisticsSettings.EnableStatistics");
     }
 
     [Fact]
-    public void ReaderPage_ExposesMacAlignedSasayakiKeyboardShortcuts()
+    public void ReaderPage_ExposesNiratanAlignedSasayakiKeyboardShortcuts()
     {
         var readerXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml")
@@ -2436,36 +2471,34 @@ public class NovelReaderWebAssetTests
         shortcutModels.Should().Contain("sasayaki.jumpCue");
 
         readerXaml.Should().Contain("CharacterReceived=\"NovelReaderPage_CharacterReceived\"");
-        readerXaml.Should().Contain("Key=\"P\"");
-        readerXaml.Should().Contain("Invoked=\"SasayakiPlayPauseKeyboardAccelerator_Invoked\"");
-        readerXaml.Should().Contain("Key=\"R\"");
-        readerXaml.Should().Contain("Invoked=\"SasayakiReplayCueKeyboardAccelerator_Invoked\"");
-        readerXaml.Should().Contain("Key=\"J\"");
-        readerXaml.Should().Contain("Invoked=\"SasayakiJumpCueKeyboardAccelerator_Invoked\"");
+        readerXaml.Should().NotContain("SasayakiPlayPauseKeyboardAccelerator_Invoked");
+        readerXaml.Should().NotContain("SasayakiReplayCueKeyboardAccelerator_Invoked");
+        readerXaml.Should().NotContain("SasayakiJumpCueKeyboardAccelerator_Invoked");
 
-        readerXaml.Should().Contain("x:Name=\"SasayakiPreviousCueButton\"");
-        readerXaml.Should().Contain("x:Name=\"SasayakiPlayPauseButton\"");
-        readerXaml.Should().Contain("x:Name=\"SasayakiNextCueButton\"");
+        readerXaml.Should().Contain("x:Name=\"SasayakiPreviousCueMenuItem\"");
+        readerXaml.Should().Contain("x:Name=\"SasayakiPlayPauseMenuItem\"");
+        readerXaml.Should().Contain("x:Name=\"SasayakiNextCueMenuItem\"");
 
-        readerCode.Should().Contain("SasayakiShortcutActions.PreviousCue.DefaultShortcut.Label");
-        readerCode.Should().Contain("SasayakiShortcutActions.PlayPause.DefaultShortcut.Label");
-        readerCode.Should().Contain("SasayakiShortcutActions.NextCue.DefaultShortcut.Label");
+        readerCode.Should().Contain("_shortcutService.TryResolve(ShortcutScope.Sasayaki");
+        readerCode.Should().NotContain("SasayakiShortcutActions.PreviousCue.DefaultShortcut.Label");
+        readerCode.Should().NotContain("SasayakiShortcutActions.PlayPause.DefaultShortcut.Label");
+        readerCode.Should().NotContain("SasayakiShortcutActions.NextCue.DefaultShortcut.Label");
         readerCode.Should().Contain("NovelReaderPage_CharacterReceived");
-        readerCode.Should().Contain("case '[':");
-        readerCode.Should().Contain("case ']':");
+        readerCode.Should().Contain("KeyboardShortcutBindingFromCharacter");
+        readerCode.Should().Contain("TryHandleReaderShortcutBindingAsync");
+        readerCode.Should().Contain("IsReaderKeyDownFallbackBinding");
+        readerCode.Should().Contain("HandleSasayakiShortcutActionAsync");
+        readerCode.Should().NotContain("case '[':");
+        readerCode.Should().NotContain("case ']':");
         readerCode.Should().Contain("GoToPreviousSasayakiCueAsync");
-        readerCode.Should().Contain("SasayakiPlayPauseKeyboardAccelerator_Invoked");
         readerCode.Should().Contain("GoToNextSasayakiCueAsync");
-        readerCode.Should().Contain("SasayakiReplayCueKeyboardAccelerator_Invoked");
         readerCode.Should().Contain("ReplayCurrentSasayakiCueAsync");
-        readerCode.Should().Contain("SasayakiJumpCueKeyboardAccelerator_Invoked");
         readerCode.Should().Contain("JumpToCurrentSasayakiCueAsync");
         readerCode.Should().Contain("ResolveSasayakiJumpTarget");
-        readerCode.Should().Contain("RecordReaderHistoryEntry();");
     }
 
     [Fact]
-    public void ReaderPage_ExposesSessionNavigationHistoryControls()
+    public void ReaderPage_DoesNotExposeUnusedSessionNavigationHistoryControls()
     {
         var readerXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml")
@@ -2480,31 +2513,24 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw")
         );
 
-        readerXaml.Should().Contain("x:Name=\"NovelReaderHistoryBackButton\"");
-        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderHistoryBackButton\"");
-        readerXaml.Should().Contain("x:Uid=\"NovelReaderHistoryBackButton\"");
-        readerXaml.Should().Contain("Click=\"ReaderHistoryBackButton_Click\"");
-        readerXaml.Should().Contain("x:Name=\"NovelReaderHistoryForwardButton\"");
-        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderHistoryForwardButton\"");
-        readerXaml.Should().Contain("x:Uid=\"NovelReaderHistoryForwardButton\"");
-        readerXaml.Should().Contain("Click=\"ReaderHistoryForwardButton_Click\"");
+        readerXaml.Should().NotContain("NovelReaderHistoryBackButton");
+        readerXaml.Should().NotContain("NovelReaderHistoryForwardButton");
+        readerXaml.Should().NotContain("ReaderHistoryBackButton_Click");
+        readerXaml.Should().NotContain("ReaderHistoryForwardButton_Click");
 
-        readerCode.Should().Contain("ReaderNavigationHistoryEntry");
-        readerCode.Should().Contain("_readerBackHistory");
-        readerCode.Should().Contain("_readerForwardHistory");
-        readerCode.Should().Contain("RecordReaderHistoryEntry()");
-        readerCode.Should().Contain("RestoreReaderHistoryEntryAsync");
-        readerCode.Should().Contain("ReaderHistoryBackButton_Click");
-        readerCode.Should().Contain("ReaderHistoryForwardButton_Click");
-        readerCode.Should().Contain("UpdateReaderHistoryButtons");
-        var normalizedReaderCode = readerCode.Replace("\r\n", "\n");
-        normalizedReaderCode.Should().Contain("RecordReaderHistoryEntry();\n        LoadChapter(result.ChapterIndex, result.ChapterProgress)");
-        normalizedReaderCode.Should().Contain("RecordReaderHistoryEntry();\n            LoadChapter(chapterIndex)");
+        readerCode.Should().NotContain("ReaderNavigationHistoryEntry");
+        readerCode.Should().NotContain("_readerBackHistory");
+        readerCode.Should().NotContain("_readerForwardHistory");
+        readerCode.Should().NotContain("RecordReaderHistoryEntry");
+        readerCode.Should().NotContain("RestoreReaderHistoryEntryAsync");
+        readerCode.Should().NotContain("ReaderHistoryBackButton_Click");
+        readerCode.Should().NotContain("ReaderHistoryForwardButton_Click");
+        readerCode.Should().NotContain("UpdateReaderHistoryButtons");
 
-        enResources.Should().Contain("NovelReaderHistoryBackButton.AutomationProperties.Name");
-        enResources.Should().Contain("NovelReaderHistoryForwardButton.AutomationProperties.Name");
-        zhResources.Should().Contain("NovelReaderHistoryBackButton.AutomationProperties.Name");
-        zhResources.Should().Contain("NovelReaderHistoryForwardButton.AutomationProperties.Name");
+        enResources.Should().NotContain("NovelReaderHistoryBackButton.AutomationProperties.Name");
+        enResources.Should().NotContain("NovelReaderHistoryForwardButton.AutomationProperties.Name");
+        zhResources.Should().NotContain("NovelReaderHistoryBackButton.AutomationProperties.Name");
+        zhResources.Should().NotContain("NovelReaderHistoryForwardButton.AutomationProperties.Name");
     }
 
     [Fact]
@@ -2537,14 +2563,11 @@ public class NovelReaderWebAssetTests
         chapterContentCode.Should().Contain("CharacterJumpButton_Click");
         chapterContentCode.Should().Contain("Math.Clamp");
 
-        var normalizedReaderCode = readerCode.Replace("\r\n", "\n");
-
         readerCode.Should().Contain("ReaderChapterListContent.CharacterJumpRequested -= OnCharacterJumpRequested");
         readerCode.Should().Contain("ReaderChapterListContent.CharacterJumpRequested += OnCharacterJumpRequested");
         readerCode.Should().Contain("OnCharacterJumpRequested");
         readerCode.Should().Contain("JumpToCharacterAsync");
         readerCode.Should().Contain("ResolveCharacterJumpTarget");
-        normalizedReaderCode.Should().Contain("RecordReaderHistoryEntry();\n        LoadChapter(target.ChapterIndex, target.ChapterProgress)");
 
         foreach (var key in new[]
         {
@@ -2597,25 +2620,27 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw")
         );
 
-        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiBar\"");
-        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiLoadAudioButton\"");
-        readerXaml.Should().Contain("x:Uid=\"SasayakiLoadAudioButton\"");
-        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiSkipBackButton\"");
-        readerXaml.Should().Contain("x:Uid=\"SasayakiSkipBackButton\"");
-        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiPreviousCueButton\"");
-        readerXaml.Should().Contain("x:Uid=\"SasayakiPreviousCueButton\"");
-        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiPlayPauseButton\"");
-        readerXaml.Should().Contain("x:Uid=\"SasayakiPlayPauseButton\"");
-        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiNextCueButton\"");
-        readerXaml.Should().Contain("x:Uid=\"SasayakiNextCueButton\"");
-        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiSkipForwardButton\"");
-        readerXaml.Should().Contain("x:Uid=\"SasayakiSkipForwardButton\"");
-        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiPositionSlider\"");
-        readerXaml.Should().Contain("x:Uid=\"SasayakiPositionSlider\"");
-        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiCueText\"");
-        readerXaml.Should().Contain("x:Uid=\"SasayakiCueTextBlock\"");
-        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiPlaybackRateComboBox\"");
-        readerXaml.Should().Contain("x:Uid=\"SasayakiPlaybackRateComboBox\"");
+        readerXaml.Should().NotContain("AutomationProperties.AutomationId=\"NovelReaderSasayakiBar\"");
+        readerXaml.Should().NotContain("AutomationProperties.AutomationId=\"NovelReaderSasayakiPositionSlider\"");
+        readerXaml.Should().NotContain("AutomationProperties.AutomationId=\"NovelReaderSasayakiPlaybackRateComboBox\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiButton\"");
+        readerXaml.Should().Contain("x:Uid=\"NovelReaderSasayakiButton\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiLoadAudioMenuItem\"");
+        readerXaml.Should().Contain("x:Uid=\"SasayakiLoadAudioMenuItem\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiSkipBackMenuItem\"");
+        readerXaml.Should().Contain("x:Uid=\"SasayakiSkipBackMenuItem\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiPreviousCueMenuItem\"");
+        readerXaml.Should().Contain("x:Uid=\"SasayakiPreviousCueMenuItem\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiPlayPauseMenuItem\"");
+        readerXaml.Should().Contain("x:Uid=\"SasayakiPlayPauseMenuItem\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiNextCueMenuItem\"");
+        readerXaml.Should().Contain("x:Uid=\"SasayakiNextCueMenuItem\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiSkipForwardMenuItem\"");
+        readerXaml.Should().Contain("x:Uid=\"SasayakiSkipForwardMenuItem\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiReplayCueMenuItem\"");
+        readerXaml.Should().Contain("x:Uid=\"SasayakiReplayCueMenuItem\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiJumpCueMenuItem\"");
+        readerXaml.Should().Contain("x:Uid=\"SasayakiJumpCueMenuItem\"");
         readerXaml.Should().NotContain("AutomationProperties.Name=\"Load Audiobook\"");
         readerXaml.Should().NotContain("AutomationProperties.Name=\"Skip Back 15 Seconds\"");
         readerXaml.Should().NotContain("AutomationProperties.Name=\"Previous Cue\"");
@@ -2627,20 +2652,205 @@ public class NovelReaderWebAssetTests
 
         foreach (var key in new[]
         {
-            "SasayakiLoadAudioButton.AutomationProperties.Name",
-            "SasayakiSkipBackButton.AutomationProperties.Name",
-            "SasayakiPreviousCueButton.AutomationProperties.Name",
-            "SasayakiPlayPauseButton.AutomationProperties.Name",
-            "SasayakiNextCueButton.AutomationProperties.Name",
-            "SasayakiSkipForwardButton.AutomationProperties.Name",
-            "SasayakiPositionSlider.AutomationProperties.Name",
-            "SasayakiCueTextBlock.AutomationProperties.Name",
-            "SasayakiPlaybackRateComboBox.AutomationProperties.Name",
+            "NovelReaderSasayakiButton.AutomationProperties.Name",
+            "SasayakiLoadAudioMenuItem.Text",
+            "SasayakiSkipBackMenuItem.Text",
+            "SasayakiPreviousCueMenuItem.Text",
+            "SasayakiPlayPauseMenuItem.Text",
+            "SasayakiNextCueMenuItem.Text",
+            "SasayakiSkipForwardMenuItem.Text",
+            "SasayakiReplayCueMenuItem.Text",
+            "SasayakiJumpCueMenuItem.Text",
+            "NovelReaderSasayakiPanelDialog.Title",
+            "NovelReaderSasayakiPanelDialog.CloseButtonText",
+            "NovelReaderSasayakiAudioSectionHeader.Text",
+            "NovelReaderSasayakiPlaybackSectionHeader.Text",
+            "NovelReaderSasayakiSettingsSectionHeader.Text",
+            "NovelReaderSasayakiThemeSectionHeader.Text",
+            "NovelReaderSasayakiPanelLoadAudioButton.AutomationProperties.Name",
+            "NovelReaderSasayakiPanelSkipBackButton.AutomationProperties.Name",
+            "NovelReaderSasayakiPanelPreviousCueButton.AutomationProperties.Name",
+            "NovelReaderSasayakiPanelPlayPauseButton.AutomationProperties.Name",
+            "NovelReaderSasayakiPanelNextCueButton.AutomationProperties.Name",
+            "NovelReaderSasayakiPanelSkipForwardButton.AutomationProperties.Name",
+            "NovelReaderSasayakiDelayLabel.Text",
+            "NovelReaderSasayakiSpeedLabel.Text",
+            "NovelReaderSasayakiShowToggleSwitch.Header",
+            "NovelReaderSasayakiAutoScrollToggleSwitch.Header",
+            "NovelReaderSasayakiAutoPauseToggleSwitch.Header",
+            "NovelReaderSasayakiLightTextColorLabel.Text",
+            "NovelReaderSasayakiLightBackgroundColorLabel.Text",
+            "NovelReaderSasayakiDarkTextColorLabel.Text",
+            "NovelReaderSasayakiDarkBackgroundColorLabel.Text",
         })
         {
             enResources.Should().Contain(key);
             zhResources.Should().Contain(key);
         }
+    }
+
+    [Fact]
+    public void ReaderPage_OrdersSasayakiMenuLikeNiratanWithoutLyricsMode()
+    {
+        var readerXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml")
+        );
+
+        int IndexOf(string value) => readerXaml.IndexOf(value, StringComparison.Ordinal);
+
+        var skipBack = IndexOf("x:Name=\"SasayakiSkipBackMenuItem\"");
+        var previousCue = IndexOf("x:Name=\"SasayakiPreviousCueMenuItem\"");
+        var playPause = IndexOf("x:Name=\"SasayakiPlayPauseMenuItem\"");
+        var nextCue = IndexOf("x:Name=\"SasayakiNextCueMenuItem\"");
+        var skipForward = IndexOf("x:Name=\"SasayakiSkipForwardMenuItem\"");
+        var replayCue = IndexOf("x:Name=\"SasayakiReplayCueMenuItem\"");
+        var jumpCue = IndexOf("x:Name=\"SasayakiJumpCueMenuItem\"");
+        var loadAudio = IndexOf("x:Name=\"SasayakiLoadAudioMenuItem\"");
+
+        skipBack.Should().BeGreaterThanOrEqualTo(0);
+        previousCue.Should().BeGreaterThan(skipBack);
+        playPause.Should().BeGreaterThan(previousCue);
+        nextCue.Should().BeGreaterThan(playPause);
+        skipForward.Should().BeGreaterThan(nextCue);
+        replayCue.Should().BeGreaterThan(skipForward);
+        jumpCue.Should().BeGreaterThan(replayCue);
+        loadAudio.Should().BeGreaterThan(jumpCue);
+
+        readerXaml.Should().NotContain("NovelReaderLyricsModeMenuItem");
+        readerXaml.Should().NotContain("Lyrics Mode");
+    }
+
+    [Fact]
+    public void ReaderPage_DefinesNiratanStyleSasayakiPanelWithoutLyricsMode()
+    {
+        var readerXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml")
+        );
+
+        foreach (var requiredToken in new[]
+        {
+            "NovelReaderSasayakiPanelDialog",
+            "NovelReaderSasayakiAudioSection",
+            "NovelReaderSasayakiPlaybackSection",
+            "NovelReaderSasayakiSettingsSection",
+            "NovelReaderSasayakiThemeSection",
+            "NovelReaderSasayakiPanelSkipBackButton",
+            "NovelReaderSasayakiPanelPreviousCueButton",
+            "NovelReaderSasayakiPanelPlayPauseButton",
+            "NovelReaderSasayakiPanelNextCueButton",
+            "NovelReaderSasayakiPanelSkipForwardButton",
+            "NovelReaderSasayakiPanelLoadAudioButton",
+            "NovelReaderSasayakiDelaySlider",
+            "Minimum=\"-2\"",
+            "Maximum=\"2\"",
+            "StepFrequency=\"0.05\"",
+            "NovelReaderSasayakiSpeedSlider",
+            "Minimum=\"0.5\"",
+            "Maximum=\"1.5\"",
+            "NovelReaderSasayakiShowToggleSwitch",
+            "NovelReaderSasayakiAutoScrollToggleSwitch",
+            "NovelReaderSasayakiAutoPauseToggleSwitch",
+            "NovelReaderSasayakiLightTextColorPicker",
+            "NovelReaderSasayakiLightBackgroundColorPicker",
+            "NovelReaderSasayakiDarkTextColorPicker",
+            "NovelReaderSasayakiDarkBackgroundColorPicker",
+        })
+        {
+            readerXaml.Should().Contain(requiredToken);
+        }
+
+        readerXaml.Should().NotContain("NovelReaderLyricsModeMenuItem");
+        readerXaml.Should().NotContain("Lyrics Mode");
+    }
+
+    [Fact]
+    public void ReaderPage_GuardsSasayakiPanelSliderInitialization()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
+        );
+
+        readerCode.Should().Contain("private bool _isRefreshingSasayakiPanel = true;");
+        var initializeIndex = readerCode.IndexOf("InitializeComponent();", StringComparison.Ordinal);
+        var guardOffIndex = readerCode.IndexOf(
+            "_isRefreshingSasayakiPanel = false;",
+            initializeIndex,
+            StringComparison.Ordinal);
+
+        initializeIndex.Should().BeGreaterThanOrEqualTo(0);
+        guardOffIndex.Should().BeGreaterThan(initializeIndex);
+    }
+
+    [Fact]
+    public void ReaderPage_UsesSheetDialogsForReaderToolbarPanels()
+    {
+        var readerXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml")
+        );
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
+        );
+
+        foreach (var requiredToken in new[]
+        {
+            "ReaderChapterPanelDialog",
+            "ReaderSearchPanelDialog",
+            "ReaderHighlightsPanelDialog",
+            "ReaderStatisticsPanelDialog",
+            "ReaderAppearancePanelDialog",
+            "AutomationProperties.AutomationId=\"NovelReaderChapterPanelDialog\"",
+            "AutomationProperties.AutomationId=\"NovelReaderSearchPanelDialog\"",
+            "AutomationProperties.AutomationId=\"NovelReaderHighlightsPanelDialog\"",
+            "AutomationProperties.AutomationId=\"NovelReaderStatisticsPanelDialog\"",
+            "AutomationProperties.AutomationId=\"NovelReaderAppearancePanelDialog\"",
+        })
+        {
+            readerXaml.Should().Contain(requiredToken);
+        }
+
+        foreach (var oldPopup in new[]
+        {
+            "ReaderChapterPanelPopup",
+            "ReaderSearchPanelPopup",
+            "ReaderHighlightsPanelPopup",
+            "ReaderStatisticsPanelPopup",
+            "ReaderAppearancePanelPopup",
+        })
+        {
+            readerXaml.Should().NotContain(oldPopup);
+            readerCode.Should().NotContain(oldPopup);
+        }
+
+        readerCode.Should().Contain("ShowReaderPanelDialogAsync");
+        readerCode.Should().NotContain("OpenReaderPanel(");
+        readerCode.Should().NotContain("PositionReaderPanel");
+    }
+
+    [Fact]
+    public void ReaderPage_UsesWideSheetDialogContentForReaderPanels()
+    {
+        var readerXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml")
+        );
+        var appearanceContentXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Controls", "ReaderAppearanceSettingsContent.xaml")
+        );
+
+        readerXaml.Should().Contain("<Grid Width=\"1120\"");
+        readerXaml.Should().Contain("<controls:ReaderAppearanceSettingsContent Width=\"1280\"");
+        readerXaml.Should().Contain("<StackPanel Width=\"1120\"");
+        readerXaml.Should().Contain("MaxWidth=\"1120\"");
+        (readerXaml.Split("<x:Double x:Key=\"ContentDialogMaxWidth\">1600</x:Double>").Length - 1)
+            .Should().Be(6);
+        (readerXaml.Split("<x:Double x:Key=\"ContentDialogMinWidth\">1120</x:Double>").Length - 1)
+            .Should().Be(5);
+        readerXaml.Should().Contain("<x:Double x:Key=\"ContentDialogMinWidth\">1280</x:Double>");
+        appearanceContentXaml.Should().Contain("MaxWidth=\"1280\"");
+
+        readerXaml.Should().NotContain("Width=\"560\"");
+        readerXaml.Should().NotContain("MaxWidth=\"560\"");
+        readerXaml.Should().NotContain("Width=\"640\"");
+        appearanceContentXaml.Should().NotContain("MaxWidth=\"1000\"");
     }
 
     [Fact]
@@ -2655,9 +2865,10 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("settings.EnableSasayaki");
         readerCode.Should().Contain("settings.ReaderShowSasayakiToggle");
         readerCode.Should().Contain("AutoPauseOnLookup");
-        readerCode.Should().Contain("ShowSkipControls");
-        readerCode.Should().Contain("SasayakiSkipBackButton.Visibility");
-        readerCode.Should().Contain("SasayakiSkipForwardButton.Visibility");
+        readerCode.Should().Contain("SasayakiSkipBackMenuItem.IsEnabled");
+        readerCode.Should().Contain("SasayakiSkipForwardMenuItem.IsEnabled");
+        readerCode.Should().NotContain("SasayakiSkipBackMenuItem.Visibility = settings.ShowSkipControls");
+        readerCode.Should().NotContain("SasayakiSkipForwardMenuItem.Visibility = settings.ShowSkipControls");
         readerCode.Should().Contain("SasayakiSkipBack_Click");
         readerCode.Should().Contain("SasayakiSkipForward_Click");
         readerCode.Should().NotContain("if (CurrentSasayakiSettings.ShowSkipControls)");
@@ -2671,5 +2882,95 @@ public class NovelReaderWebAssetTests
         bridgeScript.Should().Contain("setColors: function");
         bridgeScript.Should().Contain("--hoshi-sasayaki-background-color");
         bridgeScript.Should().Contain("autoScroll !== false");
+    }
+
+    [Fact]
+    public void ReaderSasayakiHighlight_UsesContinuousRangeWithoutActiveOutline()
+    {
+        var bridgeScript = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
+
+        bridgeScript.Should().Contain("_createHighlightRanges: function");
+        bridgeScript.Should().Contain("CSS.highlights.set(\"hoshi-sasayaki\"");
+        bridgeScript.Should().Contain("new Highlight(...ranges)");
+        bridgeScript.Should().Contain("window.hoshiSelection?.clearSelection?.()");
+        bridgeScript.Should().Contain("window.getSelection()?.removeAllRanges?.()");
+        bridgeScript.Should().Contain("runningCount + nodeLen >= targetCodePoint");
+        bridgeScript.Should().Contain("_wrapHighlightRanges: function");
+        bridgeScript.Should().Contain("return text.length;");
+        bridgeScript.Should().NotContain("hoshi-sasayaki-highlight-active");
+        bridgeScript.Should().NotContain("outline: 2px");
+        bridgeScript.Should().NotContain("for (var i = slices.length - 1; i >= 0; i--)");
+        bridgeScript.Should().NotContain("return fallbackOffset;");
+        bridgeScript.Should().NotContain("range.intersectsNode");
+    }
+
+    [Fact]
+    public void ReaderSasayakiHighlight_IgnoresStaleAsyncRequests()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
+        );
+
+        readerCode.Should().Contain("_sasayakiHighlightGeneration");
+        readerCode.Should().Contain("Interlocked.Increment(ref _sasayakiHighlightGeneration)");
+        readerCode.Should().Contain("window.__hoshiSasayakiHighlightGeneration");
+        readerCode.Should().Contain("currentGeneration > generation");
+    }
+
+    [Fact]
+    public void ReaderLookup_ProvidesNovelSasayakiMiningContext()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
+        );
+        var popupCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryLookupPopup.cs")
+        );
+        var overlayCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs")
+        );
+        var miningContext = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Models", "Anki", "AnkiMiningPayload.cs")
+        );
+
+        readerCode.Should().Contain("CreateReaderAnkiMiningContext");
+        readerCode.Should().Contain("TryFindSasayakiMatchAtOffset");
+        readerCode.Should().Contain("RequestSasayakiMiningAudioAsync");
+        readerCode.Should().Contain("SasayakiAudioProvider");
+        readerCode.Should().Contain("SasayakiPopupControls");
+        readerCode.Should().Contain("ReplaySasayakiMatchAsync");
+        readerCode.Should().Contain("JumpToSasayakiMatchAsync");
+        readerCode.Should().Contain("JumpToAndPlaySasayakiMatchAsync");
+        readerCode.Should().Contain("PlaySasayakiMatchFromCueAsync");
+        readerCode.Should().Contain("await PlaySasayakiMatchFromCueAsync(match);");
+        readerCode.Should().NotContain("await JumpToSasayakiMatchAsync(match);\r\n        await ReplaySasayakiMatchAsync(match);");
+        readerCode.Should().NotContain("await JumpToSasayakiMatchAsync(match);\n        await ReplaySasayakiMatchAsync(match);");
+        readerCode.Should().Contain("JumpToCueAsync: () => JumpToAndPlaySasayakiMatchAsync(match)");
+        readerCode.Should().Contain("sentenceOffset");
+        readerCode.Should().Contain("normalizedOffset");
+        readerCode.Should().Contain("DocumentTitle = book?.Title");
+        readerCode.Should().Contain("CoverPath = book?.CoverPath");
+        readerCode.Should().Contain("audioSettings");
+        readerCode.Should().Contain("ankiSettings");
+
+        miningContext.Should().Contain("SasayakiPopupControls");
+        miningContext.Should().Contain("TogglePlaybackAsync");
+        miningContext.Should().Contain("ReplayCueAsync");
+        miningContext.Should().Contain("JumpToCueAsync");
+
+        popupCode.Should().Contain("NovelReaderPopupSasayakiControls");
+        popupCode.Should().Contain("NovelReaderPopupSasayakiPlayPauseButton");
+        popupCode.Should().Contain("NovelReaderPopupSasayakiReplayCueButton");
+        popupCode.Should().Contain("NovelReaderPopupSasayakiJumpCueButton");
+        popupCode.Should().Contain("HandleSasayakiPopupPlayPauseAsync");
+        popupCode.Should().Contain("HandleSasayakiPopupReplayCueAsync");
+        popupCode.Should().Contain("HandleSasayakiPopupJumpCueAsync");
+        popupCode.Should().Contain("DismissRequested");
+        popupCode.Should().Contain("DismissRequested?.Invoke(this, EventArgs.Empty)");
+
+        overlayCode.Should().Contain("DismissRequested += OnPopupDismissRequested");
+        overlayCode.Should().Contain("DismissRequested -= OnPopupDismissRequested");
+        overlayCode.Should().Contain("private void OnPopupDismissRequested");
+        overlayCode.Should().Contain("Dismiss();");
     }
 }
