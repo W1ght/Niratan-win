@@ -22,6 +22,8 @@ internal sealed class NavigationService : INavigationService
                 Type t when t == typeof(AdvancedSettingsPage) => AppPage.AdvancedSettingsPage,
                 Type t when t == typeof(SasayakiSettingsPage) => AppPage.SasayakiSettingsPage,
                 Type t when t == typeof(StatisticsSettingsPage) => AppPage.StatisticsSettingsPage,
+                Type t when t == typeof(VideoSettingsPage) => AppPage.VideoSettingsPage,
+                Type t when t == typeof(KeyboardShortcutsSettingsPage) => AppPage.KeyboardShortcutsSettingsPage,
                 _ => AppPage.Other,
             };
 

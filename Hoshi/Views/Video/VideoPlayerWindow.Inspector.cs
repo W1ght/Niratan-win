@@ -99,7 +99,7 @@ public sealed partial class VideoPlayerWindow
         if (tab == VideoInspectorTab.SubtitleList)
             ScrollCurrentTranscriptRowIntoView();
         else if (tab == VideoInspectorTab.Chapters)
-            ScrollCurrentEpisodeRowIntoView();
+            ScrollCurrentChapterRowIntoView();
     }
 
     private void OpenInspectorTab(VideoInspectorTab tab)

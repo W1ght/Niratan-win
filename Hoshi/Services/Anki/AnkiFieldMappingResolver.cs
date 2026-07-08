@@ -19,6 +19,25 @@ internal static class AnkiFieldMappingResolver
         return LapisPreset.AutofillDefaults(noteType, savedMappings, preset);
     }
 
+    public static AnkiMiningMediaNeeds ResolveMediaNeedsForMining(
+        AnkiNoteType noteType,
+        Dictionary<string, string> savedMappings,
+        AnkiMiningContext context)
+    {
+        var mappings = ResolveForMining(noteType, savedMappings, context);
+        return new AnkiMiningMediaNeeds(
+            mappings.Values.Any(UsesVideoScreenshot),
+            mappings.Values.Any(UsesVideoAudioClip));
+    }
+
+    private static bool UsesVideoScreenshot(string value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && value.Contains("{video-screenshot}", System.StringComparison.Ordinal);
+
+    private static bool UsesVideoAudioClip(string value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && value.Contains("{video-audio-clip}", System.StringComparison.Ordinal);
+
     private static bool IsVideoContext(AnkiMiningContext context) =>
         !string.IsNullOrWhiteSpace(context.VideoFileName)
         || !string.IsNullOrWhiteSpace(context.VideoTimestamp)

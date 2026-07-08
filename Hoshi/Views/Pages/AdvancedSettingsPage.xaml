@@ -90,6 +90,80 @@
                             </StackPanel>
                         </Button>
                     </toolkit:SettingsCard>
+
+                    <TextBlock x:Uid="AdvancedVideoSectionHeader"
+                               Style="{StaticResource AdvancedSectionHeaderTextBlockStyle}"
+                               Text="Video" />
+
+                    <toolkit:SettingsCard x:Uid="AdvancedVideoCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE768;}">
+                        <Button AutomationProperties.AutomationId="VideoSettingsButton"
+                                x:Uid="VideoSettingsButton"
+                                Click="VideoSettings_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock x:Uid="SettingsOpenVideoText" Text="Open" />
+                                <FontIcon Glyph="&#xE76C;" FontSize="14" />
+                            </StackPanel>
+                        </Button>
+                    </toolkit:SettingsCard>
+
+                    <TextBlock x:Uid="AdvancedShortcutsControlsSectionHeader"
+                               Style="{StaticResource AdvancedSectionHeaderTextBlockStyle}"
+                               Text="Shortcuts &amp; Controls" />
+
+                    <toolkit:SettingsCard x:Uid="AdvancedKeyboardShortcutsCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE765;}">
+                        <Button AutomationProperties.AutomationId="KeyboardShortcutsSettingsButton"
+                                Click="KeyboardShortcutsSettings_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock x:Uid="SettingsOpenText" Text="Open" />
+                            </StackPanel>
+                        </Button>
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="AdvancedGameControllerCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE7FC;}">
+                        <Button AutomationProperties.AutomationId="GameControllerSettingsButton"
+                                IsEnabled="False">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock x:Uid="SettingsUnavailableText" Text="Unavailable" />
+                            </StackPanel>
+                        </Button>
+                    </toolkit:SettingsCard>
+
+                    <TextBlock x:Uid="AdvancedSyncDataSectionHeader"
+                               Style="{StaticResource AdvancedSectionHeaderTextBlockStyle}"
+                               Text="Sync &amp; Data" />
+
+                    <toolkit:SettingsCard x:Uid="AdvancedSyncCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE753;}">
+                        <Button AutomationProperties.AutomationId="SyncSettingsButton"
+                                IsEnabled="False">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock x:Uid="SettingsUnavailableText" Text="Unavailable" />
+                            </StackPanel>
+                        </Button>
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="AdvancedBackupCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE838;}">
+                        <Button AutomationProperties.AutomationId="BackupSettingsButton"
+                                IsEnabled="False">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock x:Uid="SettingsUnavailableText" Text="Unavailable" />
+                            </StackPanel>
+                        </Button>
+                    </toolkit:SettingsCard>
                 </StackPanel>
             </Grid>
         </ScrollViewer>

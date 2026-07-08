@@ -1260,6 +1260,15 @@ public sealed class DictionaryLookupPopup : IDisposable
             try
             {
                 Log.Information("[Lifecycle] Anki mine started");
+                var preflight = await _ankiService.PreflightMiningAsync(rawPayload, _miningContext);
+                if (!preflight.CanMine)
+                {
+                    await _contentWebView.CoreWebView2.ExecuteScriptAsync(
+                        "if (typeof window.onMineComplete === 'function') window.onMineComplete(false);");
+                    return;
+                }
+
+                await RequestVideoMiningMediaAsync(preflight);
                 var success = await _ankiService.MineEntryAsync(rawPayload, _miningContext);
 
                 var script = success
@@ -1275,6 +1284,24 @@ public sealed class DictionaryLookupPopup : IDisposable
                     "if (typeof window.onMineComplete === 'function') window.onMineComplete(false);");
             }
         });
+    }
+
+    private async Task RequestVideoMiningMediaAsync(AnkiMiningPreflightResult preflight)
+    {
+        if (!preflight.MediaNeeds.NeedsVideoMedia || _miningContext.VideoMediaProvider == null)
+            return;
+
+        var result = await _miningContext.VideoMediaProvider(
+            new VideoMiningMediaRequest(
+                preflight.MediaNeeds.NeedsVideoScreenshot,
+                preflight.MediaNeeds.NeedsVideoAudioClip,
+                preflight.DirectMediaDirectory),
+            CancellationToken.None);
+
+        _miningContext.VideoScreenshotPath = result.ScreenshotPath;
+        _miningContext.VideoAudioClipPath = result.AudioClipPath;
+        _miningContext.VideoScreenshotTag = result.ScreenshotTag;
+        _miningContext.VideoAudioClipTag = result.AudioClipTag;
     }
 
     private void HandleDuplicateCheck(JsonElement payload)

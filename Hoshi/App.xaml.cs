@@ -19,6 +19,7 @@ using Hoshi.Services.Logging;
 using Hoshi.Services.Novels;
 using Hoshi.Services.Sasayaki;
 using Hoshi.Services.Settings;
+using Hoshi.Services.Shortcuts;
 using Hoshi.Services.Storage;
 using Hoshi.Services.UI;
 using Hoshi.Services.Video;
@@ -127,6 +128,8 @@ public partial class App : Application
         services.AddTransient<SettingsPageViewModel>();
         services.AddTransient<DictionarySettingsPageViewModel>();
         services.AddTransient<AudioSettingsPageViewModel>();
+        services.AddTransient<VideoSettingsPageViewModel>();
+        services.AddTransient<KeyboardShortcutsSettingsPageViewModel>();
         services.AddTransient<SasayakiSettingsPageViewModel>();
         services.AddTransient<StatisticsSettingsPageViewModel>();
         services.AddTransient<AnkiSettingsPageViewModel>();
@@ -144,11 +147,15 @@ public partial class App : Application
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IReaderSettingsService, ReaderSettingsService>();
+        services.AddSingleton<IShortcutService, ShortcutService>();
         services.AddSingleton<IDataService, DataService>();
         services.AddSingleton<IEpubParserService, EpubParserService>();
         services.AddSingleton<INovelEpubImportService, NovelEpubImportService>();
         services.AddSingleton<INovelLibraryService, NovelLibraryService>();
         services.AddSingleton<IVideoLibraryService, VideoLibraryService>();
+        services.AddSingleton<IVideoMiningHistoryStore>(provider =>
+            new VideoMiningHistoryStore(
+                provider.GetRequiredService<ISettingsService>().Current.VideoSettings.MiningHistoryLimit));
         services.AddTransient<IVideoPlaybackEngine, MpvPlaybackEngine>();
         services.AddSingleton<IVideoMiningMediaExtractor, LibMpvVideoMiningMediaExtractor>();
         services.AddSingleton<IVideoSubtitleTranscriptExtractor, FfmpegVideoSubtitleTranscriptExtractor>();

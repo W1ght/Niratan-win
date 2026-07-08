@@ -81,6 +81,56 @@
   <data name="AdvancedAudioCard.Description" xml:space="preserve"><value>词典音频源、自动播放和本地音频数据库</value></data>
   <data name="AudioSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>打开音频设置</value></data>
   <data name="SettingsOpenAudioText.Text" xml:space="preserve"><value>打开</value></data>
+  <data name="AudioSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>返回</value></data>
+  <data name="AudioSettingsPageTitle.Text" xml:space="preserve"><value>音频</value></data>
+  <data name="AudioSourcesSectionHeader.Text" xml:space="preserve"><value>音频源</value></data>
+  <data name="AudioMoveSourceUpButton.AutomationProperties.Name" xml:space="preserve"><value>上移</value></data>
+  <data name="AudioMoveSourceUpButton.ToolTipService.ToolTip" xml:space="preserve"><value>上移</value></data>
+  <data name="AudioMoveSourceDownButton.AutomationProperties.Name" xml:space="preserve"><value>下移</value></data>
+  <data name="AudioMoveSourceDownButton.ToolTipService.ToolTip" xml:space="preserve"><value>下移</value></data>
+  <data name="AudioDeleteSourceButton.AutomationProperties.Name" xml:space="preserve"><value>删除音频源</value></data>
+  <data name="AudioDeleteSourceButton.ToolTipService.ToolTip" xml:space="preserve"><value>删除音频源</value></data>
+  <data name="AudioEnableSourceToggle.AutomationProperties.Name" xml:space="preserve"><value>启用音频源</value></data>
+  <data name="AudioAddSourceSectionHeader.Text" xml:space="preserve"><value>添加音频源</value></data>
+  <data name="AudioSourceNameCard.Header" xml:space="preserve"><value>名称</value></data>
+  <data name="AudioSourceNameTextBox.AutomationProperties.Name" xml:space="preserve"><value>音频源名称</value></data>
+  <data name="AudioSourceNameTextBox.PlaceholderText" xml:space="preserve"><value>音频源名称</value></data>
+  <data name="AudioSourceUrlCard.Header" xml:space="preserve"><value>URL</value></data>
+  <data name="AudioSourceUrlCard.Description" xml:space="preserve"><value>带有 {term} 和 {reading} 占位符的 URL</value></data>
+  <data name="AudioSourceUrlTextBox.AutomationProperties.Name" xml:space="preserve"><value>音频源 URL</value></data>
+  <data name="AudioAddSourceButton.AutomationProperties.Name" xml:space="preserve"><value>添加音频源</value></data>
+  <data name="AudioAddSourceButtonText.Text" xml:space="preserve"><value>添加</value></data>
+  <data name="AudioYomitanJsonHint.Text" xml:space="preserve"><value>支持 Yomitan JSON 格式的音频源。</value></data>
+  <data name="AudioPlaybackSectionHeader.Text" xml:space="preserve"><value>播放</value></data>
+  <data name="AudioAutoplayCard.Header" xml:space="preserve"><value>启用自动播放</value></data>
+  <data name="AudioAutoplayCard.Description" xml:space="preserve"><value>查词时自动播放第一个结果的音频</value></data>
+  <data name="AudioAutoplayToggle.AutomationProperties.Name" xml:space="preserve"><value>启用自动播放</value></data>
+  <data name="AudioPlaybackModeCard.Header" xml:space="preserve"><value>播放模式</value></data>
+  <data name="AudioPlaybackModeCard.Description" xml:space="preserve"><value>控制音频播放如何与其他媒体共存</value></data>
+  <data name="AudioPlaybackModeComboBox.AutomationProperties.Name" xml:space="preserve"><value>播放模式</value></data>
+  <data name="AudioLocalAudioSectionHeader.Text" xml:space="preserve"><value>本地音频</value></data>
+  <data name="AudioLocalAudioEnabledCard.Header" xml:space="preserve"><value>启用本地音频</value></data>
+  <data name="AudioLocalAudioEnabledCard.Description" xml:space="preserve"><value>使用导入的 Android 音频数据库提供本地音频</value></data>
+  <data name="AudioLocalAudioToggle.AutomationProperties.Name" xml:space="preserve"><value>启用本地音频</value></data>
+  <data name="AudioAndroidAudioDatabaseCard.Header" xml:space="preserve"><value>Android 音频数据库</value></data>
+  <data name="AudioImportLocalAudioButton.AutomationProperties.Name" xml:space="preserve"><value>导入本地音频数据库</value></data>
+  <data name="AudioImportLocalAudioButtonText.Text" xml:space="preserve"><value>导入 .db</value></data>
+  <data name="AudioDeleteLocalAudioButton.AutomationProperties.Name" xml:space="preserve"><value>删除本地音频数据库</value></data>
+  <data name="AudioDeleteLocalAudioButtonText.Text" xml:space="preserve"><value>删除</value></data>
+  <data name="AudioLocalAudioDatabaseHelpText.Text" xml:space="preserve"><value>Android 音频数据库是包含词典条目录音的 SQLite .db 文件。导入后可使用本地发音音频。</value></data>
+  <data name="AudioPlaybackModeInterrupt" xml:space="preserve"><value>中断其他音频</value></data>
+  <data name="AudioPlaybackModeDuck" xml:space="preserve"><value>降低其他音频音量</value></data>
+  <data name="AudioPlaybackModeMix" xml:space="preserve"><value>与其他音频混合</value></data>
+  <data name="AudioDefaultSourceName" xml:space="preserve"><value>默认</value></data>
+  <data name="AudioLocalSourceName" xml:space="preserve"><value>本地</value></data>
+  <data name="AudioLocalAudioImportingStatus" xml:space="preserve"><value>正在导入音频数据库...</value></data>
+  <data name="AudioLocalAudioImportedStatus" xml:space="preserve"><value>数据库：{0}</value></data>
+  <data name="AudioLocalAudioMissingStatus" xml:space="preserve"><value>尚未导入音频数据库。导入 Android 音频 .db 文件后即可使用本地音频。</value></data>
+  <data name="AudioNotificationTitle" xml:space="preserve"><value>音频</value></data>
+  <data name="AudioLocalAudioImportedNotification" xml:space="preserve"><value>本地音频数据库已导入</value></data>
+  <data name="AudioImportErrorTitle" xml:space="preserve"><value>导入错误</value></data>
+  <data name="AudioLocalAudioDeletedNotification" xml:space="preserve"><value>本地音频数据库已删除</value></data>
+  <data name="AudioDeleteErrorTitle" xml:space="preserve"><value>删除错误</value></data>
   <data name="AdvancedStatisticsCard.Header" xml:space="preserve"><value>统计</value></data>
   <data name="AdvancedStatisticsCard.Description" xml:space="preserve"><value>阅读目标、自动开始和统计同步</value></data>
   <data name="AdvancedSasayakiCard.Header" xml:space="preserve"><value>Sasayaki</value></data>
@@ -234,6 +284,8 @@
   <data name="VideoInspectorCurrentVideoHeaderText.Text" xml:space="preserve"><value>当前视频</value></data>
   <data name="VideoInspectorEpisodesHeaderText.Text" xml:space="preserve"><value>选集</value></data>
   <data name="VideoInspectorNoEpisodesText.Text" xml:space="preserve"><value>没有选集</value></data>
+  <data name="VideoInspectorChaptersHeaderText.Text" xml:space="preserve"><value>章节</value></data>
+  <data name="VideoInspectorNoChaptersText.Text" xml:space="preserve"><value>暂无章节</value></data>
   <data name="VideoInspectorPlaybackHeaderText.Text" xml:space="preserve"><value>播放</value></data>
   <data name="VideoInspectorAudioHeaderText.Text" xml:space="preserve"><value>音频</value></data>
   <data name="VideoInspectorSubtitlesHeaderText.Text" xml:space="preserve"><value>字幕</value></data>
@@ -401,17 +453,128 @@
   <data name="GlobalLookupEnabledCard.Description" xml:space="preserve"><value>启用选中文本查词。快捷键可用性会显示在下方。</value></data>
   <data name="SettingsSecondaryNavigationView.PaneTitle" xml:space="preserve"><value>设置</value></data>
   <data name="SettingsLibrarySectionHeader.Content" xml:space="preserve"><value>资料库</value></data>
+  <data name="SettingsProfilesNavItem.Content" xml:space="preserve"><value>配置档案</value></data>
+  <data name="SettingsAppearanceNavItem.Content" xml:space="preserve"><value>外观</value></data>
   <data name="SettingsDictionariesNavItem.Content" xml:space="preserve"><value>词典</value></data>
   <data name="SettingsAnkiNavItem.Content" xml:space="preserve"><value>Anki</value></data>
   <data name="SettingsReaderSectionHeader.Content" xml:space="preserve"><value>阅读器</value></data>
-  <data name="SettingsAppearanceNavItem.Content" xml:space="preserve"><value>外观</value></data>
   <data name="SettingsAudioNavItem.Content" xml:space="preserve"><value>音频</value></data>
   <data name="SettingsStatisticsNavItem.Content" xml:space="preserve"><value>统计</value></data>
-  <data name="SettingsSasayakiNavItem.Content" xml:space="preserve"><value>Sasayaki</value></data>
+  <data name="SettingsSasayakiNavItem.Content" xml:space="preserve"><value>Sasayaki（有声书）</value></data>
+  <data name="SettingsVideoSectionHeader.Content" xml:space="preserve"><value>视频</value></data>
+  <data name="SettingsVideoNavItem.Content" xml:space="preserve"><value>视频</value></data>
+  <data name="SettingsShortcutsControlsSectionHeader.Content" xml:space="preserve"><value>快捷键与控制</value></data>
+  <data name="SettingsKeyboardShortcutsNavItem.Content" xml:space="preserve"><value>键盘快捷键</value></data>
+  <data name="SettingsGameControllerNavItem.Content" xml:space="preserve"><value>游戏手柄</value></data>
+  <data name="SettingsSyncDataSectionHeader.Content" xml:space="preserve"><value>同步与数据</value></data>
+  <data name="SettingsSyncNavItem.Content" xml:space="preserve"><value>ッツ Sync</value></data>
+  <data name="SettingsBackupNavItem.Content" xml:space="preserve"><value>备份</value></data>
   <data name="SettingsAdvancedSectionHeader.Content" xml:space="preserve"><value>高级</value></data>
   <data name="SettingsAdvancedNavItem.Content" xml:space="preserve"><value>高级</value></data>
   <data name="SettingsSupportSectionHeader.Content" xml:space="preserve"><value>支持</value></data>
   <data name="SettingsAboutNavItem.Content" xml:space="preserve"><value>关于</value></data>
   <data name="SettingsReportIssueNavItem.Content" xml:space="preserve"><value>报告问题</value></data>
+  <data name="AdvancedVideoSectionHeader.Text" xml:space="preserve"><value>视频</value></data>
+  <data name="AdvancedVideoCard.Header" xml:space="preserve"><value>视频</value></data>
+  <data name="AdvancedVideoCard.Description" xml:space="preserve"><value>播放默认值与视频学习选项</value></data>
+  <data name="AdvancedShortcutsControlsSectionHeader.Text" xml:space="preserve"><value>快捷键与控制</value></data>
+  <data name="AdvancedKeyboardShortcutsCard.Header" xml:space="preserve"><value>键盘快捷键</value></data>
+  <data name="AdvancedKeyboardShortcutsCard.Description" xml:space="preserve"><value>全局、阅读器、Sasayaki 与视频快捷键绑定</value></data>
+  <data name="AdvancedGameControllerCard.Header" xml:space="preserve"><value>游戏手柄</value></data>
+  <data name="AdvancedGameControllerCard.Description" xml:space="preserve"><value>阅读和播放控制映射</value></data>
+  <data name="AdvancedSyncDataSectionHeader.Text" xml:space="preserve"><value>同步与数据</value></data>
+  <data name="AdvancedSyncCard.Header" xml:space="preserve"><value>ッツ Sync</value></data>
+  <data name="AdvancedSyncCard.Description" xml:space="preserve"><value>书籍、设置和播放位置云同步</value></data>
+  <data name="AdvancedBackupCard.Header" xml:space="preserve"><value>备份</value></data>
+  <data name="AdvancedBackupCard.Description" xml:space="preserve"><value>导出和恢复应用数据</value></data>
+  <data name="VideoSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>打开视频设置</value></data>
+  <data name="SettingsOpenVideoText.Text" xml:space="preserve"><value>打开</value></data>
+  <data name="VideoSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>返回</value></data>
+  <data name="VideoSettingsPageTitle.Text" xml:space="preserve"><value>视频设置</value></data>
+  <data name="VideoPlaybackSectionHeader.Text" xml:space="preserve"><value>播放</value></data>
+  <data name="VideoAutoPlayNextCard.Header" xml:space="preserve"><value>自动播放下一集</value></data>
+  <data name="VideoAutoPlayNextCard.Description" xml:space="preserve"><value>播放到结尾时自动打开剧集列表中的下一项</value></data>
+  <data name="VideoRememberPlaybackStateCard.Header" xml:space="preserve"><value>记住播放位置</value></data>
+  <data name="VideoRememberPlaybackStateCard.Description" xml:space="preserve"><value>为每个导入视频恢复并保存播放进度</value></data>
+  <data name="VideoSeekIntervalCard.Header" xml:space="preserve"><value>快进/快退间隔</value></data>
+  <data name="VideoSeekIntervalCard.Description" xml:space="preserve"><value>前进和后退控件每次跳转的秒数</value></data>
+  <data name="VideoMiningHistoryLimitCard.Header" xml:space="preserve"><value>挖矿历史数量</value></data>
+  <data name="VideoMiningHistoryLimitCard.Description" xml:space="preserve"><value>保留在界面中的最近字幕挖矿记录数量</value></data>
+  <data name="VideoEngineSectionHeader.Text" xml:space="preserve"><value>播放引擎</value></data>
+  <data name="VideoHardwareDecodingCard.Header" xml:space="preserve"><value>硬件解码</value></data>
+  <data name="VideoHardwareDecodingCard.Description" xml:space="preserve"><value>可用时使用 GPU 视频解码</value></data>
+  <data name="VideoDeinterlacingCard.Header" xml:space="preserve"><value>反交错</value></data>
+  <data name="VideoDeinterlacingCard.Description" xml:space="preserve"><value>为隔行扫描源视频应用反交错处理</value></data>
+  <data name="VideoHdrEnhancementCard.Header" xml:space="preserve"><value>HDR 增强</value></data>
+  <data name="VideoHdrEnhancementCard.Description" xml:space="preserve"><value>启用面向 HDR 的视频增强默认值</value></data>
+  <data name="VideoEqualizerSectionHeader.Text" xml:space="preserve"><value>画面调节</value></data>
+  <data name="VideoBrightnessCard.Header" xml:space="preserve"><value>亮度</value></data>
+  <data name="VideoContrastCard.Header" xml:space="preserve"><value>对比度</value></data>
+  <data name="VideoSaturationCard.Header" xml:space="preserve"><value>饱和度</value></data>
+  <data name="VideoGammaCard.Header" xml:space="preserve"><value>伽马</value></data>
+  <data name="VideoHueCard.Header" xml:space="preserve"><value>色相</value></data>
+  <data name="VideoSubtitleAppearanceSectionHeader.Text" xml:space="preserve"><value>字幕外观</value></data>
+  <data name="VideoSubtitleFontFamilyCard.Header" xml:space="preserve"><value>字幕字体</value></data>
+  <data name="VideoSubtitleFontFamilyCard.Description" xml:space="preserve"><value>留空时使用系统默认字体</value></data>
+  <data name="VideoSubtitleFontSizeCard.Header" xml:space="preserve"><value>字幕字号</value></data>
+  <data name="VideoSubtitleFontWeightCard.Header" xml:space="preserve"><value>字幕字重</value></data>
+  <data name="VideoSubtitleShadowRadiusCard.Header" xml:space="preserve"><value>字幕阴影半径</value></data>
+  <data name="VideoSubtitleBackgroundOpacityCard.Header" xml:space="preserve"><value>字幕背景透明度</value></data>
+  <data name="VideoSubtitleBackgroundDisabledCard.Header" xml:space="preserve"><value>禁用字幕背景</value></data>
+  <data name="VideoSubtitleBackgroundDisabledCard.Description" xml:space="preserve"><value>默认保持字幕文字背景透明</value></data>
+  <data name="VideoSubtitleVerticalPositionCard.Header" xml:space="preserve"><value>字幕垂直位置</value></data>
+  <data name="VideoSubtitleColorsSectionHeader.Text" xml:space="preserve"><value>字幕颜色</value></data>
+  <data name="VideoSubtitleColorCard.Header" xml:space="preserve"><value>字幕文字颜色</value></data>
+  <data name="VideoSubtitleLookupHighlightColorCard.Header" xml:space="preserve"><value>查词高亮颜色</value></data>
+  <data name="VideoSubtitleLookupHighlightTextColorCard.Header" xml:space="preserve"><value>查词高亮文字颜色</value></data>
+  <data name="VideoSubtitleMaskSectionHeader.Text" xml:space="preserve"><value>字幕遮罩</value></data>
+  <data name="VideoSubtitleMaskCard.Header" xml:space="preserve"><value>启用字幕遮罩</value></data>
+  <data name="VideoSubtitleMaskModeCard.Header" xml:space="preserve"><value>遮罩模式</value></data>
+  <data name="VideoSubtitleMaskBlurRadiusCard.Header" xml:space="preserve"><value>遮罩模糊半径</value></data>
+  <data name="VideoSubtitleMaskHiddenOpacityCard.Header" xml:space="preserve"><value>隐藏字幕不透明度</value></data>
+  <data name="VideoSubtitleMaskModeBlur" xml:space="preserve"><value>模糊</value></data>
+  <data name="VideoSubtitleMaskModeTransparent" xml:space="preserve"><value>透明</value></data>
+  <data name="VideoKeyboardShortcutsCard.Header" xml:space="preserve"><value>键盘快捷键</value></data>
+  <data name="VideoKeyboardShortcutsCard.Description" xml:space="preserve"><value>在统一快捷键编辑器中配置视频播放快捷键</value></data>
+  <data name="VideoKeyboardShortcutsButton.AutomationProperties.Name" xml:space="preserve"><value>打开键盘快捷键</value></data>
+  <data name="SettingsUnavailableText.Text" xml:space="preserve"><value>不可用</value></data>
+  <data name="SettingsOpenText.Text" xml:space="preserve"><value>打开</value></data>
+  <data name="KeyboardShortcutsBackButton.AutomationProperties.Name" xml:space="preserve"><value>返回</value></data>
+  <data name="KeyboardShortcutsPageTitle.Text" xml:space="preserve"><value>键盘快捷键</value></data>
+  <data name="KeyboardShortcutResetButton.Content" xml:space="preserve"><value>重置</value></data>
+  <data name="KeyboardShortcutsRecordingHint" xml:space="preserve"><value>请按下“{0}”的新快捷键。Esc 取消。</value></data>
+  <data name="KeyboardShortcutsUnassignedText" xml:space="preserve"><value>未分配</value></data>
+  <data name="KeyboardShortcutsConflictText" xml:space="preserve"><value>与“{0}”冲突</value></data>
+  <data name="KeyboardShortcutsShadowedText" xml:space="preserve"><value>会被“{0}”覆盖</value></data>
+  <data name="ShortcutCategoryGlobal" xml:space="preserve"><value>全局</value></data>
+  <data name="ShortcutCategoryReader" xml:space="preserve"><value>阅读器</value></data>
+  <data name="ShortcutCategoryDictionaryPopup" xml:space="preserve"><value>词典弹窗</value></data>
+  <data name="ShortcutCategorySasayaki" xml:space="preserve"><value>Sasayaki</value></data>
+  <data name="ShortcutCategoryVideo" xml:space="preserve"><value>视频</value></data>
+  <data name="ShortcutActionReaderPreviousPage" xml:space="preserve"><value>上一页</value></data>
+  <data name="ShortcutActionReaderNextPage" xml:space="preserve"><value>下一页</value></data>
+  <data name="ShortcutActionReaderClose" xml:space="preserve"><value>关闭阅读器</value></data>
+  <data name="ShortcutActionReaderToggleFocusMode" xml:space="preserve"><value>切换专注模式</value></data>
+  <data name="ShortcutActionReaderToggleStatistics" xml:space="preserve"><value>切换阅读计时</value></data>
+  <data name="ShortcutActionSasayakiPreviousCue" xml:space="preserve"><value>上一句</value></data>
+  <data name="ShortcutActionSasayakiPlayPause" xml:space="preserve"><value>播放/暂停</value></data>
+  <data name="ShortcutActionSasayakiNextCue" xml:space="preserve"><value>下一句</value></data>
+  <data name="ShortcutActionSasayakiReplayCue" xml:space="preserve"><value>重播当前句</value></data>
+  <data name="ShortcutActionSasayakiJumpCue" xml:space="preserve"><value>跳转到当前句</value></data>
+  <data name="ShortcutActionVideoPlayPause" xml:space="preserve"><value>播放/暂停</value></data>
+  <data name="ShortcutActionVideoSeekBackward" xml:space="preserve"><value>后退</value></data>
+  <data name="ShortcutActionVideoSeekForward" xml:space="preserve"><value>前进</value></data>
+  <data name="ShortcutActionVideoVolumeUp" xml:space="preserve"><value>提高音量</value></data>
+  <data name="ShortcutActionVideoVolumeDown" xml:space="preserve"><value>降低音量</value></data>
+  <data name="ShortcutActionVideoPreviousSubtitle" xml:space="preserve"><value>上一条字幕</value></data>
+  <data name="ShortcutActionVideoNextSubtitle" xml:space="preserve"><value>下一条字幕</value></data>
+  <data name="ShortcutActionVideoToggleSubtitles" xml:space="preserve"><value>显示/隐藏字幕</value></data>
+  <data name="ShortcutActionVideoCycleSubtitleTrack" xml:space="preserve"><value>切换字幕轨</value></data>
+  <data name="ShortcutActionVideoToggleFullscreen" xml:space="preserve"><value>切换全屏</value></data>
+  <data name="ShortcutActionVideoLookupSubtitle" xml:space="preserve"><value>查询当前字幕</value></data>
+  <data name="ShortcutActionVideoToggleHardwareDecoding" xml:space="preserve"><value>切换硬件解码</value></data>
+  <data name="ShortcutActionVideoIncreaseSubtitleSize" xml:space="preserve"><value>增大字幕字号</value></data>
+  <data name="ShortcutActionVideoDecreaseSubtitleSize" xml:space="preserve"><value>减小字幕字号</value></data>
+  <data name="ShortcutActionVideoCloseOverlayOrFullscreen" xml:space="preserve"><value>关闭面板或退出全屏</value></data>
   <data name="AboutSettingsPageTitle.Text" xml:space="preserve"><value>关于</value></data>
 </root>

@@ -88,6 +88,14 @@ public sealed class AnkiConnectClient : IDisposable
         return result.Deserialize<List<string>>() ?? [];
     }
 
+    public async Task<string?> GetMediaDirPathAsync()
+    {
+        var result = await RequestAsync("getMediaDirPath", null);
+        return result.ValueKind == JsonValueKind.String
+            ? result.GetString()
+            : null;
+    }
+
     public async Task<bool> CanAddNotesAsync(
         AnkiDeck deck,
         AnkiNoteType noteType,

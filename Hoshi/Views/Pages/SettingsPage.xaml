@@ -26,6 +26,24 @@
         <NavigationView.MenuItems>
             <NavigationViewItemHeader x:Uid="SettingsLibrarySectionHeader"
                                       Content="Library" />
+            <NavigationViewItem x:Name="SettingsProfilesNavItem"
+                                x:Uid="SettingsProfilesNavItem"
+                                AutomationProperties.AutomationId="SettingsProfilesNavItem"
+                                Content="Profiles"
+                                IsEnabled="False">
+                <NavigationViewItem.Icon>
+                    <FontIcon Glyph="&#xE77B;" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem x:Name="SettingsAppearanceNavItem"
+                                x:Uid="SettingsAppearanceNavItem"
+                                AutomationProperties.AutomationId="SettingsAppearanceNavItem"
+                                Content="Appearance"
+                                Tag="Hoshi.Views.Pages.ReaderAppearanceSettingsPage">
+                <NavigationViewItem.Icon>
+                    <FontIcon Glyph="&#xE790;" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
             <NavigationViewItem x:Name="SettingsDictionariesNavItem"
                                 x:Uid="SettingsDictionariesNavItem"
                                 AutomationProperties.AutomationId="SettingsDictionariesNavItem"
@@ -47,15 +65,6 @@
 
             <NavigationViewItemHeader x:Uid="SettingsReaderSectionHeader"
                                       Content="Reader" />
-            <NavigationViewItem x:Name="SettingsAppearanceNavItem"
-                                x:Uid="SettingsAppearanceNavItem"
-                                AutomationProperties.AutomationId="SettingsAppearanceNavItem"
-                                Content="Appearance"
-                                Tag="Hoshi.Views.Pages.ReaderAppearanceSettingsPage">
-                <NavigationViewItem.Icon>
-                    <FontIcon Glyph="&#xE790;" />
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
             <NavigationViewItem x:Name="SettingsAudioNavItem"
                                 x:Uid="SettingsAudioNavItem"
                                 AutomationProperties.AutomationId="SettingsAudioNavItem"
@@ -84,15 +93,57 @@
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
 
-            <NavigationViewItemHeader x:Uid="SettingsAdvancedSectionHeader"
-                                      Content="Advanced" />
-            <NavigationViewItem x:Name="SettingsAdvancedNavItem"
-                                x:Uid="SettingsAdvancedNavItem"
-                                AutomationProperties.AutomationId="SettingsAdvancedNavItem"
-                                Content="Advanced"
-                                Tag="Hoshi.Views.Pages.AdvancedSettingsPage">
+            <NavigationViewItemHeader x:Uid="SettingsVideoSectionHeader"
+                                      Content="Video" />
+            <NavigationViewItem x:Name="SettingsVideoNavItem"
+                                x:Uid="SettingsVideoNavItem"
+                                AutomationProperties.AutomationId="SettingsVideoNavItem"
+                                Content="Video"
+                                Tag="Hoshi.Views.Pages.VideoSettingsPage">
                 <NavigationViewItem.Icon>
-                    <FontIcon Glyph="&#xE713;" />
+                    <FontIcon Glyph="&#xE768;" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+
+            <NavigationViewItemHeader x:Uid="SettingsShortcutsControlsSectionHeader"
+                                      Content="Shortcuts &amp; Controls" />
+            <NavigationViewItem x:Name="SettingsKeyboardShortcutsNavItem"
+                                x:Uid="SettingsKeyboardShortcutsNavItem"
+                                AutomationProperties.AutomationId="SettingsKeyboardShortcutsNavItem"
+                                Content="Keyboard Shortcuts"
+                                Tag="Hoshi.Views.Pages.KeyboardShortcutsSettingsPage">
+                <NavigationViewItem.Icon>
+                    <FontIcon Glyph="&#xE765;" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem x:Name="SettingsGameControllerNavItem"
+                                x:Uid="SettingsGameControllerNavItem"
+                                AutomationProperties.AutomationId="SettingsGameControllerNavItem"
+                                Content="Game Controller"
+                                IsEnabled="False">
+                <NavigationViewItem.Icon>
+                    <FontIcon Glyph="&#xE7FC;" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+
+            <NavigationViewItemHeader x:Uid="SettingsSyncDataSectionHeader"
+                                      Content="Sync &amp; Data" />
+            <NavigationViewItem x:Name="SettingsSyncNavItem"
+                                x:Uid="SettingsSyncNavItem"
+                                AutomationProperties.AutomationId="SettingsSyncNavItem"
+                                Content="ッツ Sync"
+                                IsEnabled="False">
+                <NavigationViewItem.Icon>
+                    <FontIcon Glyph="&#xE753;" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem x:Name="SettingsBackupNavItem"
+                                x:Uid="SettingsBackupNavItem"
+                                AutomationProperties.AutomationId="SettingsBackupNavItem"
+                                Content="Backup"
+                                IsEnabled="False">
+                <NavigationViewItem.Icon>
+                    <FontIcon Glyph="&#xE838;" />
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
 
