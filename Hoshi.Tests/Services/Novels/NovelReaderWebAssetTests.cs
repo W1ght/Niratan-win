@@ -239,6 +239,31 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void DictionaryPopup_UsesNiratanStyleTwoColumnDictionaryCards()
+    {
+        var popupCss = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.css")
+        );
+        var popupJs = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.js")
+        );
+
+        popupCss.Should().Contain("--popup-dictionary-card-gap");
+        popupCss.Should().Contain(".glossary-sections");
+        popupCss.Should().Contain(".glossary-sections:not(.single-section)");
+        popupCss.Should().Contain(".glossary-sections.single-section");
+        popupCss.Should().Contain("border: 1px solid rgba");
+        popupCss.Should().Contain("box-shadow");
+
+        popupJs.Should().Contain("function layoutDictionaryColumns()");
+        popupJs.Should().Contain("ResizeObserver");
+        popupJs.Should().Contain("var glossarySections = el('div', { className: 'glossary-sections' });");
+        popupJs.Should().Contain("glossarySections.classList.add('single-section')");
+        popupJs.Should().Contain("glossarySections.appendChild(createGlossarySection(");
+        popupJs.Should().Contain("layoutDictionaryColumns();");
+    }
+
+    [Fact]
     public void DictionaryPopupHide_KeepsWebView2InVisualTree()
     {
         var popupCode = File.ReadAllText(
