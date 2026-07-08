@@ -1446,6 +1446,7 @@ function redirect(count) {
   window.entryCount = count;
   selectedDictionaries = {};
   audioUrls = {};
+  disconnectDictionaryColumns();
   document.getElementById('entries-container').innerHTML = '';
   window.renderPopup();
   requestAnimationFrame(function () {
@@ -1468,6 +1469,7 @@ window.replacePopupResults = function (count) {
   selectedDictionaries = {};
   audioUrls = {};
   var container = document.getElementById('entries-container');
+  disconnectDictionaryColumns();
   if (container) container.innerHTML = '';
   window.hoshiPopupObserveContentReady?.();
   window.renderPopup();
@@ -1490,6 +1492,7 @@ window.hoshiInjectResults = function (entriesJson, count) {
   selectedDictionaries = {};
   audioUrls = {};
   var container = document.getElementById('entries-container');
+  disconnectDictionaryColumns();
   if (container) container.innerHTML = '';
   window.hoshiPopupObserveContentReady?.();
   window.renderPopup();
@@ -1513,6 +1516,7 @@ function restore(snap) {
   flushPendingHistoryRestore();
   var container = document.getElementById('entries-container');
   var nodes = snap.nodes.slice();
+  disconnectDictionaryColumns();
   var shouldDeferOffscreenNodes = snap.scrollTop === 0 && nodes.length > 6;
   if (shouldDeferOffscreenNodes) {
     container.replaceChildren.apply(container, nodes.splice(0, 4));
@@ -1525,6 +1529,8 @@ function restore(snap) {
   window.entryCount = snap.entryCount;
   selectedDictionaries = {};
   audioUrls = {};
+  observeAllDictionarySections();
+  scheduleDictionaryColumns();
   requestAnimationFrame(function () {
     document.scrollingElement.scrollTop = snap.scrollTop;
   });
@@ -1538,6 +1544,106 @@ function navigate(origin, destination) {
 
 window.navigateBack = function () { navigate(backStack, forwardStack); };
 window.navigateForward = function () { navigate(forwardStack, backStack); };
+
+var dictionaryColumnsRaf = 0;
+var dictionaryColumnsObserver = null;
+
+function dictionaryColumnsGap() {
+  var value = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--popup-dictionary-card-gap'));
+  return Number.isFinite(value) ? value : 8;
+}
+
+function shouldUseDictionaryColumns(section) {
+  return section
+    && !section.classList.contains('single-section')
+    && section.clientWidth >= 480;
+}
+
+function resetDictionarySectionLayout(section) {
+  if (!section) return;
+  section.style.position = '';
+  section.style.height = '';
+  Array.from(section.children).forEach(function (item) {
+    item.style.position = '';
+    item.style.left = '';
+    item.style.top = '';
+    item.style.width = '';
+    item.style.transform = '';
+    item.style.visibility = 'visible';
+    item.style.marginTop = '';
+  });
+}
+
+function disconnectDictionaryColumns() {
+  if (dictionaryColumnsRaf) {
+    cancelAnimationFrame(dictionaryColumnsRaf);
+    dictionaryColumnsRaf = 0;
+  }
+  if (dictionaryColumnsObserver) {
+    dictionaryColumnsObserver.disconnect();
+    dictionaryColumnsObserver = null;
+  }
+}
+
+function layoutDictionaryColumns() {
+  var sections = document.querySelectorAll('#entries-container .glossary-sections');
+  sections.forEach(function (section) {
+    if (!shouldUseDictionaryColumns(section)) {
+      resetDictionarySectionLayout(section);
+      return;
+    }
+
+    var gap = dictionaryColumnsGap();
+    var columnWidth = (section.clientWidth - gap) / 2;
+    var columnHeights = [0, 0];
+
+    section.style.position = 'relative';
+    Array.from(section.children).forEach(function (item) {
+      var column = columnHeights[0] <= columnHeights[1] ? 0 : 1;
+      var x = column * (columnWidth + gap);
+      var y = columnHeights[column];
+
+      item.style.position = 'absolute';
+      item.style.left = '0';
+      item.style.top = '0';
+      item.style.width = columnWidth + 'px';
+      item.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
+      item.style.visibility = 'visible';
+      item.style.marginTop = '0';
+
+      columnHeights[column] += item.offsetHeight + gap;
+    });
+
+    section.style.height = Math.max(0, Math.max(columnHeights[0], columnHeights[1]) - gap) + 'px';
+  });
+}
+
+function scheduleDictionaryColumns() {
+  if (dictionaryColumnsRaf) return;
+  dictionaryColumnsRaf = requestAnimationFrame(function () {
+    dictionaryColumnsRaf = 0;
+    layoutDictionaryColumns();
+  });
+}
+
+function observeDictionaryColumns(section) {
+  if (!section || typeof ResizeObserver === 'undefined') return;
+  dictionaryColumnsObserver = dictionaryColumnsObserver || new ResizeObserver(scheduleDictionaryColumns);
+  dictionaryColumnsObserver.observe(section);
+  Array.from(section.children).forEach(function (item) {
+    dictionaryColumnsObserver.observe(item);
+  });
+}
+
+function observeAllDictionarySections() {
+  document.querySelectorAll('#entries-container .glossary-sections').forEach(observeDictionaryColumns);
+}
+
+window.addEventListener('resize', scheduleDictionaryColumns);
+
+document.addEventListener('toggle', function () {
+  scheduleDictionaryColumns();
+}, true);
 
 // === Main render ===
 
@@ -1608,6 +1714,10 @@ window.renderPopup = function () {
       });
 
       var dictNames = Object.keys(grouped);
+      var glossarySections = el('div', { className: 'glossary-sections' });
+      if (dictNames.length === 1) glossarySections.classList.add('single-section');
+      entryDiv.appendChild(glossarySections);
+
       var dictIdx = 0;
       postPopupTrace('render-entry', {
         generation: generation,
@@ -1618,10 +1728,17 @@ window.renderPopup = function () {
 
       function nextDict() {
         if (generation !== (window.popupRenderGeneration || 0)) return;
-        if (dictIdx >= dictNames.length) { idx++; next(); return; }
+        if (dictIdx >= dictNames.length) {
+          observeDictionaryColumns(glossarySections);
+          layoutDictionaryColumns();
+          idx++;
+          next();
+          return;
+        }
         var dictName = dictNames[dictIdx];
-        entryDiv.appendChild(createGlossarySection(dictName, grouped[dictName], dictIdx === 0, idx));
+        glossarySections.appendChild(createGlossarySection(dictName, grouped[dictName], dictIdx === 0, idx));
         dictIdx++;
+        scheduleDictionaryColumns();
         requestAnimationFrame(nextDict);
       }
 
@@ -1651,6 +1768,7 @@ window.renderPopup = function () {
         document.body.appendChild(customStyle);
       }
 
+      layoutDictionaryColumns();
       document.documentElement.style.visibility = 'visible';
       postPopupTrace('render-finished', {
         generation: generation,
