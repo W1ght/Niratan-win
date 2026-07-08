@@ -238,6 +238,10 @@ dotnet build -p:Platform=x64 && dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c De
 
 详见 [docs/VERIFICATION.md](docs/VERIFICATION.md)。
 
+### 6.4 发布版本
+
+发布 GitHub 版本或标签时，不需要在本地跑构建或测试；直接推送发布提交和版本标签，用 GitHub Actions 执行验证与打包，并以 Actions 结果作为发布依据。
+
 ---
 
 ## 7. 文档路由
