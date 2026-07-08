@@ -143,6 +143,9 @@ public sealed class TtuBookImportServiceTests
 
         public Task<Result> SaveNovelBookOrderAsync(IReadOnlyList<string> orderedBookIds, CancellationToken ct = default) =>
             Task.FromResult(Result.Success());
+
+        public Task<Result> SetNovelProfileAsync(string bookId, string? profileId, CancellationToken ct = default) =>
+            Task.FromResult(Result.Success());
     }
 
     private sealed class FakeTtuSyncService : ITtuSyncService
