@@ -2,9 +2,9 @@ name: CI - Unit Tests (xUnit)
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -19,6 +19,10 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+
+      - name: Build native dictionary library
+        shell: pwsh
+        run: .\build-native.ps1
 
       - name: Restore dependencies
         run: dotnet restore
