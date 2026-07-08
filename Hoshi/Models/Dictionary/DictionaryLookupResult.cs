@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace Hoshi.Models.Dictionary;
 
@@ -15,7 +16,20 @@ public sealed record GlossaryEntry(
 
 public sealed record FrequencyEntry(string DictName, List<Frequency> Frequencies);
 
-public sealed record PitchEntry(string DictName, List<int> PitchPositions);
+public sealed record PitchEntry
+{
+    [JsonConstructor]
+    public PitchEntry(string dictName, List<int> pitchPositions, List<string>? transcriptions = null)
+    {
+        DictName = dictName;
+        PitchPositions = pitchPositions;
+        Transcriptions = transcriptions ?? [];
+    }
+
+    public string DictName { get; init; }
+    public List<int> PitchPositions { get; init; }
+    public List<string> Transcriptions { get; init; }
+}
 
 public sealed record TermResult(
     string Expression,

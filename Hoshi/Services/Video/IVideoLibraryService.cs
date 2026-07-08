@@ -30,4 +30,9 @@ public interface IVideoLibraryService
         string videoId,
         VideoPlaybackState state,
         CancellationToken ct = default);
+
+    Task<Result> SetVideoProfileAsync(
+        string videoId,
+        string? profileId,
+        CancellationToken ct = default);
 }

@@ -17,6 +17,7 @@ using Hoshi.Services.Audio;
 using Hoshi.Services.Dictionary;
 using Hoshi.Services.Logging;
 using Hoshi.Services.Novels;
+using Hoshi.Services.Profiles;
 using Hoshi.Services.Sasayaki;
 using Hoshi.Services.Settings;
 using Hoshi.Services.Shortcuts;
@@ -127,6 +128,7 @@ public partial class App : Application
         services.AddTransient<NavigationPageViewModel>();
         services.AddTransient<SettingsPageViewModel>();
         services.AddTransient<DictionarySettingsPageViewModel>();
+        services.AddTransient<ProfilesSettingsPageViewModel>();
         services.AddTransient<AudioSettingsPageViewModel>();
         services.AddTransient<VideoSettingsPageViewModel>();
         services.AddTransient<KeyboardShortcutsSettingsPageViewModel>();
@@ -147,6 +149,13 @@ public partial class App : Application
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IReaderSettingsService, ReaderSettingsService>();
+        services.AddSingleton<IProfileService, ProfileService>();
+        services.AddSingleton<ProfileSettingsStore>();
+        services.AddSingleton<ProfileRuntimeService>();
+        services.AddSingleton<IProfileRuntimeService>(provider =>
+            provider.GetRequiredService<ProfileRuntimeService>());
+        services.AddSingleton<IDictionaryProfileContext>(provider =>
+            provider.GetRequiredService<ProfileRuntimeService>());
         services.AddSingleton<IShortcutService, ShortcutService>();
         services.AddSingleton<IDataService, DataService>();
         services.AddSingleton<IEpubParserService, EpubParserService>();
@@ -194,6 +203,10 @@ public partial class App : Application
 
             var readerSettings = GetService<IReaderSettingsService>();
             await readerSettings.LoadAsync();
+
+            var profiles = GetService<IProfileService>();
+            await profiles.LoadAsync();
+            await GetService<IProfileRuntimeService>().InitializeAsync();
 
             MainWindow = new MainWindow();
             MainWindow.Activate();

@@ -63,6 +63,9 @@ public class AnkiServiceDictionaryMediaTests
         public void Set<T>(Expression<Func<AppSettings, T>> selector, T value) =>
             SettingChanged?.Invoke(this, new SettingsChangedEventArgs { PropertyName = "" });
 
+        public void ReplaceCurrent(AppSettings settings) =>
+            SettingChanged?.Invoke(this, new SettingsChangedEventArgs { PropertyName = nameof(Current) });
+
         public Task SaveAsync() => Task.CompletedTask;
 
         public Task LoadAsync() => Task.CompletedTask;
@@ -93,5 +96,7 @@ public class AnkiServiceDictionaryMediaTests
         }
 
         public Task RebuildQueryAsync() => Task.CompletedTask;
+
+        public Task SetActiveLanguageAsync(string languageId) => Task.CompletedTask;
     }
 }

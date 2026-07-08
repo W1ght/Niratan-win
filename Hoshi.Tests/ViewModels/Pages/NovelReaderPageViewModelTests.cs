@@ -6,7 +6,9 @@ using Hoshi.Models;
 using Hoshi.Models.Common;
 using Hoshi.Models.DTO;
 using Hoshi.Models.Novel;
+using Hoshi.Models.Profiles;
 using Hoshi.Services.Novels;
+using Hoshi.Services.Profiles;
 using Hoshi.Services.UI;
 using Hoshi.Tests.TestUtils;
 using Hoshi.ViewModels.Pages;
@@ -42,7 +44,8 @@ public sealed class NovelReaderPageViewModelTests
             new FakeMessenger(),
             highlightService,
             new NovelBookSidecarService(),
-            new NovelStatisticsSidecarService());
+            new NovelStatisticsSidecarService(),
+            new NoOpProfileRuntimeService());
         await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"));
         sut.SetChapterCharacterCounts([10, 20]);
         sut.SetChapter(1, count: 2);
@@ -144,7 +147,8 @@ public sealed class NovelReaderPageViewModelTests
             new FakeMessenger(),
             new ReaderHighlightService(),
             sidecarService,
-            new NovelStatisticsSidecarService());
+            new NovelStatisticsSidecarService(),
+            new NoOpProfileRuntimeService());
         await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"));
         sut.SetChapterCharacterCounts([100, 50]);
         sut.SetChapter(1, count: 2);
@@ -254,7 +258,8 @@ public sealed class NovelReaderPageViewModelTests
             new FakeMessenger(),
             highlightService,
             novelBookSidecarService ?? new NovelBookSidecarService(),
-            novelStatisticsSidecarService ?? new NovelStatisticsSidecarService());
+            novelStatisticsSidecarService ?? new NovelStatisticsSidecarService(),
+            new NoOpProfileRuntimeService());
         sut.InitializeAsync(new NovelReaderNavigationArgs("book-1")).GetAwaiter().GetResult();
         return sut;
     }
@@ -286,5 +291,41 @@ public sealed class NovelReaderPageViewModelTests
             if (Directory.Exists(Path))
                 Directory.Delete(Path, recursive: true);
         }
+    }
+
+    private sealed class NoOpProfileRuntimeService : IProfileRuntimeService
+    {
+        public ProfileResolution ActiveResolution { get; } = new(
+            new HoshiProfile(ProfileConstants.DefaultJapaneseProfileId, "Japanese EPUB", ContentLanguageProfile.Japanese.Id),
+            ContentLanguageProfile.Japanese,
+            ProfileContext.Global());
+
+        public string ActiveProfileId => ActiveResolution.Profile.Id;
+
+        public ContentLanguageProfile ActiveLanguage => ActiveResolution.Language;
+
+        public event EventHandler<ProfileResolution>? ProfileChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public Task InitializeAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task ActivateGlobalAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task ActivateProfileAsync(
+            string profileId,
+            bool setGlobalActive = true,
+            CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task ActivateForBookAsync(NovelBook book, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task ActivateForVideoAsync(VideoItem video, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task SaveActiveSettingsAsync(CancellationToken ct = default) => Task.CompletedTask;
     }
 }

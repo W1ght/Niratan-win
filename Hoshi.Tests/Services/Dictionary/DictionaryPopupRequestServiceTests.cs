@@ -212,6 +212,8 @@ public class DictionaryPopupRequestServiceTests
             Task.FromResult<byte[]?>(null);
 
         public Task RebuildQueryAsync() => Task.CompletedTask;
+
+        public Task SetActiveLanguageAsync(string languageId) => Task.CompletedTask;
     }
 
     private sealed class RecordingSettingsService : ISettingsService
@@ -225,6 +227,13 @@ public class DictionaryPopupRequestServiceTests
             {
                 PropertyName = selector.ToString() ?? "",
                 NewValue = value,
+            });
+
+        public void ReplaceCurrent(AppSettings settings) =>
+            SettingChanged?.Invoke(this, new SettingsChangedEventArgs
+            {
+                PropertyName = nameof(Current),
+                NewValue = settings,
             });
 
         public Task SaveAsync() => Task.CompletedTask;

@@ -90,6 +90,42 @@ public class VideoDataServiceTests
             "SubtitleSelectionTrackName");
     }
 
+    [Fact]
+    public async Task Migration010_AddsProfileOverrideColumns()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+
+        await InvokeMigrationAsync("Migration_003", connection, transaction);
+        await InvokeMigrationAsync("Migration_008", connection, transaction);
+        await InvokeMigrationAsync("Migration_009", connection, transaction);
+        await InvokeMigrationAsync("Migration_010", connection, transaction);
+        await transaction.CommitAsync(ct);
+
+        var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT tbl_name || '.' || name
+            FROM (
+                SELECT 'NovelBooks' AS tbl_name, name
+                FROM pragma_table_info('NovelBooks')
+                UNION ALL
+                SELECT 'VideoItems' AS tbl_name, name
+                FROM pragma_table_info('VideoItems')
+            )
+            WHERE name = 'ProfileId'
+            ORDER BY tbl_name;
+            """;
+
+        var names = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            names.Add(reader.GetString(0));
+
+        names.Should().Equal("NovelBooks.ProfileId", "VideoItems.ProfileId");
+    }
+
     private static async Task InvokeMigration008Async(
         SqliteConnection connection,
         DbTransaction transaction)

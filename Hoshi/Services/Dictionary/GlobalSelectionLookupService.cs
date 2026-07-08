@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows.Automation;
 using System.Windows.Automation.Text;
 using Hoshi.Models.Settings;
+using Hoshi.Services.Profiles;
 using Hoshi.Services.Settings;
 using Serilog;
 using Windows.System;
@@ -35,18 +36,21 @@ public sealed class GlobalSelectionLookupService : IGlobalSelectionLookupService
     private readonly IGlobalLookupHotKeyRegistrar _hotKeyRegistrar;
     private readonly ISelectedTextReader _selectedTextReader;
     private readonly IGlobalLookupPopupService _popupService;
+    private readonly IProfileRuntimeService? _profileRuntime;
     private string _statusText = "Global lookup disabled.";
 
     public GlobalSelectionLookupService(
         ISettingsService settingsService,
         IGlobalLookupHotKeyRegistrar hotKeyRegistrar,
         ISelectedTextReader selectedTextReader,
-        IGlobalLookupPopupService popupService)
+        IGlobalLookupPopupService popupService,
+        IProfileRuntimeService? profileRuntime = null)
     {
         _settingsService = settingsService;
         _hotKeyRegistrar = hotKeyRegistrar;
         _selectedTextReader = selectedTextReader;
         _popupService = popupService;
+        _profileRuntime = profileRuntime;
     }
 
     public string StatusText => _statusText;
@@ -95,6 +99,9 @@ public sealed class GlobalSelectionLookupService : IGlobalSelectionLookupService
         }
 
         Log.Information("[GlobalLookup] Hotkey lookup requested for '{Query}'", query);
+        if (_profileRuntime is not null)
+            await _profileRuntime.ActivateGlobalAsync(ct);
+
         await _popupService.ShowAsync(query, ct);
     }
 

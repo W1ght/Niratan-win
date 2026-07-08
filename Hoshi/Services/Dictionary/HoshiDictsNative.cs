@@ -35,22 +35,39 @@ internal static class HoshiDictsNative
         IntPtr[] freq_paths, int freq_count,
         IntPtr[] pitch_paths, int pitch_count);
 
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+    private static extern void hoshi_session_rebuild_with_language(
+        IntPtr session,
+        IntPtr[] term_paths, int term_count,
+        IntPtr[] freq_paths, int freq_count,
+        IntPtr[] pitch_paths, int pitch_count,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string language_id);
+
     internal static void HoshiSessionRebuild(
         IntPtr session,
         IReadOnlyList<string> termPaths,
         IReadOnlyList<string> freqPaths,
-        IReadOnlyList<string> pitchPaths)
+        IReadOnlyList<string> pitchPaths) =>
+        HoshiSessionRebuild(session, termPaths, freqPaths, pitchPaths, "ja");
+
+    internal static void HoshiSessionRebuild(
+        IntPtr session,
+        IReadOnlyList<string> termPaths,
+        IReadOnlyList<string> freqPaths,
+        IReadOnlyList<string> pitchPaths,
+        string languageId)
     {
         var termPtrs = AllocUtf8Array(termPaths);
         var freqPtrs = AllocUtf8Array(freqPaths);
         var pitchPtrs = AllocUtf8Array(pitchPaths);
         try
         {
-            hoshi_session_rebuild(
+            hoshi_session_rebuild_with_language(
                 session,
                 termPtrs, termPtrs.Length,
                 freqPtrs, freqPtrs.Length,
-                pitchPtrs, pitchPtrs.Length);
+                pitchPtrs, pitchPtrs.Length,
+                string.IsNullOrWhiteSpace(languageId) ? "ja" : languageId);
         }
         finally
         {

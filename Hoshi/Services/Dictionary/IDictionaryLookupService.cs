@@ -16,4 +16,5 @@ public interface IDictionaryLookupService
     Task<List<DictionaryStyle>> GetStylesAsync();
     Task<byte[]?> GetMediaFileAsync(string dictName, string mediaPath);
     Task RebuildQueryAsync();
+    Task SetActiveLanguageAsync(string languageId);
 }
