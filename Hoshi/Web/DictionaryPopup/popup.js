@@ -11,9 +11,36 @@ const DEFAULT_HARMONIC_RANK = '9999999';
 const SMALL_KANA_SET = new Set('ぁぃぅぇぉゃゅょゎァィゥェォャュョヮ');
 const NUMERIC_TAG = /^\d+$/;
 const POS_TAGS = new Set(['n', 'adj-i', 'adj-na', 'adj-no', 'v1', 'vk', 'vs', 'vs-i', 'vs-s', 'vz', 'vi', 'vt']);
+const COMPACT_GLOSSARIES_ANKI = '.yomitan-glossary ul[data-sc-content="glossary"] > li:not(:first-child)::before, .yomitan-glossary .glossary-list > li:not(:first-child)::before { white-space: pre-wrap; content: " | "; display: inline; color: rgb(119, 119, 119); }\n'
+  + '.yomitan-glossary ul[data-sc-content="glossary"] > li, .yomitan-glossary .glossary-list > li { display: inline; }\n'
+  + '.yomitan-glossary ul[data-sc-content="glossary"], .yomitan-glossary .glossary-list { display: inline; list-style: none; padding-left: 0px; }';
 
 let selectedDictionaries = {};
 let miningRequestPending = false;
+let popupScrollIndicatorTimer = 0;
+
+function setPopupScrollIndicatorActive(eventTarget) {
+  var root = document.documentElement;
+  var body = document.body;
+  var activeClass = 'popup-scroll-active';
+  root.classList.add(activeClass);
+  if (body) body.classList.add(activeClass);
+
+  var scrollTarget = eventTarget && eventTarget.nodeType === Node.ELEMENT_NODE ? eventTarget : null;
+  if (scrollTarget && scrollTarget.classList) scrollTarget.classList.add(activeClass);
+
+  if (popupScrollIndicatorTimer) {
+    clearTimeout(popupScrollIndicatorTimer);
+  }
+
+  popupScrollIndicatorTimer = setTimeout(function () {
+    root.classList.remove(activeClass);
+    if (body) body.classList.remove(activeClass);
+    document.querySelectorAll('.' + activeClass).forEach(function (element) {
+      element.classList.remove(activeClass);
+    });
+  }, 900);
+}
 
 function postPopupMessage(name, body) {
   window.chrome?.webview?.postMessage({
@@ -21,6 +48,18 @@ function postPopupMessage(name, body) {
     type: 'popupMessage',
     payload: { name: name, body: body },
   });
+}
+
+function postPopupTrace(stage, details) {
+  try {
+    postPopupMessage('popupDiagnostic', {
+      kind: 'popupTrace',
+      stage: stage,
+      lookupTraceId: window.lookupTraceId || '',
+      now: performance.now(),
+      details: details || {}
+    });
+  } catch (_) { }
 }
 
 function getPopupSelectionText() {
@@ -390,28 +429,51 @@ function createDefinitionImage(data, dictionary, exporting) {
   applyDictionaryImageContainerFixes(imageContainer);
   if (typeof title === 'string') imageContainer.title = title;
 
-  var imageUrl = getDictionaryMediaUrl(dictionary, path);
-  var img = document.createElement('img');
-  img.classList.add('gloss-image');
-  img.alt = (nodeData?.alt || title || '');
-  if (!hasDimensions) {
-    img.addEventListener('load', function () {
-      var imageWidth = Math.min(img.naturalWidth, window.innerWidth - 20);
-      imageContainer.style.width = imageWidth + 'px';
-      aspectRatioSizer.style.paddingTop = ((img.naturalHeight / img.naturalWidth) * 100) + '%';
-      applyDictionaryImageContainerFixes(imageContainer);
-    }, { once: true });
-  } else if (!hasPreferredWidth && !hasPreferredHeight && sizeUnits === 'em') {
-    img.addEventListener('load', function () {
-      var aspectRatio = img.naturalHeight / img.naturalWidth;
-      var widthEm = typeof data.width === 'number' ? data.width : data.height / aspectRatio;
-      imageContainer.style.width = widthEm + 'em';
-      aspectRatioSizer.style.paddingTop = (aspectRatio * 100) + '%';
-      applyDictionaryImageContainerFixes(imageContainer);
-    }, { once: true });
+  var alt = (nodeData?.alt || title || '');
+  if (!exporting) {
+    var imageUrl = getDictionaryMediaUrl(dictionary, path);
+    var img = document.createElement('img');
+    img.classList.add('gloss-image');
+    img.alt = alt;
+    if (!hasDimensions) {
+      img.addEventListener('load', function () {
+        var imageWidth = Math.min(img.naturalWidth, window.innerWidth - 20);
+        imageContainer.style.width = imageWidth + 'px';
+        aspectRatioSizer.style.paddingTop = ((img.naturalHeight / img.naturalWidth) * 100) + '%';
+        applyDictionaryImageContainerFixes(imageContainer);
+      }, { once: true });
+    } else if (!hasPreferredWidth && !hasPreferredHeight && sizeUnits === 'em') {
+      img.addEventListener('load', function () {
+        var aspectRatio = img.naturalHeight / img.naturalWidth;
+        var widthEm = typeof data.width === 'number' ? data.width : data.height / aspectRatio;
+        imageContainer.style.width = widthEm + 'em';
+        aspectRatioSizer.style.paddingTop = (aspectRatio * 100) + '%';
+        applyDictionaryImageContainerFixes(imageContainer);
+      }, { once: true });
+    }
+    img.src = imageUrl;
+    imageContainer.appendChild(img);
+  } else {
+    var filename = (window.useAnkiConnect || window.embedMedia) ? getMediaFilename(dictionary, path) : null;
+    var image = document.createElement(filename ? 'img' : 'span');
+    image.classList.add('gloss-image');
+    if (filename) {
+      image.alt = alt;
+      image.src = filename;
+      if (sizeUnits === 'em') {
+        var emSize = 14;
+        var scaleFactor = 2 * (window.devicePixelRatio || 1);
+        image.width = usedWidth * emSize * scaleFactor;
+      } else {
+        image.width = usedWidth;
+      }
+      image.height = image.width * invAspectRatio;
+      applyImageStyles(node, imageContainer, aspectRatioSizer, imageBackground, image, filename, appearance, sizeUnits === 'em');
+    } else {
+      image.textContent = alt;
+    }
+    imageContainer.appendChild(image);
   }
-  img.src = imageUrl;
-  imageContainer.appendChild(img);
 
   return node;
 }
@@ -826,20 +888,27 @@ async function fetchAudioUrl(expression, reading, audioTraceId) {
 
       // Proxy mode: ask the audio endpoint to resolve the source URL
       var requestUrl = endpoint + '?url=' + encodeURIComponent(expandedUrl);
+      if (window.lookupTraceId) requestUrl += '&lookupTraceId=' + encodeURIComponent(window.lookupTraceId);
+      if (audioTraceId) requestUrl += '&audioTraceId=' + encodeURIComponent(audioTraceId);
+      var proxyStart = performance.now();
       postAudioTrace(audioTraceId, 'fetch-url-proxy-start', { sourceIndex: i, url: requestUrl });
       console.log('[Audio] fetchAudioUrl: proxy mode, fetching ' + requestUrl);
       try {
         var response = await fetch(requestUrl);
-        if (!response.ok) { console.log('[Audio] fetchAudioUrl: proxy returned ' + response.status); continue; }
+        if (!response.ok) {
+          postAudioTrace(audioTraceId, 'fetch-url-proxy-status', { sourceIndex: i, status: response.status, elapsedMs: performance.now() - proxyStart });
+          console.log('[Audio] fetchAudioUrl: proxy returned ' + response.status);
+          continue;
+        }
         var data = await response.json();
         if (data.type === 'audioSourceList' && data.audioSources && data.audioSources[0] && data.audioSources[0].url) {
           var resolved = data.audioSources[0].url.replace(/\\/g, '/');
-          postAudioTrace(audioTraceId, 'fetch-url-proxy-resolved', { sourceIndex: i, url: resolved });
+          postAudioTrace(audioTraceId, 'fetch-url-proxy-resolved', { sourceIndex: i, url: resolved, elapsedMs: performance.now() - proxyStart });
           console.log('[Audio] fetchAudioUrl: proxy resolved to ' + resolved);
           return resolved;
         }
       } catch (e) {
-        postAudioTrace(audioTraceId, 'fetch-url-proxy-error', { sourceIndex: i, message: e.message });
+        postAudioTrace(audioTraceId, 'fetch-url-proxy-error', { sourceIndex: i, message: e.message, elapsedMs: performance.now() - proxyStart });
         console.log('[Audio] fetchAudioUrl: proxy error ' + e.message);
         continue;
       }
@@ -873,9 +942,10 @@ function playWordAudio(audioUrl, audioTraceId) {
   }
 }
 
-async function playEntryAudio(entryIndex, audioTraceId) {
+async function playEntryAudio(entryIndex, audioTraceId, options) {
   try {
     audioTraceId = audioTraceId || nextAudioTraceId();
+    options = options || {};
     var entry = window.lookupEntries && window.lookupEntries[entryIndex];
     if (!entry) { console.log('[Audio] playEntryAudio: no entry at index ' + entryIndex); return; }
     postAudioTrace(audioTraceId, 'entry-start', { entryIndex: entryIndex, expression: entry.expression, reading: entry.reading });
@@ -883,7 +953,12 @@ async function playEntryAudio(entryIndex, audioTraceId) {
     var audioSlot = getButtonSlot('audio', entryIndex);
 
     if (!audioUrls[entryIndex]) {
-      audioUrls[entryIndex] = await fetchAudioUrl(entry.expression, entry.reading || entry.expression, audioTraceId);
+      if (options.deferResolutionToNative && (window.audioSources || []).length) {
+        audioUrls[entryIndex] = expandAudioTemplate((window.audioSources || [])[0], entry.expression, entry.reading || entry.expression, audioTraceId);
+        postAudioTrace(audioTraceId, 'fetch-url-deferred-to-native', { entryIndex: entryIndex, url: audioUrls[entryIndex] });
+      } else {
+        audioUrls[entryIndex] = await fetchAudioUrl(entry.expression, entry.reading || entry.expression, audioTraceId);
+      }
     }
     if (!audioUrls[entryIndex] || !playWordAudio(audioUrls[entryIndex], audioTraceId)) {
       postAudioTrace(audioTraceId, 'entry-failed', { entryIndex: entryIndex, url: audioUrls[entryIndex] || '' });
@@ -914,53 +989,146 @@ function constructFuriganaPlain(expression, reading) {
   return result.trim();
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatAnkiDictionaryCss(dictName) {
+  var css = window.dictionaryStyles?.[dictName] || '';
+  if (!css) return '';
+
+  var scopedCss = constructDictCss(css, dictName);
+  var formatted = scopedCss
+    .replace(/\s+/g, ' ')
+    .replace(/\s*\{\s*/g, ' { ')
+    .replace(/\s*\}\s*/g, ' }\n')
+    .replace(/;\s*/g, '; ')
+    .trim();
+  return '<style>' + formatted + '</style>';
+}
+
+function definitionTagsForAnki(rawTags, prevTags) {
+  var parsedTags = parseTags(rawTags || '').filter(function (tag) { return !NUMERIC_TAG.test(tag); });
+  var posTags = [];
+  var seenPos = {};
+  for (var pi = 0; pi < parsedTags.length; pi++) {
+    if (isPartOfSpeech(parsedTags[pi]) && !seenPos[parsedTags[pi]]) {
+      seenPos[parsedTags[pi]] = true;
+      posTags.push(parsedTags[pi]);
+    }
+  }
+  posTags.sort();
+  var currentTags = JSON.stringify(posTags);
+  var filteredTags = parsedTags.filter(function (tag) {
+    return !isPartOfSpeech(tag) || !(prevTags !== null && prevTags === currentTags);
+  });
+  return {
+    currentTags: currentTags,
+    label: filteredTags.length > 0 ? filteredTags.join(', ') : '',
+  };
+}
+
+function renderGlossaryContentForAnki(glossary, dictName) {
+  var tempDiv = document.createElement('div');
+  try {
+    renderStructuredContent(tempDiv, JSON.parse(glossary.content), null, dictName, true);
+  } catch (e) {
+    renderStructuredContent(tempDiv, glossary.content, null, dictName, true);
+  }
+  return applyTableStyles(tempDiv.innerHTML);
+}
+
 function constructGlossaryHtml(entryIndex) {
   var entry = window.lookupEntries && window.lookupEntries[entryIndex];
   if (!entry) return '';
-  var container = document.createElement('div');
-  var grouped = {};
+
+  var glossaryItems = '';
+  var styles = {};
+  var lastDict = '';
+  var prevTags = null;
+  var index = 0;
+
   entry.glossaries.forEach(function (g) {
-    (grouped[g.dictionary] || (grouped[g.dictionary] = [])).push(g);
-  });
-  var dictNames = Object.keys(grouped);
-  for (var di = 0; di < dictNames.length; di++) {
-    var dictName = dictNames[di];
-    var glossaries = grouped[dictName];
-    for (var gi = 0; gi < glossaries.length; gi++) {
-      var g = glossaries[gi];
-      try {
-        renderStructuredContent(container, JSON.parse(g.content), null, dictName, true);
-      } catch (e) {
-        renderStructuredContent(container, g.content, null, dictName, true);
-      }
+    var dictName = g.dictionary;
+    index++;
+
+    var tagInfo = definitionTagsForAnki(g.definitionTags, prevTags);
+    var label = '';
+    if (dictName !== lastDict) {
+      index = 1;
+      lastDict = dictName;
+      label = tagInfo.label ? '(' + index + ', ' + tagInfo.label + ', ' + dictName + ')' : '(' + index + ', ' + dictName + ')';
+    } else {
+      label = tagInfo.label ? '(' + index + ', ' + tagInfo.label + ')' : '(' + index + ')';
     }
+
+    glossaryItems += '<li data-dictionary="' + escapeHtml(dictName) + '"><i>' + escapeHtml(label) + '</i> <span>' + renderGlossaryContentForAnki(g, dictName) + '</span></li>';
+    prevTags = tagInfo.currentTags;
+
+    var css = window.dictionaryStyles?.[dictName];
+    if (css && !styles[dictName]) styles[dictName] = css;
+  });
+
+  var stylesHtml = '';
+  for (var si = 0, styleDictNames = Object.keys(styles); si < styleDictNames.length; si++) {
+    stylesHtml += formatAnkiDictionaryCss(styleDictNames[si]);
   }
-  return container.innerHTML;
+  if (window.compactGlossariesAnki) {
+    stylesHtml += '<style>' + COMPACT_GLOSSARIES_ANKI + '</style>';
+  }
+
+  return '<div style="text-align: left;" class="yomitan-glossary"><ol>' + glossaryItems + '</ol>' + stylesHtml + '</div>';
 }
 
 function constructSingleGlossaryHtml(entryIndex) {
   var entry = window.lookupEntries && window.lookupEntries[entryIndex];
   if (!entry) return {};
-  var grouped = {};
-  entry.glossaries.forEach(function (g) {
-    (grouped[g.dictionary] || (grouped[g.dictionary] = [])).push(g);
-  });
+
   var result = {};
-  var dictNames = Object.keys(grouped);
-  for (var di = 0; di < dictNames.length; di++) {
-    var dictName = dictNames[di];
-    var glossaries = grouped[dictName];
-    var container = document.createElement('div');
-    for (var gi = 0; gi < glossaries.length; gi++) {
-      var g = glossaries[gi];
-      try {
-        renderStructuredContent(container, JSON.parse(g.content), null, dictName, true);
-      } catch (e) {
-        renderStructuredContent(container, g.content, null, dictName, true);
-      }
+  var lastDict = null;
+  var currentGlossary = '';
+  var prevTags = null;
+
+  function flush() {
+    if (!lastDict) return;
+
+    var html = '<div style="text-align: left;" class="yomitan-glossary"><ol>' + currentGlossary + '</ol>';
+    html += formatAnkiDictionaryCss(lastDict);
+    if (window.compactGlossariesAnki) {
+      html += '<style>' + COMPACT_GLOSSARIES_ANKI + '</style>';
     }
-    result[dictName] = container.innerHTML;
+    html += '</div>';
+    result[lastDict] = html;
+    currentGlossary = '';
   }
+
+  entry.glossaries.forEach(function (g) {
+    var dictName = g.dictionary;
+    var dictChanged = lastDict !== dictName;
+    if (dictChanged) {
+      flush();
+      lastDict = dictName;
+      prevTags = null;
+    }
+
+    var tagInfo = definitionTagsForAnki(g.definitionTags, prevTags);
+    var label = '';
+    if (dictChanged) {
+      label = tagInfo.label ? '(' + tagInfo.label + ', ' + dictName + ')' : '(' + dictName + ')';
+    } else {
+      label = tagInfo.label ? '(' + tagInfo.label + ')' : '';
+    }
+
+    currentGlossary += '<li data-dictionary="' + escapeHtml(dictName) + '"><i>' + escapeHtml(label) + '</i> <span>' + renderGlossaryContentForAnki(g, dictName) + '</span></li>';
+    prevTags = tagInfo.currentTags;
+  });
+
+  flush();
   return result;
 }
 
@@ -1018,24 +1186,16 @@ async function mineEntryAtIndex(entryIndex) {
   if (mineSlot) updateButtonSlot(mineSlot, { state: 'pending' });
 
   try {
+    currentDictionaryMedia = new Map();
     var glossaryHtml = constructGlossaryHtml(entryIndex);
-    var glossaryFirstHtml = '';
-    var firstDict = entry.glossaries && entry.glossaries[0];
-    if (firstDict) {
-      var firstContainer = document.createElement('div');
-      try {
-        renderStructuredContent(firstContainer, JSON.parse(firstDict.content), null, firstDict.dictionary, true);
-      } catch (e) {
-        renderStructuredContent(firstContainer, firstDict.content, null, firstDict.dictionary, true);
-      }
-      glossaryFirstHtml = firstContainer.innerHTML;
-    }
-
     var singleGlossaries = constructSingleGlossaryHtml(entryIndex);
+    var glossaryFirstHtml = Object.values(singleGlossaries)[0] || '';
     var pitchPositions = constructPitchPositionHtml(entryIndex);
     var pitchCategories = constructPitchCategories(entryIndex);
     var frequenciesHtml = constructFrequencyHtml(entryIndex);
     var freqHarmonicRank = getFrequencyHarmonicRank(entry.frequencies || []);
+    var dictionaryMedia = currentDictionaryMedia;
+    currentDictionaryMedia = null;
 
     if (!audioUrls[entryIndex] && (window.audioSources || []).length && window.needsAudio) {
       var audioTraceId = nextAudioTraceId();
@@ -1048,8 +1208,8 @@ async function mineEntryAtIndex(entryIndex) {
     var selectedDict = selectedDictionaries[entryIndex] ? selectedDictionaries[entryIndex].name : '';
 
     var dictMedia = [];
-    if (currentDictionaryMedia && currentDictionaryMedia.size) {
-      currentDictionaryMedia.forEach(function (value) { dictMedia.push(value); });
+    if (dictionaryMedia && dictionaryMedia.size) {
+      dictionaryMedia.forEach(function (value) { dictMedia.push(value); });
     }
 
     var payload = {
@@ -1080,6 +1240,7 @@ async function mineEntryAtIndex(entryIndex) {
       setTimeout(function () { updateButtonSlot(mineSlot, { state: 'default' }); }, 2000);
     }
   } finally {
+    currentDictionaryMedia = null;
     if (!submitted) miningRequestPending = false;
   }
 }
@@ -1296,6 +1457,7 @@ function redirect(count) {
 }
 
 window.replacePopupResults = function (count) {
+  postPopupTrace('replace-results-start', { count: count });
   closeOverlay();
   flushPendingHistoryRestore();
   backStack.length = 0;
@@ -1317,6 +1479,7 @@ window.replacePopupResults = function (count) {
 // Warm-root injection: takes entry data directly instead of relying on
 // a native bridge to supply entries. Used by Windows WebView2 host.
 window.hoshiInjectResults = function (entriesJson, count) {
+  postPopupTrace('inject-results-start', { count: count });
   closeOverlay();
   flushPendingHistoryRestore();
   backStack.length = 0;
@@ -1382,6 +1545,12 @@ window.renderPopup = function () {
   var container = document.getElementById('entries-container');
   if (!window.entryCount) return;
   var generation = window.popupRenderGeneration || 0;
+  var renderStart = performance.now();
+  postPopupTrace('render-start', {
+    generation: generation,
+    entryCount: window.entryCount || 0,
+    existingChildren: container ? container.childNodes.length : 0
+  });
 
   (function () {
     var idx = 0;
@@ -1420,7 +1589,7 @@ window.renderPopup = function () {
         setTimeout(function () {
           if (generation !== (window.popupRenderGeneration || 0)) return;
           postAudioTrace(autoplayAudioTraceId, 'autoplay-fired', { entryIndex: autoplayEntryIndex });
-          playEntryAudio(autoplayEntryIndex, autoplayAudioTraceId);
+          playEntryAudio(autoplayEntryIndex, autoplayAudioTraceId, { deferResolutionToNative: true });
         }, 70);
       }
 
@@ -1440,6 +1609,12 @@ window.renderPopup = function () {
 
       var dictNames = Object.keys(grouped);
       var dictIdx = 0;
+      postPopupTrace('render-entry', {
+        generation: generation,
+        entryIndex: idx,
+        dictionaryCount: dictNames.length,
+        glossaryCount: entry.glossaries.length
+      });
 
       function nextDict() {
         if (generation !== (window.popupRenderGeneration || 0)) return;
@@ -1477,6 +1652,14 @@ window.renderPopup = function () {
       }
 
       document.documentElement.style.visibility = 'visible';
+      postPopupTrace('render-finished', {
+        generation: generation,
+        entryCount: window.entryCount || 0,
+        renderedEntries: container ? container.querySelectorAll('.entry').length : 0,
+        renderedGlossaries: container ? container.querySelectorAll('.glossary-content').length : 0,
+        textLength: container ? container.innerText.length : 0,
+        elapsedMs: performance.now() - renderStart
+      });
       postPopupMessage('contentReady', { generation: generation });
     }
 
@@ -1491,8 +1674,17 @@ window.renderPopup = function () {
   }
 
   function lookupAtPopupPoint(x, y, dismissOnMiss, source) {
+    var start = performance.now();
     var selected = window.hoshiSelection?.selectText(x, y, popupScanLength());
+    var selectMs = performance.now() - start;
     if (!selected) {
+      postPopupTrace('lookup-click-miss', {
+        source: source || 'click',
+        x: x,
+        y: y,
+        selectMs: selectMs,
+        dismissOnMiss: !!dismissOnMiss
+      });
       if (dismissOnMiss) postPopupMessage('tapOutside', null);
       return false;
     }
@@ -1505,9 +1697,26 @@ window.renderPopup = function () {
       lastShiftLookupQuery = selected;
       lastShiftLookupAt = now;
     }
+    var rectStart = performance.now();
+    var rect = window.hoshiSelection?.getSelectionRect?.(x, y) || null;
+    var rectMs = performance.now() - rectStart;
+    postPopupTrace('lookup-click-hit', {
+      source: source || 'click',
+      query: selected,
+      selectedLength: selected.length,
+      x: x,
+      y: y,
+      selectMs: selectMs,
+      rectMs: rectMs
+    });
     postPopupMessage('lookupRedirect', {
       query: selected,
-      rect: window.hoshiSelection?.getSelectionRect?.(x, y) || null,
+      rect: rect,
+      source: source || 'click',
+      selectedLength: selected.length,
+      selectMs: selectMs,
+      rectMs: rectMs,
+      clientNow: performance.now()
     });
     return true;
   }
@@ -1551,9 +1760,10 @@ window.renderPopup = function () {
   }
 };
 
-document.addEventListener('scroll', function () {
+document.addEventListener('scroll', function (event) {
+  setPopupScrollIndicatorActive(event.target);
   postPopupMessage('popupScrolled', null);
-}, { passive: true });
+}, { passive: true, capture: true });
 
 // Notify host that the popup shell is ready
 postPopupMessage('shellReady', null);

@@ -20,11 +20,57 @@
   <data name="SettingsAnkiCard.Description" xml:space="preserve"><value>AnkiConnect card mining and field mapping</value></data>
   <data name="AnkiSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>Open Anki Settings</value></data>
   <data name="SettingsOpenAnkiText.Text" xml:space="preserve"><value>Open</value></data>
+  <data name="AnkiSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>Back</value></data>
+  <data name="AnkiSettingsPageTitle.Text" xml:space="preserve"><value>AnkiConnect</value></data>
+  <data name="AnkiConnectionSectionHeader.Text" xml:space="preserve"><value>Connection</value></data>
+  <data name="AnkiConnectUrlCard.Header" xml:space="preserve"><value>AnkiConnect URL</value></data>
+  <data name="AnkiConnectUrlCard.Description" xml:space="preserve"><value>AnkiConnect HTTP endpoint (Anki must be running with the AnkiConnect plugin)</value></data>
+  <data name="AnkiConnectUrlTextBox.AutomationProperties.Name" xml:space="preserve"><value>AnkiConnect URL</value></data>
+  <data name="AnkiConnectUrlTextBox.PlaceholderText" xml:space="preserve"><value>http://localhost:8765</value></data>
+  <data name="AnkiTestConnectionButtonText.Text" xml:space="preserve"><value>Test Connection</value></data>
+  <data name="AnkiConnectionTestingStatus" xml:space="preserve"><value>Testing connection...</value></data>
+  <data name="AnkiConnectionConnectedStatus" xml:space="preserve"><value>Connected to AnkiConnect</value></data>
+  <data name="AnkiConnectionFailedStatus" xml:space="preserve"><value>Failed to connect. Make sure Anki is running with the AnkiConnect plugin.</value></data>
+  <data name="AnkiConnectionErrorStatus" xml:space="preserve"><value>Connection error: {0}</value></data>
+  <data name="AnkiFetchDataCard.Header" xml:space="preserve"><value>Fetch Data</value></data>
+  <data name="AnkiFetchDataCard.Description" xml:space="preserve"><value>Fetch available decks and note types from AnkiConnect</value></data>
+  <data name="AnkiFetchDataButtonText.Text" xml:space="preserve"><value>Fetch Decks &amp; Note Types</value></data>
+  <data name="AnkiFetchDataFailedStatus" xml:space="preserve"><value>Failed to fetch data: {0}</value></data>
+  <data name="AnkiDeckNoteTypeSectionHeader.Text" xml:space="preserve"><value>Deck &amp; Note Type</value></data>
+  <data name="AnkiDeckCard.Header" xml:space="preserve"><value>Deck</value></data>
+  <data name="AnkiDeckComboBox.PlaceholderText" xml:space="preserve"><value>Select a deck...</value></data>
+  <data name="AnkiNoteTypeCard.Header" xml:space="preserve"><value>Note Type</value></data>
+  <data name="AnkiNoteTypeComboBox.PlaceholderText" xml:space="preserve"><value>Select a note type...</value></data>
+  <data name="AnkiFieldMappingsSectionHeader.Text" xml:space="preserve"><value>Field Mappings</value></data>
+  <data name="AnkiFieldMappingDefaultsCard.Header" xml:space="preserve"><value>Field Presets</value></data>
+  <data name="AnkiFieldMappingDefaultsCard.Description" xml:space="preserve"><value>Restore known safe mappings for supported note types</value></data>
+  <data name="AnkiApplyNovelDefaultsButtonText.Text" xml:space="preserve"><value>Apply Novel Defaults</value></data>
+  <data name="AnkiApplyAnimeDefaultsButtonText.Text" xml:space="preserve"><value>Apply Anime Defaults</value></data>
+  <data name="AnkiFieldMappingComboBox.PlaceholderText" xml:space="preserve"><value>Select handlebar...</value></data>
+  <data name="AnkiFieldMappingsHelpText.Text" xml:space="preserve"><value>Supported note types are automatically filled with missing safe field mappings.</value></data>
+  <data name="AnkiTagsSectionHeader.Text" xml:space="preserve"><value>Tags</value></data>
+  <data name="AnkiTagsCard.Header" xml:space="preserve"><value>Tags</value></data>
+  <data name="AnkiTagsCard.Description" xml:space="preserve"><value>Space, comma, or semicolon separated tags added to each card</value></data>
+  <data name="AnkiTagsTextBox.AutomationProperties.Name" xml:space="preserve"><value>Tags</value></data>
+  <data name="AnkiTagsTextBox.PlaceholderText" xml:space="preserve"><value>hoshi japanese</value></data>
+  <data name="AnkiDuplicateSectionHeader.Text" xml:space="preserve"><value>Duplicate Handling</value></data>
+  <data name="AnkiAllowDupesCard.Header" xml:space="preserve"><value>Allow Duplicates</value></data>
+  <data name="AnkiAllowDupesCard.Description" xml:space="preserve"><value>Allow creating duplicate cards</value></data>
+  <data name="AnkiDuplicateScopeCard.Header" xml:space="preserve"><value>Duplicate Scope</value></data>
+  <data name="AnkiDuplicateScopeCard.Description" xml:space="preserve"><value>Scope for duplicate detection</value></data>
+  <data name="AnkiCheckAcrossModelsCard.Header" xml:space="preserve"><value>Check Across All Models</value></data>
+  <data name="AnkiCheckAcrossModelsCard.Description" xml:space="preserve"><value>Check for duplicates across all note types, not just the selected one</value></data>
+  <data name="AnkiCardContentSectionHeader.Text" xml:space="preserve"><value>Card Content</value></data>
+  <data name="AnkiCompactGlossariesCard.Header" xml:space="preserve"><value>Compact Glossaries</value></data>
+  <data name="AnkiCompactGlossariesCard.Description" xml:space="preserve"><value>Use compact glossary format in Anki cards</value></data>
+  <data name="AnkiEmbedMediaCard.Header" xml:space="preserve"><value>Embed Media</value></data>
+  <data name="AnkiEmbedMediaCard.Description" xml:space="preserve"><value>Embed dictionary images and media in Anki cards</value></data>
+  <data name="AnkiForceSyncCard.Header" xml:space="preserve"><value>Force Sync After Mining</value></data>
+  <data name="AnkiForceSyncCard.Description" xml:space="preserve"><value>Automatically sync with AnkiWeb after creating a card</value></data>
   <data name="SettingsAdvancedCard.Header" xml:space="preserve"><value>Advanced</value></data>
   <data name="SettingsAdvancedCard.Description" xml:space="preserve"><value>Reader audio, statistics, Sasayaki, shortcuts, sync, and data</value></data>
   <data name="AdvancedSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>Open Advanced Settings</value></data>
   <data name="SettingsOpenAdvancedText.Text" xml:space="preserve"><value>Open</value></data>
-  <data name="SettingsSupportSectionHeader.Text" xml:space="preserve"><value>Support</value></data>
   <data name="SettingsReportIssueCard.Header" xml:space="preserve"><value>Report an Issue</value></data>
   <data name="SettingsReportIssueCard.Description" xml:space="preserve"><value>Open the GitHub issue tracker</value></data>
   <data name="SettingsReportIssueLink.Content" xml:space="preserve"><value>Report an Issue</value></data>
@@ -39,7 +85,6 @@
   <data name="AdvancedStatisticsCard.Description" xml:space="preserve"><value>Reading goals, autostart, and statistics sync</value></data>
   <data name="AdvancedSasayakiCard.Header" xml:space="preserve"><value>Sasayaki</value></data>
   <data name="AdvancedSasayakiCard.Description" xml:space="preserve"><value>Audiobook read-along and text highlighting</value></data>
-  <data name="SettingsReaderSectionHeader.Text" xml:space="preserve"><value>Reader</value></data>
   <data name="SettingsAppearanceCard.Header" xml:space="preserve"><value>Appearance</value></data>
   <data name="SettingsAppearanceCard.Description" xml:space="preserve"><value>Reader theme, text, layout, display, and lookup interaction</value></data>
   <data name="ReaderAppearanceSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>Open Reader Appearance Settings</value></data>
@@ -134,6 +179,11 @@
   <data name="ScanNonJapaneseTextCard.Description" xml:space="preserve"><value>Allow lookup for English and other non-Japanese text</value></data>
   <data name="DictionaryMaxResultsCard.Header" xml:space="preserve"><value>Max Results</value></data>
   <data name="DictionaryScanLengthCard.Header" xml:space="preserve"><value>Scan Length</value></data>
+  <data name="DictionaryPopupSizeSectionHeader.Text" xml:space="preserve"><value>Popup Size</value></data>
+  <data name="DictionaryPopupMaxWidthCard.Header" xml:space="preserve"><value>Max Width</value></data>
+  <data name="DictionaryPopupMaxWidthCard.Description" xml:space="preserve"><value>Limits floating lookup popups in readers and videos</value></data>
+  <data name="DictionaryPopupMaxHeightCard.Header" xml:space="preserve"><value>Max Height</value></data>
+  <data name="DictionaryPopupMaxHeightCard.Description" xml:space="preserve"><value>Limits floating lookup popups in readers and videos</value></data>
   <data name="DictionaryCollapseSectionHeader.Text" xml:space="preserve"><value>Collapse Dictionaries</value></data>
   <data name="DictionaryCollapseModeCard.Header" xml:space="preserve"><value>Mode</value></data>
   <data name="DictionaryExpandFirstCard.Header" xml:space="preserve"><value>Expand First Dictionary</value></data>
@@ -349,4 +399,19 @@
   <data name="GlobalLookupPasteButton.AutomationProperties.Name" xml:space="preserve"><value>Paste from Clipboard</value></data>
   <data name="GlobalLookupEnabledCard.Header" xml:space="preserve"><value>Global Lookup</value></data>
   <data name="GlobalLookupEnabledCard.Description" xml:space="preserve"><value>Enable selected-text lookup. Hotkey availability is shown below.</value></data>
+  <data name="SettingsSecondaryNavigationView.PaneTitle" xml:space="preserve"><value>Settings</value></data>
+  <data name="SettingsLibrarySectionHeader.Content" xml:space="preserve"><value>Library</value></data>
+  <data name="SettingsDictionariesNavItem.Content" xml:space="preserve"><value>Dictionaries</value></data>
+  <data name="SettingsAnkiNavItem.Content" xml:space="preserve"><value>Anki</value></data>
+  <data name="SettingsReaderSectionHeader.Content" xml:space="preserve"><value>Reader</value></data>
+  <data name="SettingsAppearanceNavItem.Content" xml:space="preserve"><value>Appearance</value></data>
+  <data name="SettingsAudioNavItem.Content" xml:space="preserve"><value>Audio</value></data>
+  <data name="SettingsStatisticsNavItem.Content" xml:space="preserve"><value>Statistics</value></data>
+  <data name="SettingsSasayakiNavItem.Content" xml:space="preserve"><value>Sasayaki</value></data>
+  <data name="SettingsAdvancedSectionHeader.Content" xml:space="preserve"><value>Advanced</value></data>
+  <data name="SettingsAdvancedNavItem.Content" xml:space="preserve"><value>Advanced</value></data>
+  <data name="SettingsSupportSectionHeader.Content" xml:space="preserve"><value>Support</value></data>
+  <data name="SettingsAboutNavItem.Content" xml:space="preserve"><value>About</value></data>
+  <data name="SettingsReportIssueNavItem.Content" xml:space="preserve"><value>Report an Issue</value></data>
+  <data name="AboutSettingsPageTitle.Text" xml:space="preserve"><value>About</value></data>
 </root>

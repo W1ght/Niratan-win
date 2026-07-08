@@ -1,14 +1,27 @@
+using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Navigation;
 using Hoshi.Services.UI;
 
 namespace Hoshi.Views.Pages;
 
 public sealed partial class AdvancedSettingsPage : Page
 {
+    private bool _isEmbedded;
+
     public AdvancedSettingsPage()
     {
         InitializeComponent();
+    }
+
+    protected override void OnNavigatedTo(NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        _isEmbedded = e.Parameter is SettingsNavigationMode.Embedded;
+        AdvancedSettingsBackButton.Visibility = _isEmbedded
+            ? Visibility.Collapsed
+            : Visibility.Visible;
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e)
@@ -20,16 +33,27 @@ public sealed partial class AdvancedSettingsPage : Page
 
     private void AudioSettings_Click(object sender, RoutedEventArgs e)
     {
-        App.GetService<INavigationService>().Navigate(typeof(AudioSettingsPage));
+        NavigateSettingsSubpage(typeof(AudioSettingsPage));
     }
 
     private void StatisticsSettings_Click(object sender, RoutedEventArgs e)
     {
-        App.GetService<INavigationService>().Navigate(typeof(StatisticsSettingsPage));
+        NavigateSettingsSubpage(typeof(StatisticsSettingsPage));
     }
 
     private void SasayakiSettings_Click(object sender, RoutedEventArgs e)
     {
-        App.GetService<INavigationService>().Navigate(typeof(SasayakiSettingsPage));
+        NavigateSettingsSubpage(typeof(SasayakiSettingsPage));
+    }
+
+    private void NavigateSettingsSubpage(Type pageType)
+    {
+        if (_isEmbedded)
+        {
+            Frame.Navigate(pageType, SettingsNavigationMode.Embedded);
+            return;
+        }
+
+        App.GetService<INavigationService>().Navigate(pageType);
     }
 }

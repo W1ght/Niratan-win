@@ -48,6 +48,34 @@ public class VideoSubtitleLookupAssetTests
     }
 
     [Fact]
+    public void VideoSubtitleLookup_UsesFloatingDictionaryPopup()
+    {
+        var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.xaml"));
+        var code = ReadVideoPlayerWindowCode();
+
+        xaml.Should().Contain("x:Name=\"VideoDictionaryPanelChrome\"");
+        xaml.Should().Contain("HorizontalAlignment=\"Stretch\"");
+        xaml.Should().Contain("VerticalAlignment=\"Stretch\"");
+        xaml.Should().Contain("BorderThickness=\"0\"");
+        xaml.Should().Contain("Visibility=\"Collapsed\"");
+        xaml.Should().Contain("x:Name=\"PopupOverlayCanvas\"");
+        xaml.Should().Contain("SizeChanged=\"PopupOverlayCanvas_SizeChanged\"");
+        code.Should().NotContain("_popupOverlay.EmbedRoot(PopupOverlayCanvas)");
+        code.Should().NotContain("IGlobalLookupPopupService");
+        code.Should().NotContain("GlobalLookupPopupWindow");
+        code.Should().NotContain("_globalLookupPopupService");
+        code.Should().Contain("SubtitleWebView.TransformToVisual(PopupOverlayCanvas)");
+        code.Should().Contain("VideoDictionaryPanelChrome.Visibility = Visibility.Visible");
+        code.Should().Contain("EnsureVideoDictionaryOverlaySurfaceVisible(overlay);");
+        code.Should().Contain("EnsureVideoDictionaryOverlaySurfaceVisible(EnsurePopupOverlay());");
+        code.Should().Contain("await overlay.ShowLookupAsync(");
+        code.Should().Contain("VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed");
+        code.Should().Contain("_popupOverlay?.UpdateRootSize(e.NewSize.Width, e.NewSize.Height)");
+        code.Should().Contain("TryDismissLookupPopupFromOutsidePointer");
+        code.Should().Contain("IsDescendantOf(source, VideoDictionaryPanelChrome)");
+    }
+
+    [Fact]
     public void VideoSubtitleAppearance_AppliesInspectorValuesToTransparentOverlay()
     {
         var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.xaml"));
@@ -109,7 +137,7 @@ public class VideoSubtitleLookupAssetTests
     }
 
     [Fact]
-    public void VideoPlayerWindow_MaximizesAndFillsHostWhenOpeningVideoForTesting()
+    public void VideoPlayerWindow_MaximizesAndPreservesSourceAspectRatioWhenOpeningVideoForTesting()
     {
         var windowCode = ReadVideoPlayerWindowCode();
         var mpvCode = File.ReadAllText(Path.Combine(ProjectRoot, "Services", "Video", "MpvPlaybackEngine.cs"));
@@ -117,7 +145,8 @@ public class VideoSubtitleLookupAssetTests
         windowCode.Should().Contain("MaximizeVideoWindowForTesting();");
         windowCode.Should().Contain("OverlappedPresenter");
         windowCode.Should().Contain("presenter.Maximize();");
-        mpvCode.Should().Contain("MpvNative.SetOptionStringChecked(_handle, \"panscan\", \"1.0\")");
+        mpvCode.Should().Contain("MpvNative.SetOptionStringChecked(_handle, \"panscan\", \"0.0\")");
+        mpvCode.Should().NotContain("MpvNative.SetOptionStringChecked(_handle, \"panscan\", \"1.0\")");
         mpvCode.Should().Contain("MpvNative.SetOptionStringChecked(_handle, \"sub-visibility\", \"no\")");
     }
 
@@ -228,6 +257,23 @@ public class VideoSubtitleLookupAssetTests
         code.Should().Contain("PositionVideoHost();");
         code.Should().Contain("RefreshVideoLayoutAfterInspectorChanged");
         code.Should().Contain("DispatcherQueue.TryEnqueue(() =>");
+    }
+
+    [Fact]
+    public void VideoPlayerWindow_BottomOverlayAndNativeHostPreserveWindowCornerResize()
+    {
+        var code = ReadVideoPlayerWindowCode();
+
+        code.Should().Contain("RootGrid.AddHandler(UIElement.PointerPressedEvent");
+        code.Should().Contain("TryGetBottomCornerResizeDirection");
+        code.Should().Contain("BeginWindowResize");
+        code.Should().Contain("VideoWindowResizeDirection.BottomLeft");
+        code.Should().Contain("VideoWindowResizeDirection.BottomRight");
+        code.Should().Contain("WM_SYSCOMMAND");
+        code.Should().Contain("SC_SIZE");
+        code.Should().Contain("ReleaseCapture();");
+        code.Should().Contain("SendMessageW(");
+        code.Should().Contain("_parentHwnd");
     }
 
     [Fact]

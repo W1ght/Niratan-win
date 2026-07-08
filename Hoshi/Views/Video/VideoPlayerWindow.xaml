@@ -78,8 +78,20 @@
                   PointerPressed="BottomChromePopupRoot_PointerPressed"
                   PointerWheelChanged="BottomChromePopupRoot_PointerWheelChanged"
                   DoubleTapped="BottomChromePopupRoot_DoubleTapped">
-                <Canvas x:Name="PopupOverlayCanvas"
-                        Canvas.ZIndex="100" />
+                <Border x:Name="VideoDictionaryPanelChrome"
+                        Canvas.ZIndex="100"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        Margin="16,16,16,120"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Visibility="Collapsed">
+                    <Canvas x:Name="PopupOverlayCanvas"
+                            HorizontalAlignment="Stretch"
+                            VerticalAlignment="Stretch"
+                            Background="Transparent"
+                            SizeChanged="PopupOverlayCanvas_SizeChanged" />
+                </Border>
 
                 <Border x:Name="SubtitlePanelBorder"
                         Canvas.ZIndex="20"

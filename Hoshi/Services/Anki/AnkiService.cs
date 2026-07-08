@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Hoshi.Models.Anki;
 using Hoshi.Models.Settings;
+using Hoshi.Services.Dictionary;
 using Hoshi.Services.Settings;
 using Serilog;
 
@@ -15,14 +16,16 @@ namespace Hoshi.Services.Anki;
 public sealed class AnkiService : IAnkiService, IDisposable
 {
     private readonly ISettingsService _settingsService;
+    private readonly IDictionaryLookupService _dictionaryLookupService;
     private AnkiConnectClient? _client;
     private AnkiSettings _settings;
 
     public AnkiSettings Settings => _settings;
 
-    public AnkiService(ISettingsService settingsService)
+    public AnkiService(ISettingsService settingsService, IDictionaryLookupService dictionaryLookupService)
     {
         _settingsService = settingsService;
+        _dictionaryLookupService = dictionaryLookupService;
         _settings = settingsService.Current.AnkiSettings;
     }
 
@@ -235,10 +238,10 @@ public sealed class AnkiService : IAnkiService, IDisposable
                 mediaUploadSw.ElapsedMilliseconds, uploads.Count);
 
             if (videoScreenshotUploadIdx is int screenshotIdx && screenshotIdx < storedNames.Count)
-                context.VideoScreenshotTag = GetMediaTag(storedNames[screenshotIdx]);
+                context.VideoScreenshotTag = AnkiMediaMarkup.ForFieldPlaceholder(storedNames[screenshotIdx]);
 
             if (videoAudioClipUploadIdx is int videoAudioIdx && videoAudioIdx < storedNames.Count)
-                context.VideoAudioClipTag = GetMediaTag(storedNames[videoAudioIdx]);
+                context.VideoAudioClipTag = AnkiMediaMarkup.ForFieldPlaceholder(storedNames[videoAudioIdx]);
 
             // --- Phase 4: Build mediaPayload and dictionaryMediaTags from upload results ---
             var mediaPayload = payload;
@@ -259,14 +262,19 @@ public sealed class AnkiService : IAnkiService, IDisposable
             {
                 if (idx < storedNames.Count)
                 {
-                    var tag = GetMediaTag(storedNames[idx]);
-                    dictionaryMediaTags[originalFilename] = tag;
+                    var storedName = storedNames[idx];
+                    if (!string.IsNullOrWhiteSpace(storedName))
+                        dictionaryMediaTags[originalFilename] = AnkiMediaMarkup.ForDictionaryHtmlReference(storedName);
                 }
             }
 
             // --- Phase 5: Render field templates ---
+            var fieldMappings = AnkiFieldMappingResolver.ResolveForMining(
+                noteType,
+                _settings.FieldMappings,
+                context);
             var renderedFields = new Dictionary<string, string>();
-            foreach (var (fieldName, template) in _settings.FieldMappings)
+            foreach (var (fieldName, template) in fieldMappings)
             {
                 if (string.IsNullOrWhiteSpace(template) || template == "-")
                     continue;
@@ -319,7 +327,11 @@ public sealed class AnkiService : IAnkiService, IDisposable
                 return false;
 
             var renderedFields = new Dictionary<string, string>();
-            foreach (var (fieldName, template) in _settings.FieldMappings)
+            var fieldMappings = AnkiFieldMappingResolver.ResolveForMining(
+                noteType,
+                _settings.FieldMappings,
+                new AnkiMiningContext());
+            foreach (var (fieldName, template) in fieldMappings)
             {
                 if (string.IsNullOrWhiteSpace(template) || template == "-")
                     continue;
@@ -364,10 +376,21 @@ public sealed class AnkiService : IAnkiService, IDisposable
 
     private static readonly AnkiAudioDownloader s_audioDownloader = new(s_audioHttpClient);
 
-    private static async Task<byte[]?> ResolveDictionaryMediaAsync(DictionaryMedia media)
+    internal async Task<byte[]?> ResolveDictionaryMediaAsync(DictionaryMedia media)
     {
-        if (string.IsNullOrWhiteSpace(media.Path) || !File.Exists(media.Path))
+        if (string.IsNullOrWhiteSpace(media.Path))
             return null;
+
+        if (!string.IsNullOrWhiteSpace(media.Dictionary))
+        {
+            var dictionaryBytes = await _dictionaryLookupService.GetMediaFileAsync(media.Dictionary, media.Path);
+            if (dictionaryBytes is { Length: > 0 })
+                return dictionaryBytes;
+        }
+
+        if (!File.Exists(media.Path))
+            return null;
+
         return await File.ReadAllBytesAsync(media.Path);
     }
 
@@ -390,19 +413,6 @@ public sealed class AnkiService : IAnkiService, IDisposable
             SelectedDictionary = payload.SelectedDictionary,
             DictionaryMediaJson = payload.DictionaryMediaJson,
         };
-
-    private static string GetMediaTag(string filename)
-    {
-        var ext = Path.GetExtension(filename).ToLowerInvariant();
-
-        if (ext is ".mp3" or ".aac" or ".m4a" or ".wav" or ".ogg")
-            return $"[sound:{filename}]";
-
-        if (ext is ".png" or ".jpg" or ".jpeg" or ".gif" or ".webp" or ".avif" or ".svg")
-            return $"<img src=\"{filename}\">";
-
-        return filename;
-    }
 
     public void Dispose()
     {

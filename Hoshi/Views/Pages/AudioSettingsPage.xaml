@@ -24,7 +24,8 @@
                     Orientation="Horizontal"
                     Spacing="8"
                     VerticalAlignment="Center">
-            <Button Width="36"
+            <Button x:Name="AudioSettingsBackButton"
+                    Width="36"
                     Height="36"
                     Padding="0"
                     Click="BackButton_Click">

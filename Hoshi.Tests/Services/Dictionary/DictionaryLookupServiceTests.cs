@@ -158,6 +158,49 @@ public class DictionaryLookupServiceTests
     }
 
     [Fact]
+    public void PopupScript_ExportsGlossariesInYomitanCompatibleLapisShape()
+    {
+        var script = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Web", "DictionaryPopup", "popup.js"));
+
+        script.Should().Contain("COMPACT_GLOSSARIES_ANKI");
+        script.Should().Contain("class=\"yomitan-glossary\"");
+        script.Should().Contain("<ol>");
+        script.Should().Contain("<li data-dictionary=\"");
+        script.Should().Contain("applyTableStyles(tempDiv.innerHTML)");
+        script.Should().Contain("constructDictCss(css, dictName)");
+        script.Should().Contain("window.compactGlossariesAnki");
+    }
+
+    [Fact]
+    public void PopupScript_ExportsDictionaryImagesAsAnkiMediaInsteadOfPrivateWebViewUrls()
+    {
+        var script = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Web", "DictionaryPopup", "popup.js"));
+
+        script.Should().Contain("currentDictionaryMedia = new Map();");
+        script.Should().Contain("currentDictionaryMedia = null;");
+        script.Should().Contain("getMediaFilename(dictionary, path)");
+        script.Should().Contain("window.useAnkiConnect || window.embedMedia");
+        script.Should().Contain("image.src = filename;");
+        script.Should().Contain("dictionaryMedia: JSON.stringify(dictMedia)");
+        script.Should().Contain("getDictionaryMediaUrl(dictionary, path)");
+        script.Should().Contain("img.src = imageUrl;");
+    }
+
+    [Fact]
+    public void PopupScript_EmitsLookupAndRenderTimingDiagnostics()
+    {
+        var script = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Web", "DictionaryPopup", "popup.js"));
+
+        script.Should().Contain("function postPopupTrace(stage, details)");
+        script.Should().Contain("postPopupTrace('render-start'");
+        script.Should().Contain("postPopupTrace('render-finished'");
+        script.Should().Contain("postPopupTrace('lookup-click-hit'");
+        script.Should().Contain("selectMs");
+        script.Should().Contain("rectMs");
+        script.Should().Contain("clientNow");
+    }
+
+    [Fact]
     public void DictionaryImportService_DetectsFrequencyAndPitchMetadataBanks()
     {
         DictionaryImportService
@@ -263,6 +306,8 @@ public class DictionaryLookupServiceTests
         settings.ScanNonJapaneseText.Should().BeTrue();
         settings.MaxResults.Should().Be(16);
         settings.ScanLength.Should().Be(16);
+        settings.PopupMaxWidth.Should().Be(560);
+        settings.PopupMaxHeight.Should().Be(420);
         settings.CompactGlossaries.Should().BeTrue();
         settings.CompactPitchAccents.Should().BeTrue();
         settings.DeduplicatePitchAccents.Should().BeFalse();

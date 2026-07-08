@@ -20,11 +20,57 @@
   <data name="SettingsAnkiCard.Description" xml:space="preserve"><value>AnkiConnect 制卡和字段映射</value></data>
   <data name="AnkiSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>打开 Anki 设置</value></data>
   <data name="SettingsOpenAnkiText.Text" xml:space="preserve"><value>打开</value></data>
+  <data name="AnkiSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>返回</value></data>
+  <data name="AnkiSettingsPageTitle.Text" xml:space="preserve"><value>AnkiConnect</value></data>
+  <data name="AnkiConnectionSectionHeader.Text" xml:space="preserve"><value>连接</value></data>
+  <data name="AnkiConnectUrlCard.Header" xml:space="preserve"><value>AnkiConnect 地址</value></data>
+  <data name="AnkiConnectUrlCard.Description" xml:space="preserve"><value>AnkiConnect 的 HTTP 地址（需要先启动 Anki 并启用 AnkiConnect 插件）</value></data>
+  <data name="AnkiConnectUrlTextBox.AutomationProperties.Name" xml:space="preserve"><value>AnkiConnect 地址</value></data>
+  <data name="AnkiConnectUrlTextBox.PlaceholderText" xml:space="preserve"><value>http://localhost:8765</value></data>
+  <data name="AnkiTestConnectionButtonText.Text" xml:space="preserve"><value>测试连接</value></data>
+  <data name="AnkiConnectionTestingStatus" xml:space="preserve"><value>正在测试连接...</value></data>
+  <data name="AnkiConnectionConnectedStatus" xml:space="preserve"><value>已连接到 AnkiConnect</value></data>
+  <data name="AnkiConnectionFailedStatus" xml:space="preserve"><value>连接失败。请确认 Anki 已启动，并已启用 AnkiConnect 插件。</value></data>
+  <data name="AnkiConnectionErrorStatus" xml:space="preserve"><value>连接错误：{0}</value></data>
+  <data name="AnkiFetchDataCard.Header" xml:space="preserve"><value>获取数据</value></data>
+  <data name="AnkiFetchDataCard.Description" xml:space="preserve"><value>从 AnkiConnect 获取可用牌组和笔记类型</value></data>
+  <data name="AnkiFetchDataButtonText.Text" xml:space="preserve"><value>获取牌组和笔记类型</value></data>
+  <data name="AnkiFetchDataFailedStatus" xml:space="preserve"><value>获取数据失败：{0}</value></data>
+  <data name="AnkiDeckNoteTypeSectionHeader.Text" xml:space="preserve"><value>牌组和笔记类型</value></data>
+  <data name="AnkiDeckCard.Header" xml:space="preserve"><value>牌组</value></data>
+  <data name="AnkiDeckComboBox.PlaceholderText" xml:space="preserve"><value>选择牌组...</value></data>
+  <data name="AnkiNoteTypeCard.Header" xml:space="preserve"><value>笔记类型</value></data>
+  <data name="AnkiNoteTypeComboBox.PlaceholderText" xml:space="preserve"><value>选择笔记类型...</value></data>
+  <data name="AnkiFieldMappingsSectionHeader.Text" xml:space="preserve"><value>字段映射</value></data>
+  <data name="AnkiFieldMappingDefaultsCard.Header" xml:space="preserve"><value>字段预设</value></data>
+  <data name="AnkiFieldMappingDefaultsCard.Description" xml:space="preserve"><value>为支持的笔记类型恢复安全的默认字段映射</value></data>
+  <data name="AnkiApplyNovelDefaultsButtonText.Text" xml:space="preserve"><value>应用小说预设</value></data>
+  <data name="AnkiApplyAnimeDefaultsButtonText.Text" xml:space="preserve"><value>应用动画预设</value></data>
+  <data name="AnkiFieldMappingComboBox.PlaceholderText" xml:space="preserve"><value>选择占位符...</value></data>
+  <data name="AnkiFieldMappingsHelpText.Text" xml:space="preserve"><value>支持的笔记类型会自动补齐缺失的安全字段映射。</value></data>
+  <data name="AnkiTagsSectionHeader.Text" xml:space="preserve"><value>标签</value></data>
+  <data name="AnkiTagsCard.Header" xml:space="preserve"><value>标签</value></data>
+  <data name="AnkiTagsCard.Description" xml:space="preserve"><value>添加到每张卡片的标签，可用空格、逗号或分号分隔</value></data>
+  <data name="AnkiTagsTextBox.AutomationProperties.Name" xml:space="preserve"><value>标签</value></data>
+  <data name="AnkiTagsTextBox.PlaceholderText" xml:space="preserve"><value>hoshi japanese</value></data>
+  <data name="AnkiDuplicateSectionHeader.Text" xml:space="preserve"><value>重复处理</value></data>
+  <data name="AnkiAllowDupesCard.Header" xml:space="preserve"><value>允许重复</value></data>
+  <data name="AnkiAllowDupesCard.Description" xml:space="preserve"><value>允许创建重复卡片</value></data>
+  <data name="AnkiDuplicateScopeCard.Header" xml:space="preserve"><value>重复检查范围</value></data>
+  <data name="AnkiDuplicateScopeCard.Description" xml:space="preserve"><value>重复卡片检测的范围</value></data>
+  <data name="AnkiCheckAcrossModelsCard.Header" xml:space="preserve"><value>检查所有笔记类型</value></data>
+  <data name="AnkiCheckAcrossModelsCard.Description" xml:space="preserve"><value>不只检查当前笔记类型，也检查所有笔记类型中的重复卡片</value></data>
+  <data name="AnkiCardContentSectionHeader.Text" xml:space="preserve"><value>卡片内容</value></data>
+  <data name="AnkiCompactGlossariesCard.Header" xml:space="preserve"><value>紧凑释义</value></data>
+  <data name="AnkiCompactGlossariesCard.Description" xml:space="preserve"><value>在 Anki 卡片中使用紧凑释义格式</value></data>
+  <data name="AnkiEmbedMediaCard.Header" xml:space="preserve"><value>嵌入媒体</value></data>
+  <data name="AnkiEmbedMediaCard.Description" xml:space="preserve"><value>将词典图片和媒体嵌入 Anki 卡片</value></data>
+  <data name="AnkiForceSyncCard.Header" xml:space="preserve"><value>制卡后强制同步</value></data>
+  <data name="AnkiForceSyncCard.Description" xml:space="preserve"><value>创建卡片后自动同步到 AnkiWeb</value></data>
   <data name="SettingsAdvancedCard.Header" xml:space="preserve"><value>高级</value></data>
   <data name="SettingsAdvancedCard.Description" xml:space="preserve"><value>阅读音频、统计、Sasayaki、快捷键、同步和数据</value></data>
   <data name="AdvancedSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>打开高级设置</value></data>
   <data name="SettingsOpenAdvancedText.Text" xml:space="preserve"><value>打开</value></data>
-  <data name="SettingsSupportSectionHeader.Text" xml:space="preserve"><value>支持</value></data>
   <data name="SettingsReportIssueCard.Header" xml:space="preserve"><value>反馈问题</value></data>
   <data name="SettingsReportIssueCard.Description" xml:space="preserve"><value>打开 GitHub Issue 页面</value></data>
   <data name="SettingsReportIssueLink.Content" xml:space="preserve"><value>反馈问题</value></data>
@@ -39,7 +85,6 @@
   <data name="AdvancedStatisticsCard.Description" xml:space="preserve"><value>阅读目标、自动开始和统计同步</value></data>
   <data name="AdvancedSasayakiCard.Header" xml:space="preserve"><value>Sasayaki</value></data>
   <data name="AdvancedSasayakiCard.Description" xml:space="preserve"><value>有声书跟读与文本高亮</value></data>
-  <data name="SettingsReaderSectionHeader.Text" xml:space="preserve"><value>阅读器</value></data>
   <data name="SettingsAppearanceCard.Header" xml:space="preserve"><value>外观</value></data>
   <data name="SettingsAppearanceCard.Description" xml:space="preserve"><value>阅读器主题、文字、布局、显示和查词交互</value></data>
   <data name="ReaderAppearanceSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>打开阅读器外观设置</value></data>
@@ -134,6 +179,11 @@
   <data name="ScanNonJapaneseTextCard.Description" xml:space="preserve"><value>允许查询英语和其他非日语文本</value></data>
   <data name="DictionaryMaxResultsCard.Header" xml:space="preserve"><value>最大结果数</value></data>
   <data name="DictionaryScanLengthCard.Header" xml:space="preserve"><value>扫描长度</value></data>
+  <data name="DictionaryPopupSizeSectionHeader.Text" xml:space="preserve"><value>弹窗大小</value></data>
+  <data name="DictionaryPopupMaxWidthCard.Header" xml:space="preserve"><value>最大宽度</value></data>
+  <data name="DictionaryPopupMaxWidthCard.Description" xml:space="preserve"><value>限制阅读器和视频里的浮动查词弹窗</value></data>
+  <data name="DictionaryPopupMaxHeightCard.Header" xml:space="preserve"><value>最大高度</value></data>
+  <data name="DictionaryPopupMaxHeightCard.Description" xml:space="preserve"><value>限制阅读器和视频里的浮动查词弹窗</value></data>
   <data name="DictionaryCollapseSectionHeader.Text" xml:space="preserve"><value>折叠词典</value></data>
   <data name="DictionaryCollapseModeCard.Header" xml:space="preserve"><value>模式</value></data>
   <data name="DictionaryExpandFirstCard.Header" xml:space="preserve"><value>展开第一个词典</value></data>
@@ -349,4 +399,19 @@
   <data name="GlobalLookupPasteButton.AutomationProperties.Name" xml:space="preserve"><value>从剪贴板粘贴</value></data>
   <data name="GlobalLookupEnabledCard.Header" xml:space="preserve"><value>全局查词</value></data>
   <data name="GlobalLookupEnabledCard.Description" xml:space="preserve"><value>启用选中文本查词。快捷键可用性会显示在下方。</value></data>
+  <data name="SettingsSecondaryNavigationView.PaneTitle" xml:space="preserve"><value>设置</value></data>
+  <data name="SettingsLibrarySectionHeader.Content" xml:space="preserve"><value>资料库</value></data>
+  <data name="SettingsDictionariesNavItem.Content" xml:space="preserve"><value>词典</value></data>
+  <data name="SettingsAnkiNavItem.Content" xml:space="preserve"><value>Anki</value></data>
+  <data name="SettingsReaderSectionHeader.Content" xml:space="preserve"><value>阅读器</value></data>
+  <data name="SettingsAppearanceNavItem.Content" xml:space="preserve"><value>外观</value></data>
+  <data name="SettingsAudioNavItem.Content" xml:space="preserve"><value>音频</value></data>
+  <data name="SettingsStatisticsNavItem.Content" xml:space="preserve"><value>统计</value></data>
+  <data name="SettingsSasayakiNavItem.Content" xml:space="preserve"><value>Sasayaki</value></data>
+  <data name="SettingsAdvancedSectionHeader.Content" xml:space="preserve"><value>高级</value></data>
+  <data name="SettingsAdvancedNavItem.Content" xml:space="preserve"><value>高级</value></data>
+  <data name="SettingsSupportSectionHeader.Content" xml:space="preserve"><value>支持</value></data>
+  <data name="SettingsAboutNavItem.Content" xml:space="preserve"><value>关于</value></data>
+  <data name="SettingsReportIssueNavItem.Content" xml:space="preserve"><value>报告问题</value></data>
+  <data name="AboutSettingsPageTitle.Text" xml:space="preserve"><value>关于</value></data>
 </root>

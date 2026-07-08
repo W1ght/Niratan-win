@@ -50,7 +50,7 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
             MpvNative.SetOptionStringChecked(_handle, "sub-visibility", "no");
             MpvNative.SetOptionStringChecked(_handle, "keep-open", "yes");
             MpvNative.SetOptionStringChecked(_handle, "force-window", "yes");
-            MpvNative.SetOptionStringChecked(_handle, "panscan", "1.0");
+            MpvNative.SetOptionStringChecked(_handle, "panscan", "0.0");
             MpvNative.SetOptionStringChecked(_handle, "hwdec", "auto-safe");
             MpvNative.SetOptionStringChecked(_handle, "wid", hostHwnd.ToInt64().ToString());
 

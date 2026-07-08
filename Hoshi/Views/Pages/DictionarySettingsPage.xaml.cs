@@ -1,6 +1,7 @@
 using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Navigation;
 using Hoshi.Models.Dictionary;
 using Hoshi.Services.UI;
 using Hoshi.ViewModels.Pages;
@@ -16,6 +17,14 @@ public sealed partial class DictionarySettingsPage : Page
         ViewModel = App.GetService<DictionarySettingsPageViewModel>();
         InitializeComponent();
         DataContext = ViewModel;
+    }
+
+    protected override void OnNavigatedTo(NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        DictionarySettingsBackButton.Visibility = e.Parameter is SettingsNavigationMode.Embedded
+            ? Visibility.Collapsed
+            : Visibility.Visible;
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e)

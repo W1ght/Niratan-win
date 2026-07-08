@@ -30,12 +30,16 @@ public sealed class DictionaryPopupOverlay : IDisposable
     private const double PopupPadding = DictionaryPopupLayoutCalculator.PopupPadding;
     private const double ScreenBorderPadding = DictionaryPopupLayoutCalculator.ScreenBorderPadding;
     private const double MinPopupWidth = 360;
-    private const double MaxPopupWidth = 860;
+    private const double HardMaxPopupWidth = 900;
     private const double MinPopupHeight = 200;
-    private const double MaxPopupHeight = 820;
+    private const double HardMaxPopupHeight = 820;
+    private const double ChildPopupMaxWidth = 600;
+    private const double ChildPopupMaxHeight = 520;
     private const int RootPopupZIndex = 10;
     private const int ChildPopupZIndexBase = 20;
     private const int PopupZIndexStep = 10;
+    private const int PrewarmedChildHostCount = 1;
+    private const int NestedLookupMaxResults = 1;
 
     private Canvas _canvas;
     private readonly IDictionaryLookupService _lookupService;
@@ -163,9 +167,30 @@ public sealed class DictionaryPopupOverlay : IDisposable
         }
 
         await _rootHost.WarmAsync();
+        await PrewarmChildHostPoolAsync(PrewarmedChildHostCount);
 
         _rootWarm = true;
         Log.Information("[DictOverlay] Root popup prewarmed (embedded={Embedded})", _embeddedPanel != null);
+    }
+
+    private async Task PrewarmChildHostPoolAsync(int targetCount)
+    {
+        if (targetCount <= 0)
+            return;
+
+        var sw = Stopwatch.StartNew();
+        while (_childHostPool.Count < targetCount)
+        {
+            var child = CreateChildHost();
+            EnsureHostOnCanvas(child);
+            await child.WarmAsync();
+        }
+
+        Log.Information(
+            "[LookupTrace] trace=- child popup pool prewarmed in {Ms}ms target={TargetCount} pool={PoolCount}",
+            sw.ElapsedMilliseconds,
+            targetCount,
+            _childHostPool.Count);
     }
 
     public async Task ShowLookupAsync(
@@ -185,6 +210,9 @@ public sealed class DictionaryPopupOverlay : IDisposable
         if (results.Count == 0) return;
 
         var sw = Stopwatch.StartNew();
+        Log.Information(
+            "[LookupTrace] trace={TraceId} overlay show start entries={EntryCount} styles={StyleCount} embedded={Embedded}",
+            traceId ?? "-", results.Count, styles.Count, _embeddedPanel != null);
         _currentTraceId = traceId;
         _currentStyles = styles;
         _displaySettings = displaySettings;
@@ -208,9 +236,14 @@ public sealed class DictionaryPopupOverlay : IDisposable
             traceId ?? "-", sw.ElapsedMilliseconds, _embeddedPanel != null);
 
         ResetRedirectDeduplication();
+        var clearSw = Stopwatch.StartNew();
         ClearChildren();
+        Log.Information(
+            "[LookupTrace] trace={TraceId} overlay cleared children in {Ms}ms total={TotalMs}ms",
+            traceId ?? "-", clearSw.ElapsedMilliseconds, sw.ElapsedMilliseconds);
 
         _rootHost.SetMiningContext(_currentMiningContext);
+        _rootHost.ClearSnapshotAcrylicBackground();
         var injectSw = Stopwatch.StartNew();
         await _rootHost.ShowResultsWarmAsync(results, styles, displaySettings, themeMode, audio, anki, traceId: traceId);
         Log.Information(
@@ -238,7 +271,11 @@ public sealed class DictionaryPopupOverlay : IDisposable
                 _rootSelectionWidth, _rootSelectionHeight,
                 _isVertical,
                 isRoot: true);
+            ApplySnapshotAcrylicBackground(_rootHost);
         }
+        Log.Information(
+            "[LookupTrace] trace={TraceId} overlay root positioned/visible total={TotalMs}ms",
+            traceId ?? "-", sw.ElapsedMilliseconds);
 
         _rootVisible = true;
         _canvas.IsHitTestVisible = true;
@@ -271,11 +308,28 @@ public sealed class DictionaryPopupOverlay : IDisposable
 
     private async Task HandleRedirectAsync(DictionaryPopupRedirectRequest request, DictionaryLookupPopup? parentHost)
     {
+        var totalSw = Stopwatch.StartNew();
         var query = request.Query.Trim();
         if (string.IsNullOrWhiteSpace(query)) return;
         var redirectVersion = Interlocked.Increment(ref _redirectVersion);
+        var parentKind = parentHost is null || ReferenceEquals(parentHost, _rootHost) ? "root" : "child";
+        var traceId = $"{_currentTraceId ?? "popup-redirect"}-child-{redirectVersion}";
 
+        Log.Information(
+            "[LookupTrace] trace={TraceId} child redirect received query='{Query}' parent={ParentKind} source={Source} selectedLength={SelectedLength} selectMs={SelectMs:F1} rectMs={RectMs:F1}",
+            traceId,
+            query,
+            parentKind,
+            request.Source ?? "-",
+            request.SelectedLength,
+            request.SelectMs,
+            request.RectMs);
+
+        var waitSw = Stopwatch.StartNew();
         await _redirectSemaphore.WaitAsync();
+        Log.Information(
+            "[LookupTrace] trace={TraceId} child redirect semaphore acquired in {Ms}ms",
+            traceId, waitSw.ElapsedMilliseconds);
         try
         {
             if (redirectVersion != Volatile.Read(ref _redirectVersion))
@@ -292,44 +346,62 @@ public sealed class DictionaryPopupOverlay : IDisposable
             _lastRedirectParent = parent;
             _lastRedirectQuery = query;
 
-            var traceId = $"{_currentTraceId ?? "popup-redirect"}-child-{redirectVersion}";
             var lookupSw = Stopwatch.StartNew();
+            var nestedMaxResults = Math.Min(_displaySettings.MaxResults, NestedLookupMaxResults);
             var results = await _lookupService.LookupAsync(
                 query,
-                _displaySettings.MaxResults,
+                nestedMaxResults,
                 _displaySettings.ScanLength,
                 traceId: traceId);
             Log.Information(
-                "[LookupTrace] trace={TraceId} child redirect lookup finished in {Ms}ms query='{Query}' results={Count}",
-                traceId, lookupSw.ElapsedMilliseconds, query, results.Count);
+                "[LookupTrace] trace={TraceId} child redirect lookup finished in {Ms}ms query='{Query}' max={MaxResults} results={Count}",
+                traceId, lookupSw.ElapsedMilliseconds, query, nestedMaxResults, results.Count);
             if (redirectVersion != Volatile.Read(ref _redirectVersion))
                 return;
             if (results.Count == 0) return;
 
+            var highlightSw = Stopwatch.StartNew();
             await HighlightPopupSelectionAsync(parent, results[0].Matched);
+            Log.Information(
+                "[LookupTrace] trace={TraceId} child parent highlight finished in {Ms}ms total={TotalMs}ms matched='{Matched}'",
+                traceId, highlightSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, results[0].Matched);
 
+            var closeSw = Stopwatch.StartNew();
             CloseChildrenOfParent(parent);
+            Log.Information(
+                "[LookupTrace] trace={TraceId} child previous popups closed in {Ms}ms total={TotalMs}ms",
+                traceId, closeSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds);
 
+            var hostSw = Stopwatch.StartNew();
             var child = GetReusableChildHost();
+            Log.Information(
+                "[LookupTrace] trace={TraceId} child host acquired in {Ms}ms warmed={Warmed} pool={PoolCount} active={ActiveCount}",
+                traceId, hostSw.ElapsedMilliseconds, child.IsWarmed, _childHostPool.Count, _childHosts.Count);
             EnsureHostOnCanvas(child);
             if (!_childHosts.Contains(child))
                 _childHosts.Add(child);
             ApplyPopupZOrder();
 
             child.SetMiningContext(_currentMiningContext);
+            child.ClearSnapshotAcrylicBackground();
             var injectSw = Stopwatch.StartNew();
             await child.ShowResultsWarmAsync(results, _currentStyles, _displaySettings, _currentTheme, _currentAudioSettings, _currentAnkiSettings, traceId: traceId);
             Log.Information(
-                "[LookupTrace] trace={TraceId} child popup content injected in {Ms}ms entries={EntryCount}",
-                traceId, injectSw.ElapsedMilliseconds, results.Count);
+                "[LookupTrace] trace={TraceId} child popup content injected in {Ms}ms total={TotalMs}ms entries={EntryCount}",
+                traceId, injectSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, results.Count);
 
             // Make sure canvas is visible for child popups
             _canvas.Visibility = Visibility.Visible;
             _canvas.IsHitTestVisible = true;
 
+            var positionSw = Stopwatch.StartNew();
             PositionChildHost(child, parent, request);
+            ApplySnapshotAcrylicBackground(child);
+            Log.Information(
+                "[LookupTrace] trace={TraceId} child positioned in {Ms}ms total={TotalMs}ms",
+                traceId, positionSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds);
 
-            Log.Information("[DictOverlay] Child popup reused for redirect '{Query}'", query);
+            Log.Information("[DictOverlay] Child popup reused for redirect '{Query}' total={TotalMs}ms", query, totalSw.ElapsedMilliseconds);
         }
         finally
         {
@@ -415,6 +487,12 @@ public sealed class DictionaryPopupOverlay : IDisposable
                 return host;
         }
 
+        var child = CreateChildHost();
+        return child;
+    }
+
+    private DictionaryLookupPopup CreateChildHost()
+    {
         var child = CreateHost();
         if (_useStandaloneWindowVisuals)
             child.UseStandaloneWindowVisuals();
@@ -436,6 +514,29 @@ public sealed class DictionaryPopupOverlay : IDisposable
     {
         if (!_canvas.Children.Contains(host.VisualRoot))
             _canvas.Children.Add(host.VisualRoot);
+    }
+
+    private void ApplySnapshotAcrylicBackground(DictionaryLookupPopup host)
+    {
+        if (_embeddedPanel != null
+            || _useStandaloneWindowVisuals
+            || _useNakedFloatingWindowVisuals)
+        {
+            host.ClearSnapshotAcrylicBackground();
+            return;
+        }
+
+        var screenshotPath = _currentMiningContext.VideoScreenshotPath;
+        if (string.IsNullOrWhiteSpace(screenshotPath))
+        {
+            host.ClearSnapshotAcrylicBackground();
+            return;
+        }
+
+        _ = host.SetSnapshotAcrylicBackgroundAsync(
+            screenshotPath,
+            ThemeMode.Dark,
+            _currentTraceId);
     }
 
     private void ApplyPopupZOrder()
@@ -532,18 +633,18 @@ public sealed class DictionaryPopupOverlay : IDisposable
 
         if (isRoot && !isVertical)
         {
-            maxWidth = Math.Min(screenWidth * 0.88, MaxPopupWidth);
-            maxHeight = Math.Min(screenHeight * 0.72, MaxPopupHeight);
+            maxWidth = Math.Min(screenWidth * 0.88, ConfiguredRootMaxWidth());
+            maxHeight = Math.Min(screenHeight * 0.72, ConfiguredRootMaxHeight());
         }
         else if (isRoot && isVertical)
         {
-            maxWidth = Math.Min(screenWidth * 0.55, MaxPopupWidth);
-            maxHeight = Math.Min(screenHeight * 0.80, MaxPopupHeight);
+            maxWidth = Math.Min(screenWidth * 0.55, ConfiguredRootMaxWidth());
+            maxHeight = Math.Min(screenHeight * 0.80, ConfiguredRootMaxHeight());
         }
         else
         {
-            maxWidth = Math.Min(screenWidth * 0.60, 600);
-            maxHeight = Math.Min(screenHeight * 0.50, 520);
+            maxWidth = Math.Min(screenWidth * 0.60, ConfiguredChildMaxWidth());
+            maxHeight = Math.Min(screenHeight * 0.50, ConfiguredChildMaxHeight());
         }
 
         var layout = DictionaryPopupLayoutCalculator.Resolve(
@@ -601,8 +702,8 @@ public sealed class DictionaryPopupOverlay : IDisposable
         var (screenWidth, screenHeight) = GetOverlaySize();
         var (parentLeft, parentTop, parentWidth, parentHeight) = GetHostBounds(parentHost);
 
-        var maxWidth = Math.Min(screenWidth * 0.60, 600);
-        var maxHeight = Math.Min(screenHeight * 0.50, 520);
+        var maxWidth = Math.Min(screenWidth * 0.60, ConfiguredChildMaxWidth());
+        var maxHeight = Math.Min(screenHeight * 0.50, ConfiguredChildMaxHeight());
         var width = ClampDimension(
             Math.Min(screenWidth - ScreenBorderPadding * 2, maxWidth),
             MinPopupWidth,
@@ -684,6 +785,18 @@ public sealed class DictionaryPopupOverlay : IDisposable
     private static double Clamp(double value, double min, double max) => Math.Max(min, Math.Min(value, max));
     private static double ClampDimension(double value, double min, double max) => Math.Clamp(value, Math.Min(min, max), Math.Max(min, max));
     private static double ClampPopupExtent(double value, double max) => Math.Clamp(value, 0, Math.Max(0, max));
+
+    private double ConfiguredRootMaxWidth() =>
+        Clamp(_displaySettings.PopupMaxWidth, MinPopupWidth, HardMaxPopupWidth);
+
+    private double ConfiguredRootMaxHeight() =>
+        Clamp(_displaySettings.PopupMaxHeight, MinPopupHeight, HardMaxPopupHeight);
+
+    private double ConfiguredChildMaxWidth() =>
+        Math.Min(ConfiguredRootMaxWidth(), ChildPopupMaxWidth);
+
+    private double ConfiguredChildMaxHeight() =>
+        Math.Min(ConfiguredRootMaxHeight(), ChildPopupMaxHeight);
 
     private (double width, double height) GetOverlaySize()
     {
