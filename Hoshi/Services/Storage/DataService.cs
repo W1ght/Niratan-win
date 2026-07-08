@@ -32,7 +32,7 @@ internal class DataService : IDataService
     {
         using var connection = await GetOpenConnectionAsync();
         const string sql = """
-            SELECT Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount, CurrentChapterIndex, Progress, CurrentCharacterCount, TotalCharacterCount, ManualSortOrder
+            SELECT Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount, CurrentChapterIndex, Progress, CurrentCharacterCount, TotalCharacterCount, ManualSortOrder, ProfileId
             FROM NovelBooks
             WHERE @QueryText IS NULL
                 OR TRIM(@QueryText) = ''
@@ -55,7 +55,7 @@ internal class DataService : IDataService
     {
         using var connection = await GetOpenConnectionAsync();
         const string sql = """
-            SELECT Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount, CurrentChapterIndex, Progress, CurrentCharacterCount, TotalCharacterCount, ManualSortOrder
+            SELECT Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount, CurrentChapterIndex, Progress, CurrentCharacterCount, TotalCharacterCount, ManualSortOrder, ProfileId
             FROM NovelBooks
             WHERE Id = @BookId;
             """;
@@ -70,9 +70,9 @@ internal class DataService : IDataService
         using var connection = await GetOpenConnectionAsync();
         const string sql = """
             INSERT INTO NovelBooks
-                (Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount, CurrentChapterIndex, Progress, CurrentCharacterCount, TotalCharacterCount, ManualSortOrder)
+                (Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount, CurrentChapterIndex, Progress, CurrentCharacterCount, TotalCharacterCount, ManualSortOrder, ProfileId)
             VALUES
-                (@Id, @Title, @Author, @FilePath, @CoverPath, @ImportedAt, @LastOpenedAt, @Language, @UniqueIdentifier, @ExtractedPath, @ChapterCount, @CurrentChapterIndex, @Progress, @CurrentCharacterCount, @TotalCharacterCount, @ManualSortOrder)
+                (@Id, @Title, @Author, @FilePath, @CoverPath, @ImportedAt, @LastOpenedAt, @Language, @UniqueIdentifier, @ExtractedPath, @ChapterCount, @CurrentChapterIndex, @Progress, @CurrentCharacterCount, @TotalCharacterCount, @ManualSortOrder, @ProfileId)
             ON CONFLICT(FilePath) DO UPDATE SET
                 Title = excluded.Title,
                 Author = excluded.Author,
@@ -81,6 +81,7 @@ internal class DataService : IDataService
                 UniqueIdentifier = excluded.UniqueIdentifier,
                 ExtractedPath = excluded.ExtractedPath,
                 ChapterCount = excluded.ChapterCount,
+                ProfileId = COALESCE(NovelBooks.ProfileId, excluded.ProfileId),
                 TotalCharacterCount = CASE
                     WHEN excluded.TotalCharacterCount > 0 THEN excluded.TotalCharacterCount
                     ELSE NovelBooks.TotalCharacterCount
@@ -178,6 +179,23 @@ internal class DataService : IDataService
         await transaction.CommitAsync(ct);
     }
 
+    public async Task UpdateNovelProfileIdAsync(
+        string bookId,
+        string? profileId,
+        CancellationToken ct = default)
+    {
+        using var connection = await GetOpenConnectionAsync();
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                UPDATE NovelBooks
+                SET ProfileId = @ProfileId
+                WHERE Id = @BookId;
+                """,
+                new { BookId = bookId, ProfileId = profileId },
+                cancellationToken: ct));
+    }
+
     public async Task<IReadOnlyList<VideoItem>> GetVideosAsync(
         string? queryText = null,
         CancellationToken ct = default
@@ -188,7 +206,8 @@ internal class DataService : IDataService
             SELECT Id, Title, FilePath, SubtitlePath, ImportedAt, LastOpenedAt,
                    LastPositionSeconds, DurationSeconds, ManualSortOrder,
                    SubtitleSelectionKind, SubtitleSelectionPath,
-                   SubtitleSelectionTrackId, SubtitleSelectionTrackName
+                   SubtitleSelectionTrackId, SubtitleSelectionTrackName,
+                   ProfileId
             FROM VideoItems
             WHERE @QueryText IS NULL
                 OR TRIM(@QueryText) = ''
@@ -213,7 +232,8 @@ internal class DataService : IDataService
             SELECT Id, Title, FilePath, SubtitlePath, ImportedAt, LastOpenedAt,
                    LastPositionSeconds, DurationSeconds, ManualSortOrder,
                    SubtitleSelectionKind, SubtitleSelectionPath,
-                   SubtitleSelectionTrackId, SubtitleSelectionTrackName
+                   SubtitleSelectionTrackId, SubtitleSelectionTrackName,
+                   ProfileId
             FROM VideoItems
             WHERE Id = @VideoId;
             """;
@@ -231,15 +251,18 @@ internal class DataService : IDataService
                 (Id, Title, FilePath, SubtitlePath, ImportedAt, LastOpenedAt,
                  LastPositionSeconds, DurationSeconds, ManualSortOrder,
                  SubtitleSelectionKind, SubtitleSelectionPath,
-                 SubtitleSelectionTrackId, SubtitleSelectionTrackName)
+                 SubtitleSelectionTrackId, SubtitleSelectionTrackName,
+                 ProfileId)
             VALUES
                 (@Id, @Title, @FilePath, @SubtitlePath, @ImportedAt, @LastOpenedAt,
                  @LastPositionSeconds, @DurationSeconds, @ManualSortOrder,
                  @SubtitleSelectionKind, @SubtitleSelectionPath,
-                 @SubtitleSelectionTrackId, @SubtitleSelectionTrackName)
+                 @SubtitleSelectionTrackId, @SubtitleSelectionTrackName,
+                 @ProfileId)
             ON CONFLICT(FilePath) DO UPDATE SET
                 Title = excluded.Title,
-                SubtitlePath = COALESCE(excluded.SubtitlePath, VideoItems.SubtitlePath);
+                SubtitlePath = COALESCE(excluded.SubtitlePath, VideoItems.SubtitlePath),
+                ProfileId = COALESCE(VideoItems.ProfileId, excluded.ProfileId);
             """;
 
         await connection.ExecuteAsync(new CommandDefinition(sql, video, cancellationToken: ct));
@@ -327,5 +350,22 @@ internal class DataService : IDataService
                 cancellationToken: ct
             )
         );
+    }
+
+    public async Task UpdateVideoProfileIdAsync(
+        string videoId,
+        string? profileId,
+        CancellationToken ct = default)
+    {
+        using var connection = await GetOpenConnectionAsync();
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                UPDATE VideoItems
+                SET ProfileId = @ProfileId
+                WHERE Id = @VideoId;
+                """,
+                new { VideoId = videoId, ProfileId = profileId },
+                cancellationToken: ct));
     }
 }

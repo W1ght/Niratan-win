@@ -84,4 +84,54 @@ public sealed class AnkiSettings
 
     [JsonIgnore]
     public bool IsConfigured => PopupSettings.IsConfigured;
+
+    public static AnkiSettings Clone(AnkiSettings settings) =>
+        new()
+        {
+            AnkiConnectUrl = settings.AnkiConnectUrl,
+            AnkiConnectForceSync = settings.AnkiConnectForceSync,
+            SelectedDeckId = settings.SelectedDeckId,
+            SelectedDeckName = settings.SelectedDeckName,
+            SelectedNoteTypeId = settings.SelectedNoteTypeId,
+            SelectedNoteTypeName = settings.SelectedNoteTypeName,
+            AvailableDecks = settings.AvailableDecks
+                .Select(deck => new AnkiDeck { Id = deck.Id, Name = deck.Name })
+                .ToList(),
+            AvailableNoteTypes = settings.AvailableNoteTypes
+                .Select(noteType => new AnkiNoteType
+                {
+                    Id = noteType.Id,
+                    Name = noteType.Name,
+                    Fields = noteType.Fields.ToList(),
+                })
+                .ToList(),
+            FieldMappings = new Dictionary<string, string>(settings.FieldMappings),
+            Tags = settings.Tags,
+            AllowDupes = settings.AllowDupes,
+            CheckDuplicatesAcrossAllModels = settings.CheckDuplicatesAcrossAllModels,
+            DuplicateScope = settings.DuplicateScope,
+            CompactGlossaries = settings.CompactGlossaries,
+            EmbedMedia = settings.EmbedMedia,
+        };
+
+    public static AnkiSettings WithGlobalTransportFrom(
+        AnkiSettings global,
+        AnkiSettings profileOwned)
+    {
+        var merged = Clone(profileOwned);
+        merged.AnkiConnectUrl = global.AnkiConnectUrl;
+        merged.AnkiConnectForceSync = global.AnkiConnectForceSync;
+        merged.AvailableDecks = global.AvailableDecks
+            .Select(deck => new AnkiDeck { Id = deck.Id, Name = deck.Name })
+            .ToList();
+        merged.AvailableNoteTypes = global.AvailableNoteTypes
+            .Select(noteType => new AnkiNoteType
+            {
+                Id = noteType.Id,
+                Name = noteType.Name,
+                Fields = noteType.Fields.ToList(),
+            })
+            .ToList();
+        return merged;
+    }
 }

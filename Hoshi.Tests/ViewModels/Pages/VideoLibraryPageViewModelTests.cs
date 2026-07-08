@@ -156,6 +156,12 @@ public class VideoLibraryPageViewModelTests
             VideoPlaybackState state,
             CancellationToken ct = default) =>
             Task.FromResult(Result.Success());
+
+        public Task<Result> SetVideoProfileAsync(
+            string videoId,
+            string? profileId,
+            CancellationToken ct = default) =>
+            Task.FromResult(Result.Success());
     }
 
     private sealed class RecordingVideoPlayerWindowService : IVideoPlayerWindowService

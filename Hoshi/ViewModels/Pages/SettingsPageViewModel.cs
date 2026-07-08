@@ -12,6 +12,7 @@ using Hoshi.Helpers;
 using Hoshi.Models.Dictionary;
 using Hoshi.Models.Settings;
 using Hoshi.Services.Dictionary;
+using Hoshi.Services.Profiles;
 using Hoshi.Services.Settings;
 using Hoshi.Services.UI;
 using Serilog;
@@ -24,6 +25,7 @@ public partial class SettingsPageViewModel : ObservableObject
 {
     private readonly ISettingsService _settingsService;
     private readonly IReaderSettingsService _readerSettingsService;
+    private readonly IProfileRuntimeService _profileRuntime;
     private readonly IMessenger _messenger;
 
     private bool _isInitializing = true;
@@ -143,11 +145,13 @@ public partial class SettingsPageViewModel : ObservableObject
     public SettingsPageViewModel(
         ISettingsService settingsService,
         IReaderSettingsService readerSettingsService,
+        IProfileRuntimeService profileRuntime,
         IMessenger messenger
     )
     {
         _settingsService = settingsService;
         _readerSettingsService = readerSettingsService;
+        _profileRuntime = profileRuntime;
         _messenger = messenger;
 
         ImportDictionaryCommand = new AsyncRelayCommand(ImportDictionaryAsync);
@@ -160,6 +164,7 @@ public partial class SettingsPageViewModel : ObservableObject
     {
         await _settingsService.SaveAsync();
         await _readerSettingsService.SaveAsync();
+        await _profileRuntime.SaveActiveSettingsAsync();
     }
 
     private async Task InitializeAsync()

@@ -176,6 +176,27 @@ internal sealed class NovelLibraryService : INovelLibraryService
         }
     }
 
+    public async Task<Result> SetNovelProfileAsync(
+        string bookId,
+        string? profileId,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            await _dataService.UpdateNovelProfileIdAsync(bookId, profileId, ct);
+            return Result.Success();
+        }
+        catch (OperationCanceledException)
+        {
+            return Result.Cancelled();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error saving profile override for novel {BookId}", bookId);
+            return Result.Failure(ex.Message, "Error saving novel profile");
+        }
+    }
+
     private async Task<Result<T>> ExecuteAsync<T>(
         Func<CancellationToken, Task<Result<T>>> action,
         string errorTitle,
