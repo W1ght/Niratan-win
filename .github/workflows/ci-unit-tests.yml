@@ -28,10 +28,10 @@ jobs:
         run: dotnet restore
 
       - name: Build main project (x64)
-        run: dotnet build Hoshi/Hoshi.csproj --no-restore --configuration Debug --arch x64
+        run: dotnet build Hoshi/Hoshi.csproj --no-restore --configuration Debug -p:Platform=x64
 
       - name: Build and run unit tests (x64)
-        run: dotnet test Hoshi.Tests/Hoshi.Tests.csproj --no-restore --configuration Debug --verbosity normal --arch x64 --collect:"XPlat Code Coverage" --logger trx
+        run: dotnet test Hoshi.Tests/Hoshi.Tests.csproj --no-restore --configuration Debug --verbosity normal -p:Platform=x64 --collect:"XPlat Code Coverage" --logger trx
 
       - name: Publish test results
         if: always()
