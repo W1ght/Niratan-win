@@ -12,6 +12,7 @@ namespace Hoshi.Services.Novels;
 public interface IEpubParserService
 {
     EpubBook Parse(string epubFilePath, string outputDirectory);
+    EpubBook ParseExtracted(string outputDirectory, string? fallbackTitle = null);
 }
 
 public sealed class EpubParserService : IEpubParserService
@@ -32,10 +33,18 @@ public sealed class EpubParserService : IEpubParserService
 
     public EpubBook Parse(string epubFilePath, string outputDirectory)
     {
-        Directory.CreateDirectory(outputDirectory);
         ExtractZip(epubFilePath, outputDirectory);
+        return ParseExtracted(
+            outputDirectory,
+            Path.GetFileNameWithoutExtension(epubFilePath));
+    }
 
-        var containerPath = Path.Combine(outputDirectory, "META-INF", "container.xml");
+    public EpubBook ParseExtracted(string outputDirectory, string? fallbackTitle = null)
+    {
+        var extractedPath = Path.GetFullPath(outputDirectory);
+        Directory.CreateDirectory(extractedPath);
+
+        var containerPath = Path.Combine(extractedPath, "META-INF", "container.xml");
         if (!File.Exists(containerPath))
             throw new InvalidOperationException("Invalid EPUB: missing META-INF/container.xml");
 
@@ -52,35 +61,37 @@ public sealed class EpubParserService : IEpubParserService
         var opfRelativePath = rootfileElement?.Attribute("full-path")?.Value
             ?? throw new InvalidOperationException("Invalid EPUB: OPF rootfile not found in container.xml");
 
-        var opfFullPath = Path.GetFullPath(Path.Combine(outputDirectory, opfRelativePath));
+        var opfFullPath = Path.GetFullPath(Path.Combine(extractedPath, opfRelativePath));
         var opfDirectory = Path.GetDirectoryName(opfFullPath)
-            ?? outputDirectory;
+            ?? extractedPath;
 
         var opfDoc = XDocument.Load(opfFullPath);
         var packageElement = opfDoc.Element(OpfNs + "package")
             ?? opfDoc.Element("package")
             ?? throw new InvalidOperationException("Invalid EPUB: missing package element");
 
-        var title = opfDoc.Descendants(DcNs + "title").FirstOrDefault()?.Value.Trim()
-            ?? Path.GetFileNameWithoutExtension(epubFilePath);
+        var title = opfDoc.Descendants(DcNs + "title").FirstOrDefault()?.Value.Trim();
         var author = opfDoc.Descendants(DcNs + "creator").FirstOrDefault()?.Value.Trim();
         var language = opfDoc.Descendants(DcNs + "language").FirstOrDefault()?.Value.Trim();
         var identifier = opfDoc.Descendants(DcNs + "identifier").FirstOrDefault()?.Value.Trim();
 
         var manifest = ParseManifest(packageElement, opfDirectory);
         var spine = ParseSpine(packageElement, manifest);
-        var toc = ParseToc(opfDoc, opfDirectory, outputDirectory);
+        var toc = ParseToc(opfDoc, opfDirectory, extractedPath);
         var coverHref = FindCoverHref(packageElement, manifest);
+        var resolvedFallbackTitle = string.IsNullOrWhiteSpace(fallbackTitle)
+            ? Path.GetFileName(extractedPath)
+            : fallbackTitle.Trim();
 
         return new EpubBook
         {
             Title = string.IsNullOrWhiteSpace(title)
-                ? Path.GetFileNameWithoutExtension(epubFilePath)
+                ? resolvedFallbackTitle
                 : title,
             Author = string.IsNullOrWhiteSpace(author) ? null : author,
             Language = string.IsNullOrWhiteSpace(language) ? null : language,
             UniqueIdentifier = string.IsNullOrWhiteSpace(identifier) ? null : identifier,
-            ExtractedPath = outputDirectory,
+            ExtractedPath = extractedPath,
             ContainerDirectory = opfDirectory,
             Chapters = spine,
             Toc = toc,

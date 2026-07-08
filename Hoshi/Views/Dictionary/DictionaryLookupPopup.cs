@@ -13,12 +13,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.Web.WebView2.Core;
 using Windows.Storage.Streams;
 using Hoshi.Enums;
+using Hoshi.Helpers;
 using Hoshi.Models.Anki;
 using Hoshi.Models.Dictionary;
 using Hoshi.Models.Settings;
@@ -45,11 +47,17 @@ public sealed class DictionaryLookupPopup : IDisposable
 {
     public event EventHandler<DictionaryPopupRedirectRequest>? RedirectRequested;
     public event EventHandler? TapOutsideRequested;
+    public event EventHandler? DismissRequested;
     public event EventHandler? Scrolled;
     public event EventHandler? ContentReady;
 
     private readonly Grid _surfaceRoot;
     private readonly Image _snapshotAcrylicImage;
+    private readonly CommandBar _sasayakiControlsBar;
+    private readonly AppBarButton _sasayakiPopupPlayPauseButton;
+    private readonly AppBarButton _sasayakiPopupReplayCueButton;
+    private readonly AppBarButton _sasayakiPopupJumpCueButton;
+    private readonly FontIcon _sasayakiPopupPlayPauseIcon;
     private readonly WebView2 _contentWebView;
     private readonly AcrylicBrush _surfaceBrush;
     private readonly SolidColorBrush _strokeBrush;
@@ -105,14 +113,63 @@ public sealed class DictionaryLookupPopup : IDisposable
             UseSystemFocusVisuals = false,
         };
 
+        _sasayakiPopupPlayPauseIcon = CreateSasayakiCommandIcon("\uE768");
+        _sasayakiPopupPlayPauseButton = CreateSasayakiCommandButton(
+            "NovelReaderPopupSasayakiPlayPauseButton",
+            "NovelReaderPopupSasayakiPlayPauseButton.AutomationProperties.Name",
+            "Play/Pause",
+            _sasayakiPopupPlayPauseIcon,
+            SasayakiPopupPlayPauseButton_Click);
+        _sasayakiPopupReplayCueButton = CreateSasayakiCommandButton(
+            "NovelReaderPopupSasayakiReplayCueButton",
+            "NovelReaderPopupSasayakiReplayCueButton.AutomationProperties.Name",
+            "Replay Cue",
+            CreateSasayakiCommandIcon("\uE72C"),
+            SasayakiPopupReplayCueButton_Click);
+        _sasayakiPopupJumpCueButton = CreateSasayakiCommandButton(
+            "NovelReaderPopupSasayakiJumpCueButton",
+            "NovelReaderPopupSasayakiJumpCueButton.AutomationProperties.Name",
+            "Jump Cue",
+            CreateSasayakiCommandIcon("\uE8AD"),
+            SasayakiPopupJumpCueButton_Click);
+
+        _sasayakiControlsBar = new CommandBar
+        {
+            DefaultLabelPosition = CommandBarDefaultLabelPosition.Collapsed,
+            Background = new SolidColorBrush(Colors.Transparent),
+            Padding = new Thickness(8, 0, 8, 0),
+            MinHeight = 40,
+            Visibility = Visibility.Collapsed,
+            IsDynamicOverflowEnabled = false,
+            OverflowButtonVisibility = CommandBarOverflowButtonVisibility.Collapsed,
+        };
+        AutomationProperties.SetAutomationId(_sasayakiControlsBar, "NovelReaderPopupSasayakiControls");
+        AutomationProperties.SetName(
+            _sasayakiControlsBar,
+            ResourceStringHelper.GetString(
+                "NovelReaderPopupSasayakiControls.AutomationProperties.Name",
+                "Sasayaki controls"));
+        _sasayakiControlsBar.PrimaryCommands.Add(_sasayakiPopupPlayPauseButton);
+        _sasayakiControlsBar.PrimaryCommands.Add(_sasayakiPopupReplayCueButton);
+        _sasayakiControlsBar.PrimaryCommands.Add(_sasayakiPopupJumpCueButton);
+
         _surfaceRoot = new Grid
         {
+            RowDefinitions =
+            {
+                new RowDefinition { Height = GridLength.Auto },
+                new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
+            },
             Children =
             {
                 _snapshotAcrylicImage,
+                _sasayakiControlsBar,
                 _contentWebView,
             },
         };
+        Grid.SetRowSpan(_snapshotAcrylicImage, 2);
+        Grid.SetRow(_sasayakiControlsBar, 0);
+        Grid.SetRow(_contentWebView, 1);
 
         _surfaceBrush = DictionaryPopupMaterial.CreateInAppAcrylicThinBrush();
         _strokeBrush = new SolidColorBrush(
@@ -131,6 +188,98 @@ public sealed class DictionaryLookupPopup : IDisposable
             Opacity = 0,
             IsHitTestVisible = false,
         };
+    }
+
+    private static FontIcon CreateSasayakiCommandIcon(string glyph) => new()
+    {
+        Glyph = glyph,
+        FontFamily = new FontFamily("Segoe Fluent Icons"),
+        FontSize = 16,
+    };
+
+    private static AppBarButton CreateSasayakiCommandButton(
+        string automationId,
+        string nameResourceKey,
+        string fallbackName,
+        IconElement icon,
+        RoutedEventHandler clickHandler)
+    {
+        var name = ResourceStringHelper.GetString(nameResourceKey, fallbackName);
+        var button = new AppBarButton
+        {
+            Icon = icon,
+            Label = name,
+            IsCompact = true,
+        };
+        button.Click += clickHandler;
+        AutomationProperties.SetAutomationId(button, automationId);
+        AutomationProperties.SetName(button, name);
+        ToolTipService.SetToolTip(button, name);
+        return button;
+    }
+
+    private void UpdateSasayakiPopupControls()
+    {
+        var controls = _miningContext.SasayakiPopupControls;
+        if (controls == null)
+        {
+            _sasayakiControlsBar.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        _sasayakiControlsBar.Visibility = Visibility.Visible;
+        var canControl = controls.CanControl?.Invoke() ?? true;
+        _sasayakiPopupPlayPauseButton.IsEnabled = canControl;
+        _sasayakiPopupReplayCueButton.IsEnabled = canControl;
+        _sasayakiPopupJumpCueButton.IsEnabled = canControl;
+        _sasayakiPopupPlayPauseIcon.Glyph = controls.IsPlaying?.Invoke() == true
+            ? "\uE769"
+            : "\uE768";
+    }
+
+    private async void SasayakiPopupPlayPauseButton_Click(object sender, RoutedEventArgs e)
+    {
+        await HandleSasayakiPopupPlayPauseAsync();
+    }
+
+    private async void SasayakiPopupReplayCueButton_Click(object sender, RoutedEventArgs e)
+    {
+        await HandleSasayakiPopupReplayCueAsync();
+    }
+
+    private async void SasayakiPopupJumpCueButton_Click(object sender, RoutedEventArgs e)
+    {
+        await HandleSasayakiPopupJumpCueAsync();
+    }
+
+    private async Task HandleSasayakiPopupPlayPauseAsync()
+    {
+        var controls = _miningContext.SasayakiPopupControls;
+        if (controls == null || controls.CanControl?.Invoke() == false)
+            return;
+
+        await controls.TogglePlaybackAsync();
+        UpdateSasayakiPopupControls();
+    }
+
+    private async Task HandleSasayakiPopupReplayCueAsync()
+    {
+        var controls = _miningContext.SasayakiPopupControls;
+        if (controls == null || controls.CanControl?.Invoke() == false)
+            return;
+
+        await controls.ReplayCueAsync();
+        UpdateSasayakiPopupControls();
+    }
+
+    private async Task HandleSasayakiPopupJumpCueAsync()
+    {
+        var controls = _miningContext.SasayakiPopupControls;
+        if (controls == null || controls.CanControl?.Invoke() == false)
+            return;
+
+        await controls.JumpToCueAsync();
+        DismissRequested?.Invoke(this, EventArgs.Empty);
     }
 
     public void UseStandaloneWindowVisuals()
@@ -186,6 +335,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     public void SetMiningContext(AnkiMiningContext? context)
     {
         _miningContext = context ?? new AnkiMiningContext();
+        UpdateSasayakiPopupControls();
     }
 
     public void SetTheme(ThemeMode themeMode)
@@ -231,6 +381,7 @@ public sealed class DictionaryLookupPopup : IDisposable
             await WarmAsync(themeMode, _audioSettings, _ankiSettings);
 
         SetTheme(themeMode);
+        UpdateSasayakiPopupControls();
         var generation = PrepareForPendingContent();
         _pendingContentStopwatch = Stopwatch.StartNew();
         var injectionScript = _htmlGenerator.GenerateInjectionScript(results, styles, displaySettings, themeMode, generation, _audioSettings, _ankiSettings, traceId: traceId);
@@ -1269,6 +1420,7 @@ public sealed class DictionaryLookupPopup : IDisposable
                 }
 
                 await RequestVideoMiningMediaAsync(preflight);
+                await RequestSasayakiMiningMediaAsync(preflight);
                 var success = await _ankiService.MineEntryAsync(rawPayload, _miningContext);
 
                 var script = success
@@ -1302,6 +1454,21 @@ public sealed class DictionaryLookupPopup : IDisposable
         _miningContext.VideoAudioClipPath = result.AudioClipPath;
         _miningContext.VideoScreenshotTag = result.ScreenshotTag;
         _miningContext.VideoAudioClipTag = result.AudioClipTag;
+    }
+
+    private async Task RequestSasayakiMiningMediaAsync(AnkiMiningPreflightResult preflight)
+    {
+        if (!preflight.MediaNeeds.NeedsSasayakiAudio || _miningContext.SasayakiAudioProvider == null)
+            return;
+
+        var result = await _miningContext.SasayakiAudioProvider(
+            new SasayakiMiningAudioRequest(
+                preflight.MediaNeeds.NeedsSasayakiAudio,
+                preflight.DirectMediaDirectory),
+            CancellationToken.None);
+
+        _miningContext.SasayakiAudioPath = result.AudioClipPath;
+        _miningContext.SasayakiAudioTag = result.AudioClipTag;
     }
 
     private void HandleDuplicateCheck(JsonElement payload)

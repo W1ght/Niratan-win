@@ -139,6 +139,8 @@ public readonly record struct KeyboardShortcutBinding
             VirtualKey.Escape => "Escape",
             VirtualKey.Add => "Add",
             VirtualKey.Subtract => "Subtract",
+            _ when (int)key == 219 => "[",
+            _ when (int)key == 221 => "]",
             VirtualKey.Number0 => "0",
             VirtualKey.Number1 => "1",
             VirtualKey.Number2 => "2",

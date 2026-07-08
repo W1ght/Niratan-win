@@ -156,6 +156,8 @@
   <data name="ReaderAppearanceDialog.Title" xml:space="preserve"><value>外观</value></data>
   <data name="ReaderAppearanceDialog.PrimaryButtonText" xml:space="preserve"><value>完成</value></data>
   <data name="ReaderAppearancePageTitle.Text" xml:space="preserve"><value>外观</value></data>
+  <data name="ReaderAppearancePanelDialog.Title" xml:space="preserve"><value>外观</value></data>
+  <data name="ReaderAppearancePanelDialog.CloseButtonText" xml:space="preserve"><value>关闭</value></data>
   <data name="ReaderThemeSectionHeader.Text" xml:space="preserve"><value>阅读主题</value></data>
   <data name="ReaderColorThemeCard.Header" xml:space="preserve"><value>颜色主题</value></data>
   <data name="ReaderColorThemeCard.Description" xml:space="preserve"><value>选择阅读颜色主题</value></data>
@@ -350,13 +352,19 @@
   <data name="VideoPlayerLookupButton.Label" xml:space="preserve"><value>查词</value></data>
   <data name="VideoPlayerLookupButton.ToolTipService.ToolTip" xml:space="preserve"><value>查询字幕</value></data>
   <data name="ReaderChapterPanelTitle.Text" xml:space="preserve"><value>章节</value></data>
+  <data name="ReaderChapterPanelDialog.Title" xml:space="preserve"><value>章节</value></data>
+  <data name="ReaderChapterPanelDialog.CloseButtonText" xml:space="preserve"><value>关闭</value></data>
   <data name="ReaderSearchPanelTitle.Text" xml:space="preserve"><value>搜索</value></data>
+  <data name="ReaderSearchPanelDialog.Title" xml:space="preserve"><value>搜索</value></data>
+  <data name="ReaderSearchPanelDialog.CloseButtonText" xml:space="preserve"><value>关闭</value></data>
   <data name="ReaderSearchQueryBox.PlaceholderText" xml:space="preserve"><value>在本书中搜索</value></data>
   <data name="ReaderSearchPromptText.Text" xml:space="preserve"><value>输入文字以搜索本书</value></data>
   <data name="ReaderSearchLoadingText.Text" xml:space="preserve"><value>正在搜索...</value></data>
   <data name="ReaderSearchNoMatchesText.Text" xml:space="preserve"><value>没有匹配结果</value></data>
   <data name="ReaderSearchFailedText.Text" xml:space="preserve"><value>无法搜索这本书</value></data>
   <data name="ReaderHighlightsPanelTitle.Text" xml:space="preserve"><value>高亮</value></data>
+  <data name="ReaderHighlightsPanelDialog.Title" xml:space="preserve"><value>高亮</value></data>
+  <data name="ReaderHighlightsPanelDialog.CloseButtonText" xml:space="preserve"><value>关闭</value></data>
   <data name="ReaderHighlightsEmptyText.Text" xml:space="preserve"><value>暂无高亮</value></data>
   <data name="ReaderHighlightDeleteMenuItem.Text" xml:space="preserve"><value>删除</value></data>
   <data name="NovelReaderCharacterJumpNumberBox.PlaceholderText" xml:space="preserve"><value>字符数</value></data>
@@ -366,6 +374,8 @@
   <data name="NovelReaderStatisticsButton.AutomationProperties.Name" xml:space="preserve"><value>统计</value></data>
   <data name="ReaderStatisticsStartStopButton.AutomationProperties.Name" xml:space="preserve"><value>开始或暂停阅读统计</value></data>
   <data name="ReaderStatisticsPanelTitle.Text" xml:space="preserve"><value>统计</value></data>
+  <data name="ReaderStatisticsPanelDialog.Title" xml:space="preserve"><value>统计</value></data>
+  <data name="ReaderStatisticsPanelDialog.CloseButtonText" xml:space="preserve"><value>关闭</value></data>
   <data name="ReaderStatisticsSessionHeader.Text" xml:space="preserve"><value>本次阅读</value></data>
   <data name="ReaderStatisticsTodayHeader.Text" xml:space="preserve"><value>今天</value></data>
   <data name="ReaderStatisticsAllTimeHeader.Text" xml:space="preserve"><value>全部时间</value></data>
@@ -374,8 +384,6 @@
   <data name="ReaderStatisticsTimeLabel.Text" xml:space="preserve"><value>阅读时间</value></data>
   <data name="ReaderStatisticsBookRemainingLabel.Text" xml:space="preserve"><value>读完整本预计时间</value></data>
   <data name="ReaderStatisticsChapterRemainingLabel.Text" xml:space="preserve"><value>读完本章预计时间</value></data>
-  <data name="NovelReaderHistoryBackButton.AutomationProperties.Name" xml:space="preserve"><value>上一个阅读位置</value></data>
-  <data name="NovelReaderHistoryForwardButton.AutomationProperties.Name" xml:space="preserve"><value>下一个阅读位置</value></data>
   <data name="SettingsStatisticsCard.Header" xml:space="preserve"><value>统计</value></data>
   <data name="SettingsStatisticsCard.Description" xml:space="preserve"><value>阅读目标、自动开始和统计同步</value></data>
   <data name="StatisticsSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>打开统计设置</value></data>
@@ -403,6 +411,41 @@
   <data name="StatisticsSyncModeComboBox.Header" xml:space="preserve"><value>同步行为</value></data>
   <data name="StatisticsSyncModeComboBox.Description" xml:space="preserve"><value>同步时逐条合并或整体替换统计</value></data>
   <data name="NovelBookMatchSasayakiMenuItem.Text" xml:space="preserve"><value>匹配 Sasayaki</value></data>
+  <data name="NovelReaderSasayakiButton.AutomationProperties.Name" xml:space="preserve"><value>Sasayaki</value></data>
+  <data name="SasayakiLoadAudioMenuItem.Text" xml:space="preserve"><value>加载音频</value></data>
+  <data name="SasayakiSkipBackMenuItem.Text" xml:space="preserve"><value>后退 15 秒</value></data>
+  <data name="SasayakiPreviousCueMenuItem.Text" xml:space="preserve"><value>上一句</value></data>
+  <data name="SasayakiPlayPauseMenuItem.Text" xml:space="preserve"><value>播放/暂停</value></data>
+  <data name="SasayakiNextCueMenuItem.Text" xml:space="preserve"><value>下一句</value></data>
+  <data name="SasayakiSkipForwardMenuItem.Text" xml:space="preserve"><value>前进 15 秒</value></data>
+  <data name="SasayakiReplayCueMenuItem.Text" xml:space="preserve"><value>重播当前句</value></data>
+  <data name="SasayakiJumpCueMenuItem.Text" xml:space="preserve"><value>跳转到当前句</value></data>
+  <data name="NovelReaderSasayakiPanelDialog.Title" xml:space="preserve"><value>Sasayaki</value></data>
+  <data name="NovelReaderSasayakiPanelDialog.CloseButtonText" xml:space="preserve"><value>关闭</value></data>
+  <data name="NovelReaderSasayakiAudioSectionHeader.Text" xml:space="preserve"><value>音频</value></data>
+  <data name="NovelReaderSasayakiPlaybackSectionHeader.Text" xml:space="preserve"><value>播放</value></data>
+  <data name="NovelReaderSasayakiSettingsSectionHeader.Text" xml:space="preserve"><value>设置</value></data>
+  <data name="NovelReaderSasayakiThemeSectionHeader.Text" xml:space="preserve"><value>主题</value></data>
+  <data name="NovelReaderSasayakiPanelLoadAudioButton.AutomationProperties.Name" xml:space="preserve"><value>加载音频</value></data>
+  <data name="NovelReaderSasayakiPanelLoadAudioText.Text" xml:space="preserve"><value>加载音频</value></data>
+  <data name="NovelReaderSasayakiPanelSkipBackButton.AutomationProperties.Name" xml:space="preserve"><value>后退 15 秒</value></data>
+  <data name="NovelReaderSasayakiPanelPreviousCueButton.AutomationProperties.Name" xml:space="preserve"><value>上一句</value></data>
+  <data name="NovelReaderSasayakiPanelPlayPauseButton.AutomationProperties.Name" xml:space="preserve"><value>播放/暂停</value></data>
+  <data name="NovelReaderSasayakiPanelNextCueButton.AutomationProperties.Name" xml:space="preserve"><value>下一句</value></data>
+  <data name="NovelReaderSasayakiPanelSkipForwardButton.AutomationProperties.Name" xml:space="preserve"><value>前进 15 秒</value></data>
+  <data name="NovelReaderSasayakiDelayLabel.Text" xml:space="preserve"><value>延迟</value></data>
+  <data name="NovelReaderSasayakiSpeedLabel.Text" xml:space="preserve"><value>速度</value></data>
+  <data name="NovelReaderSasayakiShowToggleSwitch.Header" xml:space="preserve"><value>显示 Sasayaki</value></data>
+  <data name="NovelReaderSasayakiAutoScrollToggleSwitch.Header" xml:space="preserve"><value>自动滚动</value></data>
+  <data name="NovelReaderSasayakiAutoPauseToggleSwitch.Header" xml:space="preserve"><value>自动暂停</value></data>
+  <data name="NovelReaderSasayakiLightTextColorLabel.Text" xml:space="preserve"><value>浅色文本</value></data>
+  <data name="NovelReaderSasayakiLightBackgroundColorLabel.Text" xml:space="preserve"><value>浅色背景</value></data>
+  <data name="NovelReaderSasayakiDarkTextColorLabel.Text" xml:space="preserve"><value>深色文本</value></data>
+  <data name="NovelReaderSasayakiDarkBackgroundColorLabel.Text" xml:space="preserve"><value>深色背景</value></data>
+  <data name="NovelReaderPopupSasayakiControls.AutomationProperties.Name" xml:space="preserve"><value>Sasayaki 控件</value></data>
+  <data name="NovelReaderPopupSasayakiPlayPauseButton.AutomationProperties.Name" xml:space="preserve"><value>播放/暂停</value></data>
+  <data name="NovelReaderPopupSasayakiReplayCueButton.AutomationProperties.Name" xml:space="preserve"><value>重播当前句</value></data>
+  <data name="NovelReaderPopupSasayakiJumpCueButton.AutomationProperties.Name" xml:space="preserve"><value>跳转到当前句</value></data>
   <data name="SasayakiLoadAudioButton.AutomationProperties.Name" xml:space="preserve"><value>加载音频</value></data>
   <data name="SasayakiSkipBackButton.AutomationProperties.Name" xml:space="preserve"><value>后退 15 秒</value></data>
   <data name="SasayakiPreviousCueButton.AutomationProperties.Name" xml:space="preserve"><value>上一句</value></data>
@@ -556,6 +599,7 @@
   <data name="ShortcutActionReaderClose" xml:space="preserve"><value>关闭阅读器</value></data>
   <data name="ShortcutActionReaderToggleFocusMode" xml:space="preserve"><value>切换专注模式</value></data>
   <data name="ShortcutActionReaderToggleStatistics" xml:space="preserve"><value>切换阅读计时</value></data>
+  <data name="ShortcutActionReaderToggleLyricsMode" xml:space="preserve"><value>歌词模式</value></data>
   <data name="ShortcutActionSasayakiPreviousCue" xml:space="preserve"><value>上一句</value></data>
   <data name="ShortcutActionSasayakiPlayPause" xml:space="preserve"><value>播放/暂停</value></data>
   <data name="ShortcutActionSasayakiNextCue" xml:space="preserve"><value>下一句</value></data>

@@ -24,5 +24,6 @@ public class VideoMiningMediaPipelineAssetTests
 
         popupCode.Should().Contain("PreflightMiningAsync");
         popupCode.Should().Contain("RequestVideoMiningMediaAsync");
+        popupCode.Should().Contain("RequestSasayakiMiningMediaAsync");
     }
 }
