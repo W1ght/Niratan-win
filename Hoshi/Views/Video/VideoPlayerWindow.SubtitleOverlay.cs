@@ -137,15 +137,6 @@ public sealed partial class VideoPlayerWindow
         SetSubtitleFontSize(e.NewValue);
     }
 
-    private void SubtitleFontFamilyComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (ViewModel == null || _isUpdatingSubtitleAppearance)
-            return;
-
-        ViewModel.SetSubtitleFontFamily(GetSelectedSubtitleFontFamily());
-        ApplySubtitleAppearance();
-    }
-
     private void SubtitleFontWeightNumberBox_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
     {
         if (ViewModel == null || _isUpdatingSubtitleAppearance || double.IsNaN(args.NewValue))
@@ -203,7 +194,6 @@ public sealed partial class VideoPlayerWindow
 
         _isUpdatingSubtitleAppearance = true;
         ViewModel.ResetSubtitleAppearance();
-        UpdateSubtitleFontFamilyComboBox();
         SubtitleFontSizeSlider.Value = ViewModel.SubtitleFontSize;
         SubtitleFontWeightNumberBox.Value = ViewModel.SubtitleFontWeight;
         SubtitleShadowRadiusSlider.Value = ViewModel.SubtitleShadowRadius;
@@ -595,7 +585,6 @@ public sealed partial class VideoPlayerWindow
             return;
 
         _isUpdatingSubtitleAppearance = true;
-        UpdateSubtitleFontFamilyComboBox();
         SubtitleFontSizeSlider.Value = ViewModel.SubtitleFontSize;
         SubtitleFontWeightNumberBox.Value = ViewModel.SubtitleFontWeight;
         SubtitleShadowRadiusSlider.Value = ViewModel.SubtitleShadowRadius;
@@ -613,35 +602,6 @@ public sealed partial class VideoPlayerWindow
             Colors.White);
         _isUpdatingSubtitleAppearance = false;
     }
-
-    private void UpdateSubtitleFontFamilyComboBox()
-    {
-        if (ViewModel == null)
-            return;
-
-        var target = ViewModel.SubtitleFontFamily;
-        for (var i = 0; i < SubtitleFontFamilyComboBox.Items.Count; i++)
-        {
-            if (SubtitleFontFamilyComboBox.Items[i] is ComboBoxItem item
-                && string.Equals(GetSubtitleFontFamilyItemValue(item), target, StringComparison.Ordinal))
-            {
-                SubtitleFontFamilyComboBox.SelectedIndex = i;
-                return;
-            }
-        }
-
-        SubtitleFontFamilyComboBox.SelectedIndex = 0;
-    }
-
-    private string GetSelectedSubtitleFontFamily()
-    {
-        return SubtitleFontFamilyComboBox.SelectedItem is ComboBoxItem item
-            ? GetSubtitleFontFamilyItemValue(item)
-            : "";
-    }
-
-    private static string GetSubtitleFontFamilyItemValue(ComboBoxItem item) =>
-        item.Tag?.ToString()?.Trim() ?? "";
 
     private void UpdateSubtitleMaskControls()
     {

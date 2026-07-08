@@ -453,7 +453,7 @@ public class VideoSubtitleLookupAssetTests
             "VideoSaturationSlider",
             "VideoGammaSlider",
             "VideoHueSlider",
-            "VideoSubtitleFontFamilyTextBox",
+            "VideoSubtitleFontFamilyComboBox",
             "VideoSubtitleFontSizeNumberBox",
             "VideoSubtitleFontWeightNumberBox",
             "VideoSubtitleShadowRadiusSlider",
@@ -475,6 +475,10 @@ public class VideoSubtitleLookupAssetTests
         pageXaml.Should().NotContain("ControlBar");
         pageXaml.Should().NotContain("Control Bar");
         pageXaml.Should().NotContain("Layout");
+        pageXaml.Should().Contain("ItemsSource=\"{x:Bind ViewModel.AvailableSubtitleFonts}\"");
+        pageXaml.Should().Contain("SelectedValuePath=\"SubtitleFontFamily\"");
+        pageXaml.Should().Contain("SelectedValue=\"{x:Bind ViewModel.SubtitleFontFamily, Mode=TwoWay}\"");
+        pageXaml.Should().NotContain("VideoSubtitleFontFamilyTextBox");
         pageCode.Should().Contain("Frame.Navigate(typeof(KeyboardShortcutsSettingsPage)");
         settingsXaml.Should().Contain("Tag=\"Hoshi.Views.Pages.KeyboardShortcutsSettingsPage\"");
         enResources.Should().Contain("VideoSettingsPageTitle.Text");
@@ -514,5 +518,28 @@ public class VideoSubtitleLookupAssetTests
         windowCode.Should().Contain("AutoPlayNextEpisode");
         windowCode.Should().NotContain("SeekStepSeconds");
         windowCode.Should().NotContain("VideoControlBarLayout");
+    }
+
+    [Fact]
+    public void VideoSubtitleFontPicker_UsesSharedFontOptions()
+    {
+        var settingsViewModelCode = ReadProjectFile("ViewModels", "Pages", "SettingsPageViewModel.cs");
+        var videoSettingsViewModelCode = ReadProjectFile("ViewModels", "Pages", "VideoSettingsPageViewModel.cs");
+        var videoPlayerViewModelCode = ReadProjectFile("ViewModels", "Pages", "VideoPlayerViewModel.cs");
+        var playerXaml = ReadProjectFile("Views", "Video", "VideoPlayerWindow.xaml");
+        var fontCatalogPath = Path.Combine(ProjectRoot, "Models", "Settings", "JapaneseFontCatalog.cs");
+
+        File.Exists(fontCatalogPath).Should().BeTrue("reader and video subtitle fonts should be defined once");
+        var fontCatalogCode = File.ReadAllText(fontCatalogPath);
+        fontCatalogCode.Should().Contain("Klee One");
+        fontCatalogCode.Should().Contain("DefaultReaderCssValue");
+        fontCatalogCode.Should().Contain("DefaultSubtitleFontFamily");
+        settingsViewModelCode.Should().Contain("JapaneseFontCatalog.Fonts");
+        videoSettingsViewModelCode.Should().Contain("JapaneseFontCatalog.Fonts");
+        videoPlayerViewModelCode.Should().Contain("JapaneseFontCatalog.Fonts");
+        playerXaml.Should().Contain("ItemsSource=\"{x:Bind ViewModel.AvailableSubtitleFonts}\"");
+        playerXaml.Should().Contain("SelectedValuePath=\"SubtitleFontFamily\"");
+        playerXaml.Should().Contain("SelectedValue=\"{x:Bind ViewModel.SubtitleFontFamily, Mode=TwoWay}\"");
+        playerXaml.Should().NotContain("<ComboBoxItem Tag=\"Yu Gothic UI\"");
     }
 }

@@ -17,8 +17,8 @@ public class VideoPlayerViewModelSubtitleAppearanceTests
         Get<int>(sut, "SubtitleFontWeight").Should().Be(700);
         Get<double>(sut, "SubtitleShadowRadius").Should().Be(3);
         Get<string>(sut, "SubtitleShadowRadiusText").Should().Be("3.0");
-        Get<string>(sut, "SubtitleFontFamily").Should().Be("");
-        Get<string>(sut, "SubtitleFontFamilyText").Should().Be("System Default");
+        Get<string>(sut, "SubtitleFontFamily").Should().Be("Klee One");
+        Get<string>(sut, "SubtitleFontFamilyText").Should().Be("Klee One");
         Get<string>(sut, "SubtitleColorHex").Should().Be("#FFFFFFFF");
         Get<string>(sut, "SubtitleLookupHighlightColorHex").Should().Be("#3EB5C1CB");
         Get<string>(sut, "SubtitleLookupHighlightTextColorHex").Should().Be("#FFFFFFFF");
@@ -83,8 +83,8 @@ public class VideoPlayerViewModelSubtitleAppearanceTests
 
         Get<double>(sut, "SubtitleFontSize").Should().Be(36);
         Get<int>(sut, "SubtitleFontWeight").Should().Be(700);
-        Get<string>(sut, "SubtitleFontFamily").Should().Be("");
-        Get<string>(sut, "SubtitleFontFamilyText").Should().Be("System Default");
+        Get<string>(sut, "SubtitleFontFamily").Should().Be("Klee One");
+        Get<string>(sut, "SubtitleFontFamilyText").Should().Be("Klee One");
         Get<double>(sut, "SubtitleShadowRadius").Should().Be(3);
         Get<string>(sut, "SubtitleColorHex").Should().Be("#FFFFFFFF");
     }
