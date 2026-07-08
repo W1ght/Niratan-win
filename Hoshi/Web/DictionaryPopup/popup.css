@@ -20,6 +20,7 @@ body {
     --popup-scrollbar-inset: 2px;
     --popup-scrollbar-thumb: rgba(80, 80, 80, 0.42);
     --popup-scrollbar-thumb-active: rgba(80, 80, 80, 0.64);
+    --popup-dictionary-card-gap: 8px;
     --text-color-light1: #555555;
     --text-color-light2: #666666;
     --text-color-light3: #777777;
@@ -355,6 +356,36 @@ html[data-hoshi-color-scheme="dark"] .gloss-image-link[data-appearance="monochro
 .glossary-group {
     position: relative;
     margin-top: 5px;
+    min-width: 0;
+    padding: 6px 8px;
+    border: 1px solid rgba(0, 0, 0, 0.14);
+    border-radius: 8px;
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.34),
+        0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.glossary-sections {
+    margin-top: 8px;
+}
+
+.glossary-sections.single-section {
+    display: block;
+}
+
+.glossary-sections > .glossary-group {
+    margin-top: 0;
+}
+
+.glossary-sections:not(.single-section) {
+    position: relative;
+}
+
+.glossary-sections:not(.single-section) > .glossary-group {
+    position: absolute;
+    left: 0;
+    top: 0;
+    visibility: hidden;
 }
 
 .glossary-group > summary {
@@ -550,6 +581,11 @@ html[data-hoshi-color-scheme="dark"] .gloss-image-link[data-appearance="monochro
         --popup-scrollbar-thumb: rgba(255, 255, 255, 0.34);
         --popup-scrollbar-thumb-active: rgba(255, 255, 255, 0.56);
     }
+
+    .glossary-group {
+        border-color: rgba(255, 255, 255, 0.09);
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.36);
+    }
 }
 
 html[data-hoshi-color-scheme="light"],
@@ -571,4 +607,27 @@ html[data-hoshi-color-scheme="dark"] body {
     --background-color-dark1: #333333;
     --popup-scrollbar-thumb: rgba(255, 255, 255, 0.34);
     --popup-scrollbar-thumb-active: rgba(255, 255, 255, 0.56);
+}
+
+html[data-hoshi-color-scheme="dark"] .glossary-group {
+    border-color: rgba(255, 255, 255, 0.09);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.36);
+}
+
+@media (max-width: 480px) {
+    .glossary-sections:not(.single-section) {
+        position: static;
+    }
+
+    .glossary-sections:not(.single-section) > .glossary-group {
+        position: static;
+        width: auto;
+        transform: none;
+        visibility: visible;
+        margin-top: var(--popup-dictionary-card-gap);
+    }
+
+    .glossary-sections:not(.single-section) > .glossary-group:first-child {
+        margin-top: 0;
+    }
 }
