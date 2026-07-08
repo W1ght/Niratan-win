@@ -146,9 +146,11 @@
                                           HorizontalContentAlignment="Stretch"
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE753;}">
                         <Button AutomationProperties.AutomationId="SyncSettingsButton"
-                                IsEnabled="False">
+                                x:Uid="SyncSettingsButton"
+                                Click="SyncSettings_Click">
                             <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock x:Uid="SettingsUnavailableText" Text="Unavailable" />
+                                <TextBlock x:Uid="SettingsOpenText" Text="Open" />
+                                <FontIcon Glyph="&#xE76C;" FontSize="14" />
                             </StackPanel>
                         </Button>
                     </toolkit:SettingsCard>

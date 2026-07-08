@@ -576,5 +576,27 @@
   <data name="ShortcutActionVideoIncreaseSubtitleSize" xml:space="preserve"><value>Increase Subtitle Size</value></data>
   <data name="ShortcutActionVideoDecreaseSubtitleSize" xml:space="preserve"><value>Decrease Subtitle Size</value></data>
   <data name="ShortcutActionVideoCloseOverlayOrFullscreen" xml:space="preserve"><value>Close Overlay or Full Screen</value></data>
+  <data name="TtuSyncSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>Back</value></data>
+  <data name="TtuSyncSettingsPageTitle.Text" xml:space="preserve"><value>ッツ Sync</value></data>
+  <data name="TtuSyncGeneralSectionHeader.Text" xml:space="preserve"><value>General</value></data>
+  <data name="TtuSyncEnableToggle.Header" xml:space="preserve"><value>Enable Sync</value></data>
+  <data name="TtuSyncEnableToggle.Description" xml:space="preserve"><value>Sync reading progress with ッツ-compatible storage</value></data>
+  <data name="TtuSyncGoogleDriveSectionHeader.Text" xml:space="preserve"><value>Google Drive</value></data>
+  <data name="TtuSyncGoogleClientIdTextBox.Header" xml:space="preserve"><value>Client ID</value></data>
+  <data name="TtuSyncGoogleClientIdTextBox.Description" xml:space="preserve"><value>Desktop OAuth client ID from the Google Cloud project used for Drive sync</value></data>
+  <data name="TtuSyncConnectionStatusCard.Header" xml:space="preserve"><value>Connection</value></data>
+  <data name="TtuSyncConnectionStatusCard.Description" xml:space="preserve"><value>Open the system browser to connect Google Drive</value></data>
+  <data name="TtuSyncConnectionStatusText.Text" xml:space="preserve"><value>Not connected</value></data>
+  <data name="TtuSyncConnectGoogleDriveButton.Content" xml:space="preserve"><value>Connect</value></data>
+  <data name="TtuSyncSignOutGoogleDriveButton.Content" xml:space="preserve"><value>Sign out</value></data>
+  <data name="TtuSyncClearGoogleDriveCacheButton.Content" xml:space="preserve"><value>Clear cache</value></data>
+  <data name="TtuSyncBehaviorSectionHeader.Text" xml:space="preserve"><value>Behavior</value></data>
+  <data name="TtuSyncModeComboBox.Header" xml:space="preserve"><value>Direction</value></data>
+  <data name="TtuSyncModeComboBox.Description" xml:space="preserve"><value>Automatically choose the newer bookmark or require manual direction selection</value></data>
+  <data name="TtuSyncAutoSyncToggle.Header" xml:space="preserve"><value>Auto Sync</value></data>
+  <data name="TtuSyncAutoSyncToggle.Description" xml:space="preserve"><value>Queue syncs during reader lifecycle events once a transport is configured</value></data>
+  <data name="TtuSyncDataSectionHeader.Text" xml:space="preserve"><value>Data</value></data>
+  <data name="TtuSyncUploadBooksToggle.Header" xml:space="preserve"><value>Upload Books</value></data>
+  <data name="TtuSyncUploadBooksToggle.Description" xml:space="preserve"><value>Upload book data on first sync when no ッツ book data exists remotely</value></data>
   <data name="AboutSettingsPageTitle.Text" xml:space="preserve"><value>About</value></data>
 </root>

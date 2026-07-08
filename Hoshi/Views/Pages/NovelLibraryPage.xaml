@@ -75,6 +75,57 @@
             </Button>
         </DataTemplate>
 
+        <DataTemplate x:Key="RemoteNovelBookTemplate" x:DataType="vmc:RemoteNovelBookItemViewModel">
+            <Button Width="180"
+                    Padding="0"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch"
+                    AutomationProperties.AutomationId="{x:Bind AutomationId, Mode=OneTime}"
+                    AutomationProperties.Name="{x:Bind Book.Title, Mode=OneTime}"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Command="{Binding ViewModel.DownloadRemoteBookCommand, ElementName=ThisPage}"
+                    CommandParameter="{x:Bind}">
+                <StackPanel Spacing="6">
+                    <Border Height="250"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            CornerRadius="8">
+                        <Grid>
+                            <FontIcon FontSize="48"
+                                      Glyph="&#xEBD3;"
+                                      Opacity="0.36"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                    <StackPanel Spacing="4">
+                        <Grid Margin="0,0,0,4"
+                              ColumnDefinitions="*,Auto"
+                              ColumnSpacing="8">
+                            <ProgressBar Height="4"
+                                         Minimum="0"
+                                         Maximum="100"
+                                         VerticalAlignment="Center"
+                                         Value="{x:Bind OverallProgressPercent, Mode=OneWay}" />
+                            <TextBlock Grid.Column="1"
+                                       VerticalAlignment="Center"
+                                       FontWeight="SemiBold"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="{x:Bind OverallProgressText, Mode=OneWay}" />
+                        </Grid>
+                        <ProgressBar Height="3"
+                                     Minimum="0"
+                                     Maximum="1"
+                                     Value="{x:Bind DownloadProgress, Mode=OneWay}"
+                                     Visibility="{x:Bind IsDownloading, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <TextBlock Text="{x:Bind Book.Title, Mode=OneTime}"
+                                   TextWrapping="Wrap"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    </StackPanel>
+                </StackPanel>
+            </Button>
+        </DataTemplate>
+
         <DataTemplate x:Key="StatisticsDistributionTemplate" x:DataType="novel:NovelStatisticsDistributionRow">
             <Grid Padding="0,6"
                   ColumnDefinitions="*,Auto"
@@ -100,7 +151,7 @@
           Drop="NovelLibrary_Drop">
         <Grid Grid.Row="0"
               Padding="20,14,36,16"
-              ColumnDefinitions="Auto, *, Auto, Auto, Auto"
+              ColumnDefinitions="Auto, *, Auto, Auto, Auto, Auto"
               ColumnSpacing="12">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <FontIcon FontSize="24" Glyph="&#xE82D;" />
@@ -133,6 +184,16 @@
                       ToolTipService.ToolTip="Sort novels" />
 
             <Button Grid.Column="4"
+                    x:Uid="NovelLibraryRefreshGoogleDriveButton"
+                    AutomationProperties.AutomationId="NovelLibraryRefreshGoogleDriveButton"
+                    Command="{x:Bind ViewModel.RefreshRemoteBooksCommand}"
+                    ToolTipService.ToolTip="Refresh Google Drive books">
+                <Button.Content>
+                    <FontIcon Glyph="&#xE895;" />
+                </Button.Content>
+            </Button>
+
+            <Button Grid.Column="5"
                     AutomationProperties.AutomationId="ImportNovelButton"
                     Command="{x:Bind ViewModel.ImportNovelCommand}"
                     ToolTipService.ToolTip="Import EPUB">
@@ -197,17 +258,32 @@
                    Text="No novels imported."
                    Visibility="{x:Bind ViewModel.NoNovels, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
 
-        <GridView Grid.Row="2"
-                  AutomationProperties.AutomationId="NovelBookGridView"
-                  AllowDrop="True"
-                  CanDragItems="True"
-                  CanReorderItems="True"
-                  DragItemsCompleted="NovelBookGridView_DragItemsCompleted"
-                  Padding="0,0,16,0"
-                  IsItemClickEnabled="True"
-                  ItemClick="GridView_ItemClick"
-                  ItemTemplate="{StaticResource NovelBookTemplate}"
-                  ItemsSource="{x:Bind ViewModel.NovelBooks, Mode=OneWay}"
-                  SelectionMode="None" />
+        <Grid Grid.Row="2" RowDefinitions="Auto,*">
+            <ItemsControl Grid.Row="0"
+                          Margin="0,0,16,16"
+                          Padding="20,0,0,0"
+                          AutomationProperties.AutomationId="RemoteNovelBookItemsControl"
+                          ItemTemplate="{StaticResource RemoteNovelBookTemplate}"
+                          ItemsSource="{x:Bind ViewModel.RemoteBooks, Mode=OneWay}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <ItemsWrapGrid Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+
+            <GridView Grid.Row="1"
+                      AutomationProperties.AutomationId="NovelBookGridView"
+                      AllowDrop="True"
+                      CanDragItems="True"
+                      CanReorderItems="True"
+                      DragItemsCompleted="NovelBookGridView_DragItemsCompleted"
+                      Padding="0,0,16,0"
+                      IsItemClickEnabled="True"
+                      ItemClick="GridView_ItemClick"
+                      ItemTemplate="{StaticResource NovelBookTemplate}"
+                      ItemsSource="{x:Bind ViewModel.NovelBooks, Mode=OneWay}"
+                      SelectionMode="None" />
+        </Grid>
     </Grid>
 </Page>
