@@ -29,7 +29,14 @@ jobs:
     - name: Create Minimal Zip
       shell: pwsh
       run: |
-        Compress-Archive -Path Hoshi/bin/Release/net10.0-windows*/win-x64/publish/* -DestinationPath Hoshi.Minimal.x64.zip
+        $publishDir = Get-ChildItem -Path Hoshi/bin -Recurse -Directory -Filter publish |
+          Where-Object { $_.FullName -like '*\x64\Release\*win-x64*' } |
+          Sort-Object LastWriteTime -Descending |
+          Select-Object -First 1
+        if (-not $publishDir) {
+          throw "Publish directory not found under Hoshi/bin"
+        }
+        Compress-Archive -Path (Join-Path $publishDir.FullName '*') -DestinationPath Hoshi.Minimal.x64.zip
 
     - name: Publish Full for Setup
       run: dotnet publish Hoshi/Hoshi.csproj -c Release -r win-x64 --self-contained true -p:Platform=x64 -p:PublishProfile=win-x64.pubxml

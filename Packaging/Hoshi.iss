@@ -4,7 +4,7 @@
 #define MyAppExeName "Hoshi.exe"
 #define MyArch "x64"
 
-#define AppPublishPath "..\Hoshi\bin\Release\net10.0-windows10.0.22621.0\win-" + MyArch + "\publish\"
+#define AppPublishPath "..\Hoshi\bin\" + MyArch + "\Release\net10.0-windows10.0.22621.0\win-" + MyArch + "\publish\"
 #define FullExePath AppPublishPath + MyAppExeName
 
 #ifExist FullExePath
