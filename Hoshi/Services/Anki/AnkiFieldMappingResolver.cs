@@ -27,7 +27,8 @@ internal static class AnkiFieldMappingResolver
         var mappings = ResolveForMining(noteType, savedMappings, context);
         return new AnkiMiningMediaNeeds(
             mappings.Values.Any(UsesVideoScreenshot),
-            mappings.Values.Any(UsesVideoAudioClip));
+            mappings.Values.Any(UsesVideoAudioClip),
+            mappings.Values.Any(UsesSasayakiAudio));
     }
 
     private static bool UsesVideoScreenshot(string value) =>
@@ -37,6 +38,10 @@ internal static class AnkiFieldMappingResolver
     private static bool UsesVideoAudioClip(string value) =>
         !string.IsNullOrWhiteSpace(value)
         && value.Contains("{video-audio-clip}", System.StringComparison.Ordinal);
+
+    private static bool UsesSasayakiAudio(string value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && value.Contains("{sasayaki-audio}", System.StringComparison.Ordinal);
 
     private static bool IsVideoContext(AnkiMiningContext context) =>
         !string.IsNullOrWhiteSpace(context.VideoFileName)

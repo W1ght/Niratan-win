@@ -23,7 +23,7 @@ public sealed class SasayakiSidecarService : ISasayakiSidecarService
         {
             var path = Path.Combine(bookRootPath, fileName);
             var data = await TryReadAsync<SasayakiMatchData>(path, cancellationToken);
-            if (data != null)
+            if (data?.IsCurrentSchemaVersion == true)
                 return data;
         }
 

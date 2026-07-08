@@ -223,13 +223,42 @@ public sealed class NovelReaderPageViewModelTests
         sut.AllTimeStatistics.CharactersRead.Should().Be(60);
         sut.StatisticsSessionCharactersText.Should().Be("60");
         sut.StatisticsSessionSpeedText.Should().Be("1,800 / h");
-        sut.StatisticsSessionTimeText.Should().Be("00:02:00");
+        sut.StatisticsSessionTimeText.Should().Be("2m 0s");
+        sut.StatisticsSessionChromeTimeText.Should().Be("0:02");
+        sut.StatisticsTodayTimeText.Should().Be("2m 0s");
+        sut.StatisticsAllTimeTimeText.Should().Be("2m 0s");
 
         var saved = await statisticsService.LoadAsync(temp.Path, ct);
         saved.Should().ContainSingle().Which.Should().BeEquivalentTo(
             sut.TodaysStatistics,
             options => options.Excluding(s => s.LastStatisticModified));
         saved.Single().LastStatisticModified.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task FlushStatisticsAsync_UsesAndroidFloorCharacterProgressForTotalsAndSpeed()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var sut = CreateInitializedSut(
+            temp.Path,
+            new ReaderHighlightService(),
+            novelStatisticsSidecarService: new NovelStatisticsSidecarService());
+        sut.SetChapterCharacterCounts([3]);
+        sut.SetChapter(0, count: 1);
+        await sut.LoadStatisticsAsync(ct);
+
+        sut.StartStatisticsTracking(new DateTimeOffset(2026, 6, 24, 0, 0, 0, TimeSpan.Zero));
+        sut.UpdateProgress(0.5);
+        await sut.FlushStatisticsAsync(
+            new DateTimeOffset(2026, 6, 24, 1, 0, 0, TimeSpan.Zero),
+            ct);
+
+        sut.SessionStatistics.CharactersRead.Should().Be(1);
+        sut.SessionStatistics.ReadingTime.Should().Be(3600);
+        sut.SessionStatistics.LastReadingSpeed.Should().Be(1);
+        sut.TodaysStatistics.CharactersRead.Should().Be(1);
+        sut.AllTimeStatistics.CharactersRead.Should().Be(1);
     }
 
     private static NovelReaderPageViewModel CreateInitializedSut(

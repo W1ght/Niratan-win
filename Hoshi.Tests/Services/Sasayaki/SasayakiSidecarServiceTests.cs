@@ -44,6 +44,22 @@ public sealed class SasayakiSidecarServiceTests
     }
 
     [Fact]
+    public async Task LoadMatchAsync_IgnoresStaleMatcherSchema()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var service = new SasayakiSidecarService();
+        var data = CreateMatchData();
+        data.SchemaVersion = SasayakiMatchData.CurrentSchemaVersion - 1;
+        var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
+        await File.WriteAllTextAsync(System.IO.Path.Combine(temp.Path, "sasayaki_match.json"), json, ct);
+
+        var loaded = await service.LoadMatchAsync(temp.Path, ct);
+
+        loaded.Should().BeNull();
+    }
+
+    [Fact]
     public async Task SavePlaybackAsync_WritesMacCompatiblePlaybackShape()
     {
         var ct = TestContext.Current.CancellationToken;
