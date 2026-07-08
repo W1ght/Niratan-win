@@ -30,7 +30,7 @@
                                 x:Uid="SettingsProfilesNavItem"
                                 AutomationProperties.AutomationId="SettingsProfilesNavItem"
                                 Content="Profiles"
-                                IsEnabled="False">
+                                Tag="Hoshi.Views.Pages.ProfilesSettingsPage">
                 <NavigationViewItem.Icon>
                     <FontIcon Glyph="&#xE77B;" />
                 </NavigationViewItem.Icon>

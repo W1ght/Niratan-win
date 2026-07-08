@@ -13,6 +13,7 @@ using Hoshi.Models;
 using Hoshi.Models.DTO;
 using Hoshi.Models.Novel;
 using Hoshi.Services.Novels;
+using Hoshi.Services.Profiles;
 using Hoshi.Services.UI;
 
 namespace Hoshi.ViewModels.Pages;
@@ -25,6 +26,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
     private readonly IReaderHighlightService _readerHighlightService;
     private readonly INovelBookSidecarService _novelBookSidecarService;
     private readonly INovelStatisticsSidecarService _novelStatisticsSidecarService;
+    private readonly IProfileRuntimeService _profileRuntime;
 
     [ObservableProperty]
     public partial NovelBook? CurrentBook { get; set; }
@@ -126,7 +128,8 @@ public partial class NovelReaderPageViewModel : ObservableObject
         IMessenger messenger,
         IReaderHighlightService readerHighlightService,
         INovelBookSidecarService novelBookSidecarService,
-        INovelStatisticsSidecarService novelStatisticsSidecarService
+        INovelStatisticsSidecarService novelStatisticsSidecarService,
+        IProfileRuntimeService profileRuntime
     )
     {
         _novelLibraryService = novelLibraryService;
@@ -135,6 +138,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
         _readerHighlightService = readerHighlightService;
         _novelBookSidecarService = novelBookSidecarService;
         _novelStatisticsSidecarService = novelStatisticsSidecarService;
+        _profileRuntime = profileRuntime;
     }
 
     public async Task InitializeAsync(NovelReaderNavigationArgs args)
@@ -150,7 +154,10 @@ public partial class NovelReaderPageViewModel : ObservableObject
         OnPropertyChanged(nameof(ReaderTitle));
 
         if (CurrentBook != null)
+        {
+            await _profileRuntime.ActivateForBookAsync(CurrentBook);
             await _novelLibraryService.MarkOpenedAsync(CurrentBook.Id);
+        }
     }
 
     public void SetChapter(int index, int count)

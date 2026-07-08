@@ -34,4 +34,10 @@ public interface INovelLibraryService
         IReadOnlyList<string> orderedBookIds,
         CancellationToken ct = default
     );
+
+    Task<Result> SetNovelProfileAsync(
+        string bookId,
+        string? profileId,
+        CancellationToken ct = default
+    );
 }

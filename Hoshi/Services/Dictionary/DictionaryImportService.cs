@@ -20,16 +20,19 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
     private readonly ILogger<DictionaryImportService> _logger;
     private readonly IDictionaryLookupService _lookupService;
     private readonly string _dictionaryStorageDir;
+    private readonly IDictionaryProfileContext? _profileContext;
     private readonly SemaphoreSlim _fsLock = new(1, 1);
 
     public DictionaryImportService(
         ILogger<DictionaryImportService> logger,
         IDictionaryLookupService lookupService,
-        string? dictionaryStorageDir = null)
+        string? dictionaryStorageDir = null,
+        IDictionaryProfileContext? profileContext = null)
     {
         _logger = logger;
         _lookupService = lookupService;
         _dictionaryStorageDir = dictionaryStorageDir ?? GetDictionaryStorageDir();
+        _profileContext = profileContext;
     }
 
     public async Task<DictionaryImportResult> ImportAsync(string zipPath)
@@ -123,6 +126,7 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
                         var targetDir = Path.Combine(typeDir, dictName);
                         if (!Directory.Exists(targetDir))
                             CopyDirectory(importedDir, targetDir);
+                        EnableImportedDictionaryInActiveConfig(type, dictName);
                     }
 
                     _logger.LogInformation(
@@ -148,7 +152,7 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
             {
                 try
                     {
-                        NormalizeConfig(_dictionaryStorageDir);
+                        NormalizeActiveConfig(_dictionaryStorageDir);
                         await _lookupService.RebuildQueryAsync();
                     }
                     catch (Exception ex)
@@ -216,7 +220,7 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
                 return false;
 
             Directory.Delete(dictPath, recursive: true);
-            RemoveDictionaryConfig(dictDir, type, dictName);
+            RemoveDictionaryConfigFromAllProfiles(type, dictName);
             return true;
         });
     }
@@ -232,7 +236,7 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
                 if (!Directory.Exists(dictDir))
                     return new List<InstalledDictionary>();
 
-                var config = NormalizeConfig(dictDir);
+                var config = NormalizeActiveConfig(dictDir);
                 var types = type.HasValue ? [type.Value] : Enum.GetValues<DictionaryType>();
 
                 var dictionaries = types
@@ -258,7 +262,8 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
             {
                 var dictDir = _dictionaryStorageDir;
                 Directory.CreateDirectory(dictDir);
-                var config = NormalizeConfig(dictDir);
+                var configRoot = GetActiveConfigRoot();
+                var config = NormalizeActiveConfig(dictDir);
                 var existing = DictionaryConfigurationStore.GetEntries(config, type)
                     .ToDictionary(e => e.FileName, StringComparer.Ordinal);
                 var entries = orderedNames
@@ -266,7 +271,7 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
                     .Select((name, index) => existing[name] with { Order = index })
                     .ToList();
                 config = DictionaryConfigurationStore.WithEntries(config, type, entries);
-                DictionaryConfigurationStore.Save(dictDir, config);
+                DictionaryConfigurationStore.Save(configRoot, config);
             });
 
             await _lookupService.RebuildQueryAsync();
@@ -286,12 +291,13 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
             {
                 var dictDir = _dictionaryStorageDir;
                 Directory.CreateDirectory(dictDir);
-                var config = NormalizeConfig(dictDir);
+                var configRoot = GetActiveConfigRoot();
+                var config = NormalizeActiveConfig(dictDir);
                 var entries = DictionaryConfigurationStore.GetEntries(config, type)
                     .Select(entry => entry.FileName == dictName ? entry with { IsEnabled = enabled } : entry)
                     .ToList();
                 config = DictionaryConfigurationStore.WithEntries(config, type, entries);
-                DictionaryConfigurationStore.Save(dictDir, config);
+                DictionaryConfigurationStore.Save(configRoot, config);
             });
 
             await _lookupService.RebuildQueryAsync();
@@ -491,7 +497,16 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
 
     internal static DictionaryConfig NormalizeConfig(string dictDir)
     {
+        return NormalizeConfig(dictDir, dictDir, enableUnconfigured: true);
+    }
+
+    internal static DictionaryConfig NormalizeConfig(
+        string dictDir,
+        string configRoot,
+        bool enableUnconfigured)
+    {
         Directory.CreateDirectory(dictDir);
+        Directory.CreateDirectory(configRoot);
         EnsureTypeDirectories(dictDir);
         CleanupAbandonedImportStagingDirs(dictDir);
         MigrateLegacyFlatDictionaries(dictDir);
@@ -513,17 +528,14 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
                 .Select(name => name!));
         }
 
-        var config = DictionaryConfigurationStore.Load(dictDir);
-        var normalized = config;
-        foreach (var t in Enum.GetValues<DictionaryType>())
-        {
-            var entries = DictionaryConfigurationStore.MergeWithInstalled(
-                DictionaryConfigurationStore.GetEntries(normalized, t),
-                installedByType[t]);
-            normalized = DictionaryConfigurationStore.WithEntries(normalized, t, entries);
-        }
+        var config = DictionaryConfigurationStore.Load(configRoot);
+        var normalized = DictionaryConfigurationStore.NormalizeForInstalled(
+            config,
+            Enum.GetValues<DictionaryType>(),
+            type => installedByType[type],
+            enableUnconfigured);
 
-        DictionaryConfigurationStore.Save(dictDir, normalized);
+        DictionaryConfigurationStore.Save(configRoot, normalized);
         return normalized;
     }
 
@@ -750,7 +762,8 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
             yield break;
 
         // hoshidicts native binary format: type comes from config
-        if (File.Exists(Path.Combine(dir, ".hoshidicts_1")))
+        if (File.Exists(Path.Combine(dir, ".hoshidicts_1"))
+            || File.Exists(Path.Combine(dir, ".hoshidicts_2")))
         {
             var dictName = Path.GetFileName(dir);
             var config = DictionaryConfigurationStore.Load(Path.GetDirectoryName(dir) ?? GetDictionaryStorageDir());
@@ -782,15 +795,66 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
             yield return DictionaryType.Pitch;
     }
 
-    private static void RemoveDictionaryConfig(string dictDir, DictionaryType type, string dictName)
+    private void RemoveDictionaryConfigFromAllProfiles(DictionaryType type, string dictName)
     {
-        var config = DictionaryConfigurationStore.Load(dictDir);
+        foreach (var configRoot in GetConfigRootsForCleanup())
+            RemoveDictionaryConfig(configRoot, type, dictName);
+    }
+
+    private IEnumerable<string> GetConfigRootsForCleanup()
+    {
+        yield return _dictionaryStorageDir;
+
+        if (_profileContext == null)
+            yield break;
+
+        foreach (var profileId in _profileContext.ProfileIds)
+            yield return _profileContext.GetDictionaryConfigRoot(profileId);
+    }
+
+    private DictionaryConfig NormalizeActiveConfig(string dictDir)
+    {
+        var profileId = _profileContext?.ActiveProfileId;
+        return NormalizeConfig(
+            dictDir,
+            GetActiveConfigRoot(),
+            profileId is null || _profileContext!.EnableUnconfiguredDictionariesForProfile(profileId));
+    }
+
+    private void EnableImportedDictionaryInActiveConfig(DictionaryType type, string dictName)
+    {
+        var configRoot = GetActiveConfigRoot();
+        var config = DictionaryConfigurationStore.Load(configRoot);
+        var entries = DictionaryConfigurationStore.GetEntries(config, type).ToList();
+        var existingIndex = entries.FindIndex(entry => string.Equals(entry.FileName, dictName, StringComparison.Ordinal));
+        if (existingIndex >= 0)
+        {
+            entries[existingIndex] = entries[existingIndex] with { IsEnabled = true };
+        }
+        else
+        {
+            var nextOrder = entries.Count == 0 ? 0 : entries.Max(entry => entry.Order) + 1;
+            entries.Add(new DictionaryConfigEntry(dictName, true, nextOrder));
+        }
+
+        config = DictionaryConfigurationStore.WithEntries(config, type, entries);
+        DictionaryConfigurationStore.Save(configRoot, config);
+    }
+
+    private string GetActiveConfigRoot() =>
+        _profileContext == null
+            ? _dictionaryStorageDir
+            : _profileContext.GetDictionaryConfigRoot(_profileContext.ActiveProfileId);
+
+    private static void RemoveDictionaryConfig(string configRoot, DictionaryType type, string dictName)
+    {
+        var config = DictionaryConfigurationStore.Load(configRoot);
         var entries = DictionaryConfigurationStore.GetEntries(config, type)
             .Where(e => !string.Equals(e.FileName, dictName, StringComparison.Ordinal))
             .Select((entry, index) => entry with { Order = index })
             .ToList();
         config = DictionaryConfigurationStore.WithEntries(config, type, entries);
-        DictionaryConfigurationStore.Save(dictDir, config);
+        DictionaryConfigurationStore.Save(configRoot, config);
     }
 
     private static IEnumerable<DictionaryType> ImportTypes(long termCount, long freqCount, long pitchCount)
@@ -849,7 +913,9 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
         if (string.IsNullOrWhiteSpace(content))
             return DictionaryBankKind.Meta;
 
-        if (content.Contains("\"pitch\"", StringComparison.OrdinalIgnoreCase))
+        if (content.Contains("\"pitch\"", StringComparison.OrdinalIgnoreCase)
+            || content.Contains("\"ipa\"", StringComparison.OrdinalIgnoreCase)
+            || content.Contains("\"transcriptions\"", StringComparison.OrdinalIgnoreCase))
             return DictionaryBankKind.Pitch;
         if (content.Contains("\"freq\"", StringComparison.OrdinalIgnoreCase)
             || content.Contains("\"frequency\"", StringComparison.OrdinalIgnoreCase))

@@ -25,7 +25,7 @@ extern "C" {
 
 #include <stdint.h>
 
-/* Opaque session: holds DictionaryQuery + Deinflector + Lookup */
+/* Opaque session: holds DictionaryQuery + LanguageProcessor + Lookup */
 #ifdef __cplusplus
 struct hoshi_session_t;
 #else
@@ -45,6 +45,13 @@ HOSHI_API void hoshi_session_rebuild(
     const char* const* freq_paths, int freq_count,
     const char* const* pitch_paths, int pitch_count);
 
+HOSHI_API void hoshi_session_rebuild_with_language(
+    hoshi_session_t* session,
+    const char* const* term_paths, int term_count,
+    const char* const* freq_paths, int freq_count,
+    const char* const* pitch_paths, int pitch_count,
+    const char* language_id);
+
 /*
  * Import a Yomitan-format ZIP dictionary.
  * Returns JSON: { "success": bool, "title": "...", "termCount": N, "metaCount": N,
@@ -63,7 +70,8 @@ HOSHI_API char* hoshi_import(const char* zip_path, const char* output_dir);
  *                       "definitionTags": "...", "termTags": "..." }, ...],
  *      "frequencies": [{ "dictName": "...",
  *                        "frequencies": [{ "value": N, "displayValue": "..." }, ...] }, ...],
- *      "pitches": [{ "dictName": "...", "pitchPositions": [N, ...] }, ...]
+ *      "pitches": [{ "dictName": "...", "pitchPositions": [N, ...],
+ *                    "transcriptions": ["...", ...] }, ...]
  *    }
  * }, ...]
  * Caller frees with hoshi_string_free.

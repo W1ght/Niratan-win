@@ -83,6 +83,18 @@ public sealed class ShortcutServiceTests
                 });
         }
 
+        public void ReplaceCurrent(AppSettings settings)
+        {
+            Current = settings;
+            SettingChanged?.Invoke(
+                this,
+                new SettingsChangedEventArgs
+                {
+                    PropertyName = nameof(Current),
+                    NewValue = settings,
+                });
+        }
+
         public Task SaveAsync()
         {
             SaveCount++;

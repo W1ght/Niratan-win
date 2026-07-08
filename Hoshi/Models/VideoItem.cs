@@ -17,6 +17,7 @@ public class VideoItem
     public string? SubtitleSelectionPath { get; set; }
     public int? SubtitleSelectionTrackId { get; set; }
     public string? SubtitleSelectionTrackName { get; set; }
+    public string? ProfileId { get; set; }
 
     public VideoSubtitleSelection GetSubtitleSelection() =>
         SubtitleSelectionKind switch
