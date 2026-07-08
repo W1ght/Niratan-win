@@ -52,4 +52,9 @@ public interface IDataService
         double durationSeconds,
         CancellationToken ct = default
     );
+    Task SaveVideoPlaybackStateAsync(
+        string videoId,
+        VideoPlaybackState state,
+        CancellationToken ct = default
+    );
 }

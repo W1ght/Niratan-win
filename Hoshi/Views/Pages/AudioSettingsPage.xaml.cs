@@ -23,6 +23,14 @@ public sealed partial class AudioSettingsPage : Page
         ViewModel.OnNavigatedFrom();
     }
 
+    protected override void OnNavigatedTo(NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        AudioSettingsBackButton.Visibility = e.Parameter is SettingsNavigationMode.Embedded
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
+
     private void BackButton_Click(object sender, RoutedEventArgs e)
     {
         App.GetService<INavigationService>().GoBack();

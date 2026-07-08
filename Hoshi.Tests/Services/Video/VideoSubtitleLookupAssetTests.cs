@@ -28,6 +28,9 @@ public class VideoSubtitleLookupAssetTests
                 .Select(File.ReadAllText));
     }
 
+    private static string ReadProjectFile(params string[] parts) =>
+        File.ReadAllText(Path.Combine([ProjectRoot, .. parts]));
+
     [Fact]
     public void VideoSubtitleLookup_UsesWebViewDomRangeHitTesting()
     {
@@ -45,6 +48,34 @@ public class VideoSubtitleLookupAssetTests
         script.Should().Contain("getClientRects()");
         script.Should().Contain("getCharacterAtPoint");
         script.Should().Contain("window.chrome?.webview?.postMessage");
+    }
+
+    [Fact]
+    public void VideoSubtitleLookup_UsesFloatingDictionaryPopup()
+    {
+        var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.xaml"));
+        var code = ReadVideoPlayerWindowCode();
+
+        xaml.Should().Contain("x:Name=\"VideoDictionaryPanelChrome\"");
+        xaml.Should().Contain("HorizontalAlignment=\"Stretch\"");
+        xaml.Should().Contain("VerticalAlignment=\"Stretch\"");
+        xaml.Should().Contain("BorderThickness=\"0\"");
+        xaml.Should().Contain("Visibility=\"Collapsed\"");
+        xaml.Should().Contain("x:Name=\"PopupOverlayCanvas\"");
+        xaml.Should().Contain("SizeChanged=\"PopupOverlayCanvas_SizeChanged\"");
+        code.Should().NotContain("_popupOverlay.EmbedRoot(PopupOverlayCanvas)");
+        code.Should().NotContain("IGlobalLookupPopupService");
+        code.Should().NotContain("GlobalLookupPopupWindow");
+        code.Should().NotContain("_globalLookupPopupService");
+        code.Should().Contain("SubtitleWebView.TransformToVisual(PopupOverlayCanvas)");
+        code.Should().Contain("VideoDictionaryPanelChrome.Visibility = Visibility.Visible");
+        code.Should().Contain("EnsureVideoDictionaryOverlaySurfaceVisible(overlay);");
+        code.Should().Contain("EnsureVideoDictionaryOverlaySurfaceVisible(EnsurePopupOverlay());");
+        code.Should().Contain("await overlay.ShowLookupAsync(");
+        code.Should().Contain("VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed");
+        code.Should().Contain("_popupOverlay?.UpdateRootSize(e.NewSize.Width, e.NewSize.Height)");
+        code.Should().Contain("TryDismissLookupPopupFromOutsidePointer");
+        code.Should().Contain("IsDescendantOf(source, VideoDictionaryPanelChrome)");
     }
 
     [Fact]
@@ -109,7 +140,7 @@ public class VideoSubtitleLookupAssetTests
     }
 
     [Fact]
-    public void VideoPlayerWindow_MaximizesAndFillsHostWhenOpeningVideoForTesting()
+    public void VideoPlayerWindow_MaximizesAndPreservesSourceAspectRatioWhenOpeningVideoForTesting()
     {
         var windowCode = ReadVideoPlayerWindowCode();
         var mpvCode = File.ReadAllText(Path.Combine(ProjectRoot, "Services", "Video", "MpvPlaybackEngine.cs"));
@@ -117,7 +148,8 @@ public class VideoSubtitleLookupAssetTests
         windowCode.Should().Contain("MaximizeVideoWindowForTesting();");
         windowCode.Should().Contain("OverlappedPresenter");
         windowCode.Should().Contain("presenter.Maximize();");
-        mpvCode.Should().Contain("MpvNative.SetOptionStringChecked(_handle, \"panscan\", \"1.0\")");
+        mpvCode.Should().Contain("MpvNative.SetOptionStringChecked(_handle, \"panscan\", \"0.0\")");
+        mpvCode.Should().NotContain("MpvNative.SetOptionStringChecked(_handle, \"panscan\", \"1.0\")");
         mpvCode.Should().Contain("MpvNative.SetOptionStringChecked(_handle, \"sub-visibility\", \"no\")");
     }
 
@@ -231,6 +263,23 @@ public class VideoSubtitleLookupAssetTests
     }
 
     [Fact]
+    public void VideoPlayerWindow_BottomOverlayAndNativeHostPreserveWindowCornerResize()
+    {
+        var code = ReadVideoPlayerWindowCode();
+
+        code.Should().Contain("RootGrid.AddHandler(UIElement.PointerPressedEvent");
+        code.Should().Contain("TryGetBottomCornerResizeDirection");
+        code.Should().Contain("BeginWindowResize");
+        code.Should().Contain("VideoWindowResizeDirection.BottomLeft");
+        code.Should().Contain("VideoWindowResizeDirection.BottomRight");
+        code.Should().Contain("WM_SYSCOMMAND");
+        code.Should().Contain("SC_SIZE");
+        code.Should().Contain("ReleaseCapture();");
+        code.Should().Contain("SendMessageW(");
+        code.Should().Contain("_parentHwnd");
+    }
+
+    [Fact]
     public void VideoPlayerWindow_RightDockInspectorExposesNiratanPanelTabs()
     {
         var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.xaml"));
@@ -247,7 +296,8 @@ public class VideoSubtitleLookupAssetTests
         xaml.Should().Contain("Text=\"字幕列表\"");
         xaml.Should().Contain("Text=\"章节\"");
         xaml.Should().Contain("Click=\"LookupCurrentSubtitleButton_Click\"");
-        xaml.Should().Contain("挖卡历史记录源接入后会显示在这里。");
+        xaml.Should().Contain("暂无挖卡历史。保存当前字幕后会显示在这里。");
+        xaml.Should().NotContain("挖卡历史记录源接入后会显示在这里。");
         xaml.Should().Contain("x:Name=\"InspectorMiningHistoryContent\"");
         xaml.Should().Contain("x:Name=\"InspectorSubtitleListContent\"");
         xaml.Should().Contain("x:Name=\"InspectorChaptersContent\"");
@@ -335,7 +385,7 @@ public class VideoSubtitleLookupAssetTests
         transcriptCode.Should().Contain("private void UpdateTranscriptListVisibility()");
         playbackCode.Should().Contain("partial class VideoPlayerWindow");
         playbackCode.Should().Contain("private async Task TogglePlayPauseAsync");
-        playbackCode.Should().Contain("private async Task HandleVideoShortcutKeyAsync");
+        playbackCode.Should().Contain("private async Task HandleVideoShortcutActionAsync");
         subtitleOverlayCode.Should().Contain("partial class VideoPlayerWindow");
         subtitleOverlayCode.Should().Contain("private void ApplySubtitleAppearance()");
         inspectorCode.Should().Contain("partial class VideoPlayerWindow");
@@ -353,5 +403,116 @@ public class VideoSubtitleLookupAssetTests
         appCode.Should().Contain("IVideoSubtitleTranscriptExtractor, FfmpegVideoSubtitleTranscriptExtractor");
         inspectorCode.Should().Contain("_isInspectorOpen = true");
         inspectorCode.Should().Contain("InspectorPanel.Visibility = Visibility.Visible");
+    }
+
+    [Fact]
+    public void VideoSettingsPage_ExposesNiratanSettingsWithoutControlBarLayout()
+    {
+        var pagePath = Path.Combine(ProjectRoot, "Views", "Pages", "VideoSettingsPage.xaml");
+        var settingsXaml = ReadProjectFile("Views", "Pages", "SettingsPage.xaml");
+        var advancedXaml = ReadProjectFile("Views", "Pages", "AdvancedSettingsPage.xaml");
+        var advancedCode = ReadProjectFile("Views", "Pages", "AdvancedSettingsPage.xaml.cs");
+        var appCode = ReadProjectFile("App.xaml.cs");
+        var navigationCode = ReadProjectFile("Services", "UI", "NavigationService.cs");
+        var appPageCode = ReadProjectFile("Enums", "AppPage.cs");
+        var enResources = ReadProjectFile("Strings", "en-US", "Resources.resw");
+        var zhResources = ReadProjectFile("Strings", "zh-CN", "Resources.resw");
+
+        File.Exists(pagePath).Should().BeTrue();
+        var pageXaml = File.ReadAllText(pagePath);
+        var pageCode = ReadProjectFile("Views", "Pages", "VideoSettingsPage.xaml.cs");
+        XDocument.Parse(pageXaml);
+
+        settingsXaml.Should().Contain("Tag=\"Hoshi.Views.Pages.VideoSettingsPage\"");
+        settingsXaml.Should().NotContain("Content=\"Video\"\r\n                                IsEnabled=\"False\"");
+        advancedXaml.Should().Contain("x:Uid=\"VideoSettingsButton\"");
+        advancedXaml.Should().Contain("Click=\"VideoSettings_Click\"");
+        advancedXaml.Should().NotContain("AutomationProperties.AutomationId=\"VideoSettingsButton\"\r\n                                IsEnabled=\"False\"");
+        advancedCode.Should().Contain("private void VideoSettings_Click");
+        advancedCode.Should().Contain("NavigateSettingsSubpage(typeof(VideoSettingsPage))");
+        appCode.Should().Contain("AddTransient<VideoSettingsPageViewModel>");
+        appCode.Should().Contain("AddTransient<KeyboardShortcutsSettingsPageViewModel>");
+        appCode.Should().Contain("AddSingleton<IShortcutService, ShortcutService>");
+        navigationCode.Should().Contain("typeof(VideoSettingsPage) => AppPage.VideoSettingsPage");
+        navigationCode.Should().Contain("typeof(KeyboardShortcutsSettingsPage) => AppPage.KeyboardShortcutsSettingsPage");
+        appPageCode.Should().Contain("VideoSettingsPage");
+        appPageCode.Should().Contain("KeyboardShortcutsSettingsPage");
+
+        foreach (var automationId in new[]
+        {
+            "VideoAutoPlayNextToggle",
+            "VideoRememberPlaybackStateToggle",
+            "VideoSeekIntervalNumberBox",
+            "VideoMiningHistoryLimitNumberBox",
+            "VideoKeyboardShortcutsButton",
+            "VideoHardwareDecodingToggle",
+            "VideoDeinterlacingToggle",
+            "VideoHdrEnhancementToggle",
+            "VideoBrightnessSlider",
+            "VideoContrastSlider",
+            "VideoSaturationSlider",
+            "VideoGammaSlider",
+            "VideoHueSlider",
+            "VideoSubtitleFontFamilyTextBox",
+            "VideoSubtitleFontSizeNumberBox",
+            "VideoSubtitleFontWeightNumberBox",
+            "VideoSubtitleShadowRadiusSlider",
+            "VideoSubtitleBackgroundOpacitySlider",
+            "VideoSubtitleBackgroundDisabledToggle",
+            "VideoSubtitleVerticalPositionSlider",
+            "VideoSubtitleColorTextBox",
+            "VideoSubtitleLookupHighlightColorTextBox",
+            "VideoSubtitleLookupHighlightTextColorTextBox",
+            "VideoSubtitleMaskToggle",
+            "VideoSubtitleMaskModeComboBox",
+            "VideoSubtitleMaskBlurRadiusSlider",
+            "VideoSubtitleMaskHiddenOpacitySlider",
+        })
+        {
+            pageXaml.Should().Contain($"AutomationProperties.AutomationId=\"{automationId}\"");
+        }
+
+        pageXaml.Should().NotContain("ControlBar");
+        pageXaml.Should().NotContain("Control Bar");
+        pageXaml.Should().NotContain("Layout");
+        pageCode.Should().Contain("Frame.Navigate(typeof(KeyboardShortcutsSettingsPage)");
+        settingsXaml.Should().Contain("Tag=\"Hoshi.Views.Pages.KeyboardShortcutsSettingsPage\"");
+        enResources.Should().Contain("VideoSettingsPageTitle.Text");
+        zhResources.Should().Contain("VideoSettingsPageTitle.Text");
+        zhResources.Should().Contain("KeyboardShortcutsPageTitle.Text");
+        zhResources.Should().Contain("VideoKeyboardShortcutsCard.Header");
+        zhResources.Should().Contain("<value>视频设置</value>");
+    }
+
+    [Fact]
+    public void VideoPlayerWindow_UsesVideoSettingsDefaultsAndPlaybackLifecycle()
+    {
+        var windowCode = ReadVideoPlayerWindowCode();
+        var viewModelCode = ReadProjectFile("ViewModels", "Pages", "VideoPlayerViewModel.cs");
+        var appSettingsCode = ReadProjectFile("Models", "Settings", "AppSettings.cs");
+
+        appSettingsCode.Should().Contain("public VideoSettings VideoSettings { get; set; } = new();");
+        viewModelCode.Should().Contain("ApplySettings(settingsService.Current.VideoSettings)");
+        viewModelCode.Should().Contain("public void ApplySettings(VideoSettings settings)");
+        viewModelCode.Should().Contain("AutoPlayNextEpisode");
+        viewModelCode.Should().Contain("RememberPlaybackState");
+        viewModelCode.Should().Contain("SeekIntervalSeconds");
+        viewModelCode.Should().NotContain("VideoControlBarLayout");
+
+        windowCode.Should().Contain("App.GetService<IVideoLibraryService>");
+        windowCode.Should().Contain("ViewModel.SeekIntervalSeconds");
+        windowCode.Should().Contain("TryResolve(ShortcutScope.Video");
+        windowCode.Should().Contain("HandleVideoShortcutActionAsync");
+        windowCode.Should().Contain("VideoShortcutActions.SeekForwardId");
+        windowCode.Should().NotContain("IsVideoShortcutKey");
+        windowCode.Should().NotContain("case VirtualKey.Left");
+        windowCode.Should().Contain("RestorePlaybackStateIfNeededAsync");
+        windowCode.Should().Contain("SaveCurrentVideoProgressAsync");
+        windowCode.Should().Contain("TryAutoPlayNextEpisodeAsync");
+        windowCode.Should().Contain("SavePlaybackStateAsync");
+        windowCode.Should().Contain("RememberPlaybackState");
+        windowCode.Should().Contain("AutoPlayNextEpisode");
+        windowCode.Should().NotContain("SeekStepSeconds");
+        windowCode.Should().NotContain("VideoControlBarLayout");
     }
 }

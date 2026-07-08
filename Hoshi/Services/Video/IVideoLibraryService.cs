@@ -25,4 +25,9 @@ public interface IVideoLibraryService
         double positionSeconds,
         double durationSeconds,
         CancellationToken ct = default);
+
+    Task<Result> SavePlaybackStateAsync(
+        string videoId,
+        VideoPlaybackState state,
+        CancellationToken ct = default);
 }

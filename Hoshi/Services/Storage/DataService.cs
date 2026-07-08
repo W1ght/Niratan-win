@@ -185,7 +185,10 @@ internal class DataService : IDataService
     {
         using var connection = await GetOpenConnectionAsync();
         const string sql = """
-            SELECT Id, Title, FilePath, SubtitlePath, ImportedAt, LastOpenedAt, LastPositionSeconds, DurationSeconds, ManualSortOrder
+            SELECT Id, Title, FilePath, SubtitlePath, ImportedAt, LastOpenedAt,
+                   LastPositionSeconds, DurationSeconds, ManualSortOrder,
+                   SubtitleSelectionKind, SubtitleSelectionPath,
+                   SubtitleSelectionTrackId, SubtitleSelectionTrackName
             FROM VideoItems
             WHERE @QueryText IS NULL
                 OR TRIM(@QueryText) = ''
@@ -207,7 +210,10 @@ internal class DataService : IDataService
     {
         using var connection = await GetOpenConnectionAsync();
         const string sql = """
-            SELECT Id, Title, FilePath, SubtitlePath, ImportedAt, LastOpenedAt, LastPositionSeconds, DurationSeconds, ManualSortOrder
+            SELECT Id, Title, FilePath, SubtitlePath, ImportedAt, LastOpenedAt,
+                   LastPositionSeconds, DurationSeconds, ManualSortOrder,
+                   SubtitleSelectionKind, SubtitleSelectionPath,
+                   SubtitleSelectionTrackId, SubtitleSelectionTrackName
             FROM VideoItems
             WHERE Id = @VideoId;
             """;
@@ -222,9 +228,15 @@ internal class DataService : IDataService
         using var connection = await GetOpenConnectionAsync();
         const string sql = """
             INSERT INTO VideoItems
-                (Id, Title, FilePath, SubtitlePath, ImportedAt, LastOpenedAt, LastPositionSeconds, DurationSeconds, ManualSortOrder)
+                (Id, Title, FilePath, SubtitlePath, ImportedAt, LastOpenedAt,
+                 LastPositionSeconds, DurationSeconds, ManualSortOrder,
+                 SubtitleSelectionKind, SubtitleSelectionPath,
+                 SubtitleSelectionTrackId, SubtitleSelectionTrackName)
             VALUES
-                (@Id, @Title, @FilePath, @SubtitlePath, @ImportedAt, @LastOpenedAt, @LastPositionSeconds, @DurationSeconds, @ManualSortOrder)
+                (@Id, @Title, @FilePath, @SubtitlePath, @ImportedAt, @LastOpenedAt,
+                 @LastPositionSeconds, @DurationSeconds, @ManualSortOrder,
+                 @SubtitleSelectionKind, @SubtitleSelectionPath,
+                 @SubtitleSelectionTrackId, @SubtitleSelectionTrackName)
             ON CONFLICT(FilePath) DO UPDATE SET
                 Title = excluded.Title,
                 SubtitlePath = COALESCE(excluded.SubtitlePath, VideoItems.SubtitlePath);
@@ -278,6 +290,40 @@ internal class DataService : IDataService
                 WHERE Id = @VideoId;
                 """,
                 new { VideoId = videoId, PositionSeconds = positionSeconds, DurationSeconds = durationSeconds },
+                cancellationToken: ct
+            )
+        );
+    }
+
+    public async Task SaveVideoPlaybackStateAsync(
+        string videoId,
+        VideoPlaybackState state,
+        CancellationToken ct = default
+    )
+    {
+        using var connection = await GetOpenConnectionAsync();
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                UPDATE VideoItems
+                SET LastPositionSeconds = @PositionSeconds,
+                    DurationSeconds = @DurationSeconds,
+                    SubtitleSelectionKind = @SubtitleSelectionKind,
+                    SubtitleSelectionPath = @SubtitleSelectionPath,
+                    SubtitleSelectionTrackId = @SubtitleSelectionTrackId,
+                    SubtitleSelectionTrackName = @SubtitleSelectionTrackName
+                WHERE Id = @VideoId;
+                """,
+                new
+                {
+                    VideoId = videoId,
+                    state.PositionSeconds,
+                    state.DurationSeconds,
+                    SubtitleSelectionKind = (int)state.SubtitleSelection.Kind,
+                    SubtitleSelectionPath = state.SubtitleSelection.ExternalPath,
+                    SubtitleSelectionTrackId = state.SubtitleSelection.TrackId,
+                    SubtitleSelectionTrackName = state.SubtitleSelection.TrackName,
+                },
                 cancellationToken: ct
             )
         );

@@ -126,4 +126,7 @@ public sealed class AnkiMiningContext
     public string? VideoAudioClipPath { get; set; }
     public string? VideoScreenshotTag { get; set; }
     public string? VideoAudioClipTag { get; set; }
+
+    [JsonIgnore]
+    public VideoMiningMediaProvider? VideoMediaProvider { get; set; }
 }

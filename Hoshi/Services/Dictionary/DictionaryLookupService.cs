@@ -126,15 +126,25 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
         if (!_nativeAvailable)
             return [];
 
+        var totalSw = Stopwatch.StartNew();
         await EnsureIndexAsync();
+        var waitSw = Stopwatch.StartNew();
         await _rebuildLock.WaitAsync();
+        _logger.LogInformation(
+            "[LookupTrace] trace={TraceId} styles rebuild-lock acquired in {Ms}ms total={TotalMs}ms",
+            "-", waitSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds);
         try
         {
+            var nativeSw = Stopwatch.StartNew();
             var jsonPtr = HoshiDictsNative.hoshi_get_styles(_session);
             var json = HoshiDictsNative.ReadStringAndFree(jsonPtr);
-            return HoshiDictsNative.DeserializeStyles(json)
+            var styles = HoshiDictsNative.DeserializeStyles(json)
                 .Select(style => style with { DictName = ToDisplayDictionaryName(style.DictName) })
                 .ToList();
+            _logger.LogInformation(
+                "[LookupTrace] trace={TraceId} styles native+deserialize completed in {Ms}ms total={TotalMs}ms styles={StyleCount} jsonBytes={JsonLength}",
+                "-", nativeSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, styles.Count, json?.Length ?? 0);
+            return styles;
         }
         finally
         {

@@ -18,6 +18,7 @@ public sealed partial class GlobalLookupPopupWindow : Window, IDisposable
     private readonly TaskCompletionSource _loadedCompletion = new(
         TaskCreationOptions.RunContinuationsAsynchronously);
     private DictionaryPopupOverlay? _popupOverlay;
+    private DictionaryDesktopAcrylicThinBackdrop? _desktopAcrylicThinBackdrop;
     private Windows.UI.Color _hostSurfaceColor = Windows.UI.Color.FromArgb(0xFF, 0x24, 0x24, 0x24);
     private bool _canDismissOnDeactivate;
     private bool _isDisposed;
@@ -27,7 +28,9 @@ public sealed partial class GlobalLookupPopupWindow : Window, IDisposable
         InitializeComponent();
         Title = "Hoshi Lookup Popup";
         ExtendsContentIntoTitleBar = true;
-        SystemBackdrop = null;
+        _desktopAcrylicThinBackdrop = DictionaryPopupMaterial.TryApplyDesktopAcrylicThin(this, RootGrid);
+        RootGrid.Background = DictionaryPopupMaterial.CreateTransparentBrush();
+        DictionaryOverlayCanvas.Background = DictionaryPopupMaterial.CreateTransparentBrush();
         RootGrid.Loaded += OnLoaded;
         Activated += OnActivated;
         Closed += OnClosed;
@@ -132,21 +135,12 @@ public sealed partial class GlobalLookupPopupWindow : Window, IDisposable
 
     private void ApplyPopupSizedHostSurface(ThemeMode themeMode)
     {
-        SystemBackdrop = null;
-        _hostSurfaceColor = IsThemeDark(themeMode)
-            ? Windows.UI.Color.FromArgb(0xFF, 0x24, 0x24, 0x24)
-            : Windows.UI.Color.FromArgb(0xFF, 0xF8, 0xF8, 0xF8);
-        var brush = new SolidColorBrush(_hostSurfaceColor);
-        RootGrid.Background = brush;
-        DictionaryOverlayCanvas.Background = brush;
+        _desktopAcrylicThinBackdrop?.SetTheme(themeMode);
+        _hostSurfaceColor = DictionaryPopupMaterial.GetOpaqueSurfaceColor(themeMode);
+        RootGrid.Background = DictionaryPopupMaterial.CreateTransparentBrush();
+        DictionaryOverlayCanvas.Background = DictionaryPopupMaterial.CreateTransparentBrush();
+        ApplyBorderlessHostChrome();
     }
-
-    private static bool IsThemeDark(ThemeMode themeMode) => themeMode switch
-    {
-        ThemeMode.Dark => true,
-        ThemeMode.Light => false,
-        _ => Application.Current.RequestedTheme == ApplicationTheme.Dark,
-    };
 
     private static void ApplyDwmBorderlessChrome(IntPtr hwnd, Windows.UI.Color hostSurfaceColor)
     {
@@ -261,6 +255,8 @@ public sealed partial class GlobalLookupPopupWindow : Window, IDisposable
         RootGrid.Loaded -= OnLoaded;
         Activated -= OnActivated;
         Closed -= OnClosed;
+        _desktopAcrylicThinBackdrop?.Dispose();
+        _desktopAcrylicThinBackdrop = null;
 
         if (_popupOverlay is not null)
         {

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,6 +13,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.System;
 using Hoshi.Models;
+using Hoshi.Models.Shortcuts;
 using Hoshi.Services.Video;
 
 namespace Hoshi.Views.Video;
@@ -18,6 +21,15 @@ namespace Hoshi.Views.Video;
 public sealed partial class VideoPlayerWindow
 {
     private const uint WM_LBUTTONDBLCLK = 0x0203;
+    private const uint WM_SYSCOMMAND = 0x0112;
+    private const uint SC_SIZE = 0xF000;
+    private const double VideoResizeCornerGutter = 24;
+
+    private enum VideoWindowResizeDirection
+    {
+        BottomLeft = 7,
+        BottomRight = 8,
+    }
 
     private void OpenBottomChromeOverlay()
     {
@@ -75,12 +87,12 @@ public sealed partial class VideoPlayerWindow
 
     private async void RewindButton_Click(object sender, RoutedEventArgs e)
     {
-        await SeekRelativeAsync(-SeekStepSeconds);
+        await SeekRelativeAsync(-ViewModel.SeekIntervalSeconds);
     }
 
     private async void ForwardButton_Click(object sender, RoutedEventArgs e)
     {
-        await SeekRelativeAsync(SeekStepSeconds);
+        await SeekRelativeAsync(ViewModel.SeekIntervalSeconds);
     }
 
     private async void PreviousSubtitleButton_Click(object sender, RoutedEventArgs e)
@@ -690,6 +702,8 @@ public sealed partial class VideoPlayerWindow
                 ViewModel.UpdatePosition(position, duration);
                 if (ViewModel.IsEmbeddedSubtitleActive && !ViewModel.HasCompleteEmbeddedTranscript)
                     ViewModel.UpdateEmbeddedSubtitleCue(await _playbackEngine.GetCurrentSubtitleCueAsync());
+                await SaveCurrentVideoProgressIfDueAsync();
+                await TryAutoPlayNextEpisodeAsync();
             }
         }
         catch
@@ -699,6 +713,155 @@ public sealed partial class VideoPlayerWindow
         {
             _isTicking = false;
         }
+    }
+
+    private async Task<bool> RestorePlaybackStateIfNeededAsync(VideoItem video, CancellationToken ct = default)
+    {
+        if (!ViewModel.RememberPlaybackState)
+            return false;
+
+        var latest = await _videoLibraryService.GetVideoAsync(video.Id, ct);
+        var state = latest.Value != null
+            ? VideoPlaybackState.FromVideoItem(latest.Value)
+            : VideoPlaybackState.FromVideoItem(video);
+
+        var restoredSubtitle = await RestoreSubtitleSelectionAsync(state.SubtitleSelection, ct);
+        var duration = await _playbackEngine.GetDurationAsync(ct);
+        var target = state.ResolveRestorePosition(duration);
+        if (target == null)
+            return restoredSubtitle;
+
+        await _playbackEngine.SeekAsync(target.Value, ct);
+        ViewModel.UpdatePosition(target.Value, duration);
+        ViewModel.StatusText = $"Restored to {ViewModel.PositionText}";
+        return restoredSubtitle;
+    }
+
+    private async Task<bool> RestoreSubtitleSelectionAsync(
+        VideoSubtitleSelection selection,
+        CancellationToken ct = default)
+    {
+        switch (selection.Kind)
+        {
+            case VideoSubtitleSelectionKind.Off:
+                await SelectSubtitleTrackAsync(null, ct);
+                return true;
+            case VideoSubtitleSelectionKind.ExternalFile:
+                if (!string.IsNullOrWhiteSpace(selection.ExternalPath) && File.Exists(selection.ExternalPath))
+                {
+                    await LoadExternalSubtitleAsync(selection.ExternalPath, ct);
+                    return true;
+                }
+
+                return false;
+            case VideoSubtitleSelectionKind.EmbeddedTrack:
+                var track = ViewModel.SubtitleTracks.FirstOrDefault(item => item.Id == selection.TrackId)
+                            ?? ViewModel.SubtitleTracks.FirstOrDefault(item =>
+                                !string.IsNullOrWhiteSpace(selection.TrackName)
+                                && string.Equals(item.DisplayName, selection.TrackName, StringComparison.OrdinalIgnoreCase));
+                if (track != null)
+                {
+                    await SelectSubtitleTrackAsync(track, ct);
+                    return true;
+                }
+
+                return false;
+            default:
+                return false;
+        }
+    }
+
+    private async Task SaveCurrentVideoProgressIfDueAsync(CancellationToken ct = default)
+    {
+        if (!ViewModel.RememberPlaybackState || ViewModel.CurrentVideo == null)
+            return;
+
+        var now = DateTimeOffset.UtcNow;
+        if (now - _lastProgressSaveAt < TimeSpan.FromSeconds(5))
+            return;
+
+        _lastProgressSaveAt = now;
+        await SaveCurrentVideoProgressAsync(ct);
+    }
+
+    private async Task SaveCurrentVideoProgressAsync(CancellationToken ct = default)
+    {
+        if (!ViewModel.RememberPlaybackState || ViewModel.CurrentVideo == null)
+            return;
+
+        var selection = ViewModel.GetCurrentSubtitleSelection();
+        var shouldPersistProgress = VideoPlaybackState.ShouldPersistProgress(
+            ViewModel.CurrentPosition,
+            ViewModel.Duration);
+        var positionSeconds = ViewModel.CurrentPosition.TotalSeconds;
+        var durationSeconds = ViewModel.Duration.TotalSeconds;
+        if (!shouldPersistProgress && selection.Kind == VideoSubtitleSelectionKind.None)
+            return;
+
+        if (!shouldPersistProgress)
+        {
+            var latest = await _videoLibraryService.GetVideoAsync(ViewModel.CurrentVideo.Id, ct);
+            positionSeconds = latest.Value?.LastPositionSeconds ?? 0;
+            durationSeconds = latest.Value?.DurationSeconds ?? 0;
+        }
+        else if (!double.IsFinite(durationSeconds) || durationSeconds < 0)
+        {
+            durationSeconds = 0;
+        }
+
+        await _videoLibraryService.SavePlaybackStateAsync(
+            ViewModel.CurrentVideo.Id,
+            new VideoPlaybackState(
+                positionSeconds,
+                durationSeconds,
+                selection),
+            ct);
+    }
+
+    private async Task TryAutoPlayNextEpisodeAsync(CancellationToken ct = default)
+    {
+        if (!ViewModel.AutoPlayNextEpisode
+            || _isAutoPlayingNextEpisode
+            || ViewModel.CurrentVideo == null
+            || ViewModel.LoopFileEnabled
+            || ViewModel.ABLoop != null)
+        {
+            return;
+        }
+
+        var durationSeconds = ViewModel.Duration.TotalSeconds;
+        if (durationSeconds <= 0)
+            return;
+
+        if (ViewModel.CurrentPosition.TotalSeconds < Math.Max(0, durationSeconds - 0.75))
+            return;
+
+        var next = FindNextEpisodeRow();
+        if (next == null)
+            return;
+
+        _isAutoPlayingNextEpisode = true;
+        await SaveCurrentVideoProgressAsync(ct);
+        var playlist = new List<VideoItem>();
+        foreach (var row in ViewModel.EpisodeRows)
+            playlist.Add(row.Video);
+
+        await OpenVideoAsync(next.Video, playlist, ct);
+    }
+
+    private VideoEpisodeRow? FindNextEpisodeRow()
+    {
+        for (var i = 0; i < ViewModel.EpisodeRows.Count; i++)
+        {
+            if (!ViewModel.EpisodeRows[i].IsCurrent)
+                continue;
+
+            return i + 1 < ViewModel.EpisodeRows.Count
+                ? ViewModel.EpisodeRows[i + 1]
+                : null;
+        }
+
+        return null;
     }
 
     private void ProgressSlider_PointerPressed(object sender, PointerRoutedEventArgs e)
@@ -742,6 +905,9 @@ public sealed partial class VideoPlayerWindow
 
     private void VideoSurface_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        if (TryBeginWindowResizeFromRootElementPointer(e, VideoSurface))
+            return;
+
         var point = e.GetCurrentPoint(VideoSurface);
         if (point.Properties.IsLeftButtonPressed)
         {
@@ -755,6 +921,12 @@ public sealed partial class VideoPlayerWindow
 
     private void BottomChromePopupRoot_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        if (TryBeginWindowResizeFromPopupPointer(e, BottomChromePopupRoot))
+            return;
+
+        if (TryDismissLookupPopupFromOutsidePointer(e))
+            return;
+
         if (IsVideoOverlayInteractiveSource(e.OriginalSource))
             return;
 
@@ -777,6 +949,9 @@ public sealed partial class VideoPlayerWindow
 
     private void BottomChrome_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        if (TryBeginWindowResizeFromPopupPointer(e, BottomChrome))
+            return;
+
         RestoreVideoKeyboardFocus(FocusState.Pointer);
         e.Handled = true;
     }
@@ -798,7 +973,24 @@ public sealed partial class VideoPlayerWindow
 
         return IsDescendantOf(dependencyObject, BottomChrome)
             || IsDescendantOf(dependencyObject, SubtitlePanelBorder)
+            || IsDescendantOf(dependencyObject, VideoDictionaryPanelChrome)
             || IsDescendantOf(dependencyObject, PopupOverlayCanvas);
+    }
+
+    private bool TryDismissLookupPopupFromOutsidePointer(PointerRoutedEventArgs e)
+    {
+        if (!_isLookupPopupVisible || _popupOverlay is null)
+            return false;
+
+        if (e.OriginalSource is DependencyObject source
+            && IsDescendantOf(source, VideoDictionaryPanelChrome))
+        {
+            return false;
+        }
+
+        _popupOverlay.Dismiss();
+        e.Handled = true;
+        return true;
     }
 
     private static bool IsDescendantOf(DependencyObject source, DependencyObject ancestor)
@@ -906,89 +1098,198 @@ public sealed partial class VideoPlayerWindow
         }
     }
 
+    private void RootGrid_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        _ = TryBeginWindowResizeFromRootElementPointer(e, RootGrid);
+    }
+
+    private bool TryBeginWindowResizeFromRootElementPointer(
+        PointerRoutedEventArgs e,
+        FrameworkElement element)
+    {
+        var point = e.GetCurrentPoint(element);
+        if (!point.Properties.IsLeftButtonPressed)
+            return false;
+
+        var rootPoint = ReferenceEquals(element, RootGrid)
+            ? point.Position
+            : element.TransformToVisual(RootGrid)
+                .TransformPoint(point.Position);
+        return TryBeginWindowResizeFromRootPoint(rootPoint.X, rootPoint.Y, e);
+    }
+
+    private bool TryBeginWindowResizeFromPopupPointer(
+        PointerRoutedEventArgs e,
+        FrameworkElement element)
+    {
+        var point = e.GetCurrentPoint(element);
+        if (!point.Properties.IsLeftButtonPressed)
+            return false;
+
+        var popupPoint = ReferenceEquals(element, BottomChromePopupRoot)
+            ? point.Position
+            : element.TransformToVisual(BottomChromePopupRoot)
+                .TransformPoint(point.Position);
+        return TryBeginWindowResizeFromRootPoint(
+            BottomChromePopup.HorizontalOffset + popupPoint.X,
+            BottomChromePopup.VerticalOffset + popupPoint.Y,
+            e);
+    }
+
+    private bool TryBeginWindowResizeFromRootPoint(
+        double pointerX,
+        double pointerY,
+        PointerRoutedEventArgs? e = null)
+    {
+        if (!TryGetBottomCornerResizeDirection(
+                pointerX,
+                pointerY,
+                RootGrid.ActualWidth,
+                RootGrid.ActualHeight,
+                VideoResizeCornerGutter,
+                out var direction))
+        {
+            return false;
+        }
+
+        if (!BeginWindowResize(direction))
+            return false;
+
+        if (e != null)
+            e.Handled = true;
+
+        return true;
+    }
+
+    private static bool TryGetBottomCornerResizeDirection(
+        double pointerX,
+        double pointerY,
+        double width,
+        double height,
+        double gutter,
+        out VideoWindowResizeDirection direction)
+    {
+        direction = default;
+        if (width <= 0 || height <= 0 || gutter <= 0)
+            return false;
+
+        var cornerGutter = Math.Min(gutter, Math.Min(width, height) / 2);
+        if (pointerY < height - cornerGutter || pointerY > height)
+            return false;
+
+        if (pointerX >= 0 && pointerX <= cornerGutter)
+        {
+            direction = VideoWindowResizeDirection.BottomLeft;
+            return true;
+        }
+
+        if (pointerX >= width - cornerGutter && pointerX <= width)
+        {
+            direction = VideoWindowResizeDirection.BottomRight;
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool TryBeginWindowResizeFromVideoHostLParam(IntPtr lParam)
+    {
+        if (_parentHwnd == IntPtr.Zero)
+            return false;
+
+        var scale = GetDpiForWindow(_parentHwnd) / 96.0;
+        if (scale <= 0)
+            scale = 1;
+
+        return TryBeginWindowResizeFromRootPoint(
+            GetSignedLoWord(lParam) / scale,
+            GetSignedHiWord(lParam) / scale);
+    }
+
+    private bool BeginWindowResize(VideoWindowResizeDirection direction)
+    {
+        if (_parentHwnd == IntPtr.Zero || _isFullScreen)
+            return false;
+
+        ReleaseCapture();
+        _ = SendMessageW(
+            _parentHwnd,
+            WM_SYSCOMMAND,
+            new UIntPtr(SC_SIZE + (uint)direction),
+            IntPtr.Zero);
+        return true;
+    }
+
+    private static int GetSignedLoWord(IntPtr value) =>
+        (short)((long)value & 0xFFFF);
+
+    private static int GetSignedHiWord(IntPtr value) =>
+        (short)(((long)value >> 16) & 0xFFFF);
+
     private async void RootGrid_KeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (!IsVideoShortcutKey(e.Key))
+        if (!TryResolveVideoShortcut(e.Key, out var action))
             return;
 
         e.Handled = true;
-        await HandleVideoShortcutKeyAsync(e.Key);
+        await HandleVideoShortcutActionAsync(action!.Id);
     }
 
-    private static bool IsVideoShortcutKey(VirtualKey key) =>
-        key is VirtualKey.Space
-            or VirtualKey.Left
-            or VirtualKey.Right
-            or VirtualKey.Up
-            or VirtualKey.Down
-            or VirtualKey.PageUp
-            or VirtualKey.PageDown
-            or VirtualKey.V
-            or VirtualKey.S
-            or VirtualKey.F
-            or VirtualKey.F2
-            or VirtualKey.F8
-            or VirtualKey.F9
-            or VirtualKey.H
-            or VirtualKey.L
-            or VirtualKey.Add
-            or VirtualKey.Subtract
-            or VirtualKey.Escape;
-
-    private async Task HandleVideoShortcutKeyAsync(VirtualKey key)
+    private bool TryResolveVideoShortcut(VirtualKey key, out ShortcutAction? action)
     {
-        switch (key)
+        var binding = KeyboardShortcutBinding.FromVirtualKey(
+            key,
+            ShortcutInputMapper.GetCurrentModifiers());
+        return _shortcutService.TryResolve(ShortcutScope.Video, binding, out action);
+    }
+
+    private async Task HandleVideoShortcutActionAsync(string actionId)
+    {
+        switch (actionId)
         {
-            case VirtualKey.Space:
+            case VideoShortcutActions.PlayPauseId:
                 await TogglePlayPauseAsync();
                 break;
-            case VirtualKey.Left:
-                await SeekRelativeAsync(-SeekStepSeconds);
+            case VideoShortcutActions.SeekBackwardId:
+                await SeekRelativeAsync(-ViewModel.SeekIntervalSeconds);
                 break;
-            case VirtualKey.Right:
-                await SeekRelativeAsync(SeekStepSeconds);
+            case VideoShortcutActions.SeekForwardId:
+                await SeekRelativeAsync(ViewModel.SeekIntervalSeconds);
                 break;
-            case VirtualKey.Up:
+            case VideoShortcutActions.VolumeUpId:
                 await SetVolumeAsync(ViewModel.Volume + VolumeStep);
                 break;
-            case VirtualKey.Down:
+            case VideoShortcutActions.VolumeDownId:
                 await SetVolumeAsync(ViewModel.Volume - VolumeStep);
                 break;
-            case VirtualKey.PageUp:
+            case VideoShortcutActions.PreviousSubtitleId:
                 await SeekToSubtitleAsync(ViewModel.GetPreviousSubtitleStart());
                 break;
-            case VirtualKey.PageDown:
+            case VideoShortcutActions.NextSubtitleId:
                 await SeekToSubtitleAsync(ViewModel.GetNextSubtitleStart());
                 break;
-            case VirtualKey.V:
+            case VideoShortcutActions.ToggleSubtitlesId:
                 ToggleSubtitlesVisible();
                 break;
-            case VirtualKey.S:
+            case VideoShortcutActions.CycleSubtitleTrackId:
                 await CycleSubtitleTrackAsync();
                 break;
-            case VirtualKey.F:
+            case VideoShortcutActions.ToggleFullscreenId:
                 ToggleFullScreen();
                 break;
-            case VirtualKey.F2:
-            case VirtualKey.F9:
+            case VideoShortcutActions.LookupSubtitleId:
                 await LookupCurrentSubtitleAsync();
                 break;
-            case VirtualKey.F8:
+            case VideoShortcutActions.ToggleHardwareDecodingId:
                 await SetHardwareDecodingAsync(!ViewModel.HardwareDecodingEnabled);
                 break;
-            case VirtualKey.H:
-                await SetHardwareDecodingAsync(!ViewModel.HardwareDecodingEnabled);
-                break;
-            case VirtualKey.L:
-                await LookupCurrentSubtitleAsync();
-                break;
-            case VirtualKey.Add:
+            case VideoShortcutActions.IncreaseSubtitleSizeId:
                 SetSubtitleFontSize(ViewModel.SubtitleFontSize + 1);
                 break;
-            case VirtualKey.Subtract:
+            case VideoShortcutActions.DecreaseSubtitleSizeId:
                 SetSubtitleFontSize(ViewModel.SubtitleFontSize - 1);
                 break;
-            case VirtualKey.Escape:
+            case VideoShortcutActions.CloseOverlayOrFullscreenId:
                 if (_isInspectorOpen)
                 {
                     _isInspectorOpen = false;
@@ -1070,6 +1371,9 @@ public sealed partial class VideoPlayerWindow
                 DispatcherQueue.TryEnqueue(() => RestoreVideoKeyboardFocus(FocusState.Pointer));
                 break;
             case WM_LBUTTONDOWN:
+                if (TryBeginWindowResizeFromVideoHostLParam(lParam))
+                    return IntPtr.Zero;
+
                 DispatcherQueue.TryEnqueue(RunVideoSurfaceSingleClick);
                 return IntPtr.Zero;
             case WM_LBUTTONDBLCLK:
@@ -1078,9 +1382,9 @@ public sealed partial class VideoPlayerWindow
             case WM_KEYDOWN:
             case WM_SYSKEYDOWN:
                 var key = (VirtualKey)wParam.ToUInt32();
-                if (IsVideoShortcutKey(key))
+                if (TryResolveVideoShortcut(key, out var action))
                 {
-                    DispatcherQueue.TryEnqueue(async () => await HandleVideoShortcutKeyAsync(key));
+                    DispatcherQueue.TryEnqueue(async () => await HandleVideoShortcutActionAsync(action!.Id));
                     return IntPtr.Zero;
                 }
 
@@ -1110,4 +1414,15 @@ public sealed partial class VideoPlayerWindow
     {
         RestoreVideoKeyboardFocusAfterSubtitleInteraction();
     }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessageW(
+        IntPtr hWnd,
+        uint message,
+        UIntPtr wParam,
+        IntPtr lParam);
 }

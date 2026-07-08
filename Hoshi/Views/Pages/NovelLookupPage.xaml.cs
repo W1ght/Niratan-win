@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
@@ -104,16 +105,26 @@ public sealed partial class NovelLookupPage : Page, IDisposable
 
         try
         {
+            var totalSw = Stopwatch.StartNew();
+            var traceId = $"lookup-page-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds():x}";
             ViewModel.IsLookupInProgress = true;
             ViewModel.StatusText = "Looking up...";
 
             var displaySettings = App.GetService<ISettingsService>().Current.DictionaryDisplaySettings;
             var lookupService = App.GetService<IDictionaryLookupService>();
             var query = ViewModel.Query.Trim();
+            Log.Information(
+                "[LookupTrace] trace={TraceId} lookup page start query='{Query}' max={Max} scan={Scan}",
+                traceId, query, displaySettings.MaxResults, displaySettings.ScanLength);
+            var lookupSw = Stopwatch.StartNew();
             var results = await lookupService.LookupAsync(
                 query,
                 displaySettings.MaxResults,
-                displaySettings.ScanLength);
+                displaySettings.ScanLength,
+                traceId);
+            Log.Information(
+                "[LookupTrace] trace={TraceId} lookup page native lookup returned in {Ms}ms total={TotalMs}ms results={Count}",
+                traceId, lookupSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, results.Count);
 
             if (results.Count == 0)
             {
@@ -123,12 +134,17 @@ public sealed partial class NovelLookupPage : Page, IDisposable
                 return;
             }
 
+            var stylesSw = Stopwatch.StartNew();
             var styles = await lookupService.GetStylesAsync();
             var styleDict = styles.ToDictionary(s => s.DictName, s => s.Styles);
+            Log.Information(
+                "[LookupTrace] trace={TraceId} lookup page styles loaded in {Ms}ms total={TotalMs}ms styles={StyleCount}",
+                traceId, stylesSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, styleDict.Count);
 
             var appTheme = App.GetService<ISettingsService>().Current.Theme;
 
             var popupOverlay = EnsurePopupOverlay();
+            var showSw = Stopwatch.StartNew();
             _ = popupOverlay.PrewarmAsync(XamlRoot);
             DictionaryPanelRoot.Visibility = Visibility.Visible;
             await popupOverlay.ShowLookupAsync(
@@ -138,7 +154,11 @@ public sealed partial class NovelLookupPage : Page, IDisposable
                 0, 0, 1, 1,
                 XamlRoot,
                 isVertical: false,
-                themeMode: appTheme);
+                themeMode: appTheme,
+                traceId: traceId);
+            Log.Information(
+                "[LookupTrace] trace={TraceId} lookup page overlay shown in {Ms}ms total={TotalMs}ms",
+                traceId, showSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds);
 
             ViewModel.StatusText = $"{results.Count} results.";
         }
