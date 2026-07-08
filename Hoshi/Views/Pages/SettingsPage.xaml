@@ -132,7 +132,7 @@
                                 x:Uid="SettingsSyncNavItem"
                                 AutomationProperties.AutomationId="SettingsSyncNavItem"
                                 Content="ッツ Sync"
-                                IsEnabled="False">
+                                Tag="Hoshi.Views.Pages.TtuSyncSettingsPage">
                 <NavigationViewItem.Icon>
                     <FontIcon Glyph="&#xE753;" />
                 </NavigationViewItem.Icon>

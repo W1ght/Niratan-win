@@ -7,9 +7,11 @@ using Hoshi.Models.Common;
 using Hoshi.Models.Novel;
 using Hoshi.Models.Sasayaki;
 using Hoshi.Models.Settings;
+using Hoshi.Models.Sync;
 using Hoshi.Services.Novels;
 using Hoshi.Services.Sasayaki;
 using Hoshi.Services.Settings;
+using Hoshi.Services.Sync;
 using Hoshi.Services.UI;
 using Hoshi.Tests.TestUtils;
 using Hoshi.ViewModels.Components;
@@ -212,6 +214,92 @@ public class NovelLibraryPageViewModelTests
             .Which.Should().Equal("gamma", "alpha", "beta");
     }
 
+    [Fact]
+    public async Task RefreshRemoteBooksCommand_WhenGoogleDriveDisconnected_ShowsError()
+    {
+        var notification = new Mock<INotificationService>();
+        var auth = new FakeGoogleDriveAuthService { HasCredentials = false };
+        var settings = Mock.Of<ISettingsService>(s => s.Current == new AppSettings
+        {
+            TtuSyncSettings = new TtuSyncSettings { EnableSync = true },
+        });
+        var sut = CreateSut(
+            notificationService: notification.Object,
+            settingsService: settings,
+            googleDriveAuthService: auth);
+
+        await sut.RefreshRemoteBooksCommand.ExecuteAsync(null);
+
+        notification.Verify(
+            n => n.ShowError(
+                It.Is<string>(message => message.Contains("Google Drive")),
+                "Sync unavailable"),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task RefreshRemoteBooksCommand_FiltersAlreadyImportedTtuTitles()
+    {
+        var service = new RecordingNovelLibraryService
+        {
+            Books =
+            [
+                new NovelBook { Id = "local", Title = "星*読む/", FilePath = "D:\\Books\\local.epub" },
+            ],
+        };
+        var remote = new FakeTtuSyncRemoteStore
+        {
+            RemoteBooks =
+            [
+                RemoteBook("folder-local", "星*読む/", "星~ttu-star~読む%2F"),
+                RemoteBook("folder-cloud", "雲の本", "雲の本"),
+            ],
+        };
+        var settings = Mock.Of<ISettingsService>(s => s.Current == new AppSettings
+        {
+            TtuSyncSettings = new TtuSyncSettings { EnableSync = true },
+        });
+        var sut = CreateSut(
+            novelService: service,
+            syncRemoteStore: remote,
+            settingsService: settings,
+            googleDriveAuthService: new FakeGoogleDriveAuthService { HasCredentials = true });
+        await sut.InitializeAsync();
+
+        await sut.RefreshRemoteBooksCommand.ExecuteAsync(null);
+
+        sut.RemoteBooks.Should().ContainSingle();
+        sut.RemoteBooks[0].Book.Title.Should().Be("雲の本");
+    }
+
+    [Fact]
+    public async Task DownloadRemoteBookCommand_ImportsRemoteBookAndRemovesItFromRemoteShelf()
+    {
+        var remoteBook = RemoteBook("folder-cloud", "雲の本", "雲の本");
+        var remote = new FakeTtuSyncRemoteStore { RemoteBooks = [remoteBook] };
+        var importer = new FakeTtuBookImportService();
+        var notification = new Mock<INotificationService>();
+        var settings = Mock.Of<ISettingsService>(s => s.Current == new AppSettings
+        {
+            TtuSyncSettings = new TtuSyncSettings { EnableSync = true },
+        });
+        var sut = CreateSut(
+            syncRemoteStore: remote,
+            ttuBookImportService: importer,
+            notificationService: notification.Object,
+            settingsService: settings,
+            googleDriveAuthService: new FakeGoogleDriveAuthService { HasCredentials = true });
+        await sut.RefreshRemoteBooksCommand.ExecuteAsync(null);
+
+        await sut.DownloadRemoteBookCommand.ExecuteAsync(sut.RemoteBooks.Single());
+
+        importer.ImportedBook.Should().Be(remoteBook);
+        sut.RemoteBooks.Should().BeEmpty();
+        notification.Verify(
+            n => n.ShowSuccess("EPUB imported from Google Drive.", "Novel imported"),
+            Times.Once);
+    }
+
     private static NovelLibraryPageViewModel CreateSut(
         INovelLibraryService? novelService = null,
         IDialogService? dialogService = null,
@@ -220,6 +308,10 @@ public class NovelLibraryPageViewModelTests
         ISasayakiMatchService? sasayakiMatchService = null,
         ISettingsService? settingsService = null,
         INovelStatisticsDashboardService? statisticsDashboardService = null
+        ,
+        ITtuSyncRemoteStore? syncRemoteStore = null,
+        ITtuBookImportService? ttuBookImportService = null,
+        IGoogleDriveAuthService? googleDriveAuthService = null
     )
     {
         var serviceMock = new Mock<INovelLibraryService>();
@@ -240,9 +332,28 @@ public class NovelLibraryPageViewModelTests
             messenger ?? new FakeMessenger(),
             sasayakiMatchService ?? Mock.Of<ISasayakiMatchService>(),
             settingsService ?? Mock.Of<ISettingsService>(s => s.Current == new AppSettings()),
-            statisticsDashboardService ?? dashboardMock.Object
+            statisticsDashboardService ?? dashboardMock.Object,
+            syncRemoteStore ?? new FakeTtuSyncRemoteStore(),
+            ttuBookImportService ?? new FakeTtuBookImportService(),
+            googleDriveAuthService ?? new FakeGoogleDriveAuthService { HasCredentials = true }
         );
     }
+
+    private static TtuRemoteBook RemoteBook(
+        string id,
+        string title,
+        string sanitizedTitle) =>
+        new(
+            id,
+            title,
+            sanitizedTitle,
+            new TtuRemoteBookFiles(
+                Progress: new TtuRemoteFile($"{id}-progress", "progress_1_6_2000_0.25.json"),
+                Statistics: null,
+                AudioBook: null,
+                BookData: new TtuRemoteFile($"{id}-bookdata", "bookdata_1_6_1200_2000_1000.zip"),
+                Cover: null),
+            Progress: 0.25);
 
     private static void SetSortOption(NovelLibraryPageViewModel sut, string optionName)
     {
@@ -323,5 +434,71 @@ public class NovelLibraryPageViewModelTests
             SavedOrders.Add(orderedBookIds.ToList());
             return Task.FromResult(Result.Success());
         }
+    }
+
+    private sealed class FakeTtuSyncRemoteStore : ITtuSyncRemoteStore
+    {
+        public IReadOnlyList<TtuRemoteBook> RemoteBooks { get; init; } = [];
+
+        public Task<IReadOnlyList<TtuRemoteBook>> ListRemoteBooksAsync(CancellationToken ct = default) =>
+            Task.FromResult(RemoteBooks);
+
+        public Task DownloadBookDataAsync(TtuRemoteFile file, string destinationFilePath, IProgress<double>? progress = null, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task<TtuRemoteBookFiles> ListBookFilesAsync(string bookTitle, CancellationToken ct = default) =>
+            Task.FromResult(new TtuRemoteBookFiles(null, null, null, null, null));
+
+        public Task<TtuProgress?> GetProgressAsync(TtuRemoteFile file, CancellationToken ct = default) =>
+            Task.FromResult<TtuProgress?>(null);
+
+        public Task<IReadOnlyList<NovelReadingStatistic>?> GetStatisticsAsync(TtuRemoteFile file, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<NovelReadingStatistic>?>(null);
+
+        public Task<TtuAudioBook?> GetAudioBookAsync(TtuRemoteFile file, CancellationToken ct = default) =>
+            Task.FromResult<TtuAudioBook?>(null);
+
+        public Task UpsertProgressAsync(string bookTitle, TtuProgress progress, TtuRemoteFile? existingFile, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task UpsertStatisticsAsync(string bookTitle, IReadOnlyList<NovelReadingStatistic> statistics, TtuRemoteFile? existingFile, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task UpsertAudioBookAsync(string bookTitle, TtuAudioBook audioBook, TtuRemoteFile? existingFile, CancellationToken ct = default) =>
+            Task.CompletedTask;
+    }
+
+    private sealed class FakeTtuBookImportService : ITtuBookImportService
+    {
+        public TtuRemoteBook? ImportedBook { get; private set; }
+
+        public Task<Result<NovelBook>> ImportRemoteBookAsync(
+            TtuRemoteBook remoteBook,
+            TtuBookImportOptions options,
+            IProgress<double>? progress = null,
+            CancellationToken ct = default)
+        {
+            ImportedBook = remoteBook;
+            return Task.FromResult(Result<NovelBook>.Success(new NovelBook
+            {
+                Id = remoteBook.Id,
+                Title = remoteBook.Title,
+                FilePath = "D:\\Books\\remote.epub",
+            }));
+        }
+    }
+
+    private sealed class FakeGoogleDriveAuthService : IGoogleDriveAuthService
+    {
+        public bool HasCredentials { get; init; }
+
+        public Task AuthenticateAsync(string clientId, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task<string> GetAccessTokenAsync(CancellationToken ct = default) =>
+            Task.FromResult("token");
+
+        public Task SignOutAsync(CancellationToken ct = default) =>
+            Task.CompletedTask;
     }
 }

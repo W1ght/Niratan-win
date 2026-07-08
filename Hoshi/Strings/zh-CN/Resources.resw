@@ -576,5 +576,27 @@
   <data name="ShortcutActionVideoIncreaseSubtitleSize" xml:space="preserve"><value>增大字幕字号</value></data>
   <data name="ShortcutActionVideoDecreaseSubtitleSize" xml:space="preserve"><value>减小字幕字号</value></data>
   <data name="ShortcutActionVideoCloseOverlayOrFullscreen" xml:space="preserve"><value>关闭面板或退出全屏</value></data>
+  <data name="TtuSyncSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>返回</value></data>
+  <data name="TtuSyncSettingsPageTitle.Text" xml:space="preserve"><value>ッツ Sync</value></data>
+  <data name="TtuSyncGeneralSectionHeader.Text" xml:space="preserve"><value>常规</value></data>
+  <data name="TtuSyncEnableToggle.Header" xml:space="preserve"><value>启用同步</value></data>
+  <data name="TtuSyncEnableToggle.Description" xml:space="preserve"><value>与 ッツ 兼容存储同步阅读进度</value></data>
+  <data name="TtuSyncGoogleDriveSectionHeader.Text" xml:space="preserve"><value>Google Drive</value></data>
+  <data name="TtuSyncGoogleClientIdTextBox.Header" xml:space="preserve"><value>客户端 ID</value></data>
+  <data name="TtuSyncGoogleClientIdTextBox.Description" xml:space="preserve"><value>用于 Drive 同步的 Google Cloud 桌面 OAuth 客户端 ID</value></data>
+  <data name="TtuSyncConnectionStatusCard.Header" xml:space="preserve"><value>连接</value></data>
+  <data name="TtuSyncConnectionStatusCard.Description" xml:space="preserve"><value>打开系统浏览器连接 Google Drive</value></data>
+  <data name="TtuSyncConnectionStatusText.Text" xml:space="preserve"><value>未连接</value></data>
+  <data name="TtuSyncConnectGoogleDriveButton.Content" xml:space="preserve"><value>连接</value></data>
+  <data name="TtuSyncSignOutGoogleDriveButton.Content" xml:space="preserve"><value>退出登录</value></data>
+  <data name="TtuSyncClearGoogleDriveCacheButton.Content" xml:space="preserve"><value>清除缓存</value></data>
+  <data name="TtuSyncBehaviorSectionHeader.Text" xml:space="preserve"><value>行为</value></data>
+  <data name="TtuSyncModeComboBox.Header" xml:space="preserve"><value>方向</value></data>
+  <data name="TtuSyncModeComboBox.Description" xml:space="preserve"><value>自动选择更新的书签，或手动选择同步方向</value></data>
+  <data name="TtuSyncAutoSyncToggle.Header" xml:space="preserve"><value>自动同步</value></data>
+  <data name="TtuSyncAutoSyncToggle.Description" xml:space="preserve"><value>配置传输后，在阅读器生命周期事件中排队同步</value></data>
+  <data name="TtuSyncDataSectionHeader.Text" xml:space="preserve"><value>数据</value></data>
+  <data name="TtuSyncUploadBooksToggle.Header" xml:space="preserve"><value>上传书籍</value></data>
+  <data name="TtuSyncUploadBooksToggle.Description" xml:space="preserve"><value>远端没有 ッツ 书籍数据时，首次同步上传书籍数据</value></data>
   <data name="AboutSettingsPageTitle.Text" xml:space="preserve"><value>关于</value></data>
 </root>

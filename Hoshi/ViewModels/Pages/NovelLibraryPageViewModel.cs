@@ -13,9 +13,11 @@ using Hoshi.Messages;
 using Hoshi.Models;
 using Hoshi.Models.DTO;
 using Hoshi.Models.Novel;
+using Hoshi.Models.Sync;
 using Hoshi.Services.Settings;
 using Hoshi.Services.Novels;
 using Hoshi.Services.Sasayaki;
+using Hoshi.Services.Sync;
 using Hoshi.Services.UI;
 using Hoshi.ViewModels.Components;
 
@@ -31,12 +33,18 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     private readonly ISasayakiMatchService _sasayakiMatchService;
     private readonly ISettingsService _settingsService;
     private readonly INovelStatisticsDashboardService _statisticsDashboardService;
+    private readonly ITtuSyncRemoteStore _ttuSyncRemoteStore;
+    private readonly ITtuBookImportService _ttuBookImportService;
+    private readonly IGoogleDriveAuthService _googleDriveAuthService;
     private CancellationTokenSource _cts = new();
     private bool _suppressSortApplication;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NoNovels))]
     public partial ObservableCollection<NovelBookItemViewModel> NovelBooks { get; set; } = new();
+
+    [ObservableProperty]
+    public partial ObservableCollection<RemoteNovelBookItemViewModel> RemoteBooks { get; set; } = new();
 
     [ObservableProperty]
     public partial NovelLibrarySortOption SelectedSortOption { get; set; } = NovelLibrarySortOption.Recent;
@@ -57,6 +65,9 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(NoNovels))]
     public partial bool IsContentLoading { get; set; }
 
+    [ObservableProperty]
+    public partial bool IsRemoteBooksLoading { get; set; }
+
     public IReadOnlyList<NovelLibrarySortOptionItem> SortOptions { get; } =
     [
         new(NovelLibrarySortOption.Recent, "Recent"),
@@ -73,7 +84,10 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         IMessenger messenger,
         ISasayakiMatchService sasayakiMatchService,
         ISettingsService settingsService,
-        INovelStatisticsDashboardService statisticsDashboardService
+        INovelStatisticsDashboardService statisticsDashboardService,
+        ITtuSyncRemoteStore ttuSyncRemoteStore,
+        ITtuBookImportService ttuBookImportService,
+        IGoogleDriveAuthService googleDriveAuthService
     )
     {
         _novelLibraryService = novelLibraryService;
@@ -83,6 +97,9 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         _sasayakiMatchService = sasayakiMatchService;
         _settingsService = settingsService;
         _statisticsDashboardService = statisticsDashboardService;
+        _ttuSyncRemoteStore = ttuSyncRemoteStore;
+        _ttuBookImportService = ttuBookImportService;
+        _googleDriveAuthService = googleDriveAuthService;
         SelectedSortOption = _settingsService.Current.NovelLibrarySortOption;
         _messenger.RegisterAll(this);
     }
@@ -143,6 +160,91 @@ public partial class NovelLibraryPageViewModel : ObservableObject
                 importedCount == 1 ? "EPUB imported." : $"{importedCount} EPUBs imported.",
                 "Novel imported");
             await LoadNovelsAsync();
+        }
+    }
+
+    [RelayCommand]
+    private async Task RefreshRemoteBooksAsync()
+    {
+        if (!_settingsService.Current.TtuSyncSettings.EnableSync || !_googleDriveAuthService.HasCredentials)
+        {
+            _notificationService.ShowError(
+                "Connect Google Drive in ッツ Sync settings before refreshing cloud books.",
+                "Sync unavailable");
+            return;
+        }
+
+        try
+        {
+            IsRemoteBooksLoading = true;
+            var remoteBooks = await _ttuSyncRemoteStore.ListRemoteBooksAsync(_cts.Token);
+            var localTitles = NovelBooks
+                .Select(item => TtuSyncFileNames.SanitizeTtuFilename(item.Book.Title))
+                .ToHashSet(StringComparer.Ordinal);
+            RemoteBooks = new ObservableCollection<RemoteNovelBookItemViewModel>(
+                remoteBooks
+                    .Where(book => !localTitles.Contains(book.SanitizedTitle))
+                    .Select(book => new RemoteNovelBookItemViewModel(book)));
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError(
+                $"Failed to fetch books from Google Drive: {ex.Message}",
+                "Sync failed");
+        }
+        finally
+        {
+            IsRemoteBooksLoading = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task DownloadRemoteBookAsync(RemoteNovelBookItemViewModel item)
+    {
+        if (item == null || item.IsDownloading)
+            return;
+
+        item.IsDownloading = true;
+        item.DownloadProgress = 0;
+        try
+        {
+            var progress = new Progress<double>(value => item.DownloadProgress = Math.Clamp(value, 0, 1));
+            var settings = _settingsService.Current;
+            var result = await _ttuBookImportService.ImportRemoteBookAsync(
+                item.Book,
+                new TtuBookImportOptions(
+                    SyncStatistics: settings.StatisticsSettings.EnableSync,
+                    SyncAudioBook: settings.SasayakiSettings.EnableSync,
+                    StatisticsSyncMode: settings.StatisticsSettings.SyncMode),
+                progress,
+                _cts.Token);
+
+            if (!result.IsSuccess)
+            {
+                if (!result.IsCancelled)
+                    _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+                return;
+            }
+
+            RemoteBooks.Remove(item);
+            _notificationService.ShowSuccess("EPUB imported from Google Drive.", "Novel imported");
+            await LoadNovelsAsync();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError(
+                $"Failed to import book from Google Drive: {ex.Message}",
+                "Import failed");
+        }
+        finally
+        {
+            item.IsDownloading = false;
         }
     }
 

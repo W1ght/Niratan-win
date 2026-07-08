@@ -2,6 +2,7 @@ using Hoshi.Enums;
 using Hoshi.Models.Novel;
 using Hoshi.Models.Sasayaki;
 using Hoshi.Models.Shortcuts;
+using Hoshi.Models.Sync;
 
 namespace Hoshi.Models.Settings;
 
@@ -19,4 +20,5 @@ public class AppSettings
     public NovelLibrarySortOption NovelLibrarySortOption { get; set; } = NovelLibrarySortOption.Recent;
     public SasayakiSettings SasayakiSettings { get; set; } = new();
     public NovelStatisticsSettings StatisticsSettings { get; set; } = new();
+    public TtuSyncSettings TtuSyncSettings { get; set; } = new();
 }
