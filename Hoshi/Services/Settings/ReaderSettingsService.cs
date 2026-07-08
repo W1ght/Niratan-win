@@ -97,5 +97,20 @@ internal class ReaderSettingsService : IReaderSettingsService
             });
     }
 
+    public void ReplaceCurrent(ReaderSettings settings)
+    {
+        var oldValue = _current;
+        _current = settings ?? new ReaderSettings();
+
+        SettingChanged?.Invoke(
+            this,
+            new SettingsChangedEventArgs
+            {
+                PropertyName = nameof(Current),
+                OldValue = oldValue,
+                NewValue = _current,
+            });
+    }
+
     public void Reset() => _current = new ReaderSettings();
 }

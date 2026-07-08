@@ -160,12 +160,13 @@ class JsonWriter {
 
 struct hoshi_session_t {
   std::unique_ptr<DictionaryQuery> query;
-  Deinflector deinflector;
+  const LanguageProcessor* language;
   std::unique_ptr<Lookup> lookup;
 
   hoshi_session_t()
       : query(std::make_unique<DictionaryQuery>()),
-        lookup(std::make_unique<Lookup>(*query, deinflector)) {}
+        language(&language::get("ja")),
+        lookup(std::make_unique<Lookup>(*query, *language)) {}
 };
 
 /* -------------------------------------------------------------------------- */
@@ -205,6 +206,14 @@ void WritePitchEntry(JsonWriter& w, const PitchEntry& pe) {
   for (size_t i = 0; i < pe.pitch_positions.size(); ++i) {
     if (i > 0) w.Comma();
     w.Int(pe.pitch_positions[i]);
+  }
+  w.EndArray();
+  w.Comma();
+  w.Key("transcriptions");
+  w.StartArray();
+  for (size_t i = 0; i < pe.transcriptions.size(); ++i) {
+    if (i > 0) w.Comma();
+    w.String(pe.transcriptions[i]);
   }
   w.EndArray();
   w.EndObject();
@@ -269,19 +278,23 @@ void WriteTermResult(JsonWriter& w, const TermResult& tr) {
 }
 
 void WriteLookupResult(JsonWriter& w, const LookupResult& lr) {
+  const TraceCandidate* candidate = lr.trace_candidates.empty() ? nullptr : &lr.trace_candidates.front();
+
   w.StartObject();
   w.Key("matched"); w.String(lr.matched);
   w.Comma();
-  w.Key("deinflected"); w.String(lr.deinflected);
+  w.Key("deinflected"); w.String(candidate ? candidate->deinflected : lr.term.expression);
   w.Comma();
-  w.Key("preprocessorSteps"); w.Int(lr.preprocessor_steps);
+  w.Key("preprocessorSteps"); w.Int(candidate ? candidate->preprocessor_steps : 0);
   w.Comma();
 
   w.Key("trace");
   w.StartArray();
-  for (size_t i = 0; i < lr.trace.size(); ++i) {
-    if (i > 0) w.Comma();
-    WriteTransformGroup(w, lr.trace[i]);
+  if (candidate) {
+    for (size_t i = 0; i < candidate->trace.size(); ++i) {
+      if (i > 0) w.Comma();
+      WriteTransformGroup(w, candidate->trace[i]);
+    }
   }
   w.EndArray();
   w.Comma();
@@ -307,6 +320,19 @@ uint8_t* AllocBuffer(const void* data, size_t size) {
 
 }  // namespace
 
+const LanguageProcessor& ResolveLanguage(const char* language_id) {
+  try {
+    if (!language_id || std::strlen(language_id) == 0) {
+      return language::get("ja");
+    }
+    return language::get(std::string_view(language_id));
+  } catch (const std::exception& e) {
+    native_log("[REBUILD] unsupported language '%s': %s; falling back to ja",
+               language_id ? language_id : "(null)", e.what());
+    return language::get("ja");
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Public C API                                                               */
 /* -------------------------------------------------------------------------- */
@@ -326,20 +352,36 @@ HOSHI_API void hoshi_session_rebuild(
     const char* const* term_paths, int term_count,
     const char* const* freq_paths, int freq_count,
     const char* const* pitch_paths, int pitch_count) {
+  hoshi_session_rebuild_with_language(
+      session,
+      term_paths, term_count,
+      freq_paths, freq_count,
+      pitch_paths, pitch_count,
+      "ja");
+}
+
+HOSHI_API void hoshi_session_rebuild_with_language(
+    hoshi_session_t* session,
+    const char* const* term_paths, int term_count,
+    const char* const* freq_paths, int freq_count,
+    const char* const* pitch_paths, int pitch_count,
+    const char* language_id) {
   if (!session) {
     native_log("[REBUILD] session is NULL");
     return;
   }
 
-  native_log("[REBUILD] Starting: %d term, %d freq, %d pitch dicts", term_count, freq_count, pitch_count);
+  native_log("[REBUILD] Starting: %d term, %d freq, %d pitch dicts, language=%s",
+             term_count, freq_count, pitch_count, language_id ? language_id : "(null)");
 
   auto query = std::make_unique<DictionaryQuery>();
 
   for (int i = 0; i < term_count; ++i) {
     if (!term_paths[i]) continue;
-    auto marker = std::filesystem::path(std::string(term_paths[i])) / ".hoshidicts_1";
-    bool ok = std::filesystem::is_regular_file(marker);
-    native_log("[REBUILD] Term[%d] .hoshidicts_1 found=%d", i, ok);
+    auto dict_path = std::filesystem::path(std::string(term_paths[i]));
+    bool ok_v1 = std::filesystem::is_regular_file(dict_path / ".hoshidicts_1");
+    bool ok_v2 = std::filesystem::is_regular_file(dict_path / ".hoshidicts_2");
+    native_log("[REBUILD] Term[%d] marker found v1=%d v2=%d", i, ok_v1, ok_v2);
     query->add_term_dict(std::string(term_paths[i]));
   }
   for (int i = 0; i < freq_count; ++i) {
@@ -353,7 +395,8 @@ HOSHI_API void hoshi_session_rebuild(
 
   session->lookup.reset();
   session->query = std::move(query);
-  session->lookup = std::make_unique<Lookup>(*session->query, session->deinflector);
+  session->language = &ResolveLanguage(language_id);
+  session->lookup = std::make_unique<Lookup>(*session->query, *session->language);
   native_log("[REBUILD] Complete, lookup recreated with %d term dicts passed", term_count);
 }
 

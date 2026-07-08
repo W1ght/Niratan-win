@@ -194,6 +194,13 @@ public class GlobalSelectionLookupServiceTests
                 NewValue = value,
             });
 
+        public void ReplaceCurrent(AppSettings settings) =>
+            SettingChanged?.Invoke(this, new SettingsChangedEventArgs
+            {
+                PropertyName = nameof(Current),
+                NewValue = settings,
+            });
+
         public Task SaveAsync() => Task.CompletedTask;
 
         public Task LoadAsync() => Task.CompletedTask;

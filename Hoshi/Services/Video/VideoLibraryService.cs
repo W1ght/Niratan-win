@@ -156,6 +156,27 @@ internal sealed class VideoLibraryService : IVideoLibraryService
         }
     }
 
+    public async Task<Result> SetVideoProfileAsync(
+        string videoId,
+        string? profileId,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            await _dataService.UpdateVideoProfileIdAsync(videoId, profileId, ct);
+            return Result.Success();
+        }
+        catch (OperationCanceledException)
+        {
+            return Result.Cancelled();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error saving profile override for video {VideoId}", videoId);
+            return Result.Failure(ex.Message, "Error saving video profile");
+        }
+    }
+
     public static string? FindSidecarSubtitle(string videoPath)
     {
         var directory = Path.GetDirectoryName(videoPath);

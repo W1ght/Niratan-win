@@ -11,6 +11,7 @@ public interface IReaderSettingsService
     ReaderSettings Current { get; }
 
     void Set<T>(Expression<Func<ReaderSettings, T>> selector, T value);
+    void ReplaceCurrent(ReaderSettings settings);
 
     Task SaveAsync();
     Task LoadAsync();

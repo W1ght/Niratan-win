@@ -33,6 +33,11 @@ public interface IDataService
         IReadOnlyList<string> orderedBookIds,
         CancellationToken ct = default
     );
+    Task UpdateNovelProfileIdAsync(
+        string bookId,
+        string? profileId,
+        CancellationToken ct = default
+    );
 
     Task<IReadOnlyList<VideoItem>> GetVideosAsync(
         string? queryText = null,
@@ -55,6 +60,11 @@ public interface IDataService
     Task SaveVideoPlaybackStateAsync(
         string videoId,
         VideoPlaybackState state,
+        CancellationToken ct = default
+    );
+    Task UpdateVideoProfileIdAsync(
+        string videoId,
+        string? profileId,
         CancellationToken ct = default
     );
 }

@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Hoshi.Helpers;
 using Hoshi.Models.Dictionary;
+using Hoshi.Models.Profiles;
 
 namespace Hoshi.Services.Dictionary;
 
@@ -16,19 +17,25 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
 {
     private readonly ILogger<DictionaryLookupService> _logger;
     private readonly string _dictionaryStorageDir;
+    private readonly IDictionaryProfileContext? _profileContext;
     private readonly Dictionary<string, string> _loadedDictDirs = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _displayNameByNativeName = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _nativeNameByDisplayName = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _styles = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _rebuildLock = new(1, 1);
     private IntPtr _session = IntPtr.Zero;
+    private string _activeLanguageId = ContentLanguageProfile.Japanese.Id;
     private bool _indexReady;
     private bool _nativeAvailable = true;
 
-    public DictionaryLookupService(ILogger<DictionaryLookupService> logger, string? dictionaryStorageDir = null)
+    public DictionaryLookupService(
+        ILogger<DictionaryLookupService> logger,
+        string? dictionaryStorageDir = null,
+        IDictionaryProfileContext? profileContext = null)
     {
         _logger = logger;
         _dictionaryStorageDir = dictionaryStorageDir ?? GetDictionaryStorageDir();
+        _profileContext = profileContext;
         CreateSession();
     }
 
@@ -190,14 +197,29 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
 
         // Sync config with filesystem before acquiring the rebuild lock
         // so that file I/O does not block lookups.
-        DictionaryImportService.NormalizeConfig(dictDir);
+        DictionaryImportService.NormalizeConfig(
+            dictDir,
+            GetActiveConfigRoot(),
+            EnableUnconfiguredDictionariesForActiveProfile());
 
         await _rebuildLock.WaitAsync();
         try
         {
-            var termPaths = GetOrderedDictionaryDirectories(dictDir, DictionaryType.Term);
-            var freqPaths = GetOrderedDictionaryDirectories(dictDir, DictionaryType.Frequency);
-            var pitchPaths = GetOrderedDictionaryDirectories(dictDir, DictionaryType.Pitch);
+            var termPaths = GetOrderedDictionaryDirectories(
+                dictDir,
+                DictionaryType.Term,
+                GetActiveConfigRoot(),
+                EnableUnconfiguredDictionariesForActiveProfile());
+            var freqPaths = GetOrderedDictionaryDirectories(
+                dictDir,
+                DictionaryType.Frequency,
+                GetActiveConfigRoot(),
+                EnableUnconfiguredDictionariesForActiveProfile());
+            var pitchPaths = GetOrderedDictionaryDirectories(
+                dictDir,
+                DictionaryType.Pitch,
+                GetActiveConfigRoot(),
+                EnableUnconfiguredDictionariesForActiveProfile());
 
             _logger.LogInformation(
                 "[Rebuild] Passing paths to native: Term=[{TermPaths}], Freq=[{FreqPaths}], Pitch=[{PitchPaths}], Session={SessionPtr}",
@@ -207,7 +229,8 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
                 _session,
                 termPaths,
                 freqPaths,
-                pitchPaths);
+                pitchPaths,
+                _activeLanguageId);
 
             _loadedDictDirs.Clear();
             _displayNameByNativeName.Clear();
@@ -250,7 +273,14 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
         return Path.Combine(AppDataHelper.GetAppDataPath(), "dictionaries");
     }
 
-    internal static IReadOnlyList<string> GetOrderedDictionaryDirectories(string dictDir, DictionaryType type)
+    internal static IReadOnlyList<string> GetOrderedDictionaryDirectories(string dictDir, DictionaryType type) =>
+        GetOrderedDictionaryDirectories(dictDir, type, dictDir, enableUnconfigured: true);
+
+    internal static IReadOnlyList<string> GetOrderedDictionaryDirectories(
+        string dictDir,
+        DictionaryType type,
+        string configRoot,
+        bool enableUnconfigured)
     {
         var typeDir = DictionaryImportService.GetDictionaryTypeStorageDir(dictDir, type);
         var directories = Directory.Exists(typeDir)
@@ -262,7 +292,7 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
             .Where(item => !string.IsNullOrEmpty(item.Name))
             .ToDictionary(item => item.Name!, item => item.Path, StringComparer.Ordinal);
 
-        var config = DictionaryConfigurationStore.Load(dictDir);
+        var config = DictionaryConfigurationStore.Load(configRoot);
         var installedForType = directories
             .Select(Path.GetFileName)
             .Where(name => !string.IsNullOrEmpty(name))
@@ -272,7 +302,8 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
         var enabledEntries = DictionaryConfigurationStore
             .MergeWithInstalled(
                 DictionaryConfigurationStore.GetEntries(config, type),
-                installedForType)
+                installedForType,
+                enableUnconfigured)
             .Where(entry => entry.IsEnabled)
             .ToList();
 
@@ -281,6 +312,27 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
             .Where(path => path != null)
             .Select(path => path!)
             .ToList();
+    }
+
+    public async Task SetActiveLanguageAsync(string languageId)
+    {
+        _activeLanguageId = ContentLanguageProfile.Normalize(languageId).Id;
+        _indexReady = false;
+        await RebuildQueryAsync();
+    }
+
+    internal Task SetActiveLanguageForTestsAsync(string languageId) =>
+        SetActiveLanguageAsync(languageId);
+
+    private string GetActiveConfigRoot() =>
+        _profileContext == null
+            ? _dictionaryStorageDir
+            : _profileContext.GetDictionaryConfigRoot(_profileContext.ActiveProfileId);
+
+    private bool EnableUnconfiguredDictionariesForActiveProfile()
+    {
+        var profileId = _profileContext?.ActiveProfileId;
+        return profileId is null || _profileContext!.EnableUnconfiguredDictionariesForProfile(profileId);
     }
 
     private List<DictionaryLookupResult> ApplyDictionaryDisplayTitles(List<DictionaryLookupResult> results)

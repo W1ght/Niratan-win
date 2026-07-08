@@ -20,4 +20,5 @@ public class NovelBook
     public int CurrentCharacterCount { get; set; }
     public int TotalCharacterCount { get; set; }
     public int ManualSortOrder { get; set; }
+    public string? ProfileId { get; set; }
 }

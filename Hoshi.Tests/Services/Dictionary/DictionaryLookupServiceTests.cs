@@ -471,6 +471,47 @@ public class DictionaryLookupServiceTests
     }
 
     [Fact]
+    public async Task LookupAsync_EnglishProfile_DeinflectsEnglishWords()
+    {
+        using var temp = new TemporaryDictionaryRoot();
+        temp.WriteTermDictionary("EnglishDict",
+            new object[] { "read", "", "", "v", 10, new[] { "to interpret written text" } });
+
+        var service = new DictionaryLookupService(
+            NullLogger<DictionaryLookupService>.Instance,
+            temp.DictionaryRoot);
+        await service.SetActiveLanguageForTestsAsync("en");
+
+        var results = await service.LookupAsync("reading");
+
+        results.Should().Contain(result => result.Term.Expression == "read");
+    }
+
+    [Fact]
+    public async Task LookupAsync_MapsEnglishIpaTranscriptions()
+    {
+        using var temp = new TemporaryDictionaryRoot();
+        temp.WriteTermDictionary("EnglishDict",
+            new object[] { "tomato", "", "", "n", 10, new[] { "a fruit" } });
+        temp.WriteMetadataDictionary("IpaDict", "term_meta_bank_1.json",
+            new object[]
+            {
+                "tomato",
+                "ipa",
+                new { reading = "", transcriptions = new object[] { new { ipa = "/təˈmeɪtoʊ/" } } },
+            });
+
+        var service = new DictionaryLookupService(
+            NullLogger<DictionaryLookupService>.Instance,
+            temp.DictionaryRoot);
+        await service.SetActiveLanguageForTestsAsync("en");
+
+        var result = (await service.LookupAsync("tomato")).Single();
+
+        result.Term.Pitches.Should().ContainSingle().Which.Transcriptions.Should().Contain("/təˈmeɪtoʊ/");
+    }
+
+    [Fact]
     public async Task LookupAsync_MapsCompatibilityImportSourceNameToDisplayTitle()
     {
         using var temp = new TemporaryDictionaryRoot();
@@ -507,7 +548,7 @@ public class DictionaryLookupServiceTests
             ["星", "ほし", "", "n", 10, new[] { "star" }]);
 
         var dictPath = Path.Combine(temp.DictionaryRoot, "TestDict");
-        File.Exists(Path.Combine(dictPath, ".hoshidicts_1")).Should().BeTrue();
+        File.Exists(Path.Combine(dictPath, ".hoshidicts_2")).Should().BeTrue();
 
         var session = IntPtr.Zero;
         try
@@ -771,5 +812,7 @@ public class DictionaryLookupServiceTests
             RebuildCount++;
             return Task.CompletedTask;
         }
+
+        public Task SetActiveLanguageAsync(string languageId) => Task.CompletedTask;
     }
 }

@@ -434,6 +434,12 @@ public class NovelLibraryPageViewModelTests
             SavedOrders.Add(orderedBookIds.ToList());
             return Task.FromResult(Result.Success());
         }
+
+        public Task<Result> SetNovelProfileAsync(
+            string bookId,
+            string? profileId,
+            CancellationToken ct = default) =>
+            Task.FromResult(Result.Success());
     }
 
     private sealed class FakeTtuSyncRemoteStore : ITtuSyncRemoteStore

@@ -65,7 +65,13 @@ public static class DictionaryConfigurationStore
 
     public static List<DictionaryConfigEntry> MergeWithInstalled(
         IReadOnlyList<DictionaryConfigEntry> configured,
-        IReadOnlyList<string> installedNames)
+        IReadOnlyList<string> installedNames) =>
+        MergeWithInstalled(configured, installedNames, enableUnconfigured: true);
+
+    public static List<DictionaryConfigEntry> MergeWithInstalled(
+        IReadOnlyList<DictionaryConfigEntry> configured,
+        IReadOnlyList<string> installedNames,
+        bool enableUnconfigured)
     {
         var configuredByName = configured
             .GroupBy(e => e.FileName, StringComparer.Ordinal)
@@ -77,7 +83,7 @@ public static class DictionaryConfigurationStore
             if (configuredByName.TryGetValue(name, out var entry))
                 merged.Add(entry);
             else
-                merged.Add(new DictionaryConfigEntry(name, true, int.MaxValue));
+                merged.Add(new DictionaryConfigEntry(name, enableUnconfigured, int.MaxValue));
         }
 
         return merged
@@ -85,6 +91,25 @@ public static class DictionaryConfigurationStore
             .ThenBy(e => e.FileName, StringComparer.OrdinalIgnoreCase)
             .Select((entry, index) => entry with { Order = index })
             .ToList();
+    }
+
+    public static DictionaryConfig NormalizeForInstalled(
+        DictionaryConfig config,
+        IEnumerable<DictionaryType> types,
+        Func<DictionaryType, IReadOnlyList<string>> installedNamesByType,
+        bool enableUnconfigured)
+    {
+        var normalized = config;
+        foreach (var type in types)
+        {
+            var entries = MergeWithInstalled(
+                GetEntries(normalized, type),
+                installedNamesByType(type),
+                enableUnconfigured);
+            normalized = WithEntries(normalized, type, entries);
+        }
+
+        return normalized;
     }
 
     private static DictionaryConfig LoadLegacyOrder(string dictionaryRoot)

@@ -104,5 +104,21 @@ internal class SettingsService : ISettingsService
         );
     }
 
+    public void ReplaceCurrent(AppSettings settings)
+    {
+        var oldValue = _current;
+        _current = settings ?? new AppSettings();
+
+        SettingChanged?.Invoke(
+            this,
+            new SettingsChangedEventArgs
+            {
+                PropertyName = nameof(Current),
+                OldValue = oldValue,
+                NewValue = _current,
+            }
+        );
+    }
+
     public void Reset() => _current = new AppSettings();
 }
