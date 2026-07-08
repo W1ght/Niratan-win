@@ -19,8 +19,7 @@ public sealed class SasayakiParser
     public List<SasayakiCue> Parse(string srtContent)
     {
         var cues = new List<SasayakiCue>();
-        var normalizedContent = srtContent
-            .Replace("\r\n", "\n", StringComparison.Ordinal)
+        var normalizedContent = Regex.Replace(srtContent, @"\r+\n", "\n")
             .Replace('\r', '\n');
         var blocks = Regex.Split(normalizedContent.Trim(), @"\n\s*\n");
 
