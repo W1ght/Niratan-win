@@ -10,26 +10,11 @@
       CharacterReceived="NovelReaderPage_CharacterReceived"
       mc:Ignorable="d">
 
-    <Page.KeyboardAccelerators>
-        <KeyboardAccelerator Key="Escape"
-                             Invoked="ReaderCloseKeyboardAccelerator_Invoked" />
-        <KeyboardAccelerator Key="F"
-                             Invoked="ReaderFocusKeyboardAccelerator_Invoked" />
-        <KeyboardAccelerator Key="T"
-                             Invoked="ReaderStatisticsKeyboardAccelerator_Invoked" />
-        <KeyboardAccelerator Key="P"
-                             Invoked="SasayakiPlayPauseKeyboardAccelerator_Invoked" />
-        <KeyboardAccelerator Key="R"
-                             Invoked="SasayakiReplayCueKeyboardAccelerator_Invoked" />
-        <KeyboardAccelerator Key="J"
-                             Invoked="SasayakiJumpCueKeyboardAccelerator_Invoked" />
-    </Page.KeyboardAccelerators>
-
     <Grid RowDefinitions="Auto,*,Auto">
         <Grid Grid.Row="0"
               x:Name="ReaderTopChrome"
               Padding="16,12"
-              ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*"
+              ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,*"
               ColumnSpacing="8">
             <Button HorizontalAlignment="Left"
                     x:Name="NovelReaderBackButton"
@@ -41,30 +26,6 @@
             </Button>
 
             <Button Grid.Column="1"
-                    x:Name="NovelReaderHistoryBackButton"
-                    HorizontalAlignment="Left"
-                    AutomationProperties.AutomationId="NovelReaderHistoryBackButton"
-                    x:Uid="NovelReaderHistoryBackButton"
-                    Click="ReaderHistoryBackButton_Click"
-                    IsEnabled="False">
-                <Button.Content>
-                    <FontIcon Glyph="&#xE830;" />
-                </Button.Content>
-            </Button>
-
-            <Button Grid.Column="2"
-                    x:Name="NovelReaderHistoryForwardButton"
-                    HorizontalAlignment="Left"
-                    AutomationProperties.AutomationId="NovelReaderHistoryForwardButton"
-                    x:Uid="NovelReaderHistoryForwardButton"
-                    Click="ReaderHistoryForwardButton_Click"
-                    IsEnabled="False">
-                <Button.Content>
-                    <FontIcon Glyph="&#xE831;" />
-                </Button.Content>
-            </Button>
-
-            <Button Grid.Column="3"
                     HorizontalAlignment="Left"
                     AutomationProperties.AutomationId="NovelReaderChapterButton"
                     x:Uid="NovelReaderChapterButton"
@@ -74,7 +35,7 @@
                 </Button.Content>
             </Button>
 
-            <Button Grid.Column="4"
+            <Button Grid.Column="2"
                     x:Name="NovelReaderSearchButton"
                     HorizontalAlignment="Left"
                     AutomationProperties.AutomationId="NovelReaderSearchButton"
@@ -85,7 +46,7 @@
                 </Button.Content>
             </Button>
 
-            <Button Grid.Column="5"
+            <Button Grid.Column="3"
                     HorizontalAlignment="Left"
                     AutomationProperties.AutomationId="NovelReaderHighlightsButton"
                     x:Uid="NovelReaderHighlightsButton"
@@ -95,7 +56,7 @@
                 </Button.Content>
             </Button>
 
-            <Button Grid.Column="6"
+            <Button Grid.Column="4"
                     x:Name="NovelReaderStatisticsButton"
                     HorizontalAlignment="Left"
                     AutomationProperties.AutomationId="NovelReaderStatisticsButton"
@@ -106,7 +67,7 @@
                 </Button.Content>
             </Button>
 
-            <Button Grid.Column="7"
+            <Button Grid.Column="5"
                     HorizontalAlignment="Left"
                     AutomationProperties.AutomationId="NovelReaderAppearanceButton"
                     x:Uid="NovelReaderAppearanceButton"
@@ -116,7 +77,89 @@
                 </Button.Content>
             </Button>
 
-            <StackPanel Grid.Column="8"
+            <Button Grid.Column="6"
+                    x:Name="SasayakiButton"
+                    HorizontalAlignment="Left"
+                    AutomationProperties.AutomationId="NovelReaderSasayakiButton"
+                    x:Uid="NovelReaderSasayakiButton"
+                    Click="SasayakiButton_Click"
+                    Visibility="Collapsed">
+                <Button.Content>
+                    <FontIcon x:Name="SasayakiButtonIcon" Glyph="&#xE767;" />
+                </Button.Content>
+                <Button.ContextFlyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem x:Name="SasayakiSkipBackMenuItem"
+                                        x:Uid="SasayakiSkipBackMenuItem"
+                                        AutomationProperties.AutomationId="NovelReaderSasayakiSkipBackMenuItem"
+                                        Click="SasayakiSkipBack_Click">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE7A7;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem x:Name="SasayakiPreviousCueMenuItem"
+                                        x:Uid="SasayakiPreviousCueMenuItem"
+                                        AutomationProperties.AutomationId="NovelReaderSasayakiPreviousCueMenuItem"
+                                        Click="SasayakiPrevCue_Click">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE892;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem x:Name="SasayakiPlayPauseMenuItem"
+                                        x:Uid="SasayakiPlayPauseMenuItem"
+                                        AutomationProperties.AutomationId="NovelReaderSasayakiPlayPauseMenuItem"
+                                        Click="SasayakiPlayPause_Click">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon x:Name="SasayakiPlayPauseMenuIcon" Glyph="&#xE768;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem x:Name="SasayakiNextCueMenuItem"
+                                        x:Uid="SasayakiNextCueMenuItem"
+                                        AutomationProperties.AutomationId="NovelReaderSasayakiNextCueMenuItem"
+                                        Click="SasayakiNextCue_Click">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE893;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem x:Name="SasayakiSkipForwardMenuItem"
+                                        x:Uid="SasayakiSkipForwardMenuItem"
+                                        AutomationProperties.AutomationId="NovelReaderSasayakiSkipForwardMenuItem"
+                                        Click="SasayakiSkipForward_Click">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE7A6;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem x:Name="SasayakiReplayCueMenuItem"
+                                        x:Uid="SasayakiReplayCueMenuItem"
+                                        AutomationProperties.AutomationId="NovelReaderSasayakiReplayCueMenuItem"
+                                        Click="SasayakiReplayCue_Click">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE102;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem x:Name="SasayakiJumpCueMenuItem"
+                                        x:Uid="SasayakiJumpCueMenuItem"
+                                        AutomationProperties.AutomationId="NovelReaderSasayakiJumpCueMenuItem"
+                                        Click="SasayakiJumpCue_Click">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8AD;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem x:Name="SasayakiLoadAudioMenuItem"
+                                        x:Uid="SasayakiLoadAudioMenuItem"
+                                        AutomationProperties.AutomationId="NovelReaderSasayakiLoadAudioMenuItem"
+                                        Click="SasayakiLoadButton_Click">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8A5;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                    </MenuFlyout>
+                </Button.ContextFlyout>
+            </Button>
+
+            <StackPanel Grid.Column="7"
                         Margin="12,0,0,0"
                         VerticalAlignment="Center"
                         Spacing="1">
@@ -153,326 +196,303 @@
                 Visibility="Collapsed"
                 AutomationProperties.AutomationId="DictionaryOverlayCanvas" />
 
-        <Popup x:Name="ReaderChapterPanelPopup"
-               Grid.RowSpan="2"
-               IsLightDismissEnabled="True"
-               ShouldConstrainToRootBounds="True">
-            <Border x:Name="ReaderChapterPanelRoot"
-                    Width="420"
-                    Padding="24"
-                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8">
-                <Grid RowDefinitions="Auto,*">
-                    <TextBlock x:Uid="ReaderChapterPanelTitle"
-                               Margin="0,0,0,16"
-                               Style="{StaticResource SubtitleTextBlockStyle}"
-                               Text="Chapters" />
-                    <controls:ReaderChapterListContent x:Name="ReaderChapterListContent"
-                                                       Grid.Row="1" />
-                </Grid>
-            </Border>
-        </Popup>
+        <ContentDialog x:Name="ReaderChapterPanelDialog"
+                       x:Uid="ReaderChapterPanelDialog"
+                       AutomationProperties.AutomationId="NovelReaderChapterPanelDialog"
+                       MinWidth="1120"
+                       MaxWidth="1600"
+                       CloseButtonText="Close"
+                       DefaultButton="Close">
+            <ContentDialog.Resources>
+                <x:Double x:Key="ContentDialogMaxWidth">1600</x:Double>
+                <x:Double x:Key="ContentDialogMinWidth">1120</x:Double>
+            </ContentDialog.Resources>
+            <Grid Width="1120"
+                  Height="560">
+                <controls:ReaderChapterListContent x:Name="ReaderChapterListContent" />
+            </Grid>
+        </ContentDialog>
 
-        <Popup x:Name="ReaderSearchPanelPopup"
-               Grid.RowSpan="2"
-               IsLightDismissEnabled="True"
-               ShouldConstrainToRootBounds="True">
-            <Border x:Name="ReaderSearchPanelRoot"
-                    Width="420"
-                    Padding="24"
-                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8">
-                <Grid RowDefinitions="Auto,Auto,*" RowSpacing="12">
-                    <TextBlock x:Uid="ReaderSearchPanelTitle"
-                               Style="{StaticResource SubtitleTextBlockStyle}"
-                               Text="Search" />
-                    <TextBox x:Name="ReaderSearchQueryBox"
-                             Grid.Row="1"
-                             x:Uid="ReaderSearchQueryBox"
-                             AutomationProperties.AutomationId="NovelReaderSearchQueryBox"
-                             PlaceholderText="Search in this book"
-                             TextChanged="ReaderSearchQueryBox_TextChanged" />
-                    <Grid Grid.Row="2">
-                        <ListView x:Name="ReaderSearchResultsList"
-                                  AutomationProperties.AutomationId="NovelReaderSearchResultsList"
-                                  IsItemClickEnabled="True"
-                                  ItemClick="SearchResult_ItemClick"
-                                  SelectionMode="None">
-                            <ListView.ItemTemplate>
-                                <DataTemplate x:DataType="novel:ReaderSearchResult">
-                                    <StackPanel Padding="4,8" Spacing="4">
-                                        <TextBlock FontWeight="SemiBold"
-                                                   Text="{x:Bind ChapterLabel}" />
-                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                   MaxLines="3"
-                                                   TextWrapping="Wrap">
-                                            <Run Text="{x:Bind SnippetBeforeMatch}" />
-                                            <Run FontWeight="SemiBold"
-                                                 Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
-                                                 Text="{x:Bind SnippetMatch}" />
-                                            <Run Text="{x:Bind SnippetAfterMatch}" />
-                                        </TextBlock>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
-                        <StackPanel x:Name="ReaderSearchStatusPanel"
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"
-                                    IsHitTestVisible="False"
-                                    Spacing="8">
-                            <ProgressRing x:Name="ReaderSearchLoadingRing"
-                                          Width="24"
-                                          Height="24"
-                                          IsActive="False"
-                                          Visibility="Collapsed" />
-                            <TextBlock x:Name="ReaderSearchPromptText"
-                                       x:Uid="ReaderSearchPromptText"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Style="{StaticResource BodyTextBlockStyle}"
-                                       Text="Enter text to search this book" />
-                            <TextBlock x:Name="ReaderSearchLoadingText"
-                                       x:Uid="ReaderSearchLoadingText"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Style="{StaticResource BodyTextBlockStyle}"
-                                       Text="Searching..."
-                                       Visibility="Collapsed" />
-                            <TextBlock x:Name="ReaderSearchNoMatchesText"
-                                       x:Uid="ReaderSearchNoMatchesText"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Style="{StaticResource BodyTextBlockStyle}"
-                                       Text="No matches"
-                                       Visibility="Collapsed" />
-                            <TextBlock x:Name="ReaderSearchFailedText"
-                                       x:Uid="ReaderSearchFailedText"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       Style="{StaticResource BodyTextBlockStyle}"
-                                       Text="Could not search this book"
-                                       Visibility="Collapsed" />
-                        </StackPanel>
-                    </Grid>
-                </Grid>
-            </Border>
-        </Popup>
-
-        <Popup x:Name="ReaderHighlightsPanelPopup"
-               Grid.RowSpan="2"
-               IsLightDismissEnabled="True"
-               ShouldConstrainToRootBounds="True">
-            <Border x:Name="ReaderHighlightsPanelRoot"
-                    Width="420"
-                    Padding="24"
-                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8">
-                <Grid RowDefinitions="Auto,*">
-                    <TextBlock x:Uid="ReaderHighlightsPanelTitle"
-                               Margin="0,0,0,16"
-                               Style="{StaticResource SubtitleTextBlockStyle}"
-                               Text="Highlights" />
-                    <Grid Grid.Row="1">
-                        <ListView x:Name="ReaderHighlightsList"
-                                  AutomationProperties.AutomationId="NovelReaderHighlightsList"
-                                  IsItemClickEnabled="True"
-                                  ItemClick="Highlight_ItemClick"
-                                  SelectionMode="None">
-                            <ListView.ItemTemplate>
-                                <DataTemplate x:DataType="novel:ReaderHighlightListItem">
-                                    <Grid Padding="4,8"
-                                          ColumnDefinitions="4,*"
-                                          ColumnSpacing="10">
-                                        <Grid.ContextFlyout>
-                                            <MenuFlyout>
-                                                <MenuFlyoutItem x:Uid="ReaderHighlightDeleteMenuItem"
-                                                                Text="Delete"
-                                                                AutomationProperties.AutomationId="ReaderHighlightDeleteMenuItem"
-                                                                Tag="{Binding}"
-                                                                Click="ReaderHighlightDeleteMenuItem_Click" />
-                                            </MenuFlyout>
-                                        </Grid.ContextFlyout>
-                                        <Border CornerRadius="2">
-                                            <Border.Background>
-                                                <SolidColorBrush Color="{x:Bind SwatchColor}" />
-                                            </Border.Background>
-                                        </Border>
-                                        <StackPanel Grid.Column="1" Spacing="4">
-                                            <TextBlock FontWeight="SemiBold"
-                                                       Text="{x:Bind ChapterLabel}" />
-                                            <TextBlock MaxLines="5"
-                                                       Text="{x:Bind Text}"
-                                                       TextWrapping="Wrap" />
-                                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                                           Text="{x:Bind PositionText}" />
-                                                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                                           Text="{x:Bind CreatedText}" />
-                                            </StackPanel>
-                                        </StackPanel>
-                                    </Grid>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
-                        <TextBlock x:Name="ReaderHighlightsEmptyText"
-                                   x:Uid="ReaderHighlightsEmptyText"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
+        <ContentDialog x:Name="ReaderSearchPanelDialog"
+                       x:Uid="ReaderSearchPanelDialog"
+                       AutomationProperties.AutomationId="NovelReaderSearchPanelDialog"
+                       MinWidth="1120"
+                       MaxWidth="1600"
+                       CloseButtonText="Close"
+                       DefaultButton="Close">
+            <ContentDialog.Resources>
+                <x:Double x:Key="ContentDialogMaxWidth">1600</x:Double>
+                <x:Double x:Key="ContentDialogMinWidth">1120</x:Double>
+            </ContentDialog.Resources>
+            <Grid Width="1120"
+                  Height="560"
+                  RowDefinitions="Auto,*"
+                  RowSpacing="12">
+                <TextBox x:Name="ReaderSearchQueryBox"
+                         x:Uid="ReaderSearchQueryBox"
+                         AutomationProperties.AutomationId="NovelReaderSearchQueryBox"
+                         PlaceholderText="Search in this book"
+                         TextChanged="ReaderSearchQueryBox_TextChanged" />
+                <Grid Grid.Row="1">
+                    <ListView x:Name="ReaderSearchResultsList"
+                              AutomationProperties.AutomationId="NovelReaderSearchResultsList"
+                              IsItemClickEnabled="True"
+                              ItemClick="SearchResult_ItemClick"
+                              SelectionMode="None">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="novel:ReaderSearchResult">
+                                <StackPanel Padding="4,8" Spacing="4">
+                                    <TextBlock FontWeight="SemiBold"
+                                               Text="{x:Bind ChapterLabel}" />
+                                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               MaxLines="3"
+                                               TextWrapping="Wrap">
+                                        <Run Text="{x:Bind SnippetBeforeMatch}" />
+                                        <Run FontWeight="SemiBold"
+                                             Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                             Text="{x:Bind SnippetMatch}" />
+                                        <Run Text="{x:Bind SnippetAfterMatch}" />
+                                    </TextBlock>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <StackPanel x:Name="ReaderSearchStatusPanel"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                IsHitTestVisible="False"
+                                Spacing="8">
+                        <ProgressRing x:Name="ReaderSearchLoadingRing"
+                                      Width="24"
+                                      Height="24"
+                                      IsActive="False"
+                                      Visibility="Collapsed" />
+                        <TextBlock x:Name="ReaderSearchPromptText"
+                                   x:Uid="ReaderSearchPromptText"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   Text="No highlights"
+                                   Style="{StaticResource BodyTextBlockStyle}"
+                                   Text="Enter text to search this book" />
+                        <TextBlock x:Name="ReaderSearchLoadingText"
+                                   x:Uid="ReaderSearchLoadingText"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Style="{StaticResource BodyTextBlockStyle}"
+                                   Text="Searching..."
                                    Visibility="Collapsed" />
-                    </Grid>
+                        <TextBlock x:Name="ReaderSearchNoMatchesText"
+                                   x:Uid="ReaderSearchNoMatchesText"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Style="{StaticResource BodyTextBlockStyle}"
+                                   Text="No matches"
+                                   Visibility="Collapsed" />
+                        <TextBlock x:Name="ReaderSearchFailedText"
+                                   x:Uid="ReaderSearchFailedText"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Style="{StaticResource BodyTextBlockStyle}"
+                                   Text="Could not search this book"
+                                   Visibility="Collapsed" />
+                    </StackPanel>
                 </Grid>
-            </Border>
-        </Popup>
+            </Grid>
+        </ContentDialog>
 
-        <Popup x:Name="ReaderStatisticsPanelPopup"
-               Grid.RowSpan="2"
-               IsLightDismissEnabled="True"
-               ShouldConstrainToRootBounds="True">
-            <Border x:Name="ReaderStatisticsPanelRoot"
-                    Width="420"
-                    Padding="24"
-                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8">
-                <Grid RowDefinitions="Auto,*" RowSpacing="16">
-                    <Grid ColumnDefinitions="*,Auto">
-                        <TextBlock x:Uid="ReaderStatisticsPanelTitle"
-                                   VerticalAlignment="Center"
-                                   Style="{StaticResource SubtitleTextBlockStyle}"
-                                   Text="Statistics" />
-                        <Button Grid.Column="1"
-                                x:Name="ReaderStatisticsStartStopButton"
-                                x:Uid="ReaderStatisticsStartStopButton"
-                                AutomationProperties.AutomationId="NovelReaderStatisticsStartStopButton"
-                                Click="StatisticsStartStopButton_Click">
-                            <FontIcon x:Name="ReaderStatisticsStartStopIcon" Glyph="&#xE768;" />
-                        </Button>
-                    </Grid>
-
-                    <ScrollViewer Grid.Row="1">
-                        <StackPanel Spacing="14">
-                            <TextBlock x:Uid="ReaderStatisticsSessionHeader"
-                                       FontWeight="SemiBold"
-                                       Text="Session" />
-                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="8">
-                                <TextBlock x:Uid="ReaderStatisticsCharactersLabel"
-                                           Text="Characters Read" />
-                                <TextBlock Grid.Column="1"
-                                           FontWeight="SemiBold"
-                                           Text="{x:Bind ViewModel.StatisticsSessionCharactersText, Mode=OneWay}" />
-                                <TextBlock Grid.Row="1"
-                                           x:Uid="ReaderStatisticsSpeedLabel"
-                                           Text="Reading Speed" />
-                                <TextBlock Grid.Row="1"
-                                           Grid.Column="1"
-                                           FontWeight="SemiBold"
-                                           Text="{x:Bind ViewModel.StatisticsSessionSpeedText, Mode=OneWay}" />
-                                <TextBlock Grid.Row="2"
-                                           x:Uid="ReaderStatisticsTimeLabel"
-                                           Text="Reading Time" />
-                                <TextBlock Grid.Row="2"
-                                           Grid.Column="1"
-                                           FontWeight="SemiBold"
-                                           Text="{x:Bind ViewModel.StatisticsSessionTimeText, Mode=OneWay}" />
-                                <TextBlock Grid.Row="3"
-                                           x:Uid="ReaderStatisticsBookRemainingLabel"
-                                           Text="Time to finish Book" />
-                                <TextBlock Grid.Row="3"
-                                           Grid.Column="1"
-                                           FontWeight="SemiBold"
-                                           Text="{x:Bind ViewModel.StatisticsBookRemainingTimeText, Mode=OneWay}" />
-                                <TextBlock Grid.Row="4"
-                                           x:Uid="ReaderStatisticsChapterRemainingLabel"
-                                           Text="Time to finish Chapter" />
-                                <TextBlock Grid.Row="4"
-                                           Grid.Column="1"
-                                           FontWeight="SemiBold"
-                                           Text="{x:Bind ViewModel.StatisticsChapterRemainingTimeText, Mode=OneWay}" />
+        <ContentDialog x:Name="ReaderHighlightsPanelDialog"
+                       x:Uid="ReaderHighlightsPanelDialog"
+                       AutomationProperties.AutomationId="NovelReaderHighlightsPanelDialog"
+                       MinWidth="1120"
+                       MaxWidth="1600"
+                       CloseButtonText="Close"
+                       DefaultButton="Close">
+            <ContentDialog.Resources>
+                <x:Double x:Key="ContentDialogMaxWidth">1600</x:Double>
+                <x:Double x:Key="ContentDialogMinWidth">1120</x:Double>
+            </ContentDialog.Resources>
+            <Grid Width="1120"
+                  Height="560">
+                <ListView x:Name="ReaderHighlightsList"
+                          AutomationProperties.AutomationId="NovelReaderHighlightsList"
+                          IsItemClickEnabled="True"
+                          ItemClick="Highlight_ItemClick"
+                          SelectionMode="None">
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="novel:ReaderHighlightListItem">
+                            <Grid Padding="4,8"
+                                  ColumnDefinitions="4,*"
+                                  ColumnSpacing="10">
+                                <Grid.ContextFlyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem x:Uid="ReaderHighlightDeleteMenuItem"
+                                                        Text="Delete"
+                                                        AutomationProperties.AutomationId="ReaderHighlightDeleteMenuItem"
+                                                        Tag="{Binding}"
+                                                        Click="ReaderHighlightDeleteMenuItem_Click" />
+                                    </MenuFlyout>
+                                </Grid.ContextFlyout>
+                                <Border CornerRadius="2">
+                                    <Border.Background>
+                                        <SolidColorBrush Color="{x:Bind SwatchColor}" />
+                                    </Border.Background>
+                                </Border>
+                                <StackPanel Grid.Column="1" Spacing="4">
+                                    <TextBlock FontWeight="SemiBold"
+                                               Text="{x:Bind ChapterLabel}" />
+                                    <TextBlock MaxLines="5"
+                                               Text="{x:Bind Text}"
+                                               TextWrapping="Wrap" />
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   Text="{x:Bind PositionText}" />
+                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   Text="{x:Bind CreatedText}" />
+                                    </StackPanel>
+                                </StackPanel>
                             </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+                <TextBlock x:Name="ReaderHighlightsEmptyText"
+                           x:Uid="ReaderHighlightsEmptyText"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="No highlights"
+                           Visibility="Collapsed" />
+            </Grid>
+        </ContentDialog>
 
-                            <TextBlock x:Uid="ReaderStatisticsTodayHeader"
+        <ContentDialog x:Name="ReaderStatisticsPanelDialog"
+                       x:Uid="ReaderStatisticsPanelDialog"
+                       AutomationProperties.AutomationId="NovelReaderStatisticsPanelDialog"
+                       MinWidth="1120"
+                       MaxWidth="1600"
+                       CloseButtonText="Close"
+                       DefaultButton="Close">
+            <ContentDialog.Resources>
+                <x:Double x:Key="ContentDialogMaxWidth">1600</x:Double>
+                <x:Double x:Key="ContentDialogMinWidth">1120</x:Double>
+            </ContentDialog.Resources>
+            <Grid Width="1120"
+                  Height="560"
+                  RowDefinitions="Auto,*"
+                  RowSpacing="16">
+                <Button x:Name="ReaderStatisticsStartStopButton"
+                        x:Uid="ReaderStatisticsStartStopButton"
+                        AutomationProperties.AutomationId="NovelReaderStatisticsStartStopButton"
+                        HorizontalAlignment="Right"
+                        Click="StatisticsStartStopButton_Click">
+                    <FontIcon x:Name="ReaderStatisticsStartStopIcon" Glyph="&#xE768;" />
+                </Button>
+
+                <ScrollViewer Grid.Row="1">
+                    <StackPanel Spacing="14">
+                        <TextBlock x:Uid="ReaderStatisticsSessionHeader"
+                                   FontWeight="SemiBold"
+                                   Text="Session" />
+                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="8">
+                            <TextBlock x:Uid="ReaderStatisticsCharactersLabel"
+                                       Text="Characters Read" />
+                            <TextBlock Grid.Column="1"
                                        FontWeight="SemiBold"
-                                       Text="Today" />
-                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
-                                <TextBlock x:Uid="ReaderStatisticsCharactersLabel"
-                                           Text="Characters Read" />
-                                <TextBlock Grid.Column="1"
-                                           FontWeight="SemiBold"
-                                           Text="{x:Bind ViewModel.StatisticsTodayCharactersText, Mode=OneWay}" />
-                                <TextBlock Grid.Row="1"
-                                           x:Uid="ReaderStatisticsSpeedLabel"
-                                           Text="Reading Speed" />
-                                <TextBlock Grid.Row="1"
-                                           Grid.Column="1"
-                                           FontWeight="SemiBold"
-                                           Text="{x:Bind ViewModel.StatisticsTodaySpeedText, Mode=OneWay}" />
-                                <TextBlock Grid.Row="2"
-                                           x:Uid="ReaderStatisticsTimeLabel"
-                                           Text="Reading Time" />
-                                <TextBlock Grid.Row="2"
-                                           Grid.Column="1"
-                                           FontWeight="SemiBold"
-                                           Text="{x:Bind ViewModel.StatisticsTodayTimeText, Mode=OneWay}" />
-                            </Grid>
-
-                            <TextBlock x:Uid="ReaderStatisticsAllTimeHeader"
+                                       Text="{x:Bind ViewModel.StatisticsSessionCharactersText, Mode=OneWay}" />
+                            <TextBlock Grid.Row="1"
+                                       x:Uid="ReaderStatisticsSpeedLabel"
+                                       Text="Reading Speed" />
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="1"
                                        FontWeight="SemiBold"
-                                       Text="All Time" />
-                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
-                                <TextBlock x:Uid="ReaderStatisticsCharactersLabel"
-                                           Text="Characters Read" />
-                                <TextBlock Grid.Column="1"
-                                           FontWeight="SemiBold"
-                                           Text="{x:Bind ViewModel.StatisticsAllTimeCharactersText, Mode=OneWay}" />
-                                <TextBlock Grid.Row="1"
-                                           x:Uid="ReaderStatisticsSpeedLabel"
-                                           Text="Reading Speed" />
-                                <TextBlock Grid.Row="1"
-                                           Grid.Column="1"
-                                           FontWeight="SemiBold"
-                                           Text="{x:Bind ViewModel.StatisticsAllTimeSpeedText, Mode=OneWay}" />
-                                <TextBlock Grid.Row="2"
-                                           x:Uid="ReaderStatisticsTimeLabel"
-                                           Text="Reading Time" />
-                                <TextBlock Grid.Row="2"
-                                           Grid.Column="1"
-                                           FontWeight="SemiBold"
-                                           Text="{x:Bind ViewModel.StatisticsAllTimeTimeText, Mode=OneWay}" />
-                            </Grid>
-                        </StackPanel>
-                    </ScrollViewer>
-                </Grid>
-            </Border>
-        </Popup>
+                                       Text="{x:Bind ViewModel.StatisticsSessionSpeedText, Mode=OneWay}" />
+                            <TextBlock Grid.Row="2"
+                                       x:Uid="ReaderStatisticsTimeLabel"
+                                       Text="Reading Time" />
+                            <TextBlock Grid.Row="2"
+                                       Grid.Column="1"
+                                       FontWeight="SemiBold"
+                                       Text="{x:Bind ViewModel.StatisticsSessionTimeText, Mode=OneWay}" />
+                            <TextBlock Grid.Row="3"
+                                       x:Uid="ReaderStatisticsBookRemainingLabel"
+                                       Text="Time to finish Book" />
+                            <TextBlock Grid.Row="3"
+                                       Grid.Column="1"
+                                       FontWeight="SemiBold"
+                                       Text="{x:Bind ViewModel.StatisticsBookRemainingTimeText, Mode=OneWay}" />
+                            <TextBlock Grid.Row="4"
+                                       x:Uid="ReaderStatisticsChapterRemainingLabel"
+                                       Text="Time to finish Chapter" />
+                            <TextBlock Grid.Row="4"
+                                       Grid.Column="1"
+                                       FontWeight="SemiBold"
+                                       Text="{x:Bind ViewModel.StatisticsChapterRemainingTimeText, Mode=OneWay}" />
+                        </Grid>
 
-        <Popup x:Name="ReaderAppearancePanelPopup"
-               Grid.RowSpan="2"
-               IsLightDismissEnabled="True"
-               ShouldConstrainToRootBounds="True">
-            <Border x:Name="ReaderAppearancePanelRoot"
-                    Width="420"
-                    Padding="24"
-                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8">
-                <Grid RowDefinitions="Auto,*">
-                    <TextBlock x:Uid="ReaderAppearancePageTitle"
-                               Margin="0,0,0,16"
-                               Style="{StaticResource SubtitleTextBlockStyle}"
-                               Text="Appearance" />
-                    <controls:ReaderAppearanceSettingsContent Grid.Row="1" />
-                </Grid>
-            </Border>
-        </Popup>
+                        <TextBlock x:Uid="ReaderStatisticsTodayHeader"
+                                   FontWeight="SemiBold"
+                                   Text="Today" />
+                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+                            <TextBlock x:Uid="ReaderStatisticsCharactersLabel"
+                                       Text="Characters Read" />
+                            <TextBlock Grid.Column="1"
+                                       FontWeight="SemiBold"
+                                       Text="{x:Bind ViewModel.StatisticsTodayCharactersText, Mode=OneWay}" />
+                            <TextBlock Grid.Row="1"
+                                       x:Uid="ReaderStatisticsSpeedLabel"
+                                       Text="Reading Speed" />
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="1"
+                                       FontWeight="SemiBold"
+                                       Text="{x:Bind ViewModel.StatisticsTodaySpeedText, Mode=OneWay}" />
+                            <TextBlock Grid.Row="2"
+                                       x:Uid="ReaderStatisticsTimeLabel"
+                                       Text="Reading Time" />
+                            <TextBlock Grid.Row="2"
+                                       Grid.Column="1"
+                                       FontWeight="SemiBold"
+                                       Text="{x:Bind ViewModel.StatisticsTodayTimeText, Mode=OneWay}" />
+                        </Grid>
+
+                        <TextBlock x:Uid="ReaderStatisticsAllTimeHeader"
+                                   FontWeight="SemiBold"
+                                   Text="All Time" />
+                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+                            <TextBlock x:Uid="ReaderStatisticsCharactersLabel"
+                                       Text="Characters Read" />
+                            <TextBlock Grid.Column="1"
+                                       FontWeight="SemiBold"
+                                       Text="{x:Bind ViewModel.StatisticsAllTimeCharactersText, Mode=OneWay}" />
+                            <TextBlock Grid.Row="1"
+                                       x:Uid="ReaderStatisticsSpeedLabel"
+                                       Text="Reading Speed" />
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="1"
+                                       FontWeight="SemiBold"
+                                       Text="{x:Bind ViewModel.StatisticsAllTimeSpeedText, Mode=OneWay}" />
+                            <TextBlock Grid.Row="2"
+                                       x:Uid="ReaderStatisticsTimeLabel"
+                                       Text="Reading Time" />
+                            <TextBlock Grid.Row="2"
+                                       Grid.Column="1"
+                                       FontWeight="SemiBold"
+                                       Text="{x:Bind ViewModel.StatisticsAllTimeTimeText, Mode=OneWay}" />
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </ContentDialog>
+
+        <ContentDialog x:Name="ReaderAppearancePanelDialog"
+                       x:Uid="ReaderAppearancePanelDialog"
+                       AutomationProperties.AutomationId="NovelReaderAppearancePanelDialog"
+                       MinWidth="1280"
+                       MaxWidth="1600"
+                       CloseButtonText="Close"
+                       DefaultButton="Close">
+            <ContentDialog.Resources>
+                <x:Double x:Key="ContentDialogMaxWidth">1600</x:Double>
+                <x:Double x:Key="ContentDialogMinWidth">1280</x:Double>
+            </ContentDialog.Resources>
+            <controls:ReaderAppearanceSettingsContent Width="1280"
+                                                      Height="620" />
+        </ContentDialog>
 
         <Grid Grid.Row="2"
               x:Name="ReaderBottomChrome"
@@ -487,148 +507,219 @@
                        Style="{StaticResource CaptionTextBlockStyle}"
                        Visibility="Collapsed" />
 
-            <!-- Sasayaki audiobook sync bar -->
-            <Grid Grid.Row="1"
-                  x:Name="SasayakiBar"
-                  AutomationProperties.AutomationId="NovelReaderSasayakiBar"
-                  Padding="16,8"
-                  Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                  BorderThickness="0,1,0,0"
-                  ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*,Auto,Auto"
-                  ColumnSpacing="8"
-                  Visibility="Collapsed">
-            <!-- Load audiobook button -->
-            <Button Grid.Column="0"
-                    x:Uid="SasayakiLoadAudioButton"
-                    AutomationProperties.AutomationId="NovelReaderSasayakiLoadAudioButton"
-                    Width="36"
-                    Height="36"
-                    Padding="0"
-                    Click="SasayakiLoadButton_Click">
-                <FontIcon Glyph="&#xE8A5;" />
-            </Button>
-
-            <!-- Skip backward -->
-            <Button Grid.Column="1"
-                    x:Name="SasayakiSkipBackButton"
-                    x:Uid="SasayakiSkipBackButton"
-                    AutomationProperties.AutomationId="NovelReaderSasayakiSkipBackButton"
-                    Width="36"
-                    Height="36"
-                    Padding="0"
-                    Click="SasayakiSkipBack_Click"
-                    Visibility="Collapsed">
-                <TextBlock FontSize="12"
-                           FontWeight="SemiBold"
-                           Text="-15" />
-            </Button>
-
-            <!-- Previous cue -->
-            <Button Grid.Column="2"
-                    x:Name="SasayakiPreviousCueButton"
-                    x:Uid="SasayakiPreviousCueButton"
-                    AutomationProperties.AutomationId="NovelReaderSasayakiPreviousCueButton"
-                    Width="36"
-                    Height="36"
-                    Padding="0"
-                    Click="SasayakiPrevCue_Click">
-                <FontIcon Glyph="&#xE892;" />
-            </Button>
-
-            <!-- Play/Pause -->
-            <Button Grid.Column="3"
-                    x:Name="SasayakiPlayPauseButton"
-                    x:Uid="SasayakiPlayPauseButton"
-                    AutomationProperties.AutomationId="NovelReaderSasayakiPlayPauseButton"
-                    Width="36"
-                    Height="36"
-                    Padding="0"
-                    Click="SasayakiPlayPause_Click">
-                <FontIcon x:Name="SasayakiPlayIcon" Glyph="&#xE768;" />
-            </Button>
-
-            <!-- Next cue -->
-            <Button Grid.Column="4"
-                    x:Name="SasayakiNextCueButton"
-                    x:Uid="SasayakiNextCueButton"
-                    AutomationProperties.AutomationId="NovelReaderSasayakiNextCueButton"
-                    Width="36"
-                    Height="36"
-                    Padding="0"
-                    Click="SasayakiNextCue_Click">
-                <FontIcon Glyph="&#xE893;" />
-            </Button>
-
-            <!-- Skip forward -->
-            <Button Grid.Column="5"
-                    x:Name="SasayakiSkipForwardButton"
-                    x:Uid="SasayakiSkipForwardButton"
-                    AutomationProperties.AutomationId="NovelReaderSasayakiSkipForwardButton"
-                    Width="36"
-                    Height="36"
-                    Padding="0"
-                    Click="SasayakiSkipForward_Click"
-                    Visibility="Collapsed">
-                <TextBlock FontSize="12"
-                           FontWeight="SemiBold"
-                           Text="+15" />
-            </Button>
-
-            <!-- Progress and cue text -->
-            <Grid Grid.Column="6" RowDefinitions="Auto,Auto">
-                <Slider Grid.Row="0"
-                        x:Name="SasayakiPositionSlider"
-                        x:Uid="SasayakiPositionSlider"
-                        AutomationProperties.AutomationId="NovelReaderSasayakiPositionSlider"
-                        Minimum="0"
-                        Maximum="100"
-                        ValueChanged="SasayakiPositionSlider_ValueChanged" />
-                <TextBlock Grid.Row="1"
-                           x:Name="SasayakiCueTextBlock"
-                           x:Uid="SasayakiCueTextBlock"
-                           AutomationProperties.AutomationId="NovelReaderSasayakiCueText"
-                           MaxLines="1"
-                           Style="{StaticResource CaptionTextBlockStyle}"
-                           TextTrimming="CharacterEllipsis"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            </Grid>
-
-            <!-- Time display -->
-            <StackPanel Grid.Column="7"
-                        VerticalAlignment="Center"
-                        Orientation="Horizontal"
-                        Spacing="4">
-                <TextBlock x:Name="SasayakiPositionText"
-                           Style="{StaticResource CaptionTextBlockStyle}"
-                           Text="00:00" />
-                <TextBlock Style="{StaticResource CaptionTextBlockStyle}"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                           Text="/" />
-                <TextBlock x:Name="SasayakiDurationText"
-                           Style="{StaticResource CaptionTextBlockStyle}"
-                           Text="00:00" />
-            </StackPanel>
-
-            <!-- Playback rate -->
-            <ComboBox Grid.Column="8"
-                      x:Name="SasayakiRateComboBox"
-                      x:Uid="SasayakiPlaybackRateComboBox"
-                      AutomationProperties.AutomationId="NovelReaderSasayakiPlaybackRateComboBox"
-                      Width="64"
-                      SelectedIndex="2"
-                      SelectionChanged="SasayakiRateComboBox_SelectionChanged">
-                <ComboBoxItem>0.5x</ComboBoxItem>
-                <ComboBoxItem>0.75x</ComboBoxItem>
-                <ComboBoxItem>1.0x</ComboBoxItem>
-                <ComboBoxItem>1.25x</ComboBoxItem>
-                <ComboBoxItem>1.5x</ComboBoxItem>
-                <ComboBoxItem>1.75x</ComboBoxItem>
-                <ComboBoxItem>2.0x</ComboBoxItem>
-                <ComboBoxItem>2.5x</ComboBoxItem>
-                <ComboBoxItem>3.0x</ComboBoxItem>
-            </ComboBox>
-            </Grid>
         </Grid>
+
+        <ContentDialog x:Name="SasayakiPanelDialog"
+                       x:Uid="NovelReaderSasayakiPanelDialog"
+                       AutomationProperties.AutomationId="NovelReaderSasayakiPanelDialog"
+                       MinWidth="1120"
+                       MaxWidth="1600"
+                       CloseButtonText="Close"
+                       DefaultButton="Close">
+            <ContentDialog.Resources>
+                <x:Double x:Key="ContentDialogMaxWidth">1600</x:Double>
+                <x:Double x:Key="ContentDialogMinWidth">1120</x:Double>
+            </ContentDialog.Resources>
+            <ScrollViewer MaxHeight="640"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <StackPanel Width="1120"
+                            MaxWidth="1120"
+                            DataContext="{x:Bind SasayakiPanelViewModel}"
+                            Spacing="20">
+                    <StackPanel x:Name="SasayakiPanelAudioSection"
+                                AutomationProperties.AutomationId="NovelReaderSasayakiAudioSection"
+                                Spacing="12">
+                        <TextBlock x:Uid="NovelReaderSasayakiAudioSectionHeader"
+                                   FontWeight="SemiBold"
+                                   Text="Audio" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                            <StackPanel Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="{Binding PositionText, Mode=OneWay}" />
+                                    <TextBlock Text="/" />
+                                    <TextBlock Text="{Binding DurationText, Mode=OneWay}" />
+                                </StackPanel>
+                                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           MaxLines="2"
+                                           Text="{Binding CurrentCueText, Mode=OneWay}"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Text="{Binding SasayakiStatusText, Mode=OneWay}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    x:Name="SasayakiPanelLoadAudioButton"
+                                    x:Uid="NovelReaderSasayakiPanelLoadAudioButton"
+                                    AutomationProperties.AutomationId="NovelReaderSasayakiPanelLoadAudioButton"
+                                    Click="SasayakiLoadButton_Click">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE8A5;" />
+                                    <TextBlock x:Uid="NovelReaderSasayakiPanelLoadAudioText"
+                                               Text="Load Audio" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                        <StackPanel HorizontalAlignment="Center"
+                                    Orientation="Horizontal"
+                                    Spacing="8">
+                            <Button x:Name="SasayakiPanelSkipBackButton"
+                                    x:Uid="NovelReaderSasayakiPanelSkipBackButton"
+                                    AutomationProperties.AutomationId="NovelReaderSasayakiPanelSkipBackButton"
+                                    Click="SasayakiSkipBack_Click">
+                                <FontIcon Glyph="&#xE7A7;" />
+                            </Button>
+                            <Button x:Name="SasayakiPanelPreviousCueButton"
+                                    x:Uid="NovelReaderSasayakiPanelPreviousCueButton"
+                                    AutomationProperties.AutomationId="NovelReaderSasayakiPanelPreviousCueButton"
+                                    Click="SasayakiPrevCue_Click">
+                                <FontIcon Glyph="&#xE892;" />
+                            </Button>
+                            <Button x:Name="SasayakiPanelPlayPauseButton"
+                                    x:Uid="NovelReaderSasayakiPanelPlayPauseButton"
+                                    AutomationProperties.AutomationId="NovelReaderSasayakiPanelPlayPauseButton"
+                                    Click="SasayakiPlayPause_Click">
+                                <FontIcon x:Name="SasayakiPanelPlayPauseIcon" Glyph="&#xE768;" />
+                            </Button>
+                            <Button x:Name="SasayakiPanelNextCueButton"
+                                    x:Uid="NovelReaderSasayakiPanelNextCueButton"
+                                    AutomationProperties.AutomationId="NovelReaderSasayakiPanelNextCueButton"
+                                    Click="SasayakiNextCue_Click">
+                                <FontIcon Glyph="&#xE893;" />
+                            </Button>
+                            <Button x:Name="SasayakiPanelSkipForwardButton"
+                                    x:Uid="NovelReaderSasayakiPanelSkipForwardButton"
+                                    AutomationProperties.AutomationId="NovelReaderSasayakiPanelSkipForwardButton"
+                                    Click="SasayakiSkipForward_Click">
+                                <FontIcon Glyph="&#xE7A6;" />
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel x:Name="SasayakiPanelPlaybackSection"
+                                AutomationProperties.AutomationId="NovelReaderSasayakiPlaybackSection"
+                                Spacing="12">
+                        <TextBlock x:Uid="NovelReaderSasayakiPlaybackSectionHeader"
+                                   FontWeight="SemiBold"
+                                   Text="Playback" />
+                        <Grid ColumnDefinitions="120,*,56"
+                              ColumnSpacing="12"
+                              RowDefinitions="Auto,Auto"
+                              RowSpacing="10">
+                            <TextBlock x:Uid="NovelReaderSasayakiDelayLabel"
+                                       VerticalAlignment="Center"
+                                       Text="Delay" />
+                            <Slider Grid.Column="1"
+                                    x:Name="SasayakiDelaySlider"
+                                    AutomationProperties.AutomationId="NovelReaderSasayakiDelaySlider"
+                                    Minimum="-2"
+                                    Maximum="2"
+                                    SmallChange="0.05"
+                                    StepFrequency="0.05"
+                                    ValueChanged="SasayakiDelaySlider_ValueChanged" />
+                            <TextBlock Grid.Column="2"
+                                       x:Name="SasayakiDelayValueText"
+                                       VerticalAlignment="Center"
+                                       TextAlignment="Right"
+                                       Text="0.00s" />
+
+                            <TextBlock Grid.Row="1"
+                                       x:Uid="NovelReaderSasayakiSpeedLabel"
+                                       VerticalAlignment="Center"
+                                       Text="Speed" />
+                            <Slider Grid.Row="1"
+                                    Grid.Column="1"
+                                    x:Name="SasayakiSpeedSlider"
+                                    AutomationProperties.AutomationId="NovelReaderSasayakiSpeedSlider"
+                                    Minimum="0.5"
+                                    Maximum="1.5"
+                                    SmallChange="0.05"
+                                    StepFrequency="0.05"
+                                    ValueChanged="SasayakiSpeedSlider_ValueChanged" />
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="2"
+                                       x:Name="SasayakiSpeedValueText"
+                                       VerticalAlignment="Center"
+                                       TextAlignment="Right"
+                                       Text="1.00x" />
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel x:Name="SasayakiPanelSettingsSection"
+                                AutomationProperties.AutomationId="NovelReaderSasayakiSettingsSection"
+                                Spacing="12">
+                        <TextBlock x:Uid="NovelReaderSasayakiSettingsSectionHeader"
+                                   FontWeight="SemiBold"
+                                   Text="Settings" />
+                        <ToggleSwitch x:Name="SasayakiPanelShowToggleSwitch"
+                                      x:Uid="NovelReaderSasayakiShowToggleSwitch"
+                                      AutomationProperties.AutomationId="NovelReaderSasayakiShowToggleSwitch"
+                                      Header="Show Sasayaki"
+                                      Toggled="SasayakiPanelShowToggleSwitch_Toggled" />
+                        <ToggleSwitch x:Name="SasayakiPanelAutoScrollToggleSwitch"
+                                      x:Uid="NovelReaderSasayakiAutoScrollToggleSwitch"
+                                      AutomationProperties.AutomationId="NovelReaderSasayakiAutoScrollToggleSwitch"
+                                      Header="Auto-Scroll"
+                                      Toggled="SasayakiPanelAutoScrollToggleSwitch_Toggled" />
+                        <ToggleSwitch x:Name="SasayakiPanelAutoPauseToggleSwitch"
+                                      x:Uid="NovelReaderSasayakiAutoPauseToggleSwitch"
+                                      AutomationProperties.AutomationId="NovelReaderSasayakiAutoPauseToggleSwitch"
+                                      Header="Auto-Pause"
+                                      Toggled="SasayakiPanelAutoPauseToggleSwitch_Toggled" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="SasayakiPanelThemeSection"
+                                AutomationProperties.AutomationId="NovelReaderSasayakiThemeSection"
+                                Spacing="12">
+                        <TextBlock x:Uid="NovelReaderSasayakiThemeSectionHeader"
+                                   FontWeight="SemiBold"
+                                   Text="Theme" />
+                        <Grid ColumnDefinitions="*,*"
+                              ColumnSpacing="16"
+                              RowDefinitions="Auto,Auto">
+                            <StackPanel Spacing="8">
+                                <TextBlock x:Uid="NovelReaderSasayakiLightTextColorLabel"
+                                           Text="Light Text" />
+                                <ColorPicker x:Name="SasayakiPanelLightTextColorPicker"
+                                             AutomationProperties.AutomationId="NovelReaderSasayakiLightTextColorPicker"
+                                             IsAlphaEnabled="True"
+                                             IsMoreButtonVisible="False"
+                                             ColorChanged="SasayakiPanelLightTextColorPicker_ColorChanged" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="8">
+                                <TextBlock x:Uid="NovelReaderSasayakiLightBackgroundColorLabel"
+                                           Text="Light Background" />
+                                <ColorPicker x:Name="SasayakiPanelLightBackgroundColorPicker"
+                                             AutomationProperties.AutomationId="NovelReaderSasayakiLightBackgroundColorPicker"
+                                             IsAlphaEnabled="True"
+                                             IsMoreButtonVisible="False"
+                                             ColorChanged="SasayakiPanelLightBackgroundColorPicker_ColorChanged" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Spacing="8">
+                                <TextBlock x:Uid="NovelReaderSasayakiDarkTextColorLabel"
+                                           Text="Dark Text" />
+                                <ColorPicker x:Name="SasayakiPanelDarkTextColorPicker"
+                                             AutomationProperties.AutomationId="NovelReaderSasayakiDarkTextColorPicker"
+                                             IsAlphaEnabled="True"
+                                             IsMoreButtonVisible="False"
+                                             ColorChanged="SasayakiPanelDarkTextColorPicker_ColorChanged" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1"
+                                        Grid.Column="1"
+                                        Spacing="8">
+                                <TextBlock x:Uid="NovelReaderSasayakiDarkBackgroundColorLabel"
+                                           Text="Dark Background" />
+                                <ColorPicker x:Name="SasayakiPanelDarkBackgroundColorPicker"
+                                             AutomationProperties.AutomationId="NovelReaderSasayakiDarkBackgroundColorPicker"
+                                             IsAlphaEnabled="True"
+                                             IsMoreButtonVisible="False"
+                                             ColorChanged="SasayakiPanelDarkBackgroundColorPicker_ColorChanged" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </ContentDialog>
     </Grid>
 </Page>

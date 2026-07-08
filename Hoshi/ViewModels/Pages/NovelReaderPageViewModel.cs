@@ -105,6 +105,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
     public string StatisticsSessionCharactersText => FormatCount(SessionStatistics.CharactersRead);
     public string StatisticsSessionSpeedText => FormatSpeed(SessionStatistics.LastReadingSpeed);
     public string StatisticsSessionTimeText => FormatDuration(SessionStatistics.ReadingTime);
+    public string StatisticsSessionChromeTimeText => FormatChromeReadingTime(SessionStatistics.ReadingTime);
     public string StatisticsBookRemainingTimeText => FormatDuration(
         EstimateRemainingSeconds(TotalCharacterCount - CurrentCharacterCount));
     public string StatisticsChapterRemainingTimeText => FormatDuration(
@@ -360,8 +361,10 @@ public partial class NovelReaderPageViewModel : ObservableObject
         for (var i = 0; i < safeIndex; i++)
             priorCount += _chapterCharacterCounts[i];
 
+        var chapterOffset = (int)(
+            _chapterCharacterCounts[safeIndex] * Math.Clamp(Progress, 0, 1));
         CurrentCharacterCount = Math.Clamp(
-            priorCount + (int)Math.Round(_chapterCharacterCounts[safeIndex] * Math.Clamp(Progress, 0, 1)),
+            priorCount + chapterOffset,
             0,
             TotalCharacterCount);
     }
@@ -570,10 +573,23 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
     private static string FormatDuration(double seconds)
     {
-        var duration = TimeSpan.FromSeconds(Math.Max(0, seconds));
-        return duration.TotalHours >= 24
-            ? $"{(int)duration.TotalHours}:{duration.Minutes:00}:{duration.Seconds:00}"
-            : duration.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture);
+        var totalSeconds = Math.Max((long)seconds, 0L);
+        var hours = totalSeconds / 3600;
+        var minutes = totalSeconds % 3600 / 60;
+        var remainingSeconds = totalSeconds % 60;
+        return hours > 0
+            ? $"{hours}h {minutes}m {remainingSeconds}s"
+            : minutes > 0
+                ? $"{minutes}m {remainingSeconds}s"
+                : $"{remainingSeconds}s";
+    }
+
+    private static string FormatChromeReadingTime(double seconds)
+    {
+        var totalMinutes = Math.Max((long)(seconds / 60d), 0L);
+        var hours = totalMinutes / 60;
+        var minutes = totalMinutes % 60;
+        return $"{hours}:{minutes.ToString("00", CultureInfo.InvariantCulture)}";
     }
 
     private void OnStatisticsTextChanged()
@@ -582,6 +598,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
         OnPropertyChanged(nameof(StatisticsSessionCharactersText));
         OnPropertyChanged(nameof(StatisticsSessionSpeedText));
         OnPropertyChanged(nameof(StatisticsSessionTimeText));
+        OnPropertyChanged(nameof(StatisticsSessionChromeTimeText));
         OnPropertyChanged(nameof(StatisticsBookRemainingTimeText));
         OnPropertyChanged(nameof(StatisticsChapterRemainingTimeText));
         OnPropertyChanged(nameof(StatisticsTodayCharactersText));

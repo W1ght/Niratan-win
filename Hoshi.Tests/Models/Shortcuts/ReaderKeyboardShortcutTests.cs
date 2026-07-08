@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Hoshi.Models.Shortcuts;
+using Windows.System;
 
 namespace Hoshi.Tests.Models.Shortcuts;
 
@@ -16,9 +17,26 @@ public sealed class ReaderKeyboardShortcutTests
     [InlineData("Escape", "Esc")]
     [InlineData("[", "[")]
     [InlineData("j", "J")]
-    public void Label_UsesMacAlignedKeyNames(string key, string expected)
+    public void Label_UsesNiratanAlignedKeyNames(string key, string expected)
     {
         new ReaderKeyboardShortcut(key).Label.Should().Be(expected);
+    }
+
+    [Fact]
+    public void KeyboardShortcutBinding_RoundTripsBracketOemVirtualKeys()
+    {
+        var bracketLeftKey = (VirtualKey)219;
+        var bracketRightKey = (VirtualKey)221;
+
+        KeyboardShortcutBinding.FromVirtualKey(bracketLeftKey).Should().Be(new KeyboardShortcutBinding("["));
+        KeyboardShortcutBinding.FromVirtualKey(bracketRightKey).Should().Be(new KeyboardShortcutBinding("]"));
+
+        ShortcutInputMapper.TryGetVirtualKey(new KeyboardShortcutBinding("["), out var leftKey, out _)
+            .Should().BeTrue();
+        ShortcutInputMapper.TryGetVirtualKey(new KeyboardShortcutBinding("]"), out var rightKey, out _)
+            .Should().BeTrue();
+        leftKey.Should().Be(bracketLeftKey);
+        rightKey.Should().Be(bracketRightKey);
     }
 
     [Fact]
@@ -35,24 +53,26 @@ public sealed class ReaderKeyboardShortcutTests
     }
 
     [Fact]
-    public void ReaderShortcutActions_DefineReaderDefaults()
+    public void ReaderShortcutActions_DefineNiratanReaderDefaults()
     {
         ReaderShortcutActions.All.Select(action => action.Id).Should().Equal(
             "reader.previousPage",
             "reader.nextPage",
             "reader.close",
             "reader.toggleFocusMode",
-            "reader.toggleStatistics");
+            "reader.toggleStatistics",
+            "reader.toggleLyricsMode");
 
         ReaderShortcutActions.PreviousPage.DefaultShortcut.Label.Should().Be("\u2190");
         ReaderShortcutActions.NextPage.DefaultShortcut.Label.Should().Be("\u2192");
         ReaderShortcutActions.Close.DefaultShortcut.Label.Should().Be("Esc");
         ReaderShortcutActions.ToggleFocusMode.DefaultShortcut.Label.Should().Be("F");
         ReaderShortcutActions.ToggleStatistics.DefaultShortcut.Label.Should().Be("T");
+        ReaderShortcutActions.ToggleLyricsMode.DefaultShortcut.Label.Should().Be("L");
     }
 
     [Fact]
-    public void SasayakiShortcutActions_DefineMacAlignedDefaults()
+    public void SasayakiShortcutActions_DefineNiratanDefaults()
     {
         SasayakiShortcutActions.All.Select(action => action.Id).Should().Equal(
             "sasayaki.previousCue",

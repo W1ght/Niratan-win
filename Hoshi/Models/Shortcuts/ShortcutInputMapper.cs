@@ -37,6 +37,82 @@ public static partial class ShortcutInputMapper
         return modifiers;
     }
 
+    public static bool TryGetVirtualKey(
+        KeyboardShortcutBinding binding,
+        out VirtualKey key,
+        out VirtualKeyModifiers modifiers)
+    {
+        key = VirtualKey.None;
+        modifiers = ToVirtualKeyModifiers(binding.Modifiers);
+
+        if (binding.IsEmpty)
+            return false;
+
+        key = binding.Key switch
+        {
+            "LeftArrow" => VirtualKey.Left,
+            "RightArrow" => VirtualKey.Right,
+            "UpArrow" => VirtualKey.Up,
+            "DownArrow" => VirtualKey.Down,
+            "PageUp" => VirtualKey.PageUp,
+            "PageDown" => VirtualKey.PageDown,
+            "Space" => VirtualKey.Space,
+            "Escape" => VirtualKey.Escape,
+            "Add" => VirtualKey.Add,
+            "Subtract" => VirtualKey.Subtract,
+            "[" => (VirtualKey)219,
+            "]" => (VirtualKey)221,
+            _ => VirtualKey.None,
+        };
+
+        if (key != VirtualKey.None)
+            return true;
+
+        if (binding.Key.Length == 1)
+        {
+            var character = binding.Key[0];
+            if (character is >= 'a' and <= 'z')
+            {
+                key = (VirtualKey)((int)VirtualKey.A + character - 'a');
+                return true;
+            }
+
+            if (character is >= '0' and <= '9')
+            {
+                key = (VirtualKey)((int)VirtualKey.Number0 + character - '0');
+                return true;
+            }
+
+            return false;
+        }
+
+        if (binding.Key.Length is >= 2 and <= 3
+            && binding.Key[0] == 'F'
+            && int.TryParse(binding.Key[1..], out var functionKey)
+            && functionKey is >= 1 and <= 24)
+        {
+            key = (VirtualKey)((int)VirtualKey.F1 + functionKey - 1);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static VirtualKeyModifiers ToVirtualKeyModifiers(KeyboardShortcutModifiers modifiers)
+    {
+        var result = VirtualKeyModifiers.None;
+        if (modifiers.HasFlag(KeyboardShortcutModifiers.Control))
+            result |= VirtualKeyModifiers.Control;
+        if (modifiers.HasFlag(KeyboardShortcutModifiers.Shift))
+            result |= VirtualKeyModifiers.Shift;
+        if (modifiers.HasFlag(KeyboardShortcutModifiers.Alt))
+            result |= VirtualKeyModifiers.Menu;
+        if (modifiers.HasFlag(KeyboardShortcutModifiers.Windows))
+            result |= VirtualKeyModifiers.Windows;
+
+        return result;
+    }
+
     private static bool IsKeyDown(VirtualKey key) =>
         (GetKeyState((int)key) & 0x8000) != 0;
 

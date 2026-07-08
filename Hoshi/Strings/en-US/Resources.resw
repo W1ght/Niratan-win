@@ -156,6 +156,8 @@
   <data name="ReaderAppearanceDialog.Title" xml:space="preserve"><value>Appearance</value></data>
   <data name="ReaderAppearanceDialog.PrimaryButtonText" xml:space="preserve"><value>Done</value></data>
   <data name="ReaderAppearancePageTitle.Text" xml:space="preserve"><value>Appearance</value></data>
+  <data name="ReaderAppearancePanelDialog.Title" xml:space="preserve"><value>Appearance</value></data>
+  <data name="ReaderAppearancePanelDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
   <data name="ReaderThemeSectionHeader.Text" xml:space="preserve"><value>Reader Theme</value></data>
   <data name="ReaderColorThemeCard.Header" xml:space="preserve"><value>Color Theme</value></data>
   <data name="ReaderColorThemeCard.Description" xml:space="preserve"><value>Select the reading color theme</value></data>
@@ -350,13 +352,19 @@
   <data name="VideoPlayerLookupButton.Label" xml:space="preserve"><value>Lookup</value></data>
   <data name="VideoPlayerLookupButton.ToolTipService.ToolTip" xml:space="preserve"><value>Lookup subtitle</value></data>
   <data name="ReaderChapterPanelTitle.Text" xml:space="preserve"><value>Chapters</value></data>
+  <data name="ReaderChapterPanelDialog.Title" xml:space="preserve"><value>Chapters</value></data>
+  <data name="ReaderChapterPanelDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
   <data name="ReaderSearchPanelTitle.Text" xml:space="preserve"><value>Search</value></data>
+  <data name="ReaderSearchPanelDialog.Title" xml:space="preserve"><value>Search</value></data>
+  <data name="ReaderSearchPanelDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
   <data name="ReaderSearchQueryBox.PlaceholderText" xml:space="preserve"><value>Search in this book</value></data>
   <data name="ReaderSearchPromptText.Text" xml:space="preserve"><value>Enter text to search this book</value></data>
   <data name="ReaderSearchLoadingText.Text" xml:space="preserve"><value>Searching...</value></data>
   <data name="ReaderSearchNoMatchesText.Text" xml:space="preserve"><value>No matches</value></data>
   <data name="ReaderSearchFailedText.Text" xml:space="preserve"><value>Could not search this book</value></data>
   <data name="ReaderHighlightsPanelTitle.Text" xml:space="preserve"><value>Highlights</value></data>
+  <data name="ReaderHighlightsPanelDialog.Title" xml:space="preserve"><value>Highlights</value></data>
+  <data name="ReaderHighlightsPanelDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
   <data name="ReaderHighlightsEmptyText.Text" xml:space="preserve"><value>No highlights</value></data>
   <data name="ReaderHighlightDeleteMenuItem.Text" xml:space="preserve"><value>Delete</value></data>
   <data name="NovelReaderCharacterJumpNumberBox.PlaceholderText" xml:space="preserve"><value>Character count</value></data>
@@ -366,6 +374,8 @@
   <data name="NovelReaderStatisticsButton.AutomationProperties.Name" xml:space="preserve"><value>Statistics</value></data>
   <data name="ReaderStatisticsStartStopButton.AutomationProperties.Name" xml:space="preserve"><value>Start or pause statistics tracking</value></data>
   <data name="ReaderStatisticsPanelTitle.Text" xml:space="preserve"><value>Statistics</value></data>
+  <data name="ReaderStatisticsPanelDialog.Title" xml:space="preserve"><value>Statistics</value></data>
+  <data name="ReaderStatisticsPanelDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
   <data name="ReaderStatisticsSessionHeader.Text" xml:space="preserve"><value>Session</value></data>
   <data name="ReaderStatisticsTodayHeader.Text" xml:space="preserve"><value>Today</value></data>
   <data name="ReaderStatisticsAllTimeHeader.Text" xml:space="preserve"><value>All Time</value></data>
@@ -374,8 +384,6 @@
   <data name="ReaderStatisticsTimeLabel.Text" xml:space="preserve"><value>Reading Time</value></data>
   <data name="ReaderStatisticsBookRemainingLabel.Text" xml:space="preserve"><value>Time to finish Book</value></data>
   <data name="ReaderStatisticsChapterRemainingLabel.Text" xml:space="preserve"><value>Time to finish Chapter</value></data>
-  <data name="NovelReaderHistoryBackButton.AutomationProperties.Name" xml:space="preserve"><value>Previous Reader Position</value></data>
-  <data name="NovelReaderHistoryForwardButton.AutomationProperties.Name" xml:space="preserve"><value>Next Reader Position</value></data>
   <data name="SettingsStatisticsCard.Header" xml:space="preserve"><value>Statistics</value></data>
   <data name="SettingsStatisticsCard.Description" xml:space="preserve"><value>Reading goals, autostart, and statistics sync</value></data>
   <data name="StatisticsSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>Open Statistics Settings</value></data>
@@ -403,6 +411,41 @@
   <data name="StatisticsSyncModeComboBox.Header" xml:space="preserve"><value>Sync Behavior</value></data>
   <data name="StatisticsSyncModeComboBox.Description" xml:space="preserve"><value>Merge individual rows or replace statistics during sync</value></data>
   <data name="NovelBookMatchSasayakiMenuItem.Text" xml:space="preserve"><value>Match Sasayaki</value></data>
+  <data name="NovelReaderSasayakiButton.AutomationProperties.Name" xml:space="preserve"><value>Sasayaki</value></data>
+  <data name="SasayakiLoadAudioMenuItem.Text" xml:space="preserve"><value>Load Audio</value></data>
+  <data name="SasayakiSkipBackMenuItem.Text" xml:space="preserve"><value>Skip Back 15 Seconds</value></data>
+  <data name="SasayakiPreviousCueMenuItem.Text" xml:space="preserve"><value>Previous Cue</value></data>
+  <data name="SasayakiPlayPauseMenuItem.Text" xml:space="preserve"><value>Play/Pause</value></data>
+  <data name="SasayakiNextCueMenuItem.Text" xml:space="preserve"><value>Next Cue</value></data>
+  <data name="SasayakiSkipForwardMenuItem.Text" xml:space="preserve"><value>Skip Forward 15 Seconds</value></data>
+  <data name="SasayakiReplayCueMenuItem.Text" xml:space="preserve"><value>Replay Cue</value></data>
+  <data name="SasayakiJumpCueMenuItem.Text" xml:space="preserve"><value>Jump Cue</value></data>
+  <data name="NovelReaderSasayakiPanelDialog.Title" xml:space="preserve"><value>Sasayaki</value></data>
+  <data name="NovelReaderSasayakiPanelDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
+  <data name="NovelReaderSasayakiAudioSectionHeader.Text" xml:space="preserve"><value>Audio</value></data>
+  <data name="NovelReaderSasayakiPlaybackSectionHeader.Text" xml:space="preserve"><value>Playback</value></data>
+  <data name="NovelReaderSasayakiSettingsSectionHeader.Text" xml:space="preserve"><value>Settings</value></data>
+  <data name="NovelReaderSasayakiThemeSectionHeader.Text" xml:space="preserve"><value>Theme</value></data>
+  <data name="NovelReaderSasayakiPanelLoadAudioButton.AutomationProperties.Name" xml:space="preserve"><value>Load Audio</value></data>
+  <data name="NovelReaderSasayakiPanelLoadAudioText.Text" xml:space="preserve"><value>Load Audio</value></data>
+  <data name="NovelReaderSasayakiPanelSkipBackButton.AutomationProperties.Name" xml:space="preserve"><value>Skip Back 15 Seconds</value></data>
+  <data name="NovelReaderSasayakiPanelPreviousCueButton.AutomationProperties.Name" xml:space="preserve"><value>Previous Cue</value></data>
+  <data name="NovelReaderSasayakiPanelPlayPauseButton.AutomationProperties.Name" xml:space="preserve"><value>Play/Pause</value></data>
+  <data name="NovelReaderSasayakiPanelNextCueButton.AutomationProperties.Name" xml:space="preserve"><value>Next Cue</value></data>
+  <data name="NovelReaderSasayakiPanelSkipForwardButton.AutomationProperties.Name" xml:space="preserve"><value>Skip Forward 15 Seconds</value></data>
+  <data name="NovelReaderSasayakiDelayLabel.Text" xml:space="preserve"><value>Delay</value></data>
+  <data name="NovelReaderSasayakiSpeedLabel.Text" xml:space="preserve"><value>Speed</value></data>
+  <data name="NovelReaderSasayakiShowToggleSwitch.Header" xml:space="preserve"><value>Show Sasayaki</value></data>
+  <data name="NovelReaderSasayakiAutoScrollToggleSwitch.Header" xml:space="preserve"><value>Auto-Scroll</value></data>
+  <data name="NovelReaderSasayakiAutoPauseToggleSwitch.Header" xml:space="preserve"><value>Auto-Pause</value></data>
+  <data name="NovelReaderSasayakiLightTextColorLabel.Text" xml:space="preserve"><value>Light Text</value></data>
+  <data name="NovelReaderSasayakiLightBackgroundColorLabel.Text" xml:space="preserve"><value>Light Background</value></data>
+  <data name="NovelReaderSasayakiDarkTextColorLabel.Text" xml:space="preserve"><value>Dark Text</value></data>
+  <data name="NovelReaderSasayakiDarkBackgroundColorLabel.Text" xml:space="preserve"><value>Dark Background</value></data>
+  <data name="NovelReaderPopupSasayakiControls.AutomationProperties.Name" xml:space="preserve"><value>Sasayaki controls</value></data>
+  <data name="NovelReaderPopupSasayakiPlayPauseButton.AutomationProperties.Name" xml:space="preserve"><value>Play/Pause</value></data>
+  <data name="NovelReaderPopupSasayakiReplayCueButton.AutomationProperties.Name" xml:space="preserve"><value>Replay Cue</value></data>
+  <data name="NovelReaderPopupSasayakiJumpCueButton.AutomationProperties.Name" xml:space="preserve"><value>Jump Cue</value></data>
   <data name="SasayakiLoadAudioButton.AutomationProperties.Name" xml:space="preserve"><value>Load Audio</value></data>
   <data name="SasayakiSkipBackButton.AutomationProperties.Name" xml:space="preserve"><value>Skip Back 15 Seconds</value></data>
   <data name="SasayakiPreviousCueButton.AutomationProperties.Name" xml:space="preserve"><value>Previous Cue</value></data>
@@ -556,6 +599,7 @@
   <data name="ShortcutActionReaderClose" xml:space="preserve"><value>Close Reader</value></data>
   <data name="ShortcutActionReaderToggleFocusMode" xml:space="preserve"><value>Toggle Focus Mode</value></data>
   <data name="ShortcutActionReaderToggleStatistics" xml:space="preserve"><value>Toggle Reading Timer</value></data>
+  <data name="ShortcutActionReaderToggleLyricsMode" xml:space="preserve"><value>Lyrics Mode</value></data>
   <data name="ShortcutActionSasayakiPreviousCue" xml:space="preserve"><value>Previous Cue</value></data>
   <data name="ShortcutActionSasayakiPlayPause" xml:space="preserve"><value>Play/Pause</value></data>
   <data name="ShortcutActionSasayakiNextCue" xml:space="preserve"><value>Next Cue</value></data>

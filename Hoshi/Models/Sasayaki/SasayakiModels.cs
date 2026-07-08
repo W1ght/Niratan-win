@@ -21,6 +21,9 @@ public sealed class SasayakiMatch
 
 public sealed class SasayakiMatchData
 {
+    public const int CurrentSchemaVersion = 3;
+
+    public int SchemaVersion { get; set; } = CurrentSchemaVersion;
     public string BookId { get; set; } = "";
     public string AudiobookPath { get; set; } = "";
     public string SrtPath { get; set; } = "";
@@ -30,7 +33,10 @@ public sealed class SasayakiMatchData
     public int UnmatchedCount { get; set; }
 
     [JsonIgnore]
-    public bool IsValid => Cues.Count > 0 && Matches.Count > 0;
+    public bool IsCurrentSchemaVersion => SchemaVersion == CurrentSchemaVersion;
+
+    [JsonIgnore]
+    public bool IsValid => IsCurrentSchemaVersion && Cues.Count > 0 && Matches.Count > 0;
 }
 
 public sealed class SasayakiPlaybackData

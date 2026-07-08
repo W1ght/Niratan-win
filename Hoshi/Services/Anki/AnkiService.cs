@@ -107,7 +107,7 @@ public sealed class AnkiService : IAnkiService, IDisposable
                 noteType,
                 _settings.FieldMappings,
                 context);
-            var directMediaDirectory = needs.NeedsVideoMedia
+            var directMediaDirectory = needs.NeedsDirectMedia
                 ? await GetWritableMediaDirectoryAsync()
                 : null;
             return new AnkiMiningPreflightResult(true, false, null, needs, directMediaDirectory);
@@ -175,6 +175,7 @@ public sealed class AnkiService : IAnkiService, IDisposable
             var uploads = new List<(string filename, byte[] data)>();
             // Track which upload indices correspond to what
             int? audioUploadIdx = null;
+            int? sasayakiAudioUploadIdx = null;
             int? videoScreenshotUploadIdx = null;
             int? videoAudioClipUploadIdx = null;
             var dictMediaIndices = new List<(int idx, string originalFilename)>();
@@ -197,6 +198,7 @@ public sealed class AnkiService : IAnkiService, IDisposable
                 try
                 {
                     var bytes = await File.ReadAllBytesAsync(context.SasayakiAudioPath);
+                    sasayakiAudioUploadIdx = uploads.Count;
                     uploads.Add((Path.GetFileName(context.SasayakiAudioPath), bytes));
                 }
                 catch (Exception ex)
@@ -286,6 +288,9 @@ public sealed class AnkiService : IAnkiService, IDisposable
 
             if (videoAudioClipUploadIdx is int videoAudioIdx && videoAudioIdx < storedNames.Count)
                 context.VideoAudioClipTag = AnkiMediaMarkup.ForFieldPlaceholder(storedNames[videoAudioIdx]);
+
+            if (sasayakiAudioUploadIdx is int sasayakiAudioIdx && sasayakiAudioIdx < storedNames.Count)
+                context.SasayakiAudioTag = AnkiMediaMarkup.ForFieldPlaceholder(storedNames[sasayakiAudioIdx]);
 
             // --- Phase 4: Build mediaPayload and dictionaryMediaTags from upload results ---
             var mediaPayload = payload;
