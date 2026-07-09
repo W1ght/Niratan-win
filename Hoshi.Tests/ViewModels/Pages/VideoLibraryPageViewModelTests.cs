@@ -227,6 +227,58 @@ public class VideoLibraryPageViewModelTests
     }
 
     [Fact]
+    public async Task GenerateMissingThumbnails_IgnoresPosterArtworkForReloadDecision()
+    {
+        var posterPath = Path.GetTempFileName();
+        try
+        {
+            var service = new RecordingVideoLibraryService
+            {
+                Videos =
+                [
+                    new VideoItem
+                    {
+                        Id = "poster-backed",
+                        Title = "Poster Backed",
+                        FilePath = @"D:\Anime\poster-backed.mkv",
+                        PosterPath = posterPath,
+                    },
+                ],
+            };
+            var thumbnail = new RecordingVideoThumbnailService
+            {
+                EnsureThumbnail = video => Task.FromResult<string?>(video.PosterPath),
+            };
+            var sut = CreateSut(videoService: service, thumbnailService: thumbnail);
+
+            await sut.InitializeAsync();
+            await thumbnail.WaitForCallsAsync(1, TestContext.Current.CancellationToken);
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+
+            service.LoadCount.Should().Be(1);
+        }
+        finally
+        {
+            File.Delete(posterPath);
+        }
+    }
+
+    [Fact]
+    public void AvailableSmartRuleFields_ExposesSelectableSmartRuleFields()
+    {
+        var sut = CreateSut();
+
+        sut.AvailableSmartRuleFields.Select(field => field.Value).Should().Equal(
+            VideoSmartRuleField.FileName,
+            VideoSmartRuleField.ParentFolder,
+            VideoSmartRuleField.Path,
+            VideoSmartRuleField.Tag,
+            VideoSmartRuleField.HasBoundSubtitle,
+            VideoSmartRuleField.PlaybackState);
+        sut.AvailableSmartRuleFields.Should().OnlyContain(field => !string.IsNullOrWhiteSpace(field.DisplayName));
+    }
+
+    [Fact]
     public async Task ScanFolderCommand_PicksFolderAndScans()
     {
         var dialog = new Mock<IDialogService>();
@@ -477,11 +529,28 @@ public class VideoLibraryPageViewModelTests
 
     private sealed class RecordingVideoThumbnailService : IVideoThumbnailService
     {
+        private readonly TaskCompletionSource<int> _calls = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _callCount;
+
+        public Func<VideoItem, Task<string?>>? EnsureThumbnail { get; init; }
+
         public Task<string?> EnsureThumbnailAsync(
             VideoItem video,
             bool generateIfMissing = true,
-            CancellationToken ct = default) =>
-            Task.FromResult(video.ThumbnailPath);
+            CancellationToken ct = default)
+        {
+            var count = Interlocked.Increment(ref _callCount);
+            _calls.TrySetResult(count);
+            return EnsureThumbnail?.Invoke(video) ?? Task.FromResult(video.ThumbnailPath);
+        }
+
+        public async Task WaitForCallsAsync(int expectedCount, CancellationToken ct)
+        {
+            while (Volatile.Read(ref _callCount) < expectedCount)
+            {
+                await _calls.Task.WaitAsync(ct);
+            }
+        }
 
         public void Suspend()
         {

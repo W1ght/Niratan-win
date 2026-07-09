@@ -22,7 +22,7 @@ public class VideoLibraryPageAssetTests
         xaml.Should().Contain("x:Name=\"VideoLibrarySecondaryNavigationView\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryAllNavItem\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryContinueWatchingNavItem\"");
-        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryWatchedNavItem\"");
+        xaml.Should().NotContain("AutomationProperties.AutomationId=\"VideoLibraryWatchedNavItem\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibrarySearchBox\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibrarySortComboBox\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"ScanVideoFolderButton\"");
@@ -33,6 +33,9 @@ public class VideoLibraryPageAssetTests
         xaml.Should().Contain("x:Key=\"VideoPosterItemTemplate\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"CreateSmartCollectionButton\"");
         xaml.Should().Contain("Command=\"{x:Bind ViewModel.CreateSmartCollectionCommand}\"");
+        xaml.Should().Contain("x:Uid=\"VideoLibrarySmartCollectionRuleField\"");
+        xaml.Should().Contain("ItemsSource=\"{x:Bind ViewModel.AvailableSmartRuleFields");
+        xaml.Should().Contain("SelectedValue=\"{x:Bind ViewModel.SelectedSmartRuleField");
         xaml.Should().Contain("VideoLibraryUnwatchedNavItem");
         xaml.Should().Contain("VideoLibraryFinishedNavItem");
         xaml.Should().Contain("VideoLibraryRecentNavItem");
@@ -62,7 +65,6 @@ public class VideoLibraryPageAssetTests
             "VideoLibrarySectionHeader",
             "VideoLibraryAllNavItem",
             "VideoLibraryContinueWatchingNavItem",
-            "VideoLibraryWatchedNavItem",
             "VideoLibraryUnwatchedNavItem",
             "VideoLibraryFinishedNavItem",
             "VideoLibraryRecentNavItem",
@@ -81,6 +83,7 @@ public class VideoLibraryPageAssetTests
             "ImportVideoButton",
             "CreateSmartCollectionButton",
             "VideoLibrarySmartCollectionName",
+            "VideoLibrarySmartCollectionRuleField",
             "VideoLibrarySmartCollectionRuleValue",
             "VideoLibraryMarkWatchedMenuItem",
             "VideoLibraryClearProgressMenuItem",
@@ -99,7 +102,6 @@ public class VideoLibraryPageAssetTests
             "VideoLibrarySecondaryNavigationView.PaneTitle",
             "VideoLibraryAllNavItem.Content",
             "VideoLibraryContinueWatchingNavItem.Content",
-            "VideoLibraryWatchedNavItem.Content",
             "VideoLibraryUnwatchedNavItem.Content",
             "VideoLibraryFinishedNavItem.Content",
             "VideoLibraryRecentNavItem.Content",
@@ -117,6 +119,13 @@ public class VideoLibraryPageAssetTests
             "ImportVideoButton.Label",
             "CreateSmartCollectionButton.Label",
             "VideoLibrarySmartCollectionName.PlaceholderText",
+            "VideoLibrarySmartCollectionRuleField.Header",
+            "VideoLibrarySmartRuleFieldFileName",
+            "VideoLibrarySmartRuleFieldParentFolder",
+            "VideoLibrarySmartRuleFieldPath",
+            "VideoLibrarySmartRuleFieldTag",
+            "VideoLibrarySmartRuleFieldHasBoundSubtitle",
+            "VideoLibrarySmartRuleFieldPlaybackState",
             "VideoLibrarySmartCollectionRuleValue.PlaceholderText",
             "VideoLibraryCreateSmartCollectionPrimaryButton",
             "VideoLibraryCreateSmartCollectionSecondaryButton",
@@ -130,7 +139,7 @@ public class VideoLibraryPageAssetTests
             "VideoLibrarySortFolder",
             "VideoLibraryViewAll",
             "VideoLibraryViewContinueWatching",
-            "VideoLibraryViewWatched",
+            "VideoLibraryViewFinished",
             "VideoLibraryViewFolders",
             "VideoLibraryViewCollections",
             "VideoLibraryViewTags",
@@ -148,5 +157,13 @@ public class VideoLibraryPageAssetTests
 
         zhResources.Should().Contain("<value>继续观看</value>");
         zhResources.Should().Contain("<value>扫描文件夹</value>");
+    }
+
+    [Fact]
+    public void VideoPlayerWindowService_KeepsPlaybackStateSavedSubscribedThroughClosed()
+    {
+        var source = File.ReadAllText(Path.Combine(ProjectRoot, "Services", "Video", "VideoPlayerWindowService.cs"));
+
+        source.Should().NotContain("PlaybackStateSaved -= OnWindowPlaybackStateSaved");
     }
 }

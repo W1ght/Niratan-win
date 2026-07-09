@@ -24,8 +24,8 @@ public class VideoLibraryServiceTests : IDisposable
     {
         var ct = TestContext.Current.CancellationToken;
         var nested = Directory.CreateDirectory(Path.Combine(_directory, "Season 1")).FullName;
-        var firstVideo = Touch(Path.Combine(_directory, "Episode 01.mkv"));
-        var secondVideo = Touch(Path.Combine(nested, "Episode 02.mp4"));
+        var firstVideo = Touch(Path.Combine(_directory, "Episode 01.mkv"), "first");
+        var secondVideo = Touch(Path.Combine(nested, "Episode 02.mp4"), "second");
         Touch(Path.Combine(nested, "notes.txt"));
 
         var data = new Mock<IDataService>();
@@ -42,7 +42,31 @@ public class VideoLibraryServiceTests : IDisposable
         result.Value!.ImportedCount.Should().Be(2);
         savedVideos.Select(video => video.FilePath).Should().BeEquivalentTo(firstVideo, secondVideo);
         savedVideos.Should().OnlyContain(video => video.SourceFolderPath != null);
+        savedVideos.Should().OnlyContain(video => video.FileSizeBytes > 0);
+        savedVideos.Should().OnlyContain(video => video.ModifiedAt.HasValue);
         savedVideos.Select(video => video.CollectionName).Should().Contain("hoshi-video-library-" + Path.GetFileName(_directory).Split('-').Last());
+    }
+
+    [Fact]
+    public async Task ImportVideoAsync_PopulatesFileSizeAndModifiedTimestamp()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var modifiedAt = new DateTime(2026, 7, 9, 5, 30, 0, DateTimeKind.Utc);
+        var videoPath = Touch(Path.Combine(_directory, "Episode 04.mkv"), "video-bytes", modifiedAt);
+        var data = new Mock<IDataService>();
+        VideoItem? saved = null;
+        data
+            .Setup(service => service.UpsertVideoAsync(It.IsAny<VideoItem>(), It.IsAny<CancellationToken>()))
+            .Callback<VideoItem, CancellationToken>((video, _) => saved = video)
+            .Returns(Task.CompletedTask);
+        var sut = new VideoLibraryService(data.Object, NullLogger<VideoLibraryService>.Instance);
+
+        var result = await sut.ImportVideoAsync(videoPath, ct);
+
+        result.IsSuccess.Should().BeTrue();
+        saved.Should().NotBeNull();
+        saved!.FileSizeBytes.Should().Be(new FileInfo(videoPath).Length);
+        saved.ModifiedAt.Should().Be(modifiedAt);
     }
 
     [Fact]
@@ -120,9 +144,14 @@ public class VideoLibraryServiceTests : IDisposable
         var ct = TestContext.Current.CancellationToken;
         var data = new Mock<IDataService>();
         VideoCollection? saved = null;
+        IReadOnlyList<string>? savedItemIds = null;
         data
             .Setup(service => service.UpsertVideoCollectionAsync(It.IsAny<VideoCollection>(), It.IsAny<CancellationToken>()))
             .Callback<VideoCollection, CancellationToken>((collection, _) => saved = collection)
+            .Returns(Task.CompletedTask);
+        data
+            .Setup(service => service.SetVideoCollectionItemsAsync(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>()))
+            .Callback<string, IReadOnlyList<string>, CancellationToken>((_, itemIds, _) => savedItemIds = itemIds)
             .Returns(Task.CompletedTask);
         var sut = new VideoLibraryService(data.Object, NullLogger<VideoLibraryService>.Instance);
 
@@ -134,6 +163,7 @@ public class VideoLibraryServiceTests : IDisposable
         saved.Kind.Should().Be(VideoCollectionKind.Manual);
         saved.ItemIds.Should().Equal("video-1", "video-2");
         saved.SmartRules.Should().BeEmpty();
+        savedItemIds.Should().Equal("video-1", "video-2");
     }
 
     [Fact]
@@ -209,10 +239,18 @@ public class VideoLibraryServiceTests : IDisposable
             Directory.Delete(_directory, recursive: true);
     }
 
-    private static string Touch(string path)
+    private static string Touch(string path, string contents = "")
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, "");
+        File.WriteAllText(path, contents);
+        return path;
+    }
+
+    private static string Touch(string path, string contents, DateTime modifiedAt)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, contents);
+        File.SetLastWriteTimeUtc(path, modifiedAt);
         return path;
     }
 }

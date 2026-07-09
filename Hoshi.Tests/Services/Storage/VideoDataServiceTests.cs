@@ -265,6 +265,46 @@ public class VideoDataServiceTests
         }
     }
 
+    [Fact]
+    public async Task UpsertVideoAsync_PreservesExistingFavoriteWhenRescanUsesDefaultFalse()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var dbPath = Path.Combine(Path.GetTempPath(), $"hoshi-video-{Guid.NewGuid():N}.db");
+        try
+        {
+            var connectionString = $"Data Source={dbPath};Pooling=False";
+            await new DatabaseMigrator(NullLogger<DatabaseMigrator>.Instance, connectionString).MigrateAsync();
+            var service = new DataService(connectionString);
+            var filePath = @"D:\Anime\Episode 1.mkv";
+
+            await service.UpsertVideoAsync(new VideoItem
+            {
+                Id = "video-1",
+                Title = "Episode 1",
+                FilePath = filePath,
+                ImportedAt = DateTime.UtcNow,
+                IsFavorite = true,
+            }, ct);
+            await service.UpsertVideoAsync(new VideoItem
+            {
+                Id = "video-rescan",
+                Title = "Episode 1",
+                FilePath = filePath,
+                ImportedAt = DateTime.UtcNow,
+            }, ct);
+
+            var videos = await service.GetVideosAsync(ct: ct);
+
+            videos.Should().ContainSingle()
+                .Which.IsFavorite.Should().BeTrue();
+        }
+        finally
+        {
+            if (File.Exists(dbPath))
+                File.Delete(dbPath);
+        }
+    }
+
     private static async Task InvokeMigration008Async(
         SqliteConnection connection,
         DbTransaction transaction)

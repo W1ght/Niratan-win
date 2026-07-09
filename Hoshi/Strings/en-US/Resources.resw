@@ -284,6 +284,13 @@
   <data name="ImportVideoButton.ToolTipService.ToolTip" xml:space="preserve"><value>Import video</value></data>
   <data name="CreateSmartCollectionButton.Label" xml:space="preserve"><value>Create Smart Collection</value></data>
   <data name="VideoLibrarySmartCollectionName.PlaceholderText" xml:space="preserve"><value>Smart collection name</value></data>
+  <data name="VideoLibrarySmartCollectionRuleField.Header" xml:space="preserve"><value>Rule field</value></data>
+  <data name="VideoLibrarySmartRuleFieldFileName" xml:space="preserve"><value>File name</value></data>
+  <data name="VideoLibrarySmartRuleFieldParentFolder" xml:space="preserve"><value>Parent folder</value></data>
+  <data name="VideoLibrarySmartRuleFieldPath" xml:space="preserve"><value>Full path</value></data>
+  <data name="VideoLibrarySmartRuleFieldTag" xml:space="preserve"><value>Tag</value></data>
+  <data name="VideoLibrarySmartRuleFieldHasBoundSubtitle" xml:space="preserve"><value>Has subtitle</value></data>
+  <data name="VideoLibrarySmartRuleFieldPlaybackState" xml:space="preserve"><value>Playback state</value></data>
   <data name="VideoLibrarySmartCollectionRuleValue.PlaceholderText" xml:space="preserve"><value>Rule text</value></data>
   <data name="VideoLibraryCreateSmartCollectionPrimaryButton" xml:space="preserve"><value>Create</value></data>
   <data name="VideoLibraryCreateSmartCollectionSecondaryButton" xml:space="preserve"><value>Cancel</value></data>
@@ -298,6 +305,11 @@
   <data name="VideoLibrarySortFolder" xml:space="preserve"><value>Folder</value></data>
   <data name="VideoLibraryViewAll" xml:space="preserve"><value>All Videos</value></data>
   <data name="VideoLibraryViewContinueWatching" xml:space="preserve"><value>Continue Watching</value></data>
+  <data name="VideoLibraryViewUnwatched" xml:space="preserve"><value>Unwatched</value></data>
+  <data name="VideoLibraryViewFinished" xml:space="preserve"><value>Finished</value></data>
+  <data name="VideoLibraryViewRecent" xml:space="preserve"><value>Recent</value></data>
+  <data name="VideoLibraryViewFavorites" xml:space="preserve"><value>Favorites</value></data>
+  <data name="VideoLibraryViewNeedsReview" xml:space="preserve"><value>Needs Review</value></data>
   <data name="VideoLibraryViewWatched" xml:space="preserve"><value>Watched</value></data>
   <data name="VideoLibraryViewFolders" xml:space="preserve"><value>Folders</value></data>
   <data name="VideoLibraryViewCollections" xml:space="preserve"><value>Collections</value></data>

@@ -63,7 +63,12 @@ internal sealed class VideoThumbnailService : IVideoThumbnailService
         var outputPath = Path.Combine(_cacheDirectory, $"{cacheKey}.png");
         var cachedPath = GetExistingGeneratedPath(outputPath);
         if (cachedPath != null)
+        {
+            if (!string.Equals(video.ThumbnailPath, cachedPath, StringComparison.OrdinalIgnoreCase))
+                await _dataService.UpdateVideoThumbnailPathAsync(video.Id, cachedPath, ct);
+
             return cachedPath;
+        }
 
         if (!generateIfMissing
             || IsSuspended

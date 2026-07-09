@@ -289,7 +289,10 @@ internal class DataService : IDataService
                 FileSizeBytes = excluded.FileSizeBytes,
                 ModifiedAt = COALESCE(excluded.ModifiedAt, VideoItems.ModifiedAt),
                 ThumbnailPath = COALESCE(excluded.ThumbnailPath, VideoItems.ThumbnailPath),
-                IsFavorite = excluded.IsFavorite,
+                IsFavorite = CASE
+                    WHEN excluded.IsFavorite THEN 1
+                    ELSE VideoItems.IsFavorite
+                END,
                 SourceFolderPath = COALESCE(excluded.SourceFolderPath, VideoItems.SourceFolderPath),
                 PosterPath = COALESCE(excluded.PosterPath, VideoItems.PosterPath),
                 Tags = COALESCE(VideoItems.Tags, excluded.Tags),

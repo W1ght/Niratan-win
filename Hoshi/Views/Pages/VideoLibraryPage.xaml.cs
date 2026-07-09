@@ -82,7 +82,7 @@ public sealed partial class VideoLibraryPage : Page
         VideoLibrarySecondaryNavigationView.SelectedItem = view switch
         {
             VideoLibraryView.ContinueWatching => VideoLibraryContinueWatchingNavItem,
-            VideoLibraryView.Watched => VideoLibraryWatchedNavItem,
+            VideoLibraryView.Watched => VideoLibraryFinishedNavItem,
             VideoLibraryView.Unwatched => VideoLibraryUnwatchedNavItem,
             VideoLibraryView.Finished => VideoLibraryFinishedNavItem,
             VideoLibraryView.Recent => VideoLibraryRecentNavItem,
