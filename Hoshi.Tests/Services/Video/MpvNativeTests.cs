@@ -6,6 +6,29 @@ namespace Hoshi.Tests.Services.Video;
 public class MpvNativeTests
 {
     [Fact]
+    public void BuildLoadFileCommandArgs_AddsStartAndPauseOptionsForRestorePosition()
+    {
+        MpvPlaybackEngine.BuildLoadFileCommandArgs(
+                @"D:\Videos\episode.mkv",
+                TimeSpan.FromSeconds(629.562))
+            .Should()
+            .Equal(
+                "loadfile",
+                @"D:\Videos\episode.mkv",
+                "replace",
+                "-1",
+                "start=629.562,pause=yes");
+    }
+
+    [Fact]
+    public void BuildLoadFileCommandArgs_OmitsOptionsWithoutRestorePosition()
+    {
+        MpvPlaybackEngine.BuildLoadFileCommandArgs(@"D:\Videos\episode.mkv", null)
+            .Should()
+            .Equal("loadfile", @"D:\Videos\episode.mkv", "replace");
+    }
+
+    [Fact]
     public void CandidateLibraryPaths_IncludePackagedWindowsLibmpvDirectory()
     {
         MpvNative.GetCandidateLibraryPaths()

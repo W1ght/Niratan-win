@@ -32,6 +32,8 @@ public sealed record VideoPlaybackState(
     double DurationSeconds,
     VideoSubtitleSelection SubtitleSelection)
 {
+    public const double MinimumPersistablePositionSeconds = 5;
+
     public static VideoPlaybackState FromVideoItem(VideoItem video) =>
         new(
             NormalizeSeconds(video.LastPositionSeconds),
@@ -43,10 +45,10 @@ public sealed record VideoPlaybackState(
         if (!double.IsFinite(position.TotalSeconds) || position < TimeSpan.Zero)
             return false;
 
-        if (!double.IsFinite(duration.TotalSeconds) || duration <= TimeSpan.Zero)
-            return position > TimeSpan.Zero;
+        if (position.TotalSeconds < MinimumPersistablePositionSeconds)
+            return false;
 
-        return position > TimeSpan.Zero || duration > TimeSpan.Zero;
+        return true;
     }
 
     public TimeSpan? ResolveRestorePosition(TimeSpan actualDuration)
