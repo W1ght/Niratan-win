@@ -12,6 +12,9 @@ internal class Migration_011 : IMigration
 
     public async Task UpAsync(SqliteConnection connection, DbTransaction transaction)
     {
+        if (!await TableExistsAsync(connection, transaction, "VideoItems"))
+            return;
+
         await AddColumnIfMissingAsync(connection, transaction, "VideoItems", "SourceFolderPath", "TEXT");
         await AddColumnIfMissingAsync(connection, transaction, "VideoItems", "PosterPath", "TEXT");
         await AddColumnIfMissingAsync(connection, transaction, "VideoItems", "Tags", "TEXT");
@@ -30,6 +33,24 @@ internal class Migration_011 : IMigration
                 ON VideoItems (IsWatched);
             """,
             transaction: transaction);
+    }
+
+    private static async Task<bool> TableExistsAsync(
+        SqliteConnection connection,
+        DbTransaction transaction,
+        string tableName)
+    {
+        var count = await connection.ExecuteScalarAsync<long>(
+            """
+            SELECT COUNT(*)
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name = @TableName;
+            """,
+            new { TableName = tableName },
+            transaction);
+
+        return count > 0;
     }
 
     private static async Task AddColumnIfMissingAsync(
