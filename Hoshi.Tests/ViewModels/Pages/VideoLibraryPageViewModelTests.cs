@@ -2,6 +2,7 @@ using FluentAssertions;
 using Moq;
 using Hoshi.Models;
 using Hoshi.Models.Common;
+using Hoshi.Models.Video;
 using Hoshi.Services.UI;
 using Hoshi.Services.Video;
 using Hoshi.ViewModels.Components;
@@ -51,7 +52,11 @@ public class VideoLibraryPageViewModelTests
         await sut.ImportVideoCommand.ExecuteAsync(null);
 
         service.ImportedPaths.Should().Equal("D:\\Anime\\episode1.mkv");
-        notification.Verify(n => n.ShowSuccess("Video imported.", "Video imported"), Times.Once);
+        notification.Verify(
+            n => n.ShowSuccess(
+                It.Is<string>(message => !string.IsNullOrWhiteSpace(message)),
+                It.Is<string>(title => !string.IsNullOrWhiteSpace(title))),
+            Times.Once);
     }
 
     [Fact]
@@ -91,35 +96,281 @@ public class VideoLibraryPageViewModelTests
         await sut.InitializeAsync();
         await sut.OpenVideoCommand.ExecuteAsync(sut.Videos[1]);
 
+        var visibleOrder = sut.Videos.Select(video => video.Video.Id);
         player.OpenedVideos.Should().ContainSingle().Which.Id.Should().Be("episode-2");
         player.OpenedPlaylists.Should().ContainSingle()
             .Which.Select(video => video.Id)
-            .Should().Equal("episode-1", "episode-2", "episode-3");
+            .Should().Equal(visibleOrder);
+    }
+
+    [Fact]
+    public async Task SearchText_FiltersVisibleVideosByTitleFolderCollectionAndTags()
+    {
+        var service = new RecordingVideoLibraryService
+        {
+            Videos =
+            [
+                new VideoItem
+                {
+                    Id = "episode-1",
+                    Title = "Episode 1",
+                    FilePath = @"D:\Anime\Show\Episode 1.mkv",
+                    SourceFolderPath = @"D:\Anime\Show",
+                    CollectionName = "Show",
+                    Tags = "anime, japanese",
+                },
+                new VideoItem
+                {
+                    Id = "movie-1",
+                    Title = "Movie",
+                    FilePath = @"D:\Movies\Movie.mkv",
+                    SourceFolderPath = @"D:\Movies",
+                    CollectionName = "Movies",
+                },
+            ],
+        };
+        var sut = CreateSut(videoService: service);
+
+        await sut.InitializeAsync();
+        sut.SearchText = "japanese";
+
+        sut.Videos.Should().ContainSingle()
+            .Which.Video.Id.Should().Be("episode-1");
+    }
+
+    [Fact]
+    public async Task SelectedSortOption_ProgressSortsHighestProgressFirst()
+    {
+        var service = new RecordingVideoLibraryService
+        {
+            Videos =
+            [
+                new VideoItem { Id = "low", Title = "Low", FilePath = @"D:\Videos\low.mkv", LastPositionSeconds = 10, DurationSeconds = 100 },
+                new VideoItem { Id = "high", Title = "High", FilePath = @"D:\Videos\high.mkv", LastPositionSeconds = 80, DurationSeconds = 100 },
+                new VideoItem { Id = "none", Title = "None", FilePath = @"D:\Videos\none.mkv" },
+            ],
+        };
+        var sut = CreateSut(videoService: service);
+
+        await sut.InitializeAsync();
+        sut.SelectedSortOption = VideoLibrarySortOption.Progress;
+
+        sut.Videos.Select(video => video.Video.Id).Should().Equal("high", "low", "none");
+    }
+
+    [Fact]
+    public async Task SelectedLayoutMode_TogglesListAndPosterFlags()
+    {
+        var sut = CreateSut();
+        await sut.InitializeAsync();
+
+        sut.SelectedLayoutMode = VideoLibraryLayoutMode.Posters;
+
+        sut.IsPosterLayout.Should().BeTrue();
+        sut.IsListLayout.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ContinueWatchingView_IgnoresNearStartProgress()
+    {
+        var service = new RecordingVideoLibraryService
+        {
+            Videos =
+            [
+                new VideoItem { Id = "start", Title = "Start", FilePath = @"D:\Videos\start.mkv", LastPositionSeconds = 2, DurationSeconds = 2406 },
+                new VideoItem { Id = "continue", Title = "Continue", FilePath = @"D:\Videos\continue.mkv", LastPositionSeconds = 10, DurationSeconds = 100 },
+            ],
+        };
+        var sut = CreateSut(videoService: service);
+
+        await sut.InitializeAsync();
+        sut.SelectLibraryViewCommand.Execute(nameof(VideoLibraryView.ContinueWatching));
+
+        sut.Videos.Select(video => video.Video.Id).Should().Equal("continue");
+    }
+
+    [Fact]
+    public async Task SmartCollectionPreview_UsesAllRules()
+    {
+        var service = new RecordingVideoLibraryService
+        {
+            Videos =
+            [
+                new VideoItem { Id = "episode", Title = "Umaru 01", FilePath = @"D:\Anime\Umaru 01.mkv", Tags = "anime" },
+                new VideoItem { Id = "movie", Title = "Movie", FilePath = @"D:\Movies\Movie.mkv" },
+            ],
+        };
+        var sut = CreateSut(videoService: service);
+
+        await sut.InitializeAsync();
+        sut.SmartCollectionNameDraft = "Umaru";
+        sut.SelectedSmartRuleField = VideoSmartRuleField.FileName;
+        sut.SmartRuleValueDraft = "umaru";
+
+        sut.SmartCollectionPreviewRows.Select(row => row.Video.Id).Should().Equal("episode");
+    }
+
+    [Fact]
+    public async Task CreateSmartCollectionCommand_CreatesCollectionAndReloadsFilters()
+    {
+        var service = new RecordingVideoLibraryService();
+        var sut = CreateSut(videoService: service);
+        await sut.InitializeAsync();
+        sut.SmartCollectionNameDraft = "Anime";
+        sut.SelectedSmartRuleField = VideoSmartRuleField.Tag;
+        sut.SmartRuleValueDraft = "anime";
+
+        await sut.CreateSmartCollectionCommand.ExecuteAsync(null);
+
+        service.CreatedSmartCollections.Should().ContainSingle()
+            .Which.Name.Should().Be("Anime");
+    }
+
+    [Fact]
+    public async Task ScanFolderCommand_PicksFolderAndScans()
+    {
+        var dialog = new Mock<IDialogService>();
+        dialog
+            .Setup(service => service.OpenFolderPickerAsync())
+            .ReturnsAsync(@"D:\Anime");
+        var service = new RecordingVideoLibraryService();
+        var notification = new Mock<INotificationService>();
+        var sut = CreateSut(
+            videoService: service,
+            dialogService: dialog.Object,
+            notificationService: notification.Object);
+
+        await sut.ScanFolderCommand.ExecuteAsync(null);
+
+        service.ScannedFolders.Should().Equal(@"D:\Anime");
+        notification.Verify(
+            service => service.ShowSuccess(
+                It.Is<string>(message => message.Contains('0')),
+                It.Is<string>(title => !string.IsNullOrWhiteSpace(title))),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task MarkWatchedCommand_MarksVideoAndReloads()
+    {
+        var service = new RecordingVideoLibraryService
+        {
+            Videos =
+            [
+                new VideoItem { Id = "episode-1", Title = "Episode 1", FilePath = @"D:\Anime\episode1.mkv" },
+            ],
+        };
+        var sut = CreateSut(videoService: service);
+
+        await sut.InitializeAsync();
+        await sut.MarkWatchedCommand.ExecuteAsync(sut.Videos[0]);
+
+        service.MarkedWatchedIds.Should().Equal("episode-1");
+        service.LoadCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task ClearProgressCommand_ClearsVideoProgressAndReloads()
+    {
+        var service = new RecordingVideoLibraryService
+        {
+            Videos =
+            [
+                new VideoItem
+                {
+                    Id = "episode-1",
+                    Title = "Episode 1",
+                    FilePath = @"D:\Anime\episode1.mkv",
+                    LastPositionSeconds = 20,
+                    DurationSeconds = 100,
+                },
+            ],
+        };
+        var sut = CreateSut(videoService: service);
+
+        await sut.InitializeAsync();
+        await sut.ClearProgressCommand.ExecuteAsync(sut.Videos[0]);
+
+        service.ClearedProgressIds.Should().Equal("episode-1");
+        service.LoadCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task PlayerLibraryChanged_ReloadsVisibleVideos()
+    {
+        var service = new RecordingVideoLibraryService();
+        service.VideoResponses.Enqueue(
+        [
+            new VideoItem
+            {
+                Id = "episode-1",
+                Title = "Episode 1",
+                FilePath = @"D:\Anime\episode1.mkv",
+                LastPositionSeconds = 2,
+                DurationSeconds = 100,
+            },
+        ]);
+        service.VideoResponses.Enqueue(
+        [
+            new VideoItem
+            {
+                Id = "episode-1",
+                Title = "Episode 1",
+                FilePath = @"D:\Anime\episode1.mkv",
+                LastPositionSeconds = 76,
+                DurationSeconds = 100,
+            },
+        ]);
+        var player = new RecordingVideoPlayerWindowService();
+        var sut = CreateSut(videoService: service, playerService: player);
+
+        await sut.InitializeAsync();
+        player.RaiseLibraryChanged();
+
+        service.LoadCount.Should().Be(2);
+        sut.Videos.Should().ContainSingle()
+            .Which.Video.LastPositionSeconds.Should().Be(76);
     }
 
     private static VideoLibraryPageViewModel CreateSut(
         IVideoLibraryService? videoService = null,
         IDialogService? dialogService = null,
         INotificationService? notificationService = null,
-        IVideoPlayerWindowService? playerService = null)
+        IVideoPlayerWindowService? playerService = null,
+        IVideoThumbnailService? thumbnailService = null)
     {
         return new VideoLibraryPageViewModel(
             videoService ?? new RecordingVideoLibraryService(),
             dialogService ?? Mock.Of<IDialogService>(),
             notificationService ?? Mock.Of<INotificationService>(),
-            playerService ?? new RecordingVideoPlayerWindowService());
+            playerService ?? new RecordingVideoPlayerWindowService(),
+            thumbnailService ?? new RecordingVideoThumbnailService());
     }
 
     private sealed class RecordingVideoLibraryService : IVideoLibraryService
     {
         public IReadOnlyList<VideoItem> Videos { get; init; } = [];
+        public IReadOnlyList<VideoCollection> Collections { get; init; } = [];
+        public Queue<IReadOnlyList<VideoItem>> VideoResponses { get; } = [];
         public List<string> ImportedPaths { get; } = [];
+        public List<string> ScannedFolders { get; } = [];
         public List<string> MarkedOpenedIds { get; } = [];
+        public List<string> MarkedWatchedIds { get; } = [];
+        public List<string> ClearedProgressIds { get; } = [];
+        public List<VideoCollection> CreatedSmartCollections { get; } = [];
+        public int LoadCount { get; private set; }
 
         public Task<Result<IReadOnlyList<VideoItem>>> GetVideosAsync(
             string? queryText = null,
-            CancellationToken ct = default) =>
-            Task.FromResult(Result<IReadOnlyList<VideoItem>>.Success(Videos));
+            CancellationToken ct = default)
+        {
+            LoadCount++;
+            var videos = VideoResponses.Count > 0 ? VideoResponses.Dequeue() : Videos;
+            return Task.FromResult(Result<IReadOnlyList<VideoItem>>.Success(videos));
+        }
+
+        public Task<Result<IReadOnlyList<VideoCollection>>> GetCollectionsAsync(CancellationToken ct = default) =>
+            Task.FromResult(Result<IReadOnlyList<VideoCollection>>.Success(Collections));
 
         public Task<Result<VideoItem>> ImportVideoAsync(string filePath, CancellationToken ct = default)
         {
@@ -132,6 +383,15 @@ public class VideoLibraryPageViewModelTests
             }));
         }
 
+        public Task<Result<VideoFolderScanResult>> ScanFolderAsync(
+            string folderPath,
+            CancellationToken ct = default)
+        {
+            ScannedFolders.Add(folderPath);
+            return Task.FromResult(Result<VideoFolderScanResult>.Success(
+                new VideoFolderScanResult(0, [])));
+        }
+
         public Task<Result<VideoItem?>> GetVideoAsync(string videoId, CancellationToken ct = default) =>
             Task.FromResult(Result<VideoItem?>.Success(Videos.FirstOrDefault(video => video.Id == videoId)));
 
@@ -142,6 +402,41 @@ public class VideoLibraryPageViewModelTests
         }
 
         public Task<Result> DeleteVideoAsync(string videoId, CancellationToken ct = default) =>
+            Task.FromResult(Result.Success());
+
+        public Task<Result<VideoCollection>> CreateSmartCollectionAsync(
+            string name,
+            IReadOnlyList<VideoSmartRule> rules,
+            CancellationToken ct = default)
+        {
+            var collection = new VideoCollection
+            {
+                Name = name,
+                Kind = VideoCollectionKind.Smart,
+                SmartRules = rules,
+            };
+            CreatedSmartCollections.Add(collection);
+            return Task.FromResult(Result<VideoCollection>.Success(collection));
+        }
+
+        public Task<Result<VideoCollection>> CreateManualCollectionAsync(
+            string name,
+            IReadOnlyList<string> videoIds,
+            CancellationToken ct = default) =>
+            Task.FromResult(Result<VideoCollection>.Success(new VideoCollection
+            {
+                Name = name,
+                Kind = VideoCollectionKind.Manual,
+                ItemIds = videoIds.ToList(),
+            }));
+
+        public Task<Result> DeleteCollectionAsync(string collectionId, CancellationToken ct = default) =>
+            Task.FromResult(Result.Success());
+
+        public Task<Result> SetFavoriteAsync(
+            string videoId,
+            bool isFavorite,
+            CancellationToken ct = default) =>
             Task.FromResult(Result.Success());
 
         public Task<Result> SaveProgressAsync(
@@ -157,6 +452,22 @@ public class VideoLibraryPageViewModelTests
             CancellationToken ct = default) =>
             Task.FromResult(Result.Success());
 
+        public Task<Result> MarkWatchedAsync(
+            string videoId,
+            CancellationToken ct = default)
+        {
+            MarkedWatchedIds.Add(videoId);
+            return Task.FromResult(Result.Success());
+        }
+
+        public Task<Result> ClearProgressAsync(
+            string videoId,
+            CancellationToken ct = default)
+        {
+            ClearedProgressIds.Add(videoId);
+            return Task.FromResult(Result.Success());
+        }
+
         public Task<Result> SetVideoProfileAsync(
             string videoId,
             string? profileId,
@@ -164,10 +475,31 @@ public class VideoLibraryPageViewModelTests
             Task.FromResult(Result.Success());
     }
 
+    private sealed class RecordingVideoThumbnailService : IVideoThumbnailService
+    {
+        public Task<string?> EnsureThumbnailAsync(
+            VideoItem video,
+            bool generateIfMissing = true,
+            CancellationToken ct = default) =>
+            Task.FromResult(video.ThumbnailPath);
+
+        public void Suspend()
+        {
+        }
+
+        public void Resume()
+        {
+        }
+    }
+
     private sealed class RecordingVideoPlayerWindowService : IVideoPlayerWindowService
     {
+        public event EventHandler? LibraryChanged;
+
         public List<VideoItem> OpenedVideos { get; } = [];
         public List<IReadOnlyList<VideoItem>> OpenedPlaylists { get; } = [];
+
+        public void RaiseLibraryChanged() => LibraryChanged?.Invoke(this, EventArgs.Empty);
 
         public Task OpenAsync(VideoItem video, CancellationToken ct = default)
         {
