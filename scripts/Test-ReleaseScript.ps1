@@ -48,6 +48,7 @@ Assert-True ($scriptContent -match 'gh\s+run\s+watch') 'Release script must wait
 Assert-True ($scriptContent -match 'gh\s+release\s+view') 'Release script must inspect the GitHub Release created by Actions.'
 Assert-True ($scriptContent -notmatch "'run',\s*'download'") 'Release script must not download Actions artifacts locally.'
 Assert-True ($scriptContent -notmatch "'release',\s*'create'") 'Release script must not create/upload the Release from the local machine.'
+Assert-True ($scriptContent -notmatch '\*>\s*\$null') 'Release script must not let native stderr become a PowerShell NativeCommandError during existence checks.'
 
 $workflowPath = Join-Path $repoRoot '.github\workflows\build-and-package.yml'
 Assert-True (Test-Path -LiteralPath $workflowPath) 'Packaging workflow must exist.'

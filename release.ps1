@@ -120,7 +120,7 @@ function Assert-TagAvailable {
         [string]$RepoName
     )
 
-    & git rev-parse -q --verify "refs/tags/$Tag" *> $null
+    & git rev-parse -q --verify "refs/tags/$Tag" 1>$null 2>$null
     if ($LASTEXITCODE -eq 0) {
         throw "Local tag already exists: $Tag. Release tags are immutable."
     }
@@ -130,7 +130,7 @@ function Assert-TagAvailable {
         throw "Remote tag already exists: $Tag. Create a new patch version instead."
     }
 
-    & gh release view $Tag --repo $RepoName *> $null
+    & gh release view $Tag --repo $RepoName 1>$null 2>$null
     if ($LASTEXITCODE -eq 0) {
         throw "GitHub Release already exists: $Tag. Create a new patch version instead."
     }
