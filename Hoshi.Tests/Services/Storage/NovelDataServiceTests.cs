@@ -87,6 +87,37 @@ public class NovelDataServiceTests
     }
 
     [Fact]
+    public async Task DatabaseMigrator_AcceptsExistingVersion11Database()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var dbPath = Path.Combine(Path.GetTempPath(), $"hoshi-migration-v11-{Guid.NewGuid():N}.db");
+
+        try
+        {
+            var connectionString = $"Data Source={dbPath};Pooling=False";
+            await using (var connection = new SqliteConnection(connectionString))
+            {
+                await connection.OpenAsync(ct);
+                var command = connection.CreateCommand();
+                command.CommandText = "PRAGMA user_version = 11;";
+                await command.ExecuteNonQueryAsync(ct);
+            }
+
+            var migrator = new DatabaseMigrator(
+                NullLogger<DatabaseMigrator>.Instance,
+                connectionString);
+
+            var act = async () => await migrator.MigrateAsync();
+            await act.Should().NotThrowAsync();
+        }
+        finally
+        {
+            if (File.Exists(dbPath))
+                File.Delete(dbPath);
+        }
+    }
+
+    [Fact]
     public async Task Migration008_CreatesVideoLibraryTable()
     {
         var ct = TestContext.Current.CancellationToken;

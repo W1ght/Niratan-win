@@ -132,7 +132,7 @@ public class VideoDataServiceTests
     }
 
     [Fact]
-    public async Task Migration011_AddsVideoLibraryManagementColumns()
+    public async Task Migration011_AddsVideoLibraryManagementColumnsAndIndexes()
     {
         var ct = TestContext.Current.CancellationToken;
         await using var connection = new SqliteConnection("Data Source=:memory:");
@@ -145,8 +145,8 @@ public class VideoDataServiceTests
         await InvokeMigrationAsync("Migration_011", connection, transaction);
         await transaction.CommitAsync(ct);
 
-        var command = connection.CreateCommand();
-        command.CommandText = """
+        var columnCommand = connection.CreateCommand();
+        columnCommand.CommandText = """
             SELECT name
             FROM pragma_table_info('VideoItems')
             WHERE name IN (
@@ -159,17 +159,44 @@ public class VideoDataServiceTests
             ORDER BY name;
             """;
 
-        var names = new List<string>();
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-            names.Add(reader.GetString(0));
+        var columns = new List<string>();
+        await using (var reader = await columnCommand.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+                columns.Add(reader.GetString(0));
+        }
 
-        names.Should().Equal(
+        columns.Should().Equal(
             "CollectionName",
             "IsWatched",
             "PosterPath",
             "SourceFolderPath",
             "Tags");
+
+        var indexCommand = connection.CreateCommand();
+        indexCommand.CommandText = """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'index'
+              AND name IN (
+                  'IX_VideoItems_SourceFolderPath',
+                  'IX_VideoItems_CollectionName',
+                  'IX_VideoItems_IsWatched'
+              )
+            ORDER BY name;
+            """;
+
+        var indexes = new List<string>();
+        await using (var reader = await indexCommand.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+                indexes.Add(reader.GetString(0));
+        }
+
+        indexes.Should().Equal(
+            "IX_VideoItems_CollectionName",
+            "IX_VideoItems_IsWatched",
+            "IX_VideoItems_SourceFolderPath");
     }
 
     [Fact]

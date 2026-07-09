@@ -1283,7 +1283,7 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
-    public void GlobalLookup_IsRegisteredDisabledByDefaultAndExposedFromNavigation()
+    public void GlobalLookup_IsRegisteredDisabledByDefaultWithoutManualTitleBarWindow()
     {
         var projectCode = File.ReadAllText(Path.Combine(ProjectRoot, "Hoshi.csproj"));
         var appCode = File.ReadAllText(Path.Combine(ProjectRoot, "App.xaml.cs"));
@@ -1332,10 +1332,10 @@ public class NovelReaderWebAssetTests
         normalizedAppCode.Should().Contain(
             "MainWindow.NavigateToShell();\n            await GetService<IGlobalSelectionLookupService>().InitializeAsync();");
 
-        navigationXaml.Should().Contain("AutomationProperties.AutomationId=\"GlobalLookupButton\"");
-        navigationXaml.Should().Contain("x:Uid=\"GlobalLookupButton\"");
-        navigationCode.Should().Contain("OpenGlobalLookup_Click");
-        navigationCode.Should().Contain("IGlobalLookupWindowService");
+        navigationXaml.Should().NotContain("AutomationProperties.AutomationId=\"GlobalLookupButton\"");
+        navigationXaml.Should().NotContain("x:Uid=\"GlobalLookupButton\"");
+        navigationCode.Should().NotContain("OpenGlobalLookup_Click");
+        navigationCode.Should().NotContain("IGlobalLookupWindowService");
 
         dictionarySettingsXaml.Should().Contain("x:Uid=\"GlobalLookupEnabledCard\"");
         dictionarySettingsXaml.Should().Contain("AutomationProperties.AutomationId=\"GlobalLookupEnabledToggle\"");
@@ -1427,7 +1427,6 @@ public class NovelReaderWebAssetTests
 
         foreach (var key in new[]
         {
-            "GlobalLookupButton.AutomationProperties.Name",
             "GlobalLookupWindow.Title",
             "GlobalLookupQueryBox.PlaceholderText",
             "GlobalLookupSearchButtonText.Text",

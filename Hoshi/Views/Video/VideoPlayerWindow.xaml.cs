@@ -80,6 +80,8 @@ public sealed partial class VideoPlayerWindow : Window
     private readonly IShortcutService _shortcutService;
     private readonly VideoSubtitleTranscriptLoadCoordinator _subtitleTranscriptLoadCoordinator;
     private readonly DispatcherTimer _positionTimer = new();
+    private readonly DispatcherTimer _bottomChromeAutoHideTimer = new();
+    private readonly VideoBottomChromeAutoHideState _bottomChromeAutoHideState = new();
     private readonly HashSet<VideoTranscriptRow> _subscribedTranscriptRows = [];
     private readonly SubclassProc _videoHostSubclassProc;
     private DictionaryPopupOverlay? _popupOverlay;
@@ -154,6 +156,8 @@ public sealed partial class VideoPlayerWindow : Window
 
         _positionTimer.Interval = TimeSpan.FromMilliseconds(200);
         _positionTimer.Tick += OnPositionTimerTick;
+        _bottomChromeAutoHideTimer.Interval = VideoBottomChromeAutoHideState.DefaultHideDelay;
+        _bottomChromeAutoHideTimer.Tick += BottomChromeAutoHideTimer_Tick;
 
         RootGrid.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(RootGrid_KeyDown), true);
         RootGrid.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(RootGrid_PointerPressed), true);
@@ -841,6 +845,9 @@ public sealed partial class VideoPlayerWindow : Window
     private async void OnClosed(object sender, WindowEventArgs args)
     {
         _positionTimer.Stop();
+        _bottomChromeAutoHideTimer.Stop();
+        _bottomChromeAutoHideTimer.Tick -= BottomChromeAutoHideTimer_Tick;
+
         try
         {
             await SaveCurrentVideoProgressAsync();

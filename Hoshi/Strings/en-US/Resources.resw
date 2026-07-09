@@ -7,7 +7,7 @@
   <data name="GlobalSearchBox.PlaceholderText" xml:space="preserve"><value>Search</value></data>
   <data name="NovelNavItem.Content" xml:space="preserve"><value>Novels</value></data>
   <data name="VideoNavItem.Content" xml:space="preserve"><value>Videos</value></data>
-  <data name="NovelLookupNavItem.Content" xml:space="preserve"><value>Lookup</value></data>
+  <data name="NovelLookupNavItem.Content" xml:space="preserve"><value>Lookup Window</value></data>
   <data name="SettingsNavItem.Content" xml:space="preserve"><value>Settings</value></data>
   <data name="NormalLogsNavItem.Content" xml:space="preserve"><value>Normal Logs</value></data>
   <data name="ErrorLogsNavItem.Content" xml:space="preserve"><value>Error Logs</value></data>
@@ -252,7 +252,7 @@
   <data name="DictionaryInstalledSectionHeader.Text" xml:space="preserve"><value>Installed</value></data>
   <data name="NoDictionariesCard.Header" xml:space="preserve"><value>No Dictionaries</value></data>
   <data name="NoDictionariesCard.Description" xml:space="preserve"><value>Import a Yomitan dictionary ZIP to enable lookup for this category</value></data>
-  <data name="NovelLookupPageTitle.Text" xml:space="preserve"><value>Lookup</value></data>
+  <data name="NovelLookupPageTitle.Text" xml:space="preserve"><value>Lookup Window</value></data>
   <data name="NovelLookupQueryBox.PlaceholderText" xml:space="preserve"><value>Enter Japanese or English text</value></data>
   <data name="NovelLookupSearchButtonText.Text" xml:space="preserve"><value>Search</value></data>
   <data name="NovelLookupPopupHint.Text" xml:space="preserve"><value>Dictionary popup results render in the same WebView overlay used by the reader.</value></data>
@@ -570,7 +570,6 @@
   <data name="SasayakiLightBackgroundColorCard.Header" xml:space="preserve"><value>Light Background Color</value></data>
   <data name="SasayakiDarkTextColorCard.Header" xml:space="preserve"><value>Dark Text Color</value></data>
   <data name="SasayakiDarkBackgroundColorCard.Header" xml:space="preserve"><value>Dark Background Color</value></data>
-  <data name="GlobalLookupButton.AutomationProperties.Name" xml:space="preserve"><value>Open Global Lookup</value></data>
   <data name="GlobalLookupWindow.Title" xml:space="preserve"><value>Global Lookup</value></data>
   <data name="GlobalLookupQueryBox.PlaceholderText" xml:space="preserve"><value>Enter text to look up</value></data>
   <data name="GlobalLookupSearchButton.AutomationProperties.Name" xml:space="preserve"><value>Search</value></data>

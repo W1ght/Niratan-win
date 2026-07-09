@@ -38,6 +38,7 @@ public sealed partial class VideoPlayerWindow
             BottomChromePopup.IsOpen = true;
 
         PositionBottomChromeOverlay();
+        ShowBottomChromeForPointerActivity();
     }
 
     private void PositionBottomChromeOverlay()
@@ -981,6 +982,8 @@ public sealed partial class VideoPlayerWindow
         if (TryDismissLookupPopupFromOutsidePointer(e))
             return;
 
+        ShowBottomChromeForPointerActivity();
+
         if (IsVideoOverlayInteractiveSource(e.OriginalSource))
             return;
 
@@ -999,6 +1002,60 @@ public sealed partial class VideoPlayerWindow
 
         ToggleFullScreenFromVideoDoubleClick();
         e.Handled = true;
+    }
+
+    private void BottomChromePopupRoot_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        ShowBottomChromeForPointerActivity();
+    }
+
+    private void BottomChromePopupRoot_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        HideBottomChromeForPointerLeave();
+    }
+
+    private void BottomChromeAutoHideTimer_Tick(object? sender, object e)
+    {
+        HideBottomChromeForInactivity();
+    }
+
+    private void ShowBottomChromeForPointerActivity()
+    {
+        _bottomChromeAutoHideState.ShowForPointerActivity();
+        ApplyBottomChromeVisibility();
+        RestartBottomChromeAutoHideTimer();
+    }
+
+    private void HideBottomChromeForPointerLeave()
+    {
+        _bottomChromeAutoHideTimer.Stop();
+        _bottomChromeAutoHideState.HideForPointerLeave();
+        ApplyBottomChromeVisibility();
+    }
+
+    private void HideBottomChromeForInactivity()
+    {
+        _bottomChromeAutoHideTimer.Stop();
+        _bottomChromeAutoHideState.HideForInactivity();
+        ApplyBottomChromeVisibility();
+    }
+
+    private void RestartBottomChromeAutoHideTimer()
+    {
+        _bottomChromeAutoHideTimer.Stop();
+        _bottomChromeAutoHideTimer.Start();
+    }
+
+    private void ApplyBottomChromeVisibility()
+    {
+        if (_bottomChromeAutoHideState.IsVisible)
+        {
+            BottomChrome.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            BottomChrome.Visibility = Visibility.Collapsed;
+        }
     }
 
     private void BottomChrome_PointerPressed(object sender, PointerRoutedEventArgs e)

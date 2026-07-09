@@ -76,6 +76,8 @@
             <Grid x:Name="BottomChromePopupRoot"
                   Background="Transparent"
                   PointerPressed="BottomChromePopupRoot_PointerPressed"
+                  PointerMoved="BottomChromePopupRoot_PointerMoved"
+                  PointerExited="BottomChromePopupRoot_PointerExited"
                   PointerWheelChanged="BottomChromePopupRoot_PointerWheelChanged"
                   DoubleTapped="BottomChromePopupRoot_DoubleTapped">
                 <Border x:Name="VideoDictionaryPanelChrome"
@@ -1445,7 +1447,8 @@
                                                           DisplayMemberPath="Name"
                                                           ItemsSource="{x:Bind ViewModel.AvailableSubtitleFonts}"
                                                           SelectedValuePath="SubtitleFontFamily"
-                                                          SelectedValue="{x:Bind ViewModel.SubtitleFontFamily, Mode=TwoWay}" />
+                                                          SelectedValue="{x:Bind ViewModel.SubtitleFontFamily, Mode=TwoWay}"
+                                                          SelectionChanged="SubtitleFontFamilyComboBox_SelectionChanged" />
                                             </Grid>
                                             <Grid ColumnDefinitions="Auto,*"
                                                   ColumnSpacing="12">
