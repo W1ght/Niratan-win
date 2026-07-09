@@ -130,7 +130,7 @@ function Assert-TagAvailable {
         throw "Remote tag already exists: $Tag. Create a new patch version instead."
     }
 
-    & gh release view $Tag --repo $RepoName 1>$null 2>$null
+    & cmd /c "gh release view $Tag --repo $RepoName >NUL 2>NUL"
     if ($LASTEXITCODE -eq 0) {
         throw "GitHub Release already exists: $Tag. Create a new patch version instead."
     }
@@ -256,7 +256,7 @@ function Wait-GitHubRelease {
 
     $deadline = (Get-Date).AddMinutes(5)
     do {
-        $json = & gh release view $Tag --repo $RepoName --json tagName,url,isDraft,isPrerelease,assets 2>$null
+        $json = & cmd /c "gh release view $Tag --repo $RepoName --json tagName,url,isDraft,isPrerelease,assets 2>NUL"
         if ($LASTEXITCODE -eq 0) {
             return ($json | Out-String | ConvertFrom-Json)
         }
