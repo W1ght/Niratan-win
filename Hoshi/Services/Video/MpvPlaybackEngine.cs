@@ -66,7 +66,11 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
         return Task.CompletedTask;
     }
 
-    public Task OpenAsync(string filePath, string? subtitlePath = null, CancellationToken ct = default)
+    public Task OpenAsync(
+        string filePath,
+        string? subtitlePath = null,
+        TimeSpan? startPosition = null,
+        CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(filePath))
@@ -77,7 +81,7 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
             ThrowIfDisposed();
             EnsureInitialized();
 
-            var status = MpvNative.Command(_handle, "loadfile", filePath, "replace");
+            var status = MpvNative.Command(_handle, BuildLoadFileCommandArgs(filePath, startPosition));
             if (status < 0)
                 throw new InvalidOperationException($"Unable to load video: {MpvNative.ErrorString(status)}");
 
@@ -93,6 +97,21 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
         }
 
         return Task.CompletedTask;
+    }
+
+    internal static string[] BuildLoadFileCommandArgs(string filePath, TimeSpan? startPosition)
+    {
+        if (startPosition == null || startPosition <= TimeSpan.Zero)
+            return ["loadfile", filePath, "replace"];
+
+        return
+        [
+            "loadfile",
+            filePath,
+            "replace",
+            "-1",
+            $"start={MpvNative.FormatSeconds(startPosition.Value)},pause=yes",
+        ];
     }
 
     public Task SetPausedAsync(bool paused, CancellationToken ct = default)

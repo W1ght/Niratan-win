@@ -10,7 +10,11 @@ public interface IVideoPlaybackEngine : IDisposable
 {
     Task InitializeAsync(IntPtr hostHwnd, CancellationToken ct = default);
 
-    Task OpenAsync(string filePath, string? subtitlePath = null, CancellationToken ct = default);
+    Task OpenAsync(
+        string filePath,
+        string? subtitlePath = null,
+        TimeSpan? startPosition = null,
+        CancellationToken ct = default);
 
     Task SetPausedAsync(bool paused, CancellationToken ct = default);
 

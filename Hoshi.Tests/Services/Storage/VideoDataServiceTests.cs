@@ -1,7 +1,12 @@
 using System.Data.Common;
+using System.IO;
 using System.Reflection;
 using FluentAssertions;
+using Hoshi.Models;
+using Hoshi.Models.Video;
+using Hoshi.Services.Storage;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Hoshi.Tests.Services.Storage;
 
@@ -124,6 +129,180 @@ public class VideoDataServiceTests
             names.Add(reader.GetString(0));
 
         names.Should().Equal("NovelBooks.ProfileId", "VideoItems.ProfileId");
+    }
+
+    [Fact]
+    public async Task Migration011_AddsVideoLibraryManagementColumns()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+
+        await InvokeMigrationAsync("Migration_008", connection, transaction);
+        await InvokeMigrationAsync("Migration_009", connection, transaction);
+        await InvokeMigrationAsync("Migration_010", connection, transaction);
+        await InvokeMigrationAsync("Migration_011", connection, transaction);
+        await transaction.CommitAsync(ct);
+
+        var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT name
+            FROM pragma_table_info('VideoItems')
+            WHERE name IN (
+                'SourceFolderPath',
+                'PosterPath',
+                'Tags',
+                'CollectionName',
+                'IsWatched'
+            )
+            ORDER BY name;
+            """;
+
+        var names = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            names.Add(reader.GetString(0));
+
+        names.Should().Equal(
+            "CollectionName",
+            "IsWatched",
+            "PosterPath",
+            "SourceFolderPath",
+            "Tags");
+    }
+
+    [Fact]
+    public async Task Migration012_AddsVideoCollectionAndThumbnailSchema()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+
+        await InvokeMigrationAsync("Migration_008", connection, transaction);
+        await InvokeMigrationAsync("Migration_009", connection, transaction);
+        await InvokeMigrationAsync("Migration_010", connection, transaction);
+        await InvokeMigrationAsync("Migration_011", connection, transaction);
+        await InvokeMigrationAsync("Migration_012", connection, transaction);
+        await transaction.CommitAsync(ct);
+
+        var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT name
+            FROM pragma_table_info('VideoItems')
+            WHERE name IN ('FileSizeBytes', 'ModifiedAt', 'ThumbnailPath', 'IsFavorite')
+            ORDER BY name;
+            """;
+
+        var columns = new List<string>();
+        await using (var reader = await command.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+                columns.Add(reader.GetString(0));
+        }
+
+        columns.Should().Equal("FileSizeBytes", "IsFavorite", "ModifiedAt", "ThumbnailPath");
+
+        command.CommandText = """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name IN ('VideoCollections', 'VideoCollectionItems')
+            ORDER BY name;
+            """;
+
+        var tables = new List<string>();
+        await using (var reader = await command.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+                tables.Add(reader.GetString(0));
+        }
+
+        tables.Should().Equal("VideoCollectionItems", "VideoCollections");
+    }
+
+    [Fact]
+    public async Task DataService_PersistsVideoCollectionsAndMembership()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var dbPath = Path.Combine(Path.GetTempPath(), $"hoshi-video-{Guid.NewGuid():N}.db");
+        try
+        {
+            var connectionString = $"Data Source={dbPath};Pooling=False";
+            await new DatabaseMigrator(NullLogger<DatabaseMigrator>.Instance, connectionString).MigrateAsync();
+            var service = new DataService(connectionString);
+
+            var video = new VideoItem
+            {
+                Id = "video-1",
+                Title = "Episode 1",
+                FilePath = @"D:\Anime\Episode 1.mkv",
+                ImportedAt = DateTime.UtcNow,
+            };
+            await service.UpsertVideoAsync(video, ct);
+
+            var collection = new VideoCollection
+            {
+                Id = "collection-1",
+                Name = "Umaru",
+                Kind = VideoCollectionKind.Manual,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
+            };
+            await service.UpsertVideoCollectionAsync(collection, ct);
+            await service.SetVideoCollectionItemsAsync(collection.Id, ["video-1"], ct);
+
+            var collections = await service.GetVideoCollectionsAsync(ct);
+
+            collections.Should().ContainSingle();
+            collections[0].ItemIds.Should().Equal("video-1");
+        }
+        finally
+        {
+            if (File.Exists(dbPath))
+                File.Delete(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task UpsertVideoAsync_PreservesExistingFavoriteWhenRescanUsesDefaultFalse()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var dbPath = Path.Combine(Path.GetTempPath(), $"hoshi-video-{Guid.NewGuid():N}.db");
+        try
+        {
+            var connectionString = $"Data Source={dbPath};Pooling=False";
+            await new DatabaseMigrator(NullLogger<DatabaseMigrator>.Instance, connectionString).MigrateAsync();
+            var service = new DataService(connectionString);
+            var filePath = @"D:\Anime\Episode 1.mkv";
+
+            await service.UpsertVideoAsync(new VideoItem
+            {
+                Id = "video-1",
+                Title = "Episode 1",
+                FilePath = filePath,
+                ImportedAt = DateTime.UtcNow,
+                IsFavorite = true,
+            }, ct);
+            await service.UpsertVideoAsync(new VideoItem
+            {
+                Id = "video-rescan",
+                Title = "Episode 1",
+                FilePath = filePath,
+                ImportedAt = DateTime.UtcNow,
+            }, ct);
+
+            var videos = await service.GetVideosAsync(ct: ct);
+
+            videos.Should().ContainSingle()
+                .Which.IsFavorite.Should().BeTrue();
+        }
+        finally
+        {
+            if (File.Exists(dbPath))
+                File.Delete(dbPath);
+        }
     }
 
     private static async Task InvokeMigration008Async(
