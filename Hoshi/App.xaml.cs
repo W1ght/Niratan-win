@@ -170,6 +170,7 @@ public partial class App : Application
                 provider.GetRequiredService<ISettingsService>().Current.VideoSettings.MiningHistoryLimit));
         services.AddTransient<IVideoPlaybackEngine, MpvPlaybackEngine>();
         services.AddSingleton<IVideoMiningMediaExtractor, LibMpvVideoMiningMediaExtractor>();
+        services.AddSingleton<IVideoThumbnailService, VideoThumbnailService>();
         services.AddSingleton<IVideoSubtitleTranscriptExtractor, FfmpegVideoSubtitleTranscriptExtractor>();
         services.AddSingleton<IVideoPlayerWindowService, VideoPlayerWindowService>();
         services.AddSingleton<SubtitleParserService>();

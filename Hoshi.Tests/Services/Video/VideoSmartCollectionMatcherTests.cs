@@ -28,7 +28,7 @@ public class VideoSmartCollectionMatcherTests
             new VideoSmartRule { Field = VideoSmartRuleField.PlaybackState, Match = VideoSmartRuleMatch.Equals, Value = "inProgress" },
         };
 
-        VideoSmartCollectionMatcher.Matches(video, rules).Should().BeTrue();
+        Hoshi.Services.Video.VideoSmartCollectionMatcher.Matches(video, rules).Should().BeTrue();
     }
 
     [Fact]
@@ -49,12 +49,12 @@ public class VideoSmartCollectionMatcherTests
             new VideoSmartRule { Field = VideoSmartRuleField.PlaybackState, Match = VideoSmartRuleMatch.Equals, Value = "inProgress" },
         };
 
-        VideoSmartCollectionMatcher.Matches(video, rules).Should().BeFalse();
+        Hoshi.Services.Video.VideoSmartCollectionMatcher.Matches(video, rules).Should().BeFalse();
     }
 
     [Fact]
     public void Matches_ReturnsFalseForEmptyRules()
     {
-        VideoSmartCollectionMatcher.Matches(new VideoItem(), []).Should().BeFalse();
+        Hoshi.Services.Video.VideoSmartCollectionMatcher.Matches(new VideoItem(), []).Should().BeFalse();
     }
 }
