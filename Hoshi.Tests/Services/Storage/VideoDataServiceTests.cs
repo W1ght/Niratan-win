@@ -229,7 +229,7 @@ public class VideoDataServiceTests
         var dbPath = Path.Combine(Path.GetTempPath(), $"hoshi-video-{Guid.NewGuid():N}.db");
         try
         {
-            var connectionString = $"Data Source={dbPath}";
+            var connectionString = $"Data Source={dbPath};Pooling=False";
             await new DatabaseMigrator(NullLogger<DatabaseMigrator>.Instance, connectionString).MigrateAsync();
             var service = new DataService(connectionString);
 
