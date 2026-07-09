@@ -6,14 +6,154 @@
       xmlns:converters="using:Hoshi.Helpers.UI.Converters"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:pages="using:Hoshi.ViewModels.Pages"
       xmlns:vmc="using:Hoshi.ViewModels.Components"
       mc:Ignorable="d">
 
     <Page.Resources>
         <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
 
-        <DataTemplate x:Key="VideoItemTemplate" x:DataType="vmc:VideoItemViewModel">
-            <Button Width="240"
+        <DataTemplate x:Key="FolderFilterTemplate" x:DataType="pages:VideoLibraryFilterRow">
+            <Button Margin="0,0,8,8"
+                    Padding="12,10"
+                    MinWidth="180"
+                    HorizontalContentAlignment="Stretch"
+                    Command="{Binding ViewModel.SelectFolderFilterCommand, ElementName=ThisPage}"
+                    CommandParameter="{x:Bind}">
+                <Grid ColumnDefinitions="Auto,*"
+                      ColumnSpacing="10">
+                    <FontIcon Glyph="&#xE8B7;"
+                              VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1"
+                                Spacing="2">
+                        <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="{x:Bind MetadataText, Mode=OneWay}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+        </DataTemplate>
+
+        <DataTemplate x:Key="CollectionFilterTemplate" x:DataType="pages:VideoLibraryFilterRow">
+            <Button Margin="0,0,8,8"
+                    Padding="12,10"
+                    MinWidth="180"
+                    HorizontalContentAlignment="Stretch"
+                    Command="{Binding ViewModel.SelectCollectionFilterCommand, ElementName=ThisPage}"
+                    CommandParameter="{x:Bind}">
+                <Grid ColumnDefinitions="Auto,*"
+                      ColumnSpacing="10">
+                    <FontIcon Glyph="&#xE8F1;"
+                              VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1"
+                                Spacing="2">
+                        <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="{x:Bind MetadataText, Mode=OneWay}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+        </DataTemplate>
+
+        <DataTemplate x:Key="TagFilterTemplate" x:DataType="pages:VideoLibraryFilterRow">
+            <Button Margin="0,0,8,8"
+                    Padding="12,10"
+                    MinWidth="160"
+                    HorizontalContentAlignment="Stretch"
+                    Command="{Binding ViewModel.SelectTagFilterCommand, ElementName=ThisPage}"
+                    CommandParameter="{x:Bind}">
+                <Grid ColumnDefinitions="Auto,*"
+                      ColumnSpacing="10">
+                    <FontIcon Glyph="&#xE8EC;"
+                              VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1"
+                                Spacing="2">
+                        <TextBlock Text="{x:Bind DisplayName, Mode=OneWay}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="{x:Bind MetadataText, Mode=OneWay}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+        </DataTemplate>
+
+        <DataTemplate x:Key="VideoListItemTemplate" x:DataType="vmc:VideoItemViewModel">
+            <Button Padding="0"
+                    HorizontalContentAlignment="Stretch"
+                    AutomationProperties.AutomationId="{x:Bind AutomationId, Mode=OneTime}"
+                    AutomationProperties.Name="{x:Bind Video.Title, Mode=OneTime}"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Click="VideoButton_Click">
+                <Button.ContextFlyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem x:Uid="VideoLibraryMarkWatchedMenuItem"
+                                        Text="Mark watched"
+                                        Command="{Binding ViewModel.MarkWatchedCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                        <MenuFlyoutItem x:Uid="VideoLibraryClearProgressMenuItem"
+                                        Text="Clear progress"
+                                        Command="{Binding ViewModel.ClearProgressCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem x:Uid="VideoLibraryDeleteMenuItem"
+                                        Text="Delete"
+                                        Command="{Binding ViewModel.DeleteVideoCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                    </MenuFlyout>
+                </Button.ContextFlyout>
+                <Grid Height="96"
+                      ColumnDefinitions="144,*"
+                      ColumnSpacing="14"
+                      Padding="10,8">
+                    <Border Width="144"
+                            Height="81"
+                            CornerRadius="8"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                        <Grid>
+                            <Image Source="{x:Bind ArtworkImage, Mode=OneTime}"
+                                   Stretch="UniformToFill"
+                                   Visibility="{x:Bind HasArtwork, Mode=OneTime, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            <FontIcon Glyph="&#xE714;"
+                                      Opacity="0.35"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      Visibility="{x:Bind HasArtwork, Mode=OneTime, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}" />
+                        </Grid>
+                    </Border>
+                    <Grid Grid.Column="1"
+                          RowDefinitions="Auto,Auto,Auto"
+                          RowSpacing="6">
+                        <TextBlock Text="{x:Bind Video.Title, Mode=OneTime}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Grid.Row="1"
+                                   Text="{x:Bind ListMetadataText, Mode=OneWay}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <Grid Grid.Row="2"
+                              ColumnDefinitions="120,Auto"
+                              ColumnSpacing="10">
+                            <ProgressBar Height="4"
+                                         Minimum="0"
+                                         Maximum="100"
+                                         Value="{x:Bind OverallProgressPercent, Mode=OneWay}" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{x:Bind RemainingText, Mode=OneWay}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </Button>
+        </DataTemplate>
+
+        <DataTemplate x:Key="VideoPosterItemTemplate" x:DataType="vmc:VideoItemViewModel">
+            <Button Width="220"
                     Padding="0"
                     HorizontalContentAlignment="Stretch"
                     VerticalContentAlignment="Stretch"
@@ -22,75 +162,416 @@
                     Background="Transparent"
                     BorderThickness="0"
                     Click="VideoButton_Click">
+                <Button.ContextFlyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem x:Uid="VideoLibraryMarkWatchedMenuItem"
+                                        Text="Mark watched"
+                                        Command="{Binding ViewModel.MarkWatchedCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                        <MenuFlyoutItem x:Uid="VideoLibraryClearProgressMenuItem"
+                                        Text="Clear progress"
+                                        Command="{Binding ViewModel.ClearProgressCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem x:Uid="VideoLibraryDeleteMenuItem"
+                                        Text="Delete"
+                                        Command="{Binding ViewModel.DeleteVideoCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                    </MenuFlyout>
+                </Button.ContextFlyout>
                 <StackPanel Spacing="8">
-                    <Border Height="138"
+                    <Border Height="124"
                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                             CornerRadius="8">
                         <Grid>
+                            <Image Stretch="UniformToFill"
+                                   Source="{x:Bind ArtworkImage, Mode=OneTime}"
+                                   Visibility="{x:Bind HasArtwork, Mode=OneTime, Converter={StaticResource BooleanToVisibilityConverter}}" />
                             <FontIcon FontSize="44"
                                       Glyph="&#xE714;"
                                       Opacity="0.35"
                                       HorizontalAlignment="Center"
-                                      VerticalAlignment="Center" />
+                                      VerticalAlignment="Center"
+                                      Visibility="{x:Bind HasArtwork, Mode=OneTime, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}" />
                         </Grid>
                     </Border>
-                    <StackPanel Spacing="4">
+                    <StackPanel Spacing="5">
+                        <Grid ColumnDefinitions="*,Auto"
+                              ColumnSpacing="8">
+                            <ProgressBar Height="4"
+                                         Minimum="0"
+                                         Maximum="100"
+                                         VerticalAlignment="Center"
+                                         Value="{x:Bind OverallProgressPercent, Mode=OneWay}" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{x:Bind ProgressText, Mode=OneWay}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </Grid>
                         <TextBlock Text="{x:Bind Video.Title, Mode=OneTime}"
                                    TextWrapping="WrapWholeWords"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="{x:Bind FolderName, Mode=OneWay}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Text="{x:Bind WatchStatusText, Mode=OneWay}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
                 </StackPanel>
             </Button>
         </DataTemplate>
     </Page.Resources>
 
-    <Grid RowDefinitions="Auto,*">
-        <Grid Grid.Row="0"
-              Padding="20,14,36,16"
-              ColumnDefinitions="Auto,*,Auto"
-              ColumnSpacing="12">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <FontIcon FontSize="24" Glyph="&#xE714;" />
-                <TextBlock x:Uid="VideoLibraryPageTitle"
-                           Margin="8,0,0,0"
+    <Grid>
+        <NavigationView x:Name="VideoLibrarySecondaryNavigationView"
+                        x:Uid="VideoLibrarySecondaryNavigationView"
+                        AlwaysShowHeader="False"
+                        IsBackButtonVisible="Collapsed"
+                        IsPaneToggleButtonVisible="False"
+                        IsSettingsVisible="False"
+                        ItemInvoked="VideoLibrarySecondaryNavigationView_ItemInvoked"
+                        OpenPaneLength="248"
+                        PaneDisplayMode="Left"
+                        PaneTitle="Videos">
+            <NavigationView.Resources>
+                <Thickness x:Key="NavigationViewContentMargin">0</Thickness>
+                <Thickness x:Key="NavigationViewContentGridBorderThickness">1,0,0,0</Thickness>
+                <CornerRadius x:Key="NavigationViewContentGridCornerRadius">0</CornerRadius>
+            </NavigationView.Resources>
+
+            <NavigationView.MenuItems>
+                <NavigationViewItemHeader x:Uid="VideoLibrarySectionHeader"
+                                          Content="Library" />
+                <NavigationViewItem x:Name="VideoLibraryAllNavItem"
+                                    x:Uid="VideoLibraryAllNavItem"
+                                    AutomationProperties.AutomationId="VideoLibraryAllNavItem"
+                                    Content="All Videos"
+                                    Tag="All">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE714;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="VideoLibraryContinueWatchingNavItem"
+                                    x:Uid="VideoLibraryContinueWatchingNavItem"
+                                    AutomationProperties.AutomationId="VideoLibraryContinueWatchingNavItem"
+                                    Content="Continue Watching"
+                                    Tag="ContinueWatching">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE768;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="VideoLibraryWatchedNavItem"
+                                    x:Uid="VideoLibraryWatchedNavItem"
+                                    AutomationProperties.AutomationId="VideoLibraryWatchedNavItem"
+                                    Content="Watched"
+                                    Tag="Watched">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE930;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="VideoLibraryUnwatchedNavItem"
+                                    x:Uid="VideoLibraryUnwatchedNavItem"
+                                    AutomationProperties.AutomationId="VideoLibraryUnwatchedNavItem"
+                                    Content="Unwatched"
+                                    Tag="Unwatched">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8A5;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="VideoLibraryFinishedNavItem"
+                                    x:Uid="VideoLibraryFinishedNavItem"
+                                    AutomationProperties.AutomationId="VideoLibraryFinishedNavItem"
+                                    Content="Finished"
+                                    Tag="Finished">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE930;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="VideoLibraryRecentNavItem"
+                                    x:Uid="VideoLibraryRecentNavItem"
+                                    AutomationProperties.AutomationId="VideoLibraryRecentNavItem"
+                                    Content="Recent"
+                                    Tag="Recent">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE823;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="VideoLibraryNeedsReviewNavItem"
+                                    x:Uid="VideoLibraryNeedsReviewNavItem"
+                                    AutomationProperties.AutomationId="VideoLibraryNeedsReviewNavItem"
+                                    Content="Needs Review"
+                                    Tag="NeedsReview">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE7BA;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="VideoLibraryFavoritesNavItem"
+                                    x:Uid="VideoLibraryFavoritesNavItem"
+                                    AutomationProperties.AutomationId="VideoLibraryFavoritesNavItem"
+                                    Content="Favorites"
+                                    Tag="Favorites">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE734;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="VideoLibrarySeriesNavItem"
+                                    x:Uid="VideoLibrarySeriesNavItem"
+                                    AutomationProperties.AutomationId="VideoLibrarySeriesNavItem"
+                                    Content="Series"
+                                    Tag="Series">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8D2;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItemHeader x:Uid="VideoLibraryOrganizeSectionHeader"
+                                          Content="Organize" />
+                <NavigationViewItem x:Name="VideoLibraryFoldersNavItem"
+                                    x:Uid="VideoLibraryFoldersNavItem"
+                                    AutomationProperties.AutomationId="VideoLibraryFoldersNavItem"
+                                    Content="Folders"
+                                    Tag="Folders">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8B7;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="VideoLibraryCollectionsNavItem"
+                                    x:Uid="VideoLibraryCollectionsNavItem"
+                                    AutomationProperties.AutomationId="VideoLibraryCollectionsNavItem"
+                                    Content="Collections"
+                                    Tag="Collections">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8F1;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="VideoLibraryTagsNavItem"
+                                    x:Uid="VideoLibraryTagsNavItem"
+                                    AutomationProperties.AutomationId="VideoLibraryTagsNavItem"
+                                    Content="Tags"
+                                    Tag="Tags">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8EC;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+
+            <Grid RowDefinitions="Auto,*">
+                <Grid Grid.Row="0"
+                      Padding="20,14,28,16"
+                      ColumnDefinitions="*,280,156,112,Auto"
+                      ColumnSpacing="12">
+                    <StackPanel VerticalAlignment="Center"
+                                Spacing="2">
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="8"
+                                    VerticalAlignment="Center">
+                            <FontIcon FontSize="24" Glyph="&#xE714;" />
+                            <TextBlock Text="{x:Bind ViewModel.CurrentViewTitle, Mode=OneWay}"
+                                       VerticalAlignment="Center"
+                                       Style="{StaticResource TitleTextBlockStyle}" />
+                        </StackPanel>
+                        <TextBlock Text="{x:Bind ViewModel.CurrentViewSubtitle, Mode=OneWay}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+
+                    <TextBox Grid.Column="1"
+                             x:Name="VideoLibrarySearchBox"
+                             x:Uid="VideoLibrarySearchBox"
+                             AutomationProperties.AutomationId="VideoLibrarySearchBox"
+                             PlaceholderText="Search videos"
+                             VerticalAlignment="Center"
+                             Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <ComboBox Grid.Column="2"
+                              x:Name="VideoLibrarySortComboBox"
+                              x:Uid="VideoLibrarySortComboBox"
+                              AutomationProperties.AutomationId="VideoLibrarySortComboBox"
+                              AutomationProperties.Name="Sort videos"
+                              DisplayMemberPath="DisplayName"
+                              ItemsSource="{x:Bind ViewModel.SortOptions, Mode=OneWay}"
+                              SelectedValue="{x:Bind ViewModel.SelectedSortOption, Mode=TwoWay}"
+                              SelectedValuePath="Value"
+                              VerticalAlignment="Center" />
+
+                    <Grid x:Name="VideoLibraryLayoutSegment"
+                          AutomationProperties.AutomationId="VideoLibraryLayoutSegment"
+                          Grid.Column="3"
+                          Height="36"
+                          ColumnDefinitions="*,*">
+                        <ToggleButton x:Uid="VideoLibraryLayoutList"
+                                      IsChecked="{x:Bind ViewModel.IsListLayout, Mode=OneWay}"
+                                      Command="{x:Bind ViewModel.SelectLayoutCommand}"
+                                      CommandParameter="List">
+                            <FontIcon Glyph="&#xE8FD;" />
+                        </ToggleButton>
+                        <ToggleButton x:Uid="VideoLibraryLayoutPosters"
+                                      Grid.Column="1"
+                                      IsChecked="{x:Bind ViewModel.IsPosterLayout, Mode=OneWay}"
+                                      Command="{x:Bind ViewModel.SelectLayoutCommand}"
+                                      CommandParameter="Posters">
+                            <FontIcon Glyph="&#xECA5;" />
+                        </ToggleButton>
+                    </Grid>
+
+                    <CommandBar Grid.Column="4"
+                                DefaultLabelPosition="Right"
+                                VerticalAlignment="Center">
+                        <AppBarButton x:Name="ScanVideoFolderButton"
+                                      x:Uid="ScanVideoFolderButton"
+                                      AutomationProperties.AutomationId="ScanVideoFolderButton"
+                                      Command="{x:Bind ViewModel.ScanFolderCommand}"
+                                      Label="Scan folder">
+                            <AppBarButton.Icon>
+                                <FontIcon Glyph="&#xE8B7;" />
+                            </AppBarButton.Icon>
+                        </AppBarButton>
+                        <AppBarButton x:Name="ImportVideoButton"
+                                      x:Uid="ImportVideoButton"
+                                      AutomationProperties.AutomationId="ImportVideoButton"
+                                      Command="{x:Bind ViewModel.ImportVideoCommand}"
+                                      Label="Import video">
+                            <AppBarButton.Icon>
+                                <FontIcon Glyph="&#xE8E5;" />
+                            </AppBarButton.Icon>
+                        </AppBarButton>
+                        <AppBarButton x:Name="CreateSmartCollectionButton"
+                                      x:Uid="CreateSmartCollectionButton"
+                                      AutomationProperties.AutomationId="CreateSmartCollectionButton"
+                                      Click="CreateSmartCollectionButton_Click"
+                                      Label="Create smart collection">
+                            <AppBarButton.Icon>
+                                <FontIcon Glyph="&#xE710;" />
+                            </AppBarButton.Icon>
+                        </AppBarButton>
+                    </CommandBar>
+                </Grid>
+
+                <ProgressRing Grid.Row="1"
+                              Width="60"
+                              Height="60"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              IsActive="{x:Bind ViewModel.IsContentLoading, Mode=OneWay}"
+                              Visibility="{x:Bind ViewModel.IsContentLoading, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+
+                <TextBlock Grid.Row="1"
+                           x:Uid="NoVideosText"
+                           HorizontalAlignment="Center"
                            VerticalAlignment="Center"
-                           Style="{StaticResource TitleTextBlockStyle}"
-                           Text="Videos" />
+                           Style="{StaticResource BodyLargeStrongTextBlockStyle}"
+                           Text="No videos."
+                           Visibility="{x:Bind ViewModel.NoVideos, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+
+                <Grid Grid.Row="1"
+                      RowDefinitions="Auto,*">
+                    <StackPanel Grid.Row="0"
+                                Margin="20,0,28,12"
+                                Spacing="8">
+                        <ItemsControl x:Name="VideoLibraryFolderFilters"
+                                      AutomationProperties.AutomationId="VideoLibraryFolderFilters"
+                                      ItemTemplate="{StaticResource FolderFilterTemplate}"
+                                      ItemsSource="{x:Bind ViewModel.FolderFilters, Mode=OneWay}"
+                                      Visibility="{x:Bind ViewModel.IsFoldersView, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <ItemsWrapGrid Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                        <ItemsControl x:Name="VideoLibraryCollectionFilters"
+                                      AutomationProperties.AutomationId="VideoLibraryCollectionFilters"
+                                      ItemTemplate="{StaticResource CollectionFilterTemplate}"
+                                      ItemsSource="{x:Bind ViewModel.CollectionFilters, Mode=OneWay}"
+                                      Visibility="{x:Bind ViewModel.IsCollectionsView, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <ItemsWrapGrid Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                        <ItemsControl x:Name="VideoLibraryTagFilters"
+                                      AutomationProperties.AutomationId="VideoLibraryTagFilters"
+                                      ItemTemplate="{StaticResource TagFilterTemplate}"
+                                      ItemsSource="{x:Bind ViewModel.TagFilters, Mode=OneWay}"
+                                      Visibility="{x:Bind ViewModel.IsTagsView, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <ItemsWrapGrid Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <Grid Grid.Row="1"
+                          Margin="20,0,28,0">
+                        <ListView x:Name="VideoLibraryListView"
+                                  AutomationProperties.AutomationId="VideoLibraryListView"
+                                  ItemTemplate="{StaticResource VideoListItemTemplate}"
+                                  ItemsSource="{x:Bind ViewModel.Videos, Mode=OneWay}"
+                                  ItemClick="ListView_ItemClick"
+                                  IsItemClickEnabled="True"
+                                  SelectionMode="None"
+                                  Visibility="{x:Bind ViewModel.IsListLayout, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+
+                        <GridView x:Name="VideoGridView"
+                                  AutomationProperties.AutomationId="VideoGridView"
+                                  Padding="0,0,16,0"
+                                  IsItemClickEnabled="True"
+                                  ItemClick="GridView_ItemClick"
+                                  ItemTemplate="{StaticResource VideoPosterItemTemplate}"
+                                  ItemsSource="{x:Bind ViewModel.Videos, Mode=OneWay}"
+                                  SelectionMode="None"
+                                  Visibility="{x:Bind ViewModel.IsPosterLayout, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                            <GridView.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <ItemsWrapGrid Orientation="Horizontal"
+                                                   ItemWidth="220"
+                                                   ItemHeight="232" />
+                                </ItemsPanelTemplate>
+                            </GridView.ItemsPanel>
+                        </GridView>
+                    </Grid>
+                </Grid>
+            </Grid>
+        </NavigationView>
+
+        <ContentDialog x:Name="CreateSmartCollectionDialog"
+                       FullSizeDesired="False"
+                       DefaultButton="None">
+            <StackPanel Spacing="16"
+                        MinWidth="440">
+                <TextBox x:Uid="VideoLibrarySmartCollectionName"
+                         Header="Name"
+                         PlaceholderText="Smart collection name"
+                         Text="{Binding SmartCollectionNameDraft, Mode=TwoWay}" />
+                <TextBox x:Uid="VideoLibrarySmartCollectionRuleValue"
+                         Header="Rule"
+                         PlaceholderText="Rule text"
+                         Text="{Binding SmartRuleValueDraft, Mode=TwoWay}" />
+                <StackPanel Spacing="8">
+                    <TextBlock x:Uid="VideoLibraryPreviewMatches"
+                               Text="Preview matches"
+                               Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <ItemsControl ItemsSource="{Binding SmartCollectionPreviewRows}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vmc:VideoItemViewModel">
+                                <TextBlock Text="{Binding Video.Title}"
+                                           TextTrimming="CharacterEllipsis" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            Spacing="8">
+                    <Button x:Uid="VideoLibraryCreateSmartCollectionSecondaryButton"
+                            Content="Cancel"
+                            Click="CreateSmartCollectionSecondaryButton_Click" />
+                    <Button x:Uid="VideoLibraryCreateSmartCollectionPrimaryButton"
+                            Content="Create"
+                            Command="{x:Bind ViewModel.CreateSmartCollectionCommand}"
+                            Click="CreateSmartCollectionPrimaryButton_Click" />
+                </StackPanel>
             </StackPanel>
-
-            <Button Grid.Column="2"
-                    x:Uid="ImportVideoButton"
-                    AutomationProperties.AutomationId="ImportVideoButton"
-                    AutomationProperties.Name="Import video"
-                    Command="{x:Bind ViewModel.ImportVideoCommand}"
-                    ToolTipService.ToolTip="Import video">
-                <FontIcon Glyph="&#xE8E5;" />
-            </Button>
-        </Grid>
-
-        <ProgressRing Grid.Row="1"
-                      Width="60"
-                      Height="60"
-                      HorizontalAlignment="Center"
-                      VerticalAlignment="Center"
-                      IsActive="{x:Bind ViewModel.IsContentLoading, Mode=OneWay}"
-                      Visibility="{x:Bind ViewModel.IsContentLoading, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
-
-        <TextBlock Grid.Row="1"
-                   x:Uid="NoVideosText"
-                   HorizontalAlignment="Center"
-                   VerticalAlignment="Center"
-                   Style="{StaticResource BodyLargeStrongTextBlockStyle}"
-                   Text="No videos imported."
-                   Visibility="{x:Bind ViewModel.NoVideos, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
-
-        <GridView Grid.Row="1"
-                  AutomationProperties.AutomationId="VideoGridView"
-                  Padding="0,0,16,0"
-                  IsItemClickEnabled="True"
-                  ItemClick="GridView_ItemClick"
-                  ItemTemplate="{StaticResource VideoItemTemplate}"
-                  ItemsSource="{x:Bind ViewModel.Videos, Mode=OneWay}"
-                  SelectionMode="None" />
+        </ContentDialog>
     </Grid>
 </Page>
