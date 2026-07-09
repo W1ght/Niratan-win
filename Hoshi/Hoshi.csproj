@@ -17,6 +17,7 @@
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>True</WindowsAppSDKSelfContained>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NativeHoshidictsDll>$(MSBuildProjectDirectory)\..\native\out\hoshidicts_c_api.dll</NativeHoshidictsDll>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -42,9 +43,18 @@
   <!-- Copy native hoshidicts DLL to output directory if it exists -->
   <Target Name="CopyNativeHoshidicts" AfterTargets="Build" Condition="'$(Platform)' == 'x64'">
     <ItemGroup>
-      <_NativeDll Include="$(MSBuildProjectDirectory)\..\native\out\hoshidicts_c_api.dll" />
+      <_NativeDll Include="$(NativeHoshidictsDll)" />
     </ItemGroup>
     <Copy SourceFiles="@(_NativeDll)" DestinationFolder="$(TargetDir)" Condition="Exists('%(FullPath)')" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyNativeHoshidictsToPublish" AfterTargets="Publish" Condition="'$(Platform)' == 'x64'">
+    <Error Text="Native dictionary DLL not found. Run .\build-native.ps1 before publishing."
+           Condition="!Exists('$(NativeHoshidictsDll)')" />
+    <ItemGroup>
+      <_NativePublishDll Include="$(NativeHoshidictsDll)" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_NativePublishDll)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
   </Target>
 
   <Target Name="CleanPublish" AfterTargets="Publish">
