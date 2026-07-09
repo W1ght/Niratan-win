@@ -146,6 +146,22 @@ public sealed partial class VideoPlayerWindow
         ApplySubtitleAppearance();
     }
 
+    private void SubtitleFontFamilyComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (ViewModel == null || _isUpdatingSubtitleAppearance)
+            return;
+
+        var fontFamily = ResolveSelectedSubtitleFontFamily();
+        if (fontFamily == null)
+            return;
+
+        ViewModel.SetSubtitleFontFamily(fontFamily);
+        ViewModel.RefreshSubtitlePanelHeight();
+        SubtitleFontFamilyComboBox.SelectedValue = ViewModel.SubtitleFontFamily;
+        ApplySubtitleAppearance();
+        ViewModel.StatusText = $"Subtitle font {ViewModel.SubtitleFontFamilyText}";
+    }
+
     private void SubtitleShadowRadiusSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
     {
         if (ViewModel == null || _isUpdatingSubtitleAppearance)
@@ -194,6 +210,7 @@ public sealed partial class VideoPlayerWindow
 
         _isUpdatingSubtitleAppearance = true;
         ViewModel.ResetSubtitleAppearance();
+        SubtitleFontFamilyComboBox.SelectedValue = ViewModel.SubtitleFontFamily;
         SubtitleFontSizeSlider.Value = ViewModel.SubtitleFontSize;
         SubtitleFontWeightNumberBox.Value = ViewModel.SubtitleFontWeight;
         SubtitleShadowRadiusSlider.Value = ViewModel.SubtitleShadowRadius;
@@ -585,6 +602,7 @@ public sealed partial class VideoPlayerWindow
             return;
 
         _isUpdatingSubtitleAppearance = true;
+        SubtitleFontFamilyComboBox.SelectedValue = ViewModel.SubtitleFontFamily;
         SubtitleFontSizeSlider.Value = ViewModel.SubtitleFontSize;
         SubtitleFontWeightNumberBox.Value = ViewModel.SubtitleFontWeight;
         SubtitleShadowRadiusSlider.Value = ViewModel.SubtitleShadowRadius;
@@ -601,6 +619,15 @@ public sealed partial class VideoPlayerWindow
             ViewModel.SubtitleLookupHighlightTextColorHex,
             Colors.White);
         _isUpdatingSubtitleAppearance = false;
+    }
+
+    private string? ResolveSelectedSubtitleFontFamily()
+    {
+        if (SubtitleFontFamilyComboBox.SelectedValue is string selectedValue)
+            return selectedValue;
+
+        return (SubtitleFontFamilyComboBox.SelectedItem as global::Hoshi.Models.Settings.JapaneseFontOption)
+            ?.SubtitleFontFamily;
     }
 
     private void UpdateSubtitleMaskControls()

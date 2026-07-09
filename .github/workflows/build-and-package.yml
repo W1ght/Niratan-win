@@ -6,6 +6,9 @@ on:
     tags:
       - '**'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -22,6 +25,19 @@ jobs:
     - name: Build native dictionary library
       shell: pwsh
       run: .\build-native.ps1
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Run Unit Tests
+      run: dotnet test Hoshi.Tests/Hoshi.Tests.csproj --no-restore -c Debug --verbosity normal -p:Platform=x64 --logger trx
+
+    - name: Upload Test Results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: package-test-results
+        path: '**/*.trx'
 
     - name: Publish Minimal
       run: dotnet publish Hoshi/Hoshi.csproj -c Release -r win-x64 --self-contained false -p:Platform=x64 -p:PublishProfile=win-x64.pubxml
@@ -74,3 +90,13 @@ jobs:
       with:
         name: Hoshi.Setup.x64
         path: Packaging/Hoshi.Setup.x64*.exe
+
+    - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        name: Hoshi ${{ github.ref_name }}
+        generate_release_notes: true
+        files: |
+          Hoshi.Minimal.x64.zip
+          Packaging/Hoshi.Setup.x64*.exe

@@ -36,17 +36,6 @@
                             QueryIcon="Find"
                             Text="{x:Bind ViewModel.SearchText, Mode=TwoWay}"
                             TextChanged="AutoSuggestBox_TextChanged" />
-            <Button Grid.Column="3"
-                    x:Uid="GlobalLookupButton"
-                    Width="40"
-                    Height="32"
-                    Margin="8,0,0,0"
-                    HorizontalAlignment="Left"
-                    VerticalAlignment="Center"
-                    AutomationProperties.AutomationId="GlobalLookupButton"
-                    Click="OpenGlobalLookup_Click">
-                <FontIcon Glyph="&#xE721;" FontSize="14" />
-            </Button>
         </Grid>
 
         <NavigationView x:Name="NavigationViewControl"

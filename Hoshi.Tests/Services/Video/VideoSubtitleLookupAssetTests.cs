@@ -263,6 +263,23 @@ public class VideoSubtitleLookupAssetTests
     }
 
     [Fact]
+    public void VideoPlayerWindow_AutoHidesBottomChromeAfterPointerIdleOrLeave()
+    {
+        var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.xaml"));
+        var code = ReadVideoPlayerWindowCode();
+
+        xaml.Should().Contain("PointerMoved=\"BottomChromePopupRoot_PointerMoved\"");
+        xaml.Should().Contain("PointerExited=\"BottomChromePopupRoot_PointerExited\"");
+        code.Should().Contain("VideoBottomChromeAutoHideState");
+        code.Should().Contain("_bottomChromeAutoHideTimer.Interval = VideoBottomChromeAutoHideState.DefaultHideDelay;");
+        code.Should().Contain("_bottomChromeAutoHideTimer.Tick += BottomChromeAutoHideTimer_Tick;");
+        code.Should().Contain("ShowBottomChromeForPointerActivity();");
+        code.Should().Contain("HideBottomChromeForPointerLeave();");
+        code.Should().Contain("HideBottomChromeForInactivity();");
+        code.Should().Contain("BottomChrome.Visibility = Visibility.Collapsed;");
+    }
+
+    [Fact]
     public void VideoPlayerWindow_BottomOverlayAndNativeHostPreserveWindowCornerResize()
     {
         var code = ReadVideoPlayerWindowCode();
@@ -564,6 +581,7 @@ public class VideoSubtitleLookupAssetTests
         var videoSettingsViewModelCode = ReadProjectFile("ViewModels", "Pages", "VideoSettingsPageViewModel.cs");
         var videoPlayerViewModelCode = ReadProjectFile("ViewModels", "Pages", "VideoPlayerViewModel.cs");
         var playerXaml = ReadProjectFile("Views", "Video", "VideoPlayerWindow.xaml");
+        var subtitleOverlayCode = ReadProjectFile("Views", "Video", "VideoPlayerWindow.SubtitleOverlay.cs");
         var fontCatalogPath = Path.Combine(ProjectRoot, "Models", "Settings", "JapaneseFontCatalog.cs");
 
         File.Exists(fontCatalogPath).Should().BeTrue("reader and video subtitle fonts should be defined once");
@@ -577,6 +595,11 @@ public class VideoSubtitleLookupAssetTests
         playerXaml.Should().Contain("ItemsSource=\"{x:Bind ViewModel.AvailableSubtitleFonts}\"");
         playerXaml.Should().Contain("SelectedValuePath=\"SubtitleFontFamily\"");
         playerXaml.Should().Contain("SelectedValue=\"{x:Bind ViewModel.SubtitleFontFamily, Mode=TwoWay}\"");
+        playerXaml.Should().Contain("SelectionChanged=\"SubtitleFontFamilyComboBox_SelectionChanged\"");
+        subtitleOverlayCode.Should().Contain("SubtitleFontFamilyComboBox_SelectionChanged");
+        subtitleOverlayCode.Should().Contain("ViewModel.SetSubtitleFontFamily(fontFamily);");
+        subtitleOverlayCode.Should().Contain("ViewModel.RefreshSubtitlePanelHeight();");
+        subtitleOverlayCode.Should().Contain("ApplySubtitleAppearance();");
         playerXaml.Should().NotContain("<ComboBoxItem Tag=\"Yu Gothic UI\"");
     }
 }

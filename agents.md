@@ -10,6 +10,7 @@ WinUI 3 + Windows App SDK + C#/.NET 开发的 Windows 原生日语沉浸式 EPUB
 - **构建**: `dotnet build -p:Platform=x64`
 - **测试**: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`
 - **构建+启动**: `.\build-and-run.ps1`
+- **发布版本**: `.\release.ps1 -Version x.y.z`
 - **初始化子模块**: `git submodule update --init --recursive`
 - **UTF-8 初始化**: `.\set-utf8-console.ps1`
 - **读取中日文文档**: Windows PowerShell 5.1 必须显式使用 `Get-Content -Encoding UTF8`；`set-utf8-console.ps1` 只保证控制台输出编码，不改变文件读取解码。
@@ -240,7 +241,16 @@ dotnet build -p:Platform=x64 && dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c De
 
 ### 6.4 发布版本
 
-发布 GitHub 版本或标签时，不需要在本地跑构建或测试；直接推送发布提交和版本标签，用 GitHub Actions 执行验证与打包，并以 Actions 结果作为发布依据。
+发布 GitHub 版本或标签时，使用 `.\release.ps1 -Version x.y.z`，不要手工创建、移动、删除或复用 `v*` 标签。
+
+- 发布前必须在干净的 `main` 工作树上运行脚本；未提交改动、非 `main` 分支、已有本地/远端 tag 或已有 GitHub Release 都必须停止。
+- 发布脚本负责更新 `Hoshi/Hoshi.csproj` 版本、提交版本提交、推送 `main`、创建并推送不可变 `vX.Y.Z` 标签。
+- 发布不在本地跑构建或测试；脚本只触发并等待 GitHub Actions，以 Actions 结果作为发布依据。
+- Actions 失败时不得创建 GitHub Release；先修复问题，再发布新的 patch 版本。
+- 发布资产必须来自对应 tag 的 GitHub Actions artifacts，不使用本地 publish 目录手工打包。
+- 发布前必须验证 `Hoshi.Minimal.x64.zip` 内含 `hoshidicts_c_api.dll`，并确认存在 `Hoshi.Setup.x64*.exe`。
+- 已发布版本发现问题时，默认发布新的 patch 版本（例如 `v0.1.1`），不要静默替换旧 release 资产；除非用户明确要求，才允许编辑既有 Release。
+- 如需预览发布步骤，使用 `.\release.ps1 -Version x.y.z -PlanOnly`；该模式不得产生 git、GitHub 或文件发布副作用。
 
 ---
 

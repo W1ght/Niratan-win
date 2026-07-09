@@ -570,7 +570,6 @@
   <data name="SasayakiLightBackgroundColorCard.Header" xml:space="preserve"><value>浅色背景颜色</value></data>
   <data name="SasayakiDarkTextColorCard.Header" xml:space="preserve"><value>深色文本颜色</value></data>
   <data name="SasayakiDarkBackgroundColorCard.Header" xml:space="preserve"><value>深色背景颜色</value></data>
-  <data name="GlobalLookupButton.AutomationProperties.Name" xml:space="preserve"><value>打开全局查词</value></data>
   <data name="GlobalLookupWindow.Title" xml:space="preserve"><value>全局查词</value></data>
   <data name="GlobalLookupQueryBox.PlaceholderText" xml:space="preserve"><value>输入要查询的文本</value></data>
   <data name="GlobalLookupSearchButton.AutomationProperties.Name" xml:space="preserve"><value>查询</value></data>
