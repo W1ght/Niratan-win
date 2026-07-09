@@ -184,13 +184,17 @@ function Wait-GitHubActionsRun {
         ) | Out-String)
 
         $runs = @($json | ConvertFrom-Json)
+        if ($runs.Count -eq 1 -and $runs[0] -is [System.Array]) {
+            $runs = @($runs[0])
+        }
+
         $run = $runs |
             Where-Object { $_.headBranch -eq $Tag -and $_.headSha -eq $HeadSha } |
             Sort-Object createdAt -Descending |
             Select-Object -First 1
 
         if ($run) {
-            return [string]$run.databaseId
+            return [string]($run.databaseId)
         }
 
         Write-Host "Waiting for workflow run for $Tag..."
