@@ -375,3 +375,6 @@ native/hoshidicts/build/
 native/hoshidicts_c_api/build/
 native/out/
 *.dll.recipe
+
+# Local Codex/Superpowers planning artifacts
+.superpowers/
