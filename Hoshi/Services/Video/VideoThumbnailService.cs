@@ -7,7 +7,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Hoshi.Helpers;
 using Hoshi.Models;
-using Hoshi.Models.Common;
 using Hoshi.Services.Storage;
 
 namespace Hoshi.Services.Video;
@@ -36,14 +35,11 @@ internal sealed class VideoThumbnailService : IVideoThumbnailService
         Directory.CreateDirectory(_cacheDirectory);
     }
 
-    public async Task<Result<string?>> EnsureThumbnailAsync(
+    public Task<string?> EnsureThumbnailAsync(
         VideoItem video,
         bool generateIfMissing,
-        CancellationToken ct = default)
-    {
-        var thumbnailPath = await EnsureThumbnailPathAsync(video, generateIfMissing, ct);
-        return Result<string?>.Success(thumbnailPath);
-    }
+        CancellationToken ct = default) =>
+        EnsureThumbnailPathAsync(video, generateIfMissing, ct);
 
     private async Task<string?> EnsureThumbnailPathAsync(
         VideoItem video,
@@ -52,11 +48,11 @@ internal sealed class VideoThumbnailService : IVideoThumbnailService
     {
         ArgumentNullException.ThrowIfNull(video);
 
-        var posterPath = GetExistingPath(video.PosterPath);
+        var posterPath = GetExistingSourcePath(video.PosterPath);
         if (posterPath != null)
             return posterPath;
 
-        var thumbnailPath = GetExistingPath(video.ThumbnailPath);
+        var thumbnailPath = GetExistingSourcePath(video.ThumbnailPath);
         if (thumbnailPath != null)
             return thumbnailPath;
 
@@ -65,7 +61,7 @@ internal sealed class VideoThumbnailService : IVideoThumbnailService
 
         var cacheKey = CacheKey(video);
         var outputPath = Path.Combine(_cacheDirectory, $"{cacheKey}.png");
-        var cachedPath = GetExistingPath(outputPath);
+        var cachedPath = GetExistingGeneratedPath(outputPath);
         if (cachedPath != null)
             return cachedPath;
 
@@ -112,7 +108,7 @@ internal sealed class VideoThumbnailService : IVideoThumbnailService
         {
             await _generationGate.WaitAsync();
 
-            var cachedPath = GetExistingPath(outputPath);
+            var cachedPath = GetExistingGeneratedPath(outputPath);
             if (cachedPath != null)
                 return cachedPath;
 
@@ -154,7 +150,10 @@ internal sealed class VideoThumbnailService : IVideoThumbnailService
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
-    private static string? GetExistingPath(string? path) => HasFile(path) ? path : null;
+    private static string? GetExistingSourcePath(string? path) =>
+        !string.IsNullOrWhiteSpace(path) && File.Exists(path) ? path : null;
+
+    private static string? GetExistingGeneratedPath(string? path) => HasFile(path) ? path : null;
 
     private static bool HasFile(string? path) =>
         !string.IsNullOrWhiteSpace(path)

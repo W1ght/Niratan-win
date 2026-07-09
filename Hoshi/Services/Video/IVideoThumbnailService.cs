@@ -1,22 +1,16 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Hoshi.Models;
-using Hoshi.Models.Common;
 
 namespace Hoshi.Services.Video;
 
 public interface IVideoThumbnailService
 {
-    Task<Result<string?>> EnsureThumbnailAsync(
+    Task<string?> EnsureThumbnailAsync(
         VideoItem video,
-        bool generateIfMissing = true,
+        bool generateIfMissing,
         CancellationToken ct = default);
 
-    void Suspend()
-    {
-    }
-
-    void Resume()
-    {
-    }
+    void Suspend();
+    void Resume();
 }
