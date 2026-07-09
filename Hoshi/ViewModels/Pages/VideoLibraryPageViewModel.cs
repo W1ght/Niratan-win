@@ -87,6 +87,16 @@ public partial class VideoLibraryPageViewModel : ObservableObject
         new(VideoLibrarySortOption.Folder, ResourceStringHelper.GetString("VideoLibrarySortFolder", "Folder")),
     ];
 
+    public IReadOnlyList<VideoSmartRuleFieldOption> AvailableSmartRuleFields { get; } =
+    [
+        new(VideoSmartRuleField.FileName, ResourceStringHelper.GetString("VideoLibrarySmartRuleFieldFileName", "File name")),
+        new(VideoSmartRuleField.ParentFolder, ResourceStringHelper.GetString("VideoLibrarySmartRuleFieldParentFolder", "Parent folder")),
+        new(VideoSmartRuleField.Path, ResourceStringHelper.GetString("VideoLibrarySmartRuleFieldPath", "Full path")),
+        new(VideoSmartRuleField.Tag, ResourceStringHelper.GetString("VideoLibrarySmartRuleFieldTag", "Tag")),
+        new(VideoSmartRuleField.HasBoundSubtitle, ResourceStringHelper.GetString("VideoLibrarySmartRuleFieldHasBoundSubtitle", "Has subtitle")),
+        new(VideoSmartRuleField.PlaybackState, ResourceStringHelper.GetString("VideoLibrarySmartRuleFieldPlaybackState", "Playback state")),
+    ];
+
     public bool NoVideos => !IsContentLoading && Videos.Count == 0;
     public bool IsListLayout => SelectedLayoutMode == VideoLibraryLayoutMode.List;
     public bool IsPosterLayout => SelectedLayoutMode == VideoLibraryLayoutMode.Posters;
@@ -617,7 +627,7 @@ public partial class VideoLibraryPageViewModel : ObservableObject
                 if (string.IsNullOrWhiteSpace(result))
                     continue;
 
-                if (!string.Equals(video.ThumbnailPath, result, StringComparison.OrdinalIgnoreCase))
+                if (IsPersistedGeneratedThumbnailChange(video, result))
                     savedThumbnail = true;
             }
 
@@ -628,10 +638,18 @@ public partial class VideoLibraryPageViewModel : ObservableObject
         {
         }
     }
+
+    private static bool IsPersistedGeneratedThumbnailChange(VideoItem video, string resultPath) =>
+        !string.Equals(video.ThumbnailPath, resultPath, StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(video.PosterPath, resultPath, StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed record VideoLibrarySortOptionItem(
     VideoLibrarySortOption Value,
+    string DisplayName);
+
+public sealed record VideoSmartRuleFieldOption(
+    VideoSmartRuleField Value,
     string DisplayName);
 
 public sealed record VideoLibraryFilterRow(

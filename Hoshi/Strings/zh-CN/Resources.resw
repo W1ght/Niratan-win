@@ -284,6 +284,13 @@
   <data name="ImportVideoButton.ToolTipService.ToolTip" xml:space="preserve"><value>导入视频</value></data>
   <data name="CreateSmartCollectionButton.Label" xml:space="preserve"><value>创建智能合集</value></data>
   <data name="VideoLibrarySmartCollectionName.PlaceholderText" xml:space="preserve"><value>智能合集名称</value></data>
+  <data name="VideoLibrarySmartCollectionRuleField.Header" xml:space="preserve"><value>规则字段</value></data>
+  <data name="VideoLibrarySmartRuleFieldFileName" xml:space="preserve"><value>文件名</value></data>
+  <data name="VideoLibrarySmartRuleFieldParentFolder" xml:space="preserve"><value>父文件夹</value></data>
+  <data name="VideoLibrarySmartRuleFieldPath" xml:space="preserve"><value>完整路径</value></data>
+  <data name="VideoLibrarySmartRuleFieldTag" xml:space="preserve"><value>标签</value></data>
+  <data name="VideoLibrarySmartRuleFieldHasBoundSubtitle" xml:space="preserve"><value>有绑定字幕</value></data>
+  <data name="VideoLibrarySmartRuleFieldPlaybackState" xml:space="preserve"><value>播放状态</value></data>
   <data name="VideoLibrarySmartCollectionRuleValue.PlaceholderText" xml:space="preserve"><value>规则文本</value></data>
   <data name="VideoLibraryCreateSmartCollectionPrimaryButton" xml:space="preserve"><value>创建</value></data>
   <data name="VideoLibraryCreateSmartCollectionSecondaryButton" xml:space="preserve"><value>取消</value></data>
@@ -298,6 +305,11 @@
   <data name="VideoLibrarySortFolder" xml:space="preserve"><value>文件夹</value></data>
   <data name="VideoLibraryViewAll" xml:space="preserve"><value>全部视频</value></data>
   <data name="VideoLibraryViewContinueWatching" xml:space="preserve"><value>继续观看</value></data>
+  <data name="VideoLibraryViewUnwatched" xml:space="preserve"><value>未看</value></data>
+  <data name="VideoLibraryViewFinished" xml:space="preserve"><value>已完成</value></data>
+  <data name="VideoLibraryViewRecent" xml:space="preserve"><value>最近</value></data>
+  <data name="VideoLibraryViewFavorites" xml:space="preserve"><value>收藏</value></data>
+  <data name="VideoLibraryViewNeedsReview" xml:space="preserve"><value>待整理</value></data>
   <data name="VideoLibraryViewWatched" xml:space="preserve"><value>已看</value></data>
   <data name="VideoLibraryViewFolders" xml:space="preserve"><value>文件夹</value></data>
   <data name="VideoLibraryViewCollections" xml:space="preserve"><value>集合</value></data>

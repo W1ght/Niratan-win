@@ -259,15 +259,6 @@
                         <FontIcon Glyph="&#xE768;" />
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem x:Name="VideoLibraryWatchedNavItem"
-                                    x:Uid="VideoLibraryWatchedNavItem"
-                                    AutomationProperties.AutomationId="VideoLibraryWatchedNavItem"
-                                    Content="Watched"
-                                    Tag="Watched">
-                    <NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE930;" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
                 <NavigationViewItem x:Name="VideoLibraryUnwatchedNavItem"
                                     x:Uid="VideoLibraryUnwatchedNavItem"
                                     AutomationProperties.AutomationId="VideoLibraryUnwatchedNavItem"
@@ -543,6 +534,12 @@
                          Header="Name"
                          PlaceholderText="Smart collection name"
                          Text="{Binding SmartCollectionNameDraft, Mode=TwoWay}" />
+                <ComboBox x:Uid="VideoLibrarySmartCollectionRuleField"
+                          Header="Rule field"
+                          DisplayMemberPath="DisplayName"
+                          ItemsSource="{x:Bind ViewModel.AvailableSmartRuleFields, Mode=OneWay}"
+                          SelectedValue="{x:Bind ViewModel.SelectedSmartRuleField, Mode=TwoWay}"
+                          SelectedValuePath="Value" />
                 <TextBox x:Uid="VideoLibrarySmartCollectionRuleValue"
                          Header="Rule"
                          PlaceholderText="Rule text"

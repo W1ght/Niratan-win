@@ -61,6 +61,7 @@ internal sealed class VideoLibraryService : IVideoLibraryService
         return await ExecuteAsync(
             async token =>
             {
+                var fileInfo = new FileInfo(filePath);
                 var video = new VideoItem
                 {
                     Title = Path.GetFileNameWithoutExtension(filePath),
@@ -69,6 +70,8 @@ internal sealed class VideoLibraryService : IVideoLibraryService
                     SourceFolderPath = Path.GetDirectoryName(filePath),
                     PosterPath = FindPosterImage(filePath),
                     CollectionName = GetCollectionName(filePath, Path.GetDirectoryName(filePath)),
+                    FileSizeBytes = fileInfo.Length,
+                    ModifiedAt = fileInfo.LastWriteTimeUtc,
                     ImportedAt = DateTime.UtcNow,
                 };
                 await _dataService.UpsertVideoAsync(video, token);
@@ -152,6 +155,7 @@ internal sealed class VideoLibraryService : IVideoLibraryService
                     SmartRules = [],
                 };
                 await _dataService.UpsertVideoCollectionAsync(collection, token);
+                await _dataService.SetVideoCollectionItemsAsync(collection.Id, collection.ItemIds, token);
                 return Result<VideoCollection>.Success(collection);
             },
             "Error saving video collection",
@@ -388,6 +392,7 @@ internal sealed class VideoLibraryService : IVideoLibraryService
     private static VideoItem CreateVideoItemFromPath(string filePath, string rootPath)
     {
         var directory = Path.GetDirectoryName(filePath);
+        var fileInfo = new FileInfo(filePath);
         return new VideoItem
         {
             Title = Path.GetFileNameWithoutExtension(filePath),
@@ -396,6 +401,8 @@ internal sealed class VideoLibraryService : IVideoLibraryService
             SourceFolderPath = directory,
             PosterPath = FindPosterImage(filePath),
             CollectionName = GetCollectionName(filePath, rootPath),
+            FileSizeBytes = fileInfo.Length,
+            ModifiedAt = fileInfo.LastWriteTimeUtc,
             ImportedAt = DateTime.UtcNow,
         };
     }

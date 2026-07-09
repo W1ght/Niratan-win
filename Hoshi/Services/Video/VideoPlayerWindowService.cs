@@ -55,10 +55,7 @@ internal sealed class VideoPlayerWindowService : IVideoPlayerWindowService
     private void OnWindowClosed(object? sender, WindowEventArgs e)
     {
         if (sender is VideoPlayerWindow window)
-        {
-            window.PlaybackStateSaved -= OnWindowPlaybackStateSaved;
             window.Closed -= OnWindowClosed;
-        }
 
         _window = null;
         _thumbnailService.Resume();
