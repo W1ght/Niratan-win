@@ -12,10 +12,14 @@ internal sealed class Migration_012 : IMigration
 
     public async Task UpAsync(SqliteConnection connection, DbTransaction transaction)
     {
-        await AddColumnIfMissingAsync(connection, transaction, "VideoItems", "FileSizeBytes", "INTEGER NOT NULL DEFAULT 0");
-        await AddColumnIfMissingAsync(connection, transaction, "VideoItems", "ModifiedAt", "TEXT");
-        await AddColumnIfMissingAsync(connection, transaction, "VideoItems", "ThumbnailPath", "TEXT");
-        await AddColumnIfMissingAsync(connection, transaction, "VideoItems", "IsFavorite", "INTEGER NOT NULL DEFAULT 0");
+        var hasVideoItems = await TableExistsAsync(connection, transaction, "VideoItems");
+        if (hasVideoItems)
+        {
+            await AddColumnIfMissingAsync(connection, transaction, "VideoItems", "FileSizeBytes", "INTEGER NOT NULL DEFAULT 0");
+            await AddColumnIfMissingAsync(connection, transaction, "VideoItems", "ModifiedAt", "TEXT");
+            await AddColumnIfMissingAsync(connection, transaction, "VideoItems", "ThumbnailPath", "TEXT");
+            await AddColumnIfMissingAsync(connection, transaction, "VideoItems", "IsFavorite", "INTEGER NOT NULL DEFAULT 0");
+        }
 
         await connection.ExecuteAsync(
             """
@@ -43,11 +47,36 @@ internal sealed class Migration_012 : IMigration
 
             CREATE INDEX IF NOT EXISTS IX_VideoCollectionItems_VideoId
                 ON VideoCollectionItems (VideoId);
+            """,
+            transaction: transaction);
 
+        if (hasVideoItems)
+        {
+            await connection.ExecuteAsync(
+                """
             CREATE INDEX IF NOT EXISTS IX_VideoItems_IsFavorite
                 ON VideoItems (IsFavorite);
             """,
-            transaction: transaction);
+                transaction: transaction);
+        }
+    }
+
+    private static async Task<bool> TableExistsAsync(
+        SqliteConnection connection,
+        DbTransaction transaction,
+        string tableName)
+    {
+        var count = await connection.ExecuteScalarAsync<long>(
+            """
+            SELECT COUNT(*)
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name = @TableName;
+            """,
+            new { TableName = tableName },
+            transaction);
+
+        return count > 0;
     }
 
     private static async Task AddColumnIfMissingAsync(
