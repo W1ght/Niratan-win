@@ -46,15 +46,45 @@ public sealed class VideoItemViewModelTests
     [Fact]
     public void ArtworkPath_PrefersPosterThenThumbnail()
     {
-        new VideoItemViewModel(new VideoItem
+        var posterPath = Path.GetTempFileName();
+        var thumbnailPath = Path.GetTempFileName();
+        try
         {
-            PosterPath = @"D:\poster.jpg",
-            ThumbnailPath = @"D:\thumb.png",
-        }).ArtworkPath.Should().Be(@"D:\poster.jpg");
+            new VideoItemViewModel(new VideoItem
+            {
+                PosterPath = posterPath,
+                ThumbnailPath = thumbnailPath,
+            }).ArtworkPath.Should().Be(posterPath);
 
-        new VideoItemViewModel(new VideoItem
+            new VideoItemViewModel(new VideoItem
+            {
+                ThumbnailPath = thumbnailPath,
+            }).ArtworkPath.Should().Be(thumbnailPath);
+        }
+        finally
         {
-            ThumbnailPath = @"D:\thumb.png",
-        }).ArtworkPath.Should().Be(@"D:\thumb.png");
+            File.Delete(posterPath);
+            File.Delete(thumbnailPath);
+        }
+    }
+
+    [Fact]
+    public void ArtworkPath_FallsBackToExistingThumbnailWhenPosterIsMissing()
+    {
+        var thumbnailPath = Path.GetTempFileName();
+        try
+        {
+            var sut = new VideoItemViewModel(new VideoItem
+            {
+                PosterPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.jpg"),
+                ThumbnailPath = thumbnailPath,
+            });
+
+            sut.ArtworkPath.Should().Be(thumbnailPath);
+        }
+        finally
+        {
+            File.Delete(thumbnailPath);
+        }
     }
 }

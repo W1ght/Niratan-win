@@ -150,6 +150,7 @@ public partial class App : Application
         services.AddSingleton<INotificationService, NotificationService>();
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<IDialogService, DialogService>();
+        services.AddSingleton<IFileRevealService, FileRevealService>();
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IReaderSettingsService, ReaderSettingsService>();
         services.AddSingleton<IProfileService, ProfileService>();

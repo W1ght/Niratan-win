@@ -295,9 +295,22 @@
   <data name="VideoLibraryCreateSmartCollectionPrimaryButton" xml:space="preserve"><value>Create</value></data>
   <data name="VideoLibraryCreateSmartCollectionSecondaryButton" xml:space="preserve"><value>Cancel</value></data>
   <data name="VideoLibraryPreviewMatches" xml:space="preserve"><value>Preview matches</value></data>
+  <data name="VideoLibraryPlayMenuItem.Text" xml:space="preserve"><value>Play</value></data>
+  <data name="VideoLibraryPlayFromBeginningMenuItem.Text" xml:space="preserve"><value>Play from beginning</value></data>
+  <data name="VideoLibraryAddFavoriteMenuItem.Text" xml:space="preserve"><value>Add to favorites</value></data>
+  <data name="VideoLibraryRemoveFavoriteMenuItem.Text" xml:space="preserve"><value>Remove from favorites</value></data>
   <data name="VideoLibraryMarkWatchedMenuItem.Text" xml:space="preserve"><value>Mark watched</value></data>
   <data name="VideoLibraryClearProgressMenuItem.Text" xml:space="preserve"><value>Clear progress</value></data>
+  <data name="VideoLibraryRevealFileMenuItem.Text" xml:space="preserve"><value>Reveal file</value></data>
+  <data name="VideoLibraryAddToNewCollectionMenuItem.Text" xml:space="preserve"><value>Add to new collection</value></data>
   <data name="VideoLibraryDeleteMenuItem.Text" xml:space="preserve"><value>Delete</value></data>
+  <data name="VideoLibraryManualCollectionPromptTitle" xml:space="preserve"><value>New collection</value></data>
+  <data name="VideoLibraryManualCollectionPromptPlaceholder" xml:space="preserve"><value>Collection name</value></data>
+  <data name="VideoLibraryManualCollectionPromptPrimary" xml:space="preserve"><value>Create</value></data>
+  <data name="VideoLibraryManualCollectionCreatedMessage" xml:space="preserve"><value>Collection created.</value></data>
+  <data name="VideoLibraryFavoriteAddedMessage" xml:space="preserve"><value>Added to favorites.</value></data>
+  <data name="VideoLibraryFavoriteRemovedMessage" xml:space="preserve"><value>Removed from favorites.</value></data>
+  <data name="VideoLibraryRevealFileMissingMessage" xml:space="preserve"><value>The video file no longer exists.</value></data>
   <data name="NoVideosText.Text" xml:space="preserve"><value>No videos imported.</value></data>
   <data name="VideoLibrarySortRecent" xml:space="preserve"><value>Recent</value></data>
   <data name="VideoLibrarySortTitle" xml:space="preserve"><value>Title</value></data>

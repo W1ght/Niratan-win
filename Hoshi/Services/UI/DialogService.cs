@@ -35,6 +35,38 @@ internal class DialogService : IDialogService
         return result == ContentDialogResult.Primary;
     }
 
+    public async Task<string?> PromptTextAsync(
+        string title,
+        string placeholder,
+        string primaryButtonText,
+        string secondaryButtonText)
+    {
+        if (_xamlRoot == null)
+            throw new InvalidOperationException("XamlRoot must be initialized.");
+
+        var textBox = new TextBox
+        {
+            PlaceholderText = placeholder,
+            MinWidth = 360,
+        };
+
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = textBox,
+            PrimaryButtonText = primaryButtonText,
+            SecondaryButtonText = secondaryButtonText,
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = _xamlRoot,
+            RequestedTheme = AppTheme,
+        };
+
+        var result = await dialog.ShowAsync();
+        return result == ContentDialogResult.Primary
+            ? textBox.Text
+            : null;
+    }
+
     public async Task<string?> OpenFilePickerAsync(params string[] fileTypeFilters)
     {
         if (_xamlRoot == null)

@@ -23,6 +23,7 @@ public partial class VideoLibraryPageViewModel : ObservableObject
     private readonly INotificationService _notificationService;
     private readonly IVideoPlayerWindowService _playerWindowService;
     private readonly IVideoThumbnailService _thumbnailService;
+    private readonly IFileRevealService _fileRevealService;
     private CancellationTokenSource _cts = new();
     private List<VideoItem> _allVideos = [];
     private List<VideoCollection> _collections = [];
@@ -100,6 +101,7 @@ public partial class VideoLibraryPageViewModel : ObservableObject
     public bool NoVideos => !IsContentLoading && Videos.Count == 0;
     public bool IsListLayout => SelectedLayoutMode == VideoLibraryLayoutMode.List;
     public bool IsPosterLayout => SelectedLayoutMode == VideoLibraryLayoutMode.Posters;
+    public bool IsSmartRuleValueVisible => SelectedSmartRuleField != VideoSmartRuleField.HasBoundSubtitle;
     public bool IsFoldersView => SelectedLibraryView == VideoLibraryView.Folders;
     public bool IsCollectionsView => SelectedLibraryView == VideoLibraryView.Collections;
     public bool IsTagsView => SelectedLibraryView == VideoLibraryView.Tags;
@@ -123,13 +125,15 @@ public partial class VideoLibraryPageViewModel : ObservableObject
         IDialogService dialogService,
         INotificationService notificationService,
         IVideoPlayerWindowService playerWindowService,
-        IVideoThumbnailService videoThumbnailService)
+        IVideoThumbnailService videoThumbnailService,
+        IFileRevealService fileRevealService)
     {
         _videoLibraryService = videoLibraryService;
         _dialogService = dialogService;
         _notificationService = notificationService;
         _playerWindowService = playerWindowService;
         _thumbnailService = videoThumbnailService;
+        _fileRevealService = fileRevealService;
     }
 
     public async Task InitializeAsync()
@@ -192,6 +196,17 @@ public partial class VideoLibraryPageViewModel : ObservableObject
     [RelayCommand]
     private async Task OpenVideoAsync(VideoItemViewModel item)
     {
+        await OpenVideoCoreAsync(item, startFromBeginning: false);
+    }
+
+    [RelayCommand]
+    private async Task OpenVideoFromBeginningAsync(VideoItemViewModel item)
+    {
+        await OpenVideoCoreAsync(item, startFromBeginning: true);
+    }
+
+    private async Task OpenVideoCoreAsync(VideoItemViewModel item, bool startFromBeginning)
+    {
         var result = await _videoLibraryService.MarkOpenedAsync(item.Video.Id, _cts.Token);
         if (!result.IsSuccess && !result.IsCancelled)
         {
@@ -199,8 +214,12 @@ public partial class VideoLibraryPageViewModel : ObservableObject
             return;
         }
 
+        var video = startFromBeginning
+            ? CloneForPlayback(item.Video, lastPositionSeconds: 0)
+            : item.Video;
+
         await _playerWindowService.OpenAsync(
-            item.Video,
+            video,
             Videos.Select(video => video.Video).ToList(),
             _cts.Token);
     }
@@ -242,6 +261,74 @@ public partial class VideoLibraryPageViewModel : ObservableObject
         }
 
         await LoadVideosAsync();
+    }
+
+    [RelayCommand]
+    private async Task ToggleFavoriteAsync(VideoItemViewModel item)
+    {
+        var isFavorite = !item.Video.IsFavorite;
+        var result = await _videoLibraryService.SetFavoriteAsync(item.Video.Id, isFavorite, _cts.Token);
+        if (!result.IsSuccess)
+        {
+            if (!result.IsCancelled)
+                _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+            return;
+        }
+
+        _notificationService.ShowSuccess(ResourceStringHelper.GetString(
+            isFavorite ? "VideoLibraryFavoriteAddedMessage" : "VideoLibraryFavoriteRemovedMessage",
+            isFavorite ? "Added to favorites." : "Removed from favorites."));
+        await LoadVideosAsync();
+    }
+
+    [RelayCommand]
+    private async Task AddToNewCollectionAsync(VideoItemViewModel item)
+    {
+        var name = await _dialogService.PromptTextAsync(
+            ResourceStringHelper.GetString("VideoLibraryManualCollectionPromptTitle", "New collection"),
+            ResourceStringHelper.GetString("VideoLibraryManualCollectionPromptPlaceholder", "Collection name"),
+            ResourceStringHelper.GetString("VideoLibraryManualCollectionPromptPrimary", "Create"),
+            ResourceStringHelper.GetString("VideoLibraryCreateSmartCollectionSecondaryButton", "Cancel"));
+        if (string.IsNullOrWhiteSpace(name))
+            return;
+
+        var result = await _videoLibraryService.CreateManualCollectionAsync(
+            name.Trim(),
+            [item.Video.Id],
+            _cts.Token);
+        if (!result.IsSuccess)
+        {
+            if (!result.IsCancelled)
+                _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+            return;
+        }
+
+        var createdCollection = result.Value!;
+        _notificationService.ShowSuccess(ResourceStringHelper.GetString(
+            "VideoLibraryManualCollectionCreatedMessage",
+            "Collection created."));
+        await LoadVideosAsync();
+
+        SelectedLibraryView = VideoLibraryView.Collections;
+        _activeCollectionId = createdCollection.Id;
+        _activeFolderPath = null;
+        _activeSeriesName = null;
+        _activeTag = null;
+        ApplyVisibleVideos();
+    }
+
+    [RelayCommand]
+    private async Task RevealFileAsync(VideoItemViewModel item)
+    {
+        var result = await _fileRevealService.RevealInFileExplorerAsync(item.Video.FilePath, _cts.Token);
+        if (!result.IsSuccess && !result.IsCancelled)
+        {
+            _notificationService.ShowError(
+                result.Error ?? ResourceStringHelper.GetString(
+                    "VideoLibraryRevealFileMissingMessage",
+                    "The video file no longer exists."),
+                result.ErrorTitle ?? "Error");
+        }
     }
 
     [RelayCommand]
@@ -421,6 +508,12 @@ public partial class VideoLibraryPageViewModel : ObservableObject
         OnPropertyChanged(nameof(IsPosterLayout));
     }
 
+    partial void OnSelectedSmartRuleFieldChanged(VideoSmartRuleField value)
+    {
+        OnPropertyChanged(nameof(IsSmartRuleValueVisible));
+        OnPropertyChanged(nameof(SmartCollectionPreviewRows));
+    }
+
     partial void OnSelectedLibraryViewChanged(VideoLibraryView value)
     {
         CurrentViewTitle = GetViewTitle(value);
@@ -577,11 +670,51 @@ public partial class VideoLibraryPageViewModel : ObservableObject
 
     private IReadOnlyList<VideoSmartRule> BuildSmartRules()
     {
+        if (SelectedSmartRuleField == VideoSmartRuleField.HasBoundSubtitle)
+        {
+            return
+            [
+                new VideoSmartRule
+                {
+                    Field = VideoSmartRuleField.HasBoundSubtitle,
+                    Match = VideoSmartRuleMatch.IsTrue,
+                },
+            ];
+        }
+
         var value = SmartRuleValueDraft.Trim();
         return string.IsNullOrWhiteSpace(value)
             ? []
             : [new VideoSmartRule(SelectedSmartRuleField, value)];
     }
+
+    private static VideoItem CloneForPlayback(VideoItem video, double lastPositionSeconds) =>
+        new()
+        {
+            Id = video.Id,
+            Title = video.Title,
+            FilePath = video.FilePath,
+            SubtitlePath = video.SubtitlePath,
+            ImportedAt = video.ImportedAt,
+            LastOpenedAt = video.LastOpenedAt,
+            LastPositionSeconds = lastPositionSeconds,
+            DurationSeconds = video.DurationSeconds,
+            ManualSortOrder = video.ManualSortOrder,
+            FileSizeBytes = video.FileSizeBytes,
+            ModifiedAt = video.ModifiedAt,
+            SourceFolderPath = video.SourceFolderPath,
+            PosterPath = video.PosterPath,
+            ThumbnailPath = video.ThumbnailPath,
+            Tags = video.Tags,
+            CollectionName = video.CollectionName,
+            IsFavorite = video.IsFavorite,
+            IsWatched = video.IsWatched,
+            SubtitleSelectionKind = video.SubtitleSelectionKind,
+            SubtitleSelectionPath = video.SubtitleSelectionPath,
+            SubtitleSelectionTrackId = video.SubtitleSelectionTrackId,
+            SubtitleSelectionTrackName = video.SubtitleSelectionTrackName,
+            ProfileId = video.ProfileId,
+        };
 
     private bool IsCoveredByAnyCollection(VideoItem video) =>
         _collections.Count == 0

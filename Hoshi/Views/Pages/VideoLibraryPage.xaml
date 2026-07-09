@@ -92,6 +92,25 @@
                     Click="VideoButton_Click">
                 <Button.ContextFlyout>
                     <MenuFlyout>
+                        <MenuFlyoutItem x:Uid="VideoLibraryPlayMenuItem"
+                                        Text="Play"
+                                        Command="{Binding ViewModel.OpenVideoCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                        <MenuFlyoutItem x:Uid="VideoLibraryPlayFromBeginningMenuItem"
+                                        Text="Play from beginning"
+                                        Command="{Binding ViewModel.OpenVideoFromBeginningCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem x:Uid="VideoLibraryAddFavoriteMenuItem"
+                                        Text="Add to favorites"
+                                        Visibility="{x:Bind Video.IsFavorite, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}"
+                                        Command="{Binding ViewModel.ToggleFavoriteCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                        <MenuFlyoutItem x:Uid="VideoLibraryRemoveFavoriteMenuItem"
+                                        Text="Remove from favorites"
+                                        Visibility="{x:Bind Video.IsFavorite, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                        Command="{Binding ViewModel.ToggleFavoriteCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
                         <MenuFlyoutItem x:Uid="VideoLibraryMarkWatchedMenuItem"
                                         Text="Mark watched"
                                         Command="{Binding ViewModel.MarkWatchedCommand, ElementName=ThisPage}"
@@ -99,6 +118,14 @@
                         <MenuFlyoutItem x:Uid="VideoLibraryClearProgressMenuItem"
                                         Text="Clear progress"
                                         Command="{Binding ViewModel.ClearProgressCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                        <MenuFlyoutItem x:Uid="VideoLibraryRevealFileMenuItem"
+                                        Text="Reveal file"
+                                        Command="{Binding ViewModel.RevealFileCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                        <MenuFlyoutItem x:Uid="VideoLibraryAddToNewCollectionMenuItem"
+                                        Text="Add to new collection"
+                                        Command="{Binding ViewModel.AddToNewCollectionCommand, ElementName=ThisPage}"
                                         CommandParameter="{x:Bind}" />
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem x:Uid="VideoLibraryDeleteMenuItem"
@@ -164,6 +191,25 @@
                     Click="VideoButton_Click">
                 <Button.ContextFlyout>
                     <MenuFlyout>
+                        <MenuFlyoutItem x:Uid="VideoLibraryPlayMenuItem"
+                                        Text="Play"
+                                        Command="{Binding ViewModel.OpenVideoCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                        <MenuFlyoutItem x:Uid="VideoLibraryPlayFromBeginningMenuItem"
+                                        Text="Play from beginning"
+                                        Command="{Binding ViewModel.OpenVideoFromBeginningCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem x:Uid="VideoLibraryAddFavoriteMenuItem"
+                                        Text="Add to favorites"
+                                        Visibility="{x:Bind Video.IsFavorite, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}"
+                                        Command="{Binding ViewModel.ToggleFavoriteCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                        <MenuFlyoutItem x:Uid="VideoLibraryRemoveFavoriteMenuItem"
+                                        Text="Remove from favorites"
+                                        Visibility="{x:Bind Video.IsFavorite, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                        Command="{Binding ViewModel.ToggleFavoriteCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
                         <MenuFlyoutItem x:Uid="VideoLibraryMarkWatchedMenuItem"
                                         Text="Mark watched"
                                         Command="{Binding ViewModel.MarkWatchedCommand, ElementName=ThisPage}"
@@ -171,6 +217,14 @@
                         <MenuFlyoutItem x:Uid="VideoLibraryClearProgressMenuItem"
                                         Text="Clear progress"
                                         Command="{Binding ViewModel.ClearProgressCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                        <MenuFlyoutItem x:Uid="VideoLibraryRevealFileMenuItem"
+                                        Text="Reveal file"
+                                        Command="{Binding ViewModel.RevealFileCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                        <MenuFlyoutItem x:Uid="VideoLibraryAddToNewCollectionMenuItem"
+                                        Text="Add to new collection"
+                                        Command="{Binding ViewModel.AddToNewCollectionCommand, ElementName=ThisPage}"
                                         CommandParameter="{x:Bind}" />
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem x:Uid="VideoLibraryDeleteMenuItem"
@@ -207,8 +261,11 @@
                                        Text="{x:Bind ProgressText, Mode=OneWay}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         </Grid>
-                        <TextBlock Text="{x:Bind Video.Title, Mode=OneTime}"
+                        <TextBlock x:Name="VideoPosterTitleText"
+                                   Text="{x:Bind Video.Title, Mode=OneTime}"
                                    TextWrapping="WrapWholeWords"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxLines="2"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBlock Text="{x:Bind FolderName, Mode=OneWay}"
                                    TextTrimming="CharacterEllipsis"
@@ -516,7 +573,7 @@
                                 <ItemsPanelTemplate>
                                     <ItemsWrapGrid Orientation="Horizontal"
                                                    ItemWidth="220"
-                                                   ItemHeight="232" />
+                                                   ItemHeight="260" />
                                 </ItemsPanelTemplate>
                             </GridView.ItemsPanel>
                         </GridView>
@@ -543,6 +600,7 @@
                 <TextBox x:Uid="VideoLibrarySmartCollectionRuleValue"
                          Header="Rule"
                          PlaceholderText="Rule text"
+                         Visibility="{x:Bind ViewModel.IsSmartRuleValueVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}"
                          Text="{Binding SmartRuleValueDraft, Mode=TwoWay}" />
                 <StackPanel Spacing="8">
                     <TextBlock x:Uid="VideoLibraryPreviewMatches"

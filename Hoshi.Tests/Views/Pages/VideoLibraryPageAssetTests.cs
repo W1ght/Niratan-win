@@ -31,6 +31,9 @@ public class VideoLibraryPageAssetTests
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoGridView\"");
         xaml.Should().Contain("x:Key=\"VideoListItemTemplate\"");
         xaml.Should().Contain("x:Key=\"VideoPosterItemTemplate\"");
+        xaml.Should().Contain("x:Name=\"VideoPosterTitleText\"");
+        xaml.Should().Contain("MaxLines=\"2\"");
+        xaml.Should().Contain("ItemHeight=\"260\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"CreateSmartCollectionButton\"");
         xaml.Should().Contain("Command=\"{x:Bind ViewModel.CreateSmartCollectionCommand}\"");
         xaml.Should().Contain("x:Uid=\"VideoLibrarySmartCollectionRuleField\"");
@@ -46,8 +49,13 @@ public class VideoLibraryPageAssetTests
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryCollectionFilters\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryTagFilters\"");
         xaml.Should().Contain("Source=\"{x:Bind ArtworkImage");
+        xaml.Should().Contain("Command=\"{Binding ViewModel.OpenVideoCommand, ElementName=ThisPage}\"");
+        xaml.Should().Contain("Command=\"{Binding ViewModel.OpenVideoFromBeginningCommand, ElementName=ThisPage}\"");
+        xaml.Should().Contain("Command=\"{Binding ViewModel.ToggleFavoriteCommand, ElementName=ThisPage}\"");
         xaml.Should().Contain("Command=\"{Binding ViewModel.MarkWatchedCommand, ElementName=ThisPage}\"");
         xaml.Should().Contain("Command=\"{Binding ViewModel.ClearProgressCommand, ElementName=ThisPage}\"");
+        xaml.Should().Contain("Command=\"{Binding ViewModel.RevealFileCommand, ElementName=ThisPage}\"");
+        xaml.Should().Contain("Command=\"{Binding ViewModel.AddToNewCollectionCommand, ElementName=ThisPage}\"");
     }
 
     [Fact]
@@ -85,8 +93,14 @@ public class VideoLibraryPageAssetTests
             "VideoLibrarySmartCollectionName",
             "VideoLibrarySmartCollectionRuleField",
             "VideoLibrarySmartCollectionRuleValue",
+            "VideoLibraryPlayMenuItem",
+            "VideoLibraryPlayFromBeginningMenuItem",
+            "VideoLibraryAddFavoriteMenuItem",
+            "VideoLibraryRemoveFavoriteMenuItem",
             "VideoLibraryMarkWatchedMenuItem",
             "VideoLibraryClearProgressMenuItem",
+            "VideoLibraryRevealFileMenuItem",
+            "VideoLibraryAddToNewCollectionMenuItem",
             "VideoLibraryDeleteMenuItem",
             "NoVideosText",
         })
@@ -130,9 +144,22 @@ public class VideoLibraryPageAssetTests
             "VideoLibraryCreateSmartCollectionPrimaryButton",
             "VideoLibraryCreateSmartCollectionSecondaryButton",
             "VideoLibraryPreviewMatches",
+            "VideoLibraryPlayMenuItem.Text",
+            "VideoLibraryPlayFromBeginningMenuItem.Text",
+            "VideoLibraryAddFavoriteMenuItem.Text",
+            "VideoLibraryRemoveFavoriteMenuItem.Text",
             "VideoLibraryMarkWatchedMenuItem.Text",
             "VideoLibraryClearProgressMenuItem.Text",
+            "VideoLibraryRevealFileMenuItem.Text",
+            "VideoLibraryAddToNewCollectionMenuItem.Text",
             "VideoLibraryDeleteMenuItem.Text",
+            "VideoLibraryManualCollectionPromptTitle",
+            "VideoLibraryManualCollectionPromptPlaceholder",
+            "VideoLibraryManualCollectionPromptPrimary",
+            "VideoLibraryManualCollectionCreatedMessage",
+            "VideoLibraryFavoriteAddedMessage",
+            "VideoLibraryFavoriteRemovedMessage",
+            "VideoLibraryRevealFileMissingMessage",
             "VideoLibrarySortRecent",
             "VideoLibrarySortTitle",
             "VideoLibrarySortProgress",

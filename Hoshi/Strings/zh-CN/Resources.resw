@@ -295,9 +295,22 @@
   <data name="VideoLibraryCreateSmartCollectionPrimaryButton" xml:space="preserve"><value>创建</value></data>
   <data name="VideoLibraryCreateSmartCollectionSecondaryButton" xml:space="preserve"><value>取消</value></data>
   <data name="VideoLibraryPreviewMatches" xml:space="preserve"><value>匹配预览</value></data>
+  <data name="VideoLibraryPlayMenuItem.Text" xml:space="preserve"><value>播放</value></data>
+  <data name="VideoLibraryPlayFromBeginningMenuItem.Text" xml:space="preserve"><value>从头播放</value></data>
+  <data name="VideoLibraryAddFavoriteMenuItem.Text" xml:space="preserve"><value>加入收藏</value></data>
+  <data name="VideoLibraryRemoveFavoriteMenuItem.Text" xml:space="preserve"><value>取消收藏</value></data>
   <data name="VideoLibraryMarkWatchedMenuItem.Text" xml:space="preserve"><value>标记为已看</value></data>
   <data name="VideoLibraryClearProgressMenuItem.Text" xml:space="preserve"><value>清除进度</value></data>
+  <data name="VideoLibraryRevealFileMenuItem.Text" xml:space="preserve"><value>显示文件位置</value></data>
+  <data name="VideoLibraryAddToNewCollectionMenuItem.Text" xml:space="preserve"><value>加入新集合</value></data>
   <data name="VideoLibraryDeleteMenuItem.Text" xml:space="preserve"><value>删除</value></data>
+  <data name="VideoLibraryManualCollectionPromptTitle" xml:space="preserve"><value>新建集合</value></data>
+  <data name="VideoLibraryManualCollectionPromptPlaceholder" xml:space="preserve"><value>集合名称</value></data>
+  <data name="VideoLibraryManualCollectionPromptPrimary" xml:space="preserve"><value>创建</value></data>
+  <data name="VideoLibraryManualCollectionCreatedMessage" xml:space="preserve"><value>集合已创建。</value></data>
+  <data name="VideoLibraryFavoriteAddedMessage" xml:space="preserve"><value>已加入收藏。</value></data>
+  <data name="VideoLibraryFavoriteRemovedMessage" xml:space="preserve"><value>已取消收藏。</value></data>
+  <data name="VideoLibraryRevealFileMissingMessage" xml:space="preserve"><value>视频文件已不存在。</value></data>
   <data name="NoVideosText.Text" xml:space="preserve"><value>尚未导入视频。</value></data>
   <data name="VideoLibrarySortRecent" xml:space="preserve"><value>最近</value></data>
   <data name="VideoLibrarySortTitle" xml:space="preserve"><value>标题</value></data>

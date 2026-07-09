@@ -48,9 +48,7 @@ public sealed class VideoItemViewModel
 
     public IReadOnlyList<string> TagLabels => SplitTags(Video.Tags);
 
-    public string? ArtworkPath => !string.IsNullOrWhiteSpace(Video.PosterPath)
-        ? Video.PosterPath
-        : Video.ThumbnailPath;
+    public string? ArtworkPath => ExistingPath(Video.PosterPath) ?? ExistingPath(Video.ThumbnailPath);
 
     public BitmapImage? ArtworkImage => LoadPoster(ArtworkPath);
 
@@ -146,4 +144,9 @@ public sealed class VideoItemViewModel
             return null;
         }
     }
+
+    private static string? ExistingPath(string? path) =>
+        !string.IsNullOrWhiteSpace(path) && File.Exists(path)
+            ? path
+            : null;
 }
