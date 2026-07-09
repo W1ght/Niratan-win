@@ -150,6 +150,7 @@ public partial class App : Application
         services.AddSingleton<INotificationService, NotificationService>();
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<IDialogService, DialogService>();
+        services.AddSingleton<IFileRevealService, FileRevealService>();
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IReaderSettingsService, ReaderSettingsService>();
         services.AddSingleton<IProfileService, ProfileService>();
@@ -170,6 +171,7 @@ public partial class App : Application
                 provider.GetRequiredService<ISettingsService>().Current.VideoSettings.MiningHistoryLimit));
         services.AddTransient<IVideoPlaybackEngine, MpvPlaybackEngine>();
         services.AddSingleton<IVideoMiningMediaExtractor, LibMpvVideoMiningMediaExtractor>();
+        services.AddSingleton<IVideoThumbnailService, VideoThumbnailService>();
         services.AddSingleton<IVideoSubtitleTranscriptExtractor, FfmpegVideoSubtitleTranscriptExtractor>();
         services.AddSingleton<IVideoPlayerWindowService, VideoPlayerWindowService>();
         services.AddSingleton<SubtitleParserService>();

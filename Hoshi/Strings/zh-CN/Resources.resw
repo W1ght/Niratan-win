@@ -257,9 +257,89 @@
   <data name="NovelLookupSearchButtonText.Text" xml:space="preserve"><value>搜索</value></data>
   <data name="NovelLookupPopupHint.Text" xml:space="preserve"><value>查词结果使用和阅读器相同的 WebView 弹窗渲染。</value></data>
   <data name="VideoLibraryPageTitle.Text" xml:space="preserve"><value>视频</value></data>
+  <data name="VideoLibrarySecondaryNavigationView.PaneTitle" xml:space="preserve"><value>视频</value></data>
+  <data name="VideoLibrarySectionHeader.Content" xml:space="preserve"><value>媒体库</value></data>
+  <data name="VideoLibraryAllNavItem.Content" xml:space="preserve"><value>全部视频</value></data>
+  <data name="VideoLibraryContinueWatchingNavItem.Content" xml:space="preserve"><value>继续观看</value></data>
+  <data name="VideoLibraryWatchedNavItem.Content" xml:space="preserve"><value>已看</value></data>
+  <data name="VideoLibraryUnwatchedNavItem.Content" xml:space="preserve"><value>未看</value></data>
+  <data name="VideoLibraryFinishedNavItem.Content" xml:space="preserve"><value>已完成</value></data>
+  <data name="VideoLibraryRecentNavItem.Content" xml:space="preserve"><value>最近</value></data>
+  <data name="VideoLibraryNeedsReviewNavItem.Content" xml:space="preserve"><value>待整理</value></data>
+  <data name="VideoLibraryFavoritesNavItem.Content" xml:space="preserve"><value>收藏</value></data>
+  <data name="VideoLibrarySeriesNavItem.Content" xml:space="preserve"><value>系列</value></data>
+  <data name="VideoLibraryOrganizeSectionHeader.Content" xml:space="preserve"><value>整理</value></data>
+  <data name="VideoLibraryFoldersNavItem.Content" xml:space="preserve"><value>文件夹</value></data>
+  <data name="VideoLibraryCollectionsNavItem.Content" xml:space="preserve"><value>集合</value></data>
+  <data name="VideoLibraryTagsNavItem.Content" xml:space="preserve"><value>标签</value></data>
+  <data name="VideoLibraryLayoutList" xml:space="preserve"><value>列表</value></data>
+  <data name="VideoLibraryLayoutPosters" xml:space="preserve"><value>海报</value></data>
+  <data name="VideoLibrarySearchBox.PlaceholderText" xml:space="preserve"><value>搜索视频</value></data>
+  <data name="VideoLibrarySortComboBox.AutomationProperties.Name" xml:space="preserve"><value>排序视频</value></data>
+  <data name="ScanVideoFolderButton.AutomationProperties.Name" xml:space="preserve"><value>扫描文件夹</value></data>
+  <data name="ScanVideoFolderButton.Label" xml:space="preserve"><value>扫描文件夹</value></data>
+  <data name="ScanVideoFolderButton.ToolTipService.ToolTip" xml:space="preserve"><value>扫描文件夹</value></data>
   <data name="ImportVideoButton.AutomationProperties.Name" xml:space="preserve"><value>导入视频</value></data>
+  <data name="ImportVideoButton.Label" xml:space="preserve"><value>导入视频</value></data>
   <data name="ImportVideoButton.ToolTipService.ToolTip" xml:space="preserve"><value>导入视频</value></data>
+  <data name="CreateSmartCollectionButton.Label" xml:space="preserve"><value>创建智能合集</value></data>
+  <data name="VideoLibrarySmartCollectionName.PlaceholderText" xml:space="preserve"><value>智能合集名称</value></data>
+  <data name="VideoLibrarySmartCollectionRuleField.Header" xml:space="preserve"><value>规则字段</value></data>
+  <data name="VideoLibrarySmartRuleFieldFileName" xml:space="preserve"><value>文件名</value></data>
+  <data name="VideoLibrarySmartRuleFieldParentFolder" xml:space="preserve"><value>父文件夹</value></data>
+  <data name="VideoLibrarySmartRuleFieldPath" xml:space="preserve"><value>完整路径</value></data>
+  <data name="VideoLibrarySmartRuleFieldTag" xml:space="preserve"><value>标签</value></data>
+  <data name="VideoLibrarySmartRuleFieldHasBoundSubtitle" xml:space="preserve"><value>有绑定字幕</value></data>
+  <data name="VideoLibrarySmartRuleFieldPlaybackState" xml:space="preserve"><value>播放状态</value></data>
+  <data name="VideoLibrarySmartCollectionRuleValue.PlaceholderText" xml:space="preserve"><value>规则文本</value></data>
+  <data name="VideoLibraryCreateSmartCollectionPrimaryButton" xml:space="preserve"><value>创建</value></data>
+  <data name="VideoLibraryCreateSmartCollectionSecondaryButton" xml:space="preserve"><value>取消</value></data>
+  <data name="VideoLibraryPreviewMatches" xml:space="preserve"><value>匹配预览</value></data>
+  <data name="VideoLibraryPlayMenuItem.Text" xml:space="preserve"><value>播放</value></data>
+  <data name="VideoLibraryPlayFromBeginningMenuItem.Text" xml:space="preserve"><value>从头播放</value></data>
+  <data name="VideoLibraryAddFavoriteMenuItem.Text" xml:space="preserve"><value>加入收藏</value></data>
+  <data name="VideoLibraryRemoveFavoriteMenuItem.Text" xml:space="preserve"><value>取消收藏</value></data>
+  <data name="VideoLibraryMarkWatchedMenuItem.Text" xml:space="preserve"><value>标记为已看</value></data>
+  <data name="VideoLibraryClearProgressMenuItem.Text" xml:space="preserve"><value>清除进度</value></data>
+  <data name="VideoLibraryRevealFileMenuItem.Text" xml:space="preserve"><value>显示文件位置</value></data>
+  <data name="VideoLibraryAddToNewCollectionMenuItem.Text" xml:space="preserve"><value>加入新集合</value></data>
+  <data name="VideoLibraryDeleteMenuItem.Text" xml:space="preserve"><value>删除</value></data>
+  <data name="VideoLibraryManualCollectionPromptTitle" xml:space="preserve"><value>新建集合</value></data>
+  <data name="VideoLibraryManualCollectionPromptPlaceholder" xml:space="preserve"><value>集合名称</value></data>
+  <data name="VideoLibraryManualCollectionPromptPrimary" xml:space="preserve"><value>创建</value></data>
+  <data name="VideoLibraryManualCollectionCreatedMessage" xml:space="preserve"><value>集合已创建。</value></data>
+  <data name="VideoLibraryFavoriteAddedMessage" xml:space="preserve"><value>已加入收藏。</value></data>
+  <data name="VideoLibraryFavoriteRemovedMessage" xml:space="preserve"><value>已取消收藏。</value></data>
+  <data name="VideoLibraryRevealFileMissingMessage" xml:space="preserve"><value>视频文件已不存在。</value></data>
   <data name="NoVideosText.Text" xml:space="preserve"><value>尚未导入视频。</value></data>
+  <data name="VideoLibrarySortRecent" xml:space="preserve"><value>最近</value></data>
+  <data name="VideoLibrarySortTitle" xml:space="preserve"><value>标题</value></data>
+  <data name="VideoLibrarySortProgress" xml:space="preserve"><value>进度</value></data>
+  <data name="VideoLibrarySortFolder" xml:space="preserve"><value>文件夹</value></data>
+  <data name="VideoLibraryViewAll" xml:space="preserve"><value>全部视频</value></data>
+  <data name="VideoLibraryViewContinueWatching" xml:space="preserve"><value>继续观看</value></data>
+  <data name="VideoLibraryViewUnwatched" xml:space="preserve"><value>未看</value></data>
+  <data name="VideoLibraryViewFinished" xml:space="preserve"><value>已完成</value></data>
+  <data name="VideoLibraryViewRecent" xml:space="preserve"><value>最近</value></data>
+  <data name="VideoLibraryViewFavorites" xml:space="preserve"><value>收藏</value></data>
+  <data name="VideoLibraryViewNeedsReview" xml:space="preserve"><value>待整理</value></data>
+  <data name="VideoLibraryViewWatched" xml:space="preserve"><value>已看</value></data>
+  <data name="VideoLibraryViewFolders" xml:space="preserve"><value>文件夹</value></data>
+  <data name="VideoLibraryViewCollections" xml:space="preserve"><value>集合</value></data>
+  <data name="VideoLibraryViewTags" xml:space="preserve"><value>标签</value></data>
+  <data name="VideoLibraryCountFormat" xml:space="preserve"><value>{0} 个视频</value></data>
+  <data name="VideoLibraryImportedMessage" xml:space="preserve"><value>视频已导入。</value></data>
+  <data name="VideoLibraryImportedTitle" xml:space="preserve"><value>视频已导入</value></data>
+  <data name="VideoLibraryFolderScannedMessage" xml:space="preserve"><value>已扫描 {0} 个视频。</value></data>
+  <data name="VideoLibraryFolderScannedTitle" xml:space="preserve"><value>文件夹已扫描</value></data>
+  <data name="VideoLibraryDeleteTitle" xml:space="preserve"><value>删除视频</value></data>
+  <data name="VideoLibraryDeleteMessageFormat" xml:space="preserve"><value>删除“{0}”？这只会从 Hoshi 中移除它。</value></data>
+  <data name="VideoLibraryDeletedMessage" xml:space="preserve"><value>视频已删除。</value></data>
+  <data name="VideoSubtitleStatusNone" xml:space="preserve"><value>无字幕</value></data>
+  <data name="VideoSubtitleStatusAvailable" xml:space="preserve"><value>字幕</value></data>
+  <data name="VideoWatchStatusWatched" xml:space="preserve"><value>已看</value></data>
+  <data name="VideoWatchStatusContinue" xml:space="preserve"><value>继续观看</value></data>
+  <data name="VideoWatchStatusUnwatched" xml:space="preserve"><value>未看</value></data>
   <data name="VideoPlayerRewindButton.AutomationProperties.Name" xml:space="preserve"><value>后退 5 秒</value></data>
   <data name="VideoPlayerRewindButton.Label" xml:space="preserve"><value>后退</value></data>
   <data name="VideoPlayerPlayPauseButton.AutomationProperties.Name" xml:space="preserve"><value>播放或暂停</value></data>
@@ -351,6 +431,10 @@
   <data name="VideoPlayerLookupButton.AutomationProperties.Name" xml:space="preserve"><value>查询字幕</value></data>
   <data name="VideoPlayerLookupButton.Label" xml:space="preserve"><value>查词</value></data>
   <data name="VideoPlayerLookupButton.ToolTipService.ToolTip" xml:space="preserve"><value>查询字幕</value></data>
+  <data name="VideoPlayerStatusFullScreen" xml:space="preserve"><value>全屏</value></data>
+  <data name="VideoPlayerStatusWindowed" xml:space="preserve"><value>窗口模式</value></data>
+  <data name="VideoPlayerRestoredStatus" xml:space="preserve"><value>已恢复到 {0}</value></data>
+  <data name="VideoPlayerRestorePendingStatus" xml:space="preserve"><value>无法确认已恢复到 {0}。播放追上之前不会覆盖原进度。</value></data>
   <data name="ReaderChapterPanelTitle.Text" xml:space="preserve"><value>章节</value></data>
   <data name="ReaderChapterPanelDialog.Title" xml:space="preserve"><value>章节</value></data>
   <data name="ReaderChapterPanelDialog.CloseButtonText" xml:space="preserve"><value>关闭</value></data>

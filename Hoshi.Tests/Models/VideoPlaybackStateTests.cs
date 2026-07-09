@@ -13,6 +13,28 @@ public class VideoPlaybackStateTests
             .BeFalse();
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    public void ShouldPersistProgress_IgnoresNearStartSnapshots(double positionSeconds)
+    {
+        VideoPlaybackState.ShouldPersistProgress(
+                TimeSpan.FromSeconds(positionSeconds),
+                TimeSpan.FromSeconds(2406))
+            .Should()
+            .BeFalse();
+    }
+
+    [Fact]
+    public void ShouldPersistProgress_AllowsMeaningfulPlaybackPosition()
+    {
+        VideoPlaybackState.ShouldPersistProgress(
+                TimeSpan.FromSeconds(10),
+                TimeSpan.FromSeconds(2406))
+            .Should()
+            .BeTrue();
+    }
+
     [Fact]
     public void ResolveRestorePosition_SkipsNearEndProgress()
     {

@@ -12,6 +12,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.System;
+using Hoshi.Helpers;
 using Hoshi.Models;
 using Hoshi.Models.Shortcuts;
 using Hoshi.Services.Video;
@@ -301,6 +302,7 @@ public sealed partial class VideoPlayerWindow
     {
         try
         {
+            _protectedRestoreFloor = null;
             await _playbackEngine.SeekAsync(target);
             ViewModel.UpdatePosition(target, ViewModel.Duration);
             ViewModel.StatusText = $"Seeked to {ViewModel.PositionText}";
@@ -683,7 +685,9 @@ public sealed partial class VideoPlayerWindow
             ? AppWindowPresenterKind.FullScreen
             : AppWindowPresenterKind.Overlapped);
         FullScreenIcon.Glyph = _isFullScreen ? "\uE73F" : "\uE740";
-        ViewModel.StatusText = _isFullScreen ? "Full screen" : "Windowed";
+        ViewModel.StatusText = _isFullScreen
+            ? ResourceStringHelper.GetString("VideoPlayerStatusFullScreen", "Full screen")
+            : ResourceStringHelper.GetString("VideoPlayerStatusWindowed", "Windowed");
         RootGrid.Focus(FocusState.Programmatic);
     }
 
@@ -715,25 +719,68 @@ public sealed partial class VideoPlayerWindow
         }
     }
 
-    private async Task<bool> RestorePlaybackStateIfNeededAsync(VideoItem video, CancellationToken ct = default)
+    private async Task<VideoPlaybackState> LoadPlaybackStateAsync(VideoItem video, CancellationToken ct = default)
+    {
+        if (!ViewModel.RememberPlaybackState)
+            return VideoPlaybackState.FromVideoItem(video);
+
+        var latest = await _videoLibraryService.GetVideoAsync(video.Id, ct);
+        return latest.Value != null
+            ? VideoPlaybackState.FromVideoItem(latest.Value)
+            : VideoPlaybackState.FromVideoItem(video);
+    }
+
+    private async Task<bool> RestorePlaybackStateIfNeededAsync(
+        VideoPlaybackState state,
+        TimeSpan? openedStartPosition,
+        CancellationToken ct = default)
     {
         if (!ViewModel.RememberPlaybackState)
             return false;
 
-        var latest = await _videoLibraryService.GetVideoAsync(video.Id, ct);
-        var state = latest.Value != null
-            ? VideoPlaybackState.FromVideoItem(latest.Value)
-            : VideoPlaybackState.FromVideoItem(video);
-
         var restoredSubtitle = await RestoreSubtitleSelectionAsync(state.SubtitleSelection, ct);
-        var duration = await _playbackEngine.GetDurationAsync(ct);
-        var target = state.ResolveRestorePosition(duration);
+        if (openedStartPosition != null)
+        {
+            var duration = await _playbackEngine.GetDurationAsync(ct);
+            if (duration <= TimeSpan.Zero && state.DurationSeconds > 0)
+                duration = TimeSpan.FromSeconds(state.DurationSeconds);
+
+            ViewModel.UpdatePosition(openedStartPosition.Value, duration);
+            ViewModel.StatusText = ResourceStringHelper.FormatString(
+                "VideoPlayerRestoredStatus",
+                "Restored to {0}",
+                ViewModel.PositionText);
+            return restoredSubtitle;
+        }
+
+        var target = await VideoPlaybackRestoreWaiter.WaitForRestoreTargetAsync(
+            state,
+            _playbackEngine.GetDurationAsync,
+            ct: ct);
         if (target == null)
             return restoredSubtitle;
 
-        await _playbackEngine.SeekAsync(target.Value, ct);
-        ViewModel.UpdatePosition(target.Value, duration);
-        ViewModel.StatusText = $"Restored to {ViewModel.PositionText}";
+        _protectedRestoreFloor = VideoProgressSaveGuard.CreateProtectedRestoreFloor(target.Position);
+        await _playbackEngine.SeekAsync(target.Position, ct);
+        var seekApplied = await VideoPlaybackRestoreWaiter.WaitForSeekPositionAsync(
+            target.Position,
+            _playbackEngine.GetPositionAsync,
+            ct: ct);
+        if (!seekApplied)
+        {
+            ViewModel.StatusText = ResourceStringHelper.FormatString(
+                "VideoPlayerRestorePendingStatus",
+                "Could not verify restore to {0}. Progress will be protected until playback catches up.",
+                VideoMiningContextFactory.FormatTimestamp(target.Position));
+            return restoredSubtitle;
+        }
+
+        _protectedRestoreFloor = null;
+        ViewModel.UpdatePosition(target.Position, target.Duration);
+        ViewModel.StatusText = ResourceStringHelper.FormatString(
+            "VideoPlayerRestoredStatus",
+            "Restored to {0}",
+            ViewModel.PositionText);
         return restoredSubtitle;
     }
 
@@ -773,7 +820,7 @@ public sealed partial class VideoPlayerWindow
 
     private async Task SaveCurrentVideoProgressIfDueAsync(CancellationToken ct = default)
     {
-        if (!ViewModel.RememberPlaybackState || ViewModel.CurrentVideo == null)
+        if (_isOpeningVideo || !ViewModel.RememberPlaybackState || ViewModel.CurrentVideo == null)
             return;
 
         var now = DateTimeOffset.UtcNow;
@@ -786,8 +833,14 @@ public sealed partial class VideoPlayerWindow
 
     private async Task SaveCurrentVideoProgressAsync(CancellationToken ct = default)
     {
-        if (!ViewModel.RememberPlaybackState || ViewModel.CurrentVideo == null)
+        if (_isOpeningVideo || !ViewModel.RememberPlaybackState || ViewModel.CurrentVideo == null)
             return;
+
+        if (!VideoProgressSaveGuard.ShouldSaveProgress(ViewModel.CurrentPosition, _protectedRestoreFloor))
+            return;
+
+        if (_protectedRestoreFloor != null)
+            _protectedRestoreFloor = null;
 
         var selection = ViewModel.GetCurrentSubtitleSelection();
         var shouldPersistProgress = VideoPlaybackState.ShouldPersistProgress(
@@ -893,6 +946,7 @@ public sealed partial class VideoPlayerWindow
                 ProgressSlider.Value,
                 0,
                 Math.Max(0, ViewModel.Duration.TotalSeconds)));
+            _protectedRestoreFloor = null;
             await _playbackEngine.SeekAsync(target);
             ViewModel.UpdatePosition(target, ViewModel.Duration);
             ViewModel.StatusText = $"Seeked to {ViewModel.PositionText}";

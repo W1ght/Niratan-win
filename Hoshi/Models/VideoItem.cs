@@ -13,6 +13,15 @@ public class VideoItem
     public double LastPositionSeconds { get; set; }
     public double DurationSeconds { get; set; }
     public int ManualSortOrder { get; set; }
+    public long FileSizeBytes { get; set; }
+    public DateTime? ModifiedAt { get; set; }
+    public string? SourceFolderPath { get; set; }
+    public string? PosterPath { get; set; }
+    public string? ThumbnailPath { get; set; }
+    public string? Tags { get; set; }
+    public string? CollectionName { get; set; }
+    public bool IsFavorite { get; set; }
+    public bool IsWatched { get; set; }
     public VideoSubtitleSelectionKind SubtitleSelectionKind { get; set; } = VideoSubtitleSelectionKind.None;
     public string? SubtitleSelectionPath { get; set; }
     public int? SubtitleSelectionTrackId { get; set; }

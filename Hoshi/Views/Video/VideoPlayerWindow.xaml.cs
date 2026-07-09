@@ -92,6 +92,7 @@ public sealed partial class VideoPlayerWindow : Window
     private bool _isFullScreen;
     private bool _isScrubbing;
     private bool _isTicking;
+    private bool _isOpeningVideo;
     private bool _isInspectorOpen;
     private bool _isUpdatingVolume;
     private bool _isUpdatingPlaybackSpeed;
@@ -112,11 +113,14 @@ public sealed partial class VideoPlayerWindow : Window
     private bool _isSubtitleWebViewInitialized;
     private bool _isSubtitleWebViewReady;
     private bool _isAutoPlayingNextEpisode;
+    private TimeSpan? _protectedRestoreFloor;
     private DateTimeOffset _lastProgressSaveAt = DateTimeOffset.MinValue;
     private int _subtitleMaskBlurRenderGeneration;
     private VideoInspectorTab _selectedInspectorTab = VideoInspectorTab.SubtitleList;
 
     public VideoPlayerViewModel ViewModel { get; }
+
+    internal event EventHandler? PlaybackStateSaved;
 
     public VideoPlayerWindow()
     {
@@ -258,32 +262,50 @@ public sealed partial class VideoPlayerWindow : Window
         _pendingVideo = null;
         _pendingPlaylist = null;
         await SaveCurrentVideoProgressAsync(ct);
-        await ViewModel.LoadVideoAsync(video, ct);
-        MaximizeVideoWindowForTesting();
-        ViewModel.ReplaceEpisodes(playlist, video);
-        await _videoLibraryService.MarkOpenedAsync(video.Id, ct);
-        _isAutoPlayingNextEpisode = false;
-        _lastProgressSaveAt = DateTimeOffset.MinValue;
-        await _playbackEngine.OpenAsync(video.FilePath, video.SubtitlePath, ct);
-        await _playbackEngine.SetPlaybackSpeedAsync(ViewModel.PlaybackSpeed, ct);
-        await _playbackEngine.SetAudioDelayAsync(TimeSpan.FromSeconds(ViewModel.AudioDelaySeconds), ct);
-        await _playbackEngine.SetSubtitleDelayAsync(TimeSpan.FromMilliseconds(ViewModel.SubtitleDelayMilliseconds), ct);
-        await _playbackEngine.SetFileLoopEnabledAsync(ViewModel.LoopFileEnabled, ct);
-        await _playbackEngine.SetABLoopAsync(ViewModel.ABLoop, ct);
-        await _playbackEngine.SetAspectRatioAsync(ViewModel.AspectRatioValue, ct);
-        await _playbackEngine.SetVideoRotationAsync(ViewModel.VideoRotationDegrees, ct);
-        await ApplyVideoEnhancementAsync(ct);
-        await RefreshChaptersAsync(ct);
-        await RefreshMediaTracksAsync(string.IsNullOrWhiteSpace(video.SubtitlePath), ct);
-        var restoredSubtitle = await RestorePlaybackStateIfNeededAsync(video, ct);
-        if (!restoredSubtitle && string.IsNullOrWhiteSpace(video.SubtitlePath))
-            await SelectInitialEmbeddedSubtitleTrackAsync(ct);
+        _isOpeningVideo = true;
+        _protectedRestoreFloor = null;
+        try
+        {
+            var restoreState = await LoadPlaybackStateAsync(video, ct);
+            var restoreStartPosition = ViewModel.RememberPlaybackState
+                ? restoreState.ResolveRestorePosition(TimeSpan.Zero)
+                : null;
+            if (restoreStartPosition != null)
+                _protectedRestoreFloor = VideoProgressSaveGuard.CreateProtectedRestoreFloor(restoreStartPosition.Value);
 
-        _isPaused = false;
-        _isLookupPopupVisible = false;
-        PlayPauseIcon.Glyph = "\uE769";
-        ApplySubtitleAppearance();
-        UpdateSubtitleControlAvailability();
+            await ViewModel.LoadVideoAsync(video, ct);
+            MaximizeVideoWindowForTesting();
+            ViewModel.ReplaceEpisodes(playlist, video);
+            await _videoLibraryService.MarkOpenedAsync(video.Id, ct);
+            _isAutoPlayingNextEpisode = false;
+            _lastProgressSaveAt = DateTimeOffset.UtcNow;
+            await _playbackEngine.SetPausedAsync(true, ct);
+            await _playbackEngine.OpenAsync(video.FilePath, video.SubtitlePath, restoreStartPosition, ct);
+            await _playbackEngine.SetPlaybackSpeedAsync(ViewModel.PlaybackSpeed, ct);
+            await _playbackEngine.SetAudioDelayAsync(TimeSpan.FromSeconds(ViewModel.AudioDelaySeconds), ct);
+            await _playbackEngine.SetSubtitleDelayAsync(TimeSpan.FromMilliseconds(ViewModel.SubtitleDelayMilliseconds), ct);
+            await _playbackEngine.SetFileLoopEnabledAsync(ViewModel.LoopFileEnabled, ct);
+            await _playbackEngine.SetABLoopAsync(ViewModel.ABLoop, ct);
+            await _playbackEngine.SetAspectRatioAsync(ViewModel.AspectRatioValue, ct);
+            await _playbackEngine.SetVideoRotationAsync(ViewModel.VideoRotationDegrees, ct);
+            await ApplyVideoEnhancementAsync(ct);
+            await RefreshChaptersAsync(ct);
+            await RefreshMediaTracksAsync(string.IsNullOrWhiteSpace(video.SubtitlePath), ct);
+            var restoredSubtitle = await RestorePlaybackStateIfNeededAsync(restoreState, restoreStartPosition, ct);
+            if (!restoredSubtitle && string.IsNullOrWhiteSpace(video.SubtitlePath))
+                await SelectInitialEmbeddedSubtitleTrackAsync(ct);
+
+            await _playbackEngine.SetPausedAsync(false, ct);
+            _isPaused = false;
+            _isLookupPopupVisible = false;
+            PlayPauseIcon.Glyph = "\uE769";
+            ApplySubtitleAppearance();
+            UpdateSubtitleControlAvailability();
+        }
+        finally
+        {
+            _isOpeningVideo = false;
+        }
     }
 
     private async void LookupCurrentSubtitleButton_Click(object sender, RoutedEventArgs e)
@@ -816,35 +838,42 @@ public sealed partial class VideoPlayerWindow : Window
         (overlay ?? _popupOverlay)?.UpdateRootSize(PopupOverlayCanvas.ActualWidth, PopupOverlayCanvas.ActualHeight);
     }
 
-    private void OnClosed(object sender, WindowEventArgs args)
+    private async void OnClosed(object sender, WindowEventArgs args)
     {
         _positionTimer.Stop();
-        _ = SaveCurrentVideoProgressAsync();
-        CancelEmbeddedTranscriptLoad();
-        InspectorSubtitleListContent.TranscriptSelected -= InspectorSubtitleListContent_TranscriptSelected;
-        InspectorSubtitleListContent.SetABLoopStartRequested -= InspectorSubtitleListContent_SetABLoopStartRequested;
-        InspectorSubtitleListContent.SetABLoopEndRequested -= InspectorSubtitleListContent_SetABLoopEndRequested;
-        ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
-        ViewModel.TranscriptVisibleRows.CollectionChanged -= TranscriptVisibleRows_CollectionChanged;
-        foreach (var row in _subscribedTranscriptRows)
-            row.PropertyChanged -= TranscriptRow_PropertyChanged;
-        _subscribedTranscriptRows.Clear();
-        BottomChromePopup.IsOpen = false;
-        SubtitleWebView.GotFocus -= SubtitleWebView_GotFocus;
-        if (SubtitleWebView.CoreWebView2 != null)
-            SubtitleWebView.CoreWebView2.WebMessageReceived -= OnSubtitleWebMessageReceived;
-        if (_popupOverlay != null)
-            _popupOverlay.Dismissed -= PopupOverlay_Dismissed;
-        _popupOverlay?.Dispose();
-        _popupOverlay = null;
-        _subtitleTranscriptLoadCoordinator.Dispose();
-        _playbackEngine.Dispose();
-
-        if (_videoHwnd != IntPtr.Zero)
+        try
         {
-            RemoveWindowSubclass(_videoHwnd, _videoHostSubclassProc, VideoHostSubclassId);
-            DestroyWindow(_videoHwnd);
-            _videoHwnd = IntPtr.Zero;
+            await SaveCurrentVideoProgressAsync();
+            PlaybackStateSaved?.Invoke(this, EventArgs.Empty);
+        }
+        finally
+        {
+            CancelEmbeddedTranscriptLoad();
+            InspectorSubtitleListContent.TranscriptSelected -= InspectorSubtitleListContent_TranscriptSelected;
+            InspectorSubtitleListContent.SetABLoopStartRequested -= InspectorSubtitleListContent_SetABLoopStartRequested;
+            InspectorSubtitleListContent.SetABLoopEndRequested -= InspectorSubtitleListContent_SetABLoopEndRequested;
+            ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
+            ViewModel.TranscriptVisibleRows.CollectionChanged -= TranscriptVisibleRows_CollectionChanged;
+            foreach (var row in _subscribedTranscriptRows)
+                row.PropertyChanged -= TranscriptRow_PropertyChanged;
+            _subscribedTranscriptRows.Clear();
+            BottomChromePopup.IsOpen = false;
+            SubtitleWebView.GotFocus -= SubtitleWebView_GotFocus;
+            if (SubtitleWebView.CoreWebView2 != null)
+                SubtitleWebView.CoreWebView2.WebMessageReceived -= OnSubtitleWebMessageReceived;
+            if (_popupOverlay != null)
+                _popupOverlay.Dismissed -= PopupOverlay_Dismissed;
+            _popupOverlay?.Dispose();
+            _popupOverlay = null;
+            _subtitleTranscriptLoadCoordinator.Dispose();
+            _playbackEngine.Dispose();
+
+            if (_videoHwnd != IntPtr.Zero)
+            {
+                RemoveWindowSubclass(_videoHwnd, _videoHostSubclassProc, VideoHostSubclassId);
+                DestroyWindow(_videoHwnd);
+                _videoHwnd = IntPtr.Zero;
+            }
         }
     }
 
