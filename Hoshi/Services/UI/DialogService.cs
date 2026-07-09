@@ -52,4 +52,18 @@ internal class DialogService : IDialogService
         var file = await picker.PickSingleFileAsync();
         return file?.Path;
     }
+
+    public async Task<string?> OpenFolderPickerAsync()
+    {
+        if (_xamlRoot == null)
+            throw new InvalidOperationException("XamlRoot must be initialized.");
+
+        var picker = new FolderPicker(_xamlRoot.ContentIslandEnvironment.AppWindowId)
+        {
+            SuggestedStartLocation = PickerLocationId.VideosLibrary,
+        };
+
+        var folder = await picker.PickSingleFolderAsync();
+        return folder?.Path;
+    }
 }

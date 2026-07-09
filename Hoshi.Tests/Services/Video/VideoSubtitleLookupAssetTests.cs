@@ -512,12 +512,49 @@ public class VideoSubtitleLookupAssetTests
         windowCode.Should().NotContain("case VirtualKey.Left");
         windowCode.Should().Contain("RestorePlaybackStateIfNeededAsync");
         windowCode.Should().Contain("SaveCurrentVideoProgressAsync");
+        windowCode.Should().Contain("_isOpeningVideo");
+        windowCode.Should().Contain("VideoProgressSaveGuard.ShouldSaveProgress");
+        windowCode.Should().Contain("WaitForSeekPositionAsync");
         windowCode.Should().Contain("TryAutoPlayNextEpisodeAsync");
         windowCode.Should().Contain("SavePlaybackStateAsync");
         windowCode.Should().Contain("RememberPlaybackState");
         windowCode.Should().Contain("AutoPlayNextEpisode");
         windowCode.Should().NotContain("SeekStepSeconds");
         windowCode.Should().NotContain("VideoControlBarLayout");
+    }
+
+    [Fact]
+    public void VideoPlayerWindow_PausesPlaybackUntilRestoreSeekIsApplied()
+    {
+        var windowCode = ReadVideoPlayerWindowMainCode();
+        var methodStart = windowCode.IndexOf(
+            "private async Task OpenPendingVideoAsync",
+            StringComparison.Ordinal);
+        var methodEnd = windowCode.IndexOf(
+            "private async void LookupCurrentSubtitleButton_Click",
+            methodStart,
+            StringComparison.Ordinal);
+        var methodCode = windowCode[methodStart..methodEnd];
+
+        var pauseBeforeOpen = methodCode.IndexOf(
+            "await _playbackEngine.SetPausedAsync(true, ct);",
+            StringComparison.Ordinal);
+        var openVideo = methodCode.IndexOf(
+            "await _playbackEngine.OpenAsync(video.FilePath, video.SubtitlePath, restoreStartPosition, ct);",
+            StringComparison.Ordinal);
+        var restorePlayback = methodCode.IndexOf(
+            "var restoredSubtitle = await RestorePlaybackStateIfNeededAsync(restoreState, restoreStartPosition, ct);",
+            StringComparison.Ordinal);
+        var resumeAfterRestore = methodCode.IndexOf(
+            "await _playbackEngine.SetPausedAsync(false, ct);",
+            StringComparison.Ordinal);
+
+        methodCode.Should().Contain("var restoreState = await LoadPlaybackStateAsync(video, ct);");
+        methodCode.Should().Contain("var restoreStartPosition = ViewModel.RememberPlaybackState");
+        methodCode.Should().Contain("restoreState.ResolveRestorePosition(TimeSpan.Zero)");
+        pauseBeforeOpen.Should().BeGreaterThanOrEqualTo(0);
+        pauseBeforeOpen.Should().BeLessThan(openVideo);
+        resumeAfterRestore.Should().BeGreaterThan(restorePlayback);
     }
 
     [Fact]
