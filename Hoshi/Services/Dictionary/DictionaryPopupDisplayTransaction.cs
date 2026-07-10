@@ -48,6 +48,16 @@ internal sealed class DictionaryPopupDisplayTransaction
         return true;
     }
 
+    public bool TryAbortCommit(long generation)
+    {
+        if (CommitInFlightGeneration != generation)
+            return false;
+
+        CommitInFlightGeneration = null;
+        _pendingTraceId = null;
+        return true;
+    }
+
     public bool CancelPending(long generation, string? traceId)
     {
         if (_pendingGeneration != generation)

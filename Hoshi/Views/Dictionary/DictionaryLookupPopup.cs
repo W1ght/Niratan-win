@@ -93,16 +93,16 @@ public sealed class DictionaryLookupPopup : IDisposable
     private readonly IAudioService _audioService;
     private readonly IAnkiService _ankiService;
     private readonly DictionaryPopupDisplayTransaction _displayTransaction = new();
+    private readonly DictionaryPopupWarmCoordinator _warmCoordinator = new();
     private AnkiMiningContext _miningContext = new();
     private AnkiMiningContext _nextMiningContext = new();
     private SasayakiPopupControls? _sasayakiPopupControls;
     private AudioSettings _audioSettings = new();
     private AnkiSettings _ankiSettings = new();
     private DictionaryPopupNativeContext? _stagedNativeContext;
-    private DictionaryPopupShowRequest? _queuedShowRequest;
+    private readonly DictionaryPopupLatestRequestQueue<DictionaryPopupShowRequest> _queuedShowRequests = new();
     private bool _isCompletingContentReady;
     private bool _webViewReady;
-    private bool _isWarmed;
     private long _displayGeneration;
     private long? _pendingContentGeneration;
     private CancellationToken _pendingContentCancellationToken;
@@ -114,6 +114,7 @@ public sealed class DictionaryLookupPopup : IDisposable
 
     private const int MaxResolvedAudioUrlCacheEntries = 512;
     private const string AudioSourcePlaceholderPattern = "[^/?#&]+";
+    private static readonly TimeSpan PopupCommitTimeout = TimeSpan.FromSeconds(2);
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> s_resolvedAudioUrls = new(StringComparer.Ordinal);
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<Task<string?>>> s_audioResolutionTasks = new(StringComparer.Ordinal);
     private static readonly HttpClient s_audioResolveHttpClient = new() { Timeout = TimeSpan.FromSeconds(5) };
@@ -122,7 +123,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     private CancellationTokenSource? _deferredResultsCts;
 
     public Border VisualRoot { get; }
-    public bool IsWarmed => _isWarmed;
+    public bool IsWarmed => _warmCoordinator.IsWarm;
     public bool HasCommittedContent => _displayTransaction.HasCommittedContent;
 
     public DictionaryLookupPopup()
@@ -320,17 +321,29 @@ public sealed class DictionaryLookupPopup : IDisposable
         SetPopupCornerRadius(8);
     }
 
-    public async Task WarmAsync(
+    public Task WarmAsync(
         ThemeMode themeMode = ThemeMode.System,
         AudioSettings? audioSettings = null,
         AnkiSettings? ankiSettings = null,
         string? traceId = null)
     {
-        if (_isWarmed) return;
-        ApplySurfaceTheme(themeMode);
-        var sw = Stopwatch.StartNew();
         var normalizedAudioSettings = audioSettings ?? new AudioSettings();
         var normalizedAnkiSettings = ankiSettings ?? new AnkiSettings();
+        return _warmCoordinator.EnsureWarmAsync(() => WarmCoreAsync(
+            themeMode,
+            normalizedAudioSettings,
+            normalizedAnkiSettings,
+            traceId));
+    }
+
+    private async Task WarmCoreAsync(
+        ThemeMode themeMode,
+        AudioSettings audioSettings,
+        AnkiSettings ankiSettings,
+        string? traceId)
+    {
+        ApplySurfaceTheme(themeMode);
+        var sw = Stopwatch.StartNew();
 
         await EnsureWebViewAsync();
         Log.Information(
@@ -339,15 +352,14 @@ public sealed class DictionaryLookupPopup : IDisposable
         _shellReadyCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         _contentWebView.CoreWebView2.NavigateToString(_htmlGenerator.GenerateShellHtml(
             themeMode,
-            audioSettings: normalizedAudioSettings,
-            ankiSettings: normalizedAnkiSettings,
+            audioSettings: audioSettings,
+            ankiSettings: ankiSettings,
             hidden: true));
         Log.Information(
             "[LookupTrace] trace={TraceId} popup warm NavigateToString returned in {Ms}ms",
             traceId ?? "-", sw.ElapsedMilliseconds);
         await WaitForShellReadyAsync();
         await ApplyPopupCornerRadiusToWebViewAsync();
-        _isWarmed = true;
         Log.Information("[DictPopup] Warm WebView2 initialized in {Ms}ms", sw.ElapsedMilliseconds);
     }
 
@@ -416,7 +428,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         if (_displayTransaction.CommitInFlightGeneration is not null
             || _isCompletingContentReady)
         {
-            _queuedShowRequest = request;
+            _queuedShowRequests.Replace(request);
             return;
         }
 
@@ -429,7 +441,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         var sw = Stopwatch.StartNew();
         CancelPrefetch();
         CancelDeferredResults();
-        if (!_isWarmed)
+        if (!IsWarmed)
         {
             await WarmAsync(
                 request.ThemeMode,
@@ -442,7 +454,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         if (_displayTransaction.CommitInFlightGeneration is not null
             || _isCompletingContentReady)
         {
-            _queuedShowRequest = request;
+            _queuedShowRequests.Replace(request);
             return;
         }
 
@@ -607,7 +619,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         Log.Information("[Lifecycle] Popup hidden: wasGen={Gen}", _displayGeneration);
         CancelPrefetch();
         CancelDeferredResults();
-        _queuedShowRequest = null;
+        _queuedShowRequests.Clear();
         _stagedNativeContext = null;
         _displayTransaction.Dismiss();
         _displayGeneration++;
@@ -706,9 +718,7 @@ public sealed class DictionaryLookupPopup : IDisposable
             CoreWebView2WebResourceContext.All);
         coreWebView.WebResourceRequested += OnPopupWebResourceRequested;
 
-        coreWebView.ProcessFailed += (_, args) =>
-            Log.Error("[DictPopup] WebView2 ProcessFailed: Kind={Kind}, ExitCode={ExitCode}, Reason={Reason}",
-                args.ProcessFailedKind, args.ExitCode, args.Reason);
+        coreWebView.ProcessFailed += OnPopupWebViewProcessFailed;
 
         try
         {
@@ -724,6 +734,48 @@ public sealed class DictionaryLookupPopup : IDisposable
         }
 
         _webViewReady = true;
+    }
+
+    private void OnPopupWebViewProcessFailed(
+        CoreWebView2 sender,
+        CoreWebView2ProcessFailedEventArgs args)
+    {
+        Log.Error(
+            "[DictPopup] WebView2 ProcessFailed: Kind={Kind}, ExitCode={ExitCode}, Reason={Reason}",
+            args.ProcessFailedKind,
+            args.ExitCode,
+            args.Reason);
+        _warmCoordinator.Reset();
+        _shellReadyCompletion?.TrySetException(
+            new InvalidOperationException("Dictionary popup WebView2 process failed."));
+
+        var acceptedAtFailure = _displayTransaction.CommitInFlightGeneration;
+        if (_contentWebView.DispatcherQueue.TryEnqueue(() =>
+        {
+            if (_displayTransaction.CommitInFlightGeneration is long acceptedGeneration)
+            {
+                AbortAcceptedCommit(acceptedGeneration);
+                return;
+            }
+
+            if (_pendingContentGeneration is long pendingGeneration)
+            {
+                var traceId = _stagedNativeContext?.Generation == pendingGeneration
+                    ? _stagedNativeContext.TraceId
+                    : null;
+                if (_displayTransaction.CancelPending(pendingGeneration, traceId))
+                {
+                    ClearPendingGeneration(pendingGeneration);
+                    _ = ProcessQueuedShowAsync();
+                }
+            }
+        }))
+        {
+            return;
+        }
+
+        if (acceptedAtFailure is long generation)
+            _displayTransaction.TryAbortCommit(generation);
     }
 
     private async void OnPopupWebResourceRequested(
@@ -980,8 +1032,7 @@ public sealed class DictionaryLookupPopup : IDisposable
                         || !_displayTransaction.TryAcceptCommit(preparedGeneration))
                         break;
 
-                    _ = _contentWebView.CoreWebView2.ExecuteScriptAsync(
-                        $"window.hoshiCommitPopupRender?.({preparedGeneration});");
+                    _ = ObservePopupCommitAsync(preparedGeneration);
                     break;
 
                 case "contentReady":
@@ -997,38 +1048,7 @@ public sealed class DictionaryLookupPopup : IDisposable
                     }
 
                     _contentWebView.DispatcherQueue.TryEnqueue(() =>
-                    {
-                        if (_displayTransaction.CommitInFlightGeneration != readyGeneration
-                            || _stagedNativeContext is not { } context
-                            || context.Generation != readyGeneration)
-                            return;
-
-                        _isCompletingContentReady = true;
-                        try
-                        {
-                            if (!_displayTransaction.TryCompleteCommit(readyGeneration, out var commit))
-                                return;
-
-                            PromoteNativeContext(context);
-                            ShowReadyContent();
-                            ContentReady?.Invoke(this, EventArgs.Empty);
-                            if (_displayTransaction.CommittedGeneration != readyGeneration)
-                                return;
-                            if (_displayTransaction.PendingGeneration is not null
-                                || _displayGeneration != readyGeneration)
-                                return;
-                            ContentCommitted?.Invoke(
-                                this,
-                                new DictionaryPopupContentCommittedEventArgs(
-                                    commit.Generation,
-                                    commit.TraceId));
-                        }
-                        finally
-                        {
-                            _isCompletingContentReady = false;
-                            _ = ProcessQueuedShowAsync();
-                        }
-                    });
+                        CompleteAcceptedCommit(readyGeneration));
                     break;
 
                 case "popupDiagnostic":
@@ -1221,7 +1241,13 @@ public sealed class DictionaryLookupPopup : IDisposable
 
         var completed = await Task.WhenAny(readyTask, Task.Delay(TimeSpan.FromSeconds(3)));
         if (!ReferenceEquals(completed, readyTask))
+        {
             Log.Warning("[DictPopup] Shell ready timed out; continuing with existing WebView2 document");
+        }
+        else
+        {
+            await readyTask;
+        }
 
         _shellReadyCompletion = null;
     }
@@ -1234,6 +1260,133 @@ public sealed class DictionaryLookupPopup : IDisposable
         VisualRoot.Visibility = Visibility.Visible;
         VisualRoot.Opacity = _readyOpacity;
         VisualRoot.IsHitTestVisible = true;
+    }
+
+    private Task ObservePopupCommitAsync(long generation)
+    {
+        return DictionaryPopupCommitCoordinator.ObserveAsync(
+            generation,
+            async () =>
+            {
+                var core = _contentWebView.CoreWebView2
+                    ?? throw new InvalidOperationException("Dictionary popup WebView2 is unavailable.");
+                var raw = await core.ExecuteScriptAsync(
+                    $"window.hoshiCommitPopupRender?.({generation}) ?? false;");
+                return JsonSerializer.Deserialize<bool>(raw);
+            },
+            async () =>
+            {
+                var core = _contentWebView.CoreWebView2
+                    ?? throw new InvalidOperationException("Dictionary popup WebView2 is unavailable.");
+                var raw = await core.ExecuteScriptAsync(
+                    "window.hoshiGetCommittedPopupGeneration?.() ?? null;");
+                return JsonSerializer.Deserialize<long?>(raw);
+            },
+            async () =>
+            {
+                var core = _contentWebView.CoreWebView2
+                    ?? throw new InvalidOperationException("Dictionary popup WebView2 is unavailable.");
+                await core.ExecuteScriptAsync(
+                    $"window.hoshiDiscardPopupRender?.({generation}) ?? false;");
+            },
+            resolution => EnqueueCommitResolution(generation, resolution),
+            PopupCommitTimeout);
+    }
+
+    private void EnqueueCommitResolution(
+        long generation,
+        DictionaryPopupCommitResolution resolution)
+    {
+        if (_contentWebView.DispatcherQueue.TryEnqueue(() =>
+            ResolveCommitResolution(generation, resolution)))
+        {
+            return;
+        }
+
+        // The UI dispatcher is gone. Release exact native ownership so a
+        // future host instance or recovery path cannot inherit a stuck commit.
+        _displayTransaction.TryAbortCommit(generation);
+        _warmCoordinator.Reset();
+    }
+
+    private void ResolveCommitResolution(
+        long generation,
+        DictionaryPopupCommitResolution resolution)
+    {
+        if (resolution is DictionaryPopupCommitResolution.Committed
+            or DictionaryPopupCommitResolution.ReconciledCommitted)
+        {
+            CompleteAcceptedCommit(generation);
+            return;
+        }
+
+        if (resolution == DictionaryPopupCommitResolution.RendererUnavailable)
+            _warmCoordinator.Reset();
+        AbortAcceptedCommit(generation);
+    }
+
+    private void CompleteAcceptedCommit(long generation)
+    {
+        if (_displayTransaction.CommittedGeneration == generation)
+            return;
+        if (_displayTransaction.CommitInFlightGeneration != generation
+            || _stagedNativeContext is not { } context
+            || context.Generation != generation)
+        {
+            return;
+        }
+
+        _isCompletingContentReady = true;
+        try
+        {
+            if (!_displayTransaction.TryCompleteCommit(generation, out var commit))
+                return;
+
+            PromoteNativeContext(context);
+            ShowReadyContent();
+            ContentReady?.Invoke(this, EventArgs.Empty);
+            if (_displayTransaction.CommittedGeneration != generation)
+                return;
+            if (_displayTransaction.PendingGeneration is not null
+                || _displayGeneration != generation)
+                return;
+            ContentCommitted?.Invoke(
+                this,
+                new DictionaryPopupContentCommittedEventArgs(
+                    commit.Generation,
+                    commit.TraceId));
+        }
+        finally
+        {
+            _isCompletingContentReady = false;
+            _ = ProcessQueuedShowAsync();
+        }
+    }
+
+    private void AbortAcceptedCommit(long generation)
+    {
+        if (!_displayTransaction.TryAbortCommit(generation))
+            return;
+
+        ClearPendingGeneration(generation);
+        if (!_displayTransaction.HasCommittedContent)
+        {
+            VisualRoot.Opacity = 0;
+            VisualRoot.IsHitTestVisible = false;
+        }
+        _ = ProcessQueuedShowAsync();
+    }
+
+    private void ClearPendingGeneration(long generation)
+    {
+        if (_pendingContentGeneration == generation)
+        {
+            _pendingContentGeneration = null;
+            _pendingContentCancellationToken = default;
+            _pendingContentStopwatch = null;
+        }
+        if (_stagedNativeContext?.Generation == generation)
+            _stagedNativeContext = null;
     }
 
     private void PromoteNativeContext(DictionaryPopupNativeContext context)
@@ -1250,27 +1403,28 @@ public sealed class DictionaryLookupPopup : IDisposable
 
     private async Task ProcessQueuedShowAsync()
     {
-        var request = _queuedShowRequest;
-        _queuedShowRequest = null;
-        if (request is null || request.CancellationToken.IsCancellationRequested)
+        if (!_queuedShowRequests.TryTake(
+                request => !request.CancellationToken.IsCancellationRequested,
+                out var request))
             return;
+        var queuedRequest = request!;
 
         try
         {
-            await ShowResultsWarmCoreAsync(request);
+            await ShowResultsWarmCoreAsync(queuedRequest);
         }
-        catch (OperationCanceledException) when (request.CancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (queuedRequest.CancellationToken.IsCancellationRequested)
         {
             Log.Debug(
                 "[LookupTrace] trace={TraceId} queued popup show cancelled",
-                request.TraceId ?? "-");
+                queuedRequest.TraceId ?? "-");
         }
         catch (Exception ex)
         {
             Log.Warning(
                 ex,
                 "[LookupTrace] trace={TraceId} queued popup show failed",
-                request.TraceId ?? "-");
+                queuedRequest.TraceId ?? "-");
         }
     }
 
@@ -1740,6 +1894,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         {
             _contentWebView.CoreWebView2.WebMessageReceived -= OnPopupWebMessageReceived;
             _contentWebView.CoreWebView2.WebResourceRequested -= OnPopupWebResourceRequested;
+            _contentWebView.CoreWebView2.ProcessFailed -= OnPopupWebViewProcessFailed;
         }
         _contentWebView.Close();
     }

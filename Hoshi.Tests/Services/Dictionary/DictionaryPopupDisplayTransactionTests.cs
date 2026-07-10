@@ -77,4 +77,23 @@ public class DictionaryPopupDisplayTransactionTests
         commit.Should().Be(new DictionaryPopupContentCommit(11, "accepted"));
         state.CommittedGeneration.Should().Be(11);
     }
+
+    [Fact]
+    public void TryAbortCommit_RequiresExactInFlightGeneration_AndPreservesCommit()
+    {
+        var state = new DictionaryPopupDisplayTransaction();
+        state.BeginPending(1, "committed");
+        state.TryAcceptCommit(1);
+        state.TryCompleteCommit(1, out _);
+        state.BeginPending(2, "accepted");
+        state.TryAcceptCommit(2);
+
+        state.TryAbortCommit(1).Should().BeFalse();
+        state.CommitInFlightGeneration.Should().Be(2);
+        state.TryAbortCommit(2).Should().BeTrue();
+
+        state.CommitInFlightGeneration.Should().BeNull();
+        state.CommittedGeneration.Should().Be(1);
+        state.HasCommittedContent.Should().BeTrue();
+    }
 }

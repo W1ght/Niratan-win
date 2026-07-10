@@ -1595,6 +1595,18 @@ window.hoshiCancelPopupRender = function (expectedGeneration) {
   return true;
 };
 
+window.hoshiGetCommittedPopupGeneration = function () {
+  var generation = window.popupRenderGeneration;
+  return Number.isSafeInteger(generation) ? generation : null;
+};
+
+window.hoshiDiscardPopupRender = function (expectedGeneration) {
+  var pending = window.hoshiPendingPopupRender;
+  if (!pending || pending.generation !== expectedGeneration) return false;
+  window.hoshiPendingPopupRender = null;
+  return true;
+};
+
 window.hoshiAppendResults = function (entries, finalCount, expectedGeneration) {
   var pending = window.hoshiPendingPopupRender;
   if (pending && pending.generation === expectedGeneration)
