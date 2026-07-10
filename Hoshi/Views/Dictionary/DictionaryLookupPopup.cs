@@ -378,7 +378,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         var ranges = DictionaryPopupBatchPlanner.Create(results.Count);
         var initialRange = ranges[0];
         var initialResults = results.GetRange(initialRange.Offset, initialRange.Count);
-        var generation = PrepareForPendingContent(cancellationToken);
+        var generation = PrepareForPendingContent(cancellationToken, traceId);
         generationStarted?.Invoke(generation);
         _pendingContentStopwatch = Stopwatch.StartNew();
         var serializeSw = Stopwatch.StartNew();
@@ -403,7 +403,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         await _contentWebView.CoreWebView2.ExecuteScriptAsync(injectionScript);
         if (cancellationToken.IsCancellationRequested)
         {
-            CancelPendingContent(traceId);
+            CancelPendingContent(generation, traceId);
             cancellationToken.ThrowIfCancellationRequested();
         }
         Log.Information(
@@ -535,20 +535,20 @@ public sealed class DictionaryLookupPopup : IDisposable
         VisualRoot.IsHitTestVisible = false;
     }
 
-    public void CancelPendingContent(string? traceId)
+    public void CancelPendingContent(long generation, string? traceId)
     {
-        var generation = _pendingContentGeneration;
-        if (!_displayTransaction.CancelPending(traceId))
+        if (_pendingContentGeneration != generation
+            || !_displayTransaction.CancelPending(generation, traceId))
             return;
 
         _pendingContentGeneration = null;
         _pendingContentCancellationToken = default;
         _pendingContentStopwatch = null;
 
-        if (generation is long value && _contentWebView.CoreWebView2 is not null)
+        if (_contentWebView.CoreWebView2 is not null)
         {
             _ = _contentWebView.CoreWebView2.ExecuteScriptAsync(
-                $"window.hoshiCancelPopupRender?.({value});");
+                $"window.hoshiCancelPopupRender?.({generation});");
         }
 
         if (!_displayTransaction.HasCommittedContent)
@@ -876,6 +876,24 @@ public sealed class DictionaryLookupPopup : IDisposable
                     _shellReadyCompletion?.TrySetResult(true);
                     break;
 
+                case "contentPrepared":
+                    Log.Information("[DictPopup] Content prepared: {Payload}", payload.GetRawText());
+                    if (!IsCurrentContentReady(payload))
+                    {
+                        Log.Debug("[DictPopup] Ignored stale contentPrepared: {Payload}", payload.GetRawText());
+                        break;
+                    }
+
+                    var preparedGeneration = _pendingContentGeneration!.Value;
+                    if (!CanShowReadyContent(preparedGeneration)
+                        || _displayTransaction.PendingGeneration != preparedGeneration
+                        || _contentWebView.CoreWebView2 is null)
+                        break;
+
+                    _ = _contentWebView.CoreWebView2.ExecuteScriptAsync(
+                        $"window.hoshiCommitPopupRender?.({preparedGeneration});");
+                    break;
+
                 case "contentReady":
                     Log.Information("[DictPopup] Content ready: {Payload}", payload.GetRawText());
                     Log.Information(
@@ -896,6 +914,8 @@ public sealed class DictionaryLookupPopup : IDisposable
 
                         ShowReadyContent();
                         ContentReady?.Invoke(this, EventArgs.Empty);
+                        if (_displayTransaction.CommittedGeneration != readyGeneration)
+                            return;
                         ContentCommitted?.Invoke(
                             this,
                             new DictionaryPopupContentCommittedEventArgs(
@@ -1064,7 +1084,9 @@ public sealed class DictionaryLookupPopup : IDisposable
             details);
     }
 
-    private long PrepareForPendingContent(CancellationToken cancellationToken)
+    private long PrepareForPendingContent(
+        CancellationToken cancellationToken,
+        string? traceId)
     {
         var generation = ++_displayGeneration;
         _pendingContentGeneration = generation;
@@ -1072,7 +1094,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         _pendingContentStopwatch = null;
         var preserveCommittedContent = _displayTransaction.BeginPending(
             generation,
-            _currentTraceId);
+            traceId);
 
         if (!preserveCommittedContent)
         {

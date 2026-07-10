@@ -1203,7 +1203,7 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.js")
         );
 
-        popupJs.Should().Contain("container.addEventListener('click'");
+        popupJs.Should().Contain("liveContainer.addEventListener('click'");
         popupJs.Should().Contain("lookupAtPopupPoint(e.clientX, e.clientY, true");
         popupJs.Should().Contain("document.addEventListener('mousemove'");
         popupJs.Should().Contain("lookupAtPopupPoint(e.clientX, e.clientY, false, 'shift')");
@@ -1706,6 +1706,7 @@ public class NovelReaderWebAssetTests
         popupJs.Should().Contain("generation !== (window.popupRenderGeneration || 0)");
         popupJs.Should().Contain("document.documentElement.style.visibility = 'hidden'");
         popupJs.Should().Contain("document.documentElement.style.visibility = 'visible'");
+        popupJs.Should().Contain("postPopupMessage('contentPrepared', { generation: generation })");
         popupJs.Should().Contain("postPopupMessage('contentReady', { generation: generation })");
         popupJs.Split(
                 "postPopupMessage('contentReady', { generation: generation });",
@@ -1727,8 +1728,24 @@ public class NovelReaderWebAssetTests
         code.Should().Contain("EventHandler<DictionaryPopupContentCommittedEventArgs>? ContentCommitted");
         code.Should().Contain("var preserveCommittedContent = _displayTransaction.BeginPending(");
         code.Should().Contain("if (!preserveCommittedContent)");
-        code.Should().Contain("public void CancelPendingContent(string? traceId)");
+        code.Should().Contain("case \"contentPrepared\":");
+        code.Should().Contain("window.hoshiCommitPopupRender");
+        code.Should().Contain("public void CancelPendingContent(long generation, string? traceId)");
         code.Should().Contain("window.hoshiCancelPopupRender");
+        code.Should().Contain("PrepareForPendingContent(cancellationToken, traceId)");
+        code.Should().Contain("private long PrepareForPendingContent(");
+        code.Should().Contain("string? traceId)");
+        code.Should().Contain("_displayTransaction.CommittedGeneration != readyGeneration");
+
+        var legacyReady = code.IndexOf("ContentReady?.Invoke(this, EventArgs.Empty);", StringComparison.Ordinal);
+        var ownershipRecheck = code.IndexOf(
+            "_displayTransaction.CommittedGeneration != readyGeneration",
+            legacyReady,
+            StringComparison.Ordinal);
+        var committedEvent = code.IndexOf("ContentCommitted?.Invoke(", legacyReady, StringComparison.Ordinal);
+        legacyReady.Should().BeGreaterThanOrEqualTo(0);
+        ownershipRecheck.Should().BeGreaterThan(legacyReady);
+        committedEvent.Should().BeGreaterThan(ownershipRecheck);
     }
 
     [Fact]
@@ -1813,14 +1830,48 @@ public class NovelReaderWebAssetTests
         var js = File.ReadAllText(
             Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.js"));
 
+        js.Should().Contain("function capturePopupRuntime()");
+        js.Should().Contain("function applyPopupRuntime(runtime)");
+        js.Should().Contain("window.hoshiStagePopupRender = function (pendingPayload)");
         js.Should().Contain("var liveContainer = document.getElementById('entries-container');");
         js.Should().Contain("var stagingContainer = document.createElement('div');");
+        js.Should().Contain("postPopupMessage('contentPrepared', { generation: generation })");
+        js.Should().Contain("window.hoshiCommitPopupRender = function (expectedGeneration)");
         js.Should().Contain("liveContainer.replaceChildren.apply(liveContainer");
         js.Should().Contain("window.hoshiCancelPopupRender = function (expectedGeneration)");
+        js.Should().Contain("window.hoshiPendingPopupRender");
+        js.Should().Contain("function attachPopupInteractionHandlers()");
 
-        var start = js.IndexOf("window.hoshiInjectResults = function", StringComparison.Ordinal);
-        var end = js.IndexOf("function snapshot()", start, StringComparison.Ordinal);
-        js[start..end].Should().NotContain("container.innerHTML = ''");
+        var stageStart = js.IndexOf("window.hoshiStagePopupRender = function", StringComparison.Ordinal);
+        var commitStart = js.IndexOf("window.hoshiCommitPopupRender = function", stageStart, StringComparison.Ordinal);
+        var stage = js[stageStart..commitStart];
+        stage.Should().NotContain("closeOverlay()");
+        stage.Should().NotContain("backStack.length = 0");
+        stage.Should().NotContain("forwardStack.length = 0");
+        stage.Should().NotContain("selectedDictionaries = {}");
+        stage.Should().NotContain("audioUrls = {}");
+        stage.Should().NotContain("innerHTML = ''");
+
+        var generator = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Services", "Dictionary", "PopupHtmlGenerator.cs"));
+        var injectionStart = generator.IndexOf("public string GenerateInjectionScript", StringComparison.Ordinal);
+        var injectionEnd = generator.IndexOf("public string GenerateAppendResultsScript", injectionStart, StringComparison.Ordinal);
+        var injection = generator[injectionStart..injectionEnd];
+        injection.Should().Contain("window.hoshiStagePopupRender({");
+        injection.Should().NotContain("document.documentElement.setAttribute");
+        injection.Should().NotContain("document.documentElement.style.setProperty");
+        injection.Should().NotContain("window.dictionaryStyles =");
+        injection.Should().NotContain("window.lookupEntries =");
+        injection.Should().NotContain("window.audioSources =");
+        injection.Should().NotContain("window.useAnkiConnect =");
+
+        var prepared = js.IndexOf("postPopupMessage('contentPrepared', { generation: generation });", StringComparison.Ordinal);
+        var ready = js.IndexOf("postPopupMessage('contentReady', { generation: generation });", StringComparison.Ordinal);
+        var attachHandlers = js.IndexOf("attachPopupInteractionHandlers();", prepared, StringComparison.Ordinal);
+        prepared.Should().BeGreaterThanOrEqualTo(0);
+        attachHandlers.Should().BeGreaterThan(prepared);
+        ready.Should().BeGreaterThan(prepared);
+        attachHandlers.Should().BeLessThan(ready);
     }
 
     [Fact]

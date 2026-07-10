@@ -91,7 +91,8 @@ public class DictionaryLookupServiceTests
             [first], [], renderGeneration: 7, totalResultCount: 2);
         var append = generator.GenerateAppendResultsScript([deferred], 2, 7);
 
-        initial.Should().Contain("window.entryCount = 2;");
+        initial.Should().Contain("entryCount: 2,");
+        initial.Should().Contain("window.hoshiStagePopupRender({");
         initial.Should().Contain("first");
         initial.Should().NotContain("deferred");
         append.Should().Contain("window.hoshiAppendResults");
@@ -110,7 +111,7 @@ public class DictionaryLookupServiceTests
 
         script.Should().Contain("window.hoshiAppendResults = function");
         script.Should().Contain("expectedGeneration !== generation");
-        script.Should().Contain("Array.prototype.push.apply(window.lookupEntries, entries)");
+        script.Should().Contain("Array.prototype.push.apply(lookupEntries, entries)");
         script.Should().Contain("renderAvailableEntries()");
     }
 
@@ -161,7 +162,8 @@ public class DictionaryLookupServiceTests
         darkHtml.Should().Contain("--background-color: #000000;");
         darkHtml.Should().Contain("background-color: var(--background-color);");
         darkHtml.Should().NotContain("--background-color: #2b2b2b;");
-        darkInjection.Should().Contain("document.documentElement.style.setProperty('--background-color', '#000000');");
+        darkInjection.Should().Contain("backgroundColor: '#000000'");
+        darkInjection.Should().NotContain("document.documentElement.style.setProperty");
         lightHtml.Should().Contain("--background-color: #FFFFFF;");
         lightHtml.Should().NotContain("--background-color: #f3f3f3;");
     }
