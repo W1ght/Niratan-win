@@ -379,7 +379,6 @@ public sealed partial class NovelReaderPage : Page
         UpdateStatisticsButtonVisibility();
         RefreshReaderDisplayChrome();
         RefreshReaderStatisticsChrome();
-        StartStatisticsForAutostart(StatisticsAutostartMode.On);
         Log.Information(
             "[NovelReader] Restoring position: chapter {Chapter}, progress {Progress:F3}",
             initialChapterIndex,
@@ -1162,16 +1161,14 @@ public sealed partial class NovelReaderPage : Page
                     break;
                 case "restoreCompleted":
                     Log.Information("[NovelReader] Restore completed");
+                    StartStatisticsForAutostart(StatisticsAutostartMode.On);
                     break;
                 case "pageChanged":
                     var payload = root.GetProperty("payload");
                     var progress = payload.GetProperty("progress").GetDouble();
                     var direction = payload.GetProperty("direction").GetString();
                     var result = payload.GetProperty("result").GetString();
-                    ViewModel.UpdateProgress(progress);
-                    _currentProgress = progress;
-                    StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
-                    ViewModel.SaveProgressDebounced();
+                    var previousProgress = ViewModel.Progress;
 
                     Log.Information(
                         "[NovelReader] Page changed: direction={Dir}, result={Result}, progress={Progress:F3}",
@@ -1180,14 +1177,40 @@ public sealed partial class NovelReaderPage : Page
                         progress
                     );
 
-                    if (result == "limit")
+                    if (ReaderStatisticsEventClassifier.IsActualPageMovement(
+                        result,
+                        previousProgress,
+                        progress))
                     {
-                        if (direction == "forward")
-                            LoadChapter(ViewModel.CurrentChapterIndex + 1);
-                        else if (direction == "backward")
-                            LoadChapter(ViewModel.CurrentChapterIndex - 1);
+                        ViewModel.UpdateProgress(progress);
+                        _currentProgress = progress;
+                        StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
+                        await ViewModel.SaveProgressNowAsync(flushStatistics: false);
+                        await ViewModel.CheckpointReadingAsync(
+                            ReaderStatisticsCheckpointReason.ReadingMovement);
                     }
-                    else if (payload.TryGetProperty("state", out var pageState))
+                    else
+                    {
+                        var adjacentTarget = ReaderStatisticsEventClassifier.AdjacentChapterTarget(
+                            result,
+                            direction,
+                            ViewModel.CurrentChapterIndex,
+                            ViewModel.ChapterCount);
+                        if (adjacentTarget.HasValue)
+                        {
+                            ViewModel.UpdateProgress(progress);
+                            _currentProgress = progress;
+                            StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
+                            await ViewModel.SaveProgressNowAsync(flushStatistics: false);
+                            await ViewModel.CheckpointReadingAsync(
+                                ReaderStatisticsCheckpointReason.AdjacentChapter);
+                            LoadChapter(adjacentTarget.Value);
+                            await ViewModel.SaveProgressNowAsync(flushStatistics: false);
+                        }
+                    }
+
+                    if (!string.Equals(result, "limit", StringComparison.Ordinal)
+                        && payload.TryGetProperty("state", out var pageState))
                     {
                         await CaptureReaderArtifactsAsync(pageState.GetRawText());
                     }
@@ -3151,6 +3174,13 @@ public sealed partial class NovelReaderPage : Page
             }
 
             progress = Math.Clamp(progress, 0, 1);
+            if (!ReaderStatisticsEventClassifier.HasProgressMovement(
+                ViewModel.Progress,
+                progress))
+            {
+                return false;
+            }
+
             StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
             _currentProgress = progress;
             ViewModel.UpdateProgress(progress);
@@ -3169,6 +3199,14 @@ public sealed partial class NovelReaderPage : Page
         var target = ResolveSasayakiJumpTarget(match);
         if (target == null)
             return false;
+
+        if (target.ChapterIndex == ViewModel.CurrentChapterIndex
+            && !ReaderStatisticsEventClassifier.HasProgressMovement(
+                ViewModel.Progress,
+                target.ChapterProgress))
+        {
+            return false;
+        }
 
         StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
         LoadChapter(target.ChapterIndex, target.ChapterProgress);
