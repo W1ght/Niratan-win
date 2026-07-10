@@ -5,8 +5,10 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
+using Hoshi.Helpers;
 using Hoshi.ViewModels.Components;
 using Hoshi.ViewModels.Pages;
+using Hoshi.Views.Dialogs;
 
 namespace Hoshi.Views.Pages;
 
@@ -68,11 +70,55 @@ public sealed partial class NovelLibraryPage : Page
             await ViewModel.ImportDroppedNovelsCommand.ExecuteAsync(filePaths);
     }
 
-    private async void NovelBookGridView_DragItemsCompleted(
-        ListViewBase sender,
-        DragItemsCompletedEventArgs args)
+    private async void ShelfManagementButton_Click(object sender, RoutedEventArgs e)
     {
-        if (args.DropResult == DataPackageOperation.Move)
-            await ViewModel.SaveCurrentManualOrderCommand.ExecuteAsync(null);
+        await NovelShelfManagementDialog.ShowAsync(XamlRoot);
+        await ViewModel.InitializeAsync();
     }
+
+    private async void MoveNovelToShelfMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as MenuFlyoutItem)?.Tag is not NovelBookItemViewModel novelItem)
+            return;
+
+        var targets = ViewModel.RailSections
+            .Where(section => !section.IsDerived)
+            .Select(section => new NovelShelfTarget(section.DisplayName, section.DisplayName))
+            .Prepend(new NovelShelfTarget(
+                ResourceStringHelper.GetString(
+                    "NovelShelfUnshelvedLabel/Text",
+                    "Unshelved"),
+                null))
+            .ToList();
+        var targetPicker = new ComboBox
+        {
+            ItemsSource = targets,
+            DisplayMemberPath = nameof(NovelShelfTarget.DisplayName),
+            SelectedIndex = 0,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = ResourceStringHelper.GetString(
+                "NovelBookMoveDialog/Title",
+                "Move to shelf"),
+            Content = targetPicker,
+            PrimaryButtonText = ResourceStringHelper.GetString(
+                "NovelBookMoveDialog/PrimaryButtonText",
+                "Move"),
+            CloseButtonText = ResourceStringHelper.GetString(
+                "NovelBookMoveDialog/CloseButtonText",
+                "Cancel"),
+            DefaultButton = ContentDialogButton.Primary,
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary
+            && targetPicker.SelectedItem is NovelShelfTarget target)
+        {
+            await ViewModel.MoveBookCommand.ExecuteAsync(
+                new NovelBookShelfMoveRequest(novelItem.Book.Id, target.ShelfName));
+        }
+    }
+
+    private sealed record NovelShelfTarget(string DisplayName, string? ShelfName);
 }

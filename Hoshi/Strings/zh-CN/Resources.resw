@@ -738,4 +738,29 @@
   <data name="TtuSyncUploadBooksToggle.Header" xml:space="preserve"><value>上传书籍</value></data>
   <data name="TtuSyncUploadBooksToggle.Description" xml:space="preserve"><value>远端没有 ッツ 书籍数据时，首次同步上传书籍数据</value></data>
   <data name="AboutSettingsPageTitle.Text" xml:space="preserve"><value>关于</value></data>
+  <data name="NovelShelfReadingLabel.Text" xml:space="preserve"><value>阅读中</value></data>
+  <data name="NovelShelfUnshelvedLabel.Text" xml:space="preserve"><value>未归档</value></data>
+  <data name="NovelShelfGoogleDriveLabel.Text" xml:space="preserve"><value>Google Drive</value></data>
+  <data name="NovelShelfManageButton.Label" xml:space="preserve"><value>管理书架</value></data>
+  <data name="NovelShelfManageButton.AutomationProperties.Name" xml:space="preserve"><value>管理书架</value></data>
+  <data name="NovelShelfManagementDialog.Title" xml:space="preserve"><value>管理书架</value></data>
+  <data name="NovelShelfManagementDialog.CloseButtonText" xml:space="preserve"><value>关闭</value></data>
+  <data name="NovelShelfNameBox.Header" xml:space="preserve"><value>新建书架</value></data>
+  <data name="NovelShelfNameBox.PlaceholderText" xml:space="preserve"><value>书架名称</value></data>
+  <data name="NovelShelfRenameBox.Header" xml:space="preserve"><value>所选书架</value></data>
+  <data name="NovelShelfCreateButton.Content" xml:space="preserve"><value>创建</value></data>
+  <data name="NovelShelfRenameButton.Content" xml:space="preserve"><value>重命名</value></data>
+  <data name="NovelShelfDeleteButton.Content" xml:space="preserve"><value>删除</value></data>
+  <data name="NovelBookMoveToShelfMenuItem.Text" xml:space="preserve"><value>移动到书架…</value></data>
+  <data name="NovelStorageWarningInfoBar.Title" xml:space="preserve"><value>书籍元数据需要处理</value></data>
+  <data name="NovelStorageWarningInfoBar.Message" xml:space="preserve"><value>部分书籍元数据无法读取，原始文件已保留。</value></data>
+  <data name="NovelShelfDeleteConfirmation.Title" xml:space="preserve"><value>删除书架</value></data>
+  <data name="NovelShelfDeleteConfirmation.Content" xml:space="preserve"><value>删除“{0}”？其中的书籍将变为未归档。</value></data>
+  <data name="NovelShelfDeleteConfirmation.PrimaryButtonText" xml:space="preserve"><value>删除</value></data>
+  <data name="NovelShelfDeleteConfirmation.CloseButtonText" xml:space="preserve"><value>取消</value></data>
+  <data name="NovelShelfConfirmDeleteButton.Content" xml:space="preserve"><value>删除</value></data>
+  <data name="NovelShelfCancelDeleteButton.Content" xml:space="preserve"><value>取消</value></data>
+  <data name="NovelBookMoveDialog.Title" xml:space="preserve"><value>移动到书架</value></data>
+  <data name="NovelBookMoveDialog.PrimaryButtonText" xml:space="preserve"><value>移动</value></data>
+  <data name="NovelBookMoveDialog.CloseButtonText" xml:space="preserve"><value>取消</value></data>
 </root>
