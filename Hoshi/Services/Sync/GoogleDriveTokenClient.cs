@@ -26,12 +26,14 @@ public sealed class GoogleDriveTokenClient
 
     public async Task<GoogleDriveCredentials> ExchangeCodeAsync(
         string clientId,
+        string clientSecret,
         string code,
         string redirectUri,
         string codeVerifier,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(clientId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(clientSecret);
         ArgumentException.ThrowIfNullOrWhiteSpace(code);
         ArgumentException.ThrowIfNullOrWhiteSpace(redirectUri);
         ArgumentException.ThrowIfNullOrWhiteSpace(codeVerifier);
@@ -40,6 +42,7 @@ public sealed class GoogleDriveTokenClient
             new Dictionary<string, string>
             {
                 ["client_id"] = clientId,
+                ["client_secret"] = clientSecret,
                 ["code"] = code,
                 ["code_verifier"] = codeVerifier,
                 ["grant_type"] = "authorization_code",
@@ -50,7 +53,7 @@ public sealed class GoogleDriveTokenClient
         if (string.IsNullOrWhiteSpace(response.RefreshToken))
             throw new InvalidOperationException("Google did not return a refresh token.");
 
-        return ToCredentials(response, clientId, response.RefreshToken);
+        return ToCredentials(response, clientId, clientSecret, response.RefreshToken);
     }
 
     public async Task<GoogleDriveCredentials> RefreshAsync(
@@ -59,16 +62,22 @@ public sealed class GoogleDriveTokenClient
     {
         ArgumentNullException.ThrowIfNull(credentials);
 
-        var response = await PostTokenAsync(
-            new Dictionary<string, string>
-            {
-                ["client_id"] = credentials.ClientId,
-                ["grant_type"] = "refresh_token",
-                ["refresh_token"] = credentials.RefreshToken,
-            },
-            ct);
+        var clientSecret = credentials.ClientSecret ?? "";
+        var form = new Dictionary<string, string>
+        {
+            ["client_id"] = credentials.ClientId,
+            ["grant_type"] = "refresh_token",
+            ["refresh_token"] = credentials.RefreshToken,
+        };
+        if (!string.IsNullOrWhiteSpace(clientSecret))
+            form["client_secret"] = clientSecret;
 
-        return ToCredentials(response, credentials.ClientId, response.RefreshToken ?? credentials.RefreshToken);
+        var response = await PostTokenAsync(form, ct);
+        return ToCredentials(
+            response,
+            credentials.ClientId,
+            clientSecret,
+            response.RefreshToken ?? credentials.RefreshToken);
     }
 
     private async Task<TokenResponse> PostTokenAsync(
@@ -95,6 +104,7 @@ public sealed class GoogleDriveTokenClient
     private static GoogleDriveCredentials ToCredentials(
         TokenResponse response,
         string clientId,
+        string clientSecret,
         string refreshToken)
     {
         var expiresIn = response.ExpiresIn > 0 ? response.ExpiresIn : 3600;
@@ -103,7 +113,8 @@ public sealed class GoogleDriveTokenClient
             refreshToken,
             clientId,
             DateTimeOffset.UtcNow.AddSeconds(expiresIn),
-            string.IsNullOrWhiteSpace(response.Scope) ? DriveFileScope : response.Scope);
+            string.IsNullOrWhiteSpace(response.Scope) ? DriveFileScope : response.Scope,
+            clientSecret);
     }
 
     private sealed class TokenResponse

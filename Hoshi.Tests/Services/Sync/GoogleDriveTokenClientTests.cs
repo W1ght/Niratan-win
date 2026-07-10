@@ -27,6 +27,7 @@ public sealed class GoogleDriveTokenClientTests
 
         var credentials = await client.ExchangeCodeAsync(
             "1234567890-abcdef.apps.googleusercontent.com",
+            "desktop-client-secret",
             "authorization-code",
             "http://127.0.0.1:49152/",
             "code-verifier",
@@ -35,6 +36,7 @@ public sealed class GoogleDriveTokenClientTests
         handler.LastRequest!.RequestUri.Should().Be(GoogleDriveTokenClient.TokenEndpoint);
         handler.LastRequest.Method.Should().Be(HttpMethod.Post);
         handler.LastBody.Should().Contain("grant_type=authorization_code");
+        handler.LastBody.Should().Contain("client_secret=desktop-client-secret");
         handler.LastBody.Should().Contain("code=authorization-code");
         handler.LastBody.Should().Contain("redirect_uri=http%3A%2F%2F127.0.0.1%3A49152%2F");
         handler.LastBody.Should().Contain("code_verifier=code-verifier");
@@ -43,7 +45,8 @@ public sealed class GoogleDriveTokenClientTests
             RefreshToken: "refresh-1",
             ClientId: "1234567890-abcdef.apps.googleusercontent.com",
             ExpiresAtUtc: credentials.ExpiresAtUtc,
-            Scope: "https://www.googleapis.com/auth/drive.file"));
+            Scope: "https://www.googleapis.com/auth/drive.file",
+            ClientSecret: "desktop-client-secret"));
         credentials.ExpiresAtUtc.Should().BeAfter(DateTimeOffset.UtcNow.AddMinutes(50));
     }
 
@@ -56,7 +59,8 @@ public sealed class GoogleDriveTokenClientTests
             RefreshToken: "refresh-1",
             ClientId: "1234567890-abcdef.apps.googleusercontent.com",
             ExpiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(-5),
-            Scope: GoogleDriveTokenClient.DriveFileScope);
+            Scope: GoogleDriveTokenClient.DriveFileScope,
+            ClientSecret: "desktop-client-secret");
         var handler = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = JsonContent("""
@@ -74,11 +78,41 @@ public sealed class GoogleDriveTokenClientTests
 
         handler.LastRequest!.RequestUri.Should().Be(GoogleDriveTokenClient.TokenEndpoint);
         handler.LastBody.Should().Contain("grant_type=refresh_token");
+        handler.LastBody.Should().Contain("client_secret=desktop-client-secret");
         handler.LastBody.Should().Contain("refresh_token=refresh-1");
         refreshed.AccessToken.Should().Be("access-2");
         refreshed.RefreshToken.Should().Be("refresh-1");
         refreshed.ClientId.Should().Be(existing.ClientId);
+        refreshed.ClientSecret.Should().Be("desktop-client-secret");
         refreshed.ExpiresAtUtc.Should().BeAfter(DateTimeOffset.UtcNow.AddMinutes(20));
+    }
+
+    [Fact]
+    public async Task RefreshAsync_OmitsClientSecretForLegacyCredentialsWithoutOne()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var existing = new GoogleDriveCredentials(
+            AccessToken: "old-access",
+            RefreshToken: "refresh-legacy",
+            ClientId: "1234567890-abcdef.apps.googleusercontent.com",
+            ExpiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(-5),
+            Scope: GoogleDriveTokenClient.DriveFileScope);
+        var handler = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent("""
+                {
+                  "access_token": "access-legacy",
+                  "expires_in": 1800,
+                  "scope": "https://www.googleapis.com/auth/drive.file"
+                }
+                """),
+        });
+        var client = new GoogleDriveTokenClient(new HttpClient(handler));
+
+        var refreshed = await client.RefreshAsync(existing, ct);
+
+        handler.LastBody.Should().NotContain("client_secret=");
+        refreshed.ClientSecret.Should().BeEmpty();
     }
 
     private static StringContent JsonContent(string json) =>

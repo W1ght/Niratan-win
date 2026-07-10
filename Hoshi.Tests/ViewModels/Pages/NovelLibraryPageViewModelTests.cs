@@ -498,7 +498,10 @@ public class NovelLibraryPageViewModelTests
     {
         public bool HasCredentials { get; init; }
 
-        public Task AuthenticateAsync(string clientId, CancellationToken ct = default) =>
+        public Task AuthenticateAsync(
+            string clientId,
+            string clientSecret,
+            CancellationToken ct = default) =>
             Task.CompletedTask;
 
         public Task<string> GetAccessTokenAsync(CancellationToken ct = default) =>
