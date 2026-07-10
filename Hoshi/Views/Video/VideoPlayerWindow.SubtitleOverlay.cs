@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -12,7 +13,9 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.Web.WebView2.Core;
 using Windows.Storage.Streams;
 using Hoshi.Helpers;
+using Hoshi.Services.Settings;
 using Hoshi.Services.Video;
+using Serilog;
 
 namespace Hoshi.Views.Video;
 
@@ -309,6 +312,7 @@ public sealed partial class VideoPlayerWindow
                 case "ready":
                     _isSubtitleWebViewReady = true;
                     await UpdateSubtitleWebViewAsync();
+                    _ = PrewarmVideoDictionaryPopupAsync();
                     break;
                 case "hoverChanged":
                     _isSubtitlePointerOver = payload.ValueKind == JsonValueKind.Object
@@ -361,6 +365,28 @@ public sealed partial class VideoPlayerWindow
             anchor,
             width,
             height);
+    }
+
+    private async Task PrewarmVideoDictionaryPopupAsync()
+    {
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            var overlay = EnsurePopupOverlay();
+            await overlay.PrewarmAsync(
+                RootGrid.XamlRoot,
+                App.GetService<ISettingsService>().Current.Theme);
+            Log.Information(
+                "[VideoLookup] Popup prewarm completed in {Ms}ms",
+                sw.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(
+                ex,
+                "[VideoLookup] Popup prewarm failed in {Ms}ms",
+                sw.ElapsedMilliseconds);
+        }
     }
 
     private static double GetJsonDouble(JsonElement payload, string propertyName, double fallback)
