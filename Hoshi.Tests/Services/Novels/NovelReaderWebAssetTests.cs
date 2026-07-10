@@ -277,7 +277,7 @@ public class NovelReaderWebAssetTests
         popupCss.Should().Contain(".glossary-sections");
         popupCss.Should().Contain(".glossary-sections:not(.single-section)");
         popupCss.Should().Contain(".glossary-sections.single-section");
-        popupCss.Should().Contain("border: 1px solid rgba");
+        popupCss.Should().Contain("border: 1px solid var(--popup-card-border-color)");
         popupCss.Should().Contain("box-shadow");
 
         popupJs.Should().Contain("function layoutDictionaryColumns()");
@@ -286,6 +286,23 @@ public class NovelReaderWebAssetTests
         popupJs.Should().Contain("glossarySections.classList.add('single-section')");
         popupJs.Should().Contain("glossarySections.appendChild(createGlossarySection(");
         popupJs.Should().Contain("layoutDictionaryColumns();");
+    }
+
+    [Fact]
+    public void DictionaryPopup_UsesDesktopReferenceDictionaryCards()
+    {
+        var popupCss = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.css")
+        );
+
+        popupCss.Should().Contain("--popup-card-border-color: rgba(0, 0, 0, 0.14);");
+        popupCss.Should().Contain("--popup-card-inner-highlight: rgba(255, 255, 255, 0.34);");
+        popupCss.Should().Contain("--popup-card-shadow-color: rgba(0, 0, 0, 0.10);");
+        popupCss.Should().MatchRegex(
+            @"(?s)\.glossary-group\s*\{[^}]*border:\s*1px solid var\(--popup-card-border-color\);[^}]*border-radius:\s*8px;");
+        popupCss.Should().Contain("--popup-card-border-color: rgba(255, 255, 255, 0.18);");
+        popupCss.Should().Contain("inset 0 0 0 1px var(--popup-card-inner-highlight)");
+        popupCss.Should().Contain("0 1px 2px var(--popup-card-shadow-color)");
     }
 
     [Fact]
