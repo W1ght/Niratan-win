@@ -6,6 +6,9 @@ public class NovelBook
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Title { get; set; } = string.Empty;
+    public string OriginalTitle { get; set; } = string.Empty;
+    public string? RenamedTitle { get; set; }
+    public string Folder { get; set; } = string.Empty;
     public string? Author { get; set; }
     public string FilePath { get; set; } = string.Empty;
     public string? CoverPath { get; set; }
