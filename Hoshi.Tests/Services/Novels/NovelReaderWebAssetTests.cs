@@ -1731,7 +1731,7 @@ public class NovelReaderWebAssetTests
         code.Should().Contain("case \"contentPrepared\":");
         code.Should().Contain("window.hoshiCommitPopupRender");
         code.Should().Contain("_displayTransaction.TryAcceptCommit(preparedGeneration)");
-        code.Should().Contain("_displayTransaction.TryCompleteCommit(readyGeneration, out var commit)");
+        code.Should().Contain("_displayTransaction.TryCompleteCommit(generation, out var commit)");
         code.Should().Contain("public void CancelPendingContent(long generation, string? traceId)");
         code.Should().Contain("window.hoshiCancelPopupRender");
         code.Should().Contain("var generation = PrepareForPendingContent(");
@@ -1739,15 +1739,24 @@ public class NovelReaderWebAssetTests
         code.Should().Contain("request.TraceId);");
         code.Should().Contain("private long PrepareForPendingContent(");
         code.Should().Contain("string? traceId)");
-        code.Should().Contain("_displayTransaction.CommittedGeneration != readyGeneration");
+        code.Should().Contain("_displayTransaction.CommittedGeneration != generation");
         code.Should().Contain("_displayTransaction.PendingGeneration is not null");
-        code.Should().Contain("_displayGeneration != readyGeneration");
+        code.Should().Contain("_displayGeneration != generation");
         code.Should().Contain("private sealed record DictionaryPopupShowRequest(");
         code.Should().Contain("private sealed record DictionaryPopupNativeContext(");
-        code.Should().Contain("private DictionaryPopupShowRequest? _queuedShowRequest;");
+        code.Should().Contain("DictionaryPopupLatestRequestQueue<DictionaryPopupShowRequest> _queuedShowRequests = new();");
         code.Should().Contain("private async Task ProcessQueuedShowAsync()");
-        code.Should().Contain("_queuedShowRequest = request;");
-        code.Should().Contain("_queuedShowRequest = null;");
+        code.Should().Contain("private readonly DictionaryPopupWarmCoordinator _warmCoordinator = new();");
+        code.Should().Contain("_warmCoordinator.EnsureWarmAsync(");
+        code.Should().Contain("_warmCoordinator.Reset();");
+        code.Should().Contain("DictionaryPopupCommitCoordinator.ObserveAsync(");
+        code.Should().Contain("private void CompleteAcceptedCommit(long generation)");
+        code.Should().Contain("private void AbortAcceptedCommit(long generation)");
+        code.Should().Contain("_displayTransaction.TryAbortCommit(generation)");
+        code.Should().Contain("OnPopupWebViewProcessFailed");
+        code.Should().Contain("await readyTask;");
+        code.Should().Contain("_queuedShowRequests.Replace(request);");
+        code.Should().Contain("_queuedShowRequests.Clear();");
         code.Should().Contain("_displayTransaction.CommitInFlightGeneration is not null");
         code.Should().Contain("_isCompletingContentReady");
         code.Should().Contain("_ = ProcessQueuedShowAsync();");
@@ -1777,7 +1786,7 @@ public class NovelReaderWebAssetTests
 
         var legacyReady = code.IndexOf("ContentReady?.Invoke(this, EventArgs.Empty);", StringComparison.Ordinal);
         var ownershipRecheck = code.IndexOf(
-            "_displayTransaction.CommittedGeneration != readyGeneration",
+            "_displayTransaction.CommittedGeneration != generation",
             legacyReady,
             StringComparison.Ordinal);
         var committedEvent = code.IndexOf("ContentCommitted?.Invoke(", legacyReady, StringComparison.Ordinal);
@@ -1877,6 +1886,8 @@ public class NovelReaderWebAssetTests
         js.Should().Contain("window.hoshiCommitPopupRender = function (expectedGeneration)");
         js.Should().Contain("liveContainer.replaceChildren.apply(liveContainer");
         js.Should().Contain("window.hoshiCancelPopupRender = function (expectedGeneration)");
+        js.Should().Contain("window.hoshiGetCommittedPopupGeneration = function ()");
+        js.Should().Contain("window.hoshiDiscardPopupRender = function (expectedGeneration)");
         js.Should().Contain("window.hoshiPendingPopupRender");
         js.Should().Contain("function attachPopupInteractionHandlers()");
 

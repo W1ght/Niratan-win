@@ -86,6 +86,12 @@ native 收到 `contentPrepared` 后，必须再次校验 lookup request、genera
 
 native 发出 commit 命令前把该 generation 线性化为 **commit-in-flight**。commit-in-flight 不能被后来取消或新的 `BeginPending` 覆盖；后续查词仍可完成 native lookup，但 popup 只保存一个 latest queued replacement，并在当前 generation 的 `contentReady` 后异步启动，调用方不等待 ready。这样 commit 命令与取消命令不存在“先提交 DOM、后清除 native 所有权”的窗口。
 
+`WarmAsync` 使用 single-flight：所有并发 cold caller 共享同一个初始化 task；初始化成功后复用 shell，失败或 WebView process 失效后清除该 task，使后续请求可以重新 warm。cold caller 的音频、Anki、trace 和最终 injection payload 始终使用各自 request-local 值，不能借共享 warm task 覆盖 committed native context。
+
+native commit acknowledgement 由非阻塞 async helper 执行并观察 `ExecuteScriptAsync` 的布尔结果；查词路径仍不 await。`contentReady` 与成功的脚本返回都可以幂等完成相同 generation。脚本返回 `false` 时立即精确 abort accepted commit。脚本异常或超时时，native 通过窄接口查询 JavaScript 当前 committed generation：若与 accepted generation 匹配则完成 native commit；否则精确 abort，并保留之前 committed DOM/native context。无论 abort 或对账完成，都必须释放 commit-in-flight 并异步启动 latest queued replacement。
+
+JavaScript 只暴露 generation-scoped 的 `hoshiGetCommittedPopupGeneration()` 与必要的 `hoshiDiscardPopupRender(generation)`；查询不得返回词条或扩大 native API。若 WebView process 已失效，native 必须 abort accepted generation、重置 warm 状态并允许 queued/后续请求重新创建 WebView。
+
 `_currentTraceId`、音频设置、Anki 设置、mining context 和 Sasayaki 控件上下文也属于 committed native interaction context。新查询只把这些值放进 generation-scoped pending context；收到匹配 `contentReady` 后才整体提升。旧 popup 可交互期间始终使用旧 native context。
 
 native 层在已有 committed 内容时不把 `VisualRoot.Opacity` 或 `IsHitTestVisible` 置为隐藏；只有首次冷显示仍保持现有的 `Opacity=0` ready gate。收到当前 generation 的 `contentReady` 后，overlay 提交目标锚点和字幕高亮。过期 prepared/ready 消息不能改变内容、位置、高亮、交互数据或可见性。
@@ -119,8 +125,10 @@ native 层在已有 committed 内容时不把 `VisualRoot.Opacity` 或 `IsHitTes
 6. 取消身份：旧 generation 或仅 trace 匹配的取消不能清除更新的 pending generation。
 7. commit 线性化：commit-in-flight 不会被新请求覆盖；新请求只替换 latest queued replacement，并在 ready 后异步启动。
 8. native 上下文：pending 期间音频、Anki、mining、trace 和 Sasayaki 仍属于 committed 内容，ready 后才整体切换。
-9. 点外关闭：非字幕空白仍关闭 popup；popup 内滚动、音频、Anki 和嵌套查词不触发关闭。
-10. 运行视频字幕专项测试、字典 popup 测试和全量 x64 测试；实机验证同一字幕连续单击、Shift hover、无结果词和快速移动竞态。
+9. warm single-flight：并发 cold caller 只执行一次初始化；失败可重试，request-local payload 不串线。
+10. commit 对账：覆盖 true/false、异常、超时、ready/结果竞态、WebView process 失效与 latest queue 恢复。
+11. 点外关闭：非字幕空白仍关闭 popup；popup 内滚动、音频、Anki 和嵌套查词不触发关闭。
+12. 运行视频字幕专项测试、字典 popup 测试和全量 x64 测试；实机验证同一字幕连续单击、Shift hover、无结果词和快速移动竞态。
 
 ## 非目标
 

@@ -4,7 +4,7 @@
 
 **Goal:** Allow click and Shift-hover subtitle lookup while the video dictionary popup remains visible, replacing only the latest successful root result.
 
-**Architecture:** Video uses a host-only hit-test mode so transparent popup space passes input to the subtitle Canvas. Popup replacement is a two-phase committed/pending transaction: JavaScript stages DOM plus all interaction data and posts contentPrepared; native linearizes that generation as commit-in-flight before acknowledging commit; JavaScript atomically promotes pending state and posts contentReady. A single latest queued replacement starts asynchronously after in-flight ready, so the lookup path awaits neither message.
+**Architecture:** Video uses a host-only hit-test mode so transparent popup space passes input to the subtitle Canvas. Popup replacement is a two-phase committed/pending transaction: JavaScript stages DOM plus all interaction data and posts contentPrepared; native linearizes that generation as commit-in-flight before acknowledging commit; JavaScript atomically promotes pending state and posts contentReady. Warm initialization is single-flight, commit acknowledgement is observed/reconciled asynchronously, and a single latest queued replacement resumes after completion or exact abort, so the lookup path awaits neither message.
 
 **Tech Stack:** WinUI 3, Windows App SDK, C#/.NET 10, WebView2, JavaScript, xUnit v3, FluentAssertions.
 
@@ -16,6 +16,8 @@
 - Never await contentReady in the subtitle lookup path.
 - Never replace committed DOM or JavaScript interaction state before native acknowledges the exact pending generation.
 - Native trace/audio/Anki/mining/Sasayaki context must remain committed until matching contentReady; commit-in-flight cannot be cancelled or overwritten.
+- Cold popup initialization must be single-flight and reset after failure/process loss.
+- Commit command false/exception/timeout must resolve through exact abort or JavaScript committed-generation reconciliation; native commit-in-flight may never remain stuck.
 - Pointer passthrough is video-only; novel reader and global popup defaults stay unchanged.
 - Latest request wins. Stale lookup, ready, cancellation, and error paths cannot replace or dismiss committed content.
 - Popup scrolling, audio, Anki, nested lookup, and explicit point-outside dismissal keep existing behavior.
@@ -510,6 +512,15 @@ Make explicit Hide call _displayTransaction.Dismiss(). Cancellation paths call C
 Add a generation-scoped native context record containing local trace id, normalized audio settings, normalized Anki settings, and the next mining context. `ShowResultsWarmAsync` must use request-local normalized values through any `WarmAsync` await and store them as pending without assigning `_currentTraceId`, `_audioSettings`, `_ankiSettings`, `_miningContext`, or Sasayaki controls. Promote all fields and update Sasayaki controls only when `TryCompleteCommit` succeeds.
 
 When `CommitInFlightGeneration` is non-null, `ShowResultsWarmAsync` must store/replace one latest queued show request and return immediately. After matching contentReady completes native context and events, dequeue the latest non-cancelled request with fire-and-forget `ProcessQueuedShowAsync`; do not await ready in the caller. Explicit Hide/Dismiss cancels and clears the queued request.
+
+Third-review hardening protocol:
+
+1. Extract a testable single-flight warm coordinator. Concurrent cold callers share one warm task; success remains cached, failure resets it, and WebView process failure resets readiness for a later retry.
+2. Add exact-generation `TryAbortCommit`. Aborting clears only the matching accepted generation and preserves previous committed generation/context.
+3. Route `hoshiCommitPopupRender(generation)` through a non-blocking async helper with a bounded timeout. `ShowResultsWarmAsync`, `contentPrepared`, and the lookup caller never await ready or commit acknowledgement.
+4. Treat matching `contentReady` and a parsed script result of `true` as idempotent completion signals. A `false` result aborts immediately.
+5. On script exception/timeout, call `hoshiGetCommittedPopupGeneration()`. Complete when it equals the accepted generation; otherwise call narrow `hoshiDiscardPopupRender(generation)`, abort native ownership, preserve prior native context, and resume the latest queued request.
+6. Extract executable coordination tests for concurrent warm success/failure retry and commit true/false/exception/timeout/ready races plus queue recovery. Keep source assertions only for WebView bridge wiring.
 
 - [ ] **Step 8: Run GREEN**
 
