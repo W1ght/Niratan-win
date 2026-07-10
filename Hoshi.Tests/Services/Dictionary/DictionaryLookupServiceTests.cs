@@ -405,6 +405,23 @@ public class DictionaryLookupServiceTests
     }
 
     [Fact]
+    public void PopupHtml_AppliesScaleBeforeRendering()
+    {
+        var settings = new DictionaryDisplaySettings(
+            PopupScale: 1.25,
+            CustomCSS: ".custom{padding:8px}");
+        var generator = new PopupHtmlGenerator();
+
+        var shell = generator.GenerateShellHtml(settings: settings);
+        var injection = generator.GenerateInjectionScript([], [], settings);
+
+        shell.Should().Contain("--popup-scale:1.25;");
+        shell.Should().Contain("calc(8px * var(--popup-scale))");
+        injection.IndexOf("--popup-scale", StringComparison.Ordinal)
+            .Should().BeLessThan(injection.IndexOf("window.hoshiInjectResults", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task DictionaryImportService_ImportsMixedDictionaryIntoEachAndroidTypeDirectory()
     {
         using var temp = new TemporaryDictionaryRoot();
