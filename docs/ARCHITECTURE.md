@@ -34,7 +34,7 @@ foliate-js 已于 2026-05-19 移除，禁止引回主阅读链路。
 | 变形还原 | C# 重实现 | 对齐 Android `deinflector.cpp` |
 
 重要原则：
-- hoshidicts 作为"字典查询后端"，SQLite 作为 App 业务数据库。
+- hoshidicts 作为“字典查询后端”；主 App SQLite 只保存视频业务数据，不保存小说、书架或小说统计。
 - 高频字典查询数据不塞进主 App SQLite。
 - `native/hoshidicts/` 不可修改，所有功能通过 C API DLL P/Invoke 实现。
 
@@ -42,10 +42,12 @@ foliate-js 已于 2026-05-19 移除，禁止引回主阅读链路。
 
 | 项 | 选型 | 原因 |
 |---|---|---|
-| 数据库 | SQLite | 轻量、启动快、IO 效率高 |
-| ORM | Dapper + Microsoft.Data.Sqlite | 轻量、透明、易调试 |
+| 小说/书架/统计 | Niratan 兼容 JSON sidecar | 每本书可独立迁移、备份和同步，文件即真源 |
+| 视频业务数据 | SQLite | 保留现有视频功能的关系型查询与迁移能力 |
+| 旧小说迁移 | Dapper + Microsoft.Data.Sqlite（只读入旧表） | 一次性导出后退役旧小说表 |
+| JSON | System.Text.Json + 原子替换 | 强类型、可恢复，不暴露半写文件 |
 
-第一版不建议 EF Core（对桌面阅读器偏重）。
+不引入 EF Core 或第二套数据库技术。外部音频数据库仍按原有只读边界访问，不成为 Hoshi 的业务真源。
 
 ### 1.5 测试
 
@@ -82,7 +84,7 @@ Hoshi/
     Novels/          NovelLibraryService, NovelReaderContentStyles, EpubParserService
     Dictionary/      DictionaryLookupService, DictionaryImportService, JapaneseDeinflector, PopupHtmlGenerator
     Audio/           AudioService
-    Storage/         DataService, DatabaseMigrator
+    Storage/         VideoDataService, DatabaseMigrator, NovelStorageMigrationService
     UI/              NavigationService
     Anki/            AnkiService, AnkiHandlebarRenderer, LapisPreset
     Sasayaki/        SasayakiPlayer, SasayakiMatcher
@@ -251,62 +253,50 @@ NovelReaderPage
 
 ---
 
-## 6. 数据模型
+## 6. 数据模型与持久化边界
 
-### 6.1 books
+### 6.1 小说文件布局
 
-```sql
-CREATE TABLE books (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  author TEXT,
-  file_path TEXT NOT NULL,
-  cover_path TEXT,
-  imported_at TEXT NOT NULL,
-  last_opened_at TEXT,
-  language TEXT,
-  unique_identifier TEXT
-);
+```text
+AppData/Roaming/Hoshi/Novels/
+  book_order.json
+  shelves.json
+  novel_storage_migration_v1.json
+  <book-id>/
+    metadata.json
+    bookmark.json
+    bookinfo.json
+    statistics.json
+    highlights.json
+    <book-id>.epub
+    ...受控解包资源
 ```
 
-### 6.2 reading_progress
+- `metadata.json` 是书名、作者、相对 EPUB/封面路径、导入与最近打开时间的真源。
+- `bookmark.json` 保存章节、逻辑进度和字符位置；Reader 每次保存只写一次 canonical bookmark。
+- `bookinfo.json`、`statistics.json`、`highlights.json` 按 Niratan/Hoshi sidecar 语义独立演进。
+- `book_order.json` 保存全局/未归档顺序；`shelves.json` 保存自定义书架及书架内顺序。
+- 所有路径必须限制在对应书籍目录内；所有 JSON 写入使用同目录临时文件和原子替换。
+- JSON 缺失与损坏必须区分。损坏文件保留原件、显示非阻断警告，并禁止归一化流程覆盖它。
 
-```sql
-CREATE TABLE reading_progress (
-  book_id TEXT PRIMARY KEY,
-  location_json TEXT NOT NULL,
-  progression REAL,
-  chapter_href TEXT,
-  updated_at TEXT NOT NULL
-);
+### 6.2 服务边界
+
+```text
+NovelLibraryPage / NovelReaderPage
+  → ViewModel
+    → NovelLibraryService / NovelShelfService / NovelStatisticsService
+      → NovelBookStorageService / NovelBookSidecarService / NiratanJsonFileStore
 ```
 
-### 6.3 highlights
+ViewModel 不访问文件或 SQLite。`NovelShelfService` 串行化所有创建、重命名、删除、移动和排序操作；每次成功写入后返回完整 `NovelShelfState`，ViewModel 再重建 Reading、自定义书架和 Unshelved 投影。Google Drive 远端书籍保持独立 rail，不混入本地书架文件。
 
-```sql
-CREATE TABLE highlights (
-  id TEXT PRIMARY KEY,
-  book_id TEXT NOT NULL,
-  location_json TEXT NOT NULL,
-  selected_text TEXT NOT NULL,
-  note TEXT,
-  color TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-```
+### 6.3 SQLite 边界与旧数据迁移
 
-### 6.4 reader_settings
-
-```sql
-CREATE TABLE reader_settings (
-  scope TEXT NOT NULL,
-  scope_id TEXT NOT NULL,
-  settings_json TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  PRIMARY KEY (scope, scope_id)
-);
-```
+- `IVideoDataService` / `VideoDataService` 是主 App SQLite 的唯一业务入口，数据库迁移只创建视频相关表。
+- 旧 `NovelBooks`、`NovelReadingProgress`、`NovelReaderSettings` 仅由 `NovelStorageMigrationService` 在启动时读取。
+- 迁移顺序固定为：备份数据库 → 导出 sidecar → 重扫并校验 manifest → 同一事务退役旧小说表 → 最后原子写完成 manifest。
+- 任何导出或校验失败都 fail closed：保留旧表与备份，小说写入切为只读，原始文件不删除。
+- 如果进程在退役旧表后、写 manifest 前中断，下次启动校验文件目录后补写 manifest，不重建小说 SQLite 表。
 
 ---
 
@@ -326,11 +316,12 @@ CREATE TABLE reader_settings (
 - 缓存最近查询和常见表层词的变形还原结果。
 - popup 首屏限制词条数量，详细释义按需展开。
 
-### 7.3 数据库
+### 7.3 存储
 
-- SQLite 使用 WAL mode。
-- 使用 migration。
-- 使用统一的 AppDbConnectionFactory。
+- 小说 sidecar 使用共享原子 JSON store，写入前校验目录边界。
+- 元数据损坏时不得覆盖原文件，书架归一化必须暂停。
+- 视频 SQLite 使用 WAL mode、migration 和统一的 `AppDbConnectionFactory`。
+- SQLite schema 不得重新引入小说、书架或小说统计表。
 - 没有明确理由不引入 EF Core。
 
 ---

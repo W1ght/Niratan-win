@@ -21,6 +21,11 @@
 ```
 NovelNavItem
 ImportNovelButton
+NovelLibraryCommandBar
+NovelShelfSectionsControl
+NovelShelfManagementButton
+NovelStorageWarningInfoBar
+NovelUnshelvedBooksRepeater
 NovelBookCard
 NovelBookCard_<bookId>
 NovelReaderBackButton
@@ -108,6 +113,31 @@ YYYY-MM-DD-uia-tree.txt
 期望：打开后 reader host 不停在 Starting WebView2 bridge，不显示 Reader bridge error，
       状态进入 EPUB loaded，能看到实际 EPUB 内容。
 ```
+
+### 1.8 Niratan 文件存储与迁移验证
+
+自动化测试至少覆盖：
+
+- 新导入 EPUB 写入私有 `<book-id>` 目录，并生成合法 `metadata.json`；重新扫描后书名、封面、Profile、字符进度不变。
+- `bookmark.json` 的章节/字符位置在关闭 Reader、重启应用后可恢复，单次保存不产生第二条 SQLite 写入。
+- 旧 SQLite fixture 首次迁移前生成 `hoshi.db.pre-novel-files-v1.bak`，导出校验成功后旧小说表被退役，视频表仍存在。
+- 强制导出失败时，备份和旧小说表仍存在，小说库进入只读状态；修复 fixture 后重试可完成。
+- 缺失 JSON 可按定义初始化；损坏 `metadata.json`/`shelves.json` 必须保留原字节并显示可恢复警告，不能被自动覆盖。
+- fresh database 只创建视频业务表，不创建 `NovelBooks`、`NovelReadingProgress` 或 `NovelReaderSettings`。
+
+所有破坏性故障测试必须使用复制到临时目录的 fixture，禁止直接修改用户 AppData。
+
+### 1.9 书架交互与持久化验证
+
+1. 在小说库创建两个书架，验证同名（忽略大小写）被拒绝。
+2. 重命名、拖动调整书架顺序，关闭并重开管理窗口，顺序保持。
+3. 从书卡上下文菜单移动到自定义书架，再移动到 Unshelved；各区只出现一次。
+4. 调整书架内和 Unshelved 顺序，关闭并重启应用，顺序保持。
+5. 删除书架前必须出现确认；确认后仅删除书架，书籍进入 Unshelved，EPUB 不删除。
+6. 删除一本书后，`shelves.json` 与 `book_order.json` 不再包含该 ID。
+7. 开启 Reading rail 时，已有进度且未读完的书出现在派生 Reading 区；该派生区不写入 `shelves.json`。
+8. Google Drive 书籍保持独立 rail，不进入本地书架状态。
+9. 窄窗口下 CommandBar 可访问，页面只有一个纵向滚动所有者，横向 rail 不抢占纵向滚动。
 
 ---
 
