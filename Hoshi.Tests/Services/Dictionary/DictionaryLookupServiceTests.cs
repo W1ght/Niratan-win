@@ -382,7 +382,7 @@ public class DictionaryLookupServiceTests
     }
 
     [Fact]
-    public void DictionaryDisplaySettings_DefaultsMatchHoshiReaderAndroid()
+    public void DictionaryDisplaySettings_DefaultsMatchHoshiAndNiratan()
     {
         var settings = new DictionaryDisplaySettings();
 
@@ -391,8 +391,11 @@ public class DictionaryLookupServiceTests
         settings.ScanNonJapaneseText.Should().BeTrue();
         settings.MaxResults.Should().Be(16);
         settings.ScanLength.Should().Be(16);
-        settings.PopupMaxWidth.Should().Be(560);
-        settings.PopupMaxHeight.Should().Be(420);
+        settings.PopupMaxWidth.Should().Be(320);
+        settings.PopupMaxHeight.Should().Be(250);
+        settings.PopupScale.Should().Be(1.0);
+        settings.PopupActionBar.Should().BeFalse();
+        settings.PopupFullWidth.Should().BeFalse();
         settings.CompactGlossaries.Should().BeTrue();
         settings.CompactPitchAccents.Should().BeTrue();
         settings.DeduplicatePitchAccents.Should().BeFalse();

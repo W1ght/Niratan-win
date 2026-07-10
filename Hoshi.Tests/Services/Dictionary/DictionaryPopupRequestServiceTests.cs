@@ -96,7 +96,12 @@ public class DictionaryPopupRequestServiceTests
                 DictionaryDisplaySettings = new DictionaryDisplaySettings(
                     CollapsedDictionaries: ["A"],
                     CustomCSS: ".term{}",
-                    MaxResults: 5),
+                    MaxResults: 5,
+                    PopupMaxWidth: 1200,
+                    PopupMaxHeight: 700,
+                    PopupScale: 1.25,
+                    PopupActionBar: true,
+                    PopupFullWidth: true),
                 AudioSettings = new AudioSettings
                 {
                     EnableAutoplay = true,
@@ -126,6 +131,7 @@ public class DictionaryPopupRequestServiceTests
         var request = await sut.CreateAsync("星", ct: TestContext.Current.CancellationToken);
         settings.Current.Theme = ThemeMode.Light;
         settings.Current.DictionaryDisplaySettings.CollapsedDictionaries!.Add("B");
+        settings.Current.DictionaryDisplaySettings = new DictionaryDisplaySettings();
         settings.Current.AudioSettings.AudioSources[0].Name = "Changed";
         settings.Current.AnkiSettings.Tags = "changed";
         settings.Current.AnkiSettings.FieldMappings["Expression"] = "changed";
@@ -134,6 +140,11 @@ public class DictionaryPopupRequestServiceTests
         request!.Theme.Should().Be(ThemeMode.Dark);
         request.DisplaySettings.CustomCSS.Should().Be(".term{}");
         request.DisplaySettings.CollapsedDictionariesOrDefault.Should().Equal("A");
+        request.DisplaySettings.PopupMaxWidth.Should().Be(1200);
+        request.DisplaySettings.PopupMaxHeight.Should().Be(700);
+        request.DisplaySettings.PopupScale.Should().Be(1.25);
+        request.DisplaySettings.PopupActionBar.Should().BeTrue();
+        request.DisplaySettings.PopupFullWidth.Should().BeTrue();
         request.AudioSettings.EnableAutoplay.Should().BeTrue();
         request.AudioSettings.PlaybackMode.Should().Be(AudioPlaybackMode.Duck);
         request.AudioSettings.AudioSources.Should().ContainSingle().Which.Name.Should().Be("Custom");
