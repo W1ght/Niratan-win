@@ -2386,7 +2386,9 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("ReaderSearchPanelStatus.Failed");
         readerCode.Should().Contain("SetReaderSearchStatus");
         readerCode.Should().Contain("SearchResult_ItemClick");
-        readerCode.Should().Contain("LoadChapter(result.ChapterIndex, result.ChapterProgress)");
+        readerCode.Should().Contain("NavigateProgrammaticallyAsync(");
+        readerCode.Should().Contain("result.ChapterIndex,");
+        readerCode.Should().Contain("result.ChapterProgress);");
     }
 
     [Fact]
@@ -2511,6 +2513,11 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("ReaderStatisticsEventClassifier.IsActualPageMovement");
         readerCode.Should().Contain("ReaderStatisticsEventClassifier.AdjacentChapterTarget");
         readerCode.Should().Contain("ReaderStatisticsCheckpointReason.AdjacentChapter");
+        readerCode.Should().Contain("BeginProgrammaticNavigationAsync");
+        readerCode.Should().Contain("CompleteProgrammaticNavigationAsync");
+        readerCode.Should().Contain("ReaderStatisticsCheckpointReason.ProgrammaticDeparture");
+        readerCode.Should().Contain("SaveProgressNowAsync(flushStatistics: false)");
+        readerCode.Should().Contain("ResetStatisticsBaseline");
         readerCode.Should().Contain("StatisticsButton_Click");
         readerCode.Should().Contain("StatisticsStartStopButton_Click");
         readerCode.Should().Contain("RefreshStatisticsPanel");
