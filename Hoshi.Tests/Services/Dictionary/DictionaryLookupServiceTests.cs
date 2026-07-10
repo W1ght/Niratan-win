@@ -5,7 +5,9 @@ using Hoshi.Models.Dictionary;
 using Hoshi.Models.Settings;
 using Hoshi.Services.Dictionary;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using System.Collections.Concurrent;
 
 namespace Hoshi.Tests.Services.Dictionary;
 
@@ -575,6 +577,26 @@ public class DictionaryLookupServiceTests
     }
 
     [Fact]
+    public async Task GetStylesAsync_CachesNativeStylesUntilRebuild()
+    {
+        using var temp = new TemporaryDictionaryRoot();
+        temp.WriteTermDictionary("StyleDict",
+            ["星", "ほし", "", "n", 10, new[] { "star" }]);
+        var logger = new RecordingLogger<DictionaryLookupService>();
+        using var service = new DictionaryLookupService(logger, temp.DictionaryRoot);
+
+        await service.GetStylesAsync();
+        await service.GetStylesAsync();
+
+        logger.CountContaining("styles native+deserialize completed").Should().Be(1);
+
+        await service.RebuildQueryAsync();
+        await service.GetStylesAsync();
+
+        logger.CountContaining("styles native+deserialize completed").Should().Be(2);
+    }
+
+    [Fact]
     public void NativeLookup_BasicImportAndLookup_ReturnsResults()
     {
         using var temp = new TemporaryDictionaryRoot();
@@ -827,6 +849,28 @@ public class DictionaryLookupServiceTests
             if (Directory.Exists(_root))
                 Directory.Delete(_root, recursive: true);
         }
+    }
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        private readonly ConcurrentQueue<string> _messages = new();
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            _messages.Enqueue(formatter(state, exception));
+        }
+
+        public int CountContaining(string text) =>
+            _messages.Count(message => message.Contains(text, StringComparison.Ordinal));
     }
 
     private sealed class RecordingLookupService : IDictionaryLookupService
