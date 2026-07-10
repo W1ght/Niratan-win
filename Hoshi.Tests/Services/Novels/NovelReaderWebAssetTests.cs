@@ -247,6 +247,23 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void DictionaryPopup_WebDocumentUsesOpaqueHostSurface()
+    {
+        var popupCss = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.css")
+        );
+        popupCss.Should().MatchRegex(
+            @"(?s)html,\s*body\s*\{[^}]*background-color:\s*var\(--background-color\)\s*!important;");
+        popupCss.Should().NotContain("background-color: transparent !important");
+        popupCss.Should().MatchRegex(
+            @"(?s)#popup-viewport\s*\{[^}]*overflow-y:\s*auto;[^}]*background-color:\s*var\(--background-color\);");
+        popupCss.Should().MatchRegex(
+            @"(?s)::-webkit-scrollbar\s*\{[^}]*background:\s*transparent;");
+        popupCss.Should().MatchRegex(
+            @"(?s)::-webkit-scrollbar-track,[^{]*::-webkit-scrollbar-corner\s*\{[^}]*background:\s*transparent;");
+    }
+
+    [Fact]
     public void DictionaryPopup_UsesNiratanStyleTwoColumnDictionaryCards()
     {
         var popupCss = File.ReadAllText(
@@ -968,6 +985,38 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void WebView2Hosts_UseWritableAppDataUserDataFolder()
+    {
+        var helperCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Helpers", "WebView2EnvironmentHelper.cs")
+        );
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
+        );
+        var popupCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryLookupPopup.cs")
+        );
+        var subtitleCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.SubtitleOverlay.cs")
+        );
+
+        helperCode.Should().Contain("AppDataHelper.GetWebView2UserDataPath()");
+        helperCode.Should().Contain("CoreWebView2Environment.CreateWithOptionsAsync");
+
+        readerCode.Should().Contain("WebView2EnvironmentHelper.GetOrCreateAsync()");
+        readerCode.Should().Contain("NovelWebView.EnsureCoreWebView2Async(environment)");
+        readerCode.Should().NotContain("NovelWebView.EnsureCoreWebView2Async();");
+
+        popupCode.Should().Contain("WebView2EnvironmentHelper.GetOrCreateAsync()");
+        popupCode.Should().Contain("_contentWebView.EnsureCoreWebView2Async(environment)");
+        popupCode.Should().NotContain("_contentWebView.EnsureCoreWebView2Async();");
+
+        subtitleCode.Should().Contain("WebView2EnvironmentHelper.GetOrCreateAsync()");
+        subtitleCode.Should().Contain("SubtitleWebView.EnsureCoreWebView2Async(environment)");
+        subtitleCode.Should().NotContain("SubtitleWebView.EnsureCoreWebView2Async();");
+    }
+
+    [Fact]
     public void DictionaryLookupPopup_ReusesWarmShellForNestedLookup()
     {
         var popupCode = File.ReadAllText(
@@ -993,7 +1042,7 @@ public class NovelReaderWebAssetTests
         popupCode.Should().NotContain("_contentWebView.Visibility = Visibility.Collapsed");
         popupCode.Should().NotContain("VisualRoot.Visibility = Visibility.Collapsed;");
         popupCode.Should().Contain("VisualRoot.Opacity = 0");
-        popupCode.Should().Contain("double _readyOpacity = 0.88");
+        popupCode.Should().Contain("double _readyOpacity = 1");
         popupCode.Should().Contain("SetReadyOpacity(double opacity)");
         popupCode.Should().Contain("VisualRoot.Opacity = _readyOpacity");
         popupCode.Should().Contain("VisualRoot.IsHitTestVisible = false");
@@ -1012,57 +1061,96 @@ public class NovelReaderWebAssetTests
         File.Exists(materialPath).Should().BeTrue();
         var materialCode = File.ReadAllText(materialPath);
 
-        popupCode.Should().Contain("DictionaryPopupMaterial.CreateInAppAcrylicThinBrush");
-        popupCode.Should().Contain("DictionaryPopupMaterial.ApplyTheme");
-        popupCode.Should().Contain("_snapshotAcrylicImage");
-        popupCode.Should().Contain("SetSnapshotAcrylicBackgroundAsync");
-        popupCode.Should().Contain("DictionaryPopupSnapshotAcrylicRenderer.RenderPngAsync");
-        popupCode.Should().Contain("ApplySnapshotAcrylicWebBackgroundAsync");
+        popupCode.Should().Contain("private readonly SolidColorBrush _surfaceBrush;");
+        popupCode.Should().NotContain("SolidColorBrush _strokeBrush");
+        popupCode.Should().Contain("DictionaryPopupMaterial.GetOpaqueSurfaceColor(ThemeMode.System)");
+        popupCode.Should().Contain("DefaultBackgroundColor = initialSurfaceColor");
+        popupCode.Should().Contain("Background = _surfaceBrush");
+        popupCode.Should().NotContain("BorderBrush = _strokeBrush");
+        popupCode.Should().Contain("DictionaryPopupCornerGuard.CalculateInset(_popupCornerRadius)");
+        popupCode.Should().Contain("_surfaceRoot.Margin = new Thickness(guardInset);");
+        popupCode.Should().Contain("VisualRoot.CornerRadius = new CornerRadius(_popupCornerRadius);");
+        popupCode.Should().Contain("ApplySurfaceTheme(themeMode);");
+        popupCode.Should().Contain("_contentWebView.DefaultBackgroundColor = _surfaceBrush.Color;");
+        popupCode.Should().Contain("private double _readyOpacity = 1;");
+        popupCode.Should().NotContain("CompositionGeometricClip");
+        popupCode.Should().NotContain("CompositionRoundedRectangleGeometry");
+        popupCode.Should().NotContain("_surfaceVisual.Clip");
+        popupCode.Should().NotContain("DefaultBackgroundColor = Colors.Transparent");
+        popupCode.Should().NotContain("_contentWebView.Margin = new Thickness(-1);\n        SetPopupCornerRadius(8);");
+        popupCode.Should().NotContain("AcrylicBrush");
+        popupCode.Should().NotContain("DictionaryPopupMaterial.CreateInAppAcrylicThinBrush");
+        popupCode.Should().NotContain("DictionaryPopupMaterial.ApplyTheme");
+        popupCode.Should().NotContain("_contentWebView.DefaultBackgroundColor = isDark ? Colors.Black : Colors.White;");
+        popupCode.Should().NotContain("SetTheme(");
+        popupCode.Should().Contain("await EnsureWebViewAsync();");
+        popupCode.Should().MatchRegex(
+            @"(?s)await _contentWebView\.EnsureCoreWebView2Async\(environment\);\s*_contentWebView\.DefaultBackgroundColor = _surfaceBrush\.Color;");
         popupCode.Should().Contain("ApplyPopupCornerRadiusToWebViewAsync");
-        popupCode.Should().Contain("_snapshotAcrylicImage.Opacity = 0");
-        popupCode.Should().Contain("has-snapshot-acrylic");
+        popupCode.Should().NotContain("_snapshotAcrylicImage");
+        popupCode.Should().NotContain("SetSnapshotAcrylicBackgroundAsync");
+        popupCode.Should().NotContain("DictionaryPopupSnapshotAcrylicRenderer.RenderPngAsync");
+        popupCode.Should().NotContain("ApplySnapshotAcrylicWebBackgroundAsync");
+        popupCode.Should().NotContain("has-snapshot-acrylic");
         materialCode.Should().Contain("AcrylicBrush");
         materialCode.Should().Contain("CreateInAppAcrylicThinBrush");
         materialCode.Should().Contain("DesktopAcrylicController");
         materialCode.Should().Contain("DesktopAcrylicKind.Thin");
         materialCode.Should().Contain("AlwaysUseFallback = false");
-        materialCode.Should().Contain("TintOpacity = 0.12");
-        materialCode.Should().Contain("TintLuminosityOpacity = 0.18");
+        materialCode.Should().Contain("TintOpacity = isDark ? 0.12 : 0.78");
+        materialCode.Should().Contain("TintLuminosityOpacity = isDark ? 0.18 : 0.62");
         materialCode.Should().Contain("TintLuminosityOpacity");
         materialCode.Should().Contain("Windows.UI.Color.FromArgb(0x58");
-        materialCode.Should().Contain("Windows.UI.Color.FromArgb(0x70");
+        materialCode.Should().Contain("Windows.UI.Color.FromArgb(0xDC");
         materialCode.Should().Contain("DispatcherQueue.GetForCurrentThread()?.EnsureSystemDispatcherQueue()");
         materialCode.Should().Contain("Windows.UI.Color.FromArgb(0x18");
         materialCode.Should().Contain("Windows.UI.Color.FromArgb(0x22");
-        popupCode.Should().Contain("ThemeShadow");
-        popupCode.Should().Contain("Translation = new Vector3");
-        popupCode.Should().Contain("CornerRadius = new CornerRadius(12)");
-        popupCode.Should().Contain("BorderThickness = new Thickness(1)");
-
-        var snapshotRendererCode = File.ReadAllText(
-            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupSnapshotAcrylicRenderer.cs")
-        );
-        snapshotRendererCode.Should().Contain("CanvasBitmap.LoadAsync");
-        snapshotRendererCode.Should().Contain("GaussianBlurEffect");
-        snapshotRendererCode.Should().Contain("BlurAmount = 34");
+        materialCode.Should().Contain("Windows.UI.Color.FromArgb(0xFF, 0x00, 0x00, 0x00)");
+        materialCode.Should().Contain("Windows.UI.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)");
+        popupCode.Should().NotContain("ThemeShadow");
+        popupCode.Should().NotContain("VisualRoot.Shadow");
+        popupCode.Should().NotContain("VisualRoot.Translation");
+        popupCode.Should().NotContain("ApplyThemeShadow");
+        popupCode.Should().NotContain("using System.Numerics;");
+        popupCode.Should().NotContain("BorderThickness = new Thickness(1)");
 
         var popupCss = File.ReadAllText(
             Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.css")
         );
-        popupCss.Should().Contain("html.has-snapshot-acrylic");
         popupCss.Should().Contain("--popup-corner-radius: 12px");
-        popupCss.Should().Contain("body::before");
         popupCss.Should().Contain("border-radius: var(--popup-corner-radius)");
-        popupCss.Should().Contain("html.has-snapshot-acrylic body::before");
-        popupCss.Should().Contain("--snapshot-acrylic-background-image");
+        popupCss.Should().Contain("#popup-viewport");
+        popupCss.Should().Contain("overflow-y: auto");
+        popupCss.Should().Contain("background-color: var(--background-color) !important");
+        popupCss.Should().Contain("position: absolute;");
+        popupCss.Should().NotContain("html.has-snapshot-acrylic");
+        popupCss.Should().NotContain("--snapshot-acrylic-background-image");
+
+        var popupHtmlGeneratorCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Services", "Dictionary", "PopupHtmlGenerator.cs")
+        );
+        popupHtmlGeneratorCode.Should().Contain("<div id=\"\"popup-viewport\"\">");
+
+        var popupJs = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.js")
+        );
+        popupJs.Should().Contain("function getPopupScrollElement()");
+        popupJs.Should().NotContain("document.scrollingElement.scrollTop");
 
         var overlayCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs")
         );
-        overlayCode.Should().Contain("ApplySnapshotAcrylicBackground(_rootHost)");
-        overlayCode.Should().Contain("ApplySnapshotAcrylicBackground(child)");
-        overlayCode.Should().Contain("_currentMiningContext.VideoScreenshotPath");
-        overlayCode.Should().Contain("ThemeMode.Dark");
+        overlayCode.Should().NotContain("ApplySnapshotAcrylicBackground(_rootHost)");
+        overlayCode.Should().NotContain("ApplySnapshotAcrylicBackground(child)");
+        overlayCode.Should().NotContain("_currentMiningContext.VideoScreenshotPath");
+        overlayCode.Should().Contain("PrewarmAsync(XamlRoot xamlRoot, ThemeMode themeMode");
+        overlayCode.Should().Contain("PrewarmCoreAsync(xamlRoot, themeMode)");
+        overlayCode.Should().Contain("private double _rootReadyOpacity = 1;");
+
+        var videoCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.xaml.cs")
+        );
+        videoCode.Should().Contain("overlay.PrewarmAsync(RootGrid.XamlRoot, request.Theme)");
     }
 
     [Fact]
@@ -1407,12 +1495,15 @@ public class NovelReaderWebAssetTests
         );
         dictionaryLookupPopupCode.Should().Contain("UseStandaloneWindowVisuals");
         dictionaryLookupPopupCode.Should().Contain("UseNakedFloatingWindowVisuals");
-        dictionaryLookupPopupCode.Should().Contain("VisualRoot.Shadow = null");
-        dictionaryLookupPopupCode.Should().Contain("VisualRoot.Translation = Vector3.Zero");
-        dictionaryLookupPopupCode.Should().Contain("VisualRoot.BorderThickness = new Thickness(0)");
-        dictionaryLookupPopupCode.Should().Contain("VisualRoot.CornerRadius = new CornerRadius(0)");
-        dictionaryLookupPopupCode.Should().Contain("VisualRoot.Background = _surfaceBrush");
-        dictionaryLookupPopupCode.Should().Contain("_contentWebView.DefaultBackgroundColor = Colors.Transparent");
+        dictionaryLookupPopupCode.Should().NotContain("ThemeShadow");
+        dictionaryLookupPopupCode.Should().NotContain("VisualRoot.Shadow");
+        dictionaryLookupPopupCode.Should().NotContain("VisualRoot.Translation");
+        dictionaryLookupPopupCode.Should().NotContain("using System.Numerics;");
+        dictionaryLookupPopupCode.Should().NotContain("VisualRoot.BorderThickness");
+        dictionaryLookupPopupCode.Should().Contain("VisualRoot.CornerRadius = new CornerRadius(_popupCornerRadius)");
+        dictionaryLookupPopupCode.Should().Contain("Background = _surfaceBrush");
+        dictionaryLookupPopupCode.Should().Contain("DictionaryPopupCornerGuard.CalculateInset(_popupCornerRadius)");
+        dictionaryLookupPopupCode.Should().Contain("DefaultBackgroundColor = initialSurfaceColor");
         dictionaryLookupPopupCode.Should().Contain("_contentWebView.Margin = new Thickness(-1)");
         dictionaryLookupPopupCode.Should().Contain("IsTabStop = false");
         dictionaryLookupPopupCode.Should().Contain("UseSystemFocusVisuals = false");
@@ -1758,8 +1849,8 @@ public class NovelReaderWebAssetTests
         overlayCode.Should().Contain("_redirectVersion");
         overlayCode.Should().Contain("Interlocked.Increment(ref _redirectVersion)");
         overlayCode.Should().Contain("PrewarmedChildHostCount = 1");
-        overlayCode.Should().Contain("await PrewarmChildHostPoolAsync(PrewarmedChildHostCount)");
-        overlayCode.Should().Contain("await child.WarmAsync()");
+        overlayCode.Should().Contain("await PrewarmChildHostPoolAsync(PrewarmedChildHostCount, themeMode)");
+        overlayCode.Should().Contain("await child.WarmAsync(themeMode)");
         overlayCode.Should().Contain("NestedLookupMaxResults = 1");
         overlayCode.Should().Contain("var nestedMaxResults = Math.Min(_displaySettings.MaxResults, NestedLookupMaxResults)");
         overlayCode.Should().Contain("nestedMaxResults,");
