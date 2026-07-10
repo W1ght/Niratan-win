@@ -99,14 +99,18 @@ public sealed class GoogleOAuthLoopbackReceiver : IGoogleOAuthLoopbackReceiver
         GoogleOAuthCallback callback,
         CancellationToken ct)
     {
-        var title = string.IsNullOrWhiteSpace(callback.Error)
-            ? "Google Drive connected"
+        var succeeded = string.IsNullOrWhiteSpace(callback.Error);
+        var title = succeeded
+            ? "Google Drive authorization received"
             : "Google Drive authorization failed";
+        var message = succeeded
+            ? "Google Drive authorization received. Return to Hoshi to finish connecting."
+            : "Google Drive authorization failed. Return to Hoshi for details.";
         var body = $"""
             <!doctype html>
             <html lang="en">
             <head><meta charset="utf-8"><title>{WebUtility.HtmlEncode(title)}</title></head>
-            <body>{WebUtility.HtmlEncode(title)}. You can close this window.</body>
+            <body>{WebUtility.HtmlEncode(message)}</body>
             </html>
             """;
         var bodyBytes = Encoding.UTF8.GetBytes(body);
