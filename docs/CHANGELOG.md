@@ -1,5 +1,20 @@
 # Changelog
 
+## 视频查词首次打开和大词条结果卡顿
+
+**原因**：
+- 视频窗口在 native lookup 完成后才预热根/子 WebView2，首次查询承担完整冷启动成本。
+- 全部 `maxResults` 结果曾被序列化进单个 `ExecuteScriptAsync`；大型 structured content 可产生 1 MB 以上 payload，使 WebView2 传输远慢于 native lookup。
+- 字幕 Shift hover 只有 in-flight 布尔锁，没有 latest-request-wins，旧结果可能继续占用热路径。
+
+**解决**：
+- 字幕 WebView ready 后后台预热 popup，保留按需 warm 作为失败回退。
+- 首条结果独立注入并显示，剩余结果以不超过三条的 generation-scoped 小批次追加，保留用户配置的最终结果数量和顺序。
+- 视频查词请求使用版本和取消令牌；新请求使旧请求失效，旧结果不能再高亮、显示或替换当前 popup。
+- `DictionaryPopupRequest.TraceId` 贯穿视频 overlay，并分别记录首批/延后批次的序列化字节数和传输耗时。
+
+---
+
 ## popup 先显示释义、后闪出主词
 
 **原因**：
