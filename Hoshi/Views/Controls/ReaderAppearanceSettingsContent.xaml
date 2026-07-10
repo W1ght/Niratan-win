@@ -296,6 +296,65 @@
                                   x:Uid="ReaderShowReadingTimeToggle"
                                   IsOn="{x:Bind ViewModel.ShowReadingTime, Mode=TwoWay}" />
                 </toolkit:SettingsCard>
+
+                <TextBlock x:Uid="PopupAppearanceSectionHeader"
+                           Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
+                           Text="Popup" />
+                <toolkit:SettingsCard x:Uid="PopupWidthCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE9A6;}">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBlock MinWidth="64"
+                                   VerticalAlignment="Center"
+                                   Text="{x:Bind ViewModel.PopupMaxWidthText, Mode=OneWay}" />
+                        <Slider Width="220" Minimum="100" Maximum="1400"
+                                SmallChange="10" StepFrequency="10"
+                                Value="{x:Bind ViewModel.PopupMaxWidth, Mode=TwoWay}" />
+                    </StackPanel>
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="PopupHeightCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE9A5;}">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBlock MinWidth="64"
+                                   VerticalAlignment="Center"
+                                   Text="{x:Bind ViewModel.PopupMaxHeightText, Mode=OneWay}" />
+                        <Slider Width="220" Minimum="100" Maximum="800"
+                                SmallChange="10" StepFrequency="10"
+                                Value="{x:Bind ViewModel.PopupMaxHeight, Mode=TwoWay}" />
+                    </StackPanel>
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="PopupScaleCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE8A3;}">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBlock MinWidth="64"
+                                   VerticalAlignment="Center"
+                                   Text="{x:Bind ViewModel.PopupScaleText, Mode=OneWay}" />
+                        <Slider Width="220" Minimum="0.8" Maximum="1.5"
+                                SmallChange="0.05" StepFrequency="0.05"
+                                Value="{x:Bind ViewModel.PopupScale, Mode=TwoWay}" />
+                    </StackPanel>
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="PopupActionBarCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE8BB;}">
+                    <ToggleSwitch x:Uid="PopupActionBarToggle"
+                                  AutomationProperties.AutomationId="PopupActionBarToggle"
+                                  IsOn="{x:Bind ViewModel.PopupActionBar, Mode=TwoWay}" />
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="PopupFullWidthCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE9A6;}">
+                    <ToggleSwitch x:Uid="PopupFullWidthToggle"
+                                  AutomationProperties.AutomationId="PopupFullWidthToggle"
+                                  IsOn="{x:Bind ViewModel.PopupFullWidth, Mode=TwoWay}" />
+                </toolkit:SettingsCard>
             </StackPanel>
         </Grid>
     </ScrollViewer>
