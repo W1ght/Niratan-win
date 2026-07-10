@@ -1,5 +1,18 @@
 # Changelog
 
+## Google Drive OAuth 回调显示成功但连接失败
+
+**原因**：
+- loopback 已收到授权码后就向浏览器显示 `Google Drive connected`，但此时 token 交换尚未完成。
+- 桌面 OAuth 客户端要求 token 请求携带 `client_secret`；Windows 实现只接收和发送 `client_id`，首次交换返回 `client_secret is missing`，刷新路径也缺少同一参数。
+
+**解决**：
+- 设置页使用 `PasswordBox` 接收客户端密钥，成功授权后将其与 token 一起存入 Windows Credential Manager，不写入普通设置。
+- 授权码交换和 refresh token 请求都发送客户端密钥，并兼容读取不含密钥的旧凭据。
+- loopback 页面只提示已收到授权，最终连接成功状态由 token 交换和凭据保存完成后的 WinUI 页面显示。
+
+---
+
 ## 视频字幕软阴影出现双命中或黑色矩形
 
 **原因**：
