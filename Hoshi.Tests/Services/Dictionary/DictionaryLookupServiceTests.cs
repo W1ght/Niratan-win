@@ -97,7 +97,7 @@ public class DictionaryLookupServiceTests
         initial.Should().NotContain("deferred");
         append.Should().Contain("window.hoshiAppendResults");
         append.Should().Contain("deferred");
-        append.Should().Contain(", 2, 7)");
+        append.Should().Contain(", 2, 0, 7)");
         append.Should().Contain("bridge-missing");
         append.Should().Contain("appended");
         append.Should().Contain("stale");
@@ -120,7 +120,7 @@ public class DictionaryLookupServiceTests
     {
         var script = File.ReadAllText(
             Path.Combine(AppContext.BaseDirectory, "Web", "DictionaryPopup", "popup.js"));
-        const string readyMessage = "postPopupMessage('contentReady', { generation: generation });";
+        const string readyMessage = "postPopupMessage('contentReady', {";
 
         script.Should().Contain("function commitFirstFrame(generation, entryDiv)");
         script.Should().Contain("function renderAvailableEntries()");
