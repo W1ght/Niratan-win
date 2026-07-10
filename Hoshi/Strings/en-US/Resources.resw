@@ -723,6 +723,8 @@
   <data name="TtuSyncGoogleDriveSectionHeader.Text" xml:space="preserve"><value>Google Drive</value></data>
   <data name="TtuSyncGoogleClientIdTextBox.Header" xml:space="preserve"><value>Client ID</value></data>
   <data name="TtuSyncGoogleClientIdTextBox.Description" xml:space="preserve"><value>Desktop OAuth client ID from the Google Cloud project used for Drive sync</value></data>
+  <data name="TtuSyncGoogleClientSecretPasswordBox.Header" xml:space="preserve"><value>Client secret</value></data>
+  <data name="TtuSyncGoogleClientSecretPasswordBox.Description" xml:space="preserve"><value>Client secret from the same Google Cloud desktop OAuth client</value></data>
   <data name="TtuSyncConnectionStatusCard.Header" xml:space="preserve"><value>Connection</value></data>
   <data name="TtuSyncConnectionStatusCard.Description" xml:space="preserve"><value>Open the system browser to connect Google Drive</value></data>
   <data name="TtuSyncConnectionStatusText.Text" xml:space="preserve"><value>Not connected</value></data>

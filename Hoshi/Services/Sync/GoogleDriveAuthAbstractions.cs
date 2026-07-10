@@ -9,7 +9,10 @@ public interface IGoogleDriveAuthService
 {
     bool HasCredentials { get; }
 
-    Task AuthenticateAsync(string clientId, CancellationToken ct = default);
+    Task AuthenticateAsync(
+        string clientId,
+        string clientSecret,
+        CancellationToken ct = default);
 
     Task<string> GetAccessTokenAsync(CancellationToken ct = default);
 

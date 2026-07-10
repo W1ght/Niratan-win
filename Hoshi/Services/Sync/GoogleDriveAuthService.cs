@@ -29,10 +29,15 @@ public sealed class GoogleDriveAuthService : IGoogleDriveAuthService
 
     public bool HasCredentials => _credentialStore.HasCredentials;
 
-    public async Task AuthenticateAsync(string clientId, CancellationToken ct = default)
+    public async Task AuthenticateAsync(
+        string clientId,
+        string clientSecret,
+        CancellationToken ct = default)
     {
         clientId = clientId.Trim();
+        clientSecret = clientSecret.Trim();
         ArgumentException.ThrowIfNullOrWhiteSpace(clientId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(clientSecret);
 
         var state = GoogleOAuthPkce.CreateCodeVerifier();
         var codeVerifier = GoogleOAuthPkce.CreateCodeVerifier();
@@ -57,6 +62,7 @@ public sealed class GoogleDriveAuthService : IGoogleDriveAuthService
 
         var credentials = await _tokenClient.ExchangeCodeAsync(
             clientId,
+            clientSecret,
             callback.Code,
             session.RedirectUri.ToString(),
             codeVerifier,

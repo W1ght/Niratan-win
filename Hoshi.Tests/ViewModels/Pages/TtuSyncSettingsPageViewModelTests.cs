@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.Input;
 using FluentAssertions;
 using Hoshi.Models.Settings;
@@ -52,6 +53,7 @@ public sealed class TtuSyncSettingsPageViewModelTests
             SelectedSyncMode = TtuSettingsSyncMode.Manual,
             EnableAutoSync = true,
             GoogleClientId = "1234567890-abcdef.apps.googleusercontent.com",
+            GoogleClientSecret = "must-not-enter-app-settings",
             UploadBooks = true,
         };
 
@@ -61,20 +63,25 @@ public sealed class TtuSyncSettingsPageViewModelTests
         saved.EnableAutoSync.Should().BeTrue();
         saved.GoogleClientId.Should().Be("1234567890-abcdef.apps.googleusercontent.com");
         saved.UploadBooks.Should().BeTrue();
+        JsonSerializer.Serialize(saved).Should().NotContain("ClientSecret");
+        JsonSerializer.Serialize(saved).Should().NotContain("must-not-enter-app-settings");
         settingsService.Verify(s => s.SaveAsync(), Times.AtLeastOnce);
     }
 
     [Fact]
-    public async Task ConnectGoogleDriveCommand_AuthenticatesWithTrimmedClientIdAndUpdatesStatus()
+    public async Task ConnectGoogleDriveCommand_AuthenticatesWithTrimmedClientCredentialsAndClearsSecret()
     {
         var auth = new FakeGoogleDriveAuthService();
         var viewModel = CreateViewModel(auth);
         viewModel.GoogleClientId = "  1234567890-abcdef.apps.googleusercontent.com  ";
+        viewModel.GoogleClientSecret = "  desktop-client-secret  ";
 
         await viewModel.ConnectGoogleDriveCommand.ExecuteAsync(null);
 
         auth.AuthenticatedClientId.Should().Be("1234567890-abcdef.apps.googleusercontent.com");
+        auth.AuthenticatedClientSecret.Should().Be("desktop-client-secret");
         auth.HasCredentials.Should().BeTrue();
+        viewModel.GoogleClientSecret.Should().BeEmpty();
         viewModel.GoogleDriveConnectionStatus.Should().Be("Connected");
     }
 
@@ -84,11 +91,43 @@ public sealed class TtuSyncSettingsPageViewModelTests
         var auth = new FakeGoogleDriveAuthService();
         var viewModel = CreateViewModel(auth);
         viewModel.GoogleClientId = " ";
+        viewModel.GoogleClientSecret = "desktop-client-secret";
 
         await viewModel.ConnectGoogleDriveCommand.ExecuteAsync(null);
 
         auth.AuthenticatedClientId.Should().BeNull();
         viewModel.GoogleDriveConnectionStatus.Should().Contain("client ID");
+    }
+
+    [Fact]
+    public async Task ConnectGoogleDriveCommand_RequiresClientSecret()
+    {
+        var auth = new FakeGoogleDriveAuthService();
+        var viewModel = CreateViewModel(auth);
+        viewModel.GoogleClientId = "1234567890-abcdef.apps.googleusercontent.com";
+        viewModel.GoogleClientSecret = " ";
+
+        await viewModel.ConnectGoogleDriveCommand.ExecuteAsync(null);
+
+        auth.AuthenticatedClientId.Should().BeNull();
+        viewModel.GoogleDriveConnectionStatus.Should().Contain("client secret");
+    }
+
+    [Fact]
+    public async Task ConnectGoogleDriveCommand_PreservesClientSecretWhenAuthenticationFails()
+    {
+        var auth = new FakeGoogleDriveAuthService
+        {
+            AuthenticationException = new InvalidOperationException("token failed"),
+        };
+        var viewModel = CreateViewModel(auth);
+        viewModel.GoogleClientId = "1234567890-abcdef.apps.googleusercontent.com";
+        viewModel.GoogleClientSecret = "desktop-client-secret";
+
+        await viewModel.ConnectGoogleDriveCommand.ExecuteAsync(null);
+
+        viewModel.GoogleClientSecret.Should().Be("desktop-client-secret");
+        viewModel.GoogleDriveConnectionStatus.Should().Contain("token failed");
     }
 
     [Fact]
@@ -141,10 +180,19 @@ public sealed class TtuSyncSettingsPageViewModelTests
     {
         public bool HasCredentials { get; set; }
         public string? AuthenticatedClientId { get; private set; }
+        public string? AuthenticatedClientSecret { get; private set; }
+        public Exception? AuthenticationException { get; init; }
 
-        public Task AuthenticateAsync(string clientId, CancellationToken ct = default)
+        public Task AuthenticateAsync(
+            string clientId,
+            string clientSecret,
+            CancellationToken ct = default)
         {
             AuthenticatedClientId = clientId;
+            AuthenticatedClientSecret = clientSecret;
+            if (AuthenticationException != null)
+                return Task.FromException(AuthenticationException);
+
             HasCredentials = true;
             return Task.CompletedTask;
         }
