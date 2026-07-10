@@ -573,8 +573,6 @@ public class NovelReaderWebAssetTests
         dictionaryXaml.Should().Contain("DictionaryType_Checked");
         dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryMaxResultsIncreaseButton\"");
         dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryScanLengthIncreaseButton\"");
-        dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryPopupMaxWidthIncreaseButton\"");
-        dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryPopupMaxHeightIncreaseButton\"");
         dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryCollapseModeComboBox\"");
         dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryCompactGlossariesToggle\"");
         dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryShowExpressionTagsToggle\"");
@@ -587,6 +585,56 @@ public class NovelReaderWebAssetTests
         dictionaryXaml.Should().Contain("DragItemsCompleted=\"DictionaryList_DragItemsCompleted\"");
         dictionaryXaml.Should().Contain("CornerRadius=\"8\"");
         dictionaryXaml.Should().NotContain("Header=\"Dictionary Order\"");
+    }
+
+    [Fact]
+    public void PopupAppearanceSettings_AreOwnedByAppearanceAndMatchNiratanControls()
+    {
+        var appearanceXaml = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Views", "Controls", "ReaderAppearanceSettingsContent.xaml"));
+        var dictionaryXaml = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Views", "Pages", "DictionarySettingsPage.xaml"));
+        var appearanceViewModel = File.ReadAllText(Path.Combine(
+            ProjectRoot, "ViewModels", "Pages", "SettingsPageViewModel.cs"));
+        var dictionaryViewModel = File.ReadAllText(Path.Combine(
+            ProjectRoot, "ViewModels", "Pages", "DictionarySettingsPageViewModel.cs"));
+        var enResources = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Strings", "en-US", "Resources.resw"));
+        var zhResources = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Strings", "zh-CN", "Resources.resw"));
+
+        appearanceXaml.Should().Contain("x:Uid=\"PopupAppearanceSectionHeader\"");
+        appearanceXaml.Should().Contain("Minimum=\"100\" Maximum=\"1400\"");
+        appearanceXaml.Should().Contain("Minimum=\"100\" Maximum=\"800\"");
+        appearanceXaml.Should().Contain("Minimum=\"0.8\" Maximum=\"1.5\"");
+        appearanceXaml.Should().Contain("AutomationProperties.AutomationId=\"PopupActionBarToggle\"");
+        appearanceXaml.Should().Contain("AutomationProperties.AutomationId=\"PopupFullWidthToggle\"");
+        appearanceViewModel.Should().Contain("partial double PopupScale");
+        appearanceViewModel.Should().Contain("current with { PopupFullWidth = value }");
+
+        dictionaryXaml.Should().NotContain("DictionaryPopupMaxWidthCard");
+        dictionaryXaml.Should().NotContain("DictionaryPopupMaxHeightCard");
+        dictionaryViewModel.Should().NotContain("PopupMaxWidth");
+        dictionaryViewModel.Should().NotContain("PopupMaxHeight");
+
+        foreach (var key in new[]
+        {
+            "PopupAppearanceSectionHeader.Text",
+            "PopupWidthCard.Header",
+            "PopupWidthCard.Description",
+            "PopupHeightCard.Header",
+            "PopupHeightCard.Description",
+            "PopupScaleCard.Header",
+            "PopupScaleCard.Description",
+            "PopupActionBarCard.Header",
+            "PopupActionBarCard.Description",
+            "PopupFullWidthCard.Header",
+            "PopupFullWidthCard.Description",
+        })
+        {
+            enResources.Should().Contain(key);
+            zhResources.Should().Contain(key);
+        }
     }
 
     [Fact]
@@ -1549,11 +1597,17 @@ public class NovelReaderWebAssetTests
             "GlobalLookupPasteButton.AutomationProperties.Name",
             "GlobalLookupEnabledCard.Header",
             "GlobalLookupEnabledCard.Description",
-            "DictionaryPopupSizeSectionHeader.Text",
-            "DictionaryPopupMaxWidthCard.Header",
-            "DictionaryPopupMaxWidthCard.Description",
-            "DictionaryPopupMaxHeightCard.Header",
-            "DictionaryPopupMaxHeightCard.Description",
+            "PopupAppearanceSectionHeader.Text",
+            "PopupWidthCard.Header",
+            "PopupWidthCard.Description",
+            "PopupHeightCard.Header",
+            "PopupHeightCard.Description",
+            "PopupScaleCard.Header",
+            "PopupScaleCard.Description",
+            "PopupActionBarCard.Header",
+            "PopupActionBarCard.Description",
+            "PopupFullWidthCard.Header",
+            "PopupFullWidthCard.Description",
         })
         {
             enResources.Should().Contain(key);
@@ -1591,8 +1645,11 @@ public class NovelReaderWebAssetTests
 
         settingsCode.Should().Contain("int MaxResults = 16");
         settingsCode.Should().Contain("int ScanLength = 16");
-        settingsCode.Should().Contain("int PopupMaxWidth = 560");
-        settingsCode.Should().Contain("int PopupMaxHeight = 420");
+        settingsCode.Should().Contain("int PopupMaxWidth = 320");
+        settingsCode.Should().Contain("int PopupMaxHeight = 250");
+        settingsCode.Should().Contain("double PopupScale = 1.0");
+        settingsCode.Should().Contain("bool PopupActionBar = false");
+        settingsCode.Should().Contain("bool PopupFullWidth = false");
         settingsCode.Should().Contain("bool DictionaryTabDefault = false");
         settingsCode.Should().Contain("DictionaryCollapseMode CollapseMode = DictionaryCollapseMode.ExpandAll");
         settingsCode.Should().Contain("bool ExpandFirstDictionary = false");
