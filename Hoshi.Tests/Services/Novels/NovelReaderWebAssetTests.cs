@@ -303,6 +303,8 @@ public class NovelReaderWebAssetTests
         popupCss.Should().Contain("--popup-card-border-color: rgba(255, 255, 255, 0.18);");
         popupCss.Should().Contain("inset 0 0 0 1px var(--popup-card-inner-highlight)");
         popupCss.Should().Contain("0 1px 2px var(--popup-card-shadow-color)");
+        popupCss.Should().MatchRegex(
+            @"(?s)html\[data-hoshi-color-scheme=""light""\],\s*html\[data-hoshi-color-scheme=""light""\] body\s*\{[^}]*--popup-card-border-color:\s*rgba\(0, 0, 0, 0\.14\);[^}]*--popup-card-inner-highlight:\s*rgba\(255, 255, 255, 0\.34\);[^}]*--popup-card-shadow-color:\s*rgba\(0, 0, 0, 0\.10\);[^}]*\}");
     }
 
     [Fact]

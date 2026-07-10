@@ -586,6 +586,9 @@ html[data-hoshi-color-scheme="light"] body {
     --background-color: #FFFFFF;
     --background-color-light: #FFFFFF;
     --text-color: #000;
+    --popup-card-border-color: rgba(0, 0, 0, 0.14);
+    --popup-card-inner-highlight: rgba(255, 255, 255, 0.34);
+    --popup-card-shadow-color: rgba(0, 0, 0, 0.10);
 }
 
 html[data-hoshi-color-scheme="dark"],
