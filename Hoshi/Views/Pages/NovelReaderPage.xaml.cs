@@ -419,7 +419,8 @@ public sealed partial class NovelReaderPage : Page
         else
             Log.Error("[NovelReader] Highlights JS file not found at {Path}", highlightsPath);
 
-        await NovelWebView.EnsureCoreWebView2Async();
+        var environment = await WebView2EnvironmentHelper.GetOrCreateAsync();
+        await NovelWebView.EnsureCoreWebView2Async(environment);
 
         NovelWebView.CoreWebView2.WebMessageReceived -= OnWebMessageReceived;
         NovelWebView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
@@ -488,7 +489,7 @@ public sealed partial class NovelReaderPage : Page
         readerSettings.SettingChanged += OnReaderSettingChanged;
         App.GetService<ISettingsService>().SettingChanged += OnAppSettingChanged;
 
-        _ = EnsurePopupOverlay().PrewarmAsync(XamlRoot);
+        _ = EnsurePopupOverlay().PrewarmAsync(XamlRoot, App.GetService<ISettingsService>().Current.Theme);
 
         UpdateSasayakiChromeVisibility();
         if (CurrentSasayakiSettings.EnableSasayaki)
@@ -1342,7 +1343,7 @@ public sealed partial class NovelReaderPage : Page
                 normalizedOffset);
 
             var popupOverlay = EnsurePopupOverlay();
-            _ = popupOverlay.PrewarmAsync(XamlRoot);
+            _ = popupOverlay.PrewarmAsync(XamlRoot, appTheme);
             PauseSasayakiForLookup();
             phaseSw.Restart();
             await popupOverlay.ShowLookupAsync(

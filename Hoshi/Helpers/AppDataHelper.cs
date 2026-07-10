@@ -14,6 +14,9 @@ public static class AppDataHelper
 
     public static string GetDataPath() => EnsureDirectory(Path.Combine(GetAppDataPath(), "Data"));
 
+    public static string GetWebView2UserDataPath() =>
+        EnsureDirectory(Path.Combine(GetAppDataPath(), "WebView2"));
+
     public static string GetPluginsPath() =>
         EnsureDirectory(Path.Combine(GetAppDataPath(), "Plugins"));
 

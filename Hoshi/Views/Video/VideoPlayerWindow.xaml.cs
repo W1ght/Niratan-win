@@ -641,7 +641,7 @@ public sealed partial class VideoPlayerWindow : Window
             await HighlightSubtitleWebSelectionAsync(request.Results[0].Matched);
 
             var overlay = EnsurePopupOverlay();
-            _ = overlay.PrewarmAsync(RootGrid.XamlRoot);
+            _ = overlay.PrewarmAsync(RootGrid.XamlRoot, request.Theme);
             EnsureVideoDictionaryOverlaySurfaceVisible(overlay);
             var point = anchorPoint
                 ?? SubtitleWebView.TransformToVisual(PopupOverlayCanvas)

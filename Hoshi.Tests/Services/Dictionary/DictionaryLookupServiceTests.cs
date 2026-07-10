@@ -65,7 +65,7 @@ public class DictionaryLookupServiceTests
     }
 
     [Fact]
-    public void PopupHtmlGenerator_UsesTranslucentGlassBackgroundColors()
+    public void PopupHtmlGenerator_UsesOpaqueThemeBackgroundColors()
     {
         var generator = new PopupHtmlGenerator();
 
@@ -73,11 +73,11 @@ public class DictionaryLookupServiceTests
         var darkInjection = generator.GenerateInjectionScript([], [], themeMode: ThemeMode.Dark);
         var lightHtml = generator.GenerateHtml([], [], themeMode: ThemeMode.Light);
 
-        darkHtml.Should().Contain("--background-color: rgba(18, 18, 18, 0.24);");
-        darkHtml.Should().Contain("background-color: transparent;");
+        darkHtml.Should().Contain("--background-color: #000000;");
+        darkHtml.Should().Contain("background-color: var(--background-color);");
         darkHtml.Should().NotContain("--background-color: #2b2b2b;");
-        darkInjection.Should().Contain("document.documentElement.style.setProperty('--background-color', 'rgba(18, 18, 18, 0.24)');");
-        lightHtml.Should().Contain("--background-color: rgba(248, 248, 248, 0.40);");
+        darkInjection.Should().Contain("document.documentElement.style.setProperty('--background-color', '#000000');");
+        lightHtml.Should().Contain("--background-color: #FFFFFF;");
         lightHtml.Should().NotContain("--background-color: #f3f3f3;");
     }
 
