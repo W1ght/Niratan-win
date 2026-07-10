@@ -2514,7 +2514,8 @@ public class NovelReaderWebAssetTests
         viewModelCode.Should().Contain("StartStatisticsTracking");
         viewModelCode.Should().Contain("StopStatisticsTrackingAsync");
         viewModelCode.Should().Contain("FlushStatisticsAsync");
-        viewModelCode.Should().Contain("INovelStatisticsSidecarService");
+        viewModelCode.Should().Contain("IReaderStatisticsSession");
+        viewModelCode.Should().Contain("CheckpointReadingAsync");
         enResources.Should().Contain("NovelReaderStatisticsButton.AutomationProperties.Name");
         enResources.Should().Contain("ReaderStatisticsPanelDialog.Title");
         enResources.Should().Contain("ReaderStatisticsPanelDialog.CloseButtonText");
