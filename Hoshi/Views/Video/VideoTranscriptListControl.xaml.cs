@@ -13,9 +13,11 @@ namespace Hoshi.Views.Video;
 public sealed partial class VideoTranscriptListControl : UserControl
 {
     private const int TranscriptWindowEdgeThreshold = 6;
+    private const int MaxCenterAttempts = 8;
 
     private VideoPlayerViewModel? _viewModel;
     private bool _isTranscriptWindowExpansionQueued;
+    private int _scrollRequestVersion;
 
     public VideoTranscriptListControl()
     {
@@ -51,14 +53,14 @@ public sealed partial class VideoTranscriptListControl : UserControl
 
     public void ScrollRowIntoView(VideoTranscriptRow row)
     {
+        if (TranscriptListView.Visibility != Visibility.Visible)
+            return;
+
         if (_viewModel != null && !_viewModel.TranscriptVisibleRows.Contains(row))
             _viewModel.RefreshTranscriptWindowForCurrentRow();
 
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            TranscriptListView.ScrollIntoView(row, ScrollIntoViewAlignment.Default);
-            DispatcherQueue.TryEnqueue(() => CenterRowInViewport(row));
-        });
+        var requestVersion = ++_scrollRequestVersion;
+        QueueCenterRowInViewport(row, requestVersion, attempt: 0);
     }
 
     public void UpdateListVisibility()
@@ -109,14 +111,36 @@ public sealed partial class VideoTranscriptListControl : UserControl
         });
     }
 
-    private void CenterRowInViewport(VideoTranscriptRow row)
+    private void QueueCenterRowInViewport(VideoTranscriptRow row, int requestVersion, int attempt)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (requestVersion != _scrollRequestVersion)
+                return;
+
+            if (_viewModel != null && !_viewModel.TranscriptVisibleRows.Contains(row))
+                _viewModel.RefreshTranscriptWindowForCurrentRow();
+
+            TranscriptListView.ScrollIntoView(row, ScrollIntoViewAlignment.Default);
+            if (TryCenterRowInViewport(row))
+                return;
+
+            if (attempt < MaxCenterAttempts)
+                QueueCenterRowInViewport(row, requestVersion, attempt + 1);
+        });
+    }
+
+    private bool TryCenterRowInViewport(VideoTranscriptRow row)
     {
         if (TranscriptListView.ContainerFromItem(row) is not ListViewItem container)
-            return;
+            return false;
 
         var scrollViewer = FindDescendant<ScrollViewer>(TranscriptListView);
         if (scrollViewer == null || scrollViewer.ViewportHeight <= 0)
-            return;
+            return false;
+
+        if (container.ActualHeight <= 0)
+            return false;
 
         var bounds = container
             .TransformToVisual(scrollViewer)
@@ -126,6 +150,7 @@ public sealed partial class VideoTranscriptListControl : UserControl
             - ((scrollViewer.ViewportHeight - bounds.Height) / 2);
         var targetOffset = Math.Clamp(centeredOffset, 0, scrollViewer.ScrollableHeight);
         scrollViewer.ChangeView(null, targetOffset, null, disableAnimation: true);
+        return true;
     }
 
     private static T? FindDescendant<T>(DependencyObject root)

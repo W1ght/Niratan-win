@@ -31,6 +31,7 @@ public partial class VideoPlayerViewModel : ObservableObject
     private bool _subtitleSelectionOff;
     private bool _hasCompleteEmbeddedTranscript;
     private readonly VideoTranscriptWindow _transcriptWindow = new();
+    private int _lastTranscriptCurrentIndex = -1;
     private IReadOnlyList<VideoChapter> _chapters = [];
 
     [ObservableProperty]
@@ -825,6 +826,7 @@ public partial class VideoPlayerViewModel : ObservableObject
 
     private void ReplaceTranscriptRows(IEnumerable<VideoSubtitleCue> cues)
     {
+        _lastTranscriptCurrentIndex = -1;
         TranscriptRows.Clear();
         foreach (var cue in cues)
         {
@@ -879,6 +881,7 @@ public partial class VideoPlayerViewModel : ObservableObject
 
     private void UpdateTranscriptCurrentCues(IReadOnlyList<VideoSubtitleCue> cues)
     {
+        var previousCurrentIndex = _lastTranscriptCurrentIndex;
         var currentIndex = -1;
         for (var index = 0; index < TranscriptRows.Count; index++)
         {
@@ -891,10 +894,24 @@ public partial class VideoPlayerViewModel : ObservableObject
 
         if (currentIndex >= 0)
         {
-            _transcriptWindow.Reset(TranscriptRows.Count, currentIndex);
-            RefreshTranscriptVisibleRows();
+            var currentRow = TranscriptRows[currentIndex];
+            if (ShouldRecenterTranscriptWindow(previousCurrentIndex, currentIndex))
+            {
+                _transcriptWindow.Reset(TranscriptRows.Count, currentIndex);
+                RefreshTranscriptVisibleRows();
+            }
+            else if (_transcriptWindow.EnsureContains(TranscriptRows.Count, currentIndex)
+                || !TranscriptVisibleRows.Contains(currentRow))
+            {
+                RefreshTranscriptVisibleRows();
+            }
+
+            _lastTranscriptCurrentIndex = currentIndex;
         }
     }
+
+    private static bool ShouldRecenterTranscriptWindow(int previousCurrentIndex, int currentIndex) =>
+        previousCurrentIndex < 0 || Math.Abs(currentIndex - previousCurrentIndex) > 1;
 
     public void RefreshTranscriptWindowForCurrentRow()
     {
