@@ -374,6 +374,90 @@ public class VideoPlayerViewModelEmbeddedSubtitleTests
     }
 
     [Fact]
+    public void UpdatePosition_WhenAdjacentCurrentRowStaysInsideVisibleWindow_DoesNotRebuildVisibleRows()
+    {
+        var sut = CreateSut();
+        var track = new VideoTrackInfo(
+            3,
+            VideoTrackType.Subtitle,
+            "Japanese",
+            "jpn",
+            "subrip",
+            2,
+            null,
+            false,
+            true);
+        var cues = Enumerable
+            .Range(0, 140)
+            .Select(index => new VideoSubtitleCue(
+                index,
+                TimeSpan.FromSeconds(index * 2),
+                TimeSpan.FromSeconds(index * 2 + 1),
+                $"字幕 {index:000}"))
+            .ToList();
+
+        sut.SelectEmbeddedSubtitleTrack(track);
+        sut.ReplaceEmbeddedSubtitleCues(track, cues);
+        sut.UpdatePosition(TimeSpan.FromSeconds(200), TimeSpan.FromSeconds(300));
+
+        sut.TranscriptVisibleRows[0].Index.Should().Be(60);
+        sut.TranscriptVisibleRows[^1].Index.Should().Be(139);
+
+        var visibleRowsChanged = 0;
+        sut.TranscriptVisibleRows.CollectionChanged += (_, _) => visibleRowsChanged++;
+
+        sut.UpdatePosition(TimeSpan.FromSeconds(202), TimeSpan.FromSeconds(300));
+
+        visibleRowsChanged.Should().Be(0);
+        sut.TranscriptVisibleRows[0].Index.Should().Be(60);
+        sut.TranscriptVisibleRows[^1].Index.Should().Be(139);
+        sut.TranscriptVisibleRows.Should().Contain(row => row.Text == "字幕 101" && row.IsCurrent);
+    }
+
+    [Fact]
+    public void UpdatePosition_WhenPlaybackCrossesSubtitleGapToAdjacentRow_DoesNotRebuildVisibleRows()
+    {
+        var sut = CreateSut();
+        var track = new VideoTrackInfo(
+            3,
+            VideoTrackType.Subtitle,
+            "Japanese",
+            "jpn",
+            "subrip",
+            2,
+            null,
+            false,
+            true);
+        var cues = Enumerable
+            .Range(0, 140)
+            .Select(index => new VideoSubtitleCue(
+                index,
+                TimeSpan.FromSeconds(index * 2),
+                TimeSpan.FromSeconds(index * 2 + 1),
+                $"字幕 {index:000}"))
+            .ToList();
+
+        sut.SelectEmbeddedSubtitleTrack(track);
+        sut.ReplaceEmbeddedSubtitleCues(track, cues);
+        sut.UpdatePosition(TimeSpan.FromSeconds(200), TimeSpan.FromSeconds(300));
+        sut.UpdatePosition(TimeSpan.FromSeconds(201.5), TimeSpan.FromSeconds(300));
+
+        sut.TranscriptRows.Should().OnlyContain(row => !row.IsCurrent);
+        sut.TranscriptVisibleRows[0].Index.Should().Be(60);
+        sut.TranscriptVisibleRows[^1].Index.Should().Be(139);
+
+        var visibleRowsChanged = 0;
+        sut.TranscriptVisibleRows.CollectionChanged += (_, _) => visibleRowsChanged++;
+
+        sut.UpdatePosition(TimeSpan.FromSeconds(202), TimeSpan.FromSeconds(300));
+
+        visibleRowsChanged.Should().Be(0);
+        sut.TranscriptVisibleRows[0].Index.Should().Be(60);
+        sut.TranscriptVisibleRows[^1].Index.Should().Be(139);
+        sut.TranscriptVisibleRows.Should().Contain(row => row.Text == "字幕 101" && row.IsCurrent);
+    }
+
+    [Fact]
     public void TranscriptWindow_ExpandsAtEdgesWithoutLosingFullTranscript()
     {
         var sut = CreateSut();
