@@ -1489,18 +1489,20 @@ window.hoshiInjectResults = function (entriesJson, count) {
   flushPendingHistoryRestore();
   backStack.length = 0;
   forwardStack.length = 0;
-  document.documentElement.style.visibility = 'hidden';
   window.lookupEntries = entriesJson;
   window.entryCount = count;
   selectedDictionaries = {};
   audioUrls = {};
-  var container = document.getElementById('entries-container');
-  disconnectDictionaryColumns();
-  if (container) container.innerHTML = '';
   window.renderPopup();
   requestAnimationFrame(function () {
     getPopupScrollElement().scrollTop = 0;
   });
+};
+
+window.hoshiCancelPopupRender = function (expectedGeneration) {
+  if (expectedGeneration !== (window.popupRenderGeneration || 0)) return false;
+  window.popupRenderGeneration = expectedGeneration + 1;
+  return true;
 };
 
 function snapshot() {
@@ -1650,8 +1652,10 @@ document.addEventListener('toggle', function () {
 // === Main render ===
 
 window.renderPopup = function () {
-  var container = document.getElementById('entries-container');
-  if (!window.entryCount) return;
+  var liveContainer = document.getElementById('entries-container');
+  if (!liveContainer || !window.entryCount) return;
+  var stagingContainer = document.createElement('div');
+  var container = stagingContainer;
   var generation = window.popupRenderGeneration || 0;
   var renderStart = performance.now();
   var firstFrameCommitted = false;
@@ -1772,12 +1776,15 @@ window.renderPopup = function () {
   function commitFirstFrame(generation, entryDiv) {
     if (firstFrameCommitted
       || !entryDiv
-      || generation !== (window.popupRenderGeneration || 0)) {
-      return false;
-    }
+      || generation !== (window.popupRenderGeneration || 0)) return false;
 
     wrapRubyTextNodes(entryDiv);
     applyConfiguredStyles();
+    disconnectDictionaryColumns();
+    liveContainer.replaceChildren.apply(liveContainer,
+      Array.from(stagingContainer.childNodes));
+    container = liveContainer;
+    observeAllDictionarySections();
     layoutDictionaryColumns();
     document.documentElement.style.visibility = 'visible';
     firstFrameCommitted = true;
