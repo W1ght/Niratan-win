@@ -14,14 +14,23 @@ public sealed class NovelEpubImportService : INovelEpubImportService
 {
     private readonly IEpubParserService _epubParser;
     private readonly ILogger<NovelEpubImportService> _logger;
+    private readonly Func<string, string> _bookRootResolver;
 
     public NovelEpubImportService(
         IEpubParserService epubParser,
         ILogger<NovelEpubImportService> logger
-    )
+    ) : this(epubParser, logger, AppDataHelper.GetNovelBookPath)
+    {
+    }
+
+    internal NovelEpubImportService(
+        IEpubParserService epubParser,
+        ILogger<NovelEpubImportService> logger,
+        Func<string, string> bookRootResolver)
     {
         _epubParser = epubParser;
         _logger = logger;
+        _bookRootResolver = bookRootResolver;
     }
 
     public async Task<Result<NovelImportResult>> ImportAsync(
@@ -29,6 +38,7 @@ public sealed class NovelEpubImportService : INovelEpubImportService
         CancellationToken ct = default
     )
     {
+        string? bookRoot = null;
         try
         {
             if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -44,10 +54,13 @@ public sealed class NovelEpubImportService : INovelEpubImportService
                 return Result<NovelImportResult>.Failure("Please select a .epub file.");
 
             var bookId = Guid.NewGuid().ToString("N");
-            var extractedPath = AppDataHelper.GetNovelBookPath(bookId);
+            bookRoot = _bookRootResolver(bookId);
+            Directory.CreateDirectory(bookRoot);
+            var privateEpubPath = Path.Combine(bookRoot, bookId + ".epub");
+            File.Copy(filePath, privateEpubPath, overwrite: false);
 
             var epubBook = await Task.Run(
-                () => _epubParser.Parse(filePath, extractedPath),
+                () => _epubParser.Parse(privateEpubPath, bookRoot),
                 ct
             );
 
@@ -55,12 +68,14 @@ public sealed class NovelEpubImportService : INovelEpubImportService
             {
                 Id = bookId,
                 Title = epubBook.Title,
+                OriginalTitle = epubBook.Title,
+                Folder = bookId,
                 Author = epubBook.Author,
-                FilePath = Path.GetFullPath(filePath),
+                FilePath = privateEpubPath,
                 CoverPath = epubBook.CoverHref != null
                     ? Path.Combine(epubBook.ContainerDirectory, epubBook.CoverHref)
                     : null,
-                ExtractedPath = extractedPath,
+                ExtractedPath = bookRoot,
                 ChapterCount = epubBook.Chapters.Count,
                 ImportedAt = DateTime.UtcNow,
                 Language = epubBook.Language,
@@ -71,12 +86,20 @@ public sealed class NovelEpubImportService : INovelEpubImportService
         }
         catch (OperationCanceledException)
         {
+            DeleteIncompleteRoot(bookRoot);
             return Result<NovelImportResult>.Cancelled();
         }
         catch (Exception ex)
         {
+            DeleteIncompleteRoot(bookRoot);
             _logger.LogWarning(ex, "Failed to import EPUB {FilePath}", filePath);
             return Result<NovelImportResult>.Failure(ex.Message, "EPUB import failed");
         }
+    }
+
+    private static void DeleteIncompleteRoot(string? bookRoot)
+    {
+        if (!string.IsNullOrWhiteSpace(bookRoot) && Directory.Exists(bookRoot))
+            Directory.Delete(bookRoot, recursive: true);
     }
 }

@@ -3,12 +3,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using Hoshi.Models;
 using Hoshi.Models.Common;
+using Hoshi.Models.Novel;
 
 namespace Hoshi.Services.Novels;
 
 public interface INovelLibraryService
 {
-    Task<Result<IReadOnlyList<NovelBook>>> GetNovelBooksAsync(
+    Task<Result<NovelBookCatalogSnapshot>> GetNovelBooksAsync(
         string? queryText = null,
         CancellationToken ct = default
     );

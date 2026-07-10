@@ -12,6 +12,7 @@ using Microsoft.UI.Xaml;
 using Serilog;
 using Hoshi.Helpers;
 using Hoshi.Models;
+using Hoshi.Models.Novel;
 using Hoshi.Services;
 using Hoshi.Services.Anki;
 using Hoshi.Services.Audio;
@@ -162,6 +163,11 @@ public partial class App : Application
             provider.GetRequiredService<ProfileRuntimeService>());
         services.AddSingleton<IShortcutService, ShortcutService>();
         services.AddSingleton<IDataService, DataService>();
+        services.AddSingleton<INiratanJsonFileStore, NiratanJsonFileStore>();
+        services.AddSingleton<INovelBookStorageService, NovelBookStorageService>();
+        services.AddSingleton<NovelStorageAccessState>();
+        services.AddSingleton<INovelStorageAccessState>(provider =>
+            provider.GetRequiredService<NovelStorageAccessState>());
         services.AddSingleton<IEpubParserService, EpubParserService>();
         services.AddSingleton<INovelEpubImportService, NovelEpubImportService>();
         services.AddSingleton<INovelLibraryService, NovelLibraryService>();

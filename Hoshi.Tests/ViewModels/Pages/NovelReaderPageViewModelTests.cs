@@ -117,7 +117,7 @@ public sealed class NovelReaderPageViewModelTests
     }
 
     [Fact]
-    public async Task SaveProgressNowAsync_WritesBookmarkSidecarBesideDatabaseProgress()
+    public async Task SaveProgressNowAsync_DelegatesCanonicalBookmarkWriteOnce()
     {
         var ct = TestContext.Current.CancellationToken;
         using var temp = new TempBookDirectory();
@@ -156,12 +156,14 @@ public sealed class NovelReaderPageViewModelTests
 
         await sut.SaveProgressNowAsync();
 
-        var bookmark = await sidecarService.LoadBookmarkAsync(temp.Path, ct);
-        bookmark.Should().NotBeNull();
-        bookmark!.ChapterIndex.Should().Be(1);
-        bookmark.Progress.Should().Be(0.5);
-        bookmark.CharacterCount.Should().Be(125);
-        bookmark.LastModified.Should().NotBeNull();
+        (await sidecarService.LoadBookmarkAsync(temp.Path, ct)).Should().BeNull();
+        novelService.Verify(s => s.SaveProgressAsync(
+            "book-1",
+            1,
+            0.5,
+            125,
+            150,
+            It.IsAny<CancellationToken>()), Times.Once);
         novelService.VerifyAll();
     }
 
