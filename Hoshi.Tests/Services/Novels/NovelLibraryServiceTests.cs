@@ -97,16 +97,39 @@ public sealed class NovelLibraryServiceTests
         storage.VerifyNoOtherCalls();
     }
 
+    [Fact]
+    public async Task DeleteNovelAsync_ShelfCleanupFailurePreservesBookDirectory()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var storage = new Mock<INovelBookStorageService>();
+        storage.Setup(service => service.LoadAsync("a", ct))
+            .ReturnsAsync(new NovelBook { Id = "a", Title = "星" });
+        var shelves = new Mock<INovelShelfService>();
+        shelves.Setup(service => service.RemoveBookAsync("a", ct))
+            .ReturnsAsync(Result<NovelShelfState>.Failure("shelves.json is invalid"));
+        var sut = CreateSut(storage: storage, shelves: shelves);
+
+        var result = await sut.DeleteNovelAsync("a", ct);
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Should().Contain("shelves.json is invalid");
+        storage.Verify(service => service.DeleteAsync(
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     private static NovelLibraryService CreateSut(
         Mock<INovelBookStorageService>? storage = null,
         Mock<INovelBookSidecarService>? sidecars = null,
         Mock<INovelStorageAccessState>? accessState = null,
-        Mock<INovelEpubImportService>? import = null) =>
+        Mock<INovelEpubImportService>? import = null,
+        Mock<INovelShelfService>? shelves = null) =>
         new(
             storage?.Object ?? Mock.Of<INovelBookStorageService>(),
             sidecars?.Object ?? Mock.Of<INovelBookSidecarService>(),
             accessState?.Object ?? CreateWritableAccessState().Object,
             import?.Object ?? Mock.Of<INovelEpubImportService>(),
+            shelves?.Object ?? CreateSuccessfulShelfService().Object,
             NullLogger<NovelLibraryService>.Instance);
 
     private static Mock<INovelStorageAccessState> CreateWritableAccessState()
@@ -114,5 +137,15 @@ public sealed class NovelLibraryServiceTests
         var state = new Mock<INovelStorageAccessState>();
         state.SetupGet(value => value.IsReadOnly).Returns(false);
         return state;
+    }
+
+    private static Mock<INovelShelfService> CreateSuccessfulShelfService()
+    {
+        var shelves = new Mock<INovelShelfService>();
+        shelves.Setup(service => service.RemoveBookAsync(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelShelfState>.Success(new NovelShelfState([], [])));
+        return shelves;
     }
 }

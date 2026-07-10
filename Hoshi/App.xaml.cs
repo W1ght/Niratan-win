@@ -165,6 +165,7 @@ public partial class App : Application
         services.AddSingleton<IVideoDataService, VideoDataService>();
         services.AddSingleton<INiratanJsonFileStore, NiratanJsonFileStore>();
         services.AddSingleton<INovelBookStorageService, NovelBookStorageService>();
+        services.AddSingleton<INovelShelfService, NovelShelfService>();
         services.AddSingleton<INovelStorageMigrationService, NovelStorageMigrationService>();
         services.AddSingleton<NovelStorageAccessState>();
         services.AddSingleton<INovelStorageAccessState>(provider =>

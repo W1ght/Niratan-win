@@ -15,6 +15,7 @@ internal sealed class NovelLibraryService : INovelLibraryService
     private readonly INovelBookSidecarService _sidecars;
     private readonly INovelStorageAccessState _accessState;
     private readonly INovelEpubImportService _epubImportService;
+    private readonly INovelShelfService _shelves;
     private readonly ILogger<NovelLibraryService> _logger;
 
     public NovelLibraryService(
@@ -22,12 +23,14 @@ internal sealed class NovelLibraryService : INovelLibraryService
         INovelBookSidecarService sidecars,
         INovelStorageAccessState accessState,
         INovelEpubImportService epubImportService,
+        INovelShelfService shelves,
         ILogger<NovelLibraryService> logger)
     {
         _storage = storage;
         _sidecars = sidecars;
         _accessState = accessState;
         _epubImportService = epubImportService;
+        _shelves = shelves;
         _logger = logger;
     }
 
@@ -118,6 +121,16 @@ internal sealed class NovelLibraryService : INovelLibraryService
                 var book = await _storage.LoadAsync(bookId, token);
                 if (book is null)
                     return Result.Failure("Book not found.", "Delete failed");
+
+                var shelfResult = await _shelves.RemoveBookAsync(bookId, token);
+                if (!shelfResult.IsSuccess)
+                {
+                    return shelfResult.IsCancelled
+                        ? Result.Cancelled()
+                        : Result.Failure(
+                            shelfResult.Error!,
+                            shelfResult.ErrorTitle ?? "Delete failed");
+                }
 
                 await _storage.DeleteAsync(bookId, token);
                 _logger.LogInformation("Deleted novel '{Title}' ({Id})", book.Title, bookId);
