@@ -31,6 +31,9 @@ public partial class TtuSyncSettingsPageViewModel : ObservableObject
     public partial string GoogleClientId { get; set; } = "";
 
     [ObservableProperty]
+    public partial string GoogleClientSecret { get; set; } = "";
+
+    [ObservableProperty]
     public partial bool UploadBooks { get; set; }
 
     [ObservableProperty]
@@ -96,11 +99,19 @@ public partial class TtuSyncSettingsPageViewModel : ObservableObject
             return;
         }
 
+        var clientSecret = GoogleClientSecret.Trim();
+        if (string.IsNullOrWhiteSpace(clientSecret))
+        {
+            GoogleDriveConnectionStatus = "Enter a client secret first.";
+            return;
+        }
+
         IsGoogleDriveBusy = true;
         GoogleDriveConnectionStatus = "Connecting...";
         try
         {
-            await _googleDriveAuthService.AuthenticateAsync(clientId);
+            await _googleDriveAuthService.AuthenticateAsync(clientId, clientSecret);
+            GoogleClientSecret = "";
             UpdateConnectionStatus();
         }
         catch (Exception ex)
