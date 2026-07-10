@@ -81,6 +81,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     private static readonly HttpClient s_audioResolveHttpClient = new() { Timeout = TimeSpan.FromSeconds(5) };
     private static readonly LocalAudioSourceListResolver s_localAudioSourceListResolver = new();
     private CancellationTokenSource? _prefetchCts;
+    private CancellationTokenSource? _deferredResultsCts;
 
     public Border VisualRoot { get; }
     public bool IsWarmed => _isWarmed;
@@ -353,25 +354,123 @@ public sealed class DictionaryLookupPopup : IDisposable
         _audioSettings = audioSettings ?? new AudioSettings();
         _ankiSettings = ankiSettings ?? new AnkiSettings();
         CancelPrefetch();
+        CancelDeferredResults();
         if (!_isWarmed)
             await WarmAsync(themeMode, _audioSettings, _ankiSettings);
 
         UpdateSasayakiPopupControls();
+        var ranges = DictionaryPopupBatchPlanner.Create(results.Count);
+        var initialRange = ranges[0];
+        var initialResults = results.GetRange(initialRange.Offset, initialRange.Count);
         var generation = PrepareForPendingContent();
         _pendingContentStopwatch = Stopwatch.StartNew();
-        var injectionScript = _htmlGenerator.GenerateInjectionScript(results, styles, displaySettings, themeMode, generation, _audioSettings, _ankiSettings, traceId: traceId);
+        var serializeSw = Stopwatch.StartNew();
+        var injectionScript = _htmlGenerator.GenerateInjectionScript(initialResults,
+            styles,
+            displaySettings,
+            themeMode,
+            generation,
+            _audioSettings,
+            _ankiSettings,
+            traceId: traceId,
+            totalResultCount: results.Count);
+        var payloadBytes = Encoding.UTF8.GetByteCount(injectionScript);
+        Log.Information(
+            "[LookupTrace] trace={TraceId} popup initial serialized in {Ms}ms bytes={Bytes} entries={EntryCount} total={TotalCount}",
+            traceId ?? "-",
+            serializeSw.ElapsedMilliseconds,
+            payloadBytes,
+            initialResults.Count,
+            results.Count);
+        var executeSw = Stopwatch.StartNew();
         await _contentWebView.CoreWebView2.ExecuteScriptAsync(injectionScript);
         Log.Information(
-            "[LookupTrace] trace={TraceId} popup ExecuteScriptAsync finished in {Ms}ms gen={Gen} entries={EntryCount}",
-            traceId ?? "-", sw.ElapsedMilliseconds, generation, results.Count);
-        Log.Information("[Lifecycle] Popup content injected: entries={EntryCount} gen={Gen}", results.Count, generation);
+            "[LookupTrace] trace={TraceId} popup initial ExecuteScriptAsync finished in {Ms}ms total={TotalMs}ms gen={Gen} entries={EntryCount}",
+            traceId ?? "-", executeSw.ElapsedMilliseconds, sw.ElapsedMilliseconds, generation, initialResults.Count);
+        Log.Information("[Lifecycle] Popup initial content injected: entries={EntryCount} total={TotalCount} gen={Gen}",
+            initialResults.Count, results.Count, generation);
         PrefetchAudioUrls(results);
+
+        if (ranges.Count > 1)
+        {
+            _deferredResultsCts = new CancellationTokenSource();
+            _ = AppendDeferredResultsAsync(
+                results,
+                ranges.Skip(1).ToArray(),
+                results.Count,
+                generation,
+                traceId,
+                _deferredResultsCts.Token);
+        }
+    }
+
+    private async Task AppendDeferredResultsAsync(
+        List<DictionaryLookupResult> results,
+        IReadOnlyList<DictionaryPopupBatchRange> ranges,
+        int totalResultCount,
+        long generation,
+        string? traceId,
+        CancellationToken ct)
+    {
+        try
+        {
+            await Task.Yield();
+            for (var batchIndex = 0; batchIndex < ranges.Count; batchIndex++)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (generation != _displayGeneration)
+                    return;
+
+                var range = ranges[batchIndex];
+                var batch = results.GetRange(range.Offset, range.Count);
+                var serializeSw = Stopwatch.StartNew();
+                var script = _htmlGenerator.GenerateAppendResultsScript(
+                    batch,
+                    totalResultCount,
+                    generation);
+                var payloadBytes = Encoding.UTF8.GetByteCount(script);
+                Log.Information(
+                    "[LookupTrace] trace={TraceId} popup deferred batch serialized in {Ms}ms bytes={Bytes} batch={BatchIndex} entries={EntryCount} gen={Gen}",
+                    traceId ?? "-",
+                    serializeSw.ElapsedMilliseconds,
+                    payloadBytes,
+                    batchIndex,
+                    batch.Count,
+                    generation);
+
+                var executeSw = Stopwatch.StartNew();
+                await _contentWebView.CoreWebView2.ExecuteScriptAsync(script);
+                Log.Information(
+                    "[LookupTrace] trace={TraceId} popup deferred batch transferred in {Ms}ms batch={BatchIndex} entries={EntryCount} gen={Gen}",
+                    traceId ?? "-",
+                    executeSw.ElapsedMilliseconds,
+                    batchIndex,
+                    batch.Count,
+                    generation);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            Log.Debug(
+                "[LookupTrace] trace={TraceId} popup deferred batches cancelled gen={Gen}",
+                traceId ?? "-",
+                generation);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(
+                ex,
+                "[LookupTrace] trace={TraceId} popup deferred batch failed gen={Gen}",
+                traceId ?? "-",
+                generation);
+        }
     }
 
     public void Hide()
     {
         Log.Information("[Lifecycle] Popup hidden: wasGen={Gen}", _displayGeneration);
         CancelPrefetch();
+        CancelDeferredResults();
         _displayGeneration++;
         _pendingContentGeneration = null;
         VisualRoot.Opacity = 0;
@@ -1044,6 +1143,13 @@ public sealed class DictionaryLookupPopup : IDisposable
         _prefetchCts = null;
     }
 
+    private void CancelDeferredResults()
+    {
+        _deferredResultsCts?.Cancel();
+        _deferredResultsCts?.Dispose();
+        _deferredResultsCts = null;
+    }
+
     /// <summary>
     /// Prefetch audio URL resolution for the primary entry only (first result).
     /// Never blocks the UI thread — runs on a background task with cancellation.
@@ -1350,6 +1456,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     public void Dispose()
     {
         CancelPrefetch();
+        CancelDeferredResults();
         if (_contentWebView.CoreWebView2 != null)
         {
             _contentWebView.CoreWebView2.WebMessageReceived -= OnPopupWebMessageReceived;

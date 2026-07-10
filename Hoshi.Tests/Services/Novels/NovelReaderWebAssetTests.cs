@@ -1712,7 +1712,7 @@ public class NovelReaderWebAssetTests
             .Should()
             .HaveCount(2);
         popupJs.Should().Contain("function commitFirstFrame(generation, entryDiv)");
-        popupJs.Should().Contain("function renderRemainingEntries(startIndex, generation, onFinished)");
+        popupJs.Should().Contain("function renderAvailableEntries()");
         popupJs.Should().Contain("postPopupMessage('tapOutside', null);");
     }
 
