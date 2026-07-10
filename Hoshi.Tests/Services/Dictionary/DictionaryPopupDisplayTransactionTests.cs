@@ -10,11 +10,13 @@ public class DictionaryPopupDisplayTransactionTests
     {
         var state = new DictionaryPopupDisplayTransaction();
         state.BeginPending(1, "first").Should().BeFalse();
-        state.TryCommit(1, out _).Should().BeTrue();
+        state.TryAcceptCommit(1).Should().BeTrue();
+        state.TryCompleteCommit(1, out _).Should().BeTrue();
 
         state.BeginPending(2, "second").Should().BeTrue();
-        state.TryCommit(1, out _).Should().BeFalse();
-        state.TryCommit(2, out var commit).Should().BeTrue();
+        state.TryAcceptCommit(1).Should().BeFalse();
+        state.TryAcceptCommit(2).Should().BeTrue();
+        state.TryCompleteCommit(2, out var commit).Should().BeTrue();
 
         commit.Should().Be(new DictionaryPopupContentCommit(2, "second"));
         state.HasCommittedContent.Should().BeTrue();
@@ -25,7 +27,8 @@ public class DictionaryPopupDisplayTransactionTests
     {
         var state = new DictionaryPopupDisplayTransaction();
         state.BeginPending(1, "shown");
-        state.TryCommit(1, out _);
+        state.TryAcceptCommit(1);
+        state.TryCompleteCommit(1, out _);
         state.BeginPending(2, "cancelled");
 
         state.CancelPending(2, "cancelled").Should().BeTrue();
@@ -54,5 +57,24 @@ public class DictionaryPopupDisplayTransactionTests
 
         state.CancelPending(7, "current").Should().BeTrue();
         state.PendingGeneration.Should().BeNull();
+    }
+
+    [Fact]
+    public void CommitInFlight_RejectsReplacementAndCancellationUntilCompletion()
+    {
+        var state = new DictionaryPopupDisplayTransaction();
+        state.BeginPending(11, "accepted");
+        state.TryAcceptCommit(11).Should().BeTrue();
+
+        state.CommitInFlightGeneration.Should().Be(11);
+        state.CancelPending(11, "accepted").Should().BeFalse();
+        state.BeginPending(12, "newer");
+        state.PendingGeneration.Should().BeNull();
+        state.TryAcceptCommit(12).Should().BeFalse();
+        state.TryCompleteCommit(12, out _).Should().BeFalse();
+
+        state.TryCompleteCommit(11, out var commit).Should().BeTrue();
+        commit.Should().Be(new DictionaryPopupContentCommit(11, "accepted"));
+        state.CommittedGeneration.Should().Be(11);
     }
 }
