@@ -1730,12 +1730,50 @@ public class NovelReaderWebAssetTests
         code.Should().Contain("if (!preserveCommittedContent)");
         code.Should().Contain("case \"contentPrepared\":");
         code.Should().Contain("window.hoshiCommitPopupRender");
+        code.Should().Contain("_displayTransaction.TryAcceptCommit(preparedGeneration)");
+        code.Should().Contain("_displayTransaction.TryCompleteCommit(readyGeneration, out var commit)");
         code.Should().Contain("public void CancelPendingContent(long generation, string? traceId)");
         code.Should().Contain("window.hoshiCancelPopupRender");
-        code.Should().Contain("PrepareForPendingContent(cancellationToken, traceId)");
+        code.Should().Contain("var generation = PrepareForPendingContent(");
+        code.Should().Contain("request.CancellationToken,");
+        code.Should().Contain("request.TraceId);");
         code.Should().Contain("private long PrepareForPendingContent(");
         code.Should().Contain("string? traceId)");
         code.Should().Contain("_displayTransaction.CommittedGeneration != readyGeneration");
+        code.Should().Contain("_displayTransaction.PendingGeneration is not null");
+        code.Should().Contain("_displayGeneration != readyGeneration");
+        code.Should().Contain("private sealed record DictionaryPopupShowRequest(");
+        code.Should().Contain("private sealed record DictionaryPopupNativeContext(");
+        code.Should().Contain("private DictionaryPopupShowRequest? _queuedShowRequest;");
+        code.Should().Contain("private async Task ProcessQueuedShowAsync()");
+        code.Should().Contain("_queuedShowRequest = request;");
+        code.Should().Contain("_queuedShowRequest = null;");
+        code.Should().Contain("_displayTransaction.CommitInFlightGeneration is not null");
+        code.Should().Contain("_isCompletingContentReady");
+        code.Should().Contain("_ = ProcessQueuedShowAsync();");
+        code.Should().Contain("private void PromoteNativeContext(");
+        code.Should().Contain("_nextMiningContext = context ?? new AnkiMiningContext();");
+
+        var showStart = code.IndexOf("public async Task ShowResultsWarmAsync(", StringComparison.Ordinal);
+        var showEnd = code.IndexOf("private async Task AppendDeferredResultsAsync(", showStart, StringComparison.Ordinal);
+        var showPath = code[showStart..showEnd];
+        showPath.Should().Contain("var normalizedAudioSettings = audioSettings ?? new AudioSettings();");
+        showPath.Should().Contain("var normalizedAnkiSettings = ankiSettings ?? new AnkiSettings();");
+        showPath.Should().NotContain("_currentTraceId = traceId;");
+        showPath.Should().NotContain("_audioSettings =");
+        showPath.Should().NotContain("_ankiSettings =");
+        showPath.Should().NotContain("_miningContext =");
+        showPath.Should().NotContain("UpdateSasayakiPopupControls();");
+
+        var promoteStart = code.IndexOf("private void PromoteNativeContext(", StringComparison.Ordinal);
+        var promoteEnd = code.IndexOf("private async Task ProcessQueuedShowAsync()", promoteStart, StringComparison.Ordinal);
+        var promote = code[promoteStart..promoteEnd];
+        promote.Should().Contain("_currentTraceId = context.TraceId;");
+        promote.Should().Contain("_audioSettings = context.AudioSettings;");
+        promote.Should().Contain("_ankiSettings = context.AnkiSettings;");
+        promote.Should().Contain("_miningContext = context.MiningContext;");
+        promote.Should().Contain("_sasayakiPopupControls = context.SasayakiControls;");
+        promote.Should().Contain("UpdateSasayakiPopupControls();");
 
         var legacyReady = code.IndexOf("ContentReady?.Invoke(this, EventArgs.Empty);", StringComparison.Ordinal);
         var ownershipRecheck = code.IndexOf(
@@ -1916,7 +1954,7 @@ public class NovelReaderWebAssetTests
         overlayCode.Should().Contain("string? traceId = null");
         overlayCode.Should().Contain("[LookupTrace] trace={TraceId} root popup content injected");
         popupCode.Should().Contain("string? traceId = null");
-        popupCode.Should().Contain("_currentTraceId = traceId");
+        popupCode.Should().Contain("_currentTraceId = context.TraceId");
         popupCode.Should().Contain("[LookupTrace] trace={TraceId} popup initial ExecuteScriptAsync finished");
         popupCode.Should().Contain("[AudioTrace] lookup={TraceId} audio={AudioTraceId} popup-js stage={Stage}");
         popupCode.Should().Contain("[AudioTrace] lookup={TraceId} audio={AudioTraceId} native message received");

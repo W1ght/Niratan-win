@@ -50,6 +50,28 @@ public sealed class DictionaryPopupContentCommittedEventArgs(
 
 public sealed class DictionaryLookupPopup : IDisposable
 {
+    private sealed record DictionaryPopupShowRequest(
+        List<DictionaryLookupResult> Results,
+        Dictionary<string, string> Styles,
+        DictionaryDisplaySettings DisplaySettings,
+        ThemeMode ThemeMode,
+        AudioSettings AudioSettings,
+        AnkiSettings AnkiSettings,
+        AnkiMiningContext MiningContext,
+        SasayakiPopupControls? SasayakiControls,
+        string? TraceId,
+        CancellationToken CancellationToken,
+        Action<long>? GenerationStarted);
+
+    private sealed record DictionaryPopupNativeContext(
+        long Generation,
+        string? TraceId,
+        ThemeMode ThemeMode,
+        AudioSettings AudioSettings,
+        AnkiSettings AnkiSettings,
+        AnkiMiningContext MiningContext,
+        SasayakiPopupControls? SasayakiControls);
+
     public event EventHandler<DictionaryPopupRedirectRequest>? RedirectRequested;
     public event EventHandler? TapOutsideRequested;
     public event EventHandler? DismissRequested;
@@ -72,8 +94,13 @@ public sealed class DictionaryLookupPopup : IDisposable
     private readonly IAnkiService _ankiService;
     private readonly DictionaryPopupDisplayTransaction _displayTransaction = new();
     private AnkiMiningContext _miningContext = new();
+    private AnkiMiningContext _nextMiningContext = new();
+    private SasayakiPopupControls? _sasayakiPopupControls;
     private AudioSettings _audioSettings = new();
     private AnkiSettings _ankiSettings = new();
+    private DictionaryPopupNativeContext? _stagedNativeContext;
+    private DictionaryPopupShowRequest? _queuedShowRequest;
+    private bool _isCompletingContentReady;
     private bool _webViewReady;
     private bool _isWarmed;
     private long _displayGeneration;
@@ -219,7 +246,7 @@ public sealed class DictionaryLookupPopup : IDisposable
 
     private void UpdateSasayakiPopupControls()
     {
-        var controls = _miningContext.SasayakiPopupControls;
+        var controls = _sasayakiPopupControls;
         if (controls == null)
         {
             _sasayakiControlsBar.Visibility = Visibility.Collapsed;
@@ -253,7 +280,7 @@ public sealed class DictionaryLookupPopup : IDisposable
 
     private async Task HandleSasayakiPopupPlayPauseAsync()
     {
-        var controls = _miningContext.SasayakiPopupControls;
+        var controls = _sasayakiPopupControls;
         if (controls == null || controls.CanControl?.Invoke() == false)
             return;
 
@@ -263,7 +290,7 @@ public sealed class DictionaryLookupPopup : IDisposable
 
     private async Task HandleSasayakiPopupReplayCueAsync()
     {
-        var controls = _miningContext.SasayakiPopupControls;
+        var controls = _sasayakiPopupControls;
         if (controls == null || controls.CanControl?.Invoke() == false)
             return;
 
@@ -273,7 +300,7 @@ public sealed class DictionaryLookupPopup : IDisposable
 
     private async Task HandleSasayakiPopupJumpCueAsync()
     {
-        var controls = _miningContext.SasayakiPopupControls;
+        var controls = _sasayakiPopupControls;
         if (controls == null || controls.CanControl?.Invoke() == false)
             return;
 
@@ -293,23 +320,31 @@ public sealed class DictionaryLookupPopup : IDisposable
         SetPopupCornerRadius(8);
     }
 
-    public async Task WarmAsync(ThemeMode themeMode = ThemeMode.System, AudioSettings? audioSettings = null, AnkiSettings? ankiSettings = null)
+    public async Task WarmAsync(
+        ThemeMode themeMode = ThemeMode.System,
+        AudioSettings? audioSettings = null,
+        AnkiSettings? ankiSettings = null,
+        string? traceId = null)
     {
-        ApplySurfaceTheme(themeMode);
         if (_isWarmed) return;
+        ApplySurfaceTheme(themeMode);
         var sw = Stopwatch.StartNew();
-        _audioSettings = audioSettings ?? new AudioSettings();
-        _ankiSettings = ankiSettings ?? new AnkiSettings();
+        var normalizedAudioSettings = audioSettings ?? new AudioSettings();
+        var normalizedAnkiSettings = ankiSettings ?? new AnkiSettings();
 
         await EnsureWebViewAsync();
         Log.Information(
             "[LookupTrace] trace={TraceId} popup warm EnsureWebView2 completed in {Ms}ms",
-            _currentTraceId ?? "-", sw.ElapsedMilliseconds);
+            traceId ?? "-", sw.ElapsedMilliseconds);
         _shellReadyCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _contentWebView.CoreWebView2.NavigateToString(_htmlGenerator.GenerateShellHtml(themeMode, audioSettings: _audioSettings, ankiSettings: _ankiSettings, hidden: true));
+        _contentWebView.CoreWebView2.NavigateToString(_htmlGenerator.GenerateShellHtml(
+            themeMode,
+            audioSettings: normalizedAudioSettings,
+            ankiSettings: normalizedAnkiSettings,
+            hidden: true));
         Log.Information(
             "[LookupTrace] trace={TraceId} popup warm NavigateToString returned in {Ms}ms",
-            _currentTraceId ?? "-", sw.ElapsedMilliseconds);
+            traceId ?? "-", sw.ElapsedMilliseconds);
         await WaitForShellReadyAsync();
         await ApplyPopupCornerRadiusToWebViewAsync();
         _isWarmed = true;
@@ -318,8 +353,7 @@ public sealed class DictionaryLookupPopup : IDisposable
 
     public void SetMiningContext(AnkiMiningContext? context)
     {
-        _miningContext = context ?? new AnkiMiningContext();
-        UpdateSasayakiPopupControls();
+        _nextMiningContext = context ?? new AnkiMiningContext();
     }
 
     public void SetReadyOpacity(double opacity)
@@ -363,68 +397,115 @@ public sealed class DictionaryLookupPopup : IDisposable
         Action<long>? generationStarted = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ApplySurfaceTheme(themeMode);
-        var sw = Stopwatch.StartNew();
-        _currentTraceId = traceId;
-        _audioSettings = audioSettings ?? new AudioSettings();
-        _ankiSettings = ankiSettings ?? new AnkiSettings();
-        CancelPrefetch();
-        CancelDeferredResults();
-        if (!_isWarmed)
-            await WarmAsync(themeMode, _audioSettings, _ankiSettings);
-        cancellationToken.ThrowIfCancellationRequested();
-
-        UpdateSasayakiPopupControls();
-        var ranges = DictionaryPopupBatchPlanner.Create(results.Count);
-        var initialRange = ranges[0];
-        var initialResults = results.GetRange(initialRange.Offset, initialRange.Count);
-        var generation = PrepareForPendingContent(cancellationToken, traceId);
-        generationStarted?.Invoke(generation);
-        _pendingContentStopwatch = Stopwatch.StartNew();
-        var serializeSw = Stopwatch.StartNew();
-        var injectionScript = _htmlGenerator.GenerateInjectionScript(initialResults,
+        var normalizedAudioSettings = audioSettings ?? new AudioSettings();
+        var normalizedAnkiSettings = ankiSettings ?? new AnkiSettings();
+        var miningContext = _nextMiningContext;
+        var request = new DictionaryPopupShowRequest(
+            results,
             styles,
             displaySettings,
             themeMode,
+            normalizedAudioSettings,
+            normalizedAnkiSettings,
+            miningContext,
+            miningContext.SasayakiPopupControls,
+            traceId,
+            cancellationToken,
+            generationStarted);
+
+        if (_displayTransaction.CommitInFlightGeneration is not null
+            || _isCompletingContentReady)
+        {
+            _queuedShowRequest = request;
+            return;
+        }
+
+        await ShowResultsWarmCoreAsync(request);
+    }
+
+    private async Task ShowResultsWarmCoreAsync(DictionaryPopupShowRequest request)
+    {
+        request.CancellationToken.ThrowIfCancellationRequested();
+        var sw = Stopwatch.StartNew();
+        CancelPrefetch();
+        CancelDeferredResults();
+        if (!_isWarmed)
+        {
+            await WarmAsync(
+                request.ThemeMode,
+                request.AudioSettings,
+                request.AnkiSettings,
+                request.TraceId);
+        }
+        request.CancellationToken.ThrowIfCancellationRequested();
+
+        if (_displayTransaction.CommitInFlightGeneration is not null
+            || _isCompletingContentReady)
+        {
+            _queuedShowRequest = request;
+            return;
+        }
+
+        var ranges = DictionaryPopupBatchPlanner.Create(request.Results.Count);
+        var initialRange = ranges[0];
+        var initialResults = request.Results.GetRange(initialRange.Offset, initialRange.Count);
+        var generation = PrepareForPendingContent(
+            request.CancellationToken,
+            request.TraceId);
+        request.GenerationStarted?.Invoke(generation);
+        _stagedNativeContext = new DictionaryPopupNativeContext(
             generation,
-            _audioSettings,
-            _ankiSettings,
-            traceId: traceId,
-            totalResultCount: results.Count);
+            request.TraceId,
+            request.ThemeMode,
+            request.AudioSettings,
+            request.AnkiSettings,
+            request.MiningContext,
+            request.SasayakiControls);
+        _pendingContentStopwatch = Stopwatch.StartNew();
+        var serializeSw = Stopwatch.StartNew();
+        var injectionScript = _htmlGenerator.GenerateInjectionScript(initialResults,
+            request.Styles,
+            request.DisplaySettings,
+            request.ThemeMode,
+            generation,
+            request.AudioSettings,
+            request.AnkiSettings,
+            traceId: request.TraceId,
+            totalResultCount: request.Results.Count);
         var payloadBytes = Encoding.UTF8.GetByteCount(injectionScript);
         Log.Information(
             "[LookupTrace] trace={TraceId} popup initial serialized in {Ms}ms bytes={Bytes} entries={EntryCount} total={TotalCount}",
-            traceId ?? "-",
+            request.TraceId ?? "-",
             serializeSw.ElapsedMilliseconds,
             payloadBytes,
             initialResults.Count,
-            results.Count);
+            request.Results.Count);
         var executeSw = Stopwatch.StartNew();
         await _contentWebView.CoreWebView2.ExecuteScriptAsync(injectionScript);
-        if (cancellationToken.IsCancellationRequested)
+        if (request.CancellationToken.IsCancellationRequested)
         {
-            CancelPendingContent(generation, traceId);
-            cancellationToken.ThrowIfCancellationRequested();
+            CancelPendingContent(generation, request.TraceId);
+            request.CancellationToken.ThrowIfCancellationRequested();
         }
         Log.Information(
             "[LookupTrace] trace={TraceId} popup initial ExecuteScriptAsync finished in {Ms}ms total={TotalMs}ms gen={Gen} entries={EntryCount}",
-            traceId ?? "-", executeSw.ElapsedMilliseconds, sw.ElapsedMilliseconds, generation, initialResults.Count);
+            request.TraceId ?? "-", executeSw.ElapsedMilliseconds, sw.ElapsedMilliseconds, generation, initialResults.Count);
         Log.Information("[Lifecycle] Popup initial content injected: entries={EntryCount} total={TotalCount} gen={Gen}",
-            initialResults.Count, results.Count, generation);
-        PrefetchAudioUrls(results);
+            initialResults.Count, request.Results.Count, generation);
+        PrefetchAudioUrls(request.Results, request.AudioSettings, request.TraceId);
 
         if (ranges.Count > 1)
         {
-            var deferredCts = cancellationToken.CanBeCanceled
-                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+            var deferredCts = request.CancellationToken.CanBeCanceled
+                ? CancellationTokenSource.CreateLinkedTokenSource(request.CancellationToken)
                 : new CancellationTokenSource();
             _deferredResultsCts = deferredCts;
             _ = AppendDeferredResultsAsync(
-                results,
+                request.Results,
                 ranges.Skip(1).ToArray(),
-                results.Count,
+                request.Results.Count,
                 generation,
-                traceId,
+                request.TraceId,
                 deferredCts);
         }
     }
@@ -526,6 +607,8 @@ public sealed class DictionaryLookupPopup : IDisposable
         Log.Information("[Lifecycle] Popup hidden: wasGen={Gen}", _displayGeneration);
         CancelPrefetch();
         CancelDeferredResults();
+        _queuedShowRequest = null;
+        _stagedNativeContext = null;
         _displayTransaction.Dismiss();
         _displayGeneration++;
         _pendingContentGeneration = null;
@@ -544,6 +627,8 @@ public sealed class DictionaryLookupPopup : IDisposable
         _pendingContentGeneration = null;
         _pendingContentCancellationToken = default;
         _pendingContentStopwatch = null;
+        if (_stagedNativeContext?.Generation == generation)
+            _stagedNativeContext = null;
 
         if (_contentWebView.CoreWebView2 is not null)
         {
@@ -810,7 +895,10 @@ public sealed class DictionaryLookupPopup : IDisposable
         }
     }
 
-    private bool IsAllowedAudioResolverUrl(string url)
+    private bool IsAllowedAudioResolverUrl(string url) =>
+        IsAllowedAudioResolverUrl(url, _audioSettings);
+
+    private static bool IsAllowedAudioResolverUrl(string url, AudioSettings audioSettings)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var candidate))
             return false;
@@ -818,10 +906,10 @@ public sealed class DictionaryLookupPopup : IDisposable
         if (candidate.Scheme != Uri.UriSchemeHttp && candidate.Scheme != Uri.UriSchemeHttps)
             return false;
 
-        if (_audioSettings.EnableLocalAudio && LocalAudioSourceListResolver.IsLocalAudioSourceListUrl(url))
+        if (audioSettings.EnableLocalAudio && LocalAudioSourceListResolver.IsLocalAudioSourceListUrl(url))
             return true;
 
-        foreach (var template in _audioSettings.EnabledAudioSourceUrls)
+        foreach (var template in audioSettings.EnabledAudioSourceUrls)
         {
             var normalizedTemplate = NormalizeAudioSourceUrl(template);
             if (string.IsNullOrWhiteSpace(normalizedTemplate))
@@ -887,7 +975,9 @@ public sealed class DictionaryLookupPopup : IDisposable
                     var preparedGeneration = _pendingContentGeneration!.Value;
                     if (!CanShowReadyContent(preparedGeneration)
                         || _displayTransaction.PendingGeneration != preparedGeneration
-                        || _contentWebView.CoreWebView2 is null)
+                        || _stagedNativeContext?.Generation != preparedGeneration
+                        || _contentWebView.CoreWebView2 is null
+                        || !_displayTransaction.TryAcceptCommit(preparedGeneration))
                         break;
 
                     _ = _contentWebView.CoreWebView2.ExecuteScriptAsync(
@@ -898,29 +988,46 @@ public sealed class DictionaryLookupPopup : IDisposable
                     Log.Information("[DictPopup] Content ready: {Payload}", payload.GetRawText());
                     Log.Information(
                         "[LookupTrace] trace={TraceId} popup contentReady message received gen={Gen} elapsedSinceInject={Ms}ms",
-                        _currentTraceId ?? "-", _pendingContentGeneration, _pendingContentStopwatch?.ElapsedMilliseconds ?? -1);
-                    if (!IsCurrentContentReady(payload))
+                        _stagedNativeContext?.TraceId ?? "-", _pendingContentGeneration, _pendingContentStopwatch?.ElapsedMilliseconds ?? -1);
+                    if (!TryGetContentGeneration(payload, out var readyGeneration)
+                        || _displayTransaction.CommitInFlightGeneration != readyGeneration)
                     {
                         Log.Debug("[DictPopup] Ignored stale contentReady: {Payload}", payload.GetRawText());
                         break;
                     }
 
-                    var readyGeneration = _pendingContentGeneration!.Value;
                     _contentWebView.DispatcherQueue.TryEnqueue(() =>
                     {
-                        if (!CanShowReadyContent(readyGeneration)
-                            || !_displayTransaction.TryCommit(readyGeneration, out var commit))
+                        if (_displayTransaction.CommitInFlightGeneration != readyGeneration
+                            || _stagedNativeContext is not { } context
+                            || context.Generation != readyGeneration)
                             return;
 
-                        ShowReadyContent();
-                        ContentReady?.Invoke(this, EventArgs.Empty);
-                        if (_displayTransaction.CommittedGeneration != readyGeneration)
-                            return;
-                        ContentCommitted?.Invoke(
-                            this,
-                            new DictionaryPopupContentCommittedEventArgs(
-                                commit.Generation,
-                                commit.TraceId));
+                        _isCompletingContentReady = true;
+                        try
+                        {
+                            if (!_displayTransaction.TryCompleteCommit(readyGeneration, out var commit))
+                                return;
+
+                            PromoteNativeContext(context);
+                            ShowReadyContent();
+                            ContentReady?.Invoke(this, EventArgs.Empty);
+                            if (_displayTransaction.CommittedGeneration != readyGeneration)
+                                return;
+                            if (_displayTransaction.PendingGeneration is not null
+                                || _displayGeneration != readyGeneration)
+                                return;
+                            ContentCommitted?.Invoke(
+                                this,
+                                new DictionaryPopupContentCommittedEventArgs(
+                                    commit.Generation,
+                                    commit.TraceId));
+                        }
+                        finally
+                        {
+                            _isCompletingContentReady = false;
+                            _ = ProcessQueuedShowAsync();
+                        }
                     });
                     break;
 
@@ -1129,6 +1236,44 @@ public sealed class DictionaryLookupPopup : IDisposable
         VisualRoot.IsHitTestVisible = true;
     }
 
+    private void PromoteNativeContext(DictionaryPopupNativeContext context)
+    {
+        ApplySurfaceTheme(context.ThemeMode);
+        _currentTraceId = context.TraceId;
+        _audioSettings = context.AudioSettings;
+        _ankiSettings = context.AnkiSettings;
+        _miningContext = context.MiningContext;
+        _sasayakiPopupControls = context.SasayakiControls;
+        _stagedNativeContext = null;
+        UpdateSasayakiPopupControls();
+    }
+
+    private async Task ProcessQueuedShowAsync()
+    {
+        var request = _queuedShowRequest;
+        _queuedShowRequest = null;
+        if (request is null || request.CancellationToken.IsCancellationRequested)
+            return;
+
+        try
+        {
+            await ShowResultsWarmCoreAsync(request);
+        }
+        catch (OperationCanceledException) when (request.CancellationToken.IsCancellationRequested)
+        {
+            Log.Debug(
+                "[LookupTrace] trace={TraceId} queued popup show cancelled",
+                request.TraceId ?? "-");
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(
+                ex,
+                "[LookupTrace] trace={TraceId} queued popup show failed",
+                request.TraceId ?? "-");
+        }
+    }
+
     private bool IsCurrentContentReady(JsonElement payload)
     {
         if (_pendingContentGeneration is not long expected)
@@ -1136,12 +1281,17 @@ public sealed class DictionaryLookupPopup : IDisposable
         if (_pendingContentCancellationToken.IsCancellationRequested)
             return false;
 
-        if (!payload.TryGetProperty("body", out var body) || body.ValueKind != JsonValueKind.Object)
-            return false;
-
-        return body.TryGetProperty("generation", out var generationElement)
-            && generationElement.TryGetInt64(out var generation)
+        return TryGetContentGeneration(payload, out var generation)
             && generation == expected;
+    }
+
+    private static bool TryGetContentGeneration(JsonElement payload, out long generation)
+    {
+        generation = default;
+        return payload.TryGetProperty("body", out var body)
+            && body.ValueKind == JsonValueKind.Object
+            && body.TryGetProperty("generation", out var generationElement)
+            && generationElement.TryGetInt64(out generation);
     }
 
     private bool CanShowReadyContent(long generation) =>
@@ -1280,9 +1430,12 @@ public sealed class DictionaryLookupPopup : IDisposable
     /// Prefetch audio URL resolution for the primary entry only (first result).
     /// Never blocks the UI thread — runs on a background task with cancellation.
     /// </summary>
-    private void PrefetchAudioUrls(List<DictionaryLookupResult> results)
+    private void PrefetchAudioUrls(
+        List<DictionaryLookupResult> results,
+        AudioSettings audioSettings,
+        string? traceId)
     {
-        var sources = _audioSettings.EnabledAudioSourceUrls;
+        var sources = audioSettings.EnabledAudioSourceUrls;
         if (sources.Count == 0) return;
         if (results.Count == 0) return;
 
@@ -1300,9 +1453,9 @@ public sealed class DictionaryLookupPopup : IDisposable
             {
                 ct.ThrowIfCancellationRequested();
                 var resolverUrl = ExpandAudioTemplate(sources[0], expression, reading);
-                if (!IsAllowedAudioResolverUrl(resolverUrl))
+                if (!IsAllowedAudioResolverUrl(resolverUrl, audioSettings))
                     return;
-                await TryResolveAudioUrlAsync(resolverUrl, _currentTraceId ?? "prefetch", "prefetch");
+                await TryResolveAudioUrlAsync(resolverUrl, traceId ?? "prefetch", "prefetch");
                 Log.Information("[AudioPrefetch] auto: '{Expr}'/'{Reading}', entries={Count}",
                     expression, reading, results.Count);
             }
