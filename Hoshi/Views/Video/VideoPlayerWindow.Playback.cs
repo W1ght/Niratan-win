@@ -1389,7 +1389,7 @@ public sealed partial class VideoPlayerWindow
                 ToggleFullScreen();
                 break;
             case VideoShortcutActions.LookupSubtitleId:
-                await LookupCurrentSubtitleAsync();
+                await StartSubtitleLookupAsync();
                 break;
             case VideoShortcutActions.ToggleHardwareDecodingId:
                 await SetHardwareDecodingAsync(!ViewModel.HardwareDecodingEnabled);

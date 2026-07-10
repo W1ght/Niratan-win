@@ -86,6 +86,18 @@ public class VideoSubtitleLookupAssetTests
     }
 
     [Fact]
+    public void VideoSubtitleLookup_UsesLatestRequestWinsCoordination()
+    {
+        var code = ReadVideoPlayerWindowCode();
+
+        code.Should().Contain("_subtitleLookupCoordinator.BeginRequest()");
+        code.Should().Contain("_subtitleLookupCoordinator.IsCurrent(lookupRequest)");
+        code.Should().Contain("lookupRequest.CancellationToken");
+        code.Should().Contain("popupRequest.TraceId");
+        code.Should().NotContain("_isSubtitlePointerLookupRunning");
+    }
+
+    [Fact]
     public void VideoSubtitleAppearance_AppliesInspectorValuesToTransparentOverlay()
     {
         var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.xaml"));
