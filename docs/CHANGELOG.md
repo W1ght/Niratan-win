@@ -1,5 +1,19 @@
 # Changelog
 
+## popup 先显示释义、后闪出主词
+
+**原因**：
+- popup 同时存在两套 `contentReady`：shell observer 在第一块释义出现时提前通知，完整 renderer 又在所有词条完成后通知。
+- renderer 隐藏了网页根节点，但双列布局给释义卡写入内联 `visibility: visible`，导致 native 提前显示 WebView2 时只有释义能穿透根隐藏，标题和标签仍不可见。
+- 全部结果按词典逐帧渲染，放大了半成品暴露时间；native lookup、反序列化和 rebuild 还可能在 WinUI 线程同步执行。
+
+**解决**：
+- `popup.js` 成为唯一 ready 来源：先一次性构造并布局完整首词，再发送当前 generation 的唯一 `contentReady`；其余词条随后逐帧追加。
+- 保留 native `Opacity=0` generation gate，过期 renderer 不能显示旧内容或继续追加。
+- hoshidicts lookup、styles、media 和 rebuild 通过同一 worker executor 串行访问 native session；styles 缓存到下次 rebuild。
+
+---
+
 ## popup 圆角出现黑色角块
 
 **原因**：
