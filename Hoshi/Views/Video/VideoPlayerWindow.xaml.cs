@@ -32,6 +32,7 @@ using Hoshi.Services.Shortcuts;
 using Hoshi.Services.Video;
 using Hoshi.ViewModels.Pages;
 using Hoshi.Views.Dictionary;
+using Serilog;
 
 namespace Hoshi.Views.Video;
 
@@ -612,6 +613,9 @@ public sealed partial class VideoPlayerWindow : Window
         double? anchorHeight = null)
     {
         var lookupRequest = _subtitleLookupCoordinator.BeginRequest();
+        Log.Information(
+            "[VideoLookup] request version={RequestVersion}",
+            lookupRequest.Version);
         return LookupCurrentSubtitleAsync(
             lookupRequest,
             queryOverride,

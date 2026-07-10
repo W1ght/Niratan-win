@@ -1172,9 +1172,10 @@ public class NovelReaderWebAssetTests
         overlayCode.Should().Contain("private double _rootReadyOpacity = 1;");
 
         var videoCode = File.ReadAllText(
-            Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.xaml.cs")
+            Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.SubtitleOverlay.cs")
         );
-        videoCode.Should().Contain("overlay.PrewarmAsync(RootGrid.XamlRoot, request.Theme)");
+        videoCode.Should().Contain("PrewarmVideoDictionaryPopupAsync");
+        videoCode.Should().Contain("await overlay.PrewarmAsync(");
     }
 
     [Fact]
@@ -1835,7 +1836,7 @@ public class NovelReaderWebAssetTests
         overlayCode.Should().Contain("[LookupTrace] trace={TraceId} root popup content injected");
         popupCode.Should().Contain("string? traceId = null");
         popupCode.Should().Contain("_currentTraceId = traceId");
-        popupCode.Should().Contain("[LookupTrace] trace={TraceId} popup ExecuteScriptAsync finished");
+        popupCode.Should().Contain("[LookupTrace] trace={TraceId} popup initial ExecuteScriptAsync finished");
         popupCode.Should().Contain("[AudioTrace] lookup={TraceId} audio={AudioTraceId} popup-js stage={Stage}");
         popupCode.Should().Contain("[AudioTrace] lookup={TraceId} audio={AudioTraceId} native message received");
         popupCode.Should().Contain("[AudioTrace] lookup={TraceId} audio={AudioTraceId} audio service returned");

@@ -94,6 +94,7 @@ public class VideoSubtitleLookupAssetTests
         code.Should().Contain("_subtitleLookupCoordinator.IsCurrent(lookupRequest)");
         code.Should().Contain("lookupRequest.CancellationToken");
         code.Should().Contain("popupRequest.TraceId");
+        code.Should().Contain("[VideoLookup] request version={RequestVersion}");
         code.Should().NotContain("_isSubtitlePointerLookupRunning");
     }
 
