@@ -132,9 +132,8 @@ public class NovelReaderWebAssetTests
         pageCode.Should().Contain("BuildReaderWebShortcutBindingsJson");
         pageCode.Should().Contain("window.__hoshiReaderShortcutBindings");
         pageCode.Should().Contain("case \"shortcut\":");
-        pageCode.Should().Contain("result == \"limit\"");
-        pageCode.Should().Contain("LoadChapter(ViewModel.CurrentChapterIndex + 1)");
-        pageCode.Should().Contain("LoadChapter(ViewModel.CurrentChapterIndex - 1)");
+        pageCode.Should().Contain("ReaderStatisticsEventClassifier.AdjacentChapterTarget");
+        pageCode.Should().Contain("LoadChapter(adjacentTarget.Value)");
     }
 
     [Fact]
@@ -2508,6 +2507,10 @@ public class NovelReaderWebAssetTests
         readerXaml.Should().Contain("StatisticsButton_Click");
         readerXaml.Should().Contain("StatisticsStartStopButton_Click");
         readerCode.Should().Contain("ViewModel.LoadStatisticsAsync");
+        readerCode.Should().Contain("case \"restoreCompleted\":");
+        readerCode.Should().Contain("ReaderStatisticsEventClassifier.IsActualPageMovement");
+        readerCode.Should().Contain("ReaderStatisticsEventClassifier.AdjacentChapterTarget");
+        readerCode.Should().Contain("ReaderStatisticsCheckpointReason.AdjacentChapter");
         readerCode.Should().Contain("StatisticsButton_Click");
         readerCode.Should().Contain("StatisticsStartStopButton_Click");
         readerCode.Should().Contain("RefreshStatisticsPanel");
