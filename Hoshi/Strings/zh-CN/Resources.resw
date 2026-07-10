@@ -231,11 +231,19 @@
   <data name="ScanNonJapaneseTextCard.Description" xml:space="preserve"><value>允许查询英语和其他非日语文本</value></data>
   <data name="DictionaryMaxResultsCard.Header" xml:space="preserve"><value>最大结果数</value></data>
   <data name="DictionaryScanLengthCard.Header" xml:space="preserve"><value>扫描长度</value></data>
-  <data name="DictionaryPopupSizeSectionHeader.Text" xml:space="preserve"><value>弹窗大小</value></data>
-  <data name="DictionaryPopupMaxWidthCard.Header" xml:space="preserve"><value>最大宽度</value></data>
-  <data name="DictionaryPopupMaxWidthCard.Description" xml:space="preserve"><value>限制阅读器和视频里的浮动查词弹窗</value></data>
-  <data name="DictionaryPopupMaxHeightCard.Header" xml:space="preserve"><value>最大高度</value></data>
-  <data name="DictionaryPopupMaxHeightCard.Description" xml:space="preserve"><value>限制阅读器和视频里的浮动查词弹窗</value></data>
+  <data name="PopupAppearanceSectionHeader.Text" xml:space="preserve"><value>弹窗</value></data>
+  <data name="PopupWidthCard.Header" xml:space="preserve"><value>宽度</value></data>
+  <data name="PopupWidthCard.Description" xml:space="preserve"><value>设置浮动查词弹窗的宽度</value></data>
+  <data name="PopupHeightCard.Header" xml:space="preserve"><value>高度</value></data>
+  <data name="PopupHeightCard.Description" xml:space="preserve"><value>设置浮动查词弹窗的高度</value></data>
+  <data name="PopupScaleCard.Header" xml:space="preserve"><value>缩放</value></data>
+  <data name="PopupScaleCard.Description" xml:space="preserve"><value>缩放词典文字、间距、图标和控件</value></data>
+  <data name="PopupActionBarCard.Header" xml:space="preserve"><value>显示操作栏</value></data>
+  <data name="PopupActionBarCard.Description" xml:space="preserve"><value>在弹窗内容上方显示后退、前进和关闭</value></data>
+  <data name="PopupActionBarToggle.AutomationProperties.Name" xml:space="preserve"><value>显示弹窗操作栏</value></data>
+  <data name="PopupFullWidthCard.Header" xml:space="preserve"><value>全宽显示</value></data>
+  <data name="PopupFullWidthCard.Description" xml:space="preserve"><value>使用窗口可用宽度并将弹窗放在底部</value></data>
+  <data name="PopupFullWidthToggle.AutomationProperties.Name" xml:space="preserve"><value>弹窗全宽显示</value></data>
   <data name="DictionaryCollapseSectionHeader.Text" xml:space="preserve"><value>折叠词典</value></data>
   <data name="DictionaryCollapseModeCard.Header" xml:space="preserve"><value>模式</value></data>
   <data name="DictionaryExpandFirstCard.Header" xml:space="preserve"><value>展开第一个词典</value></data>
@@ -527,6 +535,10 @@
   <data name="NovelReaderSasayakiDarkTextColorLabel.Text" xml:space="preserve"><value>深色文本</value></data>
   <data name="NovelReaderSasayakiDarkBackgroundColorLabel.Text" xml:space="preserve"><value>深色背景</value></data>
   <data name="NovelReaderPopupSasayakiControls.AutomationProperties.Name" xml:space="preserve"><value>Sasayaki 控件</value></data>
+  <data name="DictionaryPopupActionBar.AutomationProperties.Name" xml:space="preserve"><value>弹窗操作</value></data>
+  <data name="DictionaryPopupBackButton.AutomationProperties.Name" xml:space="preserve"><value>后退</value></data>
+  <data name="DictionaryPopupForwardButton.AutomationProperties.Name" xml:space="preserve"><value>前进</value></data>
+  <data name="DictionaryPopupCloseButton.AutomationProperties.Name" xml:space="preserve"><value>关闭</value></data>
   <data name="NovelReaderPopupSasayakiPlayPauseButton.AutomationProperties.Name" xml:space="preserve"><value>播放/暂停</value></data>
   <data name="NovelReaderPopupSasayakiReplayCueButton.AutomationProperties.Name" xml:space="preserve"><value>重播当前句</value></data>
   <data name="NovelReaderPopupSasayakiJumpCueButton.AutomationProperties.Name" xml:space="preserve"><value>跳转到当前句</value></data>

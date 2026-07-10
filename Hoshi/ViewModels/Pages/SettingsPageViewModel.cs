@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
@@ -114,6 +115,26 @@ public partial class SettingsPageViewModel : ObservableObject
 
     public bool IsProgressPositionVisible => ShowCharacters || ShowPercentage;
 
+    // --- Popup appearance ---
+    [ObservableProperty]
+    public partial int PopupMaxWidth { get; set; }
+
+    [ObservableProperty]
+    public partial int PopupMaxHeight { get; set; }
+
+    [ObservableProperty]
+    public partial double PopupScale { get; set; }
+
+    [ObservableProperty]
+    public partial bool PopupActionBar { get; set; }
+
+    [ObservableProperty]
+    public partial bool PopupFullWidth { get; set; }
+
+    public string PopupMaxWidthText => $"{PopupMaxWidth} px";
+    public string PopupMaxHeightText => $"{PopupMaxHeight} px";
+    public string PopupScaleText => PopupScale.ToString("0.00", CultureInfo.InvariantCulture);
+
     // --- Dictionaries ---
     public ObservableCollection<InstalledDictionary> InstalledDictionaries { get; } = [];
 
@@ -208,6 +229,13 @@ public partial class SettingsPageViewModel : ObservableObject
         ShowReadingSpeed = s.ShowReadingSpeed;
         ShowReadingTime = s.ShowReadingTime;
 
+        var popup = _settingsService.Current.DictionaryDisplaySettings;
+        PopupMaxWidth = DictionaryPopupAppearanceConstraints.NormalizeWidth(popup.PopupMaxWidth);
+        PopupMaxHeight = DictionaryPopupAppearanceConstraints.NormalizeHeight(popup.PopupMaxHeight);
+        PopupScale = DictionaryPopupAppearanceConstraints.NormalizeScale(popup.PopupScale);
+        PopupActionBar = popup.PopupActionBar;
+        PopupFullWidth = popup.PopupFullWidth;
+
         _isInitializing = false;
     }
 
@@ -221,6 +249,13 @@ public partial class SettingsPageViewModel : ObservableObject
     {
         if (_isInitializing) return;
         _readerSettingsService.Set(selector, value);
+    }
+
+    private void ApplyPopupSetting(Func<DictionaryDisplaySettings, DictionaryDisplaySettings> update)
+    {
+        if (_isInitializing) return;
+        var current = _settingsService.Current.DictionaryDisplaySettings;
+        _settingsService.Set(s => s.DictionaryDisplaySettings, update(current));
     }
 
     partial void OnSelectedThemeModeChanged(ThemeMode value) => ApplySetting(s => s.Theme, value);
@@ -271,6 +306,39 @@ public partial class SettingsPageViewModel : ObservableObject
     partial void OnShowStatisticsToggleChanged(bool value) => ApplyReaderSetting(s => s.ShowStatisticsToggle, value);
     partial void OnShowReadingSpeedChanged(bool value) => ApplyReaderSetting(s => s.ShowReadingSpeed, value);
     partial void OnShowReadingTimeChanged(bool value) => ApplyReaderSetting(s => s.ShowReadingTime, value);
+
+    partial void OnPopupMaxWidthChanged(int value)
+    {
+        OnPropertyChanged(nameof(PopupMaxWidthText));
+        ApplyPopupSetting(current => current with
+        {
+            PopupMaxWidth = DictionaryPopupAppearanceConstraints.NormalizeWidth(value),
+        });
+    }
+
+    partial void OnPopupMaxHeightChanged(int value)
+    {
+        OnPropertyChanged(nameof(PopupMaxHeightText));
+        ApplyPopupSetting(current => current with
+        {
+            PopupMaxHeight = DictionaryPopupAppearanceConstraints.NormalizeHeight(value),
+        });
+    }
+
+    partial void OnPopupScaleChanged(double value)
+    {
+        OnPropertyChanged(nameof(PopupScaleText));
+        ApplyPopupSetting(current => current with
+        {
+            PopupScale = DictionaryPopupAppearanceConstraints.NormalizeScale(value),
+        });
+    }
+
+    partial void OnPopupActionBarChanged(bool value) =>
+        ApplyPopupSetting(current => current with { PopupActionBar = value });
+
+    partial void OnPopupFullWidthChanged(bool value) =>
+        ApplyPopupSetting(current => current with { PopupFullWidth = value });
 
     public async Task RefreshDictionariesAsync()
     {

@@ -382,7 +382,7 @@ public class DictionaryLookupServiceTests
     }
 
     [Fact]
-    public void DictionaryDisplaySettings_DefaultsMatchHoshiReaderAndroid()
+    public void DictionaryDisplaySettings_DefaultsMatchHoshiAndNiratan()
     {
         var settings = new DictionaryDisplaySettings();
 
@@ -391,14 +391,34 @@ public class DictionaryLookupServiceTests
         settings.ScanNonJapaneseText.Should().BeTrue();
         settings.MaxResults.Should().Be(16);
         settings.ScanLength.Should().Be(16);
-        settings.PopupMaxWidth.Should().Be(560);
-        settings.PopupMaxHeight.Should().Be(420);
+        settings.PopupMaxWidth.Should().Be(320);
+        settings.PopupMaxHeight.Should().Be(250);
+        settings.PopupScale.Should().Be(1.0);
+        settings.PopupActionBar.Should().BeFalse();
+        settings.PopupFullWidth.Should().BeFalse();
         settings.CompactGlossaries.Should().BeTrue();
         settings.CompactPitchAccents.Should().BeTrue();
         settings.DeduplicatePitchAccents.Should().BeFalse();
         settings.HarmonicFrequency.Should().BeFalse();
         settings.ShowExpressionTags.Should().BeFalse();
         settings.DictionaryTabDefault.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PopupHtml_AppliesScaleBeforeRendering()
+    {
+        var settings = new DictionaryDisplaySettings(
+            PopupScale: 1.25,
+            CustomCSS: ".custom{padding:8px}");
+        var generator = new PopupHtmlGenerator();
+
+        var shell = generator.GenerateShellHtml(settings: settings);
+        var injection = generator.GenerateInjectionScript([], [], settings);
+
+        shell.Should().Contain("--popup-scale:1.25;");
+        shell.Should().Contain("calc(8px * var(--popup-scale))");
+        injection.IndexOf("--popup-scale", StringComparison.Ordinal)
+            .Should().BeLessThan(injection.IndexOf("window.hoshiInjectResults", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -32,7 +32,13 @@ public sealed class ProfileSettingsStoreTests
         var store = new ProfileSettingsStore(profiles, settings, reader);
 
         await store.ActivateAsync("default-ja", TestContext.Current.CancellationToken);
-        settings.Current.DictionaryDisplaySettings = new DictionaryDisplaySettings(MaxResults: 9);
+        settings.Current.DictionaryDisplaySettings = new DictionaryDisplaySettings(
+            MaxResults: 9,
+            PopupMaxWidth: 1200,
+            PopupMaxHeight: 700,
+            PopupScale: 1.25,
+            PopupActionBar: true,
+            PopupFullWidth: true);
         reader.Current.FontSize = 28;
         await store.ActivateAsync(english.Id, TestContext.Current.CancellationToken);
 
@@ -40,7 +46,13 @@ public sealed class ProfileSettingsStoreTests
         reader.Current.FontSize.Should().Be(new ReaderSettings().FontSize);
 
         await store.ActivateAsync("default-ja", TestContext.Current.CancellationToken);
-        settings.Current.DictionaryDisplaySettings.MaxResults.Should().Be(9);
+        settings.Current.DictionaryDisplaySettings.Should().Match<DictionaryDisplaySettings>(value =>
+            value.MaxResults == 9
+            && value.PopupMaxWidth == 1200
+            && value.PopupMaxHeight == 700
+            && value.PopupScale == 1.25
+            && value.PopupActionBar
+            && value.PopupFullWidth);
         reader.Current.FontSize.Should().Be(28);
     }
 

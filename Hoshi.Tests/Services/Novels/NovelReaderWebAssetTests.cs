@@ -230,7 +230,7 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.js")
         );
 
-        popupCss.Should().Contain("--popup-scrollbar-size: 8px");
+        popupCss.Should().Contain("--popup-scrollbar-size: var(--popup-space-8)");
         popupCss.Should().Contain("::-webkit-scrollbar-button");
         popupCss.Should().Contain("display: none");
         popupCss.Should().Contain("::-webkit-scrollbar-track");
@@ -299,12 +299,34 @@ public class NovelReaderWebAssetTests
         popupCss.Should().Contain("--popup-card-inner-highlight: rgba(255, 255, 255, 0.34);");
         popupCss.Should().Contain("--popup-card-shadow-color: rgba(0, 0, 0, 0.10);");
         popupCss.Should().MatchRegex(
-            @"(?s)\.glossary-group\s*\{[^}]*border:\s*1px solid var\(--popup-card-border-color\);[^}]*border-radius:\s*8px;");
+            @"(?s)\.glossary-group\s*\{[^}]*border:\s*1px solid var\(--popup-card-border-color\);[^}]*border-radius:\s*var\(--popup-space-8\);");
         popupCss.Should().Contain("--popup-card-border-color: rgba(255, 255, 255, 0.18);");
         popupCss.Should().Contain("inset 0 0 0 1px var(--popup-card-inner-highlight)");
         popupCss.Should().Contain("0 1px 2px var(--popup-card-shadow-color)");
         popupCss.Should().MatchRegex(
             @"(?s)html\[data-hoshi-color-scheme=""light""\],\s*html\[data-hoshi-color-scheme=""light""\] body\s*\{[^}]*--popup-card-border-color:\s*rgba\(0, 0, 0, 0\.14\);[^}]*--popup-card-inner-highlight:\s*rgba\(255, 255, 255, 0\.34\);[^}]*--popup-card-shadow-color:\s*rgba\(0, 0, 0, 0\.10\);[^}]*\}");
+    }
+
+    [Fact]
+    public void DictionaryPopupActionBar_UsesNiratanHistoryContract()
+    {
+        var popupCode = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Views", "Dictionary", "DictionaryLookupPopup.cs"));
+        var overlayCode = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs"));
+        var popupJs = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Web", "DictionaryPopup", "popup.js"));
+
+        popupCode.Should().Contain("new CommandBar");
+        popupCode.Should().Contain("PopupActionBar");
+        popupCode.Should().Contain("NavigateBackAsync");
+        popupCode.Should().Contain("NavigateForwardAsync");
+        popupCode.Should().Contain("case \"navigationState\"");
+        overlayCode.Should().Contain("DictionaryPopupRedirectMode.InPlace");
+        popupJs.Should().Contain("window.hoshiRedirectResults");
+        popupJs.Should().Contain("postNavigationState");
+        popupJs.Should().Contain("canGoBack: backStack.length > 0");
+        popupJs.Should().Contain("canGoForward: forwardStack.length > 0");
     }
 
     [Fact]
@@ -573,8 +595,6 @@ public class NovelReaderWebAssetTests
         dictionaryXaml.Should().Contain("DictionaryType_Checked");
         dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryMaxResultsIncreaseButton\"");
         dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryScanLengthIncreaseButton\"");
-        dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryPopupMaxWidthIncreaseButton\"");
-        dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryPopupMaxHeightIncreaseButton\"");
         dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryCollapseModeComboBox\"");
         dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryCompactGlossariesToggle\"");
         dictionaryXaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryShowExpressionTagsToggle\"");
@@ -587,6 +607,56 @@ public class NovelReaderWebAssetTests
         dictionaryXaml.Should().Contain("DragItemsCompleted=\"DictionaryList_DragItemsCompleted\"");
         dictionaryXaml.Should().Contain("CornerRadius=\"8\"");
         dictionaryXaml.Should().NotContain("Header=\"Dictionary Order\"");
+    }
+
+    [Fact]
+    public void PopupAppearanceSettings_AreOwnedByAppearanceAndMatchNiratanControls()
+    {
+        var appearanceXaml = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Views", "Controls", "ReaderAppearanceSettingsContent.xaml"));
+        var dictionaryXaml = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Views", "Pages", "DictionarySettingsPage.xaml"));
+        var appearanceViewModel = File.ReadAllText(Path.Combine(
+            ProjectRoot, "ViewModels", "Pages", "SettingsPageViewModel.cs"));
+        var dictionaryViewModel = File.ReadAllText(Path.Combine(
+            ProjectRoot, "ViewModels", "Pages", "DictionarySettingsPageViewModel.cs"));
+        var enResources = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Strings", "en-US", "Resources.resw"));
+        var zhResources = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Strings", "zh-CN", "Resources.resw"));
+
+        appearanceXaml.Should().Contain("x:Uid=\"PopupAppearanceSectionHeader\"");
+        appearanceXaml.Should().Contain("Minimum=\"100\" Maximum=\"1400\"");
+        appearanceXaml.Should().Contain("Minimum=\"100\" Maximum=\"800\"");
+        appearanceXaml.Should().Contain("Minimum=\"0.8\" Maximum=\"1.5\"");
+        appearanceXaml.Should().Contain("AutomationProperties.AutomationId=\"PopupActionBarToggle\"");
+        appearanceXaml.Should().Contain("AutomationProperties.AutomationId=\"PopupFullWidthToggle\"");
+        appearanceViewModel.Should().Contain("partial double PopupScale");
+        appearanceViewModel.Should().Contain("current with { PopupFullWidth = value }");
+
+        dictionaryXaml.Should().NotContain("DictionaryPopupMaxWidthCard");
+        dictionaryXaml.Should().NotContain("DictionaryPopupMaxHeightCard");
+        dictionaryViewModel.Should().NotContain("PopupMaxWidth");
+        dictionaryViewModel.Should().NotContain("PopupMaxHeight");
+
+        foreach (var key in new[]
+        {
+            "PopupAppearanceSectionHeader.Text",
+            "PopupWidthCard.Header",
+            "PopupWidthCard.Description",
+            "PopupHeightCard.Header",
+            "PopupHeightCard.Description",
+            "PopupScaleCard.Header",
+            "PopupScaleCard.Description",
+            "PopupActionBarCard.Header",
+            "PopupActionBarCard.Description",
+            "PopupFullWidthCard.Header",
+            "PopupFullWidthCard.Description",
+        })
+        {
+            enResources.Should().Contain(key);
+            zhResources.Should().Contain(key);
+        }
     }
 
     [Fact]
@@ -1141,7 +1211,7 @@ public class NovelReaderWebAssetTests
         var popupCss = File.ReadAllText(
             Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.css")
         );
-        popupCss.Should().Contain("--popup-corner-radius: 12px");
+        popupCss.Should().Contain("--popup-corner-radius: var(--popup-space-12)");
         popupCss.Should().Contain("border-radius: var(--popup-corner-radius)");
         popupCss.Should().Contain("#popup-viewport");
         popupCss.Should().Contain("overflow-y: auto");
@@ -1549,11 +1619,17 @@ public class NovelReaderWebAssetTests
             "GlobalLookupPasteButton.AutomationProperties.Name",
             "GlobalLookupEnabledCard.Header",
             "GlobalLookupEnabledCard.Description",
-            "DictionaryPopupSizeSectionHeader.Text",
-            "DictionaryPopupMaxWidthCard.Header",
-            "DictionaryPopupMaxWidthCard.Description",
-            "DictionaryPopupMaxHeightCard.Header",
-            "DictionaryPopupMaxHeightCard.Description",
+            "PopupAppearanceSectionHeader.Text",
+            "PopupWidthCard.Header",
+            "PopupWidthCard.Description",
+            "PopupHeightCard.Header",
+            "PopupHeightCard.Description",
+            "PopupScaleCard.Header",
+            "PopupScaleCard.Description",
+            "PopupActionBarCard.Header",
+            "PopupActionBarCard.Description",
+            "PopupFullWidthCard.Header",
+            "PopupFullWidthCard.Description",
         })
         {
             enResources.Should().Contain(key);
@@ -1591,8 +1667,11 @@ public class NovelReaderWebAssetTests
 
         settingsCode.Should().Contain("int MaxResults = 16");
         settingsCode.Should().Contain("int ScanLength = 16");
-        settingsCode.Should().Contain("int PopupMaxWidth = 560");
-        settingsCode.Should().Contain("int PopupMaxHeight = 420");
+        settingsCode.Should().Contain("int PopupMaxWidth = 320");
+        settingsCode.Should().Contain("int PopupMaxHeight = 250");
+        settingsCode.Should().Contain("double PopupScale = 1.0");
+        settingsCode.Should().Contain("bool PopupActionBar = false");
+        settingsCode.Should().Contain("bool PopupFullWidth = false");
         settingsCode.Should().Contain("bool DictionaryTabDefault = false");
         settingsCode.Should().Contain("DictionaryCollapseMode CollapseMode = DictionaryCollapseMode.ExpandAll");
         settingsCode.Should().Contain("bool ExpandFirstDictionary = false");
@@ -1601,6 +1680,11 @@ public class NovelReaderWebAssetTests
         overlayCode.Should().Contain("_displaySettings.ScanLength");
         overlayCode.Should().Contain("_displaySettings.PopupMaxWidth");
         overlayCode.Should().Contain("_displaySettings.PopupMaxHeight");
+        overlayCode.Should().Contain("_displaySettings.PopupFullWidth");
+        overlayCode.Should().NotContain("ChildPopupMaxWidth");
+        overlayCode.Should().NotContain("ChildPopupMaxHeight");
+        overlayCode.Should().NotContain("HardMaxPopupWidth");
+        overlayCode.Should().NotContain("HardMaxPopupHeight");
         popupCode.Should().Contain("window.maxResults");
         popupCode.Should().Contain("window.scanLength");
     }
@@ -1646,7 +1730,7 @@ public class NovelReaderWebAssetTests
         overlayCode.Should().Contain("_canvas.ActualWidth");
         overlayCode.Should().Contain("_canvas.Width = double.NaN");
         overlayCode.Should().Contain("_canvas.Visibility = Visibility.Collapsed");
-        overlayCode.Should().Contain("ClampHostBounds");
+        overlayCode.Should().Contain("DictionaryPopupLayoutCalculator.Resolve");
         overlayCode.Should().Contain("Canvas.SetLeft");
         overlayCode.Should().Contain("Canvas.SetTop");
         overlayCode.Should().NotContain("App.MainWindow");
@@ -1683,12 +1767,14 @@ public class NovelReaderWebAssetTests
         layoutCode.Should().Contain("height = ClampPopupExtent(availableHeight - ScreenBorderPadding, maxHeight)");
         layoutCode.Should().Contain("height = maxHeight");
         layoutCode.Should().Contain("selection.X + selection.Width / 2");
+        layoutCode.Should().Contain("if (isFullWidth)");
+        layoutCode.Should().Contain("centerX = screenWidth / 2");
+        layoutCode.Should().Contain("centerY = screenHeight - ScreenBorderPadding - height / 2");
         overlayCode.Should().NotContain("centerX = screenWidth / 2");
+        overlayCode.Should().Contain("_displaySettings.PopupFullWidth");
         overlayCode.Should().Contain("PositionChildHost(child");
         overlayCode.Should().Contain("parentLeft + x");
-        overlayCode.Should().Contain("preferredLeft");
-        overlayCode.Should().Contain("desiredLeft + width / 2");
-        overlayCode.Should().Contain("PositionHostAboveOrBelowParent(host, parentHost)");
+        overlayCode.Should().NotContain("PositionHostAboveOrBelowParent");
         overlayCode.Should().Contain("GetHostBounds(parentHost)");
         overlayCode.Should().Contain("ClearChildrenAfter(host)");
         overlayCode.Should().Contain("CloseChildrenOfParent(parent)");
@@ -1884,8 +1970,9 @@ public class NovelReaderWebAssetTests
         overlayCode.Should().Contain("await PrewarmChildHostPoolAsync(PrewarmedChildHostCount, themeMode)");
         overlayCode.Should().Contain("await child.WarmAsync(themeMode)");
         overlayCode.Should().Contain("NestedLookupMaxResults = 1");
-        overlayCode.Should().Contain("var nestedMaxResults = Math.Min(_displaySettings.MaxResults, NestedLookupMaxResults)");
-        overlayCode.Should().Contain("nestedMaxResults,");
+        overlayCode.Should().Contain("redirectMode == DictionaryPopupRedirectMode.InPlace");
+        overlayCode.Should().Contain("Math.Min(_displaySettings.MaxResults, NestedLookupMaxResults)");
+        overlayCode.Should().Contain("redirectMaxResults,");
         overlayCode.Should().Contain("GetReusableChildHost");
         overlayCode.Should().Contain("HideChildHost");
         overlayCode.Should().Contain("host.VisualRoot.Opacity <= 0");

@@ -46,6 +46,8 @@ public sealed class PopupHtmlGenerator
         var entriesJson = SerializeLookupEntries(results);
         var stylesJson = SerializeStyles(styles);
         var collapsedDictionariesJson = SerializeCollapsedDictionaries(settings.CollapsedDictionariesOrDefault);
+        var popupScaleDeclarations = DictionaryPopupScaleCss.BuildDeclarations(settings.PopupScale);
+        var customCss = DictionaryPopupScaleCss.ScaleCustomCss(settings.CustomCSS);
 
         var (bgColor, textColor) = GetThemeColors(themeMode);
 
@@ -58,6 +60,7 @@ public sealed class PopupHtmlGenerator
 <style>{_popupCss}</style>
 <style>
 html, body {{
+    {popupScaleDeclarations}
     --background-color: {bgColor};
     --text-color: {textColor};
     background-color: var(--background-color);
@@ -95,7 +98,7 @@ window.audioSources = {SerializeAudioSources(audioSettings)};
 window.audioPlaybackMode = '{PlaybackModeText(audioSettings)}';
 window.audioEnableAutoplay = {BoolToJs(audioSettings?.EnableAutoplay ?? false)};
 window.audioRequestEndpoint = 'https://hoshi-audio-resolver.local/resolve';
-window.customCSS = {JsonSerializer.Serialize(settings.CustomCSS)};
+window.customCSS = {JsonSerializer.Serialize(customCss)};
 window.dictionaryMediaRequestEndpoint = 'https://hoshi-dictionary-media.local/image';
 window.useAnkiConnect = {BoolToJs(ankiSettings?.PopupSettings.UseAnkiConnect ?? false)};
 window.embedMedia = {BoolToJs(ankiSettings?.PopupSettings.EmbedMedia ?? false)};
@@ -292,19 +295,67 @@ window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlos
         AudioSettings? audioSettings = null,
         AnkiSettings? ankiSettings = null,
         string? traceId = null,
-        int? totalResultCount = null)
+        int? totalResultCount = null) =>
+        GenerateResultsInjectionScript(
+            results,
+            styles,
+            displaySettings,
+            themeMode,
+            renderGeneration,
+            audioSettings,
+            ankiSettings,
+            traceId,
+            totalResultCount,
+            "hoshiInjectResults");
+
+    public string GenerateRedirectInjectionScript(
+        List<DictionaryLookupResult> results,
+        Dictionary<string, string> styles,
+        DictionaryDisplaySettings displaySettings,
+        ThemeMode themeMode,
+        long renderGeneration,
+        AudioSettings? audioSettings = null,
+        AnkiSettings? ankiSettings = null,
+        string? traceId = null) =>
+        GenerateResultsInjectionScript(
+            results,
+            styles,
+            displaySettings,
+            themeMode,
+            renderGeneration,
+            audioSettings,
+            ankiSettings,
+            traceId,
+            results.Count,
+            "hoshiRedirectResults");
+
+    private string GenerateResultsInjectionScript(
+        List<DictionaryLookupResult> results,
+        Dictionary<string, string> styles,
+        DictionaryDisplaySettings? displaySettings,
+        ThemeMode themeMode,
+        long renderGeneration,
+        AudioSettings? audioSettings,
+        AnkiSettings? ankiSettings,
+        string? traceId,
+        int? totalResultCount,
+        string injectionFunction)
     {
         var settings = displaySettings ?? new DictionaryDisplaySettings();
         var entriesJson = SerializeLookupEntries(results);
         var finalResultCount = totalResultCount ?? results.Count;
         var stylesJson = SerializeStyles(styles);
         var collapsedDictionariesJson = SerializeCollapsedDictionaries(settings.CollapsedDictionariesOrDefault);
+        var popupScaleDeclarations = DictionaryPopupScaleCss.BuildDeclarations(settings.PopupScale);
+        var customCss = DictionaryPopupScaleCss.ScaleCustomCss(settings.CustomCSS);
         var (bgColor, textColor) = GetThemeColors(themeMode);
 
         return $@"
 document.documentElement.setAttribute('data-hoshi-color-scheme', '{(IsThemeDark(themeMode) ? "dark" : "light")}');
 document.documentElement.style.setProperty('--background-color', '{bgColor}');
 document.documentElement.style.setProperty('--text-color', '{textColor}');
+document.documentElement.style.cssText += {JsonSerializer.Serialize(popupScaleDeclarations)};
+if (document.body) document.body.style.cssText += {JsonSerializer.Serialize(popupScaleDeclarations)};
 window.dictionaryStyles = {stylesJson};
 window.compactGlossaries = {BoolToJs(settings.CompactGlossaries)};
 window.compactPitchAccents = {BoolToJs(settings.CompactPitchAccents)};
@@ -317,7 +368,7 @@ window.showExpressionTags = {BoolToJs(settings.ShowExpressionTags)};
 window.scanNonJapaneseText = {BoolToJs(settings.ScanNonJapaneseText)};
 window.maxResults = {settings.MaxResults};
 window.scanLength = {settings.ScanLength};
-window.customCSS = {JsonSerializer.Serialize(settings.CustomCSS)};
+window.customCSS = {JsonSerializer.Serialize(customCss)};
 window.popupRenderGeneration = {renderGeneration};
 window.lookupTraceId = {JsonSerializer.Serialize(traceId ?? "")};
 window.audioSources = {SerializeAudioSources(audioSettings)};
@@ -329,8 +380,8 @@ window.embedMedia = {BoolToJs(ankiSettings?.PopupSettings.EmbedMedia ?? false)};
 window.allowDupes = {BoolToJs(ankiSettings?.PopupSettings.AllowDupes ?? false)};
 window.needsAudio = {BoolToJs(ankiSettings?.PopupSettings.NeedsAudio ?? false)};
 window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlossaries ?? false)};
-if (typeof window.hoshiInjectResults === 'function') {{
-    window.hoshiInjectResults({entriesJson}, {finalResultCount});
+if (typeof window.{injectionFunction} === 'function') {{
+    window.{injectionFunction}({entriesJson}, {finalResultCount});
 }} else {{
     window.lookupEntries = {entriesJson};
     window.entryCount = {finalResultCount};

@@ -147,64 +147,6 @@
                         </StackPanel>
                     </toolkit:SettingsCard>
 
-                    <TextBlock x:Uid="DictionaryPopupSizeSectionHeader"
-                               Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
-                               Text="Popup Size" />
-
-                    <toolkit:SettingsCard x:Uid="DictionaryPopupMaxWidthCard"
-                                          HorizontalAlignment="Stretch"
-                                          HorizontalContentAlignment="Stretch"
-                                          Header="Max Width"
-                                          HeaderIcon="{ui:FontIcon Glyph=&#xE9A6;}">
-                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                            <TextBlock MinWidth="56"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"
-                                       Text="{x:Bind ViewModel.PopupMaxWidthText, Mode=OneWay}" />
-                            <Button Width="36"
-                                    Height="32"
-                                    Padding="0"
-                                    AutomationProperties.AutomationId="DictionaryPopupMaxWidthDecreaseButton"
-                                    Command="{x:Bind ViewModel.DecreasePopupMaxWidthCommand}">
-                                <FontIcon FontSize="12" Glyph="&#xE738;" />
-                            </Button>
-                            <Button Width="36"
-                                    Height="32"
-                                    Padding="0"
-                                    AutomationProperties.AutomationId="DictionaryPopupMaxWidthIncreaseButton"
-                                    Command="{x:Bind ViewModel.IncreasePopupMaxWidthCommand}">
-                                <FontIcon FontSize="12" Glyph="&#xE710;" />
-                            </Button>
-                        </StackPanel>
-                    </toolkit:SettingsCard>
-
-                    <toolkit:SettingsCard x:Uid="DictionaryPopupMaxHeightCard"
-                                          HorizontalAlignment="Stretch"
-                                          HorizontalContentAlignment="Stretch"
-                                          Header="Max Height"
-                                          HeaderIcon="{ui:FontIcon Glyph=&#xE9A5;}">
-                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                            <TextBlock MinWidth="56"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"
-                                       Text="{x:Bind ViewModel.PopupMaxHeightText, Mode=OneWay}" />
-                            <Button Width="36"
-                                    Height="32"
-                                    Padding="0"
-                                    AutomationProperties.AutomationId="DictionaryPopupMaxHeightDecreaseButton"
-                                    Command="{x:Bind ViewModel.DecreasePopupMaxHeightCommand}">
-                                <FontIcon FontSize="12" Glyph="&#xE738;" />
-                            </Button>
-                            <Button Width="36"
-                                    Height="32"
-                                    Padding="0"
-                                    AutomationProperties.AutomationId="DictionaryPopupMaxHeightIncreaseButton"
-                                    Command="{x:Bind ViewModel.IncreasePopupMaxHeightCommand}">
-                                <FontIcon FontSize="12" Glyph="&#xE710;" />
-                            </Button>
-                        </StackPanel>
-                    </toolkit:SettingsCard>
-
                     <TextBlock x:Uid="DictionaryCollapseSectionHeader"
                                Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
                                Text="Collapse Dictionaries" />
