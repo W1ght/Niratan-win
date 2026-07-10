@@ -230,7 +230,7 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.js")
         );
 
-        popupCss.Should().Contain("--popup-scrollbar-size: 8px");
+        popupCss.Should().Contain("--popup-scrollbar-size: var(--popup-space-8)");
         popupCss.Should().Contain("::-webkit-scrollbar-button");
         popupCss.Should().Contain("display: none");
         popupCss.Should().Contain("::-webkit-scrollbar-track");
@@ -299,7 +299,7 @@ public class NovelReaderWebAssetTests
         popupCss.Should().Contain("--popup-card-inner-highlight: rgba(255, 255, 255, 0.34);");
         popupCss.Should().Contain("--popup-card-shadow-color: rgba(0, 0, 0, 0.10);");
         popupCss.Should().MatchRegex(
-            @"(?s)\.glossary-group\s*\{[^}]*border:\s*1px solid var\(--popup-card-border-color\);[^}]*border-radius:\s*8px;");
+            @"(?s)\.glossary-group\s*\{[^}]*border:\s*1px solid var\(--popup-card-border-color\);[^}]*border-radius:\s*var\(--popup-space-8\);");
         popupCss.Should().Contain("--popup-card-border-color: rgba(255, 255, 255, 0.18);");
         popupCss.Should().Contain("inset 0 0 0 1px var(--popup-card-inner-highlight)");
         popupCss.Should().Contain("0 1px 2px var(--popup-card-shadow-color)");
@@ -1708,7 +1708,7 @@ public class NovelReaderWebAssetTests
         overlayCode.Should().Contain("_canvas.ActualWidth");
         overlayCode.Should().Contain("_canvas.Width = double.NaN");
         overlayCode.Should().Contain("_canvas.Visibility = Visibility.Collapsed");
-        overlayCode.Should().Contain("ClampHostBounds");
+        overlayCode.Should().Contain("DictionaryPopupLayoutCalculator.Resolve");
         overlayCode.Should().Contain("Canvas.SetLeft");
         overlayCode.Should().Contain("Canvas.SetTop");
         overlayCode.Should().NotContain("App.MainWindow");
@@ -1745,12 +1745,14 @@ public class NovelReaderWebAssetTests
         layoutCode.Should().Contain("height = ClampPopupExtent(availableHeight - ScreenBorderPadding, maxHeight)");
         layoutCode.Should().Contain("height = maxHeight");
         layoutCode.Should().Contain("selection.X + selection.Width / 2");
+        layoutCode.Should().Contain("if (isFullWidth)");
+        layoutCode.Should().Contain("centerX = screenWidth / 2");
+        layoutCode.Should().Contain("centerY = screenHeight - ScreenBorderPadding - height / 2");
         overlayCode.Should().NotContain("centerX = screenWidth / 2");
+        overlayCode.Should().Contain("_displaySettings.PopupFullWidth");
         overlayCode.Should().Contain("PositionChildHost(child");
         overlayCode.Should().Contain("parentLeft + x");
-        overlayCode.Should().Contain("preferredLeft");
-        overlayCode.Should().Contain("desiredLeft + width / 2");
-        overlayCode.Should().Contain("PositionHostAboveOrBelowParent(host, parentHost)");
+        overlayCode.Should().NotContain("PositionHostAboveOrBelowParent");
         overlayCode.Should().Contain("GetHostBounds(parentHost)");
         overlayCode.Should().Contain("ClearChildrenAfter(host)");
         overlayCode.Should().Contain("CloseChildrenOfParent(parent)");
