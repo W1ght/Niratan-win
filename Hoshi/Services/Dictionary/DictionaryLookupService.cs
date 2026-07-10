@@ -21,8 +21,8 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
     private readonly Dictionary<string, string> _loadedDictDirs = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _displayNameByNativeName = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _nativeNameByDisplayName = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, string> _styles = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _rebuildLock = new(1, 1);
+    private DictionaryStyle[]? _cachedStyles;
     private IntPtr _session = IntPtr.Zero;
     private string _activeLanguageId = ContentLanguageProfile.Japanese.Id;
     private bool _indexReady;
@@ -73,7 +73,7 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
 
         var totalSw = Stopwatch.StartNew();
         var phaseSw = Stopwatch.StartNew();
-        await EnsureIndexAsync();
+        await EnsureIndexAsync().ConfigureAwait(false);
         _logger.LogInformation(
             "[LookupTrace] trace={TraceId} ensure-index completed in {Ms}ms total={TotalMs}ms indexReady={IndexReady}",
             traceId ?? "-", phaseSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, _indexReady);
@@ -83,12 +83,11 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
             _session, _indexReady, text, maxResults, scanLength);
 
         phaseSw.Restart();
-        await _rebuildLock.WaitAsync();
-        _logger.LogInformation(
-            "[LookupTrace] trace={TraceId} rebuild-lock acquired in {Ms}ms total={TotalMs}ms",
-            traceId ?? "-", phaseSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds);
-        try
+        return await DictionaryNativeExecutor.RunAsync(_rebuildLock, () =>
         {
+            _logger.LogInformation(
+                "[LookupTrace] trace={TraceId} rebuild-lock acquired in {Ms}ms total={TotalMs}ms",
+                traceId ?? "-", phaseSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds);
             phaseSw.Restart();
             var jsonPtr = HoshiDictsNative.hoshi_lookup(_session, text, maxResults, scanLength);
             var json = HoshiDictsNative.ReadStringAndFree(jsonPtr);
@@ -103,11 +102,7 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
                 "[LookupTrace] trace={TraceId} deserialize/display completed in {Ms}ms total={TotalMs}ms results={Count}",
                 traceId ?? "-", phaseSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, results.Count);
             return results;
-        }
-        finally
-        {
-            _rebuildLock.Release();
-        }
+        }).ConfigureAwait(false);
     }
 
     public static IEnumerable<string> EnumerateLookupCandidates(string text, int scanLength = 16)
@@ -134,29 +129,34 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
             return [];
 
         var totalSw = Stopwatch.StartNew();
-        await EnsureIndexAsync();
+        await EnsureIndexAsync().ConfigureAwait(false);
         var waitSw = Stopwatch.StartNew();
-        await _rebuildLock.WaitAsync();
-        _logger.LogInformation(
-            "[LookupTrace] trace={TraceId} styles rebuild-lock acquired in {Ms}ms total={TotalMs}ms",
-            "-", waitSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds);
-        try
+        return await DictionaryNativeExecutor.RunAsync(_rebuildLock, () =>
         {
+            _logger.LogInformation(
+                "[LookupTrace] trace={TraceId} styles rebuild-lock acquired in {Ms}ms total={TotalMs}ms",
+                "-", waitSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds);
+
+            if (_cachedStyles is { } cachedStyles)
+            {
+                _logger.LogInformation(
+                    "[LookupTrace] trace={TraceId} styles cache hit total={TotalMs}ms styles={StyleCount}",
+                    "-", totalSw.ElapsedMilliseconds, cachedStyles.Length);
+                return cachedStyles.ToList();
+            }
+
             var nativeSw = Stopwatch.StartNew();
             var jsonPtr = HoshiDictsNative.hoshi_get_styles(_session);
             var json = HoshiDictsNative.ReadStringAndFree(jsonPtr);
             var styles = HoshiDictsNative.DeserializeStyles(json)
                 .Select(style => style with { DictName = ToDisplayDictionaryName(style.DictName) })
-                .ToList();
+                .ToArray();
+            _cachedStyles = styles;
             _logger.LogInformation(
                 "[LookupTrace] trace={TraceId} styles native+deserialize completed in {Ms}ms total={TotalMs}ms styles={StyleCount} jsonBytes={JsonLength}",
-                "-", nativeSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, styles.Count, json?.Length ?? 0);
-            return styles;
-        }
-        finally
-        {
-            _rebuildLock.Release();
-        }
+                "-", nativeSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, styles.Length, json?.Length ?? 0);
+            return styles.ToList();
+        }).ConfigureAwait(false);
     }
 
     public async Task<byte[]?> GetMediaFileAsync(string dictName, string mediaPath)
@@ -164,19 +164,14 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
         if (!_nativeAvailable)
             return null;
 
-        await EnsureIndexAsync();
-        await _rebuildLock.WaitAsync();
-        try
+        await EnsureIndexAsync().ConfigureAwait(false);
+        return await DictionaryNativeExecutor.RunAsync(_rebuildLock, () =>
         {
             var nativeDictName = ToNativeDictionaryName(dictName);
             var dataPtr = HoshiDictsNative.hoshi_get_media_file(
                 _session, nativeDictName, mediaPath, out var size);
             return HoshiDictsNative.ReadBufferAndFree(dataPtr, size);
-        }
-        finally
-        {
-            _rebuildLock.Release();
-        }
+        }).ConfigureAwait(false);
     }
 
     public async Task RebuildQueryAsync()
@@ -191,7 +186,12 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
         if (!Directory.Exists(dictDir))
         {
             _logger.LogDebug("[Rebuild] Skipped: dict dir not found '{Dir}'", dictDir);
-            _indexReady = true;
+            await DictionaryNativeExecutor.RunAsync(_rebuildLock, () =>
+            {
+                _cachedStyles = null;
+                _indexReady = true;
+                return true;
+            }).ConfigureAwait(false);
             return;
         }
 
@@ -202,63 +202,63 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
             GetActiveConfigRoot(),
             EnableUnconfiguredDictionariesForActiveProfile());
 
-        await _rebuildLock.WaitAsync();
+        var termPaths = GetOrderedDictionaryDirectories(
+            dictDir,
+            DictionaryType.Term,
+            GetActiveConfigRoot(),
+            EnableUnconfiguredDictionariesForActiveProfile());
+        var freqPaths = GetOrderedDictionaryDirectories(
+            dictDir,
+            DictionaryType.Frequency,
+            GetActiveConfigRoot(),
+            EnableUnconfiguredDictionariesForActiveProfile());
+        var pitchPaths = GetOrderedDictionaryDirectories(
+            dictDir,
+            DictionaryType.Pitch,
+            GetActiveConfigRoot(),
+            EnableUnconfiguredDictionariesForActiveProfile());
+
         try
         {
-            var termPaths = GetOrderedDictionaryDirectories(
-                dictDir,
-                DictionaryType.Term,
-                GetActiveConfigRoot(),
-                EnableUnconfiguredDictionariesForActiveProfile());
-            var freqPaths = GetOrderedDictionaryDirectories(
-                dictDir,
-                DictionaryType.Frequency,
-                GetActiveConfigRoot(),
-                EnableUnconfiguredDictionariesForActiveProfile());
-            var pitchPaths = GetOrderedDictionaryDirectories(
-                dictDir,
-                DictionaryType.Pitch,
-                GetActiveConfigRoot(),
-                EnableUnconfiguredDictionariesForActiveProfile());
-
-            _logger.LogInformation(
-                "[Rebuild] Passing paths to native: Term=[{TermPaths}], Freq=[{FreqPaths}], Pitch=[{PitchPaths}], Session={SessionPtr}",
-                string.Join(", ", termPaths), string.Join(", ", freqPaths), string.Join(", ", pitchPaths), _session);
-
-            HoshiDictsNative.HoshiSessionRebuild(
-                _session,
-                termPaths,
-                freqPaths,
-                pitchPaths,
-                _activeLanguageId);
-
-            _loadedDictDirs.Clear();
-            _displayNameByNativeName.Clear();
-            _nativeNameByDisplayName.Clear();
-            foreach (var path in termPaths.Concat(freqPaths).Concat(pitchPaths))
+            await DictionaryNativeExecutor.RunAsync(_rebuildLock, () =>
             {
-                var name = Path.GetFileName(path);
-                if (string.IsNullOrEmpty(name))
-                    continue;
+                _cachedStyles = null;
+                _logger.LogInformation(
+                    "[Rebuild] Passing paths to native: Term=[{TermPaths}], Freq=[{FreqPaths}], Pitch=[{PitchPaths}], Session={SessionPtr}",
+                    string.Join(", ", termPaths), string.Join(", ", freqPaths), string.Join(", ", pitchPaths), _session);
 
-                var displayName = ReadDisplayTitle(path) ?? name;
-                _loadedDictDirs[name] = path;
-                _displayNameByNativeName[name] = displayName;
-                _nativeNameByDisplayName.TryAdd(displayName, name);
-            }
+                HoshiDictsNative.HoshiSessionRebuild(
+                    _session,
+                    termPaths,
+                    freqPaths,
+                    pitchPaths,
+                    _activeLanguageId);
 
-            _indexReady = true;
-            _logger.LogInformation(
-                "[Rebuild] Success: {TermCount} term, {FreqCount} freq, {PitchCount} pitch dictionaries loaded",
-                termPaths.Count, freqPaths.Count, pitchPaths.Count);
+                _loadedDictDirs.Clear();
+                _displayNameByNativeName.Clear();
+                _nativeNameByDisplayName.Clear();
+                foreach (var path in termPaths.Concat(freqPaths).Concat(pitchPaths))
+                {
+                    var name = Path.GetFileName(path);
+                    if (string.IsNullOrEmpty(name))
+                        continue;
+
+                    var displayName = ReadDisplayTitle(path) ?? name;
+                    _loadedDictDirs[name] = path;
+                    _displayNameByNativeName[name] = displayName;
+                    _nativeNameByDisplayName.TryAdd(displayName, name);
+                }
+
+                _indexReady = true;
+                _logger.LogInformation(
+                    "[Rebuild] Success: {TermCount} term, {FreqCount} freq, {PitchCount} pitch dictionaries loaded",
+                    termPaths.Count, freqPaths.Count, pitchPaths.Count);
+                return true;
+            }).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to rebuild dictionary query");
-        }
-        finally
-        {
-            _rebuildLock.Release();
         }
     }
 
