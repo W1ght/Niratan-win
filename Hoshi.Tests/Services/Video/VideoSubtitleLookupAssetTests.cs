@@ -32,22 +32,28 @@ public class VideoSubtitleLookupAssetTests
         File.ReadAllText(Path.Combine([ProjectRoot, .. parts]));
 
     [Fact]
-    public void VideoSubtitleLookup_UsesWebViewDomRangeHitTesting()
+    public void VideoSubtitleLookup_UsesOneCanvasForRenderingAndHitTesting()
     {
         var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.xaml"));
         var code = ReadVideoPlayerWindowCode();
         var script = File.ReadAllText(Path.Combine(ProjectRoot, "Web", "VideoSubtitle", "subtitle-overlay.js"));
+        var rendererPath = Path.Combine(ProjectRoot, "Services", "Video", "VideoSubtitleCanvasRenderer.cs");
 
+        xaml.Should().Contain("x:Name=\"SubtitleCanvas\"");
+        xaml.Should().Contain("PointerPressed=\"SubtitleCanvas_PointerPressed\"");
+        xaml.Should().Contain("PointerMoved=\"SubtitleCanvas_PointerMoved\"");
         xaml.Should().Contain("x:Name=\"SubtitleWebView\"");
         xaml.Should().NotContain("x:Name=\"SubtitleTextBox\"");
         xaml.Should().NotContain("x:Name=\"SubtitleTextRun\"");
         code.Should().Contain("WebMessageReceived += OnSubtitleWebMessageReceived");
         code.Should().Contain("UpdateSubtitleWebViewAsync");
+        code.Should().Contain("LookupSubtitleAtCanvasPointAsync");
         code.Should().NotContain("VideoSubtitleHitTestResolver.ResolveCharacterIndex");
-        script.Should().Contain("document.caretPositionFromPoint");
-        script.Should().Contain("getClientRects()");
-        script.Should().Contain("getCharacterAtPoint");
-        script.Should().Contain("window.chrome?.webview?.postMessage");
+        code.Should().Contain("SubtitleCanvas.TransformToVisual(PopupOverlayCanvas)");
+        script.Should().Contain("lookupAtOffset:");
+        script.Should().Contain("selectTextAtOffset");
+        script.Should().NotContain("document.addEventListener('click'");
+        File.Exists(rendererPath).Should().BeTrue();
     }
 
     [Fact]
@@ -71,7 +77,7 @@ public class VideoSubtitleLookupAssetTests
         code.Should().NotContain("IGlobalLookupPopupService");
         code.Should().NotContain("GlobalLookupPopupWindow");
         code.Should().NotContain("_globalLookupPopupService");
-        code.Should().Contain("SubtitleWebView.TransformToVisual(PopupOverlayCanvas)");
+        code.Should().Contain("SubtitleCanvas.TransformToVisual(PopupOverlayCanvas)");
         code.Should().Contain("VideoDictionaryPanelChrome.Visibility = Visibility.Visible");
         code.Should().Contain("EnsureVideoDictionaryOverlaySurfaceVisible(lookupOverlay);");
         code.Should().Contain("EnsureVideoDictionaryOverlaySurfaceVisible(EnsurePopupOverlay());");
@@ -110,22 +116,14 @@ public class VideoSubtitleLookupAssetTests
     }
 
     [Fact]
-    public void VideoSubtitleLookup_EmptyShiftHoverCancelsThePendingRequest()
+    public void VideoSubtitleLookup_EmptyCanvasHitCancelsThePendingRequest()
     {
         var code = ReadVideoPlayerWindowCode().Replace("\r\n", "\n", StringComparison.Ordinal);
-        var script = File.ReadAllText(
-            Path.Combine(ProjectRoot, "Web", "VideoSubtitle", "subtitle-overlay.js"));
-        var lookupAtPointStart = script.IndexOf("function lookupAtPoint", StringComparison.Ordinal);
-        var lookupAtPointEnd = script.IndexOf(
-            "window.hoshiVideoSubtitle",
-            lookupAtPointStart,
-            StringComparison.Ordinal);
-        var lookupAtPoint = script[lookupAtPointStart..lookupAtPointEnd];
 
-        code.Should().Contain(
-            "case \"lookupEmpty\":\n                    _subtitleLookupCoordinator.CancelCurrent();");
-        lookupAtPoint.Should().Contain("selection.clearSelection();");
-        lookupAtPoint.Should().Contain("postToHost('lookupEmpty');");
+        code.Should().Contain("ClearSubtitleLookupFromPointer");
+        code.Should().Contain("_subtitleLookupCoordinator.CancelCurrent();");
+        code.Should().Contain("_popupOverlay?.Dismiss();");
+        code.Should().Contain("ClearSubtitleCanvasSelection();");
     }
 
     [Fact]
@@ -146,39 +144,82 @@ public class VideoSubtitleLookupAssetTests
     }
 
     [Fact]
-    public void VideoSubtitleAppearance_AppliesInspectorValuesToTransparentOverlay()
+    public void VideoSubtitleAppearance_AppliesInspectorValuesToCanvas()
     {
         var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.xaml"));
         var code = ReadVideoPlayerWindowCode();
-        var script = File.ReadAllText(Path.Combine(ProjectRoot, "Web", "VideoSubtitle", "subtitle-overlay.js"));
-        var css = File.ReadAllText(Path.Combine(ProjectRoot, "Web", "VideoSubtitle", "subtitle-overlay.css"));
+        var rendererPath = Path.Combine(ProjectRoot, "Services", "Video", "VideoSubtitleCanvasRenderer.cs");
 
-        xaml.Should().Contain("x:Name=\"SubtitleVisibleText\"");
+        xaml.Should().Contain("x:Name=\"SubtitleCanvas\"");
+        xaml.Should().Contain("win2d:CanvasControl");
+        xaml.Should().Contain("x:Name=\"SubtitleWebView\"");
+        xaml.Should().NotContain("x:Name=\"SubtitleVisibleText\"");
+        xaml.Should().NotContain("x:Name=\"SubtitleShadowText");
         xaml.Should().NotContain("x:Name=\"SubtitleBlurTextLayer\"");
         xaml.Should().NotContain("x:Name=\"SubtitleNativeBlurTextLayer\"");
-        xaml.Should().Contain("x:Name=\"SubtitleMaskBlurImage\"");
-        xaml.Should().Contain("Opacity=\"0\"");
+        xaml.Should().NotContain("x:Name=\"SubtitleMaskBlurImage\"");
         code.Should().Contain("fontSize = ViewModel.SubtitleFontSize");
         code.Should().Contain("shadowRadius = ViewModel.SubtitleShadowRadius");
         code.Should().Contain("blurRadius = ViewModel.CalculateSubtitleMaskBlurRadius");
-        code.Should().Contain("UpdateSubtitleNativeTextAppearance");
-        code.Should().Contain("ApplySubtitleTextBlockStyle(textBlock, text, fontSize, fontWeight, fontFamily, lineHeight, shadowForeground)");
-        code.Should().Contain("ApplySubtitleTextBlockStyle(SubtitleVisibleText, text, fontSize, fontWeight, fontFamily, lineHeight, foreground)");
-        code.Should().Contain("SubtitleNativeTextLayer.Visibility = isBlurred");
-        code.Should().Contain("SubtitleMaskBlurImage.Visibility = isBlurred");
-        code.Should().Contain("UpdateSubtitleMaskBlurImageAsync");
+        code.Should().Contain("UpdateSubtitleCanvasAppearance");
+        code.Should().Contain("SubtitleCanvas.Invalidate()");
+        code.Should().Contain("VideoSubtitleCanvasRenderer.Draw(");
+        code.Should().Contain("SubtitleCanvas_Draw");
+        code.Should().NotContain("new CanvasImageSource(");
+        code.Should().NotContain("ApplySubtitleTextBlockStyle");
+        code.Should().NotContain("UpdateSubtitleMaskBlurImageAsync");
         code.Should().NotContain("SubtitleNativeBlurTextLayer");
-        code.Should().Contain("SubtitleWebView.Opacity = 0");
-        code.Should().NotContain("SubtitleWebView.Opacity = isBlurred");
+        code.Should().NotContain("SubtitleWebView.Opacity = 0.01");
         code.Should().NotContain("VideoSubtitleBlurLayout");
         code.Should().NotContain("VideoSubtitleMaskBlurLayout");
-        code.Should().Contain("VideoSubtitleMaskBitmapRenderer.RenderPngAsync");
-        File.Exists(Path.Combine(ProjectRoot, "Services", "Video", "VideoSubtitleMaskBitmapRenderer.cs"))
-            .Should()
-            .BeTrue();
+        code.Should().NotContain("VideoSubtitleMaskBitmapRenderer.RenderPngAsync");
         code.Should().Contain("subtitleColor = ViewModel.SubtitleColorHex");
-        script.Should().Contain("--subtitle-filter-blur");
-        css.Should().Contain("filter: blur(var(--subtitle-filter-blur, 0px))");
+        File.Exists(rendererPath).Should().BeTrue();
+    }
+
+    [Fact]
+    public void VideoSubtitleLookup_UsesOnlyOneVisibleInteractiveTextLayer()
+    {
+        var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.xaml"));
+
+        xaml.Should().Contain("x:Name=\"SubtitleCanvas\"");
+        xaml.Should().Contain("IsHitTestVisible=\"True\"");
+        xaml.Should().Contain("x:Name=\"SubtitleWebView\"");
+        xaml.Should().Contain("IsHitTestVisible=\"False\"");
+        xaml.Should().Contain("Opacity=\"0\"");
+    }
+
+    [Fact]
+    public void VideoSubtitleLookup_DoesNotStealFocusBeforeTheDomClickCompletes()
+    {
+        var code = ReadVideoPlayerWindowCode();
+
+        code.Should().NotContain("SubtitlePanelBorder.AddHandler(UIElement.PointerPressedEvent");
+        code.Should().NotContain("SubtitleWebView.AddHandler(UIElement.PointerPressedEvent");
+        code.Should().NotContain("SubtitleWebView.GotFocus += SubtitleWebView_GotFocus");
+        code.Should().NotContain("SubtitlePanelBorder_PointerPressed");
+        code.Should().NotContain("SubtitleWebView_PointerPressed");
+        code.Should().NotContain("SubtitleWebView_GotFocus");
+        code.Should().Contain("SubtitleCanvas_PointerPressed");
+    }
+
+    [Fact]
+    public void VideoSubtitleAppearance_UsesOneNiratanSoftShadowAndCanvasSelection()
+    {
+        var rendererPath = Path.Combine(ProjectRoot, "Services", "Video", "VideoSubtitleCanvasRenderer.cs");
+        File.Exists(rendererPath).Should().BeTrue();
+        var renderer = File.Exists(rendererPath) ? File.ReadAllText(rendererPath) : "";
+        var code = ReadVideoPlayerWindowCode();
+
+        renderer.Should().Contain("VideoSubtitleShadowLayout.Create(");
+        renderer.Should().Contain("new GaussianBlurEffect");
+        renderer.Should().Contain("GetCharacterRegions(");
+        renderer.Should().Contain("SetColor(");
+        renderer.Should().Contain("FillRectangle(");
+        renderer.Should().Contain("LineSpacingBaseline = fontSize");
+        renderer.Should().NotContain("CreateOffsets");
+        code.Should().Contain("HighlightSubtitleCanvasSelection");
+        code.Should().Contain("ClearSubtitleCanvasSelection");
     }
 
     [Fact]
@@ -186,8 +227,6 @@ public class VideoSubtitleLookupAssetTests
     {
         var code = ReadVideoPlayerWindowCode();
         var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.xaml"));
-        var script = File.ReadAllText(Path.Combine(ProjectRoot, "Web", "VideoSubtitle", "subtitle-overlay.js"));
-        var css = File.ReadAllText(Path.Combine(ProjectRoot, "Web", "VideoSubtitle", "subtitle-overlay.css"));
 
         xaml.Should().NotContain("SubtitleBackgroundOpacitySlider");
         xaml.Should().NotContain("SubtitleBackgroundDisabledToggle");
@@ -195,15 +234,9 @@ public class VideoSubtitleLookupAssetTests
         xaml.Should().NotContain("VideoInspectorNoBackgroundToggle");
         code.Should().NotContain("SubtitleBackgroundOpacitySlider");
         code.Should().NotContain("SubtitleBackgroundDisabledToggle");
+        xaml.Should().Contain("x:Name=\"SubtitleWebView\"");
         xaml.Should().Contain("Opacity=\"0\"");
-        script.Should().NotContain("has-background");
-        script.Should().NotContain("--subtitle-background-opacity");
-        css.Should().NotContain("has-background");
-        css.Should().NotContain("--subtitle-background-opacity");
-        css.Should().Contain("background: transparent !important");
-        code.Split("SubtitleWebView.DefaultBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0)")
-            .Should()
-            .HaveCountGreaterThanOrEqualTo(3);
+        code.Should().Contain("SubtitlePanelBorder.Background");
     }
 
     [Fact]
@@ -228,11 +261,11 @@ public class VideoSubtitleLookupAssetTests
 
         xaml.Should().Contain("PointerPressed=\"VideoSurface_PointerPressed\"");
         code.Should().Contain("BottomChrome.AddHandler(UIElement.PointerPressedEvent");
-        code.Should().Contain("SubtitlePanelBorder.AddHandler(UIElement.PointerPressedEvent");
-        code.Should().Contain("SubtitleWebView.AddHandler(UIElement.PointerPressedEvent");
-        code.Should().Contain("SubtitleWebView.GotFocus += SubtitleWebView_GotFocus");
-        code.Should().Contain("SubtitleWebView_PointerPressed");
-        code.Should().Contain("SubtitlePanelBorder_PointerPressed");
+        code.Should().NotContain("SubtitlePanelBorder.AddHandler(UIElement.PointerPressedEvent");
+        code.Should().NotContain("SubtitleWebView.AddHandler(UIElement.PointerPressedEvent");
+        code.Should().NotContain("SubtitleWebView.GotFocus += SubtitleWebView_GotFocus");
+        code.Should().NotContain("SubtitleWebView_PointerPressed");
+        code.Should().NotContain("SubtitlePanelBorder_PointerPressed");
         code.Should().Contain("RestoreVideoKeyboardFocus");
         code.Should().Contain("RestoreVideoKeyboardFocusAfterSubtitleInteraction");
         code.Should().Contain("SetWindowSubclass(_videoHwnd");

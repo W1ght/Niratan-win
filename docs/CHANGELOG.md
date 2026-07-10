@@ -1,5 +1,20 @@
 # Changelog
 
+## 视频字幕软阴影出现双命中或黑色矩形
+
+**原因**：
+- 可见 Canvas 与可交互 WebView2 同时处理字幕点击时，一次操作会产生两套坐标和两次查询；后到的空结果可能立即关闭刚打开的 popup。
+- 把 WebView2 改为唯一可见字幕层虽能恢复 DOM 选中，但透明 WebView2 无法合成到原生视频 HWND 上，会暴露整块黑色 backing surface。
+- Canvas 自定义行距只设置了 `LineSpacing`、没有同步设置 `LineSpacingBaseline`，导致字形基线与 `GetCharacterRegions` 返回的选区行框纵向错位。
+
+**解决**：
+- `CanvasControl` 成为唯一可见、可命中的字幕表面，统一负责文字、Niratan 单层高斯阴影、字符命中和选中高亮。
+- WebView2 仅保留为 `Opacity=0`、`IsHitTestVisible=False` 的无头选择桥，继续复用非日文扫描和边界提取逻辑，不参与输入或视频合成。
+- 普通点击和 Shift hover 都先由同一个 `CanvasTextLayout` 命中，再把 UTF-16 字符偏移发送到窄 JS bridge；popup 关闭或字幕切换时同步清除 Canvas 选中范围。
+- 自定义行距使用 1.25 倍字号，并把基线设置为字号本身，使选区行框、字形和查词锚点共享同一纵向布局。
+
+---
+
 ## 视频查词首次打开和大词条结果卡顿
 
 **原因**：
