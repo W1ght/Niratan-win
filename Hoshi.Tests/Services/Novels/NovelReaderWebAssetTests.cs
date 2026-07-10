@@ -1682,6 +1682,13 @@ public class NovelReaderWebAssetTests
         popupJs.Should().Contain("document.documentElement.style.visibility = 'hidden'");
         popupJs.Should().Contain("document.documentElement.style.visibility = 'visible'");
         popupJs.Should().Contain("postPopupMessage('contentReady', { generation: generation })");
+        popupJs.Split(
+                "postPopupMessage('contentReady', { generation: generation });",
+                StringSplitOptions.None)
+            .Should()
+            .HaveCount(2);
+        popupJs.Should().Contain("function commitFirstFrame(generation, entryDiv)");
+        popupJs.Should().Contain("function renderRemainingEntries(startIndex, generation, onFinished)");
         popupJs.Should().Contain("postPopupMessage('tapOutside', null);");
     }
 
