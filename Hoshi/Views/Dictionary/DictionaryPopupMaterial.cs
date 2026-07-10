@@ -47,6 +47,13 @@ internal static class DictionaryPopupMaterial
             : Windows.UI.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF);
     }
 
+    public static Windows.UI.Color GetOutlineColor(ThemeMode themeMode)
+    {
+        return IsThemeDark(themeMode)
+            ? Windows.UI.Color.FromArgb(0xFF, 0x3A, 0x3A, 0x3C)
+            : Windows.UI.Color.FromArgb(0xFF, 0xD1, 0xD1, 0xD6);
+    }
+
     public static void ApplyTheme(AcrylicBrush brush, ThemeMode themeMode)
     {
         var isDark = IsThemeDark(themeMode);

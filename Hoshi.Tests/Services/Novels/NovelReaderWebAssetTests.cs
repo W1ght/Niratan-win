@@ -1062,16 +1062,22 @@ public class NovelReaderWebAssetTests
         var materialCode = File.ReadAllText(materialPath);
 
         popupCode.Should().Contain("private readonly SolidColorBrush _surfaceBrush;");
-        popupCode.Should().NotContain("SolidColorBrush _strokeBrush");
+        popupCode.Should().Contain("private readonly SolidColorBrush _outlineBrush;");
+        popupCode.Should().Contain("private double _popupCornerRadius = 8;");
         popupCode.Should().Contain("DictionaryPopupMaterial.GetOpaqueSurfaceColor(ThemeMode.System)");
+        popupCode.Should().Contain("DictionaryPopupMaterial.GetOutlineColor(ThemeMode.System)");
         popupCode.Should().Contain("DefaultBackgroundColor = initialSurfaceColor");
         popupCode.Should().Contain("Background = _surfaceBrush");
-        popupCode.Should().NotContain("BorderBrush = _strokeBrush");
+        popupCode.Should().Contain("BorderBrush = _outlineBrush");
+        popupCode.Should().Contain("BorderThickness = new Thickness(1)");
         popupCode.Should().Contain("DictionaryPopupCornerGuard.CalculateInset(_popupCornerRadius)");
         popupCode.Should().Contain("_surfaceRoot.Margin = new Thickness(guardInset);");
         popupCode.Should().Contain("VisualRoot.CornerRadius = new CornerRadius(_popupCornerRadius);");
         popupCode.Should().Contain("ApplySurfaceTheme(themeMode);");
-        popupCode.Should().Contain("_contentWebView.DefaultBackgroundColor = _surfaceBrush.Color;");
+        popupCode.Should().Contain("_outlineBrush.Color = DictionaryPopupMaterial.GetOutlineColor(themeMode);");
+        materialCode.Should().Contain("Windows.UI.Color.FromArgb(0xFF, 0xD1, 0xD1, 0xD6)");
+        materialCode.Should().Contain("Windows.UI.Color.FromArgb(0xFF, 0x3A, 0x3A, 0x3C)");
+        popupCode.Should().Contain("_contentWebView.DefaultBackgroundColor = surfaceColor;");
         popupCode.Should().Contain("private double _readyOpacity = 1;");
         popupCode.Should().NotContain("CompositionGeometricClip");
         popupCode.Should().NotContain("CompositionRoundedRectangleGeometry");
@@ -1112,7 +1118,6 @@ public class NovelReaderWebAssetTests
         popupCode.Should().NotContain("VisualRoot.Translation");
         popupCode.Should().NotContain("ApplyThemeShadow");
         popupCode.Should().NotContain("using System.Numerics;");
-        popupCode.Should().NotContain("BorderThickness = new Thickness(1)");
 
         var popupCss = File.ReadAllText(
             Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.css")
