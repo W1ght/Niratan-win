@@ -69,6 +69,16 @@
                                      Text="{x:Bind ViewModel.GoogleClientId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </toolkit:SettingsCard>
 
+                        <toolkit:SettingsCard x:Uid="TtuSyncGoogleClientSecretPasswordBox"
+                                              HorizontalAlignment="Stretch"
+                                              HorizontalContentAlignment="Stretch"
+                                              HeaderIcon="{ui:FontIcon Glyph=&#xE72E;}">
+                            <PasswordBox MinWidth="360"
+                                         AutomationProperties.AutomationId="TtuSyncGoogleClientSecretPasswordBox"
+                                         Password="{x:Bind ViewModel.GoogleClientSecret, Mode=TwoWay}"
+                                         PasswordRevealMode="Peek" />
+                        </toolkit:SettingsCard>
+
                         <toolkit:SettingsCard x:Uid="TtuSyncConnectionStatusCard"
                                               HorizontalAlignment="Stretch"
                                               HorizontalContentAlignment="Stretch"

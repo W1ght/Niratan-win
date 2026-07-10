@@ -51,6 +51,9 @@ public sealed class TtuSyncSettingsAssetTests
         pageXaml.Should().Contain("x:Class=\"Hoshi.Views.Pages.TtuSyncSettingsPage\"");
         pageXaml.Should().Contain("AutomationProperties.AutomationId=\"TtuSyncEnableToggle\"");
         pageXaml.Should().Contain("AutomationProperties.AutomationId=\"TtuSyncGoogleClientIdTextBox\"");
+        pageXaml.Should().Contain("x:Uid=\"TtuSyncGoogleClientSecretPasswordBox\"");
+        pageXaml.Should().Contain("AutomationProperties.AutomationId=\"TtuSyncGoogleClientSecretPasswordBox\"");
+        pageXaml.Should().Contain("Password=\"{x:Bind ViewModel.GoogleClientSecret, Mode=TwoWay}\"");
         pageXaml.Should().Contain("AutomationProperties.AutomationId=\"TtuSyncConnectGoogleDriveButton\"");
         pageXaml.Should().Contain("AutomationProperties.AutomationId=\"TtuSyncSignOutGoogleDriveButton\"");
         pageXaml.Should().Contain("AutomationProperties.AutomationId=\"TtuSyncClearGoogleDriveCacheButton\"");
@@ -73,6 +76,8 @@ public sealed class TtuSyncSettingsAssetTests
             "TtuSyncGoogleDriveSectionHeader.Text",
             "TtuSyncGoogleClientIdTextBox.Header",
             "TtuSyncGoogleClientIdTextBox.Description",
+            "TtuSyncGoogleClientSecretPasswordBox.Header",
+            "TtuSyncGoogleClientSecretPasswordBox.Description",
             "TtuSyncConnectionStatusCard.Header",
             "TtuSyncConnectionStatusText.Text",
             "TtuSyncConnectGoogleDriveButton.Content",
