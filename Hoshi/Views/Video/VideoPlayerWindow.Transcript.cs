@@ -76,7 +76,6 @@ public sealed partial class VideoPlayerWindow
         if (e.PropertyName == nameof(VideoTranscriptRow.IsCurrent)
             && sender is VideoTranscriptRow { IsCurrent: true } row)
         {
-            ViewModel.RefreshTranscriptWindowForCurrentRow();
             InspectorSubtitleListContent.ScrollRowIntoView(row);
         }
     }
