@@ -669,7 +669,6 @@ public sealed partial class VideoPlayerWindow : Window
                 return;
 
             var overlay = EnsurePopupOverlay();
-            _ = overlay.PrewarmAsync(RootGrid.XamlRoot, popupRequest.Theme);
             EnsureVideoDictionaryOverlaySurfaceVisible(overlay);
             var point = anchorPoint
                 ?? SubtitleWebView.TransformToVisual(PopupOverlayCanvas)

@@ -98,6 +98,23 @@ public class VideoSubtitleLookupAssetTests
     }
 
     [Fact]
+    public void VideoSubtitleLookup_PrewarmsPopupWhenSubtitleWebViewIsReady()
+    {
+        var code = ReadVideoPlayerWindowCode();
+        var readyIndex = code.IndexOf("case \"ready\":", StringComparison.Ordinal);
+        var prewarmIndex = code.IndexOf(
+            "PrewarmVideoDictionaryPopupAsync",
+            readyIndex,
+            StringComparison.Ordinal);
+
+        readyIndex.Should().BeGreaterThanOrEqualTo(0);
+        prewarmIndex.Should().BeGreaterThan(readyIndex);
+        code.Should().Contain("await overlay.PrewarmAsync(");
+        code.Should().Contain("RootGrid.XamlRoot");
+        code.Should().Contain("[VideoLookup] Popup prewarm");
+    }
+
+    [Fact]
     public void VideoSubtitleAppearance_AppliesInspectorValuesToTransparentOverlay()
     {
         var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.xaml"));
