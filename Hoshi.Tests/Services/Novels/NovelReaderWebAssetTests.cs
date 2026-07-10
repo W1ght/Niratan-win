@@ -308,6 +308,28 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void DictionaryPopupActionBar_UsesNiratanHistoryContract()
+    {
+        var popupCode = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Views", "Dictionary", "DictionaryLookupPopup.cs"));
+        var overlayCode = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs"));
+        var popupJs = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Web", "DictionaryPopup", "popup.js"));
+
+        popupCode.Should().Contain("new CommandBar");
+        popupCode.Should().Contain("PopupActionBar");
+        popupCode.Should().Contain("NavigateBackAsync");
+        popupCode.Should().Contain("NavigateForwardAsync");
+        popupCode.Should().Contain("case \"navigationState\"");
+        overlayCode.Should().Contain("DictionaryPopupRedirectMode.InPlace");
+        popupJs.Should().Contain("window.hoshiRedirectResults");
+        popupJs.Should().Contain("postNavigationState");
+        popupJs.Should().Contain("canGoBack: backStack.length > 0");
+        popupJs.Should().Contain("canGoForward: forwardStack.length > 0");
+    }
+
+    [Fact]
     public void DictionaryPopupHide_KeepsWebView2InVisualTree()
     {
         var popupCode = File.ReadAllText(
@@ -1948,8 +1970,9 @@ public class NovelReaderWebAssetTests
         overlayCode.Should().Contain("await PrewarmChildHostPoolAsync(PrewarmedChildHostCount, themeMode)");
         overlayCode.Should().Contain("await child.WarmAsync(themeMode)");
         overlayCode.Should().Contain("NestedLookupMaxResults = 1");
-        overlayCode.Should().Contain("var nestedMaxResults = Math.Min(_displaySettings.MaxResults, NestedLookupMaxResults)");
-        overlayCode.Should().Contain("nestedMaxResults,");
+        overlayCode.Should().Contain("redirectMode == DictionaryPopupRedirectMode.InPlace");
+        overlayCode.Should().Contain("Math.Min(_displaySettings.MaxResults, NestedLookupMaxResults)");
+        overlayCode.Should().Contain("redirectMaxResults,");
         overlayCode.Should().Contain("GetReusableChildHost");
         overlayCode.Should().Contain("HideChildHost");
         overlayCode.Should().Contain("host.VisualRoot.Opacity <= 0");

@@ -535,6 +535,10 @@
   <data name="NovelReaderSasayakiDarkTextColorLabel.Text" xml:space="preserve"><value>Dark Text</value></data>
   <data name="NovelReaderSasayakiDarkBackgroundColorLabel.Text" xml:space="preserve"><value>Dark Background</value></data>
   <data name="NovelReaderPopupSasayakiControls.AutomationProperties.Name" xml:space="preserve"><value>Sasayaki controls</value></data>
+  <data name="DictionaryPopupActionBar.AutomationProperties.Name" xml:space="preserve"><value>Popup actions</value></data>
+  <data name="DictionaryPopupBackButton.AutomationProperties.Name" xml:space="preserve"><value>Back</value></data>
+  <data name="DictionaryPopupForwardButton.AutomationProperties.Name" xml:space="preserve"><value>Forward</value></data>
+  <data name="DictionaryPopupCloseButton.AutomationProperties.Name" xml:space="preserve"><value>Close</value></data>
   <data name="NovelReaderPopupSasayakiPlayPauseButton.AutomationProperties.Name" xml:space="preserve"><value>Play/Pause</value></data>
   <data name="NovelReaderPopupSasayakiReplayCueButton.AutomationProperties.Name" xml:space="preserve"><value>Replay Cue</value></data>
   <data name="NovelReaderPopupSasayakiJumpCueButton.AutomationProperties.Name" xml:space="preserve"><value>Jump Cue</value></data>

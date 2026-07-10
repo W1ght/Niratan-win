@@ -51,6 +51,10 @@ public sealed class DictionaryLookupPopup : IDisposable
     private readonly Grid _surfaceRoot;
     private readonly SolidColorBrush _surfaceBrush;
     private readonly SolidColorBrush _outlineBrush;
+    private readonly CommandBar _actionBar;
+    private readonly AppBarButton _popupBackButton;
+    private readonly AppBarButton _popupForwardButton;
+    private readonly AppBarButton _popupCloseButton;
     private readonly CommandBar _sasayakiControlsBar;
     private readonly AppBarButton _sasayakiPopupPlayPauseButton;
     private readonly AppBarButton _sasayakiPopupReplayCueButton;
@@ -108,24 +112,66 @@ public sealed class DictionaryLookupPopup : IDisposable
             UseSystemFocusVisuals = false,
         };
 
-        _sasayakiPopupPlayPauseIcon = CreateSasayakiCommandIcon("\uE768");
-        _sasayakiPopupPlayPauseButton = CreateSasayakiCommandButton(
+        _popupBackButton = CreateCommandButton(
+            "DictionaryPopupBackButton",
+            "DictionaryPopupBackButton.AutomationProperties.Name",
+            "Back",
+            CreateCommandIcon("\uE72B"),
+            PopupBackButton_Click);
+        _popupForwardButton = CreateCommandButton(
+            "DictionaryPopupForwardButton",
+            "DictionaryPopupForwardButton.AutomationProperties.Name",
+            "Forward",
+            CreateCommandIcon("\uE72A"),
+            PopupForwardButton_Click);
+        _popupCloseButton = CreateCommandButton(
+            "DictionaryPopupCloseButton",
+            "DictionaryPopupCloseButton.AutomationProperties.Name",
+            "Close",
+            CreateCommandIcon("\uE711"),
+            PopupCloseButton_Click);
+        _popupBackButton.IsEnabled = false;
+        _popupForwardButton.IsEnabled = false;
+
+        _actionBar = new CommandBar
+        {
+            DefaultLabelPosition = CommandBarDefaultLabelPosition.Collapsed,
+            Background = new SolidColorBrush(Colors.Transparent),
+            Padding = new Thickness(8, 0, 8, 0),
+            MinHeight = 40,
+            Visibility = Visibility.Collapsed,
+            IsDynamicOverflowEnabled = false,
+            OverflowButtonVisibility = CommandBarOverflowButtonVisibility.Collapsed,
+        };
+        AutomationProperties.SetAutomationId(_actionBar, "DictionaryPopupActionBar");
+        AutomationProperties.SetName(
+            _actionBar,
+            ResourceStringHelper.GetString(
+                "DictionaryPopupActionBar.AutomationProperties.Name",
+                "Popup actions"));
+        _actionBar.PrimaryCommands.Add(_popupBackButton);
+        _actionBar.PrimaryCommands.Add(_popupForwardButton);
+        _actionBar.PrimaryCommands.Add(new AppBarSeparator());
+        _actionBar.PrimaryCommands.Add(_popupCloseButton);
+
+        _sasayakiPopupPlayPauseIcon = CreateCommandIcon("\uE768");
+        _sasayakiPopupPlayPauseButton = CreateCommandButton(
             "NovelReaderPopupSasayakiPlayPauseButton",
             "NovelReaderPopupSasayakiPlayPauseButton.AutomationProperties.Name",
             "Play/Pause",
             _sasayakiPopupPlayPauseIcon,
             SasayakiPopupPlayPauseButton_Click);
-        _sasayakiPopupReplayCueButton = CreateSasayakiCommandButton(
+        _sasayakiPopupReplayCueButton = CreateCommandButton(
             "NovelReaderPopupSasayakiReplayCueButton",
             "NovelReaderPopupSasayakiReplayCueButton.AutomationProperties.Name",
             "Replay Cue",
-            CreateSasayakiCommandIcon("\uE72C"),
+            CreateCommandIcon("\uE72C"),
             SasayakiPopupReplayCueButton_Click);
-        _sasayakiPopupJumpCueButton = CreateSasayakiCommandButton(
+        _sasayakiPopupJumpCueButton = CreateCommandButton(
             "NovelReaderPopupSasayakiJumpCueButton",
             "NovelReaderPopupSasayakiJumpCueButton.AutomationProperties.Name",
             "Jump Cue",
-            CreateSasayakiCommandIcon("\uE8AD"),
+            CreateCommandIcon("\uE8AD"),
             SasayakiPopupJumpCueButton_Click);
 
         _sasayakiControlsBar = new CommandBar
@@ -153,16 +199,19 @@ public sealed class DictionaryLookupPopup : IDisposable
             RowDefinitions =
             {
                 new RowDefinition { Height = GridLength.Auto },
+                new RowDefinition { Height = GridLength.Auto },
                 new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
             },
             Children =
             {
+                _actionBar,
                 _sasayakiControlsBar,
                 _contentWebView,
             },
         };
-        Grid.SetRow(_sasayakiControlsBar, 0);
-        Grid.SetRow(_contentWebView, 1);
+        Grid.SetRow(_actionBar, 0);
+        Grid.SetRow(_sasayakiControlsBar, 1);
+        Grid.SetRow(_contentWebView, 2);
 
         VisualRoot = new Border
         {
@@ -178,14 +227,14 @@ public sealed class DictionaryLookupPopup : IDisposable
         UpdatePopupShellGeometry();
     }
 
-    private static FontIcon CreateSasayakiCommandIcon(string glyph) => new()
+    private static FontIcon CreateCommandIcon(string glyph) => new()
     {
         Glyph = glyph,
         FontFamily = new FontFamily("Segoe Fluent Icons"),
         FontSize = 16,
     };
 
-    private static AppBarButton CreateSasayakiCommandButton(
+    private static AppBarButton CreateCommandButton(
         string automationId,
         string nameResourceKey,
         string fallbackName,
@@ -205,6 +254,42 @@ public sealed class DictionaryLookupPopup : IDisposable
         ToolTipService.SetToolTip(button, name);
         return button;
     }
+
+    private void UpdateActionBar(DictionaryDisplaySettings displaySettings)
+    {
+        _actionBar.Visibility = displaySettings.PopupActionBar
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        _popupBackButton.IsEnabled = false;
+        _popupForwardButton.IsEnabled = false;
+    }
+
+    private async void PopupBackButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await NavigateBackAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "[DictPopup] Back navigation failed");
+        }
+    }
+
+    private async void PopupForwardButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await NavigateForwardAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "[DictPopup] Forward navigation failed");
+        }
+    }
+
+    private void PopupCloseButton_Click(object sender, RoutedEventArgs e) =>
+        DismissRequested?.Invoke(this, EventArgs.Empty);
 
     private void UpdateSasayakiPopupControls()
     {
@@ -362,6 +447,7 @@ public sealed class DictionaryLookupPopup : IDisposable
             await WarmAsync(themeMode, _audioSettings, _ankiSettings);
         cancellationToken.ThrowIfCancellationRequested();
 
+        UpdateActionBar(displaySettings);
         UpdateSasayakiPopupControls();
         var ranges = DictionaryPopupBatchPlanner.Create(results.Count);
         var initialRange = ranges[0];
@@ -415,6 +501,58 @@ public sealed class DictionaryLookupPopup : IDisposable
                 traceId,
                 deferredCts);
         }
+    }
+
+    public async Task ShowRedirectResultsAsync(
+        List<DictionaryLookupResult> results,
+        Dictionary<string, string> styles,
+        DictionaryDisplaySettings displaySettings,
+        ThemeMode themeMode,
+        AudioSettings? audioSettings = null,
+        AnkiSettings? ankiSettings = null,
+        string? traceId = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (results.Count == 0)
+            return;
+
+        cancellationToken.ThrowIfCancellationRequested();
+        ApplySurfaceTheme(themeMode);
+        _currentTraceId = traceId;
+        _audioSettings = audioSettings ?? new AudioSettings();
+        _ankiSettings = ankiSettings ?? new AnkiSettings();
+        CancelPrefetch();
+        CancelDeferredResults();
+        if (!_isWarmed)
+            await WarmAsync(themeMode, _audioSettings, _ankiSettings);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        UpdateActionBar(displaySettings);
+        UpdateSasayakiPopupControls();
+        var injectionScript = _htmlGenerator.GenerateRedirectInjectionScript(
+            results,
+            styles,
+            displaySettings,
+            themeMode,
+            _displayGeneration,
+            _audioSettings,
+            _ankiSettings,
+            traceId);
+        await _contentWebView.CoreWebView2.ExecuteScriptAsync(injectionScript);
+        cancellationToken.ThrowIfCancellationRequested();
+        PrefetchAudioUrls(results);
+    }
+
+    public async Task NavigateBackAsync()
+    {
+        if (_contentWebView.CoreWebView2 is not null)
+            await _contentWebView.CoreWebView2.ExecuteScriptAsync("window.navigateBack?.()");
+    }
+
+    public async Task NavigateForwardAsync()
+    {
+        if (_contentWebView.CoreWebView2 is not null)
+            await _contentWebView.CoreWebView2.ExecuteScriptAsync("window.navigateForward?.()");
     }
 
     private async Task AppendDeferredResultsAsync(
@@ -868,6 +1006,10 @@ public sealed class DictionaryLookupPopup : IDisposable
                     LogPopupDiagnostic(payload);
                     break;
 
+                case "navigationState":
+                    UpdateNavigationState(payload);
+                    break;
+
                 case "tapOutside":
                     _contentWebView.DispatcherQueue.TryEnqueue(() =>
                         TapOutsideRequested?.Invoke(this, EventArgs.Empty));
@@ -1077,6 +1219,33 @@ public sealed class DictionaryLookupPopup : IDisposable
     private bool CanShowReadyContent(long generation) =>
         _pendingContentGeneration == generation
         && !_pendingContentCancellationToken.IsCancellationRequested;
+
+    private void UpdateNavigationState(JsonElement payload)
+    {
+        if (!payload.TryGetProperty("body", out var body)
+            || body.ValueKind != JsonValueKind.Object
+            || !body.TryGetProperty("generation", out var generationElement)
+            || !generationElement.TryGetInt64(out var generation)
+            || generation != _displayGeneration
+            || !body.TryGetProperty("canGoBack", out var canGoBackElement)
+            || canGoBackElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False)
+            || !body.TryGetProperty("canGoForward", out var canGoForwardElement)
+            || canGoForwardElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+        {
+            return;
+        }
+
+        var canGoBack = canGoBackElement.GetBoolean();
+        var canGoForward = canGoForwardElement.GetBoolean();
+        _contentWebView.DispatcherQueue.TryEnqueue(() =>
+        {
+            if (generation != _displayGeneration)
+                return;
+
+            _popupBackButton.IsEnabled = canGoBack;
+            _popupForwardButton.IsEnabled = canGoForward;
+        });
+    }
 
     private static DictionaryPopupRedirectRequest ParseRedirectRequest(JsonElement payload)
     {

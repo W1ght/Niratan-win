@@ -345,29 +345,54 @@ public sealed class DictionaryPopupOverlay : IDisposable
                 return;
 
             var parent = parentHost ?? _rootHost;
-            if (ReferenceEquals(parent, _lastRedirectParent)
+            var redirectMode = DictionaryPopupRedirectRouter.Resolve(request);
+            if (redirectMode == DictionaryPopupRedirectMode.Nested
+                && ReferenceEquals(parent, _lastRedirectParent)
                 && string.Equals(query, _lastRedirectQuery, StringComparison.Ordinal))
             {
                 Log.Debug("[DictOverlay] Ignored duplicate redirect '{Query}' from same parent", query);
                 return;
             }
 
-            _lastRedirectParent = parent;
-            _lastRedirectQuery = query;
+            if (redirectMode == DictionaryPopupRedirectMode.Nested)
+            {
+                _lastRedirectParent = parent;
+                _lastRedirectQuery = query;
+            }
+            else
+            {
+                ResetRedirectDeduplication();
+            }
 
             var lookupSw = Stopwatch.StartNew();
-            var nestedMaxResults = Math.Min(_displaySettings.MaxResults, NestedLookupMaxResults);
+            var redirectMaxResults = redirectMode == DictionaryPopupRedirectMode.InPlace
+                ? _displaySettings.MaxResults
+                : Math.Min(_displaySettings.MaxResults, NestedLookupMaxResults);
             var results = await _lookupService.LookupAsync(
                 query,
-                nestedMaxResults,
+                redirectMaxResults,
                 _displaySettings.ScanLength,
                 traceId: traceId);
             Log.Information(
                 "[LookupTrace] trace={TraceId} child redirect lookup finished in {Ms}ms query='{Query}' max={MaxResults} results={Count}",
-                traceId, lookupSw.ElapsedMilliseconds, query, nestedMaxResults, results.Count);
+                traceId, lookupSw.ElapsedMilliseconds, query, redirectMaxResults, results.Count);
             if (redirectVersion != Volatile.Read(ref _redirectVersion))
                 return;
             if (results.Count == 0) return;
+
+            if (redirectMode == DictionaryPopupRedirectMode.InPlace)
+            {
+                CloseChildrenOfParent(parent);
+                await parent.ShowRedirectResultsAsync(
+                    results,
+                    _currentStyles,
+                    _displaySettings,
+                    _currentTheme,
+                    _currentAudioSettings,
+                    _currentAnkiSettings,
+                    traceId);
+                return;
+            }
 
             var highlightSw = Stopwatch.StartNew();
             await HighlightPopupSelectionAsync(parent, results[0].Matched);

@@ -535,6 +535,10 @@
   <data name="NovelReaderSasayakiDarkTextColorLabel.Text" xml:space="preserve"><value>深色文本</value></data>
   <data name="NovelReaderSasayakiDarkBackgroundColorLabel.Text" xml:space="preserve"><value>深色背景</value></data>
   <data name="NovelReaderPopupSasayakiControls.AutomationProperties.Name" xml:space="preserve"><value>Sasayaki 控件</value></data>
+  <data name="DictionaryPopupActionBar.AutomationProperties.Name" xml:space="preserve"><value>弹窗操作</value></data>
+  <data name="DictionaryPopupBackButton.AutomationProperties.Name" xml:space="preserve"><value>后退</value></data>
+  <data name="DictionaryPopupForwardButton.AutomationProperties.Name" xml:space="preserve"><value>前进</value></data>
+  <data name="DictionaryPopupCloseButton.AutomationProperties.Name" xml:space="preserve"><value>关闭</value></data>
   <data name="NovelReaderPopupSasayakiPlayPauseButton.AutomationProperties.Name" xml:space="preserve"><value>播放/暂停</value></data>
   <data name="NovelReaderPopupSasayakiReplayCueButton.AutomationProperties.Name" xml:space="preserve"><value>重播当前句</value></data>
   <data name="NovelReaderPopupSasayakiJumpCueButton.AutomationProperties.Name" xml:space="preserve"><value>跳转到当前句</value></data>

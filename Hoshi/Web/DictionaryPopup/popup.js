@@ -1427,6 +1427,14 @@ var backStack = [];
 var forwardStack = [];
 var pendingHistoryRestore = null;
 
+function postNavigationState() {
+  postPopupMessage('navigationState', {
+    generation: Number(window.popupRenderGeneration || 0),
+    canGoBack: backStack.length > 0,
+    canGoForward: forwardStack.length > 0
+  });
+}
+
 function appendPendingHistoryRestore(flush) {
   var pending = pendingHistoryRestore;
   if (!pending) return;
@@ -1476,6 +1484,7 @@ window.replacePopupResults = function (count) {
   disconnectDictionaryColumns();
   if (container) container.innerHTML = '';
   window.renderPopup();
+  postNavigationState();
   requestAnimationFrame(function () {
     getPopupScrollElement().scrollTop = 0;
   });
@@ -1498,6 +1507,27 @@ window.hoshiInjectResults = function (entriesJson, count) {
   disconnectDictionaryColumns();
   if (container) container.innerHTML = '';
   window.renderPopup();
+  postNavigationState();
+  requestAnimationFrame(function () {
+    getPopupScrollElement().scrollTop = 0;
+  });
+};
+
+window.hoshiRedirectResults = function (entriesJson, count) {
+  closeOverlay();
+  flushPendingHistoryRestore();
+  backStack.push(snapshot());
+  forwardStack.length = 0;
+  document.documentElement.style.visibility = 'hidden';
+  window.lookupEntries = entriesJson;
+  window.entryCount = count;
+  selectedDictionaries = {};
+  audioUrls = {};
+  var container = document.getElementById('entries-container');
+  disconnectDictionaryColumns();
+  if (container) container.innerHTML = '';
+  window.renderPopup();
+  postNavigationState();
   requestAnimationFrame(function () {
     getPopupScrollElement().scrollTop = 0;
   });
@@ -1539,9 +1569,13 @@ function restore(snap) {
 }
 
 function navigate(origin, destination) {
-  if (!origin.length) return;
+  if (!origin.length) {
+    postNavigationState();
+    return;
+  }
   destination.push(snapshot());
   restore(origin.pop());
+  postNavigationState();
 }
 
 window.navigateBack = function () { navigate(backStack, forwardStack); };
