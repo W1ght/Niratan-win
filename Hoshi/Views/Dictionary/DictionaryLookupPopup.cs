@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Numerics;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -16,9 +15,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.Web.WebView2.Core;
-using Windows.Storage.Streams;
 using Hoshi.Enums;
 using Hoshi.Helpers;
 using Hoshi.Models.Anki;
@@ -52,15 +49,13 @@ public sealed class DictionaryLookupPopup : IDisposable
     public event EventHandler? ContentReady;
 
     private readonly Grid _surfaceRoot;
-    private readonly Image _snapshotAcrylicImage;
+    private readonly SolidColorBrush _surfaceBrush;
     private readonly CommandBar _sasayakiControlsBar;
     private readonly AppBarButton _sasayakiPopupPlayPauseButton;
     private readonly AppBarButton _sasayakiPopupReplayCueButton;
     private readonly AppBarButton _sasayakiPopupJumpCueButton;
     private readonly FontIcon _sasayakiPopupPlayPauseIcon;
     private readonly WebView2 _contentWebView;
-    private readonly AcrylicBrush _surfaceBrush;
-    private readonly SolidColorBrush _strokeBrush;
     private readonly PopupHtmlGenerator _htmlGenerator;
     private readonly IDictionaryLookupService _lookupService;
     private readonly IAudioService _audioService;
@@ -70,15 +65,12 @@ public sealed class DictionaryLookupPopup : IDisposable
     private AnkiSettings _ankiSettings = new();
     private bool _webViewReady;
     private bool _isWarmed;
-    private bool _useStandaloneWindowVisuals;
-    private bool _useNakedFloatingWindowVisuals;
     private long _displayGeneration;
-    private long _snapshotAcrylicGeneration;
     private long? _pendingContentGeneration;
     private Stopwatch? _pendingContentStopwatch;
     private TaskCompletionSource<bool>? _shellReadyCompletion;
     private string? _currentTraceId;
-    private double _readyOpacity = 0.88;
+    private double _readyOpacity = 1;
     private double _popupCornerRadius = 12;
 
     private const int MaxResolvedAudioUrlCacheEntries = 512;
@@ -99,16 +91,13 @@ public sealed class DictionaryLookupPopup : IDisposable
         _audioService = App.GetService<IAudioService>();
         _ankiService = App.GetService<IAnkiService>();
 
-        _snapshotAcrylicImage = new Image
-        {
-            Stretch = Stretch.UniformToFill,
-            Opacity = 0,
-            IsHitTestVisible = false,
-        };
+        var initialSurfaceColor =
+            DictionaryPopupMaterial.GetOpaqueSurfaceColor(ThemeMode.System);
+        _surfaceBrush = new SolidColorBrush(initialSurfaceColor);
 
         _contentWebView = new WebView2
         {
-            DefaultBackgroundColor = Colors.Transparent,
+            DefaultBackgroundColor = initialSurfaceColor,
             IsTabStop = false,
             UseSystemFocusVisuals = false,
         };
@@ -162,32 +151,23 @@ public sealed class DictionaryLookupPopup : IDisposable
             },
             Children =
             {
-                _snapshotAcrylicImage,
                 _sasayakiControlsBar,
                 _contentWebView,
             },
         };
-        Grid.SetRowSpan(_snapshotAcrylicImage, 2);
         Grid.SetRow(_sasayakiControlsBar, 0);
         Grid.SetRow(_contentWebView, 1);
 
-        _surfaceBrush = DictionaryPopupMaterial.CreateInAppAcrylicThinBrush();
-        _strokeBrush = new SolidColorBrush(
-            Windows.UI.Color.FromArgb(0x66, 0x00, 0x00, 0x00));
-
         VisualRoot = new Border
         {
-            CornerRadius = new CornerRadius(12),
-            BorderThickness = new Thickness(1),
-            BorderBrush = _strokeBrush,
             Background = _surfaceBrush,
+            CornerRadius = new CornerRadius(_popupCornerRadius),
             Child = _surfaceRoot,
-            Shadow = new ThemeShadow(),
-            Translation = new Vector3(0, 0, 32),
             Visibility = Visibility.Visible,
             Opacity = 0,
             IsHitTestVisible = false,
         };
+        UpdatePopupShellGeometry();
     }
 
     private static FontIcon CreateSasayakiCommandIcon(string glyph) => new()
@@ -284,34 +264,19 @@ public sealed class DictionaryLookupPopup : IDisposable
 
     public void UseStandaloneWindowVisuals()
     {
-        _useStandaloneWindowVisuals = true;
-        _contentWebView.DefaultBackgroundColor = Colors.Transparent;
         _contentWebView.Margin = new Thickness(-1);
         SetPopupCornerRadius(0);
-        VisualRoot.Background = _surfaceBrush;
-        VisualRoot.BorderThickness = new Thickness(0);
-        VisualRoot.BorderBrush = null;
-        VisualRoot.CornerRadius = new CornerRadius(0);
-        VisualRoot.Shadow = null;
-        VisualRoot.Translation = Vector3.Zero;
     }
 
     public void UseNakedFloatingWindowVisuals()
     {
-        _useNakedFloatingWindowVisuals = true;
-        _contentWebView.DefaultBackgroundColor = Colors.Transparent;
-        _contentWebView.Margin = new Thickness(-1);
+        _contentWebView.Margin = new Thickness(0);
         SetPopupCornerRadius(8);
-        VisualRoot.Background = _surfaceBrush;
-        VisualRoot.BorderThickness = new Thickness(0);
-        VisualRoot.BorderBrush = null;
-        VisualRoot.CornerRadius = new CornerRadius(8);
-        VisualRoot.Shadow = null;
-        VisualRoot.Translation = Vector3.Zero;
     }
 
     public async Task WarmAsync(ThemeMode themeMode = ThemeMode.System, AudioSettings? audioSettings = null, AnkiSettings? ankiSettings = null)
     {
+        ApplySurfaceTheme(themeMode);
         if (_isWarmed) return;
         var sw = Stopwatch.StartNew();
         _audioSettings = audioSettings ?? new AudioSettings();
@@ -338,18 +303,6 @@ public sealed class DictionaryLookupPopup : IDisposable
         UpdateSasayakiPopupControls();
     }
 
-    public void SetTheme(ThemeMode themeMode)
-    {
-        var isDark = DictionaryPopupMaterial.IsThemeDark(themeMode);
-        DictionaryPopupMaterial.ApplyTheme(_surfaceBrush, themeMode);
-        if (_useStandaloneWindowVisuals || _useNakedFloatingWindowVisuals)
-            _contentWebView.DefaultBackgroundColor = Colors.Transparent;
-
-        _strokeBrush.Color = isDark
-            ? Windows.UI.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)
-            : Windows.UI.Color.FromArgb(0x66, 0x00, 0x00, 0x00);
-    }
-
     public void SetReadyOpacity(double opacity)
     {
         _readyOpacity = Math.Clamp(opacity, 0, 1);
@@ -360,7 +313,22 @@ public sealed class DictionaryLookupPopup : IDisposable
     private void SetPopupCornerRadius(double radius)
     {
         _popupCornerRadius = Math.Max(0, radius);
+        UpdatePopupShellGeometry();
         _ = ApplyPopupCornerRadiusToWebViewAsync();
+    }
+
+    private void UpdatePopupShellGeometry()
+    {
+        var guardInset = DictionaryPopupCornerGuard.CalculateInset(_popupCornerRadius);
+        VisualRoot.CornerRadius = new CornerRadius(_popupCornerRadius);
+        _surfaceRoot.Margin = new Thickness(guardInset);
+    }
+
+    private void ApplySurfaceTheme(ThemeMode themeMode)
+    {
+        var surfaceColor = DictionaryPopupMaterial.GetOpaqueSurfaceColor(themeMode);
+        _surfaceBrush.Color = surfaceColor;
+        _contentWebView.DefaultBackgroundColor = surfaceColor;
     }
 
     public async Task ShowResultsWarmAsync(
@@ -372,6 +340,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         AnkiSettings? ankiSettings = null,
         string? traceId = null)
     {
+        ApplySurfaceTheme(themeMode);
         var sw = Stopwatch.StartNew();
         _currentTraceId = traceId;
         _audioSettings = audioSettings ?? new AudioSettings();
@@ -380,7 +349,6 @@ public sealed class DictionaryLookupPopup : IDisposable
         if (!_isWarmed)
             await WarmAsync(themeMode, _audioSettings, _ankiSettings);
 
-        SetTheme(themeMode);
         UpdateSasayakiPopupControls();
         var generation = PrepareForPendingContent();
         _pendingContentStopwatch = Stopwatch.StartNew();
@@ -399,7 +367,6 @@ public sealed class DictionaryLookupPopup : IDisposable
         CancelPrefetch();
         _displayGeneration++;
         _pendingContentGeneration = null;
-        ClearSnapshotAcrylicBackground();
         VisualRoot.Opacity = 0;
         VisualRoot.IsHitTestVisible = false;
     }
@@ -408,109 +375,6 @@ public sealed class DictionaryLookupPopup : IDisposable
     {
         if (width > 0) VisualRoot.Width = width;
         if (height > 0) VisualRoot.Height = height;
-    }
-
-    public async Task SetSnapshotAcrylicBackgroundAsync(
-        string? screenshotPath,
-        ThemeMode themeMode,
-        string? traceId = null)
-    {
-        var generation = Interlocked.Increment(ref _snapshotAcrylicGeneration);
-        if (string.IsNullOrWhiteSpace(screenshotPath) || !File.Exists(screenshotPath))
-        {
-            ClearSnapshotAcrylicBackground(generation);
-            return;
-        }
-
-        var width = VisualRoot.ActualWidth > 0 ? VisualRoot.ActualWidth : VisualRoot.Width;
-        var height = VisualRoot.ActualHeight > 0 ? VisualRoot.ActualHeight : VisualRoot.Height;
-        if (width <= 1 || height <= 1)
-        {
-            ClearSnapshotAcrylicBackground(generation);
-            return;
-        }
-
-        try
-        {
-            var bytes = await DictionaryPopupSnapshotAcrylicRenderer.RenderPngAsync(
-                screenshotPath,
-                width,
-                height,
-                themeMode);
-            if (bytes is not { Length: > 0 }
-                || generation != Interlocked.Read(ref _snapshotAcrylicGeneration))
-            {
-                return;
-            }
-
-            using var stream = new InMemoryRandomAccessStream();
-            using (var writer = new DataWriter(stream))
-            {
-                writer.WriteBytes(bytes);
-                await writer.StoreAsync();
-                await writer.FlushAsync();
-                writer.DetachStream();
-            }
-
-            stream.Seek(0);
-            var bitmap = new BitmapImage();
-            await bitmap.SetSourceAsync(stream);
-
-            if (generation != Interlocked.Read(ref _snapshotAcrylicGeneration))
-                return;
-
-            _snapshotAcrylicImage.Source = bitmap;
-            _snapshotAcrylicImage.Opacity = 0;
-            await ApplySnapshotAcrylicWebBackgroundAsync(bytes, generation);
-            Log.Information(
-                "[DictPopup] Snapshot acrylic background applied trace={TraceId} size={Width:F0}x{Height:F0}",
-                traceId ?? "-",
-                width,
-                height);
-        }
-        catch (Exception ex)
-        {
-            if (generation == Interlocked.Read(ref _snapshotAcrylicGeneration))
-                ClearSnapshotAcrylicBackground(generation);
-
-            Log.Debug(ex, "[DictPopup] Snapshot acrylic background failed trace={TraceId}", traceId ?? "-");
-        }
-    }
-
-    public void ClearSnapshotAcrylicBackground()
-    {
-        var generation = Interlocked.Increment(ref _snapshotAcrylicGeneration);
-        ClearSnapshotAcrylicBackground(generation);
-    }
-
-    private void ClearSnapshotAcrylicBackground(long generation)
-    {
-        if (generation != Interlocked.Read(ref _snapshotAcrylicGeneration))
-            return;
-
-        _snapshotAcrylicImage.Opacity = 0;
-        _snapshotAcrylicImage.Source = null;
-        _ = ClearSnapshotAcrylicWebBackgroundAsync();
-    }
-
-    private async Task ApplySnapshotAcrylicWebBackgroundAsync(byte[] bytes, long generation)
-    {
-        if (!_webViewReady
-            || _contentWebView.CoreWebView2 == null
-            || generation != Interlocked.Read(ref _snapshotAcrylicGeneration))
-        {
-            return;
-        }
-
-        var dataUrl = "data:image/png;base64," + Convert.ToBase64String(bytes);
-        var backgroundValue = $"url(\"{dataUrl}\")";
-        var script = $$"""
-            (() => {
-                document.documentElement.classList.add('has-snapshot-acrylic');
-                document.documentElement.style.setProperty('--snapshot-acrylic-background-image', {{JsonSerializer.Serialize(backgroundValue)}});
-            })();
-            """;
-        await _contentWebView.CoreWebView2.ExecuteScriptAsync(script);
     }
 
     private async Task ApplyPopupCornerRadiusToWebViewAsync()
@@ -531,26 +395,6 @@ public sealed class DictionaryLookupPopup : IDisposable
         catch (Exception ex)
         {
             Log.Debug(ex, "[DictPopup] Applying popup corner radius failed");
-        }
-    }
-
-    private async Task ClearSnapshotAcrylicWebBackgroundAsync()
-    {
-        try
-        {
-            if (!_webViewReady || _contentWebView.CoreWebView2 == null)
-                return;
-
-            await _contentWebView.CoreWebView2.ExecuteScriptAsync("""
-                (() => {
-                    document.documentElement.classList.remove('has-snapshot-acrylic');
-                    document.documentElement.style.removeProperty('--snapshot-acrylic-background-image');
-                })();
-                """);
-        }
-        catch
-        {
-            // Best-effort visual cleanup; the next shell render resets the document.
         }
     }
 
@@ -575,8 +419,9 @@ public sealed class DictionaryLookupPopup : IDisposable
     {
         if (_webViewReady) return;
 
-        await _contentWebView.EnsureCoreWebView2Async();
-        _contentWebView.DefaultBackgroundColor = Colors.Transparent;
+        var environment = await WebView2EnvironmentHelper.GetOrCreateAsync();
+        await _contentWebView.EnsureCoreWebView2Async(environment);
+        _contentWebView.DefaultBackgroundColor = _surfaceBrush.Color;
         var coreWebView = _contentWebView.CoreWebView2;
         if (coreWebView == null)
             throw new InvalidOperationException("Dictionary popup WebView2 initialization was cancelled.");

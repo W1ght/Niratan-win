@@ -27,7 +27,9 @@ body {
     --text-color-light4: #888888;
     --background-color-dark1: #eeeeee;
     color: var(--text-color);
-    background-color: transparent;
+    height: 100%;
+    overflow: hidden;
+    background-color: var(--background-color) !important;
     border: 0;
     font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif !important;
     outline: none;
@@ -37,20 +39,20 @@ body {
 body {
     position: relative;
     isolation: isolate;
-    min-height: 100vh;
-    border-radius: var(--popup-corner-radius);
-    overflow-x: hidden;
-    padding: 0 10px;
+    min-height: 100%;
+    padding: 0;
 }
 
-body::before {
-    content: "";
+#popup-viewport {
     position: fixed;
     inset: 0;
-    z-index: -1;
-    pointer-events: none;
     border-radius: var(--popup-corner-radius);
-    background: transparent;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 0 10px;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    isolation: isolate;
 }
 
 ::-webkit-scrollbar {
@@ -84,6 +86,8 @@ html:hover::-webkit-scrollbar-thumb,
 html.popup-scroll-active::-webkit-scrollbar-thumb,
 body:hover::-webkit-scrollbar-thumb,
 body.popup-scroll-active::-webkit-scrollbar-thumb,
+#popup-viewport:hover::-webkit-scrollbar-thumb,
+#popup-viewport.popup-scroll-active::-webkit-scrollbar-thumb,
 .overlay:hover::-webkit-scrollbar-thumb,
 .overlay.popup-scroll-active::-webkit-scrollbar-thumb {
     background-color: var(--popup-scrollbar-thumb);
@@ -93,18 +97,6 @@ body.popup-scroll-active::-webkit-scrollbar-thumb,
 ::-webkit-scrollbar-thumb:active {
     background-color: var(--popup-scrollbar-thumb-active);
     border-width: 2px;
-}
-
-html.has-snapshot-acrylic,
-html.has-snapshot-acrylic body {
-    background-image: none;
-}
-
-html.has-snapshot-acrylic body::before {
-    background-image: var(--snapshot-acrylic-background-image);
-    background-position: center;
-    background-repeat: no-repeat;
-    background-size: cover;
 }
 
 html:focus,
@@ -485,7 +477,7 @@ html[data-hoshi-color-scheme="dark"] .gloss-image-link[data-appearance="monochro
 }
 
 .overlay {
-    position: fixed;
+    position: absolute;
     inset: 0;
     display: none;
     z-index: 1000;
@@ -561,8 +553,8 @@ html[data-hoshi-color-scheme="dark"] .gloss-image-link[data-appearance="monochro
 @media (prefers-color-scheme: light) {
     html,
     body {
-        --background-color: rgba(248, 248, 248, 0.40);
-        --background-color-light: rgba(248, 248, 248, 0.40);
+        --background-color: #FFFFFF;
+        --background-color-light: #FFFFFF;
         --text-color: #000;
     }
 }
@@ -570,8 +562,8 @@ html[data-hoshi-color-scheme="dark"] .gloss-image-link[data-appearance="monochro
 @media (prefers-color-scheme: dark) {
     html,
     body {
-        --background-color: rgba(18, 18, 18, 0.24);
-        --background-color-light: rgba(18, 18, 18, 0.24);
+        --background-color: #000000;
+        --background-color-light: #000000;
         --text-color: #fff;
         --text-color-light1: #aaaaaa;
         --text-color-light2: #999999;
@@ -590,15 +582,15 @@ html[data-hoshi-color-scheme="dark"] .gloss-image-link[data-appearance="monochro
 
 html[data-hoshi-color-scheme="light"],
 html[data-hoshi-color-scheme="light"] body {
-    --background-color: rgba(248, 248, 248, 0.40);
-    --background-color-light: rgba(248, 248, 248, 0.40);
+    --background-color: #FFFFFF;
+    --background-color-light: #FFFFFF;
     --text-color: #000;
 }
 
 html[data-hoshi-color-scheme="dark"],
 html[data-hoshi-color-scheme="dark"] body {
-    --background-color: rgba(18, 18, 18, 0.24);
-    --background-color-light: rgba(18, 18, 18, 0.24);
+    --background-color: #000000;
+    --background-color-light: #000000;
     --text-color: #fff;
     --text-color-light1: #aaaaaa;
     --text-color-light2: #999999;

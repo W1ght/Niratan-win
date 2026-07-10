@@ -43,8 +43,8 @@ internal static class DictionaryPopupMaterial
     public static Windows.UI.Color GetOpaqueSurfaceColor(ThemeMode themeMode)
     {
         return IsThemeDark(themeMode)
-            ? Windows.UI.Color.FromArgb(0xFF, 0x24, 0x24, 0x24)
-            : Windows.UI.Color.FromArgb(0xFF, 0xF8, 0xF8, 0xF8);
+            ? Windows.UI.Color.FromArgb(0xFF, 0x00, 0x00, 0x00)
+            : Windows.UI.Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF);
     }
 
     public static void ApplyTheme(AcrylicBrush brush, ThemeMode themeMode)
@@ -54,11 +54,11 @@ internal static class DictionaryPopupMaterial
         brush.TintColor = isDark
             ? Windows.UI.Color.FromArgb(0xFF, 0x24, 0x24, 0x24)
             : Windows.UI.Color.FromArgb(0xFF, 0xF8, 0xF8, 0xF8);
-        brush.TintOpacity = 0.12;
-        brush.TintLuminosityOpacity = 0.18;
+        brush.TintOpacity = isDark ? 0.12 : 0.78;
+        brush.TintLuminosityOpacity = isDark ? 0.18 : 0.62;
         brush.FallbackColor = isDark
             ? Windows.UI.Color.FromArgb(0x58, 0x24, 0x24, 0x24)
-            : Windows.UI.Color.FromArgb(0x70, 0xF8, 0xF8, 0xF8);
+            : Windows.UI.Color.FromArgb(0xDC, 0xF8, 0xF8, 0xF8);
     }
 
     public static bool IsThemeDark(ThemeMode themeMode) => themeMode switch
