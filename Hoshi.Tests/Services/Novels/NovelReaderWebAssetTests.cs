@@ -1794,6 +1794,22 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void DictionaryPopup_StagesReplacementUntilFirstFrameReady()
+    {
+        var js = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.js"));
+
+        js.Should().Contain("var liveContainer = document.getElementById('entries-container');");
+        js.Should().Contain("var stagingContainer = document.createElement('div');");
+        js.Should().Contain("liveContainer.replaceChildren.apply(liveContainer");
+        js.Should().Contain("window.hoshiCancelPopupRender = function (expectedGeneration)");
+
+        var start = js.IndexOf("window.hoshiInjectResults = function", StringComparison.Ordinal);
+        var end = js.IndexOf("function snapshot()", start, StringComparison.Ordinal);
+        js[start..end].Should().NotContain("container.innerHTML = ''");
+    }
+
+    [Fact]
     public void DictionaryLookupAudioPath_EmitsEndToEndLatencyTraceLogs()
     {
         var selectionJs = File.ReadAllText(Path.Combine(ReaderRoot, "selection.js"));
