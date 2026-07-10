@@ -29,10 +29,10 @@ internal sealed class VideoLibraryService : IVideoLibraryService
     private static readonly string[] PosterExtensions = [".jpg", ".jpeg", ".png", ".webp"];
     private static readonly string[] FolderPosterNames = ["cover", "poster", "folder"];
 
-    private readonly IDataService _dataService;
+    private readonly IVideoDataService _dataService;
     private readonly ILogger<VideoLibraryService> _logger;
 
-    public VideoLibraryService(IDataService dataService, ILogger<VideoLibraryService> logger)
+    public VideoLibraryService(IVideoDataService dataService, ILogger<VideoLibraryService> logger)
     {
         _dataService = dataService;
         _logger = logger;

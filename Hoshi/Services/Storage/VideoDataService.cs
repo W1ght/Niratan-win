@@ -13,17 +13,17 @@ using Hoshi.Models.Video;
 
 namespace Hoshi.Services.Storage;
 
-internal class DataService : IDataService
+internal class VideoDataService : IVideoDataService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly string _connectionString;
 
-    public DataService()
+    public VideoDataService()
         : this($"Data Source={Path.Combine(AppDataHelper.GetDataPath(), "hoshi.db")}")
     {
     }
 
-    internal DataService(string connectionString)
+    internal VideoDataService(string connectionString)
     {
         _connectionString = connectionString;
     }
@@ -35,177 +35,6 @@ internal class DataService : IDataService
 
         await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
         return connection;
-    }
-
-    public async Task<IReadOnlyList<NovelBook>> GetNovelBooksAsync(
-        string? queryText = null,
-        CancellationToken ct = default
-    )
-    {
-        using var connection = await GetOpenConnectionAsync();
-        const string sql = """
-            SELECT Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount, CurrentChapterIndex, Progress, CurrentCharacterCount, TotalCharacterCount, ManualSortOrder, ProfileId
-            FROM NovelBooks
-            WHERE @QueryText IS NULL
-                OR TRIM(@QueryText) = ''
-                OR Title LIKE '%' || @QueryText || '%' COLLATE NOCASE
-                OR Author LIKE '%' || @QueryText || '%' COLLATE NOCASE
-            ORDER BY COALESCE(LastOpenedAt, ImportedAt) DESC, Title ASC;
-            """;
-
-        var result = await connection.QueryAsync<NovelBook>(
-            new CommandDefinition(
-                sql,
-                new { QueryText = queryText?.Trim() },
-                cancellationToken: ct
-            )
-        );
-        return result.ToList();
-    }
-
-    public async Task<NovelBook?> GetNovelBookAsync(string bookId, CancellationToken ct = default)
-    {
-        using var connection = await GetOpenConnectionAsync();
-        const string sql = """
-            SELECT Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount, CurrentChapterIndex, Progress, CurrentCharacterCount, TotalCharacterCount, ManualSortOrder, ProfileId
-            FROM NovelBooks
-            WHERE Id = @BookId;
-            """;
-
-        return await connection.QueryFirstOrDefaultAsync<NovelBook>(
-            new CommandDefinition(sql, new { BookId = bookId }, cancellationToken: ct)
-        );
-    }
-
-    public async Task UpsertNovelBookAsync(NovelBook book, CancellationToken ct = default)
-    {
-        using var connection = await GetOpenConnectionAsync();
-        const string sql = """
-            INSERT INTO NovelBooks
-                (Id, Title, Author, FilePath, CoverPath, ImportedAt, LastOpenedAt, Language, UniqueIdentifier, ExtractedPath, ChapterCount, CurrentChapterIndex, Progress, CurrentCharacterCount, TotalCharacterCount, ManualSortOrder, ProfileId)
-            VALUES
-                (@Id, @Title, @Author, @FilePath, @CoverPath, @ImportedAt, @LastOpenedAt, @Language, @UniqueIdentifier, @ExtractedPath, @ChapterCount, @CurrentChapterIndex, @Progress, @CurrentCharacterCount, @TotalCharacterCount, @ManualSortOrder, @ProfileId)
-            ON CONFLICT(FilePath) DO UPDATE SET
-                Title = excluded.Title,
-                Author = excluded.Author,
-                CoverPath = excluded.CoverPath,
-                Language = excluded.Language,
-                UniqueIdentifier = excluded.UniqueIdentifier,
-                ExtractedPath = excluded.ExtractedPath,
-                ChapterCount = excluded.ChapterCount,
-                ProfileId = COALESCE(NovelBooks.ProfileId, excluded.ProfileId),
-                TotalCharacterCount = CASE
-                    WHEN excluded.TotalCharacterCount > 0 THEN excluded.TotalCharacterCount
-                    ELSE NovelBooks.TotalCharacterCount
-                END;
-            """;
-
-        await connection.ExecuteAsync(new CommandDefinition(sql, book, cancellationToken: ct));
-    }
-
-    public async Task UpdateNovelLastOpenedAsync(
-        string bookId,
-        DateTime lastOpenedAt,
-        CancellationToken ct = default
-    )
-    {
-        using var connection = await GetOpenConnectionAsync();
-        await connection.ExecuteAsync(
-            new CommandDefinition(
-                "UPDATE NovelBooks SET LastOpenedAt = @LastOpenedAt WHERE Id = @BookId;",
-                new { BookId = bookId, LastOpenedAt = lastOpenedAt },
-                cancellationToken: ct
-            )
-        );
-    }
-
-    public async Task DeleteNovelBookAsync(string bookId, CancellationToken ct = default)
-    {
-        using var connection = await GetOpenConnectionAsync();
-        await connection.ExecuteAsync(
-            new CommandDefinition(
-                "DELETE FROM NovelBooks WHERE Id = @BookId;",
-                new { BookId = bookId },
-                cancellationToken: ct
-            )
-        );
-    }
-
-    public async Task SaveNovelProgressAsync(
-        string bookId,
-        int chapterIndex,
-        double progress,
-        int currentCharacterCount,
-        int totalCharacterCount,
-        CancellationToken ct = default
-    )
-    {
-        using var connection = await GetOpenConnectionAsync();
-        await connection.ExecuteAsync(
-            new CommandDefinition(
-                """
-                UPDATE NovelBooks
-                SET CurrentChapterIndex = @ChapterIndex,
-                    Progress = @Progress,
-                    CurrentCharacterCount = @CurrentCharacterCount,
-                    TotalCharacterCount = @TotalCharacterCount
-                WHERE Id = @BookId;
-                """,
-                new
-                {
-                    BookId = bookId,
-                    ChapterIndex = chapterIndex,
-                    Progress = progress,
-                    CurrentCharacterCount = currentCharacterCount,
-                    TotalCharacterCount = totalCharacterCount,
-                },
-                cancellationToken: ct
-            )
-        );
-    }
-
-    public async Task SaveNovelBookOrderAsync(
-        IReadOnlyList<string> orderedBookIds,
-        CancellationToken ct = default
-    )
-    {
-        using var connection = await GetOpenConnectionAsync();
-        await using var transaction = await connection.BeginTransactionAsync(ct);
-
-        for (var index = 0; index < orderedBookIds.Count; index++)
-        {
-            await connection.ExecuteAsync(
-                new CommandDefinition(
-                    """
-                    UPDATE NovelBooks
-                    SET ManualSortOrder = @ManualSortOrder
-                    WHERE Id = @BookId;
-                    """,
-                    new { BookId = orderedBookIds[index], ManualSortOrder = index },
-                    transaction,
-                    cancellationToken: ct
-                )
-            );
-        }
-
-        await transaction.CommitAsync(ct);
-    }
-
-    public async Task UpdateNovelProfileIdAsync(
-        string bookId,
-        string? profileId,
-        CancellationToken ct = default)
-    {
-        using var connection = await GetOpenConnectionAsync();
-        await connection.ExecuteAsync(
-            new CommandDefinition(
-                """
-                UPDATE NovelBooks
-                SET ProfileId = @ProfileId
-                WHERE Id = @BookId;
-                """,
-                new { BookId = bookId, ProfileId = profileId },
-                cancellationToken: ct));
     }
 
     public async Task<IReadOnlyList<VideoItem>> GetVideosAsync(

@@ -17,7 +17,7 @@ internal sealed class VideoThumbnailService : IVideoThumbnailService
     private static readonly TimeSpan DefaultCaptureTime = TimeSpan.FromSeconds(5);
 
     private readonly IVideoMiningMediaExtractor _extractor;
-    private readonly IDataService _dataService;
+    private readonly IVideoDataService _dataService;
     private readonly string _cacheDirectory;
     private readonly SemaphoreSlim _generationGate = new(MaximumConcurrentJobs, MaximumConcurrentJobs);
     private readonly Dictionary<string, Task<string?>> _inFlight = [];
@@ -26,7 +26,7 @@ internal sealed class VideoThumbnailService : IVideoThumbnailService
 
     public VideoThumbnailService(
         IVideoMiningMediaExtractor extractor,
-        IDataService dataService,
+        IVideoDataService dataService,
         string? cacheDirectory = null)
     {
         _extractor = extractor;

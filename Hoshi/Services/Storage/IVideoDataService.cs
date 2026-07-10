@@ -7,39 +7,8 @@ using Hoshi.Models.Video;
 
 namespace Hoshi.Services.Storage;
 
-public interface IDataService
+public interface IVideoDataService
 {
-    Task<IReadOnlyList<NovelBook>> GetNovelBooksAsync(
-        string? queryText = null,
-        CancellationToken ct = default
-    );
-    Task<NovelBook?> GetNovelBookAsync(string bookId, CancellationToken ct = default);
-
-    Task UpsertNovelBookAsync(NovelBook book, CancellationToken ct = default);
-    Task DeleteNovelBookAsync(string bookId, CancellationToken ct = default);
-    Task UpdateNovelLastOpenedAsync(
-        string bookId,
-        DateTime lastOpenedAt,
-        CancellationToken ct = default
-    );
-    Task SaveNovelProgressAsync(
-        string bookId,
-        int chapterIndex,
-        double progress,
-        int currentCharacterCount,
-        int totalCharacterCount,
-        CancellationToken ct = default
-    );
-    Task SaveNovelBookOrderAsync(
-        IReadOnlyList<string> orderedBookIds,
-        CancellationToken ct = default
-    );
-    Task UpdateNovelProfileIdAsync(
-        string bookId,
-        string? profileId,
-        CancellationToken ct = default
-    );
-
     Task<IReadOnlyList<VideoItem>> GetVideosAsync(
         string? queryText = null,
         CancellationToken ct = default
