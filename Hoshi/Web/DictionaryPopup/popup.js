@@ -1792,23 +1792,42 @@ window.renderPopup = function () {
     return true;
   }
 
-  function renderRemainingEntries(startIndex, generation, onFinished) {
-    var idx = startIndex;
+  var nextRenderIndex = 1;
+  var renderPumpActive = false;
+
+  function renderAvailableEntries() {
+    if (renderPumpActive || generation !== (window.popupRenderGeneration || 0)) return;
+    renderPumpActive = true;
+
     function next() {
-      if (generation !== (window.popupRenderGeneration || 0)) return;
-      if (idx >= window.entryCount) {
-        onFinished();
+      if (generation !== (window.popupRenderGeneration || 0)) {
+        renderPumpActive = false;
+        return;
+      }
+      if (nextRenderIndex >= window.lookupEntries.length) {
+        renderPumpActive = false;
+        if (nextRenderIndex >= window.entryCount) finishRender();
         return;
       }
 
-      renderEntry(idx, generation, function () {
-        idx++;
+      renderEntry(nextRenderIndex, generation, function () {
+        nextRenderIndex++;
         requestAnimationFrame(next);
       });
     }
 
     requestAnimationFrame(next);
   }
+
+  window.hoshiAppendResults = function (entries, finalCount, expectedGeneration) {
+    if (expectedGeneration !== generation
+        || expectedGeneration !== (window.popupRenderGeneration || 0)
+        || !Array.isArray(entries)) return false;
+    Array.prototype.push.apply(window.lookupEntries, entries);
+    window.entryCount = finalCount;
+    renderAvailableEntries();
+    return true;
+  };
 
   function finishRender() {
     if (generation !== (window.popupRenderGeneration || 0)) return;
@@ -1832,7 +1851,7 @@ window.renderPopup = function () {
   });
   renderEntry(0, generation, function (firstEntryDiv) {
     if (!commitFirstFrame(generation, firstEntryDiv)) return;
-    renderRemainingEntries(1, generation, finishRender);
+    renderAvailableEntries();
   });
 
   function popupScanLength() {
