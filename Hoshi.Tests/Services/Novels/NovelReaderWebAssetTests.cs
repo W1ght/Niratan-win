@@ -1718,6 +1718,20 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void DictionaryLookupPopup_PreservesCommittedVisualDuringReplacement()
+    {
+        var code = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryLookupPopup.cs"));
+
+        code.Should().Contain("public bool HasCommittedContent => _displayTransaction.HasCommittedContent;");
+        code.Should().Contain("EventHandler<DictionaryPopupContentCommittedEventArgs>? ContentCommitted");
+        code.Should().Contain("var preserveCommittedContent = _displayTransaction.BeginPending(");
+        code.Should().Contain("if (!preserveCommittedContent)");
+        code.Should().Contain("public void CancelPendingContent(string? traceId)");
+        code.Should().Contain("window.hoshiCancelPopupRender");
+    }
+
+    [Fact]
     public void DictionaryPopupOverlay_AnchorsChildPopupToParentSelectionRect()
     {
         var overlayCode = File.ReadAllText(

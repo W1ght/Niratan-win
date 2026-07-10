@@ -40,6 +40,14 @@ public sealed record DictionaryPopupRedirectRequest(
     double? RectMs = null,
     int? SelectedLength = null);
 
+public sealed class DictionaryPopupContentCommittedEventArgs(
+    long generation,
+    string? traceId) : EventArgs
+{
+    public long Generation { get; } = generation;
+    public string? TraceId { get; } = traceId;
+}
+
 public sealed class DictionaryLookupPopup : IDisposable
 {
     public event EventHandler<DictionaryPopupRedirectRequest>? RedirectRequested;
@@ -47,6 +55,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     public event EventHandler? DismissRequested;
     public event EventHandler? Scrolled;
     public event EventHandler? ContentReady;
+    public event EventHandler<DictionaryPopupContentCommittedEventArgs>? ContentCommitted;
 
     private readonly Grid _surfaceRoot;
     private readonly SolidColorBrush _surfaceBrush;
@@ -61,6 +70,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     private readonly IDictionaryLookupService _lookupService;
     private readonly IAudioService _audioService;
     private readonly IAnkiService _ankiService;
+    private readonly DictionaryPopupDisplayTransaction _displayTransaction = new();
     private AnkiMiningContext _miningContext = new();
     private AudioSettings _audioSettings = new();
     private AnkiSettings _ankiSettings = new();
@@ -86,6 +96,7 @@ public sealed class DictionaryLookupPopup : IDisposable
 
     public Border VisualRoot { get; }
     public bool IsWarmed => _isWarmed;
+    public bool HasCommittedContent => _displayTransaction.HasCommittedContent;
 
     public DictionaryLookupPopup()
     {
@@ -348,7 +359,8 @@ public sealed class DictionaryLookupPopup : IDisposable
         AudioSettings? audioSettings = null,
         AnkiSettings? ankiSettings = null,
         string? traceId = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Action<long>? generationStarted = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         ApplySurfaceTheme(themeMode);
@@ -367,6 +379,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         var initialRange = ranges[0];
         var initialResults = results.GetRange(initialRange.Offset, initialRange.Count);
         var generation = PrepareForPendingContent(cancellationToken);
+        generationStarted?.Invoke(generation);
         _pendingContentStopwatch = Stopwatch.StartNew();
         var serializeSw = Stopwatch.StartNew();
         var injectionScript = _htmlGenerator.GenerateInjectionScript(initialResults,
@@ -390,8 +403,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         await _contentWebView.CoreWebView2.ExecuteScriptAsync(injectionScript);
         if (cancellationToken.IsCancellationRequested)
         {
-            if (generation == _displayGeneration)
-                Hide();
+            CancelPendingContent(traceId);
             cancellationToken.ThrowIfCancellationRequested();
         }
         Log.Information(
@@ -514,11 +526,33 @@ public sealed class DictionaryLookupPopup : IDisposable
         Log.Information("[Lifecycle] Popup hidden: wasGen={Gen}", _displayGeneration);
         CancelPrefetch();
         CancelDeferredResults();
+        _displayTransaction.Dismiss();
         _displayGeneration++;
         _pendingContentGeneration = null;
         _pendingContentCancellationToken = default;
+        _pendingContentStopwatch = null;
         VisualRoot.Opacity = 0;
         VisualRoot.IsHitTestVisible = false;
+    }
+
+    public void CancelPendingContent(string? traceId)
+    {
+        var generation = _pendingContentGeneration;
+        if (!_displayTransaction.CancelPending(traceId))
+            return;
+
+        _pendingContentGeneration = null;
+        _pendingContentCancellationToken = default;
+        _pendingContentStopwatch = null;
+
+        if (generation is long value && _contentWebView.CoreWebView2 is not null)
+        {
+            _ = _contentWebView.CoreWebView2.ExecuteScriptAsync(
+                $"window.hoshiCancelPopupRender?.({value});");
+        }
+
+        if (!_displayTransaction.HasCommittedContent)
+            Hide();
     }
 
     public void SetSize(double width, double height)
@@ -856,11 +890,17 @@ public sealed class DictionaryLookupPopup : IDisposable
                     var readyGeneration = _pendingContentGeneration!.Value;
                     _contentWebView.DispatcherQueue.TryEnqueue(() =>
                     {
-                        if (!CanShowReadyContent(readyGeneration))
+                        if (!CanShowReadyContent(readyGeneration)
+                            || !_displayTransaction.TryCommit(readyGeneration, out var commit))
                             return;
 
                         ShowReadyContent();
                         ContentReady?.Invoke(this, EventArgs.Empty);
+                        ContentCommitted?.Invoke(
+                            this,
+                            new DictionaryPopupContentCommittedEventArgs(
+                                commit.Generation,
+                                commit.TraceId));
                     });
                     break;
 
@@ -1030,9 +1070,17 @@ public sealed class DictionaryLookupPopup : IDisposable
         _pendingContentGeneration = generation;
         _pendingContentCancellationToken = cancellationToken;
         _pendingContentStopwatch = null;
-        VisualRoot.Visibility = Visibility.Visible;
-        VisualRoot.Opacity = 0;
-        VisualRoot.IsHitTestVisible = false;
+        var preserveCommittedContent = _displayTransaction.BeginPending(
+            generation,
+            _currentTraceId);
+
+        if (!preserveCommittedContent)
+        {
+            VisualRoot.Visibility = Visibility.Visible;
+            VisualRoot.Opacity = 0;
+            VisualRoot.IsHitTestVisible = false;
+        }
+
         return generation;
     }
 
