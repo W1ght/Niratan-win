@@ -738,4 +738,29 @@
   <data name="TtuSyncUploadBooksToggle.Header" xml:space="preserve"><value>Upload Books</value></data>
   <data name="TtuSyncUploadBooksToggle.Description" xml:space="preserve"><value>Upload book data on first sync when no ッツ book data exists remotely</value></data>
   <data name="AboutSettingsPageTitle.Text" xml:space="preserve"><value>About</value></data>
+  <data name="NovelShelfReadingLabel.Text" xml:space="preserve"><value>Reading</value></data>
+  <data name="NovelShelfUnshelvedLabel.Text" xml:space="preserve"><value>Unshelved</value></data>
+  <data name="NovelShelfGoogleDriveLabel.Text" xml:space="preserve"><value>Google Drive</value></data>
+  <data name="NovelShelfManageButton.Label" xml:space="preserve"><value>Manage shelves</value></data>
+  <data name="NovelShelfManageButton.AutomationProperties.Name" xml:space="preserve"><value>Manage shelves</value></data>
+  <data name="NovelShelfManagementDialog.Title" xml:space="preserve"><value>Manage shelves</value></data>
+  <data name="NovelShelfManagementDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
+  <data name="NovelShelfNameBox.Header" xml:space="preserve"><value>New shelf</value></data>
+  <data name="NovelShelfNameBox.PlaceholderText" xml:space="preserve"><value>Shelf name</value></data>
+  <data name="NovelShelfRenameBox.Header" xml:space="preserve"><value>Selected shelf</value></data>
+  <data name="NovelShelfCreateButton.Content" xml:space="preserve"><value>Create</value></data>
+  <data name="NovelShelfRenameButton.Content" xml:space="preserve"><value>Rename</value></data>
+  <data name="NovelShelfDeleteButton.Content" xml:space="preserve"><value>Delete</value></data>
+  <data name="NovelBookMoveToShelfMenuItem.Text" xml:space="preserve"><value>Move to shelf…</value></data>
+  <data name="NovelStorageWarningInfoBar.Title" xml:space="preserve"><value>Book metadata needs attention</value></data>
+  <data name="NovelStorageWarningInfoBar.Message" xml:space="preserve"><value>Some book metadata could not be read. Original files were preserved.</value></data>
+  <data name="NovelShelfDeleteConfirmation.Title" xml:space="preserve"><value>Delete shelf</value></data>
+  <data name="NovelShelfDeleteConfirmation.Content" xml:space="preserve"><value>Delete '{0}'? Books will become unshelved.</value></data>
+  <data name="NovelShelfDeleteConfirmation.PrimaryButtonText" xml:space="preserve"><value>Delete</value></data>
+  <data name="NovelShelfDeleteConfirmation.CloseButtonText" xml:space="preserve"><value>Cancel</value></data>
+  <data name="NovelShelfConfirmDeleteButton.Content" xml:space="preserve"><value>Delete</value></data>
+  <data name="NovelShelfCancelDeleteButton.Content" xml:space="preserve"><value>Cancel</value></data>
+  <data name="NovelBookMoveDialog.Title" xml:space="preserve"><value>Move to shelf</value></data>
+  <data name="NovelBookMoveDialog.PrimaryButtonText" xml:space="preserve"><value>Move</value></data>
+  <data name="NovelBookMoveDialog.CloseButtonText" xml:space="preserve"><value>Cancel</value></data>
 </root>

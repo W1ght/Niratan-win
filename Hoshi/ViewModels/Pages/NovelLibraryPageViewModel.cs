@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Hoshi.Enums;
+using Hoshi.Helpers;
 using Hoshi.Messages;
 using Hoshi.Models;
 using Hoshi.Models.Common;
@@ -462,7 +463,9 @@ public partial class NovelLibraryPageViewModel : ObservableObject
                 .Select(book => new NovelBookItemViewModel(book));
             rails.Add(new NovelShelfSectionViewModel(
                 "reading",
-                "Reading",
+                ResourceStringHelper.GetString(
+                    "NovelShelfReadingLabel/Text",
+                    "Reading"),
                 IsDerived: true,
                 IsUnshelved: false,
                 new ObservableCollection<NovelBookItemViewModel>(reading)));
