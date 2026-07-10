@@ -28,6 +28,7 @@ using Hoshi.Services.Sync;
 using Hoshi.Services.UI;
 using Hoshi.Services.Video;
 using Hoshi.ViewModels.Pages;
+using Hoshi.ViewModels.Dialogs;
 using Hoshi.ViewModels.Windowing;
 
 namespace Hoshi;
@@ -140,6 +141,7 @@ public partial class App : Application
         services.AddTransient<TtuSyncSettingsPageViewModel>();
         services.AddTransient<AnkiSettingsPageViewModel>();
         services.AddTransient<NovelLibraryPageViewModel>();
+        services.AddTransient<NovelShelfManagementViewModel>();
         services.AddTransient<VideoLibraryPageViewModel>();
         services.AddTransient<NovelLookupPageViewModel>();
         services.AddTransient<NovelReaderPageViewModel>();
