@@ -136,7 +136,7 @@ dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "Fu
 
 - [ ] **Step 3: Implement ownership and DI**
 
-Store `_lastTimestamp`, `_baseline`, `_bookRoot`, `_title`, and deduplicated history. Split elapsed time at local midnight before applying the remaining interval. `Tick` advances in-memory state; `CheckpointAsync` applies elapsed state and saves once. `PauseAsync`/`StopAsync` checkpoint then change flags. `ResetBaseline` changes timestamp/position without totals.
+Store `_lastTimestamp`, `_baseline`, `_bookRoot`, `_title`, and deduplicated history. Match Niratan's current rollover order: archive the prior `Today`, establish the current local-date record, then apply the whole elapsed checkpoint to that current record. `Tick` advances in-memory state; `CheckpointAsync` applies elapsed state and saves once. `PauseAsync`/`StopAsync` checkpoint then change flags. `ResetBaseline` changes timestamp/position without totals.
 
 ```csharp
 services.AddTransient<IReaderStatisticsSession>(provider =>
