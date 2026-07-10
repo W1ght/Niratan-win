@@ -1211,7 +1211,7 @@ public class NovelReaderWebAssetTests
         var popupCss = File.ReadAllText(
             Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.css")
         );
-        popupCss.Should().Contain("--popup-corner-radius: 12px");
+        popupCss.Should().Contain("--popup-corner-radius: var(--popup-space-12)");
         popupCss.Should().Contain("border-radius: var(--popup-corner-radius)");
         popupCss.Should().Contain("#popup-viewport");
         popupCss.Should().Contain("overflow-y: auto");
