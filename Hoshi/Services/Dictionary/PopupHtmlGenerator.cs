@@ -302,40 +302,38 @@ window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlos
         var (bgColor, textColor) = GetThemeColors(themeMode);
 
         return $@"
-document.documentElement.setAttribute('data-hoshi-color-scheme', '{(IsThemeDark(themeMode) ? "dark" : "light")}');
-document.documentElement.style.setProperty('--background-color', '{bgColor}');
-document.documentElement.style.setProperty('--text-color', '{textColor}');
-window.dictionaryStyles = {stylesJson};
-window.compactGlossaries = {BoolToJs(settings.CompactGlossaries)};
-window.compactPitchAccents = {BoolToJs(settings.CompactPitchAccents)};
-window.harmonicFrequency = {BoolToJs(settings.HarmonicFrequency)};
-window.deduplicatePitchAccents = {BoolToJs(settings.DeduplicatePitchAccents)};
-window.expandFirstDictionary = {BoolToJs(settings.ExpandFirstDictionary)};
-window.collapseMode = '{settings.CollapseModeText}';
-window.collapsedDictionaries = {collapsedDictionariesJson};
-window.showExpressionTags = {BoolToJs(settings.ShowExpressionTags)};
-window.scanNonJapaneseText = {BoolToJs(settings.ScanNonJapaneseText)};
-window.maxResults = {settings.MaxResults};
-window.scanLength = {settings.ScanLength};
-window.customCSS = {JsonSerializer.Serialize(settings.CustomCSS)};
-window.popupRenderGeneration = {renderGeneration};
-window.lookupTraceId = {JsonSerializer.Serialize(traceId ?? "")};
-window.audioSources = {SerializeAudioSources(audioSettings)};
-window.audioPlaybackMode = '{PlaybackModeText(audioSettings)}';
-window.audioEnableAutoplay = {BoolToJs(audioSettings?.EnableAutoplay ?? false)};
-window.audioRequestEndpoint = 'https://hoshi-audio-resolver.local/resolve';
-window.useAnkiConnect = {BoolToJs(ankiSettings?.PopupSettings.UseAnkiConnect ?? false)};
-window.embedMedia = {BoolToJs(ankiSettings?.PopupSettings.EmbedMedia ?? false)};
-window.allowDupes = {BoolToJs(ankiSettings?.PopupSettings.AllowDupes ?? false)};
-window.needsAudio = {BoolToJs(ankiSettings?.PopupSettings.NeedsAudio ?? false)};
-window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlossaries ?? false)};
-if (typeof window.hoshiInjectResults === 'function') {{
-    window.hoshiInjectResults({entriesJson}, {finalResultCount});
-}} else {{
-    window.lookupEntries = {entriesJson};
-    window.entryCount = {finalResultCount};
-    window.renderPopup();
-}}";
+window.hoshiStagePopupRender({{
+    generation: {renderGeneration},
+    entries: {entriesJson},
+    entryCount: {finalResultCount},
+    runtime: {{
+        colorScheme: '{(IsThemeDark(themeMode) ? "dark" : "light")}',
+        backgroundColor: '{bgColor}',
+        textColor: '{textColor}',
+        dictionaryStyles: {stylesJson},
+        compactGlossaries: {BoolToJs(settings.CompactGlossaries)},
+        compactPitchAccents: {BoolToJs(settings.CompactPitchAccents)},
+        harmonicFrequency: {BoolToJs(settings.HarmonicFrequency)},
+        deduplicatePitchAccents: {BoolToJs(settings.DeduplicatePitchAccents)},
+        expandFirstDictionary: {BoolToJs(settings.ExpandFirstDictionary)},
+        collapseMode: '{settings.CollapseModeText}',
+        collapsedDictionaries: {collapsedDictionariesJson},
+        showExpressionTags: {BoolToJs(settings.ShowExpressionTags)},
+        scanNonJapaneseText: {BoolToJs(settings.ScanNonJapaneseText)},
+        maxResults: {settings.MaxResults},
+        scanLength: {settings.ScanLength},
+        customCSS: {JsonSerializer.Serialize(settings.CustomCSS)},
+        lookupTraceId: {JsonSerializer.Serialize(traceId ?? "")},
+        audioSources: {SerializeAudioSources(audioSettings)},
+        audioPlaybackMode: '{PlaybackModeText(audioSettings)}',
+        audioEnableAutoplay: {BoolToJs(audioSettings?.EnableAutoplay ?? false)},
+        useAnkiConnect: {BoolToJs(ankiSettings?.PopupSettings.UseAnkiConnect ?? false)},
+        embedMedia: {BoolToJs(ankiSettings?.PopupSettings.EmbedMedia ?? false)},
+        allowDupes: {BoolToJs(ankiSettings?.PopupSettings.AllowDupes ?? false)},
+        needsAudio: {BoolToJs(ankiSettings?.PopupSettings.NeedsAudio ?? false)},
+        compactGlossariesAnki: {BoolToJs(ankiSettings?.PopupSettings.CompactGlossaries ?? false)}
+    }}
+}});";
     }
 
     public string GenerateAppendResultsScript(

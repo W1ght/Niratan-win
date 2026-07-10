@@ -11,6 +11,7 @@ internal sealed class DictionaryPopupDisplayTransaction
 
     public bool HasCommittedContent { get; private set; }
     public long? PendingGeneration => _pendingGeneration;
+    public long? CommittedGeneration { get; private set; }
 
     public bool BeginPending(long generation, string? traceId)
     {
@@ -29,15 +30,15 @@ internal sealed class DictionaryPopupDisplayTransaction
         _pendingGeneration = null;
         _pendingTraceId = null;
         HasCommittedContent = true;
+        CommittedGeneration = generation;
         return true;
     }
 
-    public bool CancelPending(string? traceId)
+    public bool CancelPending(long generation, string? traceId)
     {
-        if (_pendingGeneration is null)
+        if (_pendingGeneration != generation)
             return false;
-        if (traceId is not null
-            && !string.Equals(traceId, _pendingTraceId, StringComparison.Ordinal))
+        if (!string.Equals(traceId, _pendingTraceId, StringComparison.Ordinal))
             return false;
 
         _pendingGeneration = null;
@@ -50,5 +51,6 @@ internal sealed class DictionaryPopupDisplayTransaction
         _pendingGeneration = null;
         _pendingTraceId = null;
         HasCommittedContent = false;
+        CommittedGeneration = null;
     }
 }

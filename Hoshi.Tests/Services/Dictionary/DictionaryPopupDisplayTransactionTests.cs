@@ -28,11 +28,31 @@ public class DictionaryPopupDisplayTransactionTests
         state.TryCommit(1, out _);
         state.BeginPending(2, "cancelled");
 
-        state.CancelPending("cancelled").Should().BeTrue();
+        state.CancelPending(2, "cancelled").Should().BeTrue();
         state.HasCommittedContent.Should().BeTrue();
+
+        state.BeginPending(3, "newer");
+        state.CancelPending(2, "cancelled").Should().BeFalse();
+        state.PendingGeneration.Should().Be(3);
 
         state.Dismiss();
         state.HasCommittedContent.Should().BeFalse();
+        state.PendingGeneration.Should().BeNull();
+        state.CommittedGeneration.Should().BeNull();
+    }
+
+    [Fact]
+    public void CancelPending_RequiresExactGenerationAndTrace()
+    {
+        var state = new DictionaryPopupDisplayTransaction();
+        state.BeginPending(7, "current");
+
+        state.CancelPending(6, "current").Should().BeFalse();
+        state.CancelPending(7, null).Should().BeFalse();
+        state.CancelPending(7, "stale").Should().BeFalse();
+        state.PendingGeneration.Should().Be(7);
+
+        state.CancelPending(7, "current").Should().BeTrue();
         state.PendingGeneration.Should().BeNull();
     }
 }
