@@ -187,6 +187,10 @@ public partial class App : Application
         services.AddSingleton<SubtitleParserService>();
         services.AddSingleton<INovelBookSidecarService, NovelBookSidecarService>();
         services.AddSingleton<INovelStatisticsSidecarService, NovelStatisticsSidecarService>();
+        services.AddTransient<IReaderStatisticsSession>(provider =>
+            new ReaderStatisticsSession(
+                provider.GetRequiredService<INovelStatisticsSidecarService>(),
+                TimeProvider.System));
         services.AddSingleton<INovelStatisticsDashboardService, NovelStatisticsDashboardService>();
         services.AddSingleton<IReaderHighlightService, ReaderHighlightService>();
         services.AddSingleton<ISasayakiSidecarService, SasayakiSidecarService>();
