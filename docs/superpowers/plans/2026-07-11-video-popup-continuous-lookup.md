@@ -4,7 +4,7 @@
 
 **Goal:** Allow click and Shift-hover subtitle lookup while the video dictionary popup remains visible, replacing only the latest successful root result.
 
-**Architecture:** Video uses a host-only hit-test mode so transparent popup space passes input to the subtitle Canvas. Popup replacement is a committed/pending generation transaction: JavaScript stages a first frame off-DOM, native keeps committed content visible, and generation-scoped ready events commit layout and subtitle highlight without awaiting contentReady.
+**Architecture:** Video uses a host-only hit-test mode so transparent popup space passes input to the subtitle Canvas. Popup replacement is a two-phase committed/pending transaction: JavaScript stages DOM plus all entry/style/audio/Anki runtime data and posts contentPrepared; native validates request version and generation before acknowledging commit; JavaScript then atomically promotes pending state and posts contentReady. The lookup path awaits neither message.
 
 **Tech Stack:** WinUI 3, Windows App SDK, C#/.NET 10, WebView2, JavaScript, xUnit v3, FluentAssertions.
 
@@ -14,6 +14,7 @@
 - Do not modify native/hoshidicts/.
 - JavaScript must not perform dictionary lookup or deinflection.
 - Never await contentReady in the subtitle lookup path.
+- Never replace committed DOM or JavaScript interaction state before native acknowledges the exact pending generation.
 - Pointer passthrough is video-only; novel reader and global popup defaults stay unchanged.
 - Latest request wins. Stale lookup, ready, cancellation, and error paths cannot replace or dismiss committed content.
 - Popup scrolling, audio, Anki, nested lookup, and explicit point-outside dismissal keep existing behavior.
@@ -26,7 +27,8 @@
 
 - Create Hoshi/Services/Dictionary/DictionaryPopupDisplayTransaction.cs for UI-independent generation state.
 - Create Hoshi.Tests/Services/Dictionary/DictionaryPopupDisplayTransactionTests.cs for transaction behavior.
-- Modify Hoshi/Web/DictionaryPopup/popup.js for detached first-frame staging.
+- Modify Hoshi/Services/Dictionary/PopupHtmlGenerator.cs to inject a complete pending render payload without overwriting committed globals.
+- Modify Hoshi/Web/DictionaryPopup/popup.js for detached first-frame staging and native-acknowledged commit.
 - Modify Hoshi/Views/Dictionary/DictionaryLookupPopup.cs for native committed/pending visibility.
 - Modify Hoshi/Views/Dictionary/DictionaryPopupOverlay.cs for video input mode and pending root layout.
 - Modify Hoshi/Views/Video/VideoPlayerWindow.xaml, VideoPlayerWindow.xaml.cs, and VideoPlayerWindow.SubtitleOverlay.cs for continuous lookup.
@@ -43,7 +45,7 @@
 
 **Interfaces:**
 - Consumes: generation long and trace id string?.
-- Produces: DictionaryPopupContentCommit, BeginPending, TryCommit, CancelPending, Dismiss, HasCommittedContent, PendingGeneration.
+- Produces: DictionaryPopupContentCommit, BeginPending, TryCommit, CancelPending(generation, traceId), Dismiss, HasCommittedContent, PendingGeneration, and CommittedGeneration.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -78,8 +80,12 @@ public class DictionaryPopupDisplayTransactionTests
         state.TryCommit(1, out _);
         state.BeginPending(2, "cancelled");
 
-        state.CancelPending("cancelled").Should().BeTrue();
+        state.CancelPending(2, "cancelled").Should().BeTrue();
         state.HasCommittedContent.Should().BeTrue();
+
+        state.BeginPending(3, "newer");
+        state.CancelPending(2, "cancelled").Should().BeFalse();
+        state.PendingGeneration.Should().Be(3);
 
         state.Dismiss();
         state.HasCommittedContent.Should().BeFalse();
@@ -112,6 +118,7 @@ internal sealed class DictionaryPopupDisplayTransaction
 
     public bool HasCommittedContent { get; private set; }
     public long? PendingGeneration => _pendingGeneration;
+    public long? CommittedGeneration { get; private set; }
 
     public bool BeginPending(long generation, string? traceId)
     {
@@ -130,12 +137,13 @@ internal sealed class DictionaryPopupDisplayTransaction
         _pendingGeneration = null;
         _pendingTraceId = null;
         HasCommittedContent = true;
+        CommittedGeneration = generation;
         return true;
     }
 
-    public bool CancelPending(string? traceId)
+    public bool CancelPending(long generation, string? traceId)
     {
-        if (_pendingGeneration is null)
+        if (_pendingGeneration != generation)
             return false;
         if (traceId is not null
             && !string.Equals(traceId, _pendingTraceId, StringComparison.Ordinal))
@@ -151,6 +159,7 @@ internal sealed class DictionaryPopupDisplayTransaction
         _pendingGeneration = null;
         _pendingTraceId = null;
         HasCommittedContent = false;
+        CommittedGeneration = null;
     }
 }
 ~~~
@@ -168,15 +177,16 @@ git commit -m "test(dictionary): model popup display transactions"
 
 ---
 
-### Task 2: Stage popup DOM before replacing committed content
+### Task 2: Stage popup DOM and runtime data until native commit
 
 **Files:**
+- Modify: Hoshi/Services/Dictionary/PopupHtmlGenerator.cs:286-354
 - Modify: Hoshi/Web/DictionaryPopup/popup.js:1484-1504,1650-1855
 - Modify: Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 
 **Interfaces:**
-- Consumes: window.popupRenderGeneration and injected entries.
-- Produces: detached first-frame commit and window.hoshiCancelPopupRender(expectedGeneration).
+- Consumes: a complete pending payload containing generation, entries, styles, display settings, trace, audio, and Anki state.
+- Produces: contentPrepared, window.hoshiCommitPopupRender(generation), window.hoshiCancelPopupRender(generation), and contentReady after native acknowledgement.
 
 - [ ] **Step 1: Add a failing asset test**
 
@@ -189,12 +199,20 @@ public void DictionaryPopup_StagesReplacementUntilFirstFrameReady()
 
     js.Should().Contain("var liveContainer = document.getElementById('entries-container');");
     js.Should().Contain("var stagingContainer = document.createElement('div');");
+    js.Should().Contain("postPopupMessage('contentPrepared', { generation: generation })");
+    js.Should().Contain("window.hoshiCommitPopupRender = function (expectedGeneration)");
     js.Should().Contain("liveContainer.replaceChildren.apply(liveContainer");
     js.Should().Contain("window.hoshiCancelPopupRender = function (expectedGeneration)");
 
     var start = js.IndexOf("window.hoshiInjectResults = function", StringComparison.Ordinal);
     var end = js.IndexOf("function snapshot()", start, StringComparison.Ordinal);
+    js[start..end].Should().NotContain("window.lookupEntries = entriesJson");
     js[start..end].Should().NotContain("container.innerHTML = ''");
+
+    var generator = File.ReadAllText(
+        Path.Combine(ProjectRoot, "Services", "Dictionary", "PopupHtmlGenerator.cs"));
+    generator.Should().Contain("window.hoshiStagePopupRender({");
+    generator.Should().NotContain("window.lookupEntries = {entriesJson};");
 }
 ~~~
 
@@ -204,79 +222,107 @@ public void DictionaryPopup_StagesReplacementUntilFirstFrameReady()
 dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopup_StagesReplacementUntilFirstFrameReady" --no-restore
 ~~~
 
-Expected: FAIL because staging and cancellation are absent.
+Expected: FAIL because the two-phase stage/commit protocol and pending payload are absent.
 
-- [ ] **Step 3: Stop clearing the live container during injection**
+- [ ] **Step 3: Inject one pending payload instead of committed globals**
 
-Replace hoshiInjectResults and add cancellation:
+Change `GenerateInjectionScript` so it calls `window.hoshiStagePopupRender` with one object containing `generation`, `entries`, `entryCount`, `dictionaryStyles`, all display booleans/numbers/CSS, `traceId`, `audioSources`, audio playback/autoplay, and all Anki flags. Remove the preceding assignments to `window.lookupEntries`, `window.dictionaryStyles`, `window.audioSources`, `window.useAnkiConnect`, and the other committed runtime globals.
 
 ~~~javascript
-window.hoshiInjectResults = function (entriesJson, count) {
-  postPopupTrace('inject-results-start', { count: count });
-  closeOverlay();
-  flushPendingHistoryRestore();
-  backStack.length = 0;
-  forwardStack.length = 0;
-  window.lookupEntries = entriesJson;
-  window.entryCount = count;
-  selectedDictionaries = {};
-  audioUrls = {};
-  window.renderPopup();
-  requestAnimationFrame(function () {
-    getPopupScrollElement().scrollTop = 0;
-  });
-};
-
-window.hoshiCancelPopupRender = function (expectedGeneration) {
-  if (expectedGeneration !== (window.popupRenderGeneration || 0)) return false;
-  window.popupRenderGeneration = expectedGeneration + 1;
-  return true;
-};
+window.hoshiStagePopupRender({
+  generation: renderGeneration,
+  entries: entriesJson,
+  entryCount: finalResultCount,
+  runtime: {
+    dictionaryStyles: stylesJson,
+    compactGlossaries: compactGlossaries,
+    compactPitchAccents: compactPitchAccents,
+    harmonicFrequency: harmonicFrequency,
+    deduplicatePitchAccents: deduplicatePitchAccents,
+    expandFirstDictionary: expandFirstDictionary,
+    collapseMode: collapseMode,
+    collapsedDictionaries: collapsedDictionaries,
+    showExpressionTags: showExpressionTags,
+    scanNonJapaneseText: scanNonJapaneseText,
+    maxResults: maxResults,
+    scanLength: scanLength,
+    customCSS: customCSS,
+    lookupTraceId: traceId,
+    audioSources: audioSources,
+    audioPlaybackMode: audioPlaybackMode,
+    audioEnableAutoplay: audioEnableAutoplay,
+    useAnkiConnect: useAnkiConnect,
+    embedMedia: embedMedia,
+    allowDupes: allowDupes,
+    needsAudio: needsAudio,
+    compactGlossariesAnki: compactGlossariesAnki
+  }
+});
 ~~~
 
-- [ ] **Step 4: Render first frame off-DOM and swap once**
+- [ ] **Step 4: Stage first frame and expose native commit/cancel**
 
-At renderPopup start:
+Add `capturePopupRuntime` and `applyPopupRuntime` listing every runtime key emitted above. `hoshiStagePopupRender(payload)` temporarily applies the pending runtime only while synchronously building the detached first entry, then restores the committed runtime before returning and posts `contentPrepared`.
+
+At `renderPopup` start, capture local entry data and use it throughout the render closure instead of reading mutable globals:
 
 ~~~javascript
 var liveContainer = document.getElementById('entries-container');
 if (!liveContainer || !window.entryCount) return;
 var stagingContainer = document.createElement('div');
 var container = stagingContainer;
+var lookupEntries = window.lookupEntries;
+var entryCount = window.entryCount;
+var generation = window.popupRenderGeneration || 0;
 ~~~
 
-Use this commit function:
+When the detached first entry is complete, do not swap. Store a pending object with a commit closure and restore the committed runtime:
 
 ~~~javascript
-function commitFirstFrame(generation, entryDiv) {
-  if (firstFrameCommitted
-    || !entryDiv
-    || generation !== (window.popupRenderGeneration || 0)) return false;
-
-  wrapRubyTextNodes(entryDiv);
-  applyConfiguredStyles();
-  disconnectDictionaryColumns();
-  liveContainer.replaceChildren.apply(
-    liveContainer,
-    Array.from(stagingContainer.childNodes));
-  container = liveContainer;
-  observeAllDictionarySections();
-  layoutDictionaryColumns();
-  document.documentElement.style.visibility = 'visible';
-  firstFrameCommitted = true;
-  postPopupTrace('first-frame-ready', {
-    generation: generation,
-    renderedEntries: 1,
-    renderedGlossaries: entryDiv.querySelectorAll('.glossary-content').length,
-    textLength: entryDiv.innerText.length,
-    elapsedMs: performance.now() - renderStart
-  });
-  postPopupMessage('contentReady', { generation: generation });
-  return true;
-}
+window.hoshiPendingPopupRender = {
+  generation: generation,
+  payload: pendingPayload,
+  commit: function () {
+    applyPopupRuntime(pendingPayload.runtime);
+    window.popupRenderGeneration = generation;
+    window.lookupEntries = lookupEntries;
+    window.entryCount = entryCount;
+    disconnectDictionaryColumns();
+    liveContainer.replaceChildren.apply(
+      liveContainer,
+      Array.from(stagingContainer.childNodes));
+    container = liveContainer;
+    applyConfiguredStyles();
+    observeAllDictionarySections();
+    layoutDictionaryColumns();
+    document.documentElement.style.visibility = 'visible';
+    postPopupMessage('contentReady', { generation: generation });
+    renderAvailableEntries();
+  }
+};
+postPopupMessage('contentPrepared', { generation: generation });
 ~~~
 
-Keep the deferred pump unchanged so it appends through the reassigned container.
+Expose exact-generation operations:
+
+~~~javascript
+window.hoshiCommitPopupRender = function (expectedGeneration) {
+  var pending = window.hoshiPendingPopupRender;
+  if (!pending || pending.generation !== expectedGeneration) return false;
+  window.hoshiPendingPopupRender = null;
+  pending.commit();
+  return true;
+};
+
+window.hoshiCancelPopupRender = function (expectedGeneration) {
+  var pending = window.hoshiPendingPopupRender;
+  if (!pending || pending.generation !== expectedGeneration) return false;
+  window.hoshiPendingPopupRender = null;
+  return true;
+};
+~~~
+
+The old committed globals and DOM remain unchanged between `contentPrepared` and native commit. Deferred rendering uses the closure-local `lookupEntries` and the reassigned live `container`.
 
 - [ ] **Step 5: Run GREEN**
 
@@ -289,7 +335,7 @@ Expected: all matching tests pass.
 - [ ] **Step 6: Commit**
 
 ~~~powershell
-git add Hoshi/Web/DictionaryPopup/popup.js Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add Hoshi/Services/Dictionary/PopupHtmlGenerator.cs Hoshi/Web/DictionaryPopup/popup.js Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "fix(dictionary): stage popup replacements atomically"
 ~~~
 
@@ -302,8 +348,8 @@ git commit -m "fix(dictionary): stage popup replacements atomically"
 - Modify: Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 
 **Interfaces:**
-- Consumes: DictionaryPopupDisplayTransaction and hoshiCancelPopupRender.
-- Produces: DictionaryPopupContentCommittedEventArgs, ContentCommitted, HasCommittedContent, CancelPendingContent, and generationStarted callback.
+- Consumes: DictionaryPopupDisplayTransaction plus hoshiCommitPopupRender/hoshiCancelPopupRender from Task 2.
+- Produces: contentPrepared validation, DictionaryPopupContentCommittedEventArgs, ContentCommitted, HasCommittedContent, CancelPendingContent(generation, traceId), and generationStarted callback.
 
 - [ ] **Step 1: Add a failing lifecycle test**
 
@@ -318,7 +364,9 @@ public void DictionaryLookupPopup_PreservesCommittedVisualDuringReplacement()
     code.Should().Contain("EventHandler<DictionaryPopupContentCommittedEventArgs>? ContentCommitted");
     code.Should().Contain("var preserveCommittedContent = _displayTransaction.BeginPending(");
     code.Should().Contain("if (!preserveCommittedContent)");
-    code.Should().Contain("public void CancelPendingContent(string? traceId)");
+    code.Should().Contain("case \"contentPrepared\":");
+    code.Should().Contain("window.hoshiCommitPopupRender");
+    code.Should().Contain("public void CancelPendingContent(long generation, string? traceId)");
     code.Should().Contain("window.hoshiCancelPopupRender");
 }
 ~~~
@@ -354,7 +402,9 @@ Add Action<long>? generationStarted = null as the final ShowResultsWarmAsync par
 Replace PrepareForPendingContent with:
 
 ~~~csharp
-private long PrepareForPendingContent(CancellationToken cancellationToken)
+private long PrepareForPendingContent(
+    CancellationToken cancellationToken,
+    string? traceId)
 {
     var generation = ++_displayGeneration;
     _pendingContentGeneration = generation;
@@ -362,7 +412,7 @@ private long PrepareForPendingContent(CancellationToken cancellationToken)
     _pendingContentStopwatch = null;
     var preserveCommittedContent = _displayTransaction.BeginPending(
         generation,
-        _currentTraceId);
+        traceId);
 
     if (!preserveCommittedContent)
     {
@@ -375,7 +425,23 @@ private long PrepareForPendingContent(CancellationToken cancellationToken)
 }
 ~~~
 
-- [ ] **Step 5: Commit only a current ready generation**
+- [ ] **Step 5: Acknowledge only a current prepared generation**
+
+Handle `contentPrepared` by parsing its generation, checking `_pendingContentGeneration`, the pending cancellation token, and transaction identity, then enqueueing this non-blocking commit command:
+
+~~~csharp
+if (!CanShowReadyContent(preparedGeneration)
+    || _displayTransaction.PendingGeneration != preparedGeneration
+    || _contentWebView.CoreWebView2 is null)
+    return;
+
+_ = _contentWebView.CoreWebView2.ExecuteScriptAsync(
+    $"window.hoshiCommitPopupRender?.({preparedGeneration});");
+~~~
+
+Do not await `contentPrepared` or `contentReady` from `ShowResultsWarmAsync`.
+
+- [ ] **Step 6: Commit only a current ready generation**
 
 In the contentReady dispatcher callback:
 
@@ -386,6 +452,8 @@ if (!CanShowReadyContent(readyGeneration)
 
 ShowReadyContent();
 ContentReady?.Invoke(this, EventArgs.Empty);
+if (_displayTransaction.CommittedGeneration != readyGeneration)
+    return;
 ContentCommitted?.Invoke(
     this,
     new DictionaryPopupContentCommittedEventArgs(
@@ -393,23 +461,23 @@ ContentCommitted?.Invoke(
         commit.TraceId));
 ~~~
 
-- [ ] **Step 6: Cancel pending content without hiding committed content**
+- [ ] **Step 7: Cancel the exact pending generation without hiding committed content**
 
 ~~~csharp
-public void CancelPendingContent(string? traceId)
+public void CancelPendingContent(long generation, string? traceId)
 {
-    var generation = _pendingContentGeneration;
-    if (!_displayTransaction.CancelPending(traceId))
+    if (_pendingContentGeneration != generation
+        || !_displayTransaction.CancelPending(generation, traceId))
         return;
 
     _pendingContentGeneration = null;
     _pendingContentCancellationToken = default;
     _pendingContentStopwatch = null;
 
-    if (generation is long value && _contentWebView.CoreWebView2 is not null)
+    if (_contentWebView.CoreWebView2 is not null)
     {
         _ = _contentWebView.CoreWebView2.ExecuteScriptAsync(
-            $"window.hoshiCancelPopupRender?.({value});");
+            $"window.hoshiCancelPopupRender?.({generation});");
     }
 
     if (!_displayTransaction.HasCommittedContent)
@@ -419,7 +487,7 @@ public void CancelPendingContent(string? traceId)
 
 Make explicit Hide call _displayTransaction.Dismiss(). Cancellation paths call CancelPendingContent instead of Hide.
 
-- [ ] **Step 7: Run GREEN**
+- [ ] **Step 8: Run GREEN**
 
 ~~~powershell
 dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupDisplayTransactionTests|FullyQualifiedName~DictionaryLookupPopup_PreservesCommittedVisualDuringReplacement|FullyQualifiedName~NovelReaderWebAssetTests" --no-restore
@@ -427,7 +495,7 @@ dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "Fu
 
 Expected: all matching tests pass.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ~~~powershell
 git add Hoshi/Views/Dictionary/DictionaryLookupPopup.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
@@ -445,7 +513,7 @@ git commit -m "fix(dictionary): preserve committed popup generations"
 - Modify: Hoshi.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs
 
 **Interfaces:**
-- Consumes: DictionaryLookupPopup.ContentCommitted, HasCommittedContent, CancelPendingContent.
+- Consumes: DictionaryLookupPopup.ContentCommitted, HasCommittedContent, and exact-generation CancelPendingContent.
 - Produces: DictionaryPopupCanvasInputMode and RootContentCommitted.
 
 - [ ] **Step 1: Add failing default and video-mode tests**
@@ -590,7 +658,7 @@ private void OnRootContentCommitted(
 }
 ~~~
 
-CancelShow must call _rootHost.CancelPendingContent(traceId) and retain committed content. Dismiss only if no committed root exists.
+CancelShow must require the matching PendingRootCommit and call `_rootHost.CancelPendingContent(pending.Generation, traceId)`, then clear only that pending layout and retain committed content. Dismiss only if no committed root exists.
 
 - [ ] **Step 5: Run GREEN**
 
@@ -838,7 +906,7 @@ git commit -m "fix(video): replace visible popup with current lookup"
 
 **解决**：
 - 视频宿主启用仅可见 popup host 命中的穿透模式，实际 popup 保持交互，透明空白把输入交给字幕 Canvas。
-- 根 popup 使用 committed/pending generation；新首屏在 detached DOM 中完成后原子替换，过期 generation 不能提交。
+- 根 popup 使用两阶段 committed/pending generation；JavaScript 暂存 DOM 与全部交互数据并发送 prepared，native 校验精确 generation 后才允许原子替换，过期 generation 不能提交。
 - latest-request-wins 在 ready 后提交新锚点和高亮；无结果、取消或失败保留最后一次成功 popup。
 
 ---

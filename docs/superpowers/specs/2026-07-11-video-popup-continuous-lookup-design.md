@@ -63,12 +63,15 @@ overlay 截获输入后，再换算并调用字幕命中。
   -> lookupAtOffset 分词桥
   -> VideoSubtitleLookupCoordinator.Begin（新版本取消旧版本）
   -> native dictionary lookup
-  -> popup pending generation
-  -> 首屏 contentReady
-  -> 原子提交内容 + popup 锚点 + 字幕高亮
+  -> popup pending generation（DOM + 词条 + 样式 + 音频 + Anki）
+  -> JavaScript contentPrepared
+  -> native 校验 request version + generation
+  -> JavaScript commit
+  -> contentReady
+  -> 原子提交 popup 锚点 + 字幕高亮
 ```
 
-当前 popup 在 native lookup 和 pending generation 期间保持最后一次成功内容。查词路径不得等待 `contentReady`；ready 消息继续异步驱动提交，确保 Shift hover 不被阻塞。
+当前 popup 在 native lookup 和 pending generation 期间保持最后一次成功内容及其全部交互数据。查词路径不得等待 `contentPrepared` 或 `contentReady`；两种消息都通过异步 generation gate 驱动，确保 Shift hover 不被阻塞。
 
 ### 3. popup 内容事务
 
@@ -77,11 +80,13 @@ overlay 截获输入后，再换算并调用字幕命中。
 - **committed**：当前可见、可交互的最后一次成功 generation。
 - **pending**：正在后台构造首屏的新 generation，带请求版本、trace id、目标锚点和目标高亮。
 
-`popup.js` 不再在收到新注入时立即清空可见 `entries-container`。它在独立的暂存容器中构造新 generation 的首个词条；generation 仍为当前且首屏布局完成后，使用一次 DOM 替换提交暂存节点，然后发送带 generation 的 `contentReady`。
+`PopupHtmlGenerator` 不再先覆盖 `window.lookupEntries`、样式、音频、Anki 或 trace 等 committed 全局状态，而是把新 generation 的完整渲染上下文作为 pending payload 交给 `popup.js`。`popup.js` 在独立暂存容器中构造首个词条，保留 committed DOM 和 committed 交互上下文，然后发送带 generation 的 `contentPrepared`。
 
-native 层在已有 committed 内容时不把 `VisualRoot.Opacity` 或 `IsHitTestVisible` 置为隐藏；只有首次冷显示仍保持现有的 `Opacity=0` ready gate。收到当前 generation 的 `contentReady` 后，overlay 提交目标锚点和字幕高亮。过期 ready 消息不能改变内容、位置、高亮或可见性。
+native 收到 `contentPrepared` 后，必须再次校验 lookup request、generation 和取消令牌。只有仍为当前的 generation 才会收到 `hoshiCommitPopupRender(generation)`；JavaScript 随后在同一个同步任务中提升 pending 全局上下文、原子替换 DOM，并发送 `contentReady`。native 不在查词路径等待任一消息。
 
-取消 pending generation 时仅丢弃暂存内容并恢复 committed 状态，不调用根 popup 的 `Dismiss`。没有 committed 内容的首次显示若被取消，则沿用现有隐藏行为。
+native 层在已有 committed 内容时不把 `VisualRoot.Opacity` 或 `IsHitTestVisible` 置为隐藏；只有首次冷显示仍保持现有的 `Opacity=0` ready gate。收到当前 generation 的 `contentReady` 后，overlay 提交目标锚点和字幕高亮。过期 prepared/ready 消息不能改变内容、位置、高亮、交互数据或可见性。
+
+取消 pending generation 必须同时匹配 generation 和 trace id，只丢弃 JavaScript pending payload 与 native pending 状态，不调用根 popup 的 `Dismiss`。没有 committed 内容的首次显示若被取消，则沿用现有隐藏行为。
 
 ### 4. 无结果和错误
 
@@ -95,8 +100,9 @@ native 层在已有 committed 内容时不把 `VisualRoot.Opacity` 或 `IsHitTes
 - `VideoPlayerWindow.xaml`：视频 popup 外层空白区域改为非命中背景。
 - `VideoPlayerWindow.xaml.cs` / `VideoPlayerWindow.SubtitleOverlay.cs`：启用视频专用 passthrough；把新查询的锚点和高亮作为 pending 状态提交；无结果时不销毁已显示 popup。
 - `DictionaryPopupOverlay`：增加默认关闭的视频专用 passthrough 选项；管理 committed/pending 根 popup 布局提交。
-- `DictionaryLookupPopup`：区分首次显示与已有内容替换；发布 generation-scoped ready/取消结果。
-- `popup.js`：首屏使用暂存容器，generation 校验后原子替换可见 DOM。
+- `PopupHtmlGenerator`：把完整新渲染上下文封装成 pending payload，不提前改写 committed JavaScript 全局状态。
+- `DictionaryLookupPopup`：区分首次显示与已有内容替换；处理 generation-scoped prepared → commit → ready/取消协议。
+- `popup.js`：首屏与全部交互数据先暂存，收到 native commit 后才原子提升为 committed DOM 和运行时状态。
 - 不修改 `native/hoshidicts/`，不把字典查询逻辑移入 JavaScript。
 
 ## 测试策略
@@ -105,9 +111,10 @@ native 层在已有 committed 内容时不把 `VisualRoot.Opacity` 或 `IsHitTes
 2. 视频连续查词：popup 可见时，单击和 Shift hover 都能启动新的 lookup；不会先调用 `Dismiss`。
 3. latest-request-wins：连续请求只有最后一个 generation 能提交内容、位置和高亮。
 4. 保留旧内容：pending、无结果、失败和取消期间 committed popup 保持可见并可交互。
-5. 原子提交：`popup.js` 在首屏完成前不清空可见容器，过期 generation 不替换 DOM。
-6. 点外关闭：非字幕空白仍关闭 popup；popup 内滚动、音频、Anki 和嵌套查词不触发关闭。
-7. 运行视频字幕专项测试、字典 popup 测试和全量 x64 测试；实机验证同一字幕连续单击、Shift hover、无结果词和快速移动竞态。
+5. 两阶段原子提交：prepared 前不清空可见容器或覆盖 committed 交互数据；没有 native commit 的 generation 不替换 DOM；过期 generation 不发送有效 ready。
+6. 取消身份：旧 generation 或仅 trace 匹配的取消不能清除更新的 pending generation。
+7. 点外关闭：非字幕空白仍关闭 popup；popup 内滚动、音频、Anki 和嵌套查词不触发关闭。
+8. 运行视频字幕专项测试、字典 popup 测试和全量 x64 测试；实机验证同一字幕连续单击、Shift hover、无结果词和快速移动竞态。
 
 ## 非目标
 
