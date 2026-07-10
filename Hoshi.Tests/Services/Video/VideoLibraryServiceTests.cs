@@ -28,7 +28,7 @@ public class VideoLibraryServiceTests : IDisposable
         var secondVideo = Touch(Path.Combine(nested, "Episode 02.mp4"), "second");
         Touch(Path.Combine(nested, "notes.txt"));
 
-        var data = new Mock<IDataService>();
+        var data = new Mock<IVideoDataService>();
         var savedVideos = new List<VideoItem>();
         data
             .Setup(service => service.UpsertVideoAsync(It.IsAny<VideoItem>(), It.IsAny<CancellationToken>()))
@@ -53,7 +53,7 @@ public class VideoLibraryServiceTests : IDisposable
         var ct = TestContext.Current.CancellationToken;
         var modifiedAt = new DateTime(2026, 7, 9, 5, 30, 0, DateTimeKind.Utc);
         var videoPath = Touch(Path.Combine(_directory, "Episode 04.mkv"), "video-bytes", modifiedAt);
-        var data = new Mock<IDataService>();
+        var data = new Mock<IVideoDataService>();
         VideoItem? saved = null;
         data
             .Setup(service => service.UpsertVideoAsync(It.IsAny<VideoItem>(), It.IsAny<CancellationToken>()))
@@ -86,7 +86,7 @@ public class VideoLibraryServiceTests : IDisposable
     public async Task MarkWatchedAsync_DelegatesToDataService()
     {
         var ct = TestContext.Current.CancellationToken;
-        var data = new Mock<IDataService>();
+        var data = new Mock<IVideoDataService>();
         data
             .Setup(service => service.MarkVideoWatchedAsync("video-1", It.IsAny<DateTime>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -104,7 +104,7 @@ public class VideoLibraryServiceTests : IDisposable
     public async Task ClearProgressAsync_DelegatesToDataService()
     {
         var ct = TestContext.Current.CancellationToken;
-        var data = new Mock<IDataService>();
+        var data = new Mock<IVideoDataService>();
         data
             .Setup(service => service.ClearVideoProgressAsync("video-1", It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -126,7 +126,7 @@ public class VideoLibraryServiceTests : IDisposable
         {
             new VideoCollection { Id = "collection-1", Name = "Favorites", Kind = VideoCollectionKind.Manual },
         };
-        var data = new Mock<IDataService>();
+        var data = new Mock<IVideoDataService>();
         data
             .Setup(service => service.GetVideoCollectionsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(collections);
@@ -142,7 +142,7 @@ public class VideoLibraryServiceTests : IDisposable
     public async Task CreateManualCollectionAsync_PersistsNormalizedManualCollection()
     {
         var ct = TestContext.Current.CancellationToken;
-        var data = new Mock<IDataService>();
+        var data = new Mock<IVideoDataService>();
         VideoCollection? saved = null;
         IReadOnlyList<string>? savedItemIds = null;
         data
@@ -170,7 +170,7 @@ public class VideoLibraryServiceTests : IDisposable
     public async Task CreateSmartCollectionAsync_PersistsNormalizedSmartCollection()
     {
         var ct = TestContext.Current.CancellationToken;
-        var data = new Mock<IDataService>();
+        var data = new Mock<IVideoDataService>();
         VideoCollection? saved = null;
         data
             .Setup(service => service.UpsertVideoCollectionAsync(It.IsAny<VideoCollection>(), It.IsAny<CancellationToken>()))
@@ -201,7 +201,7 @@ public class VideoLibraryServiceTests : IDisposable
     public async Task DeleteCollectionAsync_DelegatesToDataService()
     {
         var ct = TestContext.Current.CancellationToken;
-        var data = new Mock<IDataService>();
+        var data = new Mock<IVideoDataService>();
         data
             .Setup(service => service.DeleteVideoCollectionAsync("collection-1", It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
@@ -219,7 +219,7 @@ public class VideoLibraryServiceTests : IDisposable
     public async Task SetFavoriteAsync_DelegatesToDataService()
     {
         var ct = TestContext.Current.CancellationToken;
-        var data = new Mock<IDataService>();
+        var data = new Mock<IVideoDataService>();
         data
             .Setup(service => service.UpdateVideoFavoriteAsync("video-1", true, It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);

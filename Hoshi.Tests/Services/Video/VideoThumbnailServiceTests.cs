@@ -21,7 +21,7 @@ public class VideoThumbnailServiceTests : IDisposable
         var ct = TestContext.Current.CancellationToken;
         var poster = Touch(Path.Combine(_directory, "poster.jpg"));
         var extractor = new Mock<IVideoMiningMediaExtractor>();
-        var data = new Mock<IDataService>();
+        var data = new Mock<IVideoDataService>();
         var sut = new VideoThumbnailService(extractor.Object, data.Object, _directory);
 
         var result = await sut.EnsureThumbnailAsync(
@@ -47,7 +47,7 @@ public class VideoThumbnailServiceTests : IDisposable
                 File.WriteAllText(outputPath, "png");
                 return outputPath;
             });
-        var data = new Mock<IDataService>();
+        var data = new Mock<IVideoDataService>();
         data.Setup(service => service.UpdateVideoThumbnailPathAsync("video-1", It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         var sut = new VideoThumbnailService(extractor.Object, data.Object, _directory);
@@ -69,7 +69,7 @@ public class VideoThumbnailServiceTests : IDisposable
         var ct = TestContext.Current.CancellationToken;
         var video = Touch(Path.Combine(_directory, "suspended.mkv"));
         var extractor = new Mock<IVideoMiningMediaExtractor>();
-        var data = new Mock<IDataService>();
+        var data = new Mock<IVideoDataService>();
         var sut = new VideoThumbnailService(extractor.Object, data.Object, _directory);
         sut.Suspend();
 

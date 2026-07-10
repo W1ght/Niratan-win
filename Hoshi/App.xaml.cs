@@ -162,9 +162,10 @@ public partial class App : Application
         services.AddSingleton<IDictionaryProfileContext>(provider =>
             provider.GetRequiredService<ProfileRuntimeService>());
         services.AddSingleton<IShortcutService, ShortcutService>();
-        services.AddSingleton<IDataService, DataService>();
+        services.AddSingleton<IVideoDataService, VideoDataService>();
         services.AddSingleton<INiratanJsonFileStore, NiratanJsonFileStore>();
         services.AddSingleton<INovelBookStorageService, NovelBookStorageService>();
+        services.AddSingleton<INovelStorageMigrationService, NovelStorageMigrationService>();
         services.AddSingleton<NovelStorageAccessState>();
         services.AddSingleton<INovelStorageAccessState>(provider =>
             provider.GetRequiredService<NovelStorageAccessState>());
@@ -242,6 +243,17 @@ public partial class App : Application
             );
             await migrator.MigrateAsync();
             Log.Information("Database ready");
+
+            var novelMigrationResult = await GetService<INovelStorageMigrationService>()
+                .MigrateAsync();
+            GetService<NovelStorageAccessState>().Apply(novelMigrationResult);
+            if (novelMigrationResult.IsReadOnly)
+            {
+                GetService<INotificationService>().ShowError(
+                    novelMigrationResult.ErrorMessage
+                        ?? "Novel storage migration requires recovery.",
+                    "Novel library is read-only");
+            }
 
             await InitializeAppAsync();
 

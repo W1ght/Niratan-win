@@ -14,9 +14,10 @@ internal class DatabaseMigrator
     private readonly ILogger<DatabaseMigrator> _logger;
     private readonly string _connectionString;
 
-    // Migrations must never be reordered, removed, or edited after being released.
-    // A published migration has already run on user databases — modifying it would
-    // create schema divergence between users who installed before and after the change.
+    // Migration version slots must never be reordered or removed.
+    // Versions 3-7 intentionally keep their released numbers: existing databases have
+    // the legacy novel schema, while fresh databases skip it and use file-backed novels.
+    // Their table guards preserve upgrades for old databases before one-time export.
     private static readonly IReadOnlyList<IMigration> AllMigrations =
     [
         new Migration_001(),

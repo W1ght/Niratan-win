@@ -12,6 +12,9 @@ internal class Migration_004 : IMigration
 
     public async Task UpAsync(SqliteConnection connection, DbTransaction transaction)
     {
+        if (!await LegacyTableExistsAsync(connection, transaction))
+            return;
+
         await connection.ExecuteAsync(
             """
             ALTER TABLE NovelBooks ADD COLUMN ExtractedPath TEXT;
@@ -20,4 +23,11 @@ internal class Migration_004 : IMigration
             transaction: transaction
         );
     }
+
+    private static async Task<bool> LegacyTableExistsAsync(
+        SqliteConnection connection,
+        DbTransaction transaction) =>
+        await connection.ExecuteScalarAsync<long>(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'NovelBooks';",
+            transaction: transaction) > 0;
 }
