@@ -334,7 +334,7 @@ public sealed partial class VideoPlayerWindow
 
     private async Task HandleSubtitleWebLookupRequestAsync(JsonElement payload)
     {
-        if (payload.ValueKind != JsonValueKind.Object || _isSubtitlePointerLookupRunning)
+        if (payload.ValueKind != JsonValueKind.Object)
             return;
 
         var query = payload.TryGetProperty("text", out var textElement)
@@ -355,20 +355,12 @@ public sealed partial class VideoPlayerWindow
         var anchor = SubtitleWebView.TransformToVisual(PopupOverlayCanvas)
             .TransformPoint(new Windows.Foundation.Point(x, y));
 
-        _isSubtitlePointerLookupRunning = true;
-        try
-        {
-            await LookupCurrentSubtitleAsync(
-                query,
-                offset,
-                anchor,
-                width,
-                height);
-        }
-        finally
-        {
-            _isSubtitlePointerLookupRunning = false;
-        }
+        await StartSubtitleLookupAsync(
+            query,
+            offset,
+            anchor,
+            width,
+            height);
     }
 
     private static double GetJsonDouble(JsonElement payload, string propertyName, double fallback)

@@ -111,7 +111,6 @@ public sealed partial class VideoPlayerWindow : Window
     private bool _isUpdatingSubtitleTrackSelection;
     private bool _isSubtitlePointerOver;
     private bool _isLookupPopupVisible;
-    private bool _isSubtitlePointerLookupRunning;
     private bool _isSubtitleWebViewInitialized;
     private bool _isSubtitleWebViewReady;
     private bool _isAutoPlayingNextEpisode;
@@ -119,6 +118,7 @@ public sealed partial class VideoPlayerWindow : Window
     private DateTimeOffset _lastProgressSaveAt = DateTimeOffset.MinValue;
     private int _subtitleMaskBlurRenderGeneration;
     private VideoInspectorTab _selectedInspectorTab = VideoInspectorTab.SubtitleList;
+    private readonly VideoSubtitleLookupRequestCoordinator _subtitleLookupCoordinator = new();
 
     public VideoPlayerViewModel ViewModel { get; }
 
@@ -314,7 +314,7 @@ public sealed partial class VideoPlayerWindow : Window
 
     private async void LookupCurrentSubtitleButton_Click(object sender, RoutedEventArgs e)
     {
-        await LookupCurrentSubtitleAsync();
+        await StartSubtitleLookupAsync();
     }
 
     private async void RecordMiningHistoryButton_Click(object sender, RoutedEventArgs e)
@@ -604,7 +604,28 @@ public sealed partial class VideoPlayerWindow : Window
             await SelectAudioTrackAsync(track);
     }
 
+    private Task StartSubtitleLookupAsync(
+        string? queryOverride = null,
+        int sentenceOffset = 0,
+        Windows.Foundation.Point? anchorPoint = null,
+        double? anchorWidth = null,
+        double? anchorHeight = null)
+    {
+        var lookupRequest = _subtitleLookupCoordinator.BeginRequest();
+        return LookupCurrentSubtitleAsync(
+            lookupRequest,
+            queryOverride,
+            sentenceOffset,
+            anchorPoint,
+            anchorWidth,
+            anchorHeight);
+    }
+
+    private bool IsCurrentSubtitleLookup(VideoSubtitleLookupRequest lookupRequest) =>
+        _subtitleLookupCoordinator.IsCurrent(lookupRequest);
+
     private async Task LookupCurrentSubtitleAsync(
+        VideoSubtitleLookupRequest lookupRequest,
         string? queryOverride = null,
         int sentenceOffset = 0,
         Windows.Foundation.Point? anchorPoint = null,
@@ -624,12 +645,17 @@ public sealed partial class VideoPlayerWindow : Window
             _isPaused = true;
             PlayPauseIcon.Glyph = "\uE768";
             ApplySubtitleAppearance();
+            if (!IsCurrentSubtitleLookup(lookupRequest))
+                return;
 
-            var request = await ViewModel.CreateLookupRequestAsync(
+            var popupRequest = await ViewModel.CreateLookupRequestAsync(
                 query,
                 sentenceOffset,
-                RequestVideoMiningMediaAsync);
-            if (request == null)
+                RequestVideoMiningMediaAsync,
+                lookupRequest.CancellationToken);
+            if (!IsCurrentSubtitleLookup(lookupRequest))
+                return;
+            if (popupRequest == null)
             {
                 _popupOverlay?.Dismiss();
                 VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
@@ -638,31 +664,39 @@ public sealed partial class VideoPlayerWindow : Window
                 return;
             }
 
-            await HighlightSubtitleWebSelectionAsync(request.Results[0].Matched);
+            await HighlightSubtitleWebSelectionAsync(popupRequest.Results[0].Matched);
+            if (!IsCurrentSubtitleLookup(lookupRequest))
+                return;
 
             var overlay = EnsurePopupOverlay();
-            _ = overlay.PrewarmAsync(RootGrid.XamlRoot, request.Theme);
+            _ = overlay.PrewarmAsync(RootGrid.XamlRoot, popupRequest.Theme);
             EnsureVideoDictionaryOverlaySurfaceVisible(overlay);
             var point = anchorPoint
                 ?? SubtitleWebView.TransformToVisual(PopupOverlayCanvas)
                     .TransformPoint(new Windows.Foundation.Point(0, 0));
             ViewModel.StatusText = "Lookup opened";
             await overlay.ShowLookupAsync(
-                request.Results,
-                request.Styles,
-                request.DisplaySettings,
+                popupRequest.Results,
+                popupRequest.Styles,
+                popupRequest.DisplaySettings,
                 point.X,
                 point.Y,
                 anchorWidth ?? Math.Max(1, SubtitleWebView.ActualWidth),
                 anchorHeight ?? Math.Max(1, SubtitleWebView.ActualHeight),
                 RootGrid.XamlRoot,
                 isVertical: false,
-                request.Theme,
-                request.AudioSettings,
-                request.AnkiSettings,
-                request.MiningContext);
+                popupRequest.Theme,
+                popupRequest.AudioSettings,
+                popupRequest.AnkiSettings,
+                popupRequest.MiningContext,
+                traceId: popupRequest.TraceId);
+            if (!IsCurrentSubtitleLookup(lookupRequest))
+                return;
             _isLookupPopupVisible = true;
             ApplySubtitleAppearance();
+        }
+        catch (OperationCanceledException) when (lookupRequest.CancellationToken.IsCancellationRequested)
+        {
         }
         catch (Exception ex)
         {
@@ -870,6 +904,7 @@ public sealed partial class VideoPlayerWindow : Window
                 SubtitleWebView.CoreWebView2.WebMessageReceived -= OnSubtitleWebMessageReceived;
             if (_popupOverlay != null)
                 _popupOverlay.Dismissed -= PopupOverlay_Dismissed;
+            _subtitleLookupCoordinator.Dispose();
             _popupOverlay?.Dispose();
             _popupOverlay = null;
             _subtitleTranscriptLoadCoordinator.Dispose();
