@@ -40,4 +40,39 @@ public sealed class DictionaryPopupLayoutCalculatorTests
         (layout.Top + layout.Height).Should().Be(696);
         (layout.Left + layout.Width / 2).Should().Be(281);
     }
+
+    [Fact]
+    public void FullWidthLayout_UsesAvailableWidthAndBottomPlacement()
+    {
+        var layout = DictionaryPopupLayoutCalculator.Resolve(
+            new DictionaryPopupAnchorRect(480, 120, 42, 18),
+            screenWidth: 1000,
+            screenHeight: 800,
+            maxWidth: 320,
+            maxHeight: 250,
+            minWidth: 100,
+            isVertical: false,
+            isFullWidth: true);
+
+        layout.Left.Should().Be(6);
+        layout.Top.Should().Be(544);
+        layout.Width.Should().Be(988);
+        layout.Height.Should().Be(250);
+    }
+
+    [Fact]
+    public void FullWidthLayout_ClampsHeightToViewport()
+    {
+        var layout = DictionaryPopupLayoutCalculator.Resolve(
+            new DictionaryPopupAnchorRect(0, 0, 1, 1),
+            screenWidth: 420,
+            screenHeight: 180,
+            maxWidth: 1400,
+            maxHeight: 800,
+            minWidth: 100,
+            isVertical: false,
+            isFullWidth: true);
+
+        layout.Should().Be(new DictionaryPopupLayoutResult(6, 6, 408, 168));
+    }
 }

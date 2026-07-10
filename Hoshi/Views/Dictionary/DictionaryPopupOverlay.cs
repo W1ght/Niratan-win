@@ -27,14 +27,7 @@ public readonly record struct DictionaryPopupHostBounds(
 
 public sealed class DictionaryPopupOverlay : IDisposable
 {
-    private const double PopupPadding = DictionaryPopupLayoutCalculator.PopupPadding;
     private const double ScreenBorderPadding = DictionaryPopupLayoutCalculator.ScreenBorderPadding;
-    private const double MinPopupWidth = 360;
-    private const double HardMaxPopupWidth = 900;
-    private const double MinPopupHeight = 200;
-    private const double HardMaxPopupHeight = 820;
-    private const double ChildPopupMaxWidth = 600;
-    private const double ChildPopupMaxHeight = 520;
     private const int RootPopupZIndex = 10;
     private const int ChildPopupZIndexBase = 20;
     private const int PopupZIndexStep = 10;
@@ -282,8 +275,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
                 _rootHost,
                 _rootPointX, _rootPointY,
                 _rootSelectionWidth, _rootSelectionHeight,
-                _isVertical,
-                isRoot: true);
+                _isVertical);
         }
         Log.Information(
             "[LookupTrace] trace={TraceId} overlay root positioned/visible total={TotalMs}ms",
@@ -617,28 +609,15 @@ public sealed class DictionaryPopupOverlay : IDisposable
         DictionaryLookupPopup host,
         double selectionX, double selectionY,
         double selectionWidth, double selectionHeight,
-        bool isVertical,
-        bool isRoot = false)
+        bool isVertical)
     {
         var (screenWidth, screenHeight) = GetOverlaySize();
-
-        double maxWidth, maxHeight;
-
-        if (isRoot && !isVertical)
-        {
-            maxWidth = Math.Min(screenWidth * 0.88, ConfiguredRootMaxWidth());
-            maxHeight = Math.Min(screenHeight * 0.72, ConfiguredRootMaxHeight());
-        }
-        else if (isRoot && isVertical)
-        {
-            maxWidth = Math.Min(screenWidth * 0.55, ConfiguredRootMaxWidth());
-            maxHeight = Math.Min(screenHeight * 0.80, ConfiguredRootMaxHeight());
-        }
-        else
-        {
-            maxWidth = Math.Min(screenWidth * 0.60, ConfiguredChildMaxWidth());
-            maxHeight = Math.Min(screenHeight * 0.50, ConfiguredChildMaxHeight());
-        }
+        var maxWidth = Math.Min(
+            Math.Max(0, screenWidth - ScreenBorderPadding * 2),
+            ConfiguredPopupWidth());
+        var maxHeight = Math.Min(
+            Math.Max(0, screenHeight - ScreenBorderPadding * 2),
+            ConfiguredPopupHeight());
 
         var layout = DictionaryPopupLayoutCalculator.Resolve(
             new DictionaryPopupAnchorRect(selectionX, selectionY, selectionWidth, selectionHeight),
@@ -646,8 +625,9 @@ public sealed class DictionaryPopupOverlay : IDisposable
             screenHeight,
             maxWidth,
             maxHeight,
-            MinPopupWidth,
-            isVertical);
+            DictionaryPopupAppearanceConstraints.MinWidth,
+            isVertical,
+            _displaySettings.PopupFullWidth);
         host.SetSize(layout.Width, layout.Height);
         Canvas.SetLeft(host.VisualRoot, layout.Left);
         Canvas.SetTop(host.VisualRoot, layout.Top);
@@ -670,7 +650,14 @@ public sealed class DictionaryPopupOverlay : IDisposable
             return;
         }
 
-        PositionHostAboveOrBelowParent(host, parentHost);
+        var (_, _, parentWidth, parentHeight) = GetHostBounds(parentHost);
+        PositionHost(
+            host,
+            parentLeft,
+            parentTop,
+            parentWidth,
+            parentHeight,
+            isVertical: false);
     }
 
     private static async Task HighlightPopupSelectionAsync(
@@ -685,46 +672,6 @@ public sealed class DictionaryPopupOverlay : IDisposable
         {
             Log.Debug(ex, "[DictOverlay] Failed to highlight popup selection");
         }
-    }
-
-    private void PositionHostAboveOrBelowParent(
-        DictionaryLookupPopup host,
-        DictionaryLookupPopup parentHost,
-        double? preferredLeft = null)
-    {
-        var (screenWidth, screenHeight) = GetOverlaySize();
-        var (parentLeft, parentTop, parentWidth, parentHeight) = GetHostBounds(parentHost);
-
-        var maxWidth = Math.Min(screenWidth * 0.60, ConfiguredChildMaxWidth());
-        var maxHeight = Math.Min(screenHeight * 0.50, ConfiguredChildMaxHeight());
-        var width = ClampDimension(
-            Math.Min(screenWidth - ScreenBorderPadding * 2, maxWidth),
-            MinPopupWidth,
-            maxWidth);
-
-        var spaceAbove = SpaceAbove(parentTop);
-        var spaceBelow = SpaceBelow(parentTop, parentHeight, screenHeight);
-        var showBelow = ShowBelow(parentTop, parentHeight, screenHeight, maxHeight);
-        var availableHeight = showBelow ? spaceBelow : spaceAbove;
-        var height = ClampPopupExtent(availableHeight - ScreenBorderPadding, maxHeight);
-
-        var desiredLeft = preferredLeft ?? parentLeft + (parentWidth - width) / 2;
-        var centerX = Clamp(
-            desiredLeft + width / 2,
-            width / 2 + ScreenBorderPadding,
-            screenWidth - width / 2 - ScreenBorderPadding);
-        var centerY = showBelow
-            ? parentTop + parentHeight + PopupPadding + height / 2
-            : parentTop - PopupPadding - height / 2;
-        centerY = Clamp(
-            centerY,
-            height / 2 + ScreenBorderPadding,
-            screenHeight - height / 2 - ScreenBorderPadding);
-
-        var (left, top) = ClampHostBounds(centerX - width / 2, centerY - height / 2, width, height, screenWidth, screenHeight);
-        host.SetSize(width, height);
-        Canvas.SetLeft(host.VisualRoot, left);
-        Canvas.SetTop(host.VisualRoot, top);
     }
 
     private (double left, double top) GetHostCanvasPosition(DictionaryLookupPopup host)
@@ -764,32 +711,18 @@ public sealed class DictionaryPopupOverlay : IDisposable
         var (left, top) = GetHostCanvasPosition(host);
         var width = host.VisualRoot.ActualWidth > 0 ? host.VisualRoot.ActualWidth : host.VisualRoot.Width;
         var height = host.VisualRoot.ActualHeight > 0 ? host.VisualRoot.ActualHeight : host.VisualRoot.Height;
-        if (double.IsNaN(width) || width <= 0) width = MinPopupWidth;
-        if (double.IsNaN(height) || height <= 0) height = MinPopupHeight;
+        if (double.IsNaN(width) || width <= 0)
+            width = DictionaryPopupAppearanceConstraints.MinWidth;
+        if (double.IsNaN(height) || height <= 0)
+            height = DictionaryPopupAppearanceConstraints.MinHeight;
         return (left, top, width, height);
     }
 
-    private static double SpaceLeft(double x) => x - PopupPadding;
-    private static double SpaceRight(double x, double w, double screenWidth) => screenWidth - x - w - PopupPadding;
-    private static double SpaceAbove(double y) => y - PopupPadding;
-    private static double SpaceBelow(double y, double h, double screenHeight) => screenHeight - y - h - PopupPadding;
-    private static bool ShowOnRight(double x, double w, double screenWidth, double popupWidth) => SpaceRight(x, w, screenWidth) >= SpaceLeft(x) || SpaceRight(x, w, screenWidth) >= popupWidth;
-    private static bool ShowBelow(double y, double h, double screenHeight, double popupHeight) => SpaceBelow(y, h, screenHeight) >= SpaceAbove(y) || SpaceBelow(y, h, screenHeight) >= popupHeight;
-    private static double Clamp(double value, double min, double max) => Math.Max(min, Math.Min(value, max));
-    private static double ClampDimension(double value, double min, double max) => Math.Clamp(value, Math.Min(min, max), Math.Max(min, max));
-    private static double ClampPopupExtent(double value, double max) => Math.Clamp(value, 0, Math.Max(0, max));
+    private double ConfiguredPopupWidth() =>
+        DictionaryPopupAppearanceConstraints.NormalizeWidth(_displaySettings.PopupMaxWidth);
 
-    private double ConfiguredRootMaxWidth() =>
-        Clamp(_displaySettings.PopupMaxWidth, MinPopupWidth, HardMaxPopupWidth);
-
-    private double ConfiguredRootMaxHeight() =>
-        Clamp(_displaySettings.PopupMaxHeight, MinPopupHeight, HardMaxPopupHeight);
-
-    private double ConfiguredChildMaxWidth() =>
-        Math.Min(ConfiguredRootMaxWidth(), ChildPopupMaxWidth);
-
-    private double ConfiguredChildMaxHeight() =>
-        Math.Min(ConfiguredRootMaxHeight(), ChildPopupMaxHeight);
+    private double ConfiguredPopupHeight() =>
+        DictionaryPopupAppearanceConstraints.NormalizeHeight(_displaySettings.PopupMaxHeight);
 
     private (double width, double height) GetOverlaySize()
     {
@@ -800,21 +733,6 @@ public sealed class DictionaryPopupOverlay : IDisposable
         if (double.IsNaN(height) || height <= 0)
             height = _currentXamlRoot?.Size.Height ?? 1080;
         return (width, height);
-    }
-
-    private static (double left, double top) ClampHostBounds(
-        double left,
-        double top,
-        double width,
-        double height,
-        double screenWidth,
-        double screenHeight)
-    {
-        var maxLeft = Math.Max(ScreenBorderPadding, screenWidth - width - ScreenBorderPadding);
-        var maxTop = Math.Max(ScreenBorderPadding, screenHeight - height - ScreenBorderPadding);
-        return (
-            Clamp(left, ScreenBorderPadding, maxLeft),
-            Clamp(top, ScreenBorderPadding, maxTop));
     }
 
     public void UpdateRootSize(double width, double height)

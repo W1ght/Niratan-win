@@ -1658,6 +1658,11 @@ public class NovelReaderWebAssetTests
         overlayCode.Should().Contain("_displaySettings.ScanLength");
         overlayCode.Should().Contain("_displaySettings.PopupMaxWidth");
         overlayCode.Should().Contain("_displaySettings.PopupMaxHeight");
+        overlayCode.Should().Contain("_displaySettings.PopupFullWidth");
+        overlayCode.Should().NotContain("ChildPopupMaxWidth");
+        overlayCode.Should().NotContain("ChildPopupMaxHeight");
+        overlayCode.Should().NotContain("HardMaxPopupWidth");
+        overlayCode.Should().NotContain("HardMaxPopupHeight");
         popupCode.Should().Contain("window.maxResults");
         popupCode.Should().Contain("window.scanLength");
     }
