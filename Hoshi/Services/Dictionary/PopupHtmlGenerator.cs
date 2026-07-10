@@ -344,7 +344,14 @@ if (typeof window.hoshiInjectResults === 'function') {{
         long renderGeneration)
     {
         var entriesJson = SerializeLookupEntries(results);
-        return $"window.hoshiAppendResults?.({entriesJson}, {totalResultCount}, {renderGeneration});";
+        return $$"""
+(() => {
+    if (typeof window.hoshiAppendResults !== 'function') return 'bridge-missing';
+    return window.hoshiAppendResults({{entriesJson}}, {{totalResultCount}}, {{renderGeneration}})
+        ? 'appended'
+        : 'stale';
+})()
+""";
     }
 
     private static string BoolToJs(bool value) => value ? "true" : "false";

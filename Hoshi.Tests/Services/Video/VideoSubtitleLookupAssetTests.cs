@@ -89,13 +89,43 @@ public class VideoSubtitleLookupAssetTests
     public void VideoSubtitleLookup_UsesLatestRequestWinsCoordination()
     {
         var code = ReadVideoPlayerWindowCode();
+        var normalizedCode = code.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var overlayCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs"));
 
         code.Should().Contain("_subtitleLookupCoordinator.BeginRequest()");
         code.Should().Contain("_subtitleLookupCoordinator.IsCurrent(lookupRequest)");
         code.Should().Contain("lookupRequest.CancellationToken");
+        code.Should().Contain("cancellationToken: lookupRequest.CancellationToken");
+        code.Should().Contain("lookupOverlay?.CancelShow(lookupTraceId)");
+        normalizedCode.Should().Contain("if (!IsCurrentSubtitleLookup(lookupRequest))");
+        code.Should().Contain("stale request version={RequestVersion} failed after supersession");
         code.Should().Contain("popupRequest.TraceId");
         code.Should().Contain("[VideoLookup] request version={RequestVersion}");
         code.Should().NotContain("_isSubtitlePointerLookupRunning");
+        overlayCode.Should().Contain("CancellationToken cancellationToken = default");
+        overlayCode.Should().Contain("cancellationToken.ThrowIfCancellationRequested();");
+        overlayCode.Should().Contain("cancellationToken: cancellationToken");
+        overlayCode.Should().Contain("public void CancelShow(string? traceId)");
+    }
+
+    [Fact]
+    public void VideoSubtitleLookup_EmptyShiftHoverCancelsThePendingRequest()
+    {
+        var code = ReadVideoPlayerWindowCode().Replace("\r\n", "\n", StringComparison.Ordinal);
+        var script = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Web", "VideoSubtitle", "subtitle-overlay.js"));
+        var lookupAtPointStart = script.IndexOf("function lookupAtPoint", StringComparison.Ordinal);
+        var lookupAtPointEnd = script.IndexOf(
+            "window.hoshiVideoSubtitle",
+            lookupAtPointStart,
+            StringComparison.Ordinal);
+        var lookupAtPoint = script[lookupAtPointStart..lookupAtPointEnd];
+
+        code.Should().Contain(
+            "case \"lookupEmpty\":\n                    _subtitleLookupCoordinator.CancelCurrent();");
+        lookupAtPoint.Should().Contain("selection.clearSelection();");
+        lookupAtPoint.Should().Contain("postToHost('lookupEmpty');");
     }
 
     [Fact]

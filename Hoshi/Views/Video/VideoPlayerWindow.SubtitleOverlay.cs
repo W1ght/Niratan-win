@@ -321,6 +321,11 @@ public sealed partial class VideoPlayerWindow
                     ApplySubtitleAppearance();
                     break;
                 case "lookupEmpty":
+                    _subtitleLookupCoordinator.CancelCurrent();
+                    _popupOverlay?.Dismiss();
+                    VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
+                    _isLookupPopupVisible = false;
+                    ApplySubtitleAppearance();
                     await ClearSubtitleWebSelectionAsync();
                     RestoreVideoKeyboardFocusAfterSubtitleInteraction();
                     break;

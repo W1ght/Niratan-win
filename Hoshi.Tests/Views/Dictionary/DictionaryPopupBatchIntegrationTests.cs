@@ -28,5 +28,10 @@ public class DictionaryPopupBatchIntegrationTests
         code.Split("CancelDeferredResults();", StringSplitOptions.None)
             .Should().HaveCountGreaterThan(3);
         code.Should().Contain("generation != _displayGeneration");
+        code.Should().Contain("_pendingContentCancellationToken.IsCancellationRequested");
+        code.Should().Contain("CanShowReadyContent(readyGeneration)");
+        code.Should().Contain("CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)");
+        code.Should().Contain("ReferenceEquals(_deferredResultsCts, owner)");
+        code.Should().Contain("JsonSerializer.Deserialize<string>(rawResult)");
     }
 }

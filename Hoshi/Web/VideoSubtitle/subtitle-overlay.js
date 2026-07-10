@@ -332,7 +332,10 @@
   function lookupAtPoint(x, y) {
     const hit = selection.getCharacterAtPoint(x, y);
     if (!hit) {
+      const hadSelection = !!state.selection || state.lastShiftHoverKey !== '';
+      selection.clearSelection();
       state.lastShiftHoverKey = '';
+      if (hadSelection) postToHost('lookupEmpty');
       return;
     }
 
