@@ -11,7 +11,6 @@ using Hoshi.Models.Settings;
 using Hoshi.Models.Sync;
 using Hoshi.Services.Novels;
 using Hoshi.Services.Sasayaki;
-using Hoshi.Services.Storage;
 
 namespace Hoshi.Services.Sync;
 
@@ -20,20 +19,17 @@ public sealed class TtuSyncService : ITtuSyncService
     private readonly INovelBookSidecarService _bookSidecars;
     private readonly INovelStatisticsSidecarService _statisticsSidecars;
     private readonly ISasayakiSidecarService _sasayakiSidecars;
-    private readonly IDataService _dataService;
     private readonly ITtuSyncRemoteStore _remoteStore;
 
     public TtuSyncService(
         INovelBookSidecarService bookSidecars,
         INovelStatisticsSidecarService statisticsSidecars,
         ISasayakiSidecarService sasayakiSidecars,
-        IDataService dataService,
         ITtuSyncRemoteStore remoteStore)
     {
         _bookSidecars = bookSidecars;
         _statisticsSidecars = statisticsSidecars;
         _sasayakiSidecars = sasayakiSidecars;
-        _dataService = dataService;
         _remoteStore = remoteStore;
     }
 
@@ -216,13 +212,6 @@ public sealed class TtuSyncService : ITtuSyncService
             progress.LastBookmarkModified);
 
         await _bookSidecars.SaveBookmarkAsync(bookRootPath, bookmark, ct);
-        await _dataService.SaveNovelProgressAsync(
-            book.Id,
-            bookmark.ChapterIndex,
-            bookmark.Progress,
-            bookmark.CharacterCount,
-            bookInfo?.CharacterCount ?? book.TotalCharacterCount,
-            ct);
     }
 
     private static ReaderPosition ResolveCharacterPosition(

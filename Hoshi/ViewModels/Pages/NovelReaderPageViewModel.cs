@@ -388,7 +388,6 @@ public partial class NovelReaderPageViewModel : ObservableObject
         var progress = Progress;
         var currentCharacterCount = CurrentCharacterCount;
         var totalCharacterCount = TotalCharacterCount;
-        var bookRootPath = CurrentBook.ExtractedPath;
 
         Task.Run(async () =>
         {
@@ -403,12 +402,6 @@ public partial class NovelReaderPageViewModel : ObservableObject
                         progress,
                         currentCharacterCount,
                         totalCharacterCount,
-                        token);
-                    await SaveBookmarkSidecarAsync(
-                        bookRootPath,
-                        chapterIndex,
-                        progress,
-                        currentCharacterCount,
                         token);
                     await FlushStatisticsAsync(ct: token);
                 }
@@ -427,34 +420,8 @@ public partial class NovelReaderPageViewModel : ObservableObject
             Progress,
             CurrentCharacterCount,
             TotalCharacterCount);
-        await SaveBookmarkSidecarAsync(
-            CurrentBook.ExtractedPath,
-            CurrentChapterIndex,
-            Progress,
-            CurrentCharacterCount,
-            CancellationToken.None);
         await FlushStatisticsAsync();
         _messenger.Send(new NovelLibraryChangedMessage());
-    }
-
-    private async Task SaveBookmarkSidecarAsync(
-        string? bookRootPath,
-        int chapterIndex,
-        double progress,
-        int currentCharacterCount,
-        CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(bookRootPath))
-            return;
-
-        await _novelBookSidecarService.SaveBookmarkAsync(
-            bookRootPath,
-            new NovelBookmark(
-                chapterIndex,
-                Math.Clamp(progress, 0, 1),
-                currentCharacterCount,
-                DateTimeOffset.UtcNow),
-            ct);
     }
 
     private NovelReadingStatistic EnsureTodayStatistic(DateTimeOffset now)

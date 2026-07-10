@@ -2081,8 +2081,8 @@ public class NovelReaderWebAssetTests
         var libraryService = File.ReadAllText(
             Path.Combine(ProjectRoot, "Services", "Novels", "INovelLibraryService.cs")
         );
-        var dataService = File.ReadAllText(
-            Path.Combine(ProjectRoot, "Services", "Storage", "IDataService.cs")
+        var bookStorageService = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Services", "Novels", "INovelBookStorageService.cs")
         );
         var appSettings = File.ReadAllText(
             Path.Combine(ProjectRoot, "Models", "Settings", "AppSettings.cs")
@@ -2112,7 +2112,7 @@ public class NovelReaderWebAssetTests
         libraryViewModel.Should().Contain("SaveCurrentManualOrderAsync");
 
         libraryService.Should().Contain("SaveNovelBookOrderAsync");
-        dataService.Should().Contain("SaveNovelBookOrderAsync");
+        bookStorageService.Should().Contain("SaveBookOrderAsync");
         appSettings.Should().Contain("NovelLibrarySortOption");
         databaseMigrator.Should().Contain("new Migration_008()");
     }
@@ -2427,7 +2427,8 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("_epubBook.Chapters");
         readerCode.Should().Contain("_epubBook.ContainerDirectory");
         viewModelCode.Should().Contain("SaveBookInfoSidecarAsync");
-        viewModelCode.Should().Contain("SaveBookmarkSidecarAsync");
+        viewModelCode.Should().NotContain("SaveBookmarkSidecarAsync");
+        viewModelCode.Should().Contain("_novelLibraryService.SaveProgressAsync");
         appCode.Should().Contain("INovelBookSidecarService, NovelBookSidecarService");
     }
 

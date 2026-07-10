@@ -361,7 +361,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
         if (result.IsSuccess)
         {
-            var books = result.Value!;
+            var books = result.Value!.Books;
             NovelBooks = new ObservableCollection<NovelBookItemViewModel>(
                 SortBooks(books).Select(book => new NovelBookItemViewModel(book)));
             await LoadStatisticsDashboardAsync(books);

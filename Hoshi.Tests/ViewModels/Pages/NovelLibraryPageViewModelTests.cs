@@ -28,7 +28,8 @@ public class NovelLibraryPageViewModelTests
         service
             .Setup(s => s.GetNovelBooksAsync(null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(
-                Result<IReadOnlyList<NovelBook>>.Success(
+                Result<NovelBookCatalogSnapshot>.Success(
+                    new NovelBookCatalogSnapshot(
                     [
                         new NovelBook
                         {
@@ -36,7 +37,8 @@ public class NovelLibraryPageViewModelTests
                             Title = "Book One",
                             FilePath = "D:\\Books\\one.epub",
                         },
-                    ]
+                    ],
+                    [])
                 )
             );
 
@@ -317,7 +319,8 @@ public class NovelLibraryPageViewModelTests
         var serviceMock = new Mock<INovelLibraryService>();
         serviceMock
             .Setup(s => s.GetNovelBooksAsync(null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<IReadOnlyList<NovelBook>>.Success([]));
+            .ReturnsAsync(Result<NovelBookCatalogSnapshot>.Success(
+                new NovelBookCatalogSnapshot([], [])));
         var dashboardMock = new Mock<INovelStatisticsDashboardService>();
         dashboardMock
             .Setup(s => s.LoadSnapshotAsync(
@@ -393,10 +396,11 @@ public class NovelLibraryPageViewModelTests
         public List<string> ImportedPaths { get; } = [];
         public List<IReadOnlyList<string>> SavedOrders { get; } = [];
 
-        public Task<Result<IReadOnlyList<NovelBook>>> GetNovelBooksAsync(
+        public Task<Result<NovelBookCatalogSnapshot>> GetNovelBooksAsync(
             string? queryText = null,
             CancellationToken ct = default) =>
-            Task.FromResult(Result<IReadOnlyList<NovelBook>>.Success(Books));
+            Task.FromResult(Result<NovelBookCatalogSnapshot>.Success(
+                new NovelBookCatalogSnapshot(Books, [])));
 
         public Task<Result<NovelBook>> ImportEpubAsync(string filePath, CancellationToken ct = default)
         {
