@@ -53,15 +53,50 @@ public class DictionaryLookupServiceTests
 
         html.Should().Contain("window.lookupEntries = ");
         html.Should().Contain("window.entryCount = 1;");
-        html.Should().Contain("window.hoshiPopupObserveContentReady");
+        html.Should().NotContain("window.hoshiPopupObserveContentReady");
         html.Should().Contain("window.renderPopup();");
         html.Should().Contain("window.popupRenderGeneration");
-        html.Should().Contain("generation: window.popupRenderGeneration || 0");
+        html.Should().Contain("var generation = window.popupRenderGeneration || 0;");
         html.Should().Contain("style=\"visibility:visible\"");
         html.Should().Contain("window.dictionaryMediaRequestEndpoint = 'https://hoshi-dictionary-media.local/image';");
         html.Should().Contain("window.audioRequestEndpoint = 'https://hoshi-audio-resolver.local/resolve';");
         html.Should().Contain("popupDiagnostic");
         html.Should().Contain("contentReady");
+    }
+
+    [Fact]
+    public void PopupScript_CommitsCompleteFirstEntryBeforeSingleContentReady()
+    {
+        var script = File.ReadAllText(
+            Path.Combine(AppContext.BaseDirectory, "Web", "DictionaryPopup", "popup.js"));
+        const string readyMessage = "postPopupMessage('contentReady', { generation: generation });";
+
+        script.Should().Contain("function commitFirstFrame(generation, entryDiv)");
+        script.Should().Contain("function renderRemainingEntries(startIndex, generation, onFinished)");
+        script.Split(readyMessage, StringSplitOptions.None).Should().HaveCount(2);
+        script.Should().Contain("renderEntry(0, generation");
+        script.Should().Contain("commitFirstFrame(generation, firstEntryDiv)");
+        script.Should().Contain("renderRemainingEntries(1, generation");
+
+        var commitStart = script.IndexOf(
+            "function commitFirstFrame(generation, entryDiv)",
+            StringComparison.Ordinal);
+        var commitEnd = script.IndexOf(
+            "function renderRemainingEntries",
+            commitStart,
+            StringComparison.Ordinal);
+        var commit = script[commitStart..commitEnd];
+
+        commit.IndexOf("applyConfiguredStyles()", StringComparison.Ordinal)
+            .Should().BeLessThan(commit.IndexOf("layoutDictionaryColumns()", StringComparison.Ordinal));
+        commit.IndexOf("layoutDictionaryColumns()", StringComparison.Ordinal)
+            .Should().BeLessThan(commit.IndexOf(
+                "document.documentElement.style.visibility = 'visible'",
+                StringComparison.Ordinal));
+        commit.IndexOf(
+                "document.documentElement.style.visibility = 'visible'",
+                StringComparison.Ordinal)
+            .Should().BeLessThan(commit.IndexOf(readyMessage, StringComparison.Ordinal));
     }
 
     [Fact]

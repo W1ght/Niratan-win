@@ -264,56 +264,8 @@ window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlos
   function postDiagnostic(name, body) {{
     try {{ window.chrome?.webview?.postMessage({{ version: 1, type: 'popupMessage', payload: {{ name: name, body: body || null }} }}); }} catch (_) {{}}
   }}
-  function observeContentReady() {{
-    var container = document.getElementById('entries-container');
-    var posted = false;
-    var observer = null;
-    function snapshot() {{
-      return {{
-        entryCount: window.entryCount || 0,
-        renderedEntries: container ? container.querySelectorAll('.entry').length : 0,
-        renderedGlossaries: container ? container.querySelectorAll('.glossary-content').length : 0,
-        textLength: container ? container.innerText.length : 0,
-        generation: window.popupRenderGeneration || 0
-      }};
-    }}
-    function postReady() {{
-      if (posted) return;
-      posted = true;
-      if (observer) observer.disconnect();
-      var state = snapshot();
-      postDiagnostic('contentReady', state);
-      postDiagnostic('popupDiagnostic', state);
-    }}
-    window.hoshiPopupObserveContentReady = function () {{
-      posted = false;
-      if (observer) {{
-        observer.disconnect();
-        observer = null;
-      }}
-      if (!container || !window.entryCount) {{
-        postReady();
-        return;
-      }}
-      if (container.querySelector('.entry .glossary-content')) {{
-        postReady();
-        return;
-      }}
-      observer = new MutationObserver(function () {{
-        if (container.querySelector('.entry .glossary-content')) postReady();
-      }});
-      observer.observe(container, {{ childList: true, subtree: true }});
-      window.setTimeout(function () {{
-        if (!posted) {{
-          postDiagnostic('popupDiagnostic', snapshot());
-        }}
-      }}, 1200);
-    }};
-  }}
   try {{
-    observeContentReady();
     postDiagnostic('shellReady', {{ entryCount: window.entryCount || 0 }});
-    window.hoshiPopupObserveContentReady();
     if (typeof window.renderPopup === 'function') {{
       window.renderPopup();
     }} else {{
