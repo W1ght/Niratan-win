@@ -73,7 +73,7 @@ public class VideoSubtitleLookupAssetTests
         code.Should().NotContain("_globalLookupPopupService");
         code.Should().Contain("SubtitleWebView.TransformToVisual(PopupOverlayCanvas)");
         code.Should().Contain("VideoDictionaryPanelChrome.Visibility = Visibility.Visible");
-        code.Should().Contain("EnsureVideoDictionaryOverlaySurfaceVisible(overlay);");
+        code.Should().Contain("EnsureVideoDictionaryOverlaySurfaceVisible(lookupOverlay);");
         code.Should().Contain("EnsureVideoDictionaryOverlaySurfaceVisible(EnsurePopupOverlay());");
         code.Should().Contain("await overlay.ShowLookupAsync(");
         code.Should().Contain("VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed");
