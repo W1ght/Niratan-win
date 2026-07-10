@@ -210,6 +210,20 @@ docs/reference/hoshi/Hoshi-Reader-Android/third_party/hoshidicts-kotlin-bridge/a
 - 独立查词页和阅读器内查词共用 `DictionaryPopupOverlay` / `DictionaryLookupPopup` / `PopupHtmlGenerator` 链路
 - Shift 悬停查词不暴露延迟设置，按住 Shift 时立即触发查词
 
+### 3.5 Popup 外观
+
+1. 在 `外观 → 弹窗` 验证宽度 `100...1400`、高度 `100...800`、缩放
+   `0.8...1.5`、显示操作栏和全宽显示。
+2. 验证新建/缺失配置使用 `320 × 250`、缩放 `1.00`，两个开关默认关闭。
+3. 在阅读器和视频查词中分别测试 `320 × 250`、`1400 × 800`、缩放
+   `0.8`、缩放 `1.5`、浅色/深色主题和窗口 resize 后的边界限制。
+4. 打开显示操作栏，通过 structured content 链接跳转，使用鼠标和键盘验证
+   后退、前进和关闭。
+5. 在弹窗正文中选择文本打开嵌套查词，确认 child 继承宽度、高度、缩放、
+   操作栏和全宽配置；关闭 child 后父弹窗仍可见。
+6. 开启全宽显示，确认每一层弹窗使用窗口可用宽度并靠底部显示，同时配置
+   高度继续生效。
+
 ---
 
 ## 4. 音频验证
