@@ -5,38 +5,21 @@ namespace Hoshi.Tests.Services.Video;
 
 public class VideoSubtitleShadowLayoutTests
 {
-    [Fact]
-    public void CreateOffsets_DefaultAsbplayerShadowProducesVisibleSymmetricHalo()
+    [Theory]
+    [InlineData(0, 0, 0)]
+    [InlineData(3, 3, 0.9)]
+    [InlineData(10, 10, 0.9)]
+    [InlineData(99, 10, 0.9)]
+    public void Create_ProducesOneClampedNiratanShadow(
+        double radius,
+        float expectedRadius,
+        float expectedOpacity)
     {
-        var offsets = VideoSubtitleShadowLayout.CreateOffsets(3, 1);
+        var style = VideoSubtitleShadowLayout.Create(radius, 1);
 
-        offsets.Should().HaveCount(VideoSubtitleShadowLayout.LayerCount);
-        offsets.Should().OnlyContain(offset => offset.Opacity == 0.9);
-        offsets.Should().Contain(offset => offset.X < 0 && offset.Y == 0);
-        offsets.Should().Contain(offset => offset.X > 0 && offset.Y == 0);
-        offsets.Should().Contain(offset => offset.X == 0 && offset.Y < 0);
-        offsets.Should().Contain(offset => offset.X == 0 && offset.Y > 0);
-        offsets.Should().Contain(offset => offset.X < 0 && offset.Y < 0);
-        offsets.Should().Contain(offset => offset.X > 0 && offset.Y > 0);
-        offsets.Should().NotContain(offset => offset.X == 0 && offset.Y == 0);
+        style.BlurRadius.Should().Be(expectedRadius);
+        style.OffsetX.Should().Be(0);
+        style.OffsetY.Should().Be(radius <= 0 ? 0 : 1);
+        style.Opacity.Should().Be(expectedOpacity);
     }
-
-    [Fact]
-    public void CreateOffsets_MultipliesNiratanShadowOpacityBySubtitleMaskOpacity()
-    {
-        var offsets = VideoSubtitleShadowLayout.CreateOffsets(3, 0.5);
-
-        offsets.Should().OnlyContain(offset => offset.Opacity == 0.45);
-    }
-
-    [Fact]
-    public void CreateOffsets_ZeroShadowHidesAllLayers()
-    {
-        var offsets = VideoSubtitleShadowLayout.CreateOffsets(0, 1);
-
-        offsets.Should().HaveCount(VideoSubtitleShadowLayout.LayerCount);
-        offsets.Should().OnlyContain(offset => offset.Opacity == 0);
-        offsets.Should().OnlyContain(offset => offset.X == 0 && offset.Y == 0);
-    }
-
 }

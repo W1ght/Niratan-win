@@ -114,10 +114,13 @@ public sealed partial class VideoPlayerWindow : Window
     private bool _isLookupPopupVisible;
     private bool _isSubtitleWebViewInitialized;
     private bool _isSubtitleWebViewReady;
+    private int _subtitleSelectionStart = -1;
+    private int _subtitleSelectionLength;
+    private int _lastSubtitleHoverCharacterIndex = -1;
+    private Windows.Foundation.Point? _lastSubtitlePointerPoint;
     private bool _isAutoPlayingNextEpisode;
     private TimeSpan? _protectedRestoreFloor;
     private DateTimeOffset _lastProgressSaveAt = DateTimeOffset.MinValue;
-    private int _subtitleMaskBlurRenderGeneration;
     private VideoInspectorTab _selectedInspectorTab = VideoInspectorTab.SubtitleList;
     private readonly VideoSubtitleLookupRequestCoordinator _subtitleLookupCoordinator = new();
 
@@ -165,9 +168,6 @@ public sealed partial class VideoPlayerWindow : Window
         VideoSurface.AddHandler(UIElement.PointerWheelChangedEvent, new PointerEventHandler(VideoSurface_PointerWheelChanged), true);
         BottomChrome.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(RootGrid_KeyDown), true);
         BottomChrome.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(BottomChrome_PointerPressed), true);
-        SubtitlePanelBorder.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(SubtitlePanelBorder_PointerPressed), true);
-        SubtitleWebView.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(SubtitleWebView_PointerPressed), true);
-        SubtitleWebView.GotFocus += SubtitleWebView_GotFocus;
         ProgressSlider.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(ProgressSlider_PointerPressed), true);
         ProgressSlider.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(ProgressSlider_PointerReleased), true);
         ProgressSlider.AddHandler(UIElement.PointerCanceledEvent, new PointerEventHandler(ProgressSlider_PointerCanceled), true);
@@ -463,6 +463,9 @@ public sealed partial class VideoPlayerWindow : Window
         switch (e.PropertyName)
         {
             case nameof(VideoPlayerViewModel.CurrentSubtitleText):
+                ClearSubtitleCanvasSelection();
+                ApplySubtitleAppearance();
+                break;
             case nameof(VideoPlayerViewModel.SubtitleFontSize):
             case nameof(VideoPlayerViewModel.SubtitleFontWeight):
             case nameof(VideoPlayerViewModel.SubtitleFontFamily):
@@ -663,6 +666,7 @@ public sealed partial class VideoPlayerWindow : Window
                 return;
             if (popupRequest == null)
             {
+                ClearSubtitleCanvasSelection();
                 _popupOverlay?.Dismiss();
                 VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
                 _isLookupPopupVisible = false;
@@ -670,7 +674,7 @@ public sealed partial class VideoPlayerWindow : Window
                 return;
             }
 
-            await HighlightSubtitleWebSelectionAsync(popupRequest.Results[0].Matched);
+            await HighlightSubtitleCanvasSelectionAsync(sentenceOffset, popupRequest.Results[0].Matched);
             if (!IsCurrentSubtitleLookup(lookupRequest))
                 return;
 
@@ -678,7 +682,7 @@ public sealed partial class VideoPlayerWindow : Window
             lookupTraceId = popupRequest.TraceId;
             EnsureVideoDictionaryOverlaySurfaceVisible(lookupOverlay);
             var point = anchorPoint
-                ?? SubtitleWebView.TransformToVisual(PopupOverlayCanvas)
+                ?? SubtitleCanvas.TransformToVisual(PopupOverlayCanvas)
                     .TransformPoint(new Windows.Foundation.Point(0, 0));
             ViewModel.StatusText = "Lookup opened";
             await lookupOverlay.ShowLookupAsync(
@@ -687,8 +691,8 @@ public sealed partial class VideoPlayerWindow : Window
                 popupRequest.DisplaySettings,
                 point.X,
                 point.Y,
-                anchorWidth ?? Math.Max(1, SubtitleWebView.ActualWidth),
-                anchorHeight ?? Math.Max(1, SubtitleWebView.ActualHeight),
+                anchorWidth ?? Math.Max(1, SubtitleCanvas.ActualWidth),
+                anchorHeight ?? Math.Max(1, SubtitleCanvas.ActualHeight),
                 RootGrid.XamlRoot,
                 isVertical: false,
                 popupRequest.Theme,
@@ -722,6 +726,7 @@ public sealed partial class VideoPlayerWindow : Window
             }
 
             _popupOverlay?.Dismiss();
+            ClearSubtitleCanvasSelection();
             VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
             _isLookupPopupVisible = false;
             ApplySubtitleAppearance();
@@ -920,7 +925,6 @@ public sealed partial class VideoPlayerWindow : Window
                 row.PropertyChanged -= TranscriptRow_PropertyChanged;
             _subscribedTranscriptRows.Clear();
             BottomChromePopup.IsOpen = false;
-            SubtitleWebView.GotFocus -= SubtitleWebView_GotFocus;
             if (SubtitleWebView.CoreWebView2 != null)
                 SubtitleWebView.CoreWebView2.WebMessageReceived -= OnSubtitleWebMessageReceived;
             if (_popupOverlay != null)

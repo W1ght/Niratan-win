@@ -4,15 +4,16 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Graphics.Canvas;
+using Microsoft.Graphics.Canvas.UI.Xaml;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.Web.WebView2.Core;
-using Windows.Storage.Streams;
 using Hoshi.Helpers;
+using Hoshi.Models.Shortcuts;
 using Hoshi.Services.Settings;
 using Hoshi.Services.Video;
 using Serilog;
@@ -96,14 +97,22 @@ public sealed partial class VideoPlayerWindow
         }
     }
 
-    private async Task HighlightSubtitleWebSelectionAsync(string matchedText)
+    private async Task HighlightSubtitleCanvasSelectionAsync(int selectionStart, string matchedText)
     {
-        if (!_isSubtitleWebViewReady
-            || SubtitleWebView.CoreWebView2 == null
-            || string.IsNullOrWhiteSpace(matchedText))
+        if (string.IsNullOrWhiteSpace(matchedText))
         {
             return;
         }
+
+        _subtitleSelectionStart = Math.Clamp(
+            selectionStart,
+            0,
+            Math.Max(0, (ViewModel.CurrentSubtitleText ?? "").Length - 1));
+        _subtitleSelectionLength = matchedText.Length;
+        SubtitleCanvas.Invalidate();
+
+        if (!_isSubtitleWebViewReady || SubtitleWebView.CoreWebView2 == null)
+            return;
 
         var highlightCount = matchedText.EnumerateRunes().Count();
         if (highlightCount <= 0)
@@ -119,8 +128,9 @@ public sealed partial class VideoPlayerWindow
         }
     }
 
-    private async Task ClearSubtitleWebSelectionAsync()
+    private async Task ClearSubtitleSelectionAsync()
     {
+        ClearSubtitleCanvasSelection();
         if (!_isSubtitleWebViewReady || SubtitleWebView.CoreWebView2 == null)
             return;
 
@@ -132,6 +142,13 @@ public sealed partial class VideoPlayerWindow
         catch
         {
         }
+    }
+
+    private void ClearSubtitleCanvasSelection()
+    {
+        _subtitleSelectionStart = -1;
+        _subtitleSelectionLength = 0;
+        SubtitleCanvas.Invalidate();
     }
 
     private void SubtitleFontSizeSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
@@ -326,7 +343,7 @@ public sealed partial class VideoPlayerWindow
                     VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
                     _isLookupPopupVisible = false;
                     ApplySubtitleAppearance();
-                    await ClearSubtitleWebSelectionAsync();
+                    await ClearSubtitleSelectionAsync();
                     RestoreVideoKeyboardFocusAfterSubtitleInteraction();
                     break;
                 case "lookupRequest":
@@ -361,7 +378,7 @@ public sealed partial class VideoPlayerWindow
         var width = Math.Max(1, GetJsonDouble(payload, "width", 1));
         var height = Math.Max(1, GetJsonDouble(payload, "height", ViewModel.SubtitleFontSize));
         EnsureVideoDictionaryOverlaySurfaceVisible(EnsurePopupOverlay());
-        var anchor = SubtitleWebView.TransformToVisual(PopupOverlayCanvas)
+        var anchor = SubtitleCanvas.TransformToVisual(PopupOverlayCanvas)
             .TransformPoint(new Windows.Foundation.Point(x, y));
 
         await StartSubtitleLookupAsync(
@@ -408,7 +425,7 @@ public sealed partial class VideoPlayerWindow
         _isLookupPopupVisible = false;
         VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
         ApplySubtitleAppearance();
-        _ = ClearSubtitleWebSelectionAsync();
+        _ = ClearSubtitleSelectionAsync();
     }
 
     private void PopupOverlayCanvas_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -425,13 +442,14 @@ public sealed partial class VideoPlayerWindow
     private void SubtitlePanelBorder_PointerExited(object sender, PointerRoutedEventArgs e)
     {
         _isSubtitlePointerOver = false;
+        _lastSubtitlePointerPoint = null;
+        _lastSubtitleHoverCharacterIndex = -1;
         ApplySubtitleAppearance();
     }
 
     private void SubtitlePanelBorder_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (SubtitleMaskBlurImage.Visibility == Visibility.Visible)
-            UpdateSubtitleNativeTextAppearance();
+        SubtitleCanvas.Invalidate();
     }
 
     private void ApplySubtitleAppearance()
@@ -451,175 +469,133 @@ public sealed partial class VideoPlayerWindow
                 0,
                 0));
         SubtitlePanelBorder.BorderThickness = new Thickness(0);
-        UpdateSubtitleNativeTextAppearance();
+        UpdateSubtitleCanvasAppearance();
         _ = UpdateSubtitleWebViewAsync();
     }
 
-    private void UpdateSubtitleNativeTextAppearance()
+    private void UpdateSubtitleCanvasAppearance()
     {
-        if (ViewModel == null)
-            return;
-
         var textOpacity = ViewModel.CalculateSubtitleMaskOpacity(
             _isSubtitlePointerOver,
             _isLookupPopupVisible,
             _isPaused);
-        var blurRadius = ViewModel.CalculateSubtitleMaskBlurRadius(
-            _isSubtitlePointerOver,
-            _isLookupPopupVisible,
-            _isPaused);
-        var text = ViewModel.CurrentSubtitleText ?? "";
-        var fontSize = ViewModel.SubtitleFontSize;
-        fontSize = Math.Clamp(fontSize, 12, 160);
-        var shadowRadius = ViewModel.SubtitleShadowRadius;
-        var subtitleColor = ViewModel.SubtitleColorHex;
-        var fontWeight = new Windows.UI.Text.FontWeight
-        {
-            Weight = (ushort)Math.Clamp(ViewModel.SubtitleFontWeight, 100, 900),
-        };
-        var fontFamilyName = string.IsNullOrWhiteSpace(ViewModel.SubtitleFontFamily)
-            ? "Segoe UI, Yu Gothic UI, Meiryo"
-            : ViewModel.SubtitleFontFamily;
-        var fontFamily = new FontFamily(fontFamilyName);
-        var foregroundColor = ParseColorHex(subtitleColor, Colors.White);
-        var foreground = new SolidColorBrush(foregroundColor);
-        var shadowForeground = new SolidColorBrush(Colors.Black);
-        var lineHeight = fontSize * 1.25;
-        var isBlurred = blurRadius > 0.01 && text.Length > 0;
-
-        foreach (var textBlock in GetSubtitleShadowTextBlocks())
-        {
-            ApplySubtitleTextBlockStyle(textBlock, text, fontSize, fontWeight, fontFamily, lineHeight, shadowForeground);
-        }
-
-        ApplySubtitleTextBlockStyle(SubtitleVisibleText, text, fontSize, fontWeight, fontFamily, lineHeight, foreground);
-
-        SubtitleNativeTextLayer.Visibility = isBlurred ? Visibility.Collapsed : Visibility.Visible;
-        SubtitleMaskBlurImage.Visibility = isBlurred ? Visibility.Visible : Visibility.Collapsed;
-        SubtitleNativeTextLayer.Opacity = textOpacity;
-        SubtitleWebView.Opacity = 0;
-        SubtitleVisibleText.Opacity = 1;
-        SubtitleVisibleText.RenderTransform = null;
-
-        var offsets = VideoSubtitleShadowLayout.CreateOffsets(
-            shadowRadius,
-            1);
-        var shadowBlocks = GetSubtitleShadowTextBlocks();
-        for (var index = 0; index < shadowBlocks.Length; index++)
-        {
-            var offset = offsets[index];
-            var textBlock = shadowBlocks[index];
-            textBlock.Opacity = offset.Opacity;
-            textBlock.RenderTransform = new TranslateTransform
-            {
-                X = offset.X,
-                Y = offset.Y,
-            };
-        }
-
-        var renderGeneration = ++_subtitleMaskBlurRenderGeneration;
-        if (isBlurred)
-        {
-            _ = UpdateSubtitleMaskBlurImageAsync(
-                renderGeneration,
-                text,
-                fontFamilyName,
-                fontSize,
-                fontWeight.Weight,
-                foregroundColor,
-                shadowRadius,
-                blurRadius);
-        }
-        else
-        {
-            SubtitleMaskBlurImage.Source = null;
-        }
+        SubtitleCanvas.Opacity = textOpacity;
+        SubtitleCanvas.Invalidate();
     }
 
-    private async Task UpdateSubtitleMaskBlurImageAsync(
-        int renderGeneration,
-        string text,
-        string fontFamily,
-        double fontSize,
-        int fontWeight,
-        Windows.UI.Color foreground,
-        double shadowRadius,
-        double blurRadius)
+    private void SubtitleCanvas_Draw(CanvasControl sender, CanvasDrawEventArgs args)
     {
-        try
-        {
-            var width = Math.Max(1, SubtitlePanelBorder.ActualWidth);
-            var height = Math.Max(1, SubtitlePanelBorder.ActualHeight);
-            if (width <= 1 || height <= 1)
-            {
-                width = Math.Max(1, RootGrid.ActualWidth);
-                height = Math.Max(1, ViewModel.SubtitlePanelHeight);
-            }
+        if (ViewModel == null)
+            return;
 
-            var pngBytes = await VideoSubtitleMaskBitmapRenderer.RenderPngAsync(
-                text,
-                width,
-                height,
-                fontFamily,
-                fontSize,
-                fontWeight,
-                foreground,
-                shadowRadius,
-                blurRadius);
-
-            using var stream = new InMemoryRandomAccessStream();
-            using (var writer = new DataWriter(stream))
-            {
-                writer.WriteBytes(pngBytes);
-                await writer.StoreAsync();
-                await writer.FlushAsync();
-                writer.DetachStream();
-            }
-
-            stream.Seek(0);
-            var bitmap = new BitmapImage();
-            await bitmap.SetSourceAsync(stream);
-
-            if (renderGeneration != _subtitleMaskBlurRenderGeneration)
-                return;
-
-            SubtitleMaskBlurImage.Source = bitmap;
-        }
-        catch
-        {
-            if (renderGeneration == _subtitleMaskBlurRenderGeneration)
-                SubtitleMaskBlurImage.Source = null;
-        }
+        VideoSubtitleCanvasRenderer.Draw(
+            args.DrawingSession,
+            new Windows.Foundation.Size(sender.ActualWidth, sender.ActualHeight),
+            CreateSubtitleCanvasRenderOptions());
     }
 
-    private static void ApplySubtitleTextBlockStyle(
-        TextBlock textBlock,
-        string text,
-        double fontSize,
-        Windows.UI.Text.FontWeight fontWeight,
-        FontFamily fontFamily,
-        double lineHeight,
-        Brush foreground)
+    private VideoSubtitleCanvasRenderOptions CreateSubtitleCanvasRenderOptions()
     {
-        textBlock.Text = text;
-        textBlock.FontSize = fontSize;
-        textBlock.FontWeight = fontWeight;
-        textBlock.FontFamily = fontFamily;
-        textBlock.LineHeight = lineHeight;
-        textBlock.Foreground = foreground;
+        var fontFamily = string.IsNullOrWhiteSpace(ViewModel.SubtitleFontFamily)
+            || string.Equals(ViewModel.SubtitleFontFamily, "System Default", StringComparison.OrdinalIgnoreCase)
+                ? "Segoe UI, Yu Gothic UI, Meiryo"
+                : ViewModel.SubtitleFontFamily;
+        return new VideoSubtitleCanvasRenderOptions(
+            ViewModel.CurrentSubtitleText ?? "",
+            fontFamily,
+            ViewModel.SubtitleFontSize,
+            ViewModel.SubtitleFontWeight,
+            ParseColorHex(ViewModel.SubtitleColorHex, Colors.White),
+            ViewModel.SubtitleShadowRadius,
+            ViewModel.CalculateSubtitleMaskBlurRadius(
+                _isSubtitlePointerOver,
+                _isLookupPopupVisible,
+                _isPaused),
+            _subtitleSelectionStart,
+            _subtitleSelectionLength,
+            ParseColorHex(
+                ViewModel.SubtitleLookupHighlightColorHex,
+                Windows.UI.Color.FromArgb(0x3E, 0xB5, 0xC1, 0xCB)),
+            ParseColorHex(ViewModel.SubtitleLookupHighlightTextColorHex, Colors.White));
     }
 
-    private TextBlock[] GetSubtitleShadowTextBlocks() =>
-    [
-        SubtitleShadowText0,
-        SubtitleShadowText1,
-        SubtitleShadowText2,
-        SubtitleShadowText3,
-        SubtitleShadowText4,
-        SubtitleShadowText5,
-        SubtitleShadowText6,
-        SubtitleShadowText7,
-    ];
+    private async void SubtitleCanvas_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        e.Handled = true;
+        _lastSubtitleHoverCharacterIndex = -1;
+        var point = e.GetCurrentPoint(SubtitleCanvas).Position;
+        _lastSubtitlePointerPoint = point;
+        await LookupSubtitleAtCanvasPointAsync(point, isHoverLookup: false);
+        RestoreVideoKeyboardFocusAfterSubtitleInteraction();
+    }
+
+    private void SubtitleCanvas_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        var point = e.GetCurrentPoint(SubtitleCanvas).Position;
+        _lastSubtitlePointerPoint = point;
+        var isShiftPressed = ShortcutInputMapper.GetCurrentModifiers()
+            .HasFlag(KeyboardShortcutModifiers.Shift);
+        if (!isShiftPressed)
+        {
+            _lastSubtitleHoverCharacterIndex = -1;
+            return;
+        }
+
+        _ = LookupSubtitleAtCanvasPointAsync(point, isHoverLookup: true);
+    }
+
+    private async Task LookupSubtitleAtCanvasPointAsync(
+        Windows.Foundation.Point point,
+        bool isHoverLookup)
+    {
+        if (ViewModel == null
+            || !_isSubtitleWebViewReady
+            || SubtitleWebView.CoreWebView2 == null)
+        {
+            return;
+        }
+
+        var size = new Windows.Foundation.Size(
+            SubtitleCanvas.ActualWidth,
+            SubtitleCanvas.ActualHeight);
+        if (!VideoSubtitleCanvasRenderer.TryHitTestCharacter(
+                CanvasDevice.GetSharedDevice(),
+                size,
+                CreateSubtitleCanvasRenderOptions(),
+                point,
+                out var hit))
+        {
+            if (!isHoverLookup || _lastSubtitleHoverCharacterIndex >= 0)
+                ClearSubtitleLookupFromPointer();
+            return;
+        }
+
+        if (isHoverLookup && hit.CharacterIndex == _lastSubtitleHoverCharacterIndex)
+            return;
+
+        _lastSubtitleHoverCharacterIndex = hit.CharacterIndex;
+        var requestJson = JsonSerializer.Serialize(new
+        {
+            offset = hit.CharacterIndex,
+            x = hit.Bounds.X,
+            y = hit.Bounds.Y,
+            width = hit.Bounds.Width,
+            height = hit.Bounds.Height,
+        });
+        await SubtitleWebView.CoreWebView2.ExecuteScriptAsync(
+            $"window.hoshiVideoSubtitle?.lookupAtOffset({requestJson});");
+    }
+
+    private void ClearSubtitleLookupFromPointer()
+    {
+        _lastSubtitleHoverCharacterIndex = -1;
+        _subtitleLookupCoordinator.CancelCurrent();
+        _popupOverlay?.Dismiss();
+        VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
+        _isLookupPopupVisible = false;
+        _ = ClearSubtitleSelectionAsync();
+        ApplySubtitleAppearance();
+    }
 
     private void UpdateSubtitleAppearanceControls()
     {

@@ -1067,16 +1067,6 @@ public sealed partial class VideoPlayerWindow
         e.Handled = true;
     }
 
-    private void SubtitlePanelBorder_PointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        RestoreVideoKeyboardFocusAfterSubtitleInteraction();
-    }
-
-    private void SubtitleWebView_PointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        RestoreVideoKeyboardFocusAfterSubtitleInteraction();
-    }
-
     private bool IsVideoOverlayInteractiveSource(object? source)
     {
         if (source is not DependencyObject dependencyObject)
@@ -1339,6 +1329,14 @@ public sealed partial class VideoPlayerWindow
 
     private async void RootGrid_KeyDown(object sender, KeyRoutedEventArgs e)
     {
+        if (e.Key is VirtualKey.Shift or VirtualKey.LeftShift or VirtualKey.RightShift
+            && _lastSubtitlePointerPoint is { } subtitlePoint)
+        {
+            e.Handled = true;
+            await LookupSubtitleAtCanvasPointAsync(subtitlePoint, isHoverLookup: true);
+            return;
+        }
+
         if (!TryResolveVideoShortcut(e.Key, out var action))
             return;
 
@@ -1519,11 +1517,6 @@ public sealed partial class VideoPlayerWindow
     private void RestoreVideoKeyboardFocusAfterSubtitleInteraction()
     {
         DispatcherQueue.TryEnqueue(() => RestoreVideoKeyboardFocus(FocusState.Pointer));
-    }
-
-    private void SubtitleWebView_GotFocus(object sender, RoutedEventArgs e)
-    {
-        RestoreVideoKeyboardFocusAfterSubtitleInteraction();
     }
 
     [DllImport("user32.dll")]

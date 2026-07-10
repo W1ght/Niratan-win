@@ -4,7 +4,7 @@
 
 **Goal:** Replace the eight-direction hard subtitle outline with Niratan-compatible Gaussian shadow rendering.
 
-**Architecture:** A Win2D `CanvasControl` replaces the native `TextBlock` stack and asynchronous PNG image. `VideoSubtitleCanvasRenderer` renders a single blurred black shadow, the crisp foreground, and optionally a second mask blur over the completed composite while WebView2 remains the transparent lookup layer.
+**Architecture:** A Win2D `CanvasControl` replaces the native `TextBlock` stack and asynchronous PNG image. `VideoSubtitleCanvasRenderer` renders a single blurred black shadow, Canvas selection regions, the crisp foreground, and optionally a second mask blur over the completed composite. WebView2 remains fully hidden and non-hit-testable as a narrow text-boundary bridge only.
 
 **Tech Stack:** WinUI 3, C#/.NET 10, Microsoft.Graphics.Win2D, xUnit v3, FluentAssertions
 
@@ -12,7 +12,7 @@
 
 - Keep `SubtitleShadowRadius` clamped to `0...10` and interpret it as Gaussian blur radius.
 - Use one black 90%-opacity shadow offset by `(0, 1)` DIP.
-- Preserve the transparent WebView2 lookup layer and existing subtitle mask behavior.
+- Preserve the hidden WebView2 text-boundary bridge and existing subtitle mask behavior, but keep Canvas as the only visible and interactive layer.
 - Add no dependencies and do not move business logic into code-behind.
 
 ---
@@ -99,7 +99,7 @@ Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filt
 
 **Interfaces:**
 - Consumes: `VideoSubtitleCanvasRenderer.Draw(...)`
-- Preserves: transparent `SubtitleWebView` lookup and selection surface
+- Preserves: hidden `SubtitleWebView` text-boundary bridge; Canvas owns lookup hit testing and selection visuals
 
 - [ ] **Step 1: Add failing asset assertions for exactly one named subtitle `CanvasControl` and removal of the eight `SubtitleShadowText*` elements and `SubtitleMaskBlurImage`**
 

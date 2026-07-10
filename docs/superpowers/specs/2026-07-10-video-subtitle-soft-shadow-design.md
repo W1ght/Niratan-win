@@ -22,13 +22,15 @@ hard displaced copies of each glyph.
 
 Replace the native eight-`TextBlock` shadow stack and asynchronous PNG mask
 renderer with one Win2D `CanvasControl`. A focused video subtitle renderer
-draws a black text source through `GaussianBlurEffect`, then draws the crisp
-foreground. For mask mode it draws both into a command list and applies the
-existing second Gaussian blur to the composite.
+draws a black text source through `GaussianBlurEffect`, then draws selection
+regions and the crisp foreground. For mask mode it draws the completed
+composite through the existing second Gaussian blur.
 
 This keeps rendering GPU-backed and synchronous with the current subtitle
-state, avoiding stale asynchronous bitmap generations. The WebView2 remains
-transparent and continues to own character hit testing and selection.
+state, avoiding stale asynchronous bitmap generations. The Canvas owns the
+only visible and interactive coordinate system. WebView2 remains fully hidden
+and non-hit-testable, and is used only as the existing narrow text-boundary
+bridge so non-Japanese scanning behavior does not diverge.
 
 ## Error and edge behavior
 

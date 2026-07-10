@@ -167,6 +167,33 @@
         return null;
       }
 
+      return this.selectHit(hit, x, y);
+    },
+
+    selectTextAtOffset(request) {
+      const node = textElement.firstChild;
+      if (!node || node.nodeType !== Node.TEXT_NODE || !node.textContent.length) {
+        this.clearSelection();
+        postToHost('lookupEmpty');
+        return null;
+      }
+
+      const offset = Math.min(
+        node.textContent.length - 1,
+        Math.max(0, Number(request?.offset) || 0));
+      const x = Number(request?.x) || 0;
+      const y = Number(request?.y) || 0;
+      const width = Math.max(1, Number(request?.width) || 1);
+      const height = Math.max(1, Number(request?.height) || 1);
+      return this.selectHit(
+        { node, offset },
+        x + width / 2,
+        y + height / 2,
+        { x, y, width, height });
+    },
+
+    selectHit(hit, x, y, anchorRect) {
+
       this.clearSelection();
 
       const content = hit.node.textContent;
@@ -214,7 +241,7 @@
         text,
       };
 
-      const rect = this.getSelectionRect(x, y);
+      const rect = anchorRect || this.getSelectionRect(x, y);
       const sourceOffset = this.normalizedOffset(hit.node, hit.offset);
       postToHost('lookupRequest', {
         text,
@@ -279,22 +306,14 @@
     return fallback;
   }
 
-  function applyTextShadow(radius, opacity) {
-    const r = Math.max(0, Number(radius) || 0);
-    if (r <= 0 || opacity <= 0) {
+  function applyTextShadow(radius) {
+    const r = Math.min(10, Math.max(0, Number(radius) || 0));
+    if (r <= 0) {
       textElement.style.textShadow = 'none';
       return;
     }
 
-    const alpha = Math.min(0.95, Math.max(0, 0.9 * opacity));
-    const stroke = Math.max(1, Math.min(3, r));
-    textElement.style.textShadow = [
-      `0 0 ${r}px rgba(0, 0, 0, ${alpha})`,
-      `${stroke}px 0 0 rgba(0, 0, 0, ${alpha})`,
-      `-${stroke}px 0 0 rgba(0, 0, 0, ${alpha})`,
-      `0 ${stroke}px 0 rgba(0, 0, 0, ${alpha})`,
-      `0 -${stroke}px 0 rgba(0, 0, 0, ${alpha})`,
-    ].join(', ');
+    textElement.style.textShadow = `0 1px ${r}px rgba(0, 0, 0, 0.9)`;
   }
 
   function setState(next) {
@@ -326,7 +345,7 @@
     textElement.style.color = cssColor(next.subtitleColor, '#fff');
     highlightStyle.textContent = `::highlight(hoshi-selection) { background-color: ${cssColor(next.lookupHighlightColor, 'rgba(62, 181, 193, 0.8)')}; color: ${cssColor(next.lookupHighlightTextColor, '#fff')}; }`;
 
-    applyTextShadow(next.shadowRadius, Number.isFinite(textOpacity) ? textOpacity : 1);
+    applyTextShadow(next.shadowRadius);
   }
 
   function lookupAtPoint(x, y) {
@@ -350,31 +369,8 @@
     highlightSelection: (charCount) => selection.highlightSelection(charCount),
     clearSelection: () => selection.clearSelection(),
     getCharacterAtPoint: (x, y) => selection.getCharacterAtPoint(x, y),
+    lookupAtOffset: (request) => selection.selectTextAtOffset(request),
   };
-
-  document.addEventListener('click', (event) => {
-    selection.selectText(event.clientX, event.clientY);
-  });
-
-  document.addEventListener('mousemove', (event) => {
-    state.lastHoverPoint = { x: event.clientX, y: event.clientY };
-    if (!event.shiftKey) {
-      state.lastShiftHoverKey = '';
-      return;
-    }
-    lookupAtPoint(event.clientX, event.clientY);
-  });
-
-  document.addEventListener('keydown', (event) => {
-    if (event.key !== 'Shift' || !state.lastHoverPoint) return;
-    lookupAtPoint(state.lastHoverPoint.x, state.lastHoverPoint.y);
-  });
-
-  root.addEventListener('mouseenter', () => postToHost('hoverChanged', { isHovering: true }));
-  root.addEventListener('mouseleave', () => {
-    state.lastShiftHoverKey = '';
-    postToHost('hoverChanged', { isHovering: false });
-  });
 
   postToHost('ready');
 })();
