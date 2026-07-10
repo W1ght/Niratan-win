@@ -16,6 +16,9 @@ body {
     --list-padding1: 1.4em;
     --list-padding2: var(--list-padding1);
     --popup-corner-radius: 12px;
+    --popup-card-border-color: rgba(0, 0, 0, 0.14);
+    --popup-card-inner-highlight: rgba(255, 255, 255, 0.34);
+    --popup-card-shadow-color: rgba(0, 0, 0, 0.10);
     --popup-scrollbar-size: 8px;
     --popup-scrollbar-inset: 2px;
     --popup-scrollbar-thumb: rgba(80, 80, 80, 0.42);
@@ -350,11 +353,11 @@ html[data-hoshi-color-scheme="dark"] .gloss-image-link[data-appearance="monochro
     margin-top: 5px;
     min-width: 0;
     padding: 6px 8px;
-    border: 1px solid rgba(0, 0, 0, 0.14);
+    border: 1px solid var(--popup-card-border-color);
     border-radius: 8px;
     box-shadow:
-        inset 0 0 0 1px rgba(255, 255, 255, 0.34),
-        0 1px 2px rgba(0, 0, 0, 0.1);
+        inset 0 0 0 1px var(--popup-card-inner-highlight),
+        0 1px 2px var(--popup-card-shadow-color);
 }
 
 .glossary-sections {
@@ -570,13 +573,11 @@ html[data-hoshi-color-scheme="dark"] .gloss-image-link[data-appearance="monochro
         --text-color-light3: #888888;
         --text-color-light4: #777777;
         --background-color-dark1: #333333;
+        --popup-card-border-color: rgba(255, 255, 255, 0.18);
+        --popup-card-inner-highlight: rgba(255, 255, 255, 0);
+        --popup-card-shadow-color: rgba(0, 0, 0, 0.36);
         --popup-scrollbar-thumb: rgba(255, 255, 255, 0.34);
         --popup-scrollbar-thumb-active: rgba(255, 255, 255, 0.56);
-    }
-
-    .glossary-group {
-        border-color: rgba(255, 255, 255, 0.09);
-        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.36);
     }
 }
 
@@ -597,13 +598,11 @@ html[data-hoshi-color-scheme="dark"] body {
     --text-color-light3: #888888;
     --text-color-light4: #777777;
     --background-color-dark1: #333333;
+    --popup-card-border-color: rgba(255, 255, 255, 0.18);
+    --popup-card-inner-highlight: rgba(255, 255, 255, 0);
+    --popup-card-shadow-color: rgba(0, 0, 0, 0.36);
     --popup-scrollbar-thumb: rgba(255, 255, 255, 0.34);
     --popup-scrollbar-thumb-active: rgba(255, 255, 255, 0.56);
-}
-
-html[data-hoshi-color-scheme="dark"] .glossary-group {
-    border-color: rgba(255, 255, 255, 0.09);
-    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.36);
 }
 
 @media (max-width: 480px) {
