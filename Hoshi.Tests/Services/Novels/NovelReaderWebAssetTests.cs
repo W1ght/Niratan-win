@@ -3229,6 +3229,8 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw"));
 
         libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelLibraryCommandBar\"");
+        libraryXaml.Should().Contain("<SymbolIcon Symbol=\"Document\" />");
+        libraryXaml.Should().NotContain("Icon=\"ReportDocument\"");
         libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelShelfSectionsControl\"");
         libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelShelfManagementButton\"");
         libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStorageWarningInfoBar\"");

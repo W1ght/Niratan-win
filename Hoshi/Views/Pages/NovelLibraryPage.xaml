@@ -185,8 +185,11 @@
                                     x:Uid="NovelLibraryStatisticsButton"
                                     AutomationProperties.AutomationId="NovelLibraryStatisticsButton"
                                     AutomationProperties.Name="Statistics"
-                                    Icon="ReportDocument"
-                                    IsChecked="{x:Bind ViewModel.ShowStatisticsDashboard, Mode=TwoWay}" />
+                                    IsChecked="{x:Bind ViewModel.ShowStatisticsDashboard, Mode=TwoWay}">
+                    <AppBarToggleButton.Icon>
+                        <SymbolIcon Symbol="Document" />
+                    </AppBarToggleButton.Icon>
+                </AppBarToggleButton>
                 <AppBarButton x:Name="NovelShelfManagementButton"
                               x:Uid="NovelShelfManageButton"
                               AutomationProperties.AutomationId="NovelShelfManagementButton"
