@@ -50,6 +50,7 @@ public sealed class DictionaryLookupPopup : IDisposable
 
     private readonly Grid _surfaceRoot;
     private readonly SolidColorBrush _surfaceBrush;
+    private readonly SolidColorBrush _outlineBrush;
     private readonly CommandBar _sasayakiControlsBar;
     private readonly AppBarButton _sasayakiPopupPlayPauseButton;
     private readonly AppBarButton _sasayakiPopupReplayCueButton;
@@ -71,7 +72,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     private TaskCompletionSource<bool>? _shellReadyCompletion;
     private string? _currentTraceId;
     private double _readyOpacity = 1;
-    private double _popupCornerRadius = 12;
+    private double _popupCornerRadius = 8;
 
     private const int MaxResolvedAudioUrlCacheEntries = 512;
     private const string AudioSourcePlaceholderPattern = "[^/?#&]+";
@@ -93,7 +94,10 @@ public sealed class DictionaryLookupPopup : IDisposable
 
         var initialSurfaceColor =
             DictionaryPopupMaterial.GetOpaqueSurfaceColor(ThemeMode.System);
+        var initialOutlineColor =
+            DictionaryPopupMaterial.GetOutlineColor(ThemeMode.System);
         _surfaceBrush = new SolidColorBrush(initialSurfaceColor);
+        _outlineBrush = new SolidColorBrush(initialOutlineColor);
 
         _contentWebView = new WebView2
         {
@@ -161,6 +165,8 @@ public sealed class DictionaryLookupPopup : IDisposable
         VisualRoot = new Border
         {
             Background = _surfaceBrush,
+            BorderBrush = _outlineBrush,
+            BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(_popupCornerRadius),
             Child = _surfaceRoot,
             Visibility = Visibility.Visible,
@@ -328,6 +334,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     {
         var surfaceColor = DictionaryPopupMaterial.GetOpaqueSurfaceColor(themeMode);
         _surfaceBrush.Color = surfaceColor;
+        _outlineBrush.Color = DictionaryPopupMaterial.GetOutlineColor(themeMode);
         _contentWebView.DefaultBackgroundColor = surfaceColor;
     }
 
