@@ -291,10 +291,12 @@ window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlos
         long renderGeneration = 0,
         AudioSettings? audioSettings = null,
         AnkiSettings? ankiSettings = null,
-        string? traceId = null)
+        string? traceId = null,
+        int? totalResultCount = null)
     {
         var settings = displaySettings ?? new DictionaryDisplaySettings();
         var entriesJson = SerializeLookupEntries(results);
+        var finalResultCount = totalResultCount ?? results.Count;
         var stylesJson = SerializeStyles(styles);
         var collapsedDictionariesJson = SerializeCollapsedDictionaries(settings.CollapsedDictionariesOrDefault);
         var (bgColor, textColor) = GetThemeColors(themeMode);
@@ -328,12 +330,21 @@ window.allowDupes = {BoolToJs(ankiSettings?.PopupSettings.AllowDupes ?? false)};
 window.needsAudio = {BoolToJs(ankiSettings?.PopupSettings.NeedsAudio ?? false)};
 window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlossaries ?? false)};
 if (typeof window.hoshiInjectResults === 'function') {{
-    window.hoshiInjectResults({entriesJson}, {results.Count});
+    window.hoshiInjectResults({entriesJson}, {finalResultCount});
 }} else {{
     window.lookupEntries = {entriesJson};
-    window.entryCount = {results.Count};
+    window.entryCount = {finalResultCount};
     window.renderPopup();
 }}";
+    }
+
+    public string GenerateAppendResultsScript(
+        List<DictionaryLookupResult> results,
+        int totalResultCount,
+        long renderGeneration)
+    {
+        var entriesJson = SerializeLookupEntries(results);
+        return $"window.hoshiAppendResults?.({entriesJson}, {totalResultCount}, {renderGeneration});";
     }
 
     private static string BoolToJs(bool value) => value ? "true" : "false";

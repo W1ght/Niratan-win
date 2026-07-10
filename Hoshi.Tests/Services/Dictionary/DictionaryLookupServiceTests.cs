@@ -13,6 +13,20 @@ namespace Hoshi.Tests.Services.Dictionary;
 
 public class DictionaryLookupServiceTests
 {
+    private static DictionaryLookupResult CreateLookupResult(string expression) =>
+        new(
+            Matched: expression,
+            Deinflected: expression,
+            Trace: [],
+            Term: new TermResult(
+                Expression: expression,
+                Reading: expression,
+                Rules: "",
+                Glossaries: [new GlossaryEntry("TestDict", $"{expression} definition", "", "")],
+                Frequencies: [],
+                Pitches: []),
+            PreprocessorSteps: 0);
+
     [Fact]
     public void EnumerateLookupCandidates_ReturnsLongestPrefixesFirst()
     {
@@ -67,6 +81,37 @@ public class DictionaryLookupServiceTests
     }
 
     [Fact]
+    public void PopupHtmlGenerator_SeparatesInitialAndDeferredResultScripts()
+    {
+        var generator = new PopupHtmlGenerator();
+        var first = CreateLookupResult("first");
+        var deferred = CreateLookupResult("deferred");
+
+        var initial = generator.GenerateInjectionScript(
+            [first], [], renderGeneration: 7, totalResultCount: 2);
+        var append = generator.GenerateAppendResultsScript([deferred], 2, 7);
+
+        initial.Should().Contain("window.entryCount = 2;");
+        initial.Should().Contain("first");
+        initial.Should().NotContain("deferred");
+        append.Should().Contain("window.hoshiAppendResults");
+        append.Should().Contain("deferred");
+        append.Should().Contain(", 2, 7)");
+    }
+
+    [Fact]
+    public void PopupScript_AppendsOnlyToTheCurrentGeneration()
+    {
+        var script = File.ReadAllText(
+            Path.Combine(AppContext.BaseDirectory, "Web", "DictionaryPopup", "popup.js"));
+
+        script.Should().Contain("window.hoshiAppendResults = function");
+        script.Should().Contain("expectedGeneration !== generation");
+        script.Should().Contain("Array.prototype.push.apply(window.lookupEntries, entries)");
+        script.Should().Contain("renderAvailableEntries()");
+    }
+
+    [Fact]
     public void PopupScript_CommitsCompleteFirstEntryBeforeSingleContentReady()
     {
         var script = File.ReadAllText(
@@ -74,17 +119,17 @@ public class DictionaryLookupServiceTests
         const string readyMessage = "postPopupMessage('contentReady', { generation: generation });";
 
         script.Should().Contain("function commitFirstFrame(generation, entryDiv)");
-        script.Should().Contain("function renderRemainingEntries(startIndex, generation, onFinished)");
+        script.Should().Contain("function renderAvailableEntries()");
         script.Split(readyMessage, StringSplitOptions.None).Should().HaveCount(2);
         script.Should().Contain("renderEntry(0, generation");
         script.Should().Contain("commitFirstFrame(generation, firstEntryDiv)");
-        script.Should().Contain("renderRemainingEntries(1, generation");
+        script.Should().Contain("renderAvailableEntries()");
 
         var commitStart = script.IndexOf(
             "function commitFirstFrame(generation, entryDiv)",
             StringComparison.Ordinal);
         var commitEnd = script.IndexOf(
-            "function renderRemainingEntries",
+            "function renderAvailableEntries",
             commitStart,
             StringComparison.Ordinal);
         var commit = script[commitStart..commitEnd];
