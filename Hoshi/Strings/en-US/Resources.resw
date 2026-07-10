@@ -231,11 +231,19 @@
   <data name="ScanNonJapaneseTextCard.Description" xml:space="preserve"><value>Allow lookup for English and other non-Japanese text</value></data>
   <data name="DictionaryMaxResultsCard.Header" xml:space="preserve"><value>Max Results</value></data>
   <data name="DictionaryScanLengthCard.Header" xml:space="preserve"><value>Scan Length</value></data>
-  <data name="DictionaryPopupSizeSectionHeader.Text" xml:space="preserve"><value>Popup Size</value></data>
-  <data name="DictionaryPopupMaxWidthCard.Header" xml:space="preserve"><value>Max Width</value></data>
-  <data name="DictionaryPopupMaxWidthCard.Description" xml:space="preserve"><value>Limits floating lookup popups in readers and videos</value></data>
-  <data name="DictionaryPopupMaxHeightCard.Header" xml:space="preserve"><value>Max Height</value></data>
-  <data name="DictionaryPopupMaxHeightCard.Description" xml:space="preserve"><value>Limits floating lookup popups in readers and videos</value></data>
+  <data name="PopupAppearanceSectionHeader.Text" xml:space="preserve"><value>Popup</value></data>
+  <data name="PopupWidthCard.Header" xml:space="preserve"><value>Width</value></data>
+  <data name="PopupWidthCard.Description" xml:space="preserve"><value>Set the width of floating lookup popups</value></data>
+  <data name="PopupHeightCard.Header" xml:space="preserve"><value>Height</value></data>
+  <data name="PopupHeightCard.Description" xml:space="preserve"><value>Set the height of floating lookup popups</value></data>
+  <data name="PopupScaleCard.Header" xml:space="preserve"><value>Scale</value></data>
+  <data name="PopupScaleCard.Description" xml:space="preserve"><value>Scale dictionary text, spacing, icons, and controls</value></data>
+  <data name="PopupActionBarCard.Header" xml:space="preserve"><value>Show Action Bar</value></data>
+  <data name="PopupActionBarCard.Description" xml:space="preserve"><value>Show Back, Forward, and Close above popup content</value></data>
+  <data name="PopupActionBarToggle.AutomationProperties.Name" xml:space="preserve"><value>Show Popup Action Bar</value></data>
+  <data name="PopupFullWidthCard.Header" xml:space="preserve"><value>Full-width</value></data>
+  <data name="PopupFullWidthCard.Description" xml:space="preserve"><value>Use the available window width and place popups at the bottom</value></data>
+  <data name="PopupFullWidthToggle.AutomationProperties.Name" xml:space="preserve"><value>Show Popup Full-width</value></data>
   <data name="DictionaryCollapseSectionHeader.Text" xml:space="preserve"><value>Collapse Dictionaries</value></data>
   <data name="DictionaryCollapseModeCard.Header" xml:space="preserve"><value>Mode</value></data>
   <data name="DictionaryExpandFirstCard.Header" xml:space="preserve"><value>Expand First Dictionary</value></data>
@@ -527,6 +535,10 @@
   <data name="NovelReaderSasayakiDarkTextColorLabel.Text" xml:space="preserve"><value>Dark Text</value></data>
   <data name="NovelReaderSasayakiDarkBackgroundColorLabel.Text" xml:space="preserve"><value>Dark Background</value></data>
   <data name="NovelReaderPopupSasayakiControls.AutomationProperties.Name" xml:space="preserve"><value>Sasayaki controls</value></data>
+  <data name="DictionaryPopupActionBar.AutomationProperties.Name" xml:space="preserve"><value>Popup actions</value></data>
+  <data name="DictionaryPopupBackButton.AutomationProperties.Name" xml:space="preserve"><value>Back</value></data>
+  <data name="DictionaryPopupForwardButton.AutomationProperties.Name" xml:space="preserve"><value>Forward</value></data>
+  <data name="DictionaryPopupCloseButton.AutomationProperties.Name" xml:space="preserve"><value>Close</value></data>
   <data name="NovelReaderPopupSasayakiPlayPauseButton.AutomationProperties.Name" xml:space="preserve"><value>Play/Pause</value></data>
   <data name="NovelReaderPopupSasayakiReplayCueButton.AutomationProperties.Name" xml:space="preserve"><value>Replay Cue</value></data>
   <data name="NovelReaderPopupSasayakiJumpCueButton.AutomationProperties.Name" xml:space="preserve"><value>Jump Cue</value></data>

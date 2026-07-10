@@ -32,9 +32,21 @@ internal static class DictionaryPopupLayoutCalculator
         double maxWidth,
         double maxHeight,
         double minWidth,
-        bool isVertical)
+        bool isVertical,
+        bool isFullWidth = false)
     {
         double width, height, centerX, centerY;
+
+        if (isFullWidth)
+        {
+            width = Math.Max(0, screenWidth - ScreenBorderPadding * 2);
+            height = Math.Min(
+                Math.Max(0, maxHeight),
+                Math.Max(0, screenHeight - ScreenBorderPadding * 2));
+            centerX = screenWidth / 2;
+            centerY = screenHeight - ScreenBorderPadding - height / 2;
+            return FromCenter(centerX, centerY, width, height, screenWidth, screenHeight);
+        }
 
         if (isVertical)
         {
