@@ -4,7 +4,7 @@
 
 **Goal:** Allow click and Shift-hover subtitle lookup while the video dictionary popup remains visible, replacing only the latest successful root result.
 
-**Architecture:** Video uses a host-only hit-test mode so transparent popup space passes input to the subtitle Canvas. Popup replacement is a two-phase committed/pending transaction: JavaScript stages DOM plus all entry/style/audio/Anki runtime data and posts contentPrepared; native validates request version and generation before acknowledging commit; JavaScript then atomically promotes pending state and posts contentReady. The lookup path awaits neither message.
+**Architecture:** Video uses a host-only hit-test mode so transparent popup space passes input to the subtitle Canvas. Popup replacement is a two-phase committed/pending transaction: JavaScript stages DOM plus all interaction data and posts contentPrepared; native linearizes that generation as commit-in-flight before acknowledging commit; JavaScript atomically promotes pending state and posts contentReady. A single latest queued replacement starts asynchronously after in-flight ready, so the lookup path awaits neither message.
 
 **Tech Stack:** WinUI 3, Windows App SDK, C#/.NET 10, WebView2, JavaScript, xUnit v3, FluentAssertions.
 
@@ -15,6 +15,7 @@
 - JavaScript must not perform dictionary lookup or deinflection.
 - Never await contentReady in the subtitle lookup path.
 - Never replace committed DOM or JavaScript interaction state before native acknowledges the exact pending generation.
+- Native trace/audio/Anki/mining/Sasayaki context must remain committed until matching contentReady; commit-in-flight cannot be cancelled or overwritten.
 - Pointer passthrough is video-only; novel reader and global popup defaults stay unchanged.
 - Latest request wins. Stale lookup, ready, cancellation, and error paths cannot replace or dismiss committed content.
 - Popup scrolling, audio, Anki, nested lookup, and explicit point-outside dismissal keep existing behavior.
@@ -45,7 +46,7 @@
 
 **Interfaces:**
 - Consumes: generation long and trace id string?.
-- Produces: DictionaryPopupContentCommit, BeginPending, TryCommit, CancelPending(generation, traceId), Dismiss, HasCommittedContent, PendingGeneration, and CommittedGeneration.
+- Produces: DictionaryPopupContentCommit, BeginPending, TryAcceptCommit, TryCompleteCommit, CancelPending(generation, traceId), Dismiss, HasCommittedContent, PendingGeneration, CommitInFlightGeneration, and CommittedGeneration.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -62,11 +63,13 @@ public class DictionaryPopupDisplayTransactionTests
     {
         var state = new DictionaryPopupDisplayTransaction();
         state.BeginPending(1, "first").Should().BeFalse();
-        state.TryCommit(1, out _).Should().BeTrue();
+        state.TryAcceptCommit(1).Should().BeTrue();
+        state.TryCompleteCommit(1, out _).Should().BeTrue();
 
         state.BeginPending(2, "second").Should().BeTrue();
-        state.TryCommit(1, out _).Should().BeFalse();
-        state.TryCommit(2, out var commit).Should().BeTrue();
+        state.TryAcceptCommit(1).Should().BeFalse();
+        state.TryAcceptCommit(2).Should().BeTrue();
+        state.TryCompleteCommit(2, out var commit).Should().BeTrue();
 
         commit.Should().Be(new DictionaryPopupContentCommit(2, "second"));
         state.HasCommittedContent.Should().BeTrue();
@@ -77,7 +80,8 @@ public class DictionaryPopupDisplayTransactionTests
     {
         var state = new DictionaryPopupDisplayTransaction();
         state.BeginPending(1, "shown");
-        state.TryCommit(1, out _);
+        state.TryAcceptCommit(1);
+        state.TryCompleteCommit(1, out _);
         state.BeginPending(2, "cancelled");
 
         state.CancelPending(2, "cancelled").Should().BeTrue();
@@ -118,6 +122,7 @@ internal sealed class DictionaryPopupDisplayTransaction
 
     public bool HasCommittedContent { get; private set; }
     public long? PendingGeneration => _pendingGeneration;
+    public long? CommitInFlightGeneration { get; private set; }
     public long? CommittedGeneration { get; private set; }
 
     public bool BeginPending(long generation, string? traceId)
@@ -127,14 +132,24 @@ internal sealed class DictionaryPopupDisplayTransaction
         return HasCommittedContent;
     }
 
-    public bool TryCommit(long generation, out DictionaryPopupContentCommit commit)
+    public bool TryAcceptCommit(long generation)
+    {
+        if (_pendingGeneration != generation || CommitInFlightGeneration is not null)
+            return false;
+
+        CommitInFlightGeneration = generation;
+        _pendingGeneration = null;
+        return true;
+    }
+
+    public bool TryCompleteCommit(long generation, out DictionaryPopupContentCommit commit)
     {
         commit = default;
-        if (_pendingGeneration != generation)
+        if (CommitInFlightGeneration != generation)
             return false;
 
         commit = new DictionaryPopupContentCommit(generation, _pendingTraceId);
-        _pendingGeneration = null;
+        CommitInFlightGeneration = null;
         _pendingTraceId = null;
         HasCommittedContent = true;
         CommittedGeneration = generation;
@@ -158,6 +173,7 @@ internal sealed class DictionaryPopupDisplayTransaction
     {
         _pendingGeneration = null;
         _pendingTraceId = null;
+        CommitInFlightGeneration = null;
         HasCommittedContent = false;
         CommittedGeneration = null;
     }
@@ -349,7 +365,7 @@ git commit -m "fix(dictionary): stage popup replacements atomically"
 
 **Interfaces:**
 - Consumes: DictionaryPopupDisplayTransaction plus hoshiCommitPopupRender/hoshiCancelPopupRender from Task 2.
-- Produces: contentPrepared validation, DictionaryPopupContentCommittedEventArgs, ContentCommitted, HasCommittedContent, CancelPendingContent(generation, traceId), and generationStarted callback.
+- Produces: contentPrepared commit linearization, one latest queued replacement, generation-scoped native interaction context, DictionaryPopupContentCommittedEventArgs, ContentCommitted, HasCommittedContent, CancelPendingContent(generation, traceId), and generationStarted callback.
 
 - [ ] **Step 1: Add a failing lifecycle test**
 
@@ -432,6 +448,7 @@ Handle `contentPrepared` by parsing its generation, checking `_pendingContentGen
 ~~~csharp
 if (!CanShowReadyContent(preparedGeneration)
     || _displayTransaction.PendingGeneration != preparedGeneration
+    || !_displayTransaction.TryAcceptCommit(preparedGeneration)
     || _contentWebView.CoreWebView2 is null)
     return;
 
@@ -446,13 +463,16 @@ Do not await `contentPrepared` or `contentReady` from `ShowResultsWarmAsync`.
 In the contentReady dispatcher callback:
 
 ~~~csharp
-if (!CanShowReadyContent(readyGeneration)
-    || !_displayTransaction.TryCommit(readyGeneration, out var commit))
+if (_displayTransaction.CommitInFlightGeneration != readyGeneration
+    || !_displayTransaction.TryCompleteCommit(readyGeneration, out var commit))
     return;
 
 ShowReadyContent();
 ContentReady?.Invoke(this, EventArgs.Empty);
 if (_displayTransaction.CommittedGeneration != readyGeneration)
+    return;
+if (_displayTransaction.PendingGeneration is not null
+    || _displayGeneration != readyGeneration)
     return;
 ContentCommitted?.Invoke(
     this,
@@ -486,6 +506,10 @@ public void CancelPendingContent(long generation, string? traceId)
 ~~~
 
 Make explicit Hide call _displayTransaction.Dismiss(). Cancellation paths call CancelPendingContent instead of Hide.
+
+Add a generation-scoped native context record containing local trace id, normalized audio settings, normalized Anki settings, and the next mining context. `ShowResultsWarmAsync` must use request-local normalized values through any `WarmAsync` await and store them as pending without assigning `_currentTraceId`, `_audioSettings`, `_ankiSettings`, `_miningContext`, or Sasayaki controls. Promote all fields and update Sasayaki controls only when `TryCompleteCommit` succeeds.
+
+When `CommitInFlightGeneration` is non-null, `ShowResultsWarmAsync` must store/replace one latest queued show request and return immediately. After matching contentReady completes native context and events, dequeue the latest non-cancelled request with fire-and-forget `ProcessQueuedShowAsync`; do not await ready in the caller. Explicit Hide/Dismiss cancels and clears the queued request.
 
 - [ ] **Step 8: Run GREEN**
 
