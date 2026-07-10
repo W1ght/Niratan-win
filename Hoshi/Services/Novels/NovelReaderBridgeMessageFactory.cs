@@ -12,16 +12,26 @@ public static class NovelReaderBridgeMessageFactory
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         };
 
-    public static string CreateSetChapterMessage(int index, int totalChapters, double progress = 0)
+    public static string CreateSetChapterMessage(
+        int index,
+        int totalChapters,
+        double progress = 0,
+        long? navigationGeneration = null)
     {
-        var payload = new SetChapterPayload(index, totalChapters, progress);
+        var payload = new SetChapterPayload(
+            index,
+            totalChapters,
+            progress,
+            navigationGeneration);
         var message = new NovelReaderWebMessage<SetChapterPayload>(1, "setChapter", payload);
         return JsonSerializer.Serialize(message, JsonOptions);
     }
 
-    public static string CreateRestoreProgressMessage(double progress)
+    public static string CreateRestoreProgressMessage(
+        double progress,
+        long? navigationGeneration = null)
     {
-        var payload = new RestoreProgressPayload(progress);
+        var payload = new RestoreProgressPayload(progress, navigationGeneration);
         var message = new NovelReaderWebMessage<RestoreProgressPayload>(
             1,
             "restoreProgress",
@@ -30,7 +40,13 @@ public static class NovelReaderBridgeMessageFactory
         return JsonSerializer.Serialize(message, JsonOptions);
     }
 
-    private sealed record SetChapterPayload(int Index, int TotalChapters, double Progress);
+    private sealed record SetChapterPayload(
+        int Index,
+        int TotalChapters,
+        double Progress,
+        long? NavigationGeneration);
 
-    private sealed record RestoreProgressPayload(double Progress);
+    private sealed record RestoreProgressPayload(
+        double Progress,
+        long? NavigationGeneration);
 }

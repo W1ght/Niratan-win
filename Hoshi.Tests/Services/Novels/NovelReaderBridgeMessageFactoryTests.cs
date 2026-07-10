@@ -61,4 +61,18 @@ public class NovelReaderBridgeMessageFactoryTests
         oneDoc.RootElement.GetProperty("payload").GetProperty("progress").GetDouble()
             .Should().Be(1);
     }
+
+    [Fact]
+    public void NavigationMessages_CarryOptionalGeneration()
+    {
+        using var chapter = JsonDocument.Parse(
+            NovelReaderBridgeMessageFactory.CreateSetChapterMessage(2, 4, 0.75, 17));
+        using var restore = JsonDocument.Parse(
+            NovelReaderBridgeMessageFactory.CreateRestoreProgressMessage(0.5, 18));
+
+        chapter.RootElement.GetProperty("payload")
+            .GetProperty("navigationGeneration").GetInt64().Should().Be(17);
+        restore.RootElement.GetProperty("payload")
+            .GetProperty("navigationGeneration").GetInt64().Should().Be(18);
+    }
 }
