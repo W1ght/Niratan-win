@@ -636,6 +636,8 @@ public sealed partial class VideoPlayerWindow : Window
         double? anchorWidth = null,
         double? anchorHeight = null)
     {
+        DictionaryPopupOverlay? lookupOverlay = null;
+        string? lookupTraceId = null;
         try
         {
             var query = string.IsNullOrWhiteSpace(queryOverride)
@@ -672,13 +674,14 @@ public sealed partial class VideoPlayerWindow : Window
             if (!IsCurrentSubtitleLookup(lookupRequest))
                 return;
 
-            var overlay = EnsurePopupOverlay();
-            EnsureVideoDictionaryOverlaySurfaceVisible(overlay);
+            lookupOverlay = EnsurePopupOverlay();
+            lookupTraceId = popupRequest.TraceId;
+            EnsureVideoDictionaryOverlaySurfaceVisible(lookupOverlay);
             var point = anchorPoint
                 ?? SubtitleWebView.TransformToVisual(PopupOverlayCanvas)
                     .TransformPoint(new Windows.Foundation.Point(0, 0));
             ViewModel.StatusText = "Lookup opened";
-            await overlay.ShowLookupAsync(
+            await lookupOverlay.ShowLookupAsync(
                 popupRequest.Results,
                 popupRequest.Styles,
                 popupRequest.DisplaySettings,
@@ -692,17 +695,32 @@ public sealed partial class VideoPlayerWindow : Window
                 popupRequest.AudioSettings,
                 popupRequest.AnkiSettings,
                 popupRequest.MiningContext,
-                traceId: popupRequest.TraceId);
+                traceId: popupRequest.TraceId,
+                cancellationToken: lookupRequest.CancellationToken);
             if (!IsCurrentSubtitleLookup(lookupRequest))
+            {
+                lookupOverlay?.CancelShow(lookupTraceId);
                 return;
+            }
             _isLookupPopupVisible = true;
             ApplySubtitleAppearance();
         }
         catch (OperationCanceledException) when (lookupRequest.CancellationToken.IsCancellationRequested)
         {
+            lookupOverlay?.CancelShow(lookupTraceId);
         }
         catch (Exception ex)
         {
+            if (!IsCurrentSubtitleLookup(lookupRequest))
+            {
+                lookupOverlay?.CancelShow(lookupTraceId);
+                Log.Debug(
+                    ex,
+                    "[VideoLookup] stale request version={RequestVersion} failed after supersession",
+                    lookupRequest.Version);
+                return;
+            }
+
             _popupOverlay?.Dismiss();
             VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
             _isLookupPopupVisible = false;

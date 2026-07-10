@@ -68,6 +68,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     private bool _isWarmed;
     private long _displayGeneration;
     private long? _pendingContentGeneration;
+    private CancellationToken _pendingContentCancellationToken;
     private Stopwatch? _pendingContentStopwatch;
     private TaskCompletionSource<bool>? _shellReadyCompletion;
     private string? _currentTraceId;
@@ -346,8 +347,10 @@ public sealed class DictionaryLookupPopup : IDisposable
         ThemeMode themeMode,
         AudioSettings? audioSettings = null,
         AnkiSettings? ankiSettings = null,
-        string? traceId = null)
+        string? traceId = null,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ApplySurfaceTheme(themeMode);
         var sw = Stopwatch.StartNew();
         _currentTraceId = traceId;
@@ -357,12 +360,13 @@ public sealed class DictionaryLookupPopup : IDisposable
         CancelDeferredResults();
         if (!_isWarmed)
             await WarmAsync(themeMode, _audioSettings, _ankiSettings);
+        cancellationToken.ThrowIfCancellationRequested();
 
         UpdateSasayakiPopupControls();
         var ranges = DictionaryPopupBatchPlanner.Create(results.Count);
         var initialRange = ranges[0];
         var initialResults = results.GetRange(initialRange.Offset, initialRange.Count);
-        var generation = PrepareForPendingContent();
+        var generation = PrepareForPendingContent(cancellationToken);
         _pendingContentStopwatch = Stopwatch.StartNew();
         var serializeSw = Stopwatch.StartNew();
         var injectionScript = _htmlGenerator.GenerateInjectionScript(initialResults,
@@ -384,6 +388,12 @@ public sealed class DictionaryLookupPopup : IDisposable
             results.Count);
         var executeSw = Stopwatch.StartNew();
         await _contentWebView.CoreWebView2.ExecuteScriptAsync(injectionScript);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            if (generation == _displayGeneration)
+                Hide();
+            cancellationToken.ThrowIfCancellationRequested();
+        }
         Log.Information(
             "[LookupTrace] trace={TraceId} popup initial ExecuteScriptAsync finished in {Ms}ms total={TotalMs}ms gen={Gen} entries={EntryCount}",
             traceId ?? "-", executeSw.ElapsedMilliseconds, sw.ElapsedMilliseconds, generation, initialResults.Count);
@@ -393,14 +403,17 @@ public sealed class DictionaryLookupPopup : IDisposable
 
         if (ranges.Count > 1)
         {
-            _deferredResultsCts = new CancellationTokenSource();
+            var deferredCts = cancellationToken.CanBeCanceled
+                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+                : new CancellationTokenSource();
+            _deferredResultsCts = deferredCts;
             _ = AppendDeferredResultsAsync(
                 results,
                 ranges.Skip(1).ToArray(),
                 results.Count,
                 generation,
                 traceId,
-                _deferredResultsCts.Token);
+                deferredCts);
         }
     }
 
@@ -410,8 +423,9 @@ public sealed class DictionaryLookupPopup : IDisposable
         int totalResultCount,
         long generation,
         string? traceId,
-        CancellationToken ct)
+        CancellationTokenSource owner)
     {
+        var ct = owner.Token;
         try
         {
             await Task.Yield();
@@ -439,7 +453,30 @@ public sealed class DictionaryLookupPopup : IDisposable
                     generation);
 
                 var executeSw = Stopwatch.StartNew();
-                await _contentWebView.CoreWebView2.ExecuteScriptAsync(script);
+                var rawResult = await _contentWebView.CoreWebView2.ExecuteScriptAsync(script);
+                var appendStatus = JsonSerializer.Deserialize<string>(rawResult) ?? "unknown";
+                if (!string.Equals(appendStatus, "appended", StringComparison.Ordinal))
+                {
+                    if (string.Equals(appendStatus, "stale", StringComparison.Ordinal))
+                    {
+                        Log.Debug(
+                            "[LookupTrace] trace={TraceId} popup deferred batch rejected status={Status} batch={BatchIndex} gen={Gen}",
+                            traceId ?? "-",
+                            appendStatus,
+                            batchIndex,
+                            generation);
+                    }
+                    else
+                    {
+                        Log.Warning(
+                            "[LookupTrace] trace={TraceId} popup deferred batch rejected status={Status} batch={BatchIndex} gen={Gen}",
+                            traceId ?? "-",
+                            appendStatus,
+                            batchIndex,
+                            generation);
+                    }
+                    return;
+                }
                 Log.Information(
                     "[LookupTrace] trace={TraceId} popup deferred batch transferred in {Ms}ms batch={BatchIndex} entries={EntryCount} gen={Gen}",
                     traceId ?? "-",
@@ -464,6 +501,12 @@ public sealed class DictionaryLookupPopup : IDisposable
                 traceId ?? "-",
                 generation);
         }
+        finally
+        {
+            if (ReferenceEquals(_deferredResultsCts, owner))
+                _deferredResultsCts = null;
+            owner.Dispose();
+        }
     }
 
     public void Hide()
@@ -473,6 +516,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         CancelDeferredResults();
         _displayGeneration++;
         _pendingContentGeneration = null;
+        _pendingContentCancellationToken = default;
         VisualRoot.Opacity = 0;
         VisualRoot.IsHitTestVisible = false;
     }
@@ -809,8 +853,12 @@ public sealed class DictionaryLookupPopup : IDisposable
                         break;
                     }
 
+                    var readyGeneration = _pendingContentGeneration!.Value;
                     _contentWebView.DispatcherQueue.TryEnqueue(() =>
                     {
+                        if (!CanShowReadyContent(readyGeneration))
+                            return;
+
                         ShowReadyContent();
                         ContentReady?.Invoke(this, EventArgs.Empty);
                     });
@@ -976,10 +1024,11 @@ public sealed class DictionaryLookupPopup : IDisposable
             details);
     }
 
-    private long PrepareForPendingContent()
+    private long PrepareForPendingContent(CancellationToken cancellationToken)
     {
         var generation = ++_displayGeneration;
         _pendingContentGeneration = generation;
+        _pendingContentCancellationToken = cancellationToken;
         _pendingContentStopwatch = null;
         VisualRoot.Visibility = Visibility.Visible;
         VisualRoot.Opacity = 0;
@@ -1003,6 +1052,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     private void ShowReadyContent()
     {
         _pendingContentGeneration = null;
+        _pendingContentCancellationToken = default;
         _pendingContentStopwatch = null;
         VisualRoot.Visibility = Visibility.Visible;
         VisualRoot.Opacity = _readyOpacity;
@@ -1013,6 +1063,8 @@ public sealed class DictionaryLookupPopup : IDisposable
     {
         if (_pendingContentGeneration is not long expected)
             return false;
+        if (_pendingContentCancellationToken.IsCancellationRequested)
+            return false;
 
         if (!payload.TryGetProperty("body", out var body) || body.ValueKind != JsonValueKind.Object)
             return false;
@@ -1021,6 +1073,10 @@ public sealed class DictionaryLookupPopup : IDisposable
             && generationElement.TryGetInt64(out var generation)
             && generation == expected;
     }
+
+    private bool CanShowReadyContent(long generation) =>
+        _pendingContentGeneration == generation
+        && !_pendingContentCancellationToken.IsCancellationRequested;
 
     private static DictionaryPopupRedirectRequest ParseRedirectRequest(JsonElement payload)
     {

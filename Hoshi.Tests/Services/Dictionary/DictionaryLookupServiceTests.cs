@@ -97,6 +97,9 @@ public class DictionaryLookupServiceTests
         append.Should().Contain("window.hoshiAppendResults");
         append.Should().Contain("deferred");
         append.Should().Contain(", 2, 7)");
+        append.Should().Contain("bridge-missing");
+        append.Should().Contain("appended");
+        append.Should().Contain("stale");
     }
 
     [Fact]

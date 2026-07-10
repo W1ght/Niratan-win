@@ -206,9 +206,11 @@ public sealed class DictionaryPopupOverlay : IDisposable
         AudioSettings? audioSettings = null,
         AnkiSettings? ankiSettings = null,
         AnkiMiningContext? miningContext = null,
-        string? traceId = null)
+        string? traceId = null,
+        CancellationToken cancellationToken = default)
     {
         if (results.Count == 0) return;
+        cancellationToken.ThrowIfCancellationRequested();
 
         var sw = Stopwatch.StartNew();
         Log.Information(
@@ -232,6 +234,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         _currentMiningContext = miningContext ?? new AnkiMiningContext();
 
         await EnsureWarmAsync(xamlRoot, themeMode);
+        cancellationToken.ThrowIfCancellationRequested();
         Log.Information(
             "[LookupTrace] trace={TraceId} overlay warmed in {Ms}ms embedded={Embedded}",
             traceId ?? "-", sw.ElapsedMilliseconds, _embeddedPanel != null);
@@ -245,7 +248,17 @@ public sealed class DictionaryPopupOverlay : IDisposable
 
         _rootHost.SetMiningContext(_currentMiningContext);
         var injectSw = Stopwatch.StartNew();
-        await _rootHost.ShowResultsWarmAsync(results, styles, displaySettings, themeMode, audio, anki, traceId: traceId);
+        cancellationToken.ThrowIfCancellationRequested();
+        await _rootHost.ShowResultsWarmAsync(
+            results,
+            styles,
+            displaySettings,
+            themeMode,
+            audio,
+            anki,
+            traceId: traceId,
+            cancellationToken: cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         Log.Information(
             "[LookupTrace] trace={TraceId} root popup content injected in {Ms}ms total={TotalMs}ms entries={EntryCount}",
             traceId ?? "-", injectSw.ElapsedMilliseconds, sw.ElapsedMilliseconds, results.Count);
@@ -887,5 +900,17 @@ public sealed class DictionaryPopupOverlay : IDisposable
 
         if (wasVisible)
             Dismissed?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void CancelShow(string? traceId)
+    {
+        if (!string.Equals(_currentTraceId, traceId, StringComparison.Ordinal))
+            return;
+
+        Log.Debug(
+            "[LookupTrace] trace={TraceId} overlay show cancelled before ownership commit",
+            traceId ?? "-");
+        _currentTraceId = null;
+        Dismiss();
     }
 }
