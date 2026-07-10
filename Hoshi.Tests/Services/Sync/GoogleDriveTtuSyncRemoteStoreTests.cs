@@ -191,7 +191,10 @@ public sealed class GoogleDriveTtuSyncRemoteStoreTests
     {
         public bool HasCredentials => true;
 
-        public Task AuthenticateAsync(string clientId, CancellationToken ct = default) =>
+        public Task AuthenticateAsync(
+            string clientId,
+            string clientSecret,
+            CancellationToken ct = default) =>
             Task.CompletedTask;
 
         public Task<string> GetAccessTokenAsync(CancellationToken ct = default) =>

@@ -7,7 +7,8 @@ public sealed record GoogleDriveCredentials(
     string RefreshToken,
     string ClientId,
     DateTimeOffset ExpiresAtUtc,
-    string Scope)
+    string Scope,
+    string ClientSecret = "")
 {
     public bool ShouldRefresh(DateTimeOffset now) =>
         ExpiresAtUtc <= now.AddMinutes(2);

@@ -723,6 +723,8 @@
   <data name="TtuSyncGoogleDriveSectionHeader.Text" xml:space="preserve"><value>Google Drive</value></data>
   <data name="TtuSyncGoogleClientIdTextBox.Header" xml:space="preserve"><value>客户端 ID</value></data>
   <data name="TtuSyncGoogleClientIdTextBox.Description" xml:space="preserve"><value>用于 Drive 同步的 Google Cloud 桌面 OAuth 客户端 ID</value></data>
+  <data name="TtuSyncGoogleClientSecretPasswordBox.Header" xml:space="preserve"><value>客户端密钥</value></data>
+  <data name="TtuSyncGoogleClientSecretPasswordBox.Description" xml:space="preserve"><value>同一个 Google Cloud 桌面 OAuth 客户端的客户端密钥</value></data>
   <data name="TtuSyncConnectionStatusCard.Header" xml:space="preserve"><value>连接</value></data>
   <data name="TtuSyncConnectionStatusCard.Description" xml:space="preserve"><value>打开系统浏览器连接 Google Drive</value></data>
   <data name="TtuSyncConnectionStatusText.Text" xml:space="preserve"><value>未连接</value></data>
