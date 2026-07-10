@@ -84,6 +84,10 @@ overlay 截获输入后，再换算并调用字幕命中。
 
 native 收到 `contentPrepared` 后，必须再次校验 lookup request、generation 和取消令牌。只有仍为当前的 generation 才会收到 `hoshiCommitPopupRender(generation)`；JavaScript 随后在同一个同步任务中提升 pending 全局上下文、原子替换 DOM，并发送 `contentReady`。native 不在查词路径等待任一消息。
 
+native 发出 commit 命令前把该 generation 线性化为 **commit-in-flight**。commit-in-flight 不能被后来取消或新的 `BeginPending` 覆盖；后续查词仍可完成 native lookup，但 popup 只保存一个 latest queued replacement，并在当前 generation 的 `contentReady` 后异步启动，调用方不等待 ready。这样 commit 命令与取消命令不存在“先提交 DOM、后清除 native 所有权”的窗口。
+
+`_currentTraceId`、音频设置、Anki 设置、mining context 和 Sasayaki 控件上下文也属于 committed native interaction context。新查询只把这些值放进 generation-scoped pending context；收到匹配 `contentReady` 后才整体提升。旧 popup 可交互期间始终使用旧 native context。
+
 native 层在已有 committed 内容时不把 `VisualRoot.Opacity` 或 `IsHitTestVisible` 置为隐藏；只有首次冷显示仍保持现有的 `Opacity=0` ready gate。收到当前 generation 的 `contentReady` 后，overlay 提交目标锚点和字幕高亮。过期 prepared/ready 消息不能改变内容、位置、高亮、交互数据或可见性。
 
 取消 pending generation 必须同时匹配 generation 和 trace id，只丢弃 JavaScript pending payload 与 native pending 状态，不调用根 popup 的 `Dismiss`。没有 committed 内容的首次显示若被取消，则沿用现有隐藏行为。
@@ -113,8 +117,10 @@ native 层在已有 committed 内容时不把 `VisualRoot.Opacity` 或 `IsHitTes
 4. 保留旧内容：pending、无结果、失败和取消期间 committed popup 保持可见并可交互。
 5. 两阶段原子提交：prepared 前不清空可见容器或覆盖 committed 交互数据；没有 native commit 的 generation 不替换 DOM；过期 generation 不发送有效 ready。
 6. 取消身份：旧 generation 或仅 trace 匹配的取消不能清除更新的 pending generation。
-7. 点外关闭：非字幕空白仍关闭 popup；popup 内滚动、音频、Anki 和嵌套查词不触发关闭。
-8. 运行视频字幕专项测试、字典 popup 测试和全量 x64 测试；实机验证同一字幕连续单击、Shift hover、无结果词和快速移动竞态。
+7. commit 线性化：commit-in-flight 不会被新请求覆盖；新请求只替换 latest queued replacement，并在 ready 后异步启动。
+8. native 上下文：pending 期间音频、Anki、mining、trace 和 Sasayaki 仍属于 committed 内容，ready 后才整体切换。
+9. 点外关闭：非字幕空白仍关闭 popup；popup 内滚动、音频、Anki 和嵌套查词不触发关闭。
+10. 运行视频字幕专项测试、字典 popup 测试和全量 x64 测试；实机验证同一字幕连续单击、Shift hover、无结果词和快速移动竞态。
 
 ## 非目标
 
