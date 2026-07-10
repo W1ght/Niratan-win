@@ -24,8 +24,11 @@ public sealed record DictionaryDisplaySettings(
     bool ScanNonJapaneseText = true,
     int MaxResults = 16,
     int ScanLength = 16,
-    int PopupMaxWidth = 560,
-    int PopupMaxHeight = 420
+    int PopupMaxWidth = 320,
+    int PopupMaxHeight = 250,
+    double PopupScale = 1.0,
+    bool PopupActionBar = false,
+    bool PopupFullWidth = false
 )
 {
     [JsonIgnore]
