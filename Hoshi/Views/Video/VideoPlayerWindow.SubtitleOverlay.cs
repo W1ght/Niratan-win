@@ -11,6 +11,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.Web.WebView2.Core;
 using Windows.Storage.Streams;
+using Hoshi.Helpers;
 using Hoshi.Services.Video;
 
 namespace Hoshi.Views.Video;
@@ -24,7 +25,8 @@ public sealed partial class VideoPlayerWindow
 
         _isSubtitleWebViewInitialized = true;
         SubtitleWebView.DefaultBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
-        await SubtitleWebView.EnsureCoreWebView2Async();
+        var environment = await WebView2EnvironmentHelper.GetOrCreateAsync();
+        await SubtitleWebView.EnsureCoreWebView2Async(environment);
         SubtitleWebView.DefaultBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
 
         var coreWebView = SubtitleWebView.CoreWebView2;

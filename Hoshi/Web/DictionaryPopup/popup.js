@@ -19,6 +19,10 @@ let selectedDictionaries = {};
 let miningRequestPending = false;
 let popupScrollIndicatorTimer = 0;
 
+function getPopupScrollElement() {
+  return document.getElementById('popup-viewport') || document.scrollingElement;
+}
+
 function setPopupScrollIndicatorActive(eventTarget) {
   var root = document.documentElement;
   var body = document.body;
@@ -1450,9 +1454,9 @@ function redirect(count) {
   document.getElementById('entries-container').innerHTML = '';
   window.renderPopup();
   requestAnimationFrame(function () {
-    document.scrollingElement.scrollTop = 0;
+    getPopupScrollElement().scrollTop = 0;
     requestAnimationFrame(function () {
-      document.scrollingElement.scrollTop = 0;
+      getPopupScrollElement().scrollTop = 0;
     });
   });
 }
@@ -1474,7 +1478,7 @@ window.replacePopupResults = function (count) {
   window.hoshiPopupObserveContentReady?.();
   window.renderPopup();
   requestAnimationFrame(function () {
-    document.scrollingElement.scrollTop = 0;
+    getPopupScrollElement().scrollTop = 0;
   });
 };
 
@@ -1497,7 +1501,7 @@ window.hoshiInjectResults = function (entriesJson, count) {
   window.hoshiPopupObserveContentReady?.();
   window.renderPopup();
   requestAnimationFrame(function () {
-    document.scrollingElement.scrollTop = 0;
+    getPopupScrollElement().scrollTop = 0;
   });
 };
 
@@ -1506,7 +1510,7 @@ function snapshot() {
   var container = document.getElementById('entries-container');
   return {
     nodes: Array.from(container.childNodes),
-    scrollTop: document.scrollingElement.scrollTop,
+    scrollTop: getPopupScrollElement().scrollTop,
     lookupEntries: window.lookupEntries,
     entryCount: window.entryCount,
   };
@@ -1532,7 +1536,7 @@ function restore(snap) {
   observeAllDictionarySections();
   scheduleDictionaryColumns();
   requestAnimationFrame(function () {
-    document.scrollingElement.scrollTop = snap.scrollTop;
+    getPopupScrollElement().scrollTop = snap.scrollTop;
   });
 }
 

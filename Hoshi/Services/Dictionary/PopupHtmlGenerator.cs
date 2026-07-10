@@ -60,17 +60,19 @@ public sealed class PopupHtmlGenerator
 html, body {{
     --background-color: {bgColor};
     --text-color: {textColor};
-    background-color: transparent;
+    background-color: var(--background-color);
     color: var(--text-color);
 }}
 </style>
 </head>
 <body>
+<div id=""popup-viewport"">
 <div id=""popup-error"" style=""color:#e74c3c;padding:16px;font-size:13px;white-space:pre-wrap;display:none;border-bottom:2px solid #e74c3c;margin-bottom:8px;""></div>
 <div id=""entries-container""></div>
 <div class=""overlay"">
 <div class=""overlay-close"" onclick=""closeOverlay()"">x</div>
 <div class=""overlay-content""></div>
+</div>
 </div>
 <script>
 window.lookupEntries = {entriesJson};
@@ -440,10 +442,10 @@ if (typeof window.hoshiInjectResults === 'function') {{
     private static (string bgVar, string textColor) GetThemeColors(ThemeMode themeMode)
     {
         if (themeMode == ThemeMode.Dark)
-            return ("rgba(18, 18, 18, 0.24)", "#fff");
+            return ("#000000", "#fff");
         if (themeMode == ThemeMode.Light)
-            return ("rgba(248, 248, 248, 0.40)", "#000");
-        return ("rgba(248, 248, 248, 0.40)", "#000");
+            return ("#FFFFFF", "#000");
+        return ("#FFFFFF", "#000");
     }
 
     private static bool IsThemeDark(ThemeMode themeMode) => themeMode switch

@@ -67,7 +67,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
     private Panel? _embeddedPanel;
     private XamlRoot? _currentXamlRoot;
     private Task? _prewarmTask;
-    private double _rootReadyOpacity = 0.88;
+    private double _rootReadyOpacity = 1;
     private bool _useStandaloneWindowVisuals;
     private bool _useNakedFloatingWindowVisuals;
 
@@ -124,7 +124,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
             child.UseNakedFloatingWindowVisuals();
     }
 
-    public async Task PrewarmAsync(XamlRoot xamlRoot)
+    public async Task PrewarmAsync(XamlRoot xamlRoot, ThemeMode themeMode = ThemeMode.System)
     {
         if (_rootWarm)
             return;
@@ -135,7 +135,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
             return;
         }
 
-        _prewarmTask = PrewarmCoreAsync(xamlRoot);
+        _prewarmTask = PrewarmCoreAsync(xamlRoot, themeMode);
         try
         {
             await _prewarmTask;
@@ -147,7 +147,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         }
     }
 
-    private async Task PrewarmCoreAsync(XamlRoot xamlRoot)
+    private async Task PrewarmCoreAsync(XamlRoot xamlRoot, ThemeMode themeMode)
     {
         _currentXamlRoot = xamlRoot;
         CollapseCanvasBounds();
@@ -167,14 +167,14 @@ public sealed class DictionaryPopupOverlay : IDisposable
             _embeddedPanel.Children.Add(_rootHost.VisualRoot);
         }
 
-        await _rootHost.WarmAsync();
-        await PrewarmChildHostPoolAsync(PrewarmedChildHostCount);
+        await _rootHost.WarmAsync(themeMode);
+        await PrewarmChildHostPoolAsync(PrewarmedChildHostCount, themeMode);
 
         _rootWarm = true;
         Log.Information("[DictOverlay] Root popup prewarmed (embedded={Embedded})", _embeddedPanel != null);
     }
 
-    private async Task PrewarmChildHostPoolAsync(int targetCount)
+    private async Task PrewarmChildHostPoolAsync(int targetCount, ThemeMode themeMode)
     {
         if (targetCount <= 0)
             return;
@@ -184,7 +184,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         {
             var child = CreateChildHost();
             EnsureHostOnCanvas(child);
-            await child.WarmAsync();
+            await child.WarmAsync(themeMode);
         }
 
         Log.Information(
@@ -231,7 +231,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         _currentAnkiSettings = anki;
         _currentMiningContext = miningContext ?? new AnkiMiningContext();
 
-        await EnsureWarmAsync(xamlRoot);
+        await EnsureWarmAsync(xamlRoot, themeMode);
         Log.Information(
             "[LookupTrace] trace={TraceId} overlay warmed in {Ms}ms embedded={Embedded}",
             traceId ?? "-", sw.ElapsedMilliseconds, _embeddedPanel != null);
@@ -244,7 +244,6 @@ public sealed class DictionaryPopupOverlay : IDisposable
             traceId ?? "-", clearSw.ElapsedMilliseconds, sw.ElapsedMilliseconds);
 
         _rootHost.SetMiningContext(_currentMiningContext);
-        _rootHost.ClearSnapshotAcrylicBackground();
         var injectSw = Stopwatch.StartNew();
         await _rootHost.ShowResultsWarmAsync(results, styles, displaySettings, themeMode, audio, anki, traceId: traceId);
         Log.Information(
@@ -272,7 +271,6 @@ public sealed class DictionaryPopupOverlay : IDisposable
                 _rootSelectionWidth, _rootSelectionHeight,
                 _isVertical,
                 isRoot: true);
-            ApplySnapshotAcrylicBackground(_rootHost);
         }
         Log.Information(
             "[LookupTrace] trace={TraceId} overlay root positioned/visible total={TotalMs}ms",
@@ -286,10 +284,10 @@ public sealed class DictionaryPopupOverlay : IDisposable
             results.Count, pointX, pointY, isVertical, _embeddedPanel != null);
     }
 
-    private async Task EnsureWarmAsync(XamlRoot xamlRoot)
+    private async Task EnsureWarmAsync(XamlRoot xamlRoot, ThemeMode themeMode)
     {
         _currentXamlRoot = xamlRoot;
-        await PrewarmAsync(xamlRoot);
+        await PrewarmAsync(xamlRoot, themeMode);
     }
 
     private void OnRootRedirectRequested(object? sender, DictionaryPopupRedirectRequest request)
@@ -389,7 +387,6 @@ public sealed class DictionaryPopupOverlay : IDisposable
             ApplyPopupZOrder();
 
             child.SetMiningContext(_currentMiningContext);
-            child.ClearSnapshotAcrylicBackground();
             var injectSw = Stopwatch.StartNew();
             await child.ShowResultsWarmAsync(results, _currentStyles, _displaySettings, _currentTheme, _currentAudioSettings, _currentAnkiSettings, traceId: traceId);
             Log.Information(
@@ -402,7 +399,6 @@ public sealed class DictionaryPopupOverlay : IDisposable
 
             var positionSw = Stopwatch.StartNew();
             PositionChildHost(child, parent, request);
-            ApplySnapshotAcrylicBackground(child);
             Log.Information(
                 "[LookupTrace] trace={TraceId} child positioned in {Ms}ms total={TotalMs}ms",
                 traceId, positionSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds);
@@ -521,29 +517,6 @@ public sealed class DictionaryPopupOverlay : IDisposable
     {
         if (!_canvas.Children.Contains(host.VisualRoot))
             _canvas.Children.Add(host.VisualRoot);
-    }
-
-    private void ApplySnapshotAcrylicBackground(DictionaryLookupPopup host)
-    {
-        if (_embeddedPanel != null
-            || _useStandaloneWindowVisuals
-            || _useNakedFloatingWindowVisuals)
-        {
-            host.ClearSnapshotAcrylicBackground();
-            return;
-        }
-
-        var screenshotPath = _currentMiningContext.VideoScreenshotPath;
-        if (string.IsNullOrWhiteSpace(screenshotPath))
-        {
-            host.ClearSnapshotAcrylicBackground();
-            return;
-        }
-
-        _ = host.SetSnapshotAcrylicBackgroundAsync(
-            screenshotPath,
-            ThemeMode.Dark,
-            _currentTraceId);
     }
 
     private void ApplyPopupZOrder()
