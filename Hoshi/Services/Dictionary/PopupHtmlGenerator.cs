@@ -295,7 +295,51 @@ window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlos
         AudioSettings? audioSettings = null,
         AnkiSettings? ankiSettings = null,
         string? traceId = null,
-        int? totalResultCount = null)
+        int? totalResultCount = null) =>
+        GenerateResultsInjectionScript(
+            results,
+            styles,
+            displaySettings,
+            themeMode,
+            renderGeneration,
+            audioSettings,
+            ankiSettings,
+            traceId,
+            totalResultCount,
+            "hoshiInjectResults");
+
+    public string GenerateRedirectInjectionScript(
+        List<DictionaryLookupResult> results,
+        Dictionary<string, string> styles,
+        DictionaryDisplaySettings displaySettings,
+        ThemeMode themeMode,
+        long renderGeneration,
+        AudioSettings? audioSettings = null,
+        AnkiSettings? ankiSettings = null,
+        string? traceId = null) =>
+        GenerateResultsInjectionScript(
+            results,
+            styles,
+            displaySettings,
+            themeMode,
+            renderGeneration,
+            audioSettings,
+            ankiSettings,
+            traceId,
+            results.Count,
+            "hoshiRedirectResults");
+
+    private string GenerateResultsInjectionScript(
+        List<DictionaryLookupResult> results,
+        Dictionary<string, string> styles,
+        DictionaryDisplaySettings? displaySettings,
+        ThemeMode themeMode,
+        long renderGeneration,
+        AudioSettings? audioSettings,
+        AnkiSettings? ankiSettings,
+        string? traceId,
+        int? totalResultCount,
+        string injectionFunction)
     {
         var settings = displaySettings ?? new DictionaryDisplaySettings();
         var entriesJson = SerializeLookupEntries(results);
@@ -336,8 +380,8 @@ window.embedMedia = {BoolToJs(ankiSettings?.PopupSettings.EmbedMedia ?? false)};
 window.allowDupes = {BoolToJs(ankiSettings?.PopupSettings.AllowDupes ?? false)};
 window.needsAudio = {BoolToJs(ankiSettings?.PopupSettings.NeedsAudio ?? false)};
 window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlossaries ?? false)};
-if (typeof window.hoshiInjectResults === 'function') {{
-    window.hoshiInjectResults({entriesJson}, {finalResultCount});
+if (typeof window.{injectionFunction} === 'function') {{
+    window.{injectionFunction}({entriesJson}, {finalResultCount});
 }} else {{
     window.lookupEntries = {entriesJson};
     window.entryCount = {finalResultCount};
