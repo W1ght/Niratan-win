@@ -302,6 +302,76 @@ public class NovelLibraryPageViewModelTests
             Times.Once);
     }
 
+    [Fact]
+    public async Task InitializeAsync_ProjectsReadingCustomAndUnshelvedSectionsWithWarnings()
+    {
+        var books = new[]
+        {
+            new NovelBook { Id = "a", Title = "Reading", CurrentCharacterCount = 10, TotalCharacterCount = 100 },
+            new NovelBook { Id = "b", Title = "Complete", CurrentCharacterCount = 100, TotalCharacterCount = 100 },
+            new NovelBook { Id = "c", Title = "New" },
+        };
+        var library = new Mock<INovelLibraryService>();
+        library.Setup(service => service.GetNovelBooksAsync(null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelBookCatalogSnapshot>.Success(
+                new NovelBookCatalogSnapshot(books, ["broken/metadata.json"])));
+        var shelves = new Mock<INovelShelfService>();
+        shelves.Setup(service => service.LoadAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelShelfState>.Success(new NovelShelfState(
+                [new NovelShelf("收藏", ["b"])],
+                ["a", "c"])));
+        var settings = Mock.Of<ISettingsService>(service => service.Current == new AppSettings
+        {
+            BookshelfShowReading = true,
+        });
+        var sut = CreateSut(
+            novelService: library.Object,
+            shelfService: shelves.Object,
+            settingsService: settings);
+
+        await sut.InitializeAsync();
+
+        sut.RailSections.Select(section => section.Id).Should().Equal("reading", "shelf:收藏");
+        sut.RailSections[0].Books.Select(item => item.Book.Id).Should().Equal("a");
+        sut.RailSections[1].Books.Select(item => item.Book.Id).Should().Equal("b");
+        sut.UnshelvedBooks.Select(item => item.Book.Id).Should().Equal("a", "c");
+        sut.HasNovelStorageWarnings.Should().BeTrue();
+        sut.NovelStorageWarnings.Should().Equal("broken/metadata.json");
+    }
+
+    [Fact]
+    public async Task MoveBooksToShelfCommand_RebuildsProjectionFromServiceResult()
+    {
+        var library = new RecordingNovelLibraryService
+        {
+            Books =
+            [
+                new NovelBook { Id = "a", Title = "A" },
+                new NovelBook { Id = "b", Title = "B" },
+            ],
+        };
+        var shelves = new Mock<INovelShelfService>();
+        shelves.Setup(service => service.LoadAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelShelfState>.Success(new NovelShelfState([], ["a", "b"])));
+        shelves.Setup(service => service.MoveBooksAsync(
+                It.Is<IReadOnlyList<string>>(ids => ids.SequenceEqual(new[] { "a" })),
+                "收藏",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelShelfState>.Success(new NovelShelfState(
+                [new NovelShelf("收藏", ["a"])],
+                ["b"])));
+        var sut = CreateSut(novelService: library, shelfService: shelves.Object);
+        await sut.InitializeAsync();
+
+        await sut.MoveBooksToShelfCommand.ExecuteAsync(
+            new NovelShelfMoveRequest(["a"], "收藏"));
+
+        sut.RailSections.Should().ContainSingle();
+        sut.RailSections[0].Books.Select(item => item.Book.Id).Should().Equal("a");
+        sut.UnshelvedBooks.Select(item => item.Book.Id).Should().Equal("b");
+        shelves.VerifyAll();
+    }
+
     private static NovelLibraryPageViewModel CreateSut(
         INovelLibraryService? novelService = null,
         IDialogService? dialogService = null,
@@ -309,8 +379,8 @@ public class NovelLibraryPageViewModelTests
         FakeMessenger? messenger = null,
         ISasayakiMatchService? sasayakiMatchService = null,
         ISettingsService? settingsService = null,
-        INovelStatisticsDashboardService? statisticsDashboardService = null
-        ,
+        INovelStatisticsDashboardService? statisticsDashboardService = null,
+        INovelShelfService? shelfService = null,
         ITtuSyncRemoteStore? syncRemoteStore = null,
         ITtuBookImportService? ttuBookImportService = null,
         IGoogleDriveAuthService? googleDriveAuthService = null
@@ -336,10 +406,19 @@ public class NovelLibraryPageViewModelTests
             sasayakiMatchService ?? Mock.Of<ISasayakiMatchService>(),
             settingsService ?? Mock.Of<ISettingsService>(s => s.Current == new AppSettings()),
             statisticsDashboardService ?? dashboardMock.Object,
+            shelfService ?? CreateDefaultShelfService(),
             syncRemoteStore ?? new FakeTtuSyncRemoteStore(),
             ttuBookImportService ?? new FakeTtuBookImportService(),
             googleDriveAuthService ?? new FakeGoogleDriveAuthService { HasCredentials = true }
         );
+    }
+
+    private static INovelShelfService CreateDefaultShelfService()
+    {
+        var service = new Mock<INovelShelfService>();
+        service.Setup(value => value.LoadAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelShelfState>.Success(new NovelShelfState([], [])));
+        return service.Object;
     }
 
     private static TtuRemoteBook RemoteBook(

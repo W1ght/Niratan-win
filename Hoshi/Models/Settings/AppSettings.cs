@@ -18,6 +18,7 @@ public class AppSettings
     public ShortcutConfiguration ShortcutConfiguration { get; set; } = new();
     public AnkiSettings AnkiSettings { get; set; } = new();
     public NovelLibrarySortOption NovelLibrarySortOption { get; set; } = NovelLibrarySortOption.Recent;
+    public bool BookshelfShowReading { get; set; }
     public SasayakiSettings SasayakiSettings { get; set; } = new();
     public NovelStatisticsSettings StatisticsSettings { get; set; } = new();
     public TtuSyncSettings TtuSyncSettings { get; set; } = new();
