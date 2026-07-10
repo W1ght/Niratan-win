@@ -1544,6 +1544,7 @@ function applyPopupDocumentStyle(runtime) {
 
 window.hoshiStagePopupRender = function (pendingPayload) {
   if (!pendingPayload
+      || pendingPayload.documentEpoch !== window.hoshiPopupDocumentEpoch
       || !Number.isSafeInteger(pendingPayload.generation)
       || !Array.isArray(pendingPayload.entries)
       || !Number.isSafeInteger(pendingPayload.entryCount)
@@ -1573,6 +1574,7 @@ window.hoshiStagePopupRender = function (pendingPayload) {
 // Legacy bridge kept for callers which already populated the committed runtime.
 window.hoshiInjectResults = function (entriesJson, count) {
   return window.hoshiStagePopupRender({
+    documentEpoch: window.hoshiPopupDocumentEpoch,
     generation: window.popupRenderGeneration || 0,
     entries: entriesJson,
     entryCount: count,
@@ -1580,7 +1582,8 @@ window.hoshiInjectResults = function (entriesJson, count) {
   });
 };
 
-window.hoshiCommitPopupRender = function (expectedGeneration) {
+window.hoshiCommitPopupRender = function (expectedEpoch, expectedGeneration) {
+  if (expectedEpoch !== window.hoshiPopupDocumentEpoch) return false;
   var pending = window.hoshiPendingPopupRender;
   if (!pending || pending.generation !== expectedGeneration) return false;
   window.hoshiPendingPopupRender = null;
@@ -1588,26 +1591,30 @@ window.hoshiCommitPopupRender = function (expectedGeneration) {
   return true;
 };
 
-window.hoshiCancelPopupRender = function (expectedGeneration) {
+window.hoshiCancelPopupRender = function (expectedEpoch, expectedGeneration) {
+  if (expectedEpoch !== window.hoshiPopupDocumentEpoch) return false;
   var pending = window.hoshiPendingPopupRender;
   if (!pending || pending.generation !== expectedGeneration) return false;
   window.hoshiPendingPopupRender = null;
   return true;
 };
 
-window.hoshiGetCommittedPopupGeneration = function () {
+window.hoshiGetCommittedPopupGeneration = function (expectedEpoch) {
+  if (expectedEpoch !== window.hoshiPopupDocumentEpoch) return null;
   var generation = window.popupRenderGeneration;
   return Number.isSafeInteger(generation) ? generation : null;
 };
 
-window.hoshiDiscardPopupRender = function (expectedGeneration) {
+window.hoshiDiscardPopupRender = function (expectedEpoch, expectedGeneration) {
+  if (expectedEpoch !== window.hoshiPopupDocumentEpoch) return false;
   var pending = window.hoshiPendingPopupRender;
   if (!pending || pending.generation !== expectedGeneration) return false;
   window.hoshiPendingPopupRender = null;
   return true;
 };
 
-window.hoshiAppendResults = function (entries, finalCount, expectedGeneration) {
+window.hoshiAppendResults = function (entries, finalCount, expectedEpoch, expectedGeneration) {
+  if (expectedEpoch !== window.hoshiPopupDocumentEpoch) return false;
   var pending = window.hoshiPendingPopupRender;
   if (pending && pending.generation === expectedGeneration)
     return pending.append(entries, finalCount);
@@ -1916,7 +1923,10 @@ window.renderPopup = function (pendingPayload) {
           return promoteFirstFrame();
         }
       };
-      postPopupMessage('contentPrepared', { generation: generation });
+      postPopupMessage('contentPrepared', {
+        epoch: window.hoshiPopupDocumentEpoch,
+        generation: generation
+      });
       return true;
     }
 
@@ -1955,7 +1965,10 @@ window.renderPopup = function (pendingPayload) {
         textLength: entryDiv.innerText.length,
         elapsedMs: performance.now() - renderStart
       });
-      postPopupMessage('contentReady', { generation: generation });
+      postPopupMessage('contentReady', {
+        epoch: window.hoshiPopupDocumentEpoch,
+        generation: generation
+      });
       requestAnimationFrame(function () {
         getPopupScrollElement().scrollTop = 0;
       });
@@ -2131,4 +2144,4 @@ document.addEventListener('scroll', function (event) {
 }, { passive: true, capture: true });
 
 // Notify host that the popup shell is ready
-postPopupMessage('shellReady', null);
+postPopupMessage('shellReady', { epoch: window.hoshiPopupDocumentEpoch });

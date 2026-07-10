@@ -204,7 +204,7 @@ git commit -m "test(dictionary): model popup display transactions"
 
 **Interfaces:**
 - Consumes: a complete pending payload containing generation, entries, styles, display settings, trace, audio, and Anki state.
-- Produces: contentPrepared, window.hoshiCommitPopupRender(generation), window.hoshiCancelPopupRender(generation), and contentReady after native acknowledgement.
+- Produces: epoch-tagged contentPrepared, window.hoshiCommitPopupRender(epoch, generation), window.hoshiCancelPopupRender(epoch, generation), and epoch-tagged contentReady after native acknowledgement.
 
 - [ ] **Step 1: Add a failing asset test**
 
@@ -519,8 +519,17 @@ Third-review hardening protocol:
 2. Add exact-generation `TryAbortCommit`. Aborting clears only the matching accepted generation and preserves previous committed generation/context.
 3. Route `hoshiCommitPopupRender(generation)` through a non-blocking async helper with a bounded timeout. `ShowResultsWarmAsync`, `contentPrepared`, and the lookup caller never await ready or commit acknowledgement.
 4. Treat matching `contentReady` and a parsed script result of `true` as idempotent completion signals. A `false` result aborts immediately.
-5. On script exception/timeout, call `hoshiGetCommittedPopupGeneration()`. Complete when it equals the accepted generation; otherwise call narrow `hoshiDiscardPopupRender(generation)`, abort native ownership, preserve prior native context, and resume the latest queued request.
+5. On script exception/timeout, call `hoshiGetCommittedPopupGeneration()`. Complete when it equals the accepted generation; otherwise call narrow `hoshiDiscardPopupRender(generation)` and reconcile. The unavailable-renderer abort portion of this third-review step is superseded by the fourth-review forced-shell protocol below.
 6. Extract executable coordination tests for concurrent warm success/failure retry and commit true/false/exception/timeout/ready races plus queue recovery. Keep source assertions only for WebView bridge wiring.
+
+Fourth-review renderer epoch and recovery protocol:
+
+1. Allocate a non-reusable document epoch for every popup shell navigation. Native stage/commit/query/discard/cancel/append commands carry epoch, and JavaScript rejects commands whose epoch differs from the current document. Shell/prepared/ready messages carry the same epoch.
+2. Replace the reusable shell-ready completion with per-epoch waiters. A stale shell message cannot warm a newer operation.
+3. Give every single-flight warm operation a cancellation/version lease. `Reset` immediately cancels its public task, and the operation validates the lease before event subscription, navigation, shell-ready completion, success publication, and return. Event subscriptions remain single-install.
+4. When commit reconciliation cannot reach the renderer, preserve accepted ownership and the latest queue. Reset warm state, navigate a fresh shell, and wait for its strictly newer epoch `shellReady`; only then exact-abort the old generation and start the latest request in the fresh epoch.
+5. If recovery fails, retain the old native committed context, accepted ownership, staged context, and latest queue. A future request retries recovery. Guard ProcessFailed, Hide, recovery failure, and recovery completion with generation + failed epoch + attempt tickets.
+6. Add executable tests proving Reset immediately faults an old warm caller and ignores its late success, stale epoch commands do not match a fresh document, recovery does not release the queue before a newer epoch is ready, failed attempts retain ownership, and the fresh epoch consumes only the latest request.
 
 - [ ] **Step 8: Run GREEN**
 

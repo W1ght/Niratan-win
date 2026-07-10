@@ -27,9 +27,9 @@ public sealed class PopupHtmlGenerator
             : "";
     }
 
-    public string GenerateShellHtml(ThemeMode themeMode = ThemeMode.System, DictionaryDisplaySettings? settings = null, AudioSettings? audioSettings = null, AnkiSettings? ankiSettings = null, bool hidden = false)
+    public string GenerateShellHtml(ThemeMode themeMode = ThemeMode.System, DictionaryDisplaySettings? settings = null, AudioSettings? audioSettings = null, AnkiSettings? ankiSettings = null, bool hidden = false, long documentEpoch = 0)
     {
-        return GenerateHtml([], new Dictionary<string, string>(), settings, themeMode, audioSettings: audioSettings, ankiSettings: ankiSettings, hidden: hidden);
+        return GenerateHtml([], new Dictionary<string, string>(), settings, themeMode, audioSettings: audioSettings, ankiSettings: ankiSettings, hidden: hidden, documentEpoch: documentEpoch);
     }
 
     public string GenerateHtml(
@@ -40,7 +40,8 @@ public sealed class PopupHtmlGenerator
         long renderGeneration = 0,
         AudioSettings? audioSettings = null,
         AnkiSettings? ankiSettings = null,
-        bool hidden = false)
+        bool hidden = false,
+        long documentEpoch = 0)
     {
         var settings = displaySettings ?? new DictionaryDisplaySettings();
         var entriesJson = SerializeLookupEntries(results);
@@ -90,6 +91,7 @@ window.scanNonJapaneseText = {BoolToJs(settings.ScanNonJapaneseText)};
 window.maxResults = {settings.MaxResults};
 window.scanLength = {settings.ScanLength};
 window.popupRenderGeneration = {renderGeneration};
+window.hoshiPopupDocumentEpoch = {documentEpoch};
 window.lookupTraceId = '';
 window.audioSources = {SerializeAudioSources(audioSettings)};
 window.audioPlaybackMode = '{PlaybackModeText(audioSettings)}';
@@ -292,7 +294,8 @@ window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlos
         AudioSettings? audioSettings = null,
         AnkiSettings? ankiSettings = null,
         string? traceId = null,
-        int? totalResultCount = null)
+        int? totalResultCount = null,
+        long documentEpoch = 0)
     {
         var settings = displaySettings ?? new DictionaryDisplaySettings();
         var entriesJson = SerializeLookupEntries(results);
@@ -303,6 +306,7 @@ window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlos
 
         return $@"
 window.hoshiStagePopupRender({{
+    documentEpoch: {documentEpoch},
     generation: {renderGeneration},
     entries: {entriesJson},
     entryCount: {finalResultCount},
@@ -339,13 +343,14 @@ window.hoshiStagePopupRender({{
     public string GenerateAppendResultsScript(
         List<DictionaryLookupResult> results,
         int totalResultCount,
-        long renderGeneration)
+        long renderGeneration,
+        long documentEpoch = 0)
     {
         var entriesJson = SerializeLookupEntries(results);
         return $$"""
 (() => {
     if (typeof window.hoshiAppendResults !== 'function') return 'bridge-missing';
-    return window.hoshiAppendResults({{entriesJson}}, {{totalResultCount}}, {{renderGeneration}})
+    return window.hoshiAppendResults({{entriesJson}}, {{totalResultCount}}, {{documentEpoch}}, {{renderGeneration}})
         ? 'appended'
         : 'stale';
 })()

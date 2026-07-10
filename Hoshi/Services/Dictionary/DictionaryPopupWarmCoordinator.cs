@@ -1,14 +1,36 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Hoshi.Services.Dictionary;
 
+internal readonly record struct DictionaryPopupWarmLease(
+    long Version,
+    CancellationToken CancellationToken,
+    Func<long, bool> IsCurrent)
+{
+    public void ThrowIfInvalid()
+    {
+        CancellationToken.ThrowIfCancellationRequested();
+        if (!IsCurrent(Version))
+            throw new OperationCanceledException("Popup warm operation was superseded.", CancellationToken);
+    }
+}
+
 internal sealed class DictionaryPopupWarmCoordinator
 {
+    private sealed class WarmOperation(long version)
+    {
+        public long Version { get; } = version;
+        public CancellationTokenSource Cancellation { get; } = new();
+        public TaskCompletionSource Completion { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
     private readonly object _gate = new();
-    private Task? _warmTask;
+    private WarmOperation? _operation;
     private bool _isWarm;
-    private int _version;
+    private long _version;
 
     public bool IsWarm
     {
@@ -19,63 +41,88 @@ internal sealed class DictionaryPopupWarmCoordinator
         }
     }
 
-    public Task EnsureWarmAsync(Func<Task> warmAsync)
+    public Task EnsureWarmAsync(Func<DictionaryPopupWarmLease, Task> warmAsync)
     {
         ArgumentNullException.ThrowIfNull(warmAsync);
+        WarmOperation operation;
 
         lock (_gate)
         {
             if (_isWarm)
                 return Task.CompletedTask;
-            if (_warmTask is not null)
-                return _warmTask;
+            if (_operation is not null)
+                return _operation.Completion.Task;
 
-            var completion = new TaskCompletionSource(
-                TaskCreationOptions.RunContinuationsAsynchronously);
-            var task = completion.Task;
-            var version = _version;
-            _warmTask = task;
-            _ = RunWarmAsync(warmAsync, completion, task, version);
-            return task;
+            operation = new WarmOperation(++_version);
+            _operation = operation;
         }
+
+        _ = RunWarmAsync(warmAsync, operation);
+        return operation.Completion.Task;
     }
 
     public void Reset()
     {
+        WarmOperation? operation;
         lock (_gate)
         {
             _version++;
             _isWarm = false;
-            _warmTask = null;
+            operation = _operation;
+            _operation = null;
         }
+
+        if (operation is null)
+            return;
+        operation.Cancellation.Cancel();
+        operation.Completion.TrySetCanceled(operation.Cancellation.Token);
+    }
+
+    private bool IsCurrent(long version)
+    {
+        lock (_gate)
+            return _operation?.Version == version && _version == version;
     }
 
     private async Task RunWarmAsync(
-        Func<Task> warmAsync,
-        TaskCompletionSource completion,
-        Task task,
-        int version)
+        Func<DictionaryPopupWarmLease, Task> warmAsync,
+        WarmOperation operation)
     {
+        var lease = new DictionaryPopupWarmLease(
+            operation.Version,
+            operation.Cancellation.Token,
+            IsCurrent);
         try
         {
-            await warmAsync();
+            await warmAsync(lease);
+            lease.ThrowIfInvalid();
             lock (_gate)
             {
-                if (version == _version)
-                    _isWarm = true;
-                if (ReferenceEquals(_warmTask, task))
-                    _warmTask = null;
+                if (!ReferenceEquals(_operation, operation)
+                    || _version != operation.Version)
+                {
+                    throw new OperationCanceledException(
+                        "Popup warm operation was superseded.",
+                        operation.Cancellation.Token);
+                }
+
+                _operation = null;
+                _isWarm = true;
             }
-            completion.TrySetResult();
+            operation.Completion.TrySetResult();
         }
         catch (Exception ex)
         {
             lock (_gate)
             {
-                if (ReferenceEquals(_warmTask, task))
-                    _warmTask = null;
+                if (ReferenceEquals(_operation, operation))
+                    _operation = null;
             }
-            completion.TrySetException(ex);
+            operation.Completion.TrySetException(ex);
+        }
+        finally
+        {
+            operation.Cancellation.Dispose();
         }
     }
 }

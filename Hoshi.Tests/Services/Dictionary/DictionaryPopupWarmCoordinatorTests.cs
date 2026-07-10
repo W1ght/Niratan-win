@@ -12,7 +12,7 @@ public class DictionaryPopupWarmCoordinatorTests
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var calls = 0;
 
-        Task WarmAsync()
+        Task WarmAsync(DictionaryPopupWarmLease lease)
         {
             calls++;
             return release.Task;
@@ -27,7 +27,7 @@ public class DictionaryPopupWarmCoordinatorTests
         await Task.WhenAll(first, second);
         coordinator.IsWarm.Should().BeTrue();
 
-        await coordinator.EnsureWarmAsync(() => throw new InvalidOperationException());
+        await coordinator.EnsureWarmAsync(_ => throw new InvalidOperationException());
         calls.Should().Be(1);
     }
 
@@ -37,7 +37,7 @@ public class DictionaryPopupWarmCoordinatorTests
         var coordinator = new DictionaryPopupWarmCoordinator();
         var calls = 0;
 
-        Func<Task> warm = () =>
+        Func<DictionaryPopupWarmLease, Task> warm = _ =>
         {
             calls++;
             return calls == 1
@@ -58,12 +58,42 @@ public class DictionaryPopupWarmCoordinatorTests
     {
         var coordinator = new DictionaryPopupWarmCoordinator();
         var calls = 0;
-        await coordinator.EnsureWarmAsync(() => { calls++; return Task.CompletedTask; });
+        await coordinator.EnsureWarmAsync(_ => { calls++; return Task.CompletedTask; });
 
         coordinator.Reset();
-        await coordinator.EnsureWarmAsync(() => { calls++; return Task.CompletedTask; });
+        await coordinator.EnsureWarmAsync(_ => { calls++; return Task.CompletedTask; });
 
         calls.Should().Be(2);
+        coordinator.IsWarm.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Reset_FaultsInProgressCallerImmediately_AndLateDelegateSuccessIsIgnored()
+    {
+        var coordinator = new DictionaryPopupWarmCoordinator();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishLate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var oldCaller = coordinator.EnsureWarmAsync(async lease =>
+        {
+            started.SetResult();
+            await finishLate.Task; // deliberately ignores the cancelled lease
+        });
+        await started.Task;
+
+        coordinator.Reset();
+        Func<Task> awaitOldCaller = async () => await oldCaller;
+        await awaitOldCaller.Should().ThrowAsync<OperationCanceledException>();
+
+        finishLate.SetResult();
+        await Task.Yield();
+        coordinator.IsWarm.Should().BeFalse();
+
+        await coordinator.EnsureWarmAsync(lease =>
+        {
+            lease.ThrowIfInvalid();
+            return Task.CompletedTask;
+        });
         coordinator.IsWarm.Should().BeTrue();
     }
 }

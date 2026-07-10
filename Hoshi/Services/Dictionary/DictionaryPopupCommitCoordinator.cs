@@ -50,7 +50,8 @@ internal static class DictionaryPopupCommitCoordinator
         }
         catch (Exception)
         {
-            // Treat an unavailable renderer as not committed and abort native ownership.
+            // An unavailable renderer requires a fresh document before native
+            // ownership can be released safely.
         }
 
         if (committedGeneration == generation)
@@ -65,7 +66,8 @@ internal static class DictionaryPopupCommitCoordinator
         }
         catch (Exception)
         {
-            // Best effort only; exact native abort still releases the queue.
+            // Best effort only. If the renderer query was unavailable, the
+            // caller will force a fresh shell before releasing ownership.
         }
 
         onResolved(rendererAvailable

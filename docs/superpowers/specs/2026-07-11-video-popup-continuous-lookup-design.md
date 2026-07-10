@@ -82,7 +82,7 @@ overlay 截获输入后，再换算并调用字幕命中。
 
 `PopupHtmlGenerator` 不再先覆盖 `window.lookupEntries`、样式、音频、Anki 或 trace 等 committed 全局状态，而是把新 generation 的完整渲染上下文作为 pending payload 交给 `popup.js`。`popup.js` 在独立暂存容器中构造首个词条，保留 committed DOM 和 committed 交互上下文，然后发送带 generation 的 `contentPrepared`。
 
-native 收到 `contentPrepared` 后，必须再次校验 lookup request、generation 和取消令牌。只有仍为当前的 generation 才会收到 `hoshiCommitPopupRender(generation)`；JavaScript 随后在同一个同步任务中提升 pending 全局上下文、原子替换 DOM，并发送 `contentReady`。native 不在查词路径等待任一消息。
+native 收到 `contentPrepared` 后，必须再次校验 lookup request、document epoch、generation 和取消令牌。只有仍属于当前文档的 generation 才会收到 `hoshiCommitPopupRender(epoch, generation)`；JavaScript 随后在同一个同步任务中提升 pending 全局上下文、原子替换 DOM，并发送带 epoch 的 `contentReady`。native 不在查词路径等待任一消息。
 
 native 发出 commit 命令前把该 generation 线性化为 **commit-in-flight**。commit-in-flight 不能被后来取消或新的 `BeginPending` 覆盖；后续查词仍可完成 native lookup，但 popup 只保存一个 latest queued replacement，并在当前 generation 的 `contentReady` 后异步启动，调用方不等待 ready。这样 commit 命令与取消命令不存在“先提交 DOM、后清除 native 所有权”的窗口。
 
@@ -90,7 +90,11 @@ native 发出 commit 命令前把该 generation 线性化为 **commit-in-flight*
 
 native commit acknowledgement 由非阻塞 async helper 执行并观察 `ExecuteScriptAsync` 的布尔结果；查词路径仍不 await。`contentReady` 与成功的脚本返回都可以幂等完成相同 generation。脚本返回 `false` 时立即精确 abort accepted commit。脚本异常或超时时，native 通过窄接口查询 JavaScript 当前 committed generation：若与 accepted generation 匹配则完成 native commit；否则精确 abort，并保留之前 committed DOM/native context。无论 abort 或对账完成，都必须释放 commit-in-flight 并异步启动 latest queued replacement。
 
-JavaScript 只暴露 generation-scoped 的 `hoshiGetCommittedPopupGeneration()` 与必要的 `hoshiDiscardPopupRender(generation)`；查询不得返回词条或扩大 native API。若 WebView process 已失效，native 必须 abort accepted generation、重置 warm 状态并允许 queued/后续请求重新创建 WebView。
+每次 popup shell 初始化分配不可复用且单调递增的 document epoch。stage、commit、query、discard、cancel 和 append 命令都携带 epoch；JavaScript 对不等于当前 `window.hoshiPopupDocumentEpoch` 的命令立即拒绝。`shellReady`、`contentPrepared` 和 `contentReady` 也回传 epoch，旧文档的迟到消息不能满足新文档 waiter 或完成 native transaction。
+
+JavaScript 只暴露 epoch + generation-scoped 的 `hoshiGetCommittedPopupGeneration(epoch)` 与必要的 `hoshiDiscardPopupRender(epoch, generation)`；查询不得返回词条或扩大 native API。若 commit/query 无法确认 renderer 状态，不能立即 abort accepted generation：native 保持旧 committed native context、accepted ownership 和唯一 latest queue，强制使 warm shell 失效并导航到带新 epoch 的空 shell。只有收到该新 epoch 的 `shellReady` 后，旧 DOM 已被导航销毁，native 才精确 abort 旧 accepted generation、清理 staged context，并在新 epoch shell 中启动 latest request。恢复失败只结束本次 recovery attempt，不释放 ownership 或 queue；后续请求触发同一 generation + failed epoch 的新 attempt。
+
+`WarmAsync` 的 single-flight operation 带 cancellation/version lease。`Reset` 必须立即取消旧 caller；旧 operation 在订阅事件、导航、接受 shell-ready、完成和返回前都验证 lease，迟到成功不能把 warm 标记为成功或重复初始化。WebView 事件订阅只安装一次。ProcessFailed、Hide 和 recovery completion 都用 recovery ticket 的 generation、failed epoch 和 attempt guard，过期回调不能操作新 transaction。
 
 `_currentTraceId`、音频设置、Anki 设置、mining context 和 Sasayaki 控件上下文也属于 committed native interaction context。新查询只把这些值放进 generation-scoped pending context；收到匹配 `contentReady` 后才整体提升。旧 popup 可交互期间始终使用旧 native context。
 
@@ -126,9 +130,10 @@ native 层在已有 committed 内容时不把 `VisualRoot.Opacity` 或 `IsHitTes
 7. commit 线性化：commit-in-flight 不会被新请求覆盖；新请求只替换 latest queued replacement，并在 ready 后异步启动。
 8. native 上下文：pending 期间音频、Anki、mining、trace 和 Sasayaki 仍属于 committed 内容，ready 后才整体切换。
 9. warm single-flight：并发 cold caller 只执行一次初始化；失败可重试，request-local payload 不串线。
-10. commit 对账：覆盖 true/false、异常、超时、ready/结果竞态、WebView process 失效与 latest queue 恢复。
-11. 点外关闭：非字幕空白仍关闭 popup；popup 内滚动、音频、Anki 和嵌套查词不触发关闭。
-12. 运行视频字幕专项测试、字典 popup 测试和全量 x64 测试；实机验证同一字幕连续单击、Shift hover、无结果词和快速移动竞态。
+10. commit 对账与 renderer 恢复：覆盖 true/false、异常、超时、ready/结果竞态、迟到旧 epoch commit、新 epoch shell-ready、WebView process 失效、恢复失败保留 ownership，以及 fresh epoch 中启动 latest queue。
+11. warm reset：旧 warm caller 立即取消，旧 delegate 的迟到成功不能覆盖新 operation 或重复订阅/导航。
+12. 点外关闭：非字幕空白仍关闭 popup；popup 内滚动、音频、Anki 和嵌套查词不触发关闭。
+13. 运行视频字幕专项测试、字典 popup 测试和全量 x64 测试；实机验证同一字幕连续单击、Shift hover、无结果词和快速移动竞态。
 
 ## 非目标
 

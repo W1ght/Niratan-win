@@ -1045,9 +1045,9 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs")
         );
 
-        popupCode.Should().Contain("_shellReadyCompletion");
+        popupCode.Should().Contain("_shellReadyWaiters");
         popupCode.Should().Contain("WaitForShellReadyAsync");
-        popupCode.Should().Contain("await EnsureWebViewAsync();");
+        popupCode.Should().Contain("await EnsureWebViewAsync(lease);");
         popupCode.Should().Contain("GenerateInjectionScript");
         popupCode.Should().NotContain("public async Task ShowResultsNavigatedAsync");
         popupCode.Should().NotContain("GenerateHtml(results");
@@ -1108,9 +1108,9 @@ public class NovelReaderWebAssetTests
         popupCode.Should().NotContain("DictionaryPopupMaterial.ApplyTheme");
         popupCode.Should().NotContain("_contentWebView.DefaultBackgroundColor = isDark ? Colors.Black : Colors.White;");
         popupCode.Should().NotContain("SetTheme(");
-        popupCode.Should().Contain("await EnsureWebViewAsync();");
+        popupCode.Should().Contain("await EnsureWebViewAsync(lease);");
         popupCode.Should().MatchRegex(
-            @"(?s)await _contentWebView\.EnsureCoreWebView2Async\(environment\);\s*_contentWebView\.DefaultBackgroundColor = _surfaceBrush\.Color;");
+            @"(?s)await _contentWebView\.EnsureCoreWebView2Async\(environment\);.*?_contentWebView\.DefaultBackgroundColor = _surfaceBrush\.Color;");
         popupCode.Should().Contain("ApplyPopupCornerRadiusToWebViewAsync");
         popupCode.Should().NotContain("_snapshotAcrylicImage");
         popupCode.Should().NotContain("SetSnapshotAcrylicBackgroundAsync");
@@ -1706,13 +1706,14 @@ public class NovelReaderWebAssetTests
         popupJs.Should().Contain("generation !== (window.popupRenderGeneration || 0)");
         popupJs.Should().Contain("document.documentElement.style.visibility = 'hidden'");
         popupJs.Should().Contain("document.documentElement.style.visibility = 'visible'");
-        popupJs.Should().Contain("postPopupMessage('contentPrepared', { generation: generation })");
-        popupJs.Should().Contain("postPopupMessage('contentReady', { generation: generation })");
-        popupJs.Split(
-                "postPopupMessage('contentReady', { generation: generation });",
-                StringSplitOptions.None)
-            .Should()
-            .HaveCount(2);
+        popupJs.Should().MatchRegex(
+            @"postPopupMessage\('contentPrepared',\s*\{\s*epoch: window\.hoshiPopupDocumentEpoch,\s*generation: generation\s*\}\)");
+        popupJs.Should().MatchRegex(
+            @"postPopupMessage\('contentReady',\s*\{\s*epoch: window\.hoshiPopupDocumentEpoch,\s*generation: generation\s*\}\)");
+        System.Text.RegularExpressions.Regex.Matches(
+                popupJs,
+                @"postPopupMessage\('contentReady',\s*\{\s*epoch: window\.hoshiPopupDocumentEpoch,\s*generation: generation\s*\}\);")
+            .Should().HaveCount(1);
         popupJs.Should().Contain("function commitFirstFrame(generation, entryDiv)");
         popupJs.Should().Contain("function renderAvailableEntries()");
         popupJs.Should().Contain("postPopupMessage('tapOutside', null);");
@@ -1750,11 +1751,14 @@ public class NovelReaderWebAssetTests
         code.Should().Contain("_warmCoordinator.EnsureWarmAsync(");
         code.Should().Contain("_warmCoordinator.Reset();");
         code.Should().Contain("DictionaryPopupCommitCoordinator.ObserveAsync(");
-        code.Should().Contain("private void CompleteAcceptedCommit(long generation)");
-        code.Should().Contain("private void AbortAcceptedCommit(long generation)");
+        code.Should().Contain("private void CompleteAcceptedCommit(long generation, long documentEpoch)");
+        code.Should().Contain("private void AbortAcceptedCommit(long generation, long documentEpoch)");
         code.Should().Contain("_displayTransaction.TryAbortCommit(generation)");
         code.Should().Contain("OnPopupWebViewProcessFailed");
-        code.Should().Contain("await readyTask;");
+        code.Should().Contain("await WaitForShellReadyAsync(documentEpoch, shellReady.Task, lease);");
+        code.Should().Contain("private void StartForcedShellRecovery(long generation, long failedEpoch)");
+        code.Should().Contain("CompleteForcedShellRecovery(ticket, freshEpoch)");
+        code.Should().Contain("_recoveryCoordinator.TryComplete(ticket, freshEpoch)");
         code.Should().Contain("_queuedShowRequests.Replace(request);");
         code.Should().Contain("_queuedShowRequests.Clear();");
         code.Should().Contain("_displayTransaction.CommitInFlightGeneration is not null");
@@ -1882,12 +1886,13 @@ public class NovelReaderWebAssetTests
         js.Should().Contain("window.hoshiStagePopupRender = function (pendingPayload)");
         js.Should().Contain("var liveContainer = document.getElementById('entries-container');");
         js.Should().Contain("var stagingContainer = document.createElement('div');");
-        js.Should().Contain("postPopupMessage('contentPrepared', { generation: generation })");
-        js.Should().Contain("window.hoshiCommitPopupRender = function (expectedGeneration)");
+        js.Should().MatchRegex(
+            @"postPopupMessage\('contentPrepared',\s*\{\s*epoch: window\.hoshiPopupDocumentEpoch,\s*generation: generation\s*\}\)");
+        js.Should().Contain("window.hoshiCommitPopupRender = function (expectedEpoch, expectedGeneration)");
         js.Should().Contain("liveContainer.replaceChildren.apply(liveContainer");
-        js.Should().Contain("window.hoshiCancelPopupRender = function (expectedGeneration)");
-        js.Should().Contain("window.hoshiGetCommittedPopupGeneration = function ()");
-        js.Should().Contain("window.hoshiDiscardPopupRender = function (expectedGeneration)");
+        js.Should().Contain("window.hoshiCancelPopupRender = function (expectedEpoch, expectedGeneration)");
+        js.Should().Contain("window.hoshiGetCommittedPopupGeneration = function (expectedEpoch)");
+        js.Should().Contain("window.hoshiDiscardPopupRender = function (expectedEpoch, expectedGeneration)");
         js.Should().Contain("window.hoshiPendingPopupRender");
         js.Should().Contain("function attachPopupInteractionHandlers()");
 
@@ -1914,8 +1919,8 @@ public class NovelReaderWebAssetTests
         injection.Should().NotContain("window.audioSources =");
         injection.Should().NotContain("window.useAnkiConnect =");
 
-        var prepared = js.IndexOf("postPopupMessage('contentPrepared', { generation: generation });", StringComparison.Ordinal);
-        var ready = js.IndexOf("postPopupMessage('contentReady', { generation: generation });", StringComparison.Ordinal);
+        var prepared = js.IndexOf("postPopupMessage('contentPrepared', {", StringComparison.Ordinal);
+        var ready = js.IndexOf("postPopupMessage('contentReady', {", StringComparison.Ordinal);
         var attachHandlers = js.IndexOf("attachPopupInteractionHandlers();", prepared, StringComparison.Ordinal);
         prepared.Should().BeGreaterThanOrEqualTo(0);
         attachHandlers.Should().BeGreaterThan(prepared);
