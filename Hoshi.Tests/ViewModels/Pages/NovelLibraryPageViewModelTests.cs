@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using FluentAssertions;
 using CommunityToolkit.Mvvm.Input;
 using Moq;
@@ -357,6 +358,79 @@ public class NovelLibraryPageViewModelTests
     }
 
     [Fact]
+    public async Task DownloadRemoteBookCommand_RunsThreeImportsAndQueuesFourth()
+    {
+        var importer = new ControlledTtuBookImportService();
+        var sut = CreateSut(ttuBookImportService: importer);
+        sut.RemoteBooks = new([
+            RemoteItem("a"),
+            RemoteItem("b"),
+            RemoteItem("c"),
+            RemoteItem("d"),
+        ]);
+
+        var tasks = sut.RemoteBooks
+            .Select(item => sut.DownloadRemoteBookCommand.ExecuteAsync(item))
+            .ToArray();
+        await importer.WaitForStartedCountAsync(3);
+
+        importer.StartedIds.Should().BeEquivalentTo(["a", "b", "c"]);
+        sut.RemoteBooks.Single(item => item.Book.Id == "d").DownloadState
+            .Should().Be(RemoteNovelDownloadState.Queued);
+
+        importer.Complete("a");
+        await importer.WaitForStartedCountAsync(4);
+        importer.StartedIds.Should().Contain("d");
+        importer.CompleteAll();
+        await Task.WhenAll(tasks);
+    }
+
+    [Fact]
+    public async Task CompletedImport_DoesNotCancelAnotherActiveImport()
+    {
+        var importer = new ControlledTtuBookImportService();
+        var sut = CreateSut(ttuBookImportService: importer);
+        var first = RemoteItem("a");
+        var second = RemoteItem("b");
+        sut.RemoteBooks = new([first, second]);
+        var firstTask = sut.DownloadRemoteBookCommand.ExecuteAsync(first);
+        var secondTask = sut.DownloadRemoteBookCommand.ExecuteAsync(second);
+        await importer.WaitForStartedCountAsync(2);
+
+        importer.Complete("a");
+        await firstTask;
+
+        importer.TokenFor("b").IsCancellationRequested.Should().BeFalse();
+        importer.Complete("b");
+        await secondTask;
+    }
+
+    [Fact]
+    public async Task FailedImport_LeavesOtherImportsRunningAndCardRetryable()
+    {
+        var importer = new ControlledTtuBookImportService();
+        var notification = new Mock<INotificationService>();
+        var sut = CreateSut(
+            ttuBookImportService: importer,
+            notificationService: notification.Object);
+        var failed = RemoteItem("a");
+        var active = RemoteItem("b");
+        sut.RemoteBooks = new([failed, active]);
+        var failedTask = sut.DownloadRemoteBookCommand.ExecuteAsync(failed);
+        var activeTask = sut.DownloadRemoteBookCommand.ExecuteAsync(active);
+        await importer.WaitForStartedCountAsync(2);
+
+        importer.Fail("a", "network");
+        await failedTask;
+
+        failed.DownloadState.Should().Be(RemoteNovelDownloadState.Failed);
+        failed.CanRetry.Should().BeTrue();
+        importer.TokenFor("b").IsCancellationRequested.Should().BeFalse();
+        importer.Complete("b");
+        await activeTask;
+    }
+
+    [Fact]
     public async Task InitializeAsync_ProjectsReadingCustomAndUnshelvedSectionsWithWarnings()
     {
         var books = new[]
@@ -578,6 +652,9 @@ public class NovelLibraryPageViewModelTests
                         ThumbnailLink: $"https://thumb.test/{coverId}=s220")),
             Progress: 0.25);
 
+    private static RemoteNovelBookItemViewModel RemoteItem(string id) =>
+        new(RemoteBook(id, id.ToUpperInvariant(), id.ToUpperInvariant()));
+
     private static readonly byte[] PngBytes = Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
 
@@ -725,6 +802,66 @@ public class NovelLibraryPageViewModelTests
                 Title = remoteBook.Title,
                 FilePath = "D:\\Books\\remote.epub",
             }));
+        }
+    }
+
+    private sealed class ControlledTtuBookImportService : ITtuBookImportService
+    {
+        private readonly ConcurrentDictionary<
+            string,
+            TaskCompletionSource<Result<NovelBook>>> _results = new();
+        private readonly ConcurrentDictionary<string, CancellationToken> _tokens = new();
+        private readonly SemaphoreSlim _started = new(0);
+        private int _observedStarts;
+
+        public ConcurrentQueue<string> StartedIds { get; } = new();
+
+        public Task<Result<NovelBook>> ImportRemoteBookAsync(
+            TtuRemoteBook remoteBook,
+            TtuBookImportOptions options,
+            IProgress<double>? progress = null,
+            CancellationToken ct = default)
+        {
+            StartedIds.Enqueue(remoteBook.Id);
+            _tokens[remoteBook.Id] = ct;
+            _started.Release();
+            return _results.GetOrAdd(
+                remoteBook.Id,
+                _ => new TaskCompletionSource<Result<NovelBook>>(
+                    TaskCreationOptions.RunContinuationsAsynchronously)).Task.WaitAsync(ct);
+        }
+
+        public async Task WaitForStartedCountAsync(int count)
+        {
+            while (_observedStarts < count)
+            {
+                (await _started.WaitAsync(
+                    TimeSpan.FromSeconds(2),
+                    TestContext.Current.CancellationToken)).Should().BeTrue();
+                _observedStarts++;
+            }
+        }
+
+        public CancellationToken TokenFor(string id) => _tokens[id];
+
+        public void Complete(string id) =>
+            _results[id].SetResult(Result<NovelBook>.Success(new NovelBook
+            {
+                Id = id,
+                Title = id,
+                FilePath = $"D:\\Books\\{id}.epub",
+            }));
+
+        public void Fail(string id, string error) =>
+            _results[id].SetResult(Result<NovelBook>.Failure(error, "Import failed"));
+
+        public void CompleteAll()
+        {
+            foreach (var id in StartedIds.Distinct())
+            {
+                if (!_results[id].Task.IsCompleted)
+                    Complete(id);
+            }
         }
     }
 

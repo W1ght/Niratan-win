@@ -126,6 +126,9 @@
                                      Maximum="1"
                                      Value="{x:Bind DownloadProgress, Mode=OneWay}"
                                      Visibility="{x:Bind IsDownloading, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="{x:Bind DownloadStatusText, Mode=OneWay}"
+                                   Visibility="{x:Bind HasDownloadStatus, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
                         <TextBlock Text="{x:Bind Book.Title, Mode=OneTime}"
                                    TextWrapping="Wrap"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
