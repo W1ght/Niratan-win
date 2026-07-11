@@ -821,4 +821,7 @@
   <data name="NovelStatisticsWeeklyTargetControl.AutomationProperties.Name" xml:space="preserve"><value>每周目标天数</value></data>
   <data name="NovelStatisticsCalendarControl.AutomationProperties.Name" xml:space="preserve"><value>阅读日历</value></data>
   <data name="NovelStatisticsRankingMetricControl.AutomationProperties.Name" xml:space="preserve"><value>书籍排行指标</value></data>
+  <data name="RemoteNovelDownloadQueued" xml:space="preserve"><value>等待下载</value></data>
+  <data name="RemoteNovelDownloading" xml:space="preserve"><value>正在下载</value></data>
+  <data name="RemoteNovelDownloadRetry" xml:space="preserve"><value>重试</value></data>
 </root>

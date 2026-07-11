@@ -5,19 +5,23 @@ namespace Hoshi.Views.Controls;
 
 public sealed partial class NovelStatisticsDashboardView : UserControl
 {
+    private NovelStatisticsDashboardLayoutMode? _layoutMode;
+
     public NovelStatisticsDashboardView()
     {
         InitializeComponent();
-        Loaded += (_, _) => QueueAdaptiveLayout();
-        SizeChanged += (_, _) => QueueAdaptiveLayout();
+        Loaded += (_, _) => ApplyAdaptiveLayout(ActualWidth);
+        SizeChanged += (_, args) => ApplyAdaptiveLayout(args.NewSize.Width);
     }
-
-    private void QueueAdaptiveLayout() =>
-        DispatcherQueue.TryEnqueue(() => ApplyAdaptiveLayout(ActualWidth));
 
     private void ApplyAdaptiveLayout(double width)
     {
-        if (width >= 1260)
+        var layoutMode = NovelStatisticsDashboardLayout.Select(width);
+        if (_layoutMode == layoutMode)
+            return;
+        _layoutMode = layoutMode;
+
+        if (layoutMode == NovelStatisticsDashboardLayoutMode.Wide)
         {
             SetColumnCount(3);
             Place(TodayCard, 0, 0);
@@ -31,7 +35,7 @@ public sealed partial class NovelStatisticsDashboardView : UserControl
             return;
         }
 
-        if (width >= 840)
+        if (layoutMode == NovelStatisticsDashboardLayoutMode.Medium)
         {
             SetColumnCount(2);
             Place(TodayCard, 0, 0);

@@ -40,7 +40,13 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     private readonly ITtuSyncRemoteStore _ttuSyncRemoteStore;
     private readonly ITtuBookImportService _ttuBookImportService;
     private readonly IGoogleDriveAuthService _googleDriveAuthService;
-    private CancellationTokenSource _cts = new();
+    private readonly IGoogleDriveCoverCacheService _googleDriveCoverCacheService;
+    private readonly SemaphoreSlim _remoteCoverGate = new(6, 6);
+    private readonly SemaphoreSlim _remoteImportGate = new(3, 3);
+    private readonly SemaphoreSlim _catalogRefreshGate = new(1, 1);
+    private readonly CancellationTokenSource _pageCts = new();
+    private CancellationTokenSource? _catalogLoadCts;
+    private CancellationTokenSource? _remoteListCts;
     private bool _suppressSortApplication;
 
     [ObservableProperty]
@@ -51,10 +57,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     public partial ObservableCollection<RemoteNovelBookItemViewModel> RemoteBooks { get; set; } = new();
 
     [ObservableProperty]
-    public partial ObservableCollection<NovelShelfSectionViewModel> RailSections { get; set; } = new();
-
-    [ObservableProperty]
-    public partial ObservableCollection<NovelBookItemViewModel> UnshelvedBooks { get; set; } = new();
+    public partial ObservableCollection<NovelShelfSectionViewModel> ShelfSections { get; set; } = new();
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasNovelStorageWarnings))]
@@ -98,7 +101,8 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         INovelShelfService shelfService,
         ITtuSyncRemoteStore ttuSyncRemoteStore,
         ITtuBookImportService ttuBookImportService,
-        IGoogleDriveAuthService googleDriveAuthService
+        IGoogleDriveAuthService googleDriveAuthService,
+        IGoogleDriveCoverCacheService googleDriveCoverCacheService
     )
     {
         _novelLibraryService = novelLibraryService;
@@ -112,6 +116,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         _ttuSyncRemoteStore = ttuSyncRemoteStore;
         _ttuBookImportService = ttuBookImportService;
         _googleDriveAuthService = googleDriveAuthService;
+        _googleDriveCoverCacheService = googleDriveCoverCacheService;
         SelectedSortOption = _settingsService.Current.NovelLibrarySortOption;
         _messenger.RegisterAll(this);
     }
@@ -126,7 +131,9 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     public void OnNavigatedFrom()
     {
         StatisticsDashboard.Deactivate();
-        _cts.Cancel();
+        _pageCts.Cancel();
+        _catalogLoadCts?.Cancel();
+        _remoteListCts?.Cancel();
     }
 
     [RelayCommand]
@@ -159,7 +166,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         var importedCount = 0;
         foreach (var filePath in epubPaths)
         {
-            var result = await _novelLibraryService.ImportEpubAsync(filePath, _cts.Token);
+            var result = await _novelLibraryService.ImportEpubAsync(filePath, _pageCts.Token);
             if (!result.IsSuccess)
             {
                 if (!result.IsCancelled)
@@ -190,17 +197,30 @@ public partial class NovelLibraryPageViewModel : ObservableObject
             return;
         }
 
+        CancellationTokenSource? remoteListCts = null;
         try
         {
             IsRemoteBooksLoading = true;
-            var remoteBooks = await _ttuSyncRemoteStore.ListRemoteBooksAsync(_cts.Token);
+            _remoteListCts?.Cancel();
+            _remoteListCts?.Dispose();
+            remoteListCts = CancellationTokenSource.CreateLinkedTokenSource(
+                _pageCts.Token);
+            _remoteListCts = remoteListCts;
+            var remoteBooks = await _ttuSyncRemoteStore.ListRemoteBooksAsync(
+                remoteListCts.Token);
             var localTitles = NovelBooks
                 .Select(item => TtuSyncFileNames.SanitizeTtuFilename(item.Book.Title))
                 .ToHashSet(StringComparer.Ordinal);
+            var items = remoteBooks
+                .Where(book => !localTitles.Contains(book.SanitizedTitle))
+                .Select(book => new RemoteNovelBookItemViewModel(book))
+                .ToList();
             RemoteBooks = new ObservableCollection<RemoteNovelBookItemViewModel>(
-                remoteBooks
-                    .Where(book => !localTitles.Contains(book.SanitizedTitle))
-                    .Select(book => new RemoteNovelBookItemViewModel(book)));
+                items);
+            RebuildShelfProjections(
+                _currentShelfState,
+                NovelBooks.Select(item => item.Book).ToList());
+            await HydrateRemoteCoversAsync(items, remoteListCts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -213,20 +233,52 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         }
         finally
         {
-            IsRemoteBooksLoading = false;
+            if (ReferenceEquals(_remoteListCts, remoteListCts))
+            {
+                IsRemoteBooksLoading = false;
+                _remoteListCts = null;
+                remoteListCts?.Dispose();
+            }
         }
     }
 
-    [RelayCommand]
+    private async Task HydrateRemoteCoversAsync(
+        IReadOnlyList<RemoteNovelBookItemViewModel> items,
+        CancellationToken ct)
+    {
+        var tasks = items.Select(async item =>
+        {
+            await _remoteCoverGate.WaitAsync(ct);
+            try
+            {
+                var path = await _googleDriveCoverCacheService.GetCoverPathAsync(
+                    item.Book.Files.Cover,
+                    ct);
+                item.ApplyCoverPath(path);
+            }
+            finally
+            {
+                _remoteCoverGate.Release();
+            }
+        });
+        await Task.WhenAll(tasks);
+    }
+
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task DownloadRemoteBookAsync(RemoteNovelBookItemViewModel item)
     {
-        if (item == null || item.IsDownloading)
+        if (item == null || item.DownloadState is
+            RemoteNovelDownloadState.Queued or RemoteNovelDownloadState.Downloading)
             return;
 
-        item.IsDownloading = true;
-        item.DownloadProgress = 0;
+        item.DownloadState = RemoteNovelDownloadState.Queued;
+        var enteredGate = false;
         try
         {
+            await _remoteImportGate.WaitAsync(_pageCts.Token);
+            enteredGate = true;
+            item.DownloadState = RemoteNovelDownloadState.Downloading;
+            item.DownloadProgress = 0;
             var progress = new Progress<double>(value => item.DownloadProgress = Math.Clamp(value, 0, 1));
             var settings = _settingsService.Current;
             var result = await _ttuBookImportService.ImportRemoteBookAsync(
@@ -236,31 +288,55 @@ public partial class NovelLibraryPageViewModel : ObservableObject
                     SyncAudioBook: settings.SasayakiSettings.EnableSync,
                     StatisticsSyncMode: settings.StatisticsSettings.SyncMode),
                 progress,
-                _cts.Token);
+                _pageCts.Token);
 
             if (!result.IsSuccess)
             {
+                item.DownloadState = result.IsCancelled
+                    ? RemoteNovelDownloadState.Idle
+                    : RemoteNovelDownloadState.Failed;
                 if (!result.IsCancelled)
                     _notificationService.ShowError(result.Error!, result.ErrorTitle!);
                 return;
             }
 
             RemoteBooks.Remove(item);
+            RebuildShelfProjections(
+                _currentShelfState,
+                NovelBooks.Select(book => book.Book).ToList());
             _notificationService.ShowSuccess("EPUB imported from Google Drive.", "Novel imported");
-            await LoadNovelsAsync();
+            await RefreshCatalogAfterImportAsync();
         }
         catch (OperationCanceledException)
         {
+            item.DownloadState = RemoteNovelDownloadState.Idle;
         }
         catch (Exception ex)
         {
+            item.DownloadState = RemoteNovelDownloadState.Failed;
             _notificationService.ShowError(
                 $"Failed to import book from Google Drive: {ex.Message}",
                 "Import failed");
         }
         finally
         {
-            item.IsDownloading = false;
+            if (item.DownloadState == RemoteNovelDownloadState.Downloading)
+                item.DownloadState = RemoteNovelDownloadState.Idle;
+            if (enteredGate)
+                _remoteImportGate.Release();
+        }
+    }
+
+    private async Task RefreshCatalogAfterImportAsync()
+    {
+        await _catalogRefreshGate.WaitAsync(_pageCts.Token);
+        try
+        {
+            await LoadNovelsAsync();
+        }
+        finally
+        {
+            _catalogRefreshGate.Release();
         }
     }
 
@@ -276,10 +352,11 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     private async Task EnterStatisticsAsync()
     {
         ShowStatisticsDashboard = true;
+        await Task.Yield();
         await StatisticsDashboard.ActivateAsync(
             NovelBooks.Select(item => item.Book).ToList(),
             _currentShelfState,
-            _cts.Token);
+            _pageCts.Token);
     }
 
     [RelayCommand]
@@ -330,7 +407,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         var result = await _shelfService.MoveBooksAsync(
             request.BookIds,
             request.TargetShelfName,
-            _cts.Token);
+            _pageCts.Token);
         ApplyShelfResult(result);
     }
 
@@ -340,7 +417,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         var result = await _shelfService.MoveBooksAsync(
             [request.BookId],
             request.TargetShelfName,
-            _cts.Token);
+            _pageCts.Token);
         ApplyShelfResult(result);
     }
 
@@ -351,7 +428,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
             request.SourceBookId,
             request.TargetBookId,
             request.ShelfName,
-            _cts.Token);
+            _pageCts.Token);
         ApplyShelfResult(result);
     }
 
@@ -373,7 +450,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
                 audioPath,
                 subtitlePath,
                 _settingsService.Current.SasayakiSettings.SearchWindowSize,
-                _cts.Token);
+                _pageCts.Token);
             _notificationService.ShowSuccess(
                 $"{match.Matches.Count}/{match.Cues.Count} cues matched.",
                 "Sasayaki matched");
@@ -410,51 +487,59 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
     private async Task LoadNovelsAsync()
     {
+        _catalogLoadCts?.Cancel();
+        _catalogLoadCts?.Dispose();
+        var loadCts = CancellationTokenSource.CreateLinkedTokenSource(_pageCts.Token);
+        _catalogLoadCts = loadCts;
+        var ct = loadCts.Token;
+        IsContentLoading = true;
         try
         {
-            _cts.Cancel();
+            var result = await _novelLibraryService.GetNovelBooksAsync(ct: ct);
+
+            if (result.IsSuccess)
+            {
+                var books = result.Value!.Books;
+                NovelStorageWarnings = new ObservableCollection<string>(
+                    result.Value.CorruptMetadataPaths);
+                NovelBooks = new ObservableCollection<NovelBookItemViewModel>(
+                    SortBooks(books).Select(book => new NovelBookItemViewModel(book)));
+                var shelfResult = await _shelfService.LoadAsync(ct);
+                if (shelfResult.IsSuccess)
+                    RebuildShelfProjections(shelfResult.Value!, books);
+                else
+                {
+                    RebuildShelfProjections(
+                        new NovelShelfState([], books.Select(book => book.Id).ToList()),
+                        books);
+                    if (!shelfResult.IsCancelled)
+                        _notificationService.ShowError(
+                            shelfResult.Error!,
+                            shelfResult.ErrorTitle ?? "Shelf load failed");
+                }
+                if (ShowStatisticsDashboard)
+                {
+                    await StatisticsDashboard.ActivateAsync(
+                        books,
+                        _currentShelfState,
+                        ct);
+                }
+            }
+            else if (!result.IsCancelled)
+                _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
         }
         finally
         {
-            _cts.Dispose();
-        }
-        _cts = new CancellationTokenSource();
-
-        IsContentLoading = true;
-        var result = await _novelLibraryService.GetNovelBooksAsync(ct: _cts.Token);
-
-        if (result.IsSuccess)
-        {
-            var books = result.Value!.Books;
-            NovelStorageWarnings = new ObservableCollection<string>(
-                result.Value.CorruptMetadataPaths);
-            NovelBooks = new ObservableCollection<NovelBookItemViewModel>(
-                SortBooks(books).Select(book => new NovelBookItemViewModel(book)));
-            var shelfResult = await _shelfService.LoadAsync(_cts.Token);
-            if (shelfResult.IsSuccess)
-                RebuildShelfProjections(shelfResult.Value!, books);
-            else
+            if (ReferenceEquals(_catalogLoadCts, loadCts))
             {
-                RebuildShelfProjections(
-                    new NovelShelfState([], books.Select(book => book.Id).ToList()),
-                    books);
-                if (!shelfResult.IsCancelled)
-                    _notificationService.ShowError(
-                        shelfResult.Error!,
-                        shelfResult.ErrorTitle ?? "Shelf load failed");
-            }
-            if (ShowStatisticsDashboard)
-            {
-                await StatisticsDashboard.ActivateAsync(
-                    books,
-                    _currentShelfState,
-                    _cts.Token);
+                IsContentLoading = false;
+                _catalogLoadCts = null;
+                loadCts.Dispose();
             }
         }
-        else if (!result.IsCancelled)
-            _notificationService.ShowError(result.Error!, result.ErrorTitle!);
-
-        IsContentLoading = false;
     }
 
     private void ApplyShelfResult(Result<NovelShelfState> result)
@@ -479,40 +564,64 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     {
         _currentShelfState = state;
         var booksById = books.ToDictionary(book => book.Id, StringComparer.Ordinal);
-        var rails = new List<NovelShelfSectionViewModel>();
-        if (_settingsService.Current.BookshelfShowReading)
+        var sections = new List<NovelShelfSectionViewModel>();
+        var reading = SortBooks(books.Where(IsReading)).ToList();
+        if (reading.Count > 0)
         {
-            var reading = books
-                .Where(IsReading)
-                .Select(book => new NovelBookItemViewModel(book));
-            rails.Add(new NovelShelfSectionViewModel(
-                "reading",
-                ResourceStringHelper.GetString(
+            sections.Add(new NovelShelfSectionViewModel
+            {
+                Id = "reading",
+                DisplayName = ResourceStringHelper.GetString(
                     "NovelShelfReadingLabel/Text",
                     "Reading"),
-                IsDerived: true,
-                IsUnshelved: false,
-                new ObservableCollection<NovelBookItemViewModel>(reading)));
+                IsDerived = true,
+                Books = new(reading.Select(book => new NovelBookItemViewModel(book))),
+            });
         }
 
         foreach (var shelf in state.Shelves)
         {
-            var items = shelf.BookIds
+            var shelfBooks = shelf.BookIds
                 .Where(booksById.ContainsKey)
-                .Select(id => new NovelBookItemViewModel(booksById[id]));
-            rails.Add(new NovelShelfSectionViewModel(
-                "shelf:" + shelf.Name,
-                shelf.Name,
-                IsDerived: false,
-                IsUnshelved: false,
-                new ObservableCollection<NovelBookItemViewModel>(items)));
+                .Select(id => booksById[id]);
+            if (SelectedSortOption != NovelLibrarySortOption.Manual)
+                shelfBooks = SortBooks(shelfBooks);
+            sections.Add(new NovelShelfSectionViewModel
+            {
+                Id = "shelf:" + shelf.Name,
+                DisplayName = shelf.Name,
+                Books = new(shelfBooks.Select(book => new NovelBookItemViewModel(book))),
+            });
         }
 
-        RailSections = new ObservableCollection<NovelShelfSectionViewModel>(rails);
-        UnshelvedBooks = new ObservableCollection<NovelBookItemViewModel>(
-            state.UnshelvedBookOrder
-                .Where(booksById.ContainsKey)
-                .Select(id => new NovelBookItemViewModel(booksById[id])));
+        if (RemoteBooks.Count > 0)
+        {
+            sections.Add(new NovelShelfSectionViewModel
+            {
+                Id = "google-drive",
+                DisplayName = "Google Drive",
+                IsDerived = true,
+                IsRemote = true,
+                RemoteBooks = RemoteBooks,
+            });
+        }
+
+        var unshelvedBooks = state.UnshelvedBookOrder
+            .Where(booksById.ContainsKey)
+            .Select(id => booksById[id]);
+        if (SelectedSortOption != NovelLibrarySortOption.Manual)
+            unshelvedBooks = SortBooks(unshelvedBooks);
+        sections.Add(new NovelShelfSectionViewModel
+        {
+            Id = "unshelved",
+            DisplayName = ResourceStringHelper.GetString(
+                "NovelShelfUnshelvedLabel/Text",
+                "Unshelved"),
+            IsUnshelved = true,
+            Books = new(unshelvedBooks.Select(book => new NovelBookItemViewModel(book))),
+        });
+
+        ShelfSections = new(sections);
     }
 
     private static bool IsReading(NovelBook book) =>
@@ -536,6 +645,9 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
         NovelBooks = new ObservableCollection<NovelBookItemViewModel>(
             SortBookItems(NovelBooks));
+        RebuildShelfProjections(
+            _currentShelfState,
+            NovelBooks.Select(item => item.Book).ToList());
     }
 
     private IEnumerable<NovelBook> SortBooks(IEnumerable<NovelBook> books) =>
@@ -565,7 +677,9 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     private async Task SaveCurrentManualOrderCoreAsync()
     {
         var orderedBookIds = NovelBooks.Select(item => item.Book.Id).ToList();
-        var result = await _novelLibraryService.SaveNovelBookOrderAsync(orderedBookIds, _cts.Token);
+        var result = await _novelLibraryService.SaveNovelBookOrderAsync(
+            orderedBookIds,
+            _pageCts.Token);
         if (!result.IsSuccess && !result.IsCancelled)
             _notificationService.ShowError(result.Error!, result.ErrorTitle!);
     }

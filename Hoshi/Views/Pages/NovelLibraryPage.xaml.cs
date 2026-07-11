@@ -35,18 +35,6 @@ public sealed partial class NovelLibraryPage : Page
         ViewModel.OnNavigatedFrom();
     }
 
-    private void GridView_ItemClick(object sender, ItemClickEventArgs e)
-    {
-        if (e.ClickedItem is NovelBookItemViewModel novelItem)
-            ViewModel.OpenNovelCommand.Execute(novelItem);
-    }
-
-    private void NovelBookButton_Click(object sender, RoutedEventArgs e)
-    {
-        if ((sender as Button)?.DataContext is NovelBookItemViewModel novelItem)
-            ViewModel.OpenNovelCommand.Execute(novelItem);
-    }
-
     private void NovelLibrary_DragOver(object sender, DragEventArgs e)
     {
         e.AcceptedOperation = e.DataView.Contains(StandardDataFormats.StorageItems)
@@ -81,7 +69,7 @@ public sealed partial class NovelLibraryPage : Page
         if ((sender as MenuFlyoutItem)?.Tag is not NovelBookItemViewModel novelItem)
             return;
 
-        var targets = ViewModel.RailSections
+        var targets = ViewModel.ShelfSections
             .Where(section => !section.IsDerived)
             .Select(section => new NovelShelfTarget(section.DisplayName, section.DisplayName))
             .Prepend(new NovelShelfTarget(

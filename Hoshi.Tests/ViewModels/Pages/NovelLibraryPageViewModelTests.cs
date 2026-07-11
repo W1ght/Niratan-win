@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using FluentAssertions;
 using CommunityToolkit.Mvvm.Input;
 using Moq;
@@ -294,6 +295,41 @@ public class NovelLibraryPageViewModelTests
     }
 
     [Fact]
+    public async Task RefreshRemoteBooksCommand_HydratesCoversWithoutReorderingCards()
+    {
+        using var temp = new TempDirectory();
+        var firstPath = WritePng(temp.Path, "first.png");
+        var secondPath = WritePng(temp.Path, "second.png");
+        var remote = new FakeTtuSyncRemoteStore
+        {
+            RemoteBooks =
+            [
+                RemoteBook("a", "A", "A", "cover-a"),
+                RemoteBook("b", "B", "B", "cover-b"),
+            ],
+        };
+        var covers = new FakeGoogleDriveCoverCacheService(new Dictionary<string, string>
+        {
+            ["cover-a"] = firstPath,
+            ["cover-b"] = secondPath,
+        });
+        var settings = Mock.Of<ISettingsService>(service => service.Current == new AppSettings
+        {
+            TtuSyncSettings = new TtuSyncSettings { EnableSync = true },
+        });
+        var sut = CreateSut(
+            syncRemoteStore: remote,
+            googleDriveCoverCacheService: covers,
+            settingsService: settings);
+
+        await sut.RefreshRemoteBooksCommand.ExecuteAsync(null);
+
+        sut.RemoteBooks.Select(item => item.Book.Id).Should().Equal("a", "b");
+        sut.RemoteBooks.Select(item => item.CoverPath)
+            .Should().Equal(firstPath, secondPath);
+    }
+
+    [Fact]
     public async Task DownloadRemoteBookCommand_ImportsRemoteBookAndRemovesItFromRemoteShelf()
     {
         var remoteBook = RemoteBook("folder-cloud", "雲の本", "雲の本");
@@ -322,6 +358,79 @@ public class NovelLibraryPageViewModelTests
     }
 
     [Fact]
+    public async Task DownloadRemoteBookCommand_RunsThreeImportsAndQueuesFourth()
+    {
+        var importer = new ControlledTtuBookImportService();
+        var sut = CreateSut(ttuBookImportService: importer);
+        sut.RemoteBooks = new([
+            RemoteItem("a"),
+            RemoteItem("b"),
+            RemoteItem("c"),
+            RemoteItem("d"),
+        ]);
+
+        var tasks = sut.RemoteBooks
+            .Select(item => sut.DownloadRemoteBookCommand.ExecuteAsync(item))
+            .ToArray();
+        await importer.WaitForStartedCountAsync(3);
+
+        importer.StartedIds.Should().BeEquivalentTo(["a", "b", "c"]);
+        sut.RemoteBooks.Single(item => item.Book.Id == "d").DownloadState
+            .Should().Be(RemoteNovelDownloadState.Queued);
+
+        importer.Complete("a");
+        await importer.WaitForStartedCountAsync(4);
+        importer.StartedIds.Should().Contain("d");
+        importer.CompleteAll();
+        await Task.WhenAll(tasks);
+    }
+
+    [Fact]
+    public async Task CompletedImport_DoesNotCancelAnotherActiveImport()
+    {
+        var importer = new ControlledTtuBookImportService();
+        var sut = CreateSut(ttuBookImportService: importer);
+        var first = RemoteItem("a");
+        var second = RemoteItem("b");
+        sut.RemoteBooks = new([first, second]);
+        var firstTask = sut.DownloadRemoteBookCommand.ExecuteAsync(first);
+        var secondTask = sut.DownloadRemoteBookCommand.ExecuteAsync(second);
+        await importer.WaitForStartedCountAsync(2);
+
+        importer.Complete("a");
+        await firstTask;
+
+        importer.TokenFor("b").IsCancellationRequested.Should().BeFalse();
+        importer.Complete("b");
+        await secondTask;
+    }
+
+    [Fact]
+    public async Task FailedImport_LeavesOtherImportsRunningAndCardRetryable()
+    {
+        var importer = new ControlledTtuBookImportService();
+        var notification = new Mock<INotificationService>();
+        var sut = CreateSut(
+            ttuBookImportService: importer,
+            notificationService: notification.Object);
+        var failed = RemoteItem("a");
+        var active = RemoteItem("b");
+        sut.RemoteBooks = new([failed, active]);
+        var failedTask = sut.DownloadRemoteBookCommand.ExecuteAsync(failed);
+        var activeTask = sut.DownloadRemoteBookCommand.ExecuteAsync(active);
+        await importer.WaitForStartedCountAsync(2);
+
+        importer.Fail("a", "network");
+        await failedTask;
+
+        failed.DownloadState.Should().Be(RemoteNovelDownloadState.Failed);
+        failed.CanRetry.Should().BeTrue();
+        importer.TokenFor("b").IsCancellationRequested.Should().BeFalse();
+        importer.Complete("b");
+        await activeTask;
+    }
+
+    [Fact]
     public async Task InitializeAsync_ProjectsReadingCustomAndUnshelvedSectionsWithWarnings()
     {
         var books = new[]
@@ -341,7 +450,8 @@ public class NovelLibraryPageViewModelTests
                 ["a", "c"])));
         var settings = Mock.Of<ISettingsService>(service => service.Current == new AppSettings
         {
-            BookshelfShowReading = true,
+            BookshelfShowReading = false,
+            NovelLibrarySortOption = NovelLibrarySortOption.Manual,
         });
         var sut = CreateSut(
             novelService: library.Object,
@@ -350,12 +460,37 @@ public class NovelLibraryPageViewModelTests
 
         await sut.InitializeAsync();
 
-        sut.RailSections.Select(section => section.Id).Should().Equal("reading", "shelf:收藏");
-        sut.RailSections[0].Books.Select(item => item.Book.Id).Should().Equal("a");
-        sut.RailSections[1].Books.Select(item => item.Book.Id).Should().Equal("b");
-        sut.UnshelvedBooks.Select(item => item.Book.Id).Should().Equal("a", "c");
+        sut.ShelfSections.Select(section => section.Id)
+            .Should().Equal("reading", "shelf:收藏", "unshelved");
+        sut.ShelfSections[0].Books.Select(item => item.Book.Id).Should().Equal("a");
+        sut.ShelfSections[1].Books.Select(item => item.Book.Id).Should().Equal("b");
+        sut.ShelfSections[2].Books.Select(item => item.Book.Id).Should().Equal("a", "c");
         sut.HasNovelStorageWarnings.Should().BeTrue();
         sut.NovelStorageWarnings.Should().Equal("broken/metadata.json");
+    }
+
+    [Fact]
+    public async Task InitializeAsync_OmitsReadingWhenNoBookIsInProgress()
+    {
+        var library = new RecordingNovelLibraryService
+        {
+            Books =
+            [
+                new NovelBook { Id = "new", Title = "New" },
+                new NovelBook
+                {
+                    Id = "done",
+                    Title = "Done",
+                    CurrentCharacterCount = 10,
+                    TotalCharacterCount = 10,
+                },
+            ],
+        };
+        var sut = CreateSut(novelService: library);
+
+        await sut.InitializeAsync();
+
+        sut.ShelfSections.Select(section => section.Id).Should().Equal("unshelved");
     }
 
     [Fact]
@@ -385,9 +520,10 @@ public class NovelLibraryPageViewModelTests
         await sut.MoveBooksToShelfCommand.ExecuteAsync(
             new NovelShelfMoveRequest(["a"], "收藏"));
 
-        sut.RailSections.Should().ContainSingle();
-        sut.RailSections[0].Books.Select(item => item.Book.Id).Should().Equal("a");
-        sut.UnshelvedBooks.Select(item => item.Book.Id).Should().Equal("b");
+        sut.ShelfSections.Select(section => section.Id)
+            .Should().Equal("shelf:收藏", "unshelved");
+        sut.ShelfSections[0].Books.Select(item => item.Book.Id).Should().Equal("a");
+        sut.ShelfSections[1].Books.Select(item => item.Book.Id).Should().Equal("b");
         shelves.VerifyAll();
     }
 
@@ -446,7 +582,8 @@ public class NovelLibraryPageViewModelTests
         INovelShelfService? shelfService = null,
         ITtuSyncRemoteStore? syncRemoteStore = null,
         ITtuBookImportService? ttuBookImportService = null,
-        IGoogleDriveAuthService? googleDriveAuthService = null
+        IGoogleDriveAuthService? googleDriveAuthService = null,
+        IGoogleDriveCoverCacheService? googleDriveCoverCacheService = null
     )
     {
         var serviceMock = new Mock<INovelLibraryService>();
@@ -479,7 +616,9 @@ public class NovelLibraryPageViewModelTests
             shelfService ?? CreateDefaultShelfService(),
             syncRemoteStore ?? new FakeTtuSyncRemoteStore(),
             ttuBookImportService ?? new FakeTtuBookImportService(),
-            googleDriveAuthService ?? new FakeGoogleDriveAuthService { HasCredentials = true }
+            googleDriveAuthService ?? new FakeGoogleDriveAuthService { HasCredentials = true },
+            googleDriveCoverCacheService ?? new FakeGoogleDriveCoverCacheService(
+                new Dictionary<string, string>())
         );
     }
 
@@ -494,7 +633,8 @@ public class NovelLibraryPageViewModelTests
     private static TtuRemoteBook RemoteBook(
         string id,
         string title,
-        string sanitizedTitle) =>
+        string sanitizedTitle,
+        string? coverId = null) =>
         new(
             id,
             title,
@@ -504,8 +644,26 @@ public class NovelLibraryPageViewModelTests
                 Statistics: null,
                 AudioBook: null,
                 BookData: new TtuRemoteFile($"{id}-bookdata", "bookdata_1_6_1200_2000_1000.zip"),
-                Cover: null),
+                Cover: coverId == null
+                    ? null
+                    : new TtuRemoteFile(
+                        coverId,
+                        "cover_1_6.png",
+                        ThumbnailLink: $"https://thumb.test/{coverId}=s220")),
             Progress: 0.25);
+
+    private static RemoteNovelBookItemViewModel RemoteItem(string id) =>
+        new(RemoteBook(id, id.ToUpperInvariant(), id.ToUpperInvariant()));
+
+    private static readonly byte[] PngBytes = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+
+    private static string WritePng(string directory, string name)
+    {
+        var path = Path.Combine(directory, name);
+        File.WriteAllBytes(path, PngBytes);
+        return path;
+    }
 
     private static void SetSortOption(NovelLibraryPageViewModel sut, string optionName)
     {
@@ -645,6 +803,78 @@ public class NovelLibraryPageViewModelTests
                 FilePath = "D:\\Books\\remote.epub",
             }));
         }
+    }
+
+    private sealed class ControlledTtuBookImportService : ITtuBookImportService
+    {
+        private readonly ConcurrentDictionary<
+            string,
+            TaskCompletionSource<Result<NovelBook>>> _results = new();
+        private readonly ConcurrentDictionary<string, CancellationToken> _tokens = new();
+        private readonly SemaphoreSlim _started = new(0);
+        private int _observedStarts;
+
+        public ConcurrentQueue<string> StartedIds { get; } = new();
+
+        public Task<Result<NovelBook>> ImportRemoteBookAsync(
+            TtuRemoteBook remoteBook,
+            TtuBookImportOptions options,
+            IProgress<double>? progress = null,
+            CancellationToken ct = default)
+        {
+            StartedIds.Enqueue(remoteBook.Id);
+            _tokens[remoteBook.Id] = ct;
+            _started.Release();
+            return _results.GetOrAdd(
+                remoteBook.Id,
+                _ => new TaskCompletionSource<Result<NovelBook>>(
+                    TaskCreationOptions.RunContinuationsAsynchronously)).Task.WaitAsync(ct);
+        }
+
+        public async Task WaitForStartedCountAsync(int count)
+        {
+            while (_observedStarts < count)
+            {
+                (await _started.WaitAsync(
+                    TimeSpan.FromSeconds(2),
+                    TestContext.Current.CancellationToken)).Should().BeTrue();
+                _observedStarts++;
+            }
+        }
+
+        public CancellationToken TokenFor(string id) => _tokens[id];
+
+        public void Complete(string id) =>
+            _results[id].SetResult(Result<NovelBook>.Success(new NovelBook
+            {
+                Id = id,
+                Title = id,
+                FilePath = $"D:\\Books\\{id}.epub",
+            }));
+
+        public void Fail(string id, string error) =>
+            _results[id].SetResult(Result<NovelBook>.Failure(error, "Import failed"));
+
+        public void CompleteAll()
+        {
+            foreach (var id in StartedIds.Distinct())
+            {
+                if (!_results[id].Task.IsCompleted)
+                    Complete(id);
+            }
+        }
+    }
+
+    private sealed class FakeGoogleDriveCoverCacheService(
+        IReadOnlyDictionary<string, string> paths) : IGoogleDriveCoverCacheService
+    {
+        public Task<string?> GetCoverPathAsync(
+            TtuRemoteFile? cover,
+            CancellationToken ct = default) =>
+            Task.FromResult(
+                cover != null && paths.TryGetValue(cover.Id, out var path)
+                    ? path
+                    : null);
     }
 
     private sealed class FakeGoogleDriveAuthService : IGoogleDriveAuthService

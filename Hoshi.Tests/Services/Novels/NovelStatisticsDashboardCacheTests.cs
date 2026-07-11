@@ -38,6 +38,33 @@ public sealed class NovelStatisticsDashboardCacheTests
     }
 
     [Fact]
+    public async Task StoredSnapshot_ReloadsFromDiskInNewCacheInstance()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var cachePath = Path.Combine(temp.Path, NovelStatisticsDashboardCache.FileName);
+        var today = new DateOnly(2026, 7, 11);
+        var snapshot = new NovelStatisticsDashboardSnapshot(
+            today,
+            today,
+            [new NovelStatisticsDayAggregate(today, 1200, 600, [])],
+            [],
+            []);
+        var first = new NovelStatisticsDashboardCache(
+            new NiratanJsonFileStore(),
+            new WeakReferenceMessenger(),
+            cachePath);
+        await first.StoreAsync("key", snapshot, ct);
+
+        var reloaded = new NovelStatisticsDashboardCache(
+            new NiratanJsonFileStore(),
+            new WeakReferenceMessenger(),
+            cachePath);
+
+        (await reloaded.TryLoadAsync("key", ct)).Should().BeEquivalentTo(snapshot);
+    }
+
+    [Fact]
     public async Task CorruptCache_DeletesOnlyDerivedCache()
     {
         var ct = TestContext.Current.CancellationToken;

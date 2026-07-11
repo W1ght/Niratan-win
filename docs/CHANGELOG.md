@@ -1,5 +1,21 @@
 # Changelog
 
+## 小说书架分区、云端导入与统计入口回归
+
+**原因**：
+- 本地书卡依赖 code-behind 点击事件，分区模板重构后未归档书卡没有稳定绑定打开命令；Reading 仍被当作可选 rail，且各分区使用单行横向布局。
+- Google Drive 列表只展示占位图，没有复用带鉴权的缩略图请求与本地缓存；页面级取消源在任一本书导入后刷新目录时会取消其他导入，因此无法并行。
+- Dashboard 的 XAML AdaptiveTrigger 与 code-behind 同时修改同一组 Grid 属性，SizeChanged 又通过 DispatcherQueue 重入；统计缓存键还会在 UI 线程同步扫描所有 sidecar 文件时间。
+- Dashboard 首次实例化还引用了 WinUI 3 中不存在的 `AccentStrokeColorDefaultBrush`；磁盘缓存中的 snapshot 有多个构造函数但没有指定 JSON 构造函数，重启后读取缓存会抛出未处理异常。两者都会表现为点击统计后卡住或进程退出。
+
+**解决**：
+- 所有本地书卡显式绑定 `OpenNovelCommand`，Reading 从未读完且有进度的书籍派生；Reading、自定义书架、Google Drive、Unshelved 统一为可换行的自适应多行分区。
+- Google Drive 封面使用鉴权缩略图、格式校验、原子写入和磁盘缓存；导入改为每书独立状态与页面生命周期取消，最多 3 本并行，排队、下载、失败重试互不影响。
+- 统计入口先让出 UI 帧，缓存键扫描移到后台线程；Dashboard 只保留 code-behind 单一布局所有者，并仅在跨越 840/1260 effective-pixel 断点时重排。
+- 日历选区改用有效的 accent brush，并显式标注 snapshot 的 JSON 构造函数；新增“新缓存实例从磁盘重载”测试，覆盖应用重启后的真实缓存读取。
+
+---
+
 ## Google Drive OAuth 回调显示成功但连接失败
 
 **原因**：

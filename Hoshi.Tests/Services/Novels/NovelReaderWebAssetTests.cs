@@ -196,9 +196,7 @@ public class NovelReaderWebAssetTests
         libraryXaml
             .Should()
             .Contain("AutomationProperties.AutomationId=\"NovelShelfSectionsControl\"");
-        libraryXaml
-            .Should()
-            .Contain("AutomationProperties.AutomationId=\"NovelUnshelvedBooksRepeater\"");
+        libraryXaml.Should().NotContain("NovelUnshelvedBooksRepeater");
         libraryXaml
             .Should()
             .Contain("AutomationProperties.AutomationId=\"{x:Bind AutomationId");
@@ -2313,9 +2311,9 @@ public class NovelReaderWebAssetTests
         );
 
         libraryXaml.Should().Contain("<Button");
-        libraryXaml.Should().Contain("NovelBookButton_Click");
-        libraryCode.Should().Contain("NovelBookButton_Click");
-        libraryCode.Should().Contain("OpenNovelCommand.Execute");
+        libraryXaml.Should().Contain("Command=\"{Binding ViewModel.OpenNovelCommand, ElementName=ThisPage}\"");
+        libraryXaml.Should().Contain("CommandParameter=\"{x:Bind}\"");
+        libraryCode.Should().NotContain("NovelBookButton_Click");
     }
 
     [Fact]
@@ -2377,7 +2375,7 @@ public class NovelReaderWebAssetTests
         libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelLibrarySortComboBox\"");
         libraryXaml.Should().Contain("SelectedValue=\"{x:Bind ViewModel.SelectedSortOption, Mode=TwoWay}\"");
         libraryXaml.Should().Contain("x:Name=\"NovelShelfSectionsControl\"");
-        libraryXaml.Should().Contain("x:Name=\"NovelUnshelvedBooksRepeater\"");
+        libraryXaml.Should().NotContain("NovelUnshelvedBooksRepeater");
         libraryXaml.Should().Contain("<UniformGridLayout");
         libraryXaml.Should().Contain("Click=\"MoveNovelToShelfMenuItem_Click\"");
 
@@ -2466,19 +2464,18 @@ public class NovelReaderWebAssetTests
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsCalendarCard\"");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsBookRankingCard\"");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsShelfComparisonCard\"");
-        dashboardXaml.Should().Contain("x:Name=\"WideDashboardState\"");
-        dashboardXaml.Should().Contain("x:Name=\"MediumDashboardState\"");
-        dashboardXaml.Should().Contain("x:Name=\"NarrowDashboardState\"");
-        dashboardXaml.Should().Contain("MinWindowWidth=\"1260\"");
-        dashboardXaml.Should().Contain("MinWindowWidth=\"840\"");
+        dashboardXaml.Should().NotContain("AccentStrokeColorDefaultBrush");
+        dashboardXaml.Should().NotContain("VisualStateManager.VisualStateGroups");
+        dashboardXaml.Should().NotContain("AdaptiveTrigger");
         dashboardXaml.Should().Contain("x:Name=\"DashboardPrimaryColumn\"");
         dashboardXaml.Should().Contain("x:Name=\"DashboardSecondaryColumn\"");
         dashboardXaml.Should().Contain("x:Name=\"DashboardTertiaryColumn\"");
         dashboardXaml.Should().Contain("ScrollViewer.HorizontalScrollMode=\"Enabled\"");
         dashboardXaml.Split("VerticalScrollBarVisibility=\"Auto\"").Should().HaveCount(2);
         dashboardCode.Should().Contain("ApplyAdaptiveLayout");
-        dashboardCode.Should().Contain("width >= 1260");
-        dashboardCode.Should().Contain("width >= 840");
+        dashboardCode.Should().Contain("NovelStatisticsDashboardLayout.Select(width)");
+        dashboardCode.Should().Contain("if (_layoutMode == layoutMode)");
+        dashboardCode.Should().NotContain("DispatcherQueue.TryEnqueue");
         dashboardCode.Should().Contain("Grid.SetColumn");
         trendChartXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsTrendChart\"");
         trendChartCode.Should().Contain("Polyline");
@@ -2556,6 +2553,9 @@ public class NovelReaderWebAssetTests
 
         dashboardService.Should().Contain("NovelStatisticsDashboardCalculator");
         dashboardService.Should().Contain("LoadSnapshotAsync");
+        dashboardService.Should().Contain("Task.Run(");
+        dashboardService.Should().Contain("ConfigureAwait(false)");
+        libraryViewModel.Should().Contain("await Task.Yield()");
         appCode.Should().Contain("AddSingleton<INovelStatisticsDashboardService>(provider =>");
     }
 
@@ -3735,7 +3735,7 @@ public class NovelReaderWebAssetTests
         libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelShelfSectionsControl\"");
         libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelShelfManagementButton\"");
         libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStorageWarningInfoBar\"");
-        libraryXaml.Should().Contain("ItemsSource=\"{x:Bind ViewModel.UnshelvedBooks, Mode=OneWay}\"");
+        libraryXaml.Should().Contain("ItemsSource=\"{x:Bind ViewModel.ShelfSections, Mode=OneWay}\"");
         dialogXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelShelfList\"");
         dialogXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelShelfCreateButton\"");
         dialogXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelShelfDeleteConfirmationFlyout\"");
