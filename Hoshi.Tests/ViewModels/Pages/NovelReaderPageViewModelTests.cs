@@ -1419,6 +1419,346 @@ public sealed class NovelReaderPageViewModelTests
         sut.IsStatisticsTracking.Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ManualNavigationCheckpoint_CompletesBeforeLifecycleFinalFlush(
+        bool adjacentChapter,
+        bool close)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var events = new ConcurrentQueue<string>();
+        var manualCheckpointStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseManualCheckpoint = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var manualCheckpointCompleted = false;
+        var saveCount = 0;
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1",
+                It.IsAny<int>(),
+                It.IsAny<double>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .Callback(() => events.Enqueue(
+                Interlocked.Increment(ref saveCount) == 1
+                    ? "manual-save"
+                    : "final-save"))
+            .ReturnsAsync(Result.Success());
+        var manualReason = adjacentChapter
+            ? ReaderStatisticsCheckpointReason.AdjacentChapter
+            : ReaderStatisticsCheckpointReason.ReadingMovement;
+        var statistics = new FakeReaderStatisticsSession
+        {
+            CheckpointAsyncHandler = async (position, reason, checkpointToken) =>
+            {
+                _ = (position, checkpointToken);
+                if (reason == manualReason)
+                {
+                    events.Enqueue("manual-checkpoint-start");
+                    manualCheckpointStarted.TrySetResult();
+                    await releaseManualCheckpoint.Task;
+                    manualCheckpointCompleted = true;
+                    events.Enqueue("manual-checkpoint-end");
+                }
+                else
+                {
+                    events.Enqueue($"final-checkpoint-{reason}");
+                }
+            },
+        };
+        var flushSawManualCheckpoint = false;
+        var autoSync = CreateAutoSyncCoordinator();
+        autoSync.Setup(service => service.FlushAsync(
+                It.IsAny<NovelBook>(), It.IsAny<CancellationToken>()))
+            .Callback(() =>
+            {
+                flushSawManualCheckpoint = manualCheckpointCompleted;
+                events.Enqueue("flush-export");
+            })
+            .Returns(Task.CompletedTask);
+        var sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            statistics,
+            autoSync.Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+        sut.SetChapterCharacterCounts([100, 100]);
+        sut.SetChapter(0, 2);
+        sut.UpdateProgress(adjacentChapter ? 0.9 : 0.2);
+        var readerEvent = adjacentChapter
+            ? new ReaderPageNavigationEvent(
+                ReaderPageNavigationResult.Limit,
+                ReaderPageNavigationDirection.Forward,
+                1.0)
+            : new ReaderPageNavigationEvent(
+                ReaderPageNavigationResult.Scrolled,
+                ReaderPageNavigationDirection.Forward,
+                0.3);
+
+        var manual = sut.HandleManualPageNavigationAsync(readerEvent, ct);
+        await manualCheckpointStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        var lifecycle = close
+            ? sut.PrepareForReaderLifecycleCloseAsync(ct)
+            : sut.CheckpointAppBackgroundingAsync(ct);
+
+        lifecycle.IsCompleted.Should().BeFalse();
+        Volatile.Read(ref saveCount).Should().Be(1);
+        releaseManualCheckpoint.TrySetResult();
+        await Task.WhenAll(manual, lifecycle).WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        flushSawManualCheckpoint.Should().BeTrue();
+        statistics.Checkpoints.Select(item => item.Reason).Should().Equal(
+            manualReason,
+            close
+                ? ReaderStatisticsCheckpointReason.Close
+                : ReaderStatisticsCheckpointReason.Background);
+        events.Should().ContainInOrder(
+            "manual-save",
+            "manual-checkpoint-start",
+            "manual-checkpoint-end",
+            "final-save",
+            close ? "final-checkpoint-Close" : "final-checkpoint-Background",
+            "flush-export");
+    }
+
+    [Fact]
+    public async Task ManualNavigation_WhenBookmarkWriteFails_StillCheckpointsWithoutPublishing()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1",
+                It.IsAny<int>(),
+                It.IsAny<double>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Failure("write failed", "Bookmark"));
+        var notifications = new Mock<INotificationService>();
+        var statistics = new FakeReaderStatisticsSession();
+        var messenger = new FakeMessenger();
+        var autoSync = CreateAutoSyncCoordinator();
+        var sut = CreateSut(
+            novelService.Object,
+            notifications.Object,
+            messenger,
+            statistics,
+            autoSync.Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+        sut.SetChapterCharacterCounts([100]);
+        sut.SetChapter(0, 1);
+        sut.UpdateProgress(0.2);
+
+        await sut.HandleManualPageNavigationAsync(
+            new ReaderPageNavigationEvent(
+                ReaderPageNavigationResult.Scrolled,
+                ReaderPageNavigationDirection.Forward,
+                0.3),
+            ct);
+
+        statistics.Checkpoints.Should().Equal(
+            (30, ReaderStatisticsCheckpointReason.ReadingMovement));
+        notifications.Verify(service => service.ShowError("write failed", "Bookmark"), Times.Once);
+        autoSync.Verify(service => service.ScheduleExport(It.IsAny<NovelBook>()), Times.Never);
+        messenger.SentMessages.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task LifecycleClose_TakesOverInFlightBackgroundWithoutReopeningAdmission()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var events = new ConcurrentQueue<string>();
+        var saveCount = 0;
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1",
+                It.IsAny<int>(),
+                It.IsAny<double>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .Callback(() => events.Enqueue(
+                Interlocked.Increment(ref saveCount) == 1
+                    ? "background-save"
+                    : "close-save"))
+            .ReturnsAsync(Result.Success());
+        var backgroundFlushStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseBackgroundFlush = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var flushCount = 0;
+        var autoSync = CreateAutoSyncCoordinator();
+        autoSync.Setup(service => service.FlushAsync(
+                It.IsAny<NovelBook>(), It.IsAny<CancellationToken>()))
+            .Returns(async (NovelBook book, CancellationToken flushToken) =>
+            {
+                _ = (book, flushToken);
+                if (Interlocked.Increment(ref flushCount) == 1)
+                {
+                    events.Enqueue("background-flush-start");
+                    backgroundFlushStarted.TrySetResult();
+                    await releaseBackgroundFlush.Task;
+                    events.Enqueue("background-flush-end");
+                }
+                else
+                {
+                    events.Enqueue("close-flush");
+                }
+            });
+        var statistics = new FakeReaderStatisticsSession
+        {
+            CheckpointRecorded = reason => events.Enqueue($"checkpoint-{reason}"),
+        };
+        var sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            statistics,
+            autoSync.Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+
+        var background = sut.CheckpointAppBackgroundingAsync(ct);
+        await backgroundFlushStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        var close = sut.PrepareForReaderLifecycleCloseAsync(ct);
+        close.IsCompleted.Should().BeFalse();
+        await sut.SaveProgressNowAsync(flushStatistics: false, ct: ct);
+
+        releaseBackgroundFlush.TrySetResult();
+        await Task.WhenAll(background, close).WaitAsync(TimeSpan.FromSeconds(2), ct);
+        await sut.SaveProgressNowAsync(flushStatistics: false, ct: ct);
+
+        Volatile.Read(ref saveCount).Should().Be(2);
+        events.Should().ContainInOrder(
+            "background-save",
+            "checkpoint-Background",
+            "background-flush-start",
+            "background-flush-end",
+            "close-save",
+            "checkpoint-Close",
+            "close-flush");
+        autoSync.Verify(service => service.Cancel(), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProgrammaticCompletion_ResetBaselineCompletesBeforeLifecycleFinalFlush()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var events = new ConcurrentQueue<string>();
+        var baselineCompleted = false;
+        var saveCount = 0;
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1",
+                It.IsAny<int>(),
+                It.IsAny<double>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .Callback(() => events.Enqueue(
+                Interlocked.Increment(ref saveCount) == 1
+                    ? "programmatic-save"
+                    : "final-save"))
+            .ReturnsAsync(Result.Success());
+        var statistics = new FakeReaderStatisticsSession
+        {
+            ResetBaselineRecorded = _ =>
+            {
+                baselineCompleted = true;
+                events.Enqueue("baseline-reset");
+            },
+            CheckpointRecorded = reason => events.Enqueue($"checkpoint-{reason}"),
+        };
+        var flushSawBaseline = false;
+        var autoSync = CreateAutoSyncCoordinator();
+        autoSync.Setup(service => service.FlushAsync(
+                It.IsAny<NovelBook>(), It.IsAny<CancellationToken>()))
+            .Callback(() =>
+            {
+                flushSawBaseline = baselineCompleted;
+                events.Enqueue("flush-export");
+            })
+            .Returns(Task.CompletedTask);
+        var messenger = new WeakReferenceMessenger();
+        var recipient = new object();
+        NovelReaderPageViewModel? sut = null;
+        Task? close = null;
+        var closeRequested = false;
+        messenger.Register<NovelLibraryChangedMessage>(recipient, (_, _) =>
+        {
+            if (closeRequested)
+                return;
+
+            closeRequested = true;
+            close = sut!.PrepareForReaderLifecycleCloseAsync(ct);
+        });
+        sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            messenger,
+            statistics,
+            autoSync.Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+        sut.SetChapterCharacterCounts([100]);
+        sut.SetChapter(0, 1);
+        sut.UpdateProgress(0.4);
+
+        await sut.SaveProgressAndResetStatisticsBaselineAsync(ct);
+        await close!.WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        flushSawBaseline.Should().BeTrue();
+        statistics.ResetPositions.Should().Equal(40);
+        events.Should().ContainInOrder(
+            "programmatic-save",
+            "baseline-reset",
+            "final-save",
+            "checkpoint-Close",
+            "flush-export");
+    }
+
+    [Fact]
+    public async Task ProgrammaticCompletion_WhenBookmarkWriteFails_StillResetsWithoutPublishing()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1",
+                It.IsAny<int>(),
+                It.IsAny<double>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Failure("write failed", "Bookmark"));
+        var notifications = new Mock<INotificationService>();
+        var statistics = new FakeReaderStatisticsSession();
+        var messenger = new FakeMessenger();
+        var autoSync = CreateAutoSyncCoordinator();
+        var sut = CreateSut(
+            novelService.Object,
+            notifications.Object,
+            messenger,
+            statistics,
+            autoSync.Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+
+        await sut.SaveProgressAndResetStatisticsBaselineAsync(ct);
+
+        statistics.ResetPositions.Should().Equal(0);
+        notifications.Verify(service => service.ShowError("write failed", "Bookmark"), Times.Once);
+        autoSync.Verify(service => service.ScheduleExport(It.IsAny<NovelBook>()), Times.Never);
+        messenger.SentMessages.Should().BeEmpty();
+    }
+
     private static NovelReaderPageViewModel CreateInitializedSut(
         string bookRootPath,
         IReaderHighlightService highlightService,
@@ -1545,6 +1885,12 @@ public sealed class NovelReaderPageViewModelTests
         public List<int> ResetPositions { get; } = [];
         public List<int> StopPositions { get; } = [];
         public Action<ReaderStatisticsCheckpointReason>? CheckpointRecorded { get; set; }
+        public Action<ReaderStatisticsPosition>? ResetBaselineRecorded { get; set; }
+        public Func<
+            ReaderStatisticsPosition,
+            ReaderStatisticsCheckpointReason,
+            CancellationToken,
+            Task>? CheckpointAsyncHandler { get; set; }
 
         public event EventHandler<ReaderStatisticsSessionState>? StateChanged;
 
@@ -1572,14 +1918,15 @@ public sealed class NovelReaderPageViewModelTests
         {
         }
 
-        public Task CheckpointAsync(
+        public async Task CheckpointAsync(
             ReaderStatisticsPosition position,
             ReaderStatisticsCheckpointReason reason,
             CancellationToken ct = default)
         {
+            if (CheckpointAsyncHandler != null)
+                await CheckpointAsyncHandler(position, reason, ct);
             Checkpoints.Add((position.RawCharacterCount, reason));
             CheckpointRecorded?.Invoke(reason);
-            return Task.CompletedTask;
         }
 
         public Task PauseAsync(
@@ -1600,8 +1947,11 @@ public sealed class NovelReaderPageViewModelTests
             return Task.CompletedTask;
         }
 
-        public void ResetBaseline(ReaderStatisticsPosition position) =>
+        public void ResetBaseline(ReaderStatisticsPosition position)
+        {
             ResetPositions.Add(position.RawCharacterCount);
+            ResetBaselineRecorded?.Invoke(position);
+        }
 
         public void Publish(ReaderStatisticsSessionState state)
         {

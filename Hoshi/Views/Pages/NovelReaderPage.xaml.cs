@@ -1756,8 +1756,7 @@ public sealed partial class NovelReaderPage : Page
     private async Task CompleteProgrammaticNavigationAsync()
     {
         _pendingProgrammaticFragment = null;
-        await ViewModel.SaveProgressNowAsync(flushStatistics: false);
-        ViewModel.ResetStatisticsBaseline();
+        await ViewModel.SaveProgressAndResetStatisticsBaselineAsync();
         RefreshReaderDisplayChrome();
     }
 

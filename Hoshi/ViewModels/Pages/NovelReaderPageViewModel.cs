@@ -302,8 +302,9 @@ public partial class NovelReaderPageViewModel : ObservableObject
         if (ReaderStatisticsEventClassifier.IsActualPageMovement(readerEvent, Progress))
         {
             UpdateProgress(readerEvent.Progress);
-            await SaveProgressNowAsync(flushStatistics: false, ct: ct);
-            await CheckpointReadingAsync(ReaderStatisticsCheckpointReason.ReadingMovement, ct);
+            await SaveProgressAndCheckpointAsync(
+                ReaderStatisticsCheckpointReason.ReadingMovement,
+                ct);
             return ReaderPageNavigationOutcome.SameChapterMovement;
         }
 
@@ -315,8 +316,9 @@ public partial class NovelReaderPageViewModel : ObservableObject
             return ReaderPageNavigationOutcome.NoMovement;
 
         UpdateProgress(readerEvent.Progress);
-        await SaveProgressNowAsync(flushStatistics: false, ct: ct);
-        await CheckpointReadingAsync(ReaderStatisticsCheckpointReason.AdjacentChapter, ct);
+        await SaveProgressAndCheckpointAsync(
+            ReaderStatisticsCheckpointReason.AdjacentChapter,
+            ct);
         return ReaderPageNavigationOutcome.AdjacentChapter(adjacent.Value);
     }
 
@@ -683,6 +685,94 @@ public partial class NovelReaderPageViewModel : ObservableObject
             flushStatistics,
             scheduleAutoSync,
             ct);
+    }
+
+    private Task SaveProgressAndCheckpointAsync(
+        ReaderStatisticsCheckpointReason reason,
+        CancellationToken ct)
+    {
+        Task operation;
+        TaskCompletionSource admission;
+        lock (_saveGate)
+        {
+            var request = CaptureProgressSaveRequest();
+            if (!CanAdmitProgressWriter() || request == null)
+                return Task.CompletedTask;
+
+            _saveCts?.Cancel();
+            admission = CreateWriterAdmission();
+            operation = RunProgressWriterWithCheckpointAsync(
+                admission.Task,
+                _writerTail,
+                request,
+                reason,
+                ct);
+            _writerTail = operation;
+        }
+
+        admission.TrySetResult();
+        return operation;
+    }
+
+    private async Task RunProgressWriterWithCheckpointAsync(
+        Task admission,
+        Task previousWriter,
+        ProgressSaveRequest request,
+        ReaderStatisticsCheckpointReason reason,
+        CancellationToken ct)
+    {
+        await admission;
+        await AwaitPreviousWriterCompletionAsync(previousWriter);
+        ct.ThrowIfCancellationRequested();
+        await SaveProgressCoreAsync(
+            request,
+            flushStatistics: false,
+            scheduleAutoSync: true,
+            ct);
+        await CheckpointReadingAsync(reason, ct);
+    }
+
+    public Task SaveProgressAndResetStatisticsBaselineAsync(
+        CancellationToken ct = default)
+    {
+        Task operation;
+        TaskCompletionSource admission;
+        lock (_saveGate)
+        {
+            var request = CaptureProgressSaveRequest();
+            if (!CanAdmitProgressWriter() || request == null)
+                return Task.CompletedTask;
+
+            _saveCts?.Cancel();
+            admission = CreateWriterAdmission();
+            operation = RunProgressWriterWithBaselineResetAsync(
+                admission.Task,
+                _writerTail,
+                request,
+                ct);
+            _writerTail = operation;
+        }
+
+        admission.TrySetResult();
+        return operation;
+    }
+
+    private async Task RunProgressWriterWithBaselineResetAsync(
+        Task admission,
+        Task previousWriter,
+        ProgressSaveRequest request,
+        CancellationToken ct)
+    {
+        await admission;
+        await AwaitPreviousWriterCompletionAsync(previousWriter);
+        ct.ThrowIfCancellationRequested();
+        await SaveProgressCoreAsync(
+            request,
+            flushStatistics: false,
+            scheduleAutoSync: true,
+            ct);
+        _statisticsSession.ResetBaseline(
+            new ReaderStatisticsPosition(request.CurrentCharacterCount));
     }
 
     private async Task RunLifecycleWriterBoundaryAsync(

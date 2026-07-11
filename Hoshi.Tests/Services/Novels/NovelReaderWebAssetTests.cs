@@ -2959,7 +2959,8 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("BeginProgrammaticNavigationAsync");
         readerCode.Should().Contain("CompleteProgrammaticNavigationAsync");
         readerCode.Should().Contain("ReaderStatisticsCheckpointReason.ProgrammaticDeparture");
-        readerCode.Should().Contain("SaveProgressNowAsync(flushStatistics: false)");
+        readerCode.Should().MatchRegex(
+            @"(?s)private async Task CompleteProgrammaticNavigationAsync\(\)\s*\{\s*_pendingProgrammaticFragment = null;\s*await ViewModel\.SaveProgressAndResetStatisticsBaselineAsync\(\);\s*RefreshReaderDisplayChrome\(\);\s*\}");
         readerCode.Should().Contain("ResetStatisticsBaseline");
         readerCode.Should().Contain("StatisticsButton_Click");
         readerCode.Should().NotContain("await ViewModel.FlushStatisticsAsync();");
