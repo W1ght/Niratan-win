@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,6 +9,8 @@ namespace Hoshi.Services.Novels;
 
 public interface INovelStatisticsDashboardService
 {
+    event EventHandler<NovelStatisticsDashboardSnapshot>? SnapshotRefreshed;
+
     Task<NovelStatisticsDashboardSnapshot> LoadSnapshotAsync(
         IReadOnlyList<NovelBook> books,
         CancellationToken ct = default);

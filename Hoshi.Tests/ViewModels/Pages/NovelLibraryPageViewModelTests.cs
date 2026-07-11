@@ -372,6 +372,48 @@ public class NovelLibraryPageViewModelTests
         shelves.VerifyAll();
     }
 
+    [Fact]
+    public async Task StatisticsControls_ReprojectRangeMetricsCalendarAndCorruptWarning()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var contribution = new NovelStatisticsBookContribution(
+            "a", "A", null, 1_200, 600, true);
+        var day = new NovelStatisticsDayAggregate(
+            today, 1_200, 600, [contribution]);
+        var snapshot = new NovelStatisticsDashboardSnapshot(
+            today.AddYears(-1).AddDays(1),
+            today,
+            [day],
+            [new NovelStatisticsBookRecord("a", "A", null, 2_000)],
+            ["broken-book"]);
+        var dashboard = new Mock<INovelStatisticsDashboardService>();
+        dashboard.Setup(service => service.LoadSnapshotAsync(
+                It.IsAny<IReadOnlyList<NovelBook>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(snapshot);
+        var settings = new Mock<ISettingsService>();
+        settings.SetupGet(service => service.Current).Returns(new AppSettings());
+        var sut = CreateSut(
+            settingsService: settings.Object,
+            statisticsDashboardService: dashboard.Object);
+
+        await sut.InitializeAsync();
+        sut.SelectedStatisticsRangeMode = NovelStatisticsRangeMode.Day;
+        sut.StatisticsAnchorDate = new DateTimeOffset(
+            today.ToDateTime(TimeOnly.MinValue),
+            TimeZoneInfo.Local.GetUtcOffset(today.ToDateTime(TimeOnly.MinValue)));
+        sut.SelectedStatisticsTrendMetric = NovelStatisticsTrendMetric.Duration;
+        sut.SelectedStatisticsRankingMetric = NovelStatisticsBookRankingMetric.Duration;
+        sut.SelectedStatisticsCalendarDay = sut.StatisticsCalendarDays.Single(day => day.Date == today);
+
+        sut.HasStatisticsCorruptBooks.Should().BeTrue();
+        sut.StatisticsRangeTitle.Should().Be(today.ToString("yyyy-MM-dd"));
+        sut.StatisticsRangeText.Should().Contain("1,200");
+        sut.StatisticsTrendPoints.Should().ContainSingle().Which.ValueText.Should().Be("10m");
+        sut.StatisticsBookRankingRows.Should().ContainSingle().Which.ValueText.Should().Be("10m");
+        sut.StatisticsCalendarDetailText.Should().Contain("1,200 chars").And.Contain("1 book");
+    }
+
     private static NovelLibraryPageViewModel CreateSut(
         INovelLibraryService? novelService = null,
         IDialogService? dialogService = null,

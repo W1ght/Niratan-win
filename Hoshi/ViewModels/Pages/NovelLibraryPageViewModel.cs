@@ -15,6 +15,7 @@ using Hoshi.Models;
 using Hoshi.Models.Common;
 using Hoshi.Models.DTO;
 using Hoshi.Models.Novel;
+using Hoshi.Models.Settings;
 using Hoshi.Models.Sync;
 using Hoshi.Services.Settings;
 using Hoshi.Services.Novels;
@@ -37,6 +38,8 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     private readonly INovelStatisticsDashboardService _statisticsDashboardService;
     private readonly INovelShelfService _shelfService;
     private NovelShelfState _currentShelfState = new([], []);
+    private NovelStatisticsDashboardSnapshot? _statisticsSnapshot;
+    private bool _isInitializingStatisticsControls = true;
     private readonly ITtuSyncRemoteStore _ttuSyncRemoteStore;
     private readonly ITtuBookImportService _ttuBookImportService;
     private readonly IGoogleDriveAuthService _googleDriveAuthService;
@@ -79,19 +82,78 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     public partial string StatisticsSpeedText { get; set; } = "— / h";
 
     [ObservableProperty]
-    public partial ObservableCollection<NovelStatisticsTrendPoint> StatisticsTrendPoints { get; set; } = new();
+    public partial string StatisticsRangeTitle { get; set; } = "Recent year";
+
+    [ObservableProperty]
+    public partial NovelStatisticsRangeMode SelectedStatisticsRangeMode { get; set; } = NovelStatisticsRangeMode.Year;
+
+    [ObservableProperty]
+    public partial DateTimeOffset? StatisticsAnchorDate { get; set; }
+
+    [ObservableProperty]
+    public partial NovelStatisticsTrendGrain SelectedStatisticsTrendGrain { get; set; } = NovelStatisticsTrendGrain.Day;
+
+    [ObservableProperty]
+    public partial NovelStatisticsTrendMetric SelectedStatisticsTrendMetric { get; set; } = NovelStatisticsTrendMetric.Characters;
+
+    [ObservableProperty]
+    public partial NovelStatisticsBookRankingMetric SelectedStatisticsRankingMetric { get; set; } = NovelStatisticsBookRankingMetric.Characters;
+
+    [ObservableProperty]
+    public partial StatisticsDailyTargetType SelectedStatisticsDailyTargetType { get; set; }
+
+    [ObservableProperty]
+    public partial int StatisticsDailyCharacterTarget { get; set; }
+
+    public double StatisticsDailyCharacterTargetValue
+    {
+        get => StatisticsDailyCharacterTarget;
+        set => StatisticsDailyCharacterTarget =
+            NovelStatisticsDashboardTargets.SnapCharacterTarget((int)Math.Round(value));
+    }
+
+    [ObservableProperty]
+    public partial int StatisticsDailyDurationTargetMinutes { get; set; }
+
+    public double StatisticsDailyDurationTargetMinutesValue
+    {
+        get => StatisticsDailyDurationTargetMinutes;
+        set => StatisticsDailyDurationTargetMinutes =
+            NovelStatisticsDashboardTargets.SnapDurationTarget((int)Math.Round(value));
+    }
+
+    [ObservableProperty]
+    public partial int StatisticsWeeklyTargetDays { get; set; }
+
+    public double StatisticsWeeklyTargetDaysValue
+    {
+        get => StatisticsWeeklyTargetDays;
+        set => StatisticsWeeklyTargetDays =
+            NovelStatisticsDashboardTargets.SnapWeeklyTargetDays((int)Math.Round(value));
+    }
+
+    [ObservableProperty]
+    public partial ObservableCollection<NovelStatisticsTrendDisplayPoint> StatisticsTrendPoints { get; set; } = new();
 
     [ObservableProperty]
     public partial ObservableCollection<NovelStatisticsCalendarDay> StatisticsCalendarDays { get; set; } = new();
 
     [ObservableProperty]
-    public partial ObservableCollection<NovelStatisticsBookRankingRow> StatisticsBookRankingRows { get; set; } = new();
+    public partial ObservableCollection<NovelStatisticsBookRankingDisplayRow> StatisticsBookRankingRows { get; set; } = new();
 
     [ObservableProperty]
     public partial ObservableCollection<NovelStatisticsShelfComparisonRow> StatisticsShelfComparisonRows { get; set; } = new();
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasStatisticsCorruptBooks))]
+    [NotifyPropertyChangedFor(nameof(StatisticsCorruptWarningText))]
     public partial ObservableCollection<string> StatisticsSkippedCorruptBookIds { get; set; } = new();
+
+    [ObservableProperty]
+    public partial NovelStatisticsCalendarDay? SelectedStatisticsCalendarDay { get; set; }
+
+    [ObservableProperty]
+    public partial string StatisticsCalendarDetailText { get; set; } = "No reading records";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NoNovels))]
@@ -107,8 +169,18 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         new(NovelLibrarySortOption.Manual, "Manual"),
     ];
 
+    public NovelStatisticsRangeMode[] StatisticsRangeModes { get; } = Enum.GetValues<NovelStatisticsRangeMode>();
+    public NovelStatisticsTrendGrain[] StatisticsTrendGrains { get; } = Enum.GetValues<NovelStatisticsTrendGrain>();
+    public NovelStatisticsTrendMetric[] StatisticsTrendMetrics { get; } = Enum.GetValues<NovelStatisticsTrendMetric>();
+    public NovelStatisticsBookRankingMetric[] StatisticsRankingMetrics { get; } = Enum.GetValues<NovelStatisticsBookRankingMetric>();
+    public StatisticsDailyTargetType[] StatisticsDailyTargetTypes { get; } = Enum.GetValues<StatisticsDailyTargetType>();
+
     public bool NoNovels => !IsContentLoading && NovelBooks.Count == 0;
     public bool HasNovelStorageWarnings => NovelStorageWarnings.Count > 0;
+    public bool HasStatisticsCorruptBooks => StatisticsSkippedCorruptBookIds.Count > 0;
+    public string StatisticsCorruptWarningText => HasStatisticsCorruptBooks
+        ? "Some statistics are temporarily unavailable. The affected sidecar files were left unchanged."
+        : string.Empty;
 
     public NovelLibraryPageViewModel(
         INovelLibraryService novelLibraryService,
@@ -136,15 +208,30 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         _ttuBookImportService = ttuBookImportService;
         _googleDriveAuthService = googleDriveAuthService;
         SelectedSortOption = _settingsService.Current.NovelLibrarySortOption;
+        var statisticsSettings = _settingsService.Current.StatisticsSettings;
+        SelectedStatisticsDailyTargetType = statisticsSettings.DailyTargetType;
+        StatisticsDailyCharacterTarget = NovelStatisticsDashboardTargets.SnapCharacterTarget(
+            statisticsSettings.DailyCharacterTarget);
+        StatisticsDailyDurationTargetMinutes = NovelStatisticsDashboardTargets.SnapDurationTarget(
+            statisticsSettings.DailyDurationTargetMinutes);
+        StatisticsWeeklyTargetDays = NovelStatisticsDashboardTargets.SnapWeeklyTargetDays(
+            statisticsSettings.WeeklyTargetDays);
+        _isInitializingStatisticsControls = false;
         _messenger.RegisterAll(this);
     }
 
-    public async Task InitializeAsync() => await LoadNovelsAsync();
+    public async Task InitializeAsync()
+    {
+        _statisticsDashboardService.SnapshotRefreshed -= OnStatisticsSnapshotRefreshed;
+        _statisticsDashboardService.SnapshotRefreshed += OnStatisticsSnapshotRefreshed;
+        await LoadNovelsAsync();
+    }
 
     public void Receive(NovelLibraryChangedMessage message) => _ = LoadNovelsAsync();
 
     public void OnNavigatedFrom()
     {
+        _statisticsDashboardService.SnapshotRefreshed -= OnStatisticsSnapshotRefreshed;
         _cts.Cancel();
     }
 
@@ -569,13 +656,39 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     private async Task LoadStatisticsDashboardAsync(IReadOnlyList<NovelBook> books)
     {
         var snapshot = await _statisticsDashboardService.LoadSnapshotAsync(books, _cts.Token);
+        ApplyStatisticsDashboardSnapshot(snapshot);
+    }
+
+    private void OnStatisticsSnapshotRefreshed(
+        object? sender,
+        NovelStatisticsDashboardSnapshot snapshot) =>
+        ApplyStatisticsDashboardSnapshot(snapshot);
+
+    private void ApplyStatisticsDashboardSnapshot(
+        NovelStatisticsDashboardSnapshot snapshot)
+    {
+        _statisticsSnapshot = snapshot;
+        if (StatisticsAnchorDate == null)
+        {
+            var initialAnchor = snapshot.Days.LastOrDefault()?.Date
+                ?? DateOnly.FromDateTime(DateTime.Now);
+            StatisticsAnchorDate = LocalDateTimeOffset(initialAnchor);
+        }
+        RecalculateStatisticsDashboard();
+    }
+
+    private void RecalculateStatisticsDashboard()
+    {
+        if (_statisticsSnapshot == null)
+            return;
+
+        var snapshot = _statisticsSnapshot;
         var today = DateOnly.FromDateTime(DateTime.Now);
-        var settings = _settingsService.Current.StatisticsSettings;
         var targetSettings = new NovelStatisticsDashboardTargetSettings(
-            settings.DailyTargetType,
-            settings.DailyCharacterTarget,
-            settings.DailyDurationTargetMinutes,
-            settings.WeeklyTargetDays);
+            SelectedStatisticsDailyTargetType,
+            StatisticsDailyCharacterTarget,
+            StatisticsDailyDurationTargetMinutes,
+            StatisticsWeeklyTargetDays);
 
         var todaySummary = NovelStatisticsDashboardCalculator.TodaySummary(
             snapshot,
@@ -585,24 +698,36 @@ public partial class NovelLibraryPageViewModel : ObservableObject
             snapshot,
             today,
             targetSettings);
-        var range = new NovelStatisticsDateRange(today.AddYears(-1).AddDays(1), today);
+        var window = snapshot.WindowStart == DateOnly.MinValue
+            ? NovelStatisticsDashboardCalculator.RecentYear(today)
+            : new NovelStatisticsDateRange(snapshot.WindowStart, snapshot.WindowEnd);
+        var anchor = StatisticsAnchorDate is { } selectedAnchor
+            ? DateOnly.FromDateTime(selectedAnchor.LocalDateTime)
+            : snapshot.Days.LastOrDefault()?.Date ?? today;
+        var range = NovelStatisticsDashboardCalculator.SelectedRange(
+            SelectedStatisticsRangeMode,
+            anchor,
+            window);
         var rangeSummary = NovelStatisticsDashboardCalculator.RangeSummary(
             snapshot.Days,
             range,
             targetSettings);
         var speed = NovelStatisticsDashboardCalculator.SpeedSummary(snapshot.Days, range);
         var trend = NovelStatisticsDashboardCalculator.TrendPoints(
-            NovelStatisticsTrendGrain.Month,
+            SelectedStatisticsTrendGrain,
             range,
             snapshot.Days);
+        var calendarSnapshot = snapshot.WindowStart == DateOnly.MinValue
+            ? snapshot with { WindowStart = window.Start, WindowEnd = window.End }
+            : snapshot;
         var calendar = NovelStatisticsDashboardCalculator.CalendarDays(
-            snapshot,
+            calendarSnapshot,
             today,
             targetSettings);
         var ranking = NovelStatisticsDashboardCalculator.BookRankingRows(
             snapshot.Days,
             range,
-            NovelStatisticsBookRankingMetric.Characters);
+            SelectedStatisticsRankingMetric);
         var shelves = NovelStatisticsDashboardCalculator.ShelfComparisonRows(
             snapshot,
             _currentShelfState,
@@ -612,15 +737,131 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         StatisticsTodayText = $"{FormatCharacters(todaySummary.Characters)} chars · {FormatDuration(todaySummary.ReadingTime)} · {todaySummary.TargetPercent}%";
         StatisticsWeekText = $"{FormatCharacters(weekSummary.Characters)} chars · {weekSummary.MetTargetDays}/{weekSummary.TargetDays} days";
         StatisticsRangeText = $"{FormatCharacters(rangeSummary.Characters)} chars · {FormatDuration(rangeSummary.ReadingTime)}";
+        StatisticsRangeTitle = FormatRangeTitle(SelectedStatisticsRangeMode, range);
         StatisticsSpeedText = speed.WeightedAveragePerHour is { } weighted
             ? $"{FormatCharacters(weighted)} / h"
             : "— / h";
-        StatisticsTrendPoints = new ObservableCollection<NovelStatisticsTrendPoint>(trend);
-        StatisticsCalendarDays = new ObservableCollection<NovelStatisticsCalendarDay>(calendar.TakeLast(35));
-        StatisticsBookRankingRows = new ObservableCollection<NovelStatisticsBookRankingRow>(ranking);
+        StatisticsTrendPoints = new ObservableCollection<NovelStatisticsTrendDisplayPoint>(
+            trend.Select(point => new NovelStatisticsTrendDisplayPoint(
+                point.Id,
+                point.Label,
+                FormatTrendValue(point, SelectedStatisticsTrendMetric))));
+        StatisticsCalendarDays = new ObservableCollection<NovelStatisticsCalendarDay>(calendar);
+        StatisticsBookRankingRows = new ObservableCollection<NovelStatisticsBookRankingDisplayRow>(
+            ranking.Select(row => new NovelStatisticsBookRankingDisplayRow(
+                row.Id,
+                row.Title,
+                FormatRankingValue(row, SelectedStatisticsRankingMetric))));
         StatisticsShelfComparisonRows = new ObservableCollection<NovelStatisticsShelfComparisonRow>(shelves);
         StatisticsSkippedCorruptBookIds = new ObservableCollection<string>(snapshot.SkippedCorruptBookIds);
+
+        var selectedDate = SelectedStatisticsCalendarDay?.Date ?? anchor;
+        SelectedStatisticsCalendarDay = StatisticsCalendarDays.FirstOrDefault(day => day.Date == selectedDate)
+            ?? StatisticsCalendarDays.LastOrDefault();
+        UpdateStatisticsCalendarDetail();
     }
+
+    partial void OnSelectedStatisticsRangeModeChanged(NovelStatisticsRangeMode value) => RecalculateStatisticsDashboard();
+    partial void OnStatisticsAnchorDateChanged(DateTimeOffset? value) => RecalculateStatisticsDashboard();
+    partial void OnSelectedStatisticsTrendGrainChanged(NovelStatisticsTrendGrain value) => RecalculateStatisticsDashboard();
+    partial void OnSelectedStatisticsTrendMetricChanged(NovelStatisticsTrendMetric value) => RecalculateStatisticsDashboard();
+    partial void OnSelectedStatisticsRankingMetricChanged(NovelStatisticsBookRankingMetric value) => RecalculateStatisticsDashboard();
+    partial void OnSelectedStatisticsCalendarDayChanged(NovelStatisticsCalendarDay? value)
+    {
+        if (value != null)
+        {
+            StatisticsAnchorDate = LocalDateTimeOffset(value.Date);
+            UpdateStatisticsCalendarDetail();
+        }
+    }
+
+    partial void OnSelectedStatisticsDailyTargetTypeChanged(StatisticsDailyTargetType value) => SaveStatisticsTargetsAndRecalculate();
+    partial void OnStatisticsDailyCharacterTargetChanged(int value)
+    {
+        OnPropertyChanged(nameof(StatisticsDailyCharacterTargetValue));
+        SaveStatisticsTargetsAndRecalculate();
+    }
+
+    partial void OnStatisticsDailyDurationTargetMinutesChanged(int value)
+    {
+        OnPropertyChanged(nameof(StatisticsDailyDurationTargetMinutesValue));
+        SaveStatisticsTargetsAndRecalculate();
+    }
+
+    partial void OnStatisticsWeeklyTargetDaysChanged(int value)
+    {
+        OnPropertyChanged(nameof(StatisticsWeeklyTargetDaysValue));
+        SaveStatisticsTargetsAndRecalculate();
+    }
+
+    private void SaveStatisticsTargetsAndRecalculate()
+    {
+        if (_isInitializingStatisticsControls)
+            return;
+
+        var current = _settingsService.Current.StatisticsSettings;
+        _settingsService.Set(
+            settings => settings.StatisticsSettings,
+            new NovelStatisticsSettings
+            {
+                EnableStatistics = current.EnableStatistics,
+                AutostartMode = current.AutostartMode,
+                DailyTargetType = SelectedStatisticsDailyTargetType,
+                DailyCharacterTarget = StatisticsDailyCharacterTarget,
+                DailyDurationTargetMinutes = StatisticsDailyDurationTargetMinutes,
+                WeeklyTargetDays = StatisticsWeeklyTargetDays,
+                EnableSync = current.EnableSync,
+                SyncMode = current.SyncMode,
+            });
+        _ = _settingsService.SaveAsync();
+        RecalculateStatisticsDashboard();
+    }
+
+    private void UpdateStatisticsCalendarDetail()
+    {
+        var day = SelectedStatisticsCalendarDay;
+        StatisticsCalendarDetailText = day == null
+            ? "No reading records"
+            : $"{day.Date:yyyy-MM-dd} · {FormatCharacters(day.Characters)} chars · {FormatDuration(day.ReadingTime)} · {day.ActiveBookCount} {(day.ActiveBookCount == 1 ? "book" : "books")}";
+    }
+
+    private static DateTimeOffset LocalDateTimeOffset(DateOnly date)
+    {
+        var value = date.ToDateTime(TimeOnly.MinValue);
+        return new DateTimeOffset(value, TimeZoneInfo.Local.GetUtcOffset(value));
+    }
+
+    private static string FormatRangeTitle(
+        NovelStatisticsRangeMode mode,
+        NovelStatisticsDateRange range) => mode switch
+        {
+            NovelStatisticsRangeMode.Year => "Recent year",
+            NovelStatisticsRangeMode.Month => range.Start.ToString("yyyy-MM"),
+            NovelStatisticsRangeMode.Week => $"{range.Start:MM-dd} – {range.End:MM-dd}",
+            _ => range.Start.ToString("yyyy-MM-dd"),
+        };
+
+    private static string FormatTrendValue(
+        NovelStatisticsTrendPoint point,
+        NovelStatisticsTrendMetric metric) => metric switch
+        {
+            NovelStatisticsTrendMetric.Duration => FormatDuration(point.ReadingTime),
+            NovelStatisticsTrendMetric.Speed => point.AverageSpeedPerHour is { } speed
+                ? $"{FormatCharacters(speed)} / h"
+                : "— / h",
+            _ => $"{FormatCharacters(point.Characters)} chars",
+        };
+
+    private static string FormatRankingValue(
+        NovelStatisticsBookRankingRow row,
+        NovelStatisticsBookRankingMetric metric) => metric switch
+        {
+            NovelStatisticsBookRankingMetric.Duration => FormatDuration(row.ReadingTime),
+            NovelStatisticsBookRankingMetric.Speed => row.AverageSpeedPerHour is { } speed
+                ? $"{FormatCharacters(speed)} / h"
+                : "— / h",
+            _ => $"{FormatCharacters(row.Characters)} chars",
+        };
 
     private static string FormatCharacters(int characters) =>
         characters.ToString("N0");

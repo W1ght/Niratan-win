@@ -17,6 +17,8 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
     private readonly TimeProvider _timeProvider;
     private readonly NovelStatisticsDashboardCache? _cache;
 
+    public event EventHandler<NovelStatisticsDashboardSnapshot>? SnapshotRefreshed;
+
     public NovelStatisticsDashboardService(INovelStatisticsSidecarService statisticsSidecarService)
         : this(statisticsSidecarService, null, TimeProvider.System, null)
     {
@@ -66,8 +68,46 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
         if (_cache != null
             && await _cache.TryLoadAsync(cacheKey, ct) is { } cached)
         {
+            _ = RefreshCachedSnapshotAsync(
+                books,
+                today,
+                cacheKey,
+                SynchronizationContext.Current);
             return cached;
         }
+        return await RebuildSnapshotAsync(books, today, cacheKey, ct);
+    }
+
+    private async Task RefreshCachedSnapshotAsync(
+        IReadOnlyList<NovelBook> books,
+        DateOnly today,
+        string cacheKey,
+        SynchronizationContext? synchronizationContext)
+    {
+        try
+        {
+            var snapshot = await RebuildSnapshotAsync(
+                books,
+                today,
+                cacheKey,
+                CancellationToken.None);
+            if (synchronizationContext != null)
+                synchronizationContext.Post(_ => SnapshotRefreshed?.Invoke(this, snapshot), null);
+            else
+                SnapshotRefreshed?.Invoke(this, snapshot);
+        }
+        catch
+        {
+            // Cache remains a usable stale fallback; the next load retries the rebuild.
+        }
+    }
+
+    private async Task<NovelStatisticsDashboardSnapshot> RebuildSnapshotAsync(
+        IReadOnlyList<NovelBook> books,
+        DateOnly today,
+        string cacheKey,
+        CancellationToken ct)
+    {
         var windowStart = today.AddYears(-1).AddDays(1);
         var contributionsByDate = new Dictionary<DateOnly, List<NovelStatisticsBookContribution>>();
         var bookRecords = new List<NovelStatisticsBookRecord>();
@@ -181,7 +221,7 @@ public static partial class NovelStatisticsDashboardCalculator
             Percent(TargetRatio(aggregate, settings)),
             aggregate.Characters,
             aggregate.ReadingTime,
-            ValidAverageSpeedPerHour([aggregate]) ?? 0,
+            ValidAverageSpeedPerHour([aggregate]),
             DailyGoalStreak(daysByDate, today, settings));
     }
 
@@ -231,7 +271,7 @@ public static partial class NovelStatisticsDashboardCalculator
         return new NovelStatisticsRangeSummary(
             characters,
             readingTime,
-            ValidAverageSpeedPerHour(rangeDays) ?? 0,
+            ValidAverageSpeedPerHour(rangeDays),
             rangeDays.Count(day => TargetRatio(day, settings) >= 1),
             range.Start == range.End && rangeDays.Count == 1 ? Percent(TargetRatio(rangeDays[0], settings)) : 0);
     }

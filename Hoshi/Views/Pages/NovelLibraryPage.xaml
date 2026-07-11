@@ -129,7 +129,7 @@
             </Button>
         </DataTemplate>
 
-        <DataTemplate x:Key="StatisticsRankingTemplate" x:DataType="novel:NovelStatisticsBookRankingRow">
+        <DataTemplate x:Key="StatisticsRankingTemplate" x:DataType="novel:NovelStatisticsBookRankingDisplayRow">
             <Grid Padding="0,6"
                   ColumnDefinitions="*,Auto"
                   ColumnSpacing="8">
@@ -137,13 +137,9 @@
                     <TextBlock Text="{x:Bind Title, Mode=OneWay}"
                                TextTrimming="CharacterEllipsis"
                                Style="{StaticResource BodyStrongTextBlockStyle}" />
-                    <TextBlock Text="{x:Bind Characters, Mode=OneWay}"
+                    <TextBlock Text="{x:Bind ValueText, Mode=OneWay}"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
-                <TextBlock Grid.Column="1"
-                           VerticalAlignment="Center"
-                           FontWeight="SemiBold"
-                           Text="{x:Bind AverageSpeedPerHour, Mode=OneWay}" />
             </Grid>
         </DataTemplate>
 
@@ -157,9 +153,9 @@
             </Grid>
         </DataTemplate>
 
-        <DataTemplate x:Key="StatisticsTrendTemplate" x:DataType="novel:NovelStatisticsTrendPoint">
-            <StackPanel Width="72" Spacing="3">
-                <TextBlock Text="{x:Bind Characters}" FontWeight="SemiBold" />
+        <DataTemplate x:Key="StatisticsTrendTemplate" x:DataType="novel:NovelStatisticsTrendDisplayPoint">
+            <StackPanel MinWidth="72" Spacing="3">
+                <TextBlock Text="{x:Bind ValueText}" FontWeight="SemiBold" />
                 <TextBlock Text="{x:Bind Label}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             </StackPanel>
         </DataTemplate>
@@ -245,13 +241,111 @@
                      IsClosable="False"
                      Severity="Warning" />
 
+            <InfoBar x:Name="NovelLibraryStatisticsCorruptWarning"
+                     AutomationProperties.AutomationId="NovelLibraryStatisticsCorruptWarning"
+                     IsOpen="{x:Bind ViewModel.HasStatisticsCorruptBooks, Mode=OneWay}"
+                     IsClosable="False"
+                     Message="{x:Bind ViewModel.StatisticsCorruptWarningText, Mode=OneWay}"
+                     Severity="Warning" />
+
             <Border Padding="16"
                     CornerRadius="8"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     AutomationProperties.AutomationId="NovelLibraryStatisticsDashboard"
                     Visibility="{x:Bind ViewModel.ShowStatisticsDashboard, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
-                <Grid ColumnDefinitions="*,*,*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="18" RowSpacing="14">
-                    <StackPanel Spacing="6">
+                <ScrollViewer MaxHeight="560"
+                              HorizontalScrollBarVisibility="Disabled"
+                              VerticalScrollBarVisibility="Auto">
+                <Grid ColumnDefinitions="*,*,*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="18" RowSpacing="14">
+                    <ScrollViewer Grid.ColumnSpan="4"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  HorizontalScrollMode="Enabled"
+                                  VerticalScrollBarVisibility="Disabled"
+                                  VerticalScrollMode="Disabled">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Range" />
+                            <ComboBox Width="112"
+                                      AutomationProperties.AutomationId="NovelLibraryStatisticsRangeMode"
+                                      AutomationProperties.Name="Statistics range"
+                                      ItemsSource="{x:Bind ViewModel.StatisticsRangeModes}"
+                                      SelectedItem="{x:Bind ViewModel.SelectedStatisticsRangeMode, Mode=TwoWay}" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Anchor" />
+                            <CalendarDatePicker Width="150"
+                                                AutomationProperties.AutomationId="NovelLibraryStatisticsAnchorDate"
+                                                AutomationProperties.Name="Statistics anchor date"
+                                                Date="{x:Bind ViewModel.StatisticsAnchorDate, Mode=TwoWay}" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Time Grain" />
+                            <ComboBox Width="104"
+                                      AutomationProperties.AutomationId="NovelLibraryStatisticsTrendGrain"
+                                      AutomationProperties.Name="Trend time grain"
+                                      ItemsSource="{x:Bind ViewModel.StatisticsTrendGrains}"
+                                      SelectedItem="{x:Bind ViewModel.SelectedStatisticsTrendGrain, Mode=TwoWay}" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Trend Metric" />
+                            <ComboBox Width="112"
+                                      AutomationProperties.AutomationId="NovelLibraryStatisticsTrendMetric"
+                                      AutomationProperties.Name="Trend metric"
+                                      ItemsSource="{x:Bind ViewModel.StatisticsTrendMetrics}"
+                                      SelectedItem="{x:Bind ViewModel.SelectedStatisticsTrendMetric, Mode=TwoWay}" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Ranking Metric" />
+                            <ComboBox Width="112"
+                                      AutomationProperties.AutomationId="NovelLibraryStatisticsRankingMetric"
+                                      AutomationProperties.Name="Book ranking metric"
+                                      ItemsSource="{x:Bind ViewModel.StatisticsRankingMetrics}"
+                                      SelectedItem="{x:Bind ViewModel.SelectedStatisticsRankingMetric, Mode=TwoWay}" />
+                        </StackPanel>
+                    </StackPanel>
+                    </ScrollViewer>
+                    <ScrollViewer Grid.Row="1" Grid.ColumnSpan="4"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  HorizontalScrollMode="Enabled"
+                                  VerticalScrollBarVisibility="Disabled"
+                                  VerticalScrollMode="Disabled">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Goal Type" />
+                            <ComboBox Width="120"
+                                      AutomationProperties.AutomationId="NovelLibraryStatisticsGoalType"
+                                      AutomationProperties.Name="Daily goal type"
+                                      ItemsSource="{x:Bind ViewModel.StatisticsDailyTargetTypes}"
+                                      SelectedItem="{x:Bind ViewModel.SelectedStatisticsDailyTargetType, Mode=TwoWay}" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Character Target" />
+                            <NumberBox Width="128" Minimum="500" Maximum="20000" SmallChange="500"
+                                       AutomationProperties.AutomationId="NovelLibraryStatisticsCharacterTarget"
+                                       AutomationProperties.Name="Daily character target"
+                                       Value="{x:Bind ViewModel.StatisticsDailyCharacterTargetValue, Mode=TwoWay}" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Duration Target (min)" />
+                            <NumberBox Width="142" Minimum="5" Maximum="240" SmallChange="5"
+                                       AutomationProperties.AutomationId="NovelLibraryStatisticsDurationTarget"
+                                       AutomationProperties.Name="Daily duration target in minutes"
+                                       Value="{x:Bind ViewModel.StatisticsDailyDurationTargetMinutesValue, Mode=TwoWay}" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Weekly Target Days" />
+                            <NumberBox Width="128" Minimum="1" Maximum="7" SmallChange="1"
+                                       AutomationProperties.AutomationId="NovelLibraryStatisticsWeeklyTarget"
+                                       AutomationProperties.Name="Weekly target days"
+                                       Value="{x:Bind ViewModel.StatisticsWeeklyTargetDaysValue, Mode=TwoWay}" />
+                        </StackPanel>
+                        <TextBlock VerticalAlignment="Bottom"
+                                   Margin="8,0,0,9"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="Goals recalculate historical progress and streaks." />
+                    </StackPanel>
+                    </ScrollViewer>
+                    <StackPanel Grid.Row="2" Spacing="6">
                         <TextBlock Text="Today"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBlock x:Name="NovelLibraryTodayStatisticsText"
@@ -259,7 +353,7 @@
                                    Text="{x:Bind ViewModel.StatisticsTodayText, Mode=OneWay}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
-                    <StackPanel Grid.Column="1" Spacing="6">
+                    <StackPanel Grid.Row="2" Grid.Column="1" Spacing="6">
                         <TextBlock Text="This Week"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBlock x:Name="NovelLibraryWeekStatisticsText"
@@ -267,17 +361,17 @@
                                    Text="{x:Bind ViewModel.StatisticsWeekText, Mode=OneWay}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
-                    <StackPanel Grid.Column="2" Spacing="6">
-                        <TextBlock Text="Recent Year" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <StackPanel Grid.Row="2" Grid.Column="2" Spacing="6">
+                        <TextBlock Text="{x:Bind ViewModel.StatisticsRangeTitle, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBlock Text="{x:Bind ViewModel.StatisticsRangeText, Mode=OneWay}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
-                    <StackPanel Grid.Column="3" Spacing="6">
+                    <StackPanel Grid.Row="2" Grid.Column="3" Spacing="6">
                         <TextBlock Text="Reading Speed" Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBlock Text="{x:Bind ViewModel.StatisticsSpeedText, Mode=OneWay}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
-                    <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Spacing="6">
+                    <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Spacing="6">
                         <TextBlock Text="Book Ranking"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <ItemsControl x:Name="NovelLibraryBookRankingList"
@@ -285,15 +379,15 @@
                                       ItemTemplate="{StaticResource StatisticsRankingTemplate}"
                                       ItemsSource="{x:Bind ViewModel.StatisticsBookRankingRows, Mode=OneWay}" />
                     </StackPanel>
-                    <StackPanel Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Spacing="6">
+                    <StackPanel Grid.Row="3" Grid.Column="2" Grid.ColumnSpan="2" Spacing="6">
                         <TextBlock Text="Shelf Comparison" Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <ItemsControl x:Name="NovelLibraryShelfComparisonList"
                                       AutomationProperties.AutomationId="NovelLibraryShelfComparisonList"
                                       ItemTemplate="{StaticResource StatisticsShelfTemplate}"
                                       ItemsSource="{x:Bind ViewModel.StatisticsShelfComparisonRows, Mode=OneWay}" />
                     </StackPanel>
-                    <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Spacing="6">
-                        <TextBlock Text="Trend" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <StackPanel Grid.Row="4" Grid.ColumnSpan="4" Spacing="6">
+                        <TextBlock Text="Range &amp; Trend" Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <ItemsControl x:Name="NovelLibraryStatisticsTrend"
                                       AutomationProperties.AutomationId="NovelLibraryStatisticsTrend"
                                       ItemTemplate="{StaticResource StatisticsTrendTemplate}"
@@ -303,18 +397,28 @@
                             </ItemsControl.ItemsPanel>
                         </ItemsControl>
                     </StackPanel>
-                    <StackPanel Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2" Spacing="6">
+                    <StackPanel Grid.Row="5" Grid.ColumnSpan="4" Spacing="6">
                         <TextBlock Text="Reading Calendar" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <ItemsControl x:Name="NovelLibraryStatisticsCalendar"
-                                      AutomationProperties.AutomationId="NovelLibraryStatisticsCalendar"
-                                      ItemTemplate="{StaticResource StatisticsCalendarTemplate}"
-                                      ItemsSource="{x:Bind ViewModel.StatisticsCalendarDays, Mode=OneWay}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate><ItemsWrapGrid MaximumRowsOrColumns="7" Orientation="Horizontal" /></ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                        </ItemsControl>
+                        <ListView x:Name="NovelLibraryStatisticsCalendar"
+                                  MaxHeight="190"
+                                  AutomationProperties.AutomationId="NovelLibraryStatisticsCalendar"
+                                  AutomationProperties.Name="Reading calendar"
+                                  ItemTemplate="{StaticResource StatisticsCalendarTemplate}"
+                                  ItemsSource="{x:Bind ViewModel.StatisticsCalendarDays, Mode=OneWay}"
+                                  SelectedItem="{x:Bind ViewModel.SelectedStatisticsCalendarDay, Mode=TwoWay}"
+                                  SelectionMode="Single"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                  ScrollViewer.HorizontalScrollMode="Enabled">
+                            <ListView.ItemsPanel>
+                                <ItemsPanelTemplate><ItemsWrapGrid MaximumRowsOrColumns="7" Orientation="Vertical" /></ItemsPanelTemplate>
+                            </ListView.ItemsPanel>
+                        </ListView>
+                        <TextBlock AutomationProperties.AutomationId="NovelLibraryStatisticsCalendarDetail"
+                                   Text="{x:Bind ViewModel.StatisticsCalendarDetailText, Mode=OneWay}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
                 </Grid>
+                </ScrollViewer>
             </Border>
         </StackPanel>
 

@@ -2169,6 +2169,14 @@ public class NovelReaderWebAssetTests
         libraryXaml.Should().Contain("NovelLibraryShelfComparisonList");
         libraryXaml.Should().Contain("NovelLibraryStatisticsTrend");
         libraryXaml.Should().Contain("NovelLibraryStatisticsCalendar");
+        libraryXaml.Should().Contain("NovelLibraryStatisticsRangeMode");
+        libraryXaml.Should().Contain("NovelLibraryStatisticsAnchorDate");
+        libraryXaml.Should().Contain("NovelLibraryStatisticsTrendGrain");
+        libraryXaml.Should().Contain("NovelLibraryStatisticsTrendMetric");
+        libraryXaml.Should().Contain("NovelLibraryStatisticsRankingMetric");
+        libraryXaml.Should().Contain("NovelLibraryStatisticsGoalType");
+        libraryXaml.Should().Contain("NovelLibraryStatisticsCalendarDetail");
+        libraryXaml.Should().Contain("NovelLibraryStatisticsCorruptWarning");
         libraryXaml.Should().NotContain("By Book");
 
         libraryViewModel.Should().Contain("INovelStatisticsDashboardService");
@@ -2177,6 +2185,9 @@ public class NovelReaderWebAssetTests
         libraryViewModel.Should().Contain("StatisticsWeekText");
         libraryViewModel.Should().Contain("StatisticsBookRankingRows");
         libraryViewModel.Should().Contain("StatisticsShelfComparisonRows");
+        libraryViewModel.Should().Contain("SelectedStatisticsRangeMode");
+        libraryViewModel.Should().Contain("SelectedStatisticsTrendMetric");
+        libraryViewModel.Should().Contain("HasStatisticsCorruptBooks");
         libraryViewModel.Should().NotContain("NovelStatisticsDistributionRow");
 
         dashboardService.Should().Contain("NovelStatisticsDashboardCalculator");

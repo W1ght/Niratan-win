@@ -94,7 +94,7 @@ public sealed record NovelStatisticsTodaySummary(
     int TargetPercent,
     int Characters,
     double ReadingTime,
-    int AverageSpeedPerHour,
+    int? AverageSpeedPerHour,
     int DailyStreakDays);
 
 public sealed record NovelStatisticsWeekSummary(
@@ -121,7 +121,7 @@ public sealed record NovelStatisticsWeekDaySummary(
 public sealed record NovelStatisticsRangeSummary(
     int Characters,
     double ReadingTime,
-    int AverageSpeedPerHour,
+    int? AverageSpeedPerHour,
     int TargetDays,
     int TargetProgressPercent);
 
@@ -169,6 +169,16 @@ public sealed record NovelStatisticsShelfComparisonRow(
     int RecordedCharacters,
     double ReadingTime,
     int? AverageSpeedPerHour);
+
+public sealed record NovelStatisticsTrendDisplayPoint(
+    string Id,
+    string Label,
+    string ValueText);
+
+public sealed record NovelStatisticsBookRankingDisplayRow(
+    string Id,
+    string Title,
+    string ValueText);
 
 public static class NovelStatisticsDashboardTargets
 {
