@@ -138,6 +138,53 @@ public class VideoSubtitleLookupAssetTests
     }
 
     [Fact]
+    public void VideoSubtitleLookup_ReplacesVisiblePopupWithoutPredismiss()
+    {
+        var code = ReadVideoPlayerWindowCode();
+        var mainCode = ReadVideoPlayerWindowMainCode()
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var missStart = mainCode.IndexOf(
+            "if (popupRequest == null)",
+            StringComparison.Ordinal);
+        var missEnd = mainCode.IndexOf(
+            "lookupOverlay = EnsurePopupOverlay();",
+            missStart,
+            StringComparison.Ordinal);
+        var missCode = mainCode[missStart..missEnd];
+
+        code.Should().Contain(
+            "RootContentCommitted += PopupOverlay_RootContentCommitted");
+        code.Should().Contain(
+            "RootContentCommitted -= PopupOverlay_RootContentCommitted");
+        code.Should().Contain("StagePopupCommit(");
+        code.Should().Contain("TryTakePopupCommit(");
+        mainCode.Should().Contain(
+            "popupRequest.TraceId ?? $\"video-{lookupRequest.Version}\"");
+        mainCode.Should().Contain("traceId: lookupTraceId");
+        code.Should().Contain("if (!_isLookupPopupVisible)");
+        code.Should().Contain("ViewModel.StatusText = \"No dictionary results\"");
+        missCode.Should().NotContain("Dismiss(");
+        mainCode.Should().NotContain(
+            "await HighlightSubtitleCanvasSelectionAsync(sentenceOffset");
+        mainCode.Should().Contain(
+            "_subtitleLookupCoordinator.CancelCurrent();\n" +
+            "            lookupOverlay?.CancelShow(lookupTraceId);\n" +
+            "            if (!_isLookupPopupVisible)");
+    }
+
+    [Fact]
+    public void VideoSubtitleLookup_ClickAndShiftHoverShareTheSameRequestPath()
+    {
+        var code = ReadVideoPlayerWindowCode();
+
+        code.Should().Contain(
+            "await LookupSubtitleAtCanvasPointAsync(point, isHoverLookup: false)");
+        code.Should().Contain(
+            "_ = LookupSubtitleAtCanvasPointAsync(point, isHoverLookup: true)");
+        code.Should().Contain("await StartSubtitleLookupAsync(");
+    }
+
+    [Fact]
     public void VideoSubtitleLookup_EmptyCanvasHitCancelsThePendingRequest()
     {
         var code = ReadVideoPlayerWindowCode().Replace("\r\n", "\n", StringComparison.Ordinal);
