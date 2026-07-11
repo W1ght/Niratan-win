@@ -15,16 +15,25 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
     private readonly INovelStatisticsSidecarService _statisticsSidecarService;
     private readonly INovelBookSidecarService? _bookSidecarService;
     private readonly TimeProvider _timeProvider;
+    private readonly NovelStatisticsDashboardCache? _cache;
 
     public NovelStatisticsDashboardService(INovelStatisticsSidecarService statisticsSidecarService)
-        : this(statisticsSidecarService, null, TimeProvider.System)
+        : this(statisticsSidecarService, null, TimeProvider.System, null)
     {
     }
 
     public NovelStatisticsDashboardService(
         INovelStatisticsSidecarService statisticsSidecarService,
         INovelBookSidecarService bookSidecarService)
-        : this(statisticsSidecarService, bookSidecarService, TimeProvider.System)
+        : this(statisticsSidecarService, bookSidecarService, TimeProvider.System, null)
+    {
+    }
+
+    internal NovelStatisticsDashboardService(
+        INovelStatisticsSidecarService statisticsSidecarService,
+        INovelBookSidecarService bookSidecarService,
+        NovelStatisticsDashboardCache cache)
+        : this(statisticsSidecarService, bookSidecarService, TimeProvider.System, cache)
     {
     }
 
@@ -32,10 +41,20 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
         INovelStatisticsSidecarService statisticsSidecarService,
         INovelBookSidecarService? bookSidecarService,
         TimeProvider timeProvider)
+        : this(statisticsSidecarService, bookSidecarService, timeProvider, null)
+    {
+    }
+
+    internal NovelStatisticsDashboardService(
+        INovelStatisticsSidecarService statisticsSidecarService,
+        INovelBookSidecarService? bookSidecarService,
+        TimeProvider timeProvider,
+        NovelStatisticsDashboardCache? cache)
     {
         _statisticsSidecarService = statisticsSidecarService;
         _bookSidecarService = bookSidecarService;
         _timeProvider = timeProvider;
+        _cache = cache;
     }
 
     public async Task<NovelStatisticsDashboardSnapshot> LoadSnapshotAsync(
@@ -43,6 +62,12 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
         CancellationToken ct = default)
     {
         var today = DateOnly.FromDateTime(_timeProvider.GetLocalNow().DateTime);
+        var cacheKey = NovelStatisticsDashboardCache.CreateKey(books, today);
+        if (_cache != null
+            && await _cache.TryLoadAsync(cacheKey, ct) is { } cached)
+        {
+            return cached;
+        }
         var windowStart = today.AddYears(-1).AddDays(1);
         var contributionsByDate = new Dictionary<DateOnly, List<NovelStatisticsBookContribution>>();
         var bookRecords = new List<NovelStatisticsBookRecord>();
@@ -127,7 +152,7 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
             .OrderBy(day => day.Date)
             .ToList();
 
-        return new NovelStatisticsDashboardSnapshot(
+        var snapshot = new NovelStatisticsDashboardSnapshot(
             windowStart,
             today,
             days,
@@ -136,6 +161,9 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
                 .ThenBy(book => book.Id, StringComparer.Ordinal)
                 .ToList(),
             skippedCorruptBookIds.Distinct(StringComparer.Ordinal).ToList());
+        if (_cache != null)
+            await _cache.StoreAsync(cacheKey, snapshot, ct);
+        return snapshot;
     }
 }
 
