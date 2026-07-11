@@ -40,6 +40,16 @@ public enum DictionaryPopupShowCancellationResult
 
 public sealed class DictionaryPopupOverlay : IDisposable
 {
+    private sealed record DictionaryPopupRootContext(
+        string? TraceId,
+        Dictionary<string, string> Styles,
+        DictionaryDisplaySettings DisplaySettings,
+        ThemeMode Theme,
+        AudioSettings AudioSettings,
+        AnkiSettings AnkiSettings,
+        AnkiMiningContext MiningContext,
+        bool IsVertical);
+
     private const double PopupPadding = DictionaryPopupLayoutCalculator.PopupPadding;
     private const double ScreenBorderPadding = DictionaryPopupLayoutCalculator.ScreenBorderPadding;
     private const double MinPopupWidth = 360;
@@ -63,28 +73,18 @@ public sealed class DictionaryPopupOverlay : IDisposable
     private string _lastRedirectQuery = "";
     private DictionaryLookupPopup? _lastRedirectParent;
     private DictionaryLookupPopup _rootHost = null!;
-    private Dictionary<string, string> _currentStyles = new();
-    private DictionaryDisplaySettings _displaySettings = new();
-    private double _rootPointX;
-    private double _rootPointY;
-    private double _rootSelectionWidth;
-    private double _rootSelectionHeight;
-    private bool _isVertical;
     private bool _rootWarm;
     private bool _rootVisible;
-    private ThemeMode _currentTheme;
-    private AudioSettings _currentAudioSettings = new();
-    private AnkiSettings _currentAnkiSettings = new();
-    private string? _currentTraceId;
-    private AnkiMiningContext _currentMiningContext = new();
     private Panel? _embeddedPanel;
     private XamlRoot? _currentXamlRoot;
     private Task? _prewarmTask;
     private double _rootReadyOpacity = 1;
     private bool _useStandaloneWindowVisuals;
     private bool _useNakedFloatingWindowVisuals;
-    private readonly DictionaryPopupPendingLayoutCoordinator<DictionaryPopupLayoutResult>
-        _rootLayoutCoordinator = new();
+    private readonly DictionaryPopupRootStateCoordinator<
+        DictionaryPopupRootContext,
+        DictionaryPopupAnchorRect,
+        DictionaryPopupLayoutResult> _rootStateCoordinator = new();
 
     public event EventHandler? Dismissed;
     public event EventHandler<DictionaryPopupContentCommittedEventArgs>? RootContentCommitted;
@@ -245,22 +245,22 @@ public sealed class DictionaryPopupOverlay : IDisposable
         Log.Information(
             "[LookupTrace] trace={TraceId} overlay show start entries={EntryCount} styles={StyleCount} embedded={Embedded}",
             traceId ?? "-", results.Count, styles.Count, _embeddedPanel != null);
-        _currentTraceId = traceId;
-        _currentStyles = styles;
-        _displaySettings = displaySettings;
-        _currentTheme = themeMode;
-        _rootPointX = pointX;
-        _rootPointY = pointY;
-        _rootSelectionWidth = selectionWidth;
-        _rootSelectionHeight = selectionHeight;
-        _isVertical = isVertical;
-
         var audio = audioSettings ?? App.GetService<ISettingsService>().Current.AudioSettings;
-        _currentAudioSettings = audio;
-
         var anki = ankiSettings ?? App.GetService<ISettingsService>().Current.AnkiSettings;
-        _currentAnkiSettings = anki;
-        _currentMiningContext = miningContext ?? new AnkiMiningContext();
+        var context = new DictionaryPopupRootContext(
+            traceId,
+            styles,
+            displaySettings,
+            themeMode,
+            audio,
+            anki,
+            miningContext ?? new AnkiMiningContext(),
+            isVertical);
+        var anchor = new DictionaryPopupAnchorRect(
+            pointX,
+            pointY,
+            selectionWidth,
+            selectionHeight);
 
         await EnsureWarmAsync(xamlRoot, themeMode);
         cancellationToken.ThrowIfCancellationRequested();
@@ -290,15 +290,16 @@ public sealed class DictionaryPopupOverlay : IDisposable
             ApplyPopupZOrder();
             UpdateCanvasBounds(xamlRoot);
             targetLayout = ResolveHostLayout(
-                _rootPointX,
-                _rootPointY,
-                _rootSelectionWidth,
-                _rootSelectionHeight,
-                _isVertical,
+                anchor.X,
+                anchor.Y,
+                anchor.Width,
+                anchor.Height,
+                isVertical,
+                displaySettings,
                 isRoot: true);
         }
 
-        _rootHost.SetMiningContext(_currentMiningContext);
+        _rootHost.SetMiningContext(context.MiningContext);
         var injectSw = Stopwatch.StartNew();
         cancellationToken.ThrowIfCancellationRequested();
         await _rootHost.ShowResultsWarmAsync(
@@ -312,10 +313,16 @@ public sealed class DictionaryPopupOverlay : IDisposable
             cancellationToken: cancellationToken,
             generationStarted: generation =>
             {
-                _rootLayoutCoordinator.Stage(
-                    generation,
-                    traceId,
-                    targetLayout);
+                if (!_rootStateCoordinator.TryStage(
+                        generation,
+                        traceId,
+                        context,
+                        anchor,
+                        targetLayout))
+                {
+                    throw new InvalidOperationException(
+                        $"Popup generation {generation} could not stage root ownership.");
+                }
                 if (!_rootHost.HasCommittedContent)
                     ApplyHostLayout(_rootHost, targetLayout);
             });
@@ -363,15 +370,15 @@ public sealed class DictionaryPopupOverlay : IDisposable
         object? sender,
         DictionaryPopupContentCommittedEventArgs e)
     {
-        if (!_rootLayoutCoordinator.TryComplete(
+        if (!_rootStateCoordinator.TryCommit(
                 e.Generation,
                 e.TraceId,
-                out var layout))
+                out var committed))
         {
             return;
         }
 
-        ApplyHostLayout(_rootHost, layout);
+        ApplyHostLayout(_rootHost, committed.Layout);
         _rootVisible = true;
         if (_embeddedPanel != null)
         {
@@ -390,7 +397,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         object? sender,
         DictionaryPopupContentCommittedEventArgs e)
     {
-        if (_rootLayoutCoordinator.TryAbort(e.Generation, e.TraceId))
+        if (_rootStateCoordinator.TryAbort(e.Generation, e.TraceId))
             RootContentAborted?.Invoke(this, e);
     }
 
@@ -406,9 +413,12 @@ public sealed class DictionaryPopupOverlay : IDisposable
         var totalSw = Stopwatch.StartNew();
         var query = request.Query.Trim();
         if (string.IsNullOrWhiteSpace(query)) return;
+        if (!_rootStateCoordinator.TryGetCommitted(out var rootSnapshot))
+            return;
+        var context = rootSnapshot.Context;
         var redirectVersion = Interlocked.Increment(ref _redirectVersion);
         var parentKind = parentHost is null || ReferenceEquals(parentHost, _rootHost) ? "root" : "child";
-        var traceId = $"{_currentTraceId ?? "popup-redirect"}-child-{redirectVersion}";
+        var traceId = $"{context.TraceId ?? "popup-redirect"}-child-{redirectVersion}";
 
         Log.Information(
             "[LookupTrace] trace={TraceId} child redirect received query='{Query}' parent={ParentKind} source={Source} selectedLength={SelectedLength} selectMs={SelectMs:F1} rectMs={RectMs:F1}",
@@ -442,11 +452,13 @@ public sealed class DictionaryPopupOverlay : IDisposable
             _lastRedirectQuery = query;
 
             var lookupSw = Stopwatch.StartNew();
-            var nestedMaxResults = Math.Min(_displaySettings.MaxResults, NestedLookupMaxResults);
+            var nestedMaxResults = Math.Min(
+                context.DisplaySettings.MaxResults,
+                NestedLookupMaxResults);
             var results = await _lookupService.LookupAsync(
                 query,
                 nestedMaxResults,
-                _displaySettings.ScanLength,
+                context.DisplaySettings.ScanLength,
                 traceId: traceId);
             Log.Information(
                 "[LookupTrace] trace={TraceId} child redirect lookup finished in {Ms}ms query='{Query}' max={MaxResults} results={Count}",
@@ -477,9 +489,16 @@ public sealed class DictionaryPopupOverlay : IDisposable
                 _childHosts.Add(child);
             ApplyPopupZOrder();
 
-            child.SetMiningContext(_currentMiningContext);
+            child.SetMiningContext(context.MiningContext);
             var injectSw = Stopwatch.StartNew();
-            await child.ShowResultsWarmAsync(results, _currentStyles, _displaySettings, _currentTheme, _currentAudioSettings, _currentAnkiSettings, traceId: traceId);
+            await child.ShowResultsWarmAsync(
+                results,
+                context.Styles,
+                context.DisplaySettings,
+                context.Theme,
+                context.AudioSettings,
+                context.AnkiSettings,
+                traceId: traceId);
             Log.Information(
                 "[LookupTrace] trace={TraceId} child popup content injected in {Ms}ms total={TotalMs}ms entries={EntryCount}",
                 traceId, injectSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, results.Count);
@@ -489,7 +508,11 @@ public sealed class DictionaryPopupOverlay : IDisposable
             _canvas.IsHitTestVisible = true;
 
             var positionSw = Stopwatch.StartNew();
-            PositionChildHost(child, parent, request);
+            PositionChildHost(
+                child,
+                parent,
+                request,
+                context.DisplaySettings);
             Log.Information(
                 "[LookupTrace] trace={TraceId} child positioned in {Ms}ms total={TotalMs}ms",
                 traceId, positionSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds);
@@ -696,6 +719,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         double selectionX, double selectionY,
         double selectionWidth, double selectionHeight,
         bool isVertical,
+        DictionaryDisplaySettings displaySettings,
         bool isRoot = false)
     {
         ApplyHostLayout(
@@ -706,6 +730,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
                 selectionWidth,
                 selectionHeight,
                 isVertical,
+                displaySettings,
                 isRoot));
     }
 
@@ -715,6 +740,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         double selectionWidth,
         double selectionHeight,
         bool isVertical,
+        DictionaryDisplaySettings displaySettings,
         bool isRoot = false)
     {
         var (screenWidth, screenHeight) = GetOverlaySize();
@@ -723,18 +749,30 @@ public sealed class DictionaryPopupOverlay : IDisposable
 
         if (isRoot && !isVertical)
         {
-            maxWidth = Math.Min(screenWidth * 0.88, ConfiguredRootMaxWidth());
-            maxHeight = Math.Min(screenHeight * 0.72, ConfiguredRootMaxHeight());
+            maxWidth = Math.Min(
+                screenWidth * 0.88,
+                ConfiguredRootMaxWidth(displaySettings));
+            maxHeight = Math.Min(
+                screenHeight * 0.72,
+                ConfiguredRootMaxHeight(displaySettings));
         }
         else if (isRoot && isVertical)
         {
-            maxWidth = Math.Min(screenWidth * 0.55, ConfiguredRootMaxWidth());
-            maxHeight = Math.Min(screenHeight * 0.80, ConfiguredRootMaxHeight());
+            maxWidth = Math.Min(
+                screenWidth * 0.55,
+                ConfiguredRootMaxWidth(displaySettings));
+            maxHeight = Math.Min(
+                screenHeight * 0.80,
+                ConfiguredRootMaxHeight(displaySettings));
         }
         else
         {
-            maxWidth = Math.Min(screenWidth * 0.60, ConfiguredChildMaxWidth());
-            maxHeight = Math.Min(screenHeight * 0.50, ConfiguredChildMaxHeight());
+            maxWidth = Math.Min(
+                screenWidth * 0.60,
+                ConfiguredChildMaxWidth(displaySettings));
+            maxHeight = Math.Min(
+                screenHeight * 0.50,
+                ConfiguredChildMaxHeight(displaySettings));
         }
 
         return DictionaryPopupLayoutCalculator.Resolve(
@@ -759,7 +797,8 @@ public sealed class DictionaryPopupOverlay : IDisposable
     private void PositionChildHost(
         DictionaryLookupPopup host,
         DictionaryLookupPopup parentHost,
-        DictionaryPopupRedirectRequest request)
+        DictionaryPopupRedirectRequest request,
+        DictionaryDisplaySettings displaySettings)
     {
         var (parentLeft, parentTop) = GetHostCanvasPosition(parentHost);
 
@@ -769,11 +808,18 @@ public sealed class DictionaryPopupOverlay : IDisposable
             var anchorY = parentTop + y;
             var anchorWidth = request.Width.GetValueOrDefault(1);
             var anchorHeight = request.Height.GetValueOrDefault(1);
-            PositionHost(host, anchorX, anchorY, anchorWidth, anchorHeight, isVertical: false);
+            PositionHost(
+                host,
+                anchorX,
+                anchorY,
+                anchorWidth,
+                anchorHeight,
+                isVertical: false,
+                displaySettings: displaySettings);
             return;
         }
 
-        PositionHostAboveOrBelowParent(host, parentHost);
+        PositionHostAboveOrBelowParent(host, parentHost, displaySettings);
     }
 
     private static async Task HighlightPopupSelectionAsync(
@@ -793,13 +839,18 @@ public sealed class DictionaryPopupOverlay : IDisposable
     private void PositionHostAboveOrBelowParent(
         DictionaryLookupPopup host,
         DictionaryLookupPopup parentHost,
+        DictionaryDisplaySettings displaySettings,
         double? preferredLeft = null)
     {
         var (screenWidth, screenHeight) = GetOverlaySize();
         var (parentLeft, parentTop, parentWidth, parentHeight) = GetHostBounds(parentHost);
 
-        var maxWidth = Math.Min(screenWidth * 0.60, ConfiguredChildMaxWidth());
-        var maxHeight = Math.Min(screenHeight * 0.50, ConfiguredChildMaxHeight());
+        var maxWidth = Math.Min(
+            screenWidth * 0.60,
+            ConfiguredChildMaxWidth(displaySettings));
+        var maxHeight = Math.Min(
+            screenHeight * 0.50,
+            ConfiguredChildMaxHeight(displaySettings));
         var width = ClampDimension(
             Math.Min(screenWidth - ScreenBorderPadding * 2, maxWidth),
             MinPopupWidth,
@@ -882,17 +933,21 @@ public sealed class DictionaryPopupOverlay : IDisposable
     private static double ClampDimension(double value, double min, double max) => Math.Clamp(value, Math.Min(min, max), Math.Max(min, max));
     private static double ClampPopupExtent(double value, double max) => Math.Clamp(value, 0, Math.Max(0, max));
 
-    private double ConfiguredRootMaxWidth() =>
-        Clamp(_displaySettings.PopupMaxWidth, MinPopupWidth, HardMaxPopupWidth);
+    private static double ConfiguredRootMaxWidth(
+        DictionaryDisplaySettings displaySettings) =>
+        Clamp(displaySettings.PopupMaxWidth, MinPopupWidth, HardMaxPopupWidth);
 
-    private double ConfiguredRootMaxHeight() =>
-        Clamp(_displaySettings.PopupMaxHeight, MinPopupHeight, HardMaxPopupHeight);
+    private static double ConfiguredRootMaxHeight(
+        DictionaryDisplaySettings displaySettings) =>
+        Clamp(displaySettings.PopupMaxHeight, MinPopupHeight, HardMaxPopupHeight);
 
-    private double ConfiguredChildMaxWidth() =>
-        Math.Min(ConfiguredRootMaxWidth(), ChildPopupMaxWidth);
+    private static double ConfiguredChildMaxWidth(
+        DictionaryDisplaySettings displaySettings) =>
+        Math.Min(ConfiguredRootMaxWidth(displaySettings), ChildPopupMaxWidth);
 
-    private double ConfiguredChildMaxHeight() =>
-        Math.Min(ConfiguredRootMaxHeight(), ChildPopupMaxHeight);
+    private static double ConfiguredChildMaxHeight(
+        DictionaryDisplaySettings displaySettings) =>
+        Math.Min(ConfiguredRootMaxHeight(displaySettings), ChildPopupMaxHeight);
 
     private (double width, double height) GetOverlaySize()
     {
@@ -922,12 +977,34 @@ public sealed class DictionaryPopupOverlay : IDisposable
 
     public void UpdateRootSize(double width, double height)
     {
-        if (_rootWarm && _embeddedPanel != null)
+        if (!_rootWarm)
+            return;
+
+        if (_embeddedPanel != null)
         {
             _rootHost.SetSize(
                 width > 0 ? width : double.NaN,
                 height > 0 ? height : double.NaN);
+            return;
         }
+
+        if (!_rootVisible
+            || !_rootStateCoordinator.TryGetCommitted(out var rootSnapshot))
+        {
+            return;
+        }
+
+        var anchor = rootSnapshot.Anchor;
+        ApplyHostLayout(
+            _rootHost,
+            ResolveHostLayout(
+                anchor.X,
+                anchor.Y,
+                anchor.Width,
+                anchor.Height,
+                rootSnapshot.Context.IsVertical,
+                rootSnapshot.Context.DisplaySettings,
+                isRoot: true));
     }
 
     public DictionaryPopupHostBounds? GetRootPopupBounds()
@@ -995,7 +1072,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         var wasVisible = _rootVisible;
         if (_rootWarm)
             _rootHost.Hide();
-        _rootLayoutCoordinator.Clear();
+        _rootStateCoordinator.Clear();
         ClearChildren();
         ResetRedirectDeduplication();
         _rootVisible = false;
@@ -1011,7 +1088,9 @@ public sealed class DictionaryPopupOverlay : IDisposable
 
     public DictionaryPopupShowCancellationResult CancelShow(string? traceId)
     {
-        if (!_rootLayoutCoordinator.TryGetGeneration(traceId, out var generation))
+        if (!_rootStateCoordinator.TryGetPendingGeneration(
+                traceId,
+                out var generation))
             return DictionaryPopupShowCancellationResult.NoOwnership;
 
         Log.Debug(
@@ -1020,16 +1099,15 @@ public sealed class DictionaryPopupOverlay : IDisposable
         var contentCancelled = _rootHost.CancelPendingContent(generation, traceId);
         if (contentCancelled)
         {
-            _rootLayoutCoordinator.TryCancel(
-                generation,
-                traceId,
-                contentCancellationSucceeded: true);
+            _rootStateCoordinator.TryAbort(generation, traceId);
             if (!_rootHost.HasCommittedContent)
                 Dismiss();
             return DictionaryPopupShowCancellationResult.Cancelled;
         }
 
-        if (_rootLayoutCoordinator.TryGetGeneration(traceId, out var retainedGeneration)
+        if (_rootStateCoordinator.TryGetPendingGeneration(
+                traceId,
+                out var retainedGeneration)
             && retainedGeneration == generation)
         {
             return DictionaryPopupShowCancellationResult.CommitAccepted;

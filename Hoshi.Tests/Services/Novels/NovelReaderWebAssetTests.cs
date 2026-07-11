@@ -1597,10 +1597,10 @@ public class NovelReaderWebAssetTests
         settingsCode.Should().Contain("DictionaryCollapseMode CollapseMode = DictionaryCollapseMode.ExpandAll");
         settingsCode.Should().Contain("bool ExpandFirstDictionary = false");
         overlayCode.Should().Contain("LookupAsync(");
-        overlayCode.Should().Contain("_displaySettings.MaxResults");
-        overlayCode.Should().Contain("_displaySettings.ScanLength");
-        overlayCode.Should().Contain("_displaySettings.PopupMaxWidth");
-        overlayCode.Should().Contain("_displaySettings.PopupMaxHeight");
+        overlayCode.Should().Contain("context.DisplaySettings.MaxResults");
+        overlayCode.Should().Contain("context.DisplaySettings.ScanLength");
+        overlayCode.Should().Contain("displaySettings.PopupMaxWidth");
+        overlayCode.Should().Contain("displaySettings.PopupMaxHeight");
         popupCode.Should().Contain("window.maxResults");
         popupCode.Should().Contain("window.scanLength");
     }
@@ -1684,11 +1684,11 @@ public class NovelReaderWebAssetTests
         layoutCode.Should().Contain("height = maxHeight");
         layoutCode.Should().Contain("selection.X + selection.Width / 2");
         overlayCode.Should().NotContain("centerX = screenWidth / 2");
-        overlayCode.Should().Contain("PositionChildHost(child");
+        overlayCode.Should().Contain("PositionChildHost(");
         overlayCode.Should().Contain("parentLeft + x");
         overlayCode.Should().Contain("preferredLeft");
         overlayCode.Should().Contain("desiredLeft + width / 2");
-        overlayCode.Should().Contain("PositionHostAboveOrBelowParent(host, parentHost)");
+        overlayCode.Should().Contain("PositionHostAboveOrBelowParent(host, parentHost, displaySettings)");
         overlayCode.Should().Contain("GetHostBounds(parentHost)");
         overlayCode.Should().Contain("ClearChildrenAfter(host)");
         overlayCode.Should().Contain("CloseChildrenOfParent(parent)");
@@ -1824,7 +1824,11 @@ public class NovelReaderWebAssetTests
         overlayCode.Should().Contain("var anchorY = parentTop + y;");
         overlayCode.Should().Contain("var anchorWidth = request.Width.GetValueOrDefault(1);");
         overlayCode.Should().Contain("var anchorHeight = request.Height.GetValueOrDefault(1);");
-        overlayCode.Should().Contain("PositionHost(host, anchorX, anchorY, anchorWidth, anchorHeight");
+        overlayCode.Should().Contain("anchorX,");
+        overlayCode.Should().Contain("anchorY,");
+        overlayCode.Should().Contain("anchorWidth,");
+        overlayCode.Should().Contain("anchorHeight,");
+        overlayCode.Should().Contain("displaySettings: displaySettings");
         overlayCode.Should().NotContain("PositionHostAboveOrBelowParent(host, parentHost, parentLeft + x)");
         popupCode.Should().Contain("public async Task HighlightSelectionAsync(string matchedText)");
         popupCode.Should().Contain("window.hoshiSelection.highlightSelection");
@@ -2026,7 +2030,8 @@ public class NovelReaderWebAssetTests
         overlayCode.Should().Contain("await PrewarmChildHostPoolAsync(PrewarmedChildHostCount, themeMode)");
         overlayCode.Should().Contain("await child.WarmAsync(themeMode)");
         overlayCode.Should().Contain("NestedLookupMaxResults = 1");
-        overlayCode.Should().Contain("var nestedMaxResults = Math.Min(_displaySettings.MaxResults, NestedLookupMaxResults)");
+        overlayCode.Should().Contain("context.DisplaySettings.MaxResults");
+        overlayCode.Should().Contain("NestedLookupMaxResults");
         overlayCode.Should().Contain("nestedMaxResults,");
         overlayCode.Should().Contain("GetReusableChildHost");
         overlayCode.Should().Contain("HideChildHost");
@@ -3275,24 +3280,54 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
-    public void DictionaryPopupOverlay_CommitsPendingRootLayoutByGeneration()
+    public void DictionaryPopupOverlay_AtomicallyPromotesPendingRootStateByGeneration()
     {
         var code = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs"));
         var popupCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryLookupPopup.cs"));
 
-        code.Should().Contain("DictionaryPopupPendingLayoutCoordinator<DictionaryPopupLayoutResult>");
+        code.Should().Contain("DictionaryPopupRootStateCoordinator<");
+        code.Should().NotContain("_currentTraceId");
+        code.Should().NotContain("_currentStyles");
+        code.Should().NotContain("_rootPointX");
         code.Should().Contain("generationStarted: generation =>");
+        code.Should().Contain("rootStateCoordinator.TryStage(");
         code.Should().Contain("if (!_rootHost.HasCommittedContent)");
         code.Should().Contain("private void OnRootContentCommitted(");
-        code.Should().Contain("_rootLayoutCoordinator.TryComplete(");
-        code.Should().Contain("out var layout");
+        code.Should().Contain("_rootStateCoordinator.TryCommit(");
+        code.Should().Contain("out var committed");
+        code.Should().Contain("ApplyHostLayout(_rootHost, committed.Layout)");
+        code.Should().Contain("_rootStateCoordinator.TryGetCommitted(out var rootSnapshot)");
+        code.Should().Contain("var context = rootSnapshot.Context;");
         code.Should().Contain("var contentCancelled = _rootHost.CancelPendingContent(");
         code.Should().Contain("if (contentCancelled)");
-        code.Should().Contain("contentCancellationSucceeded: true");
+        code.Should().Contain("_rootStateCoordinator.TryAbort(generation, traceId)");
         code.Should().Contain("ContentCommitAborted += OnRootContentCommitAborted");
         code.Should().Contain("RootContentCommitted?.Invoke(this, e)");
+        code.Should().Contain("var anchor = rootSnapshot.Anchor;");
+
+        var commitIndex = code.IndexOf(
+            "_rootStateCoordinator.TryCommit(",
+            StringComparison.Ordinal);
+        var layoutIndex = code.IndexOf(
+            "ApplyHostLayout(_rootHost, committed.Layout)",
+            commitIndex,
+            StringComparison.Ordinal);
+        var eventIndex = code.IndexOf(
+            "RootContentCommitted?.Invoke(this, e)",
+            layoutIndex,
+            StringComparison.Ordinal);
+        var redirectSnapshotIndex = code.IndexOf(
+            "_rootStateCoordinator.TryGetCommitted(out var rootSnapshot)",
+            StringComparison.Ordinal);
+        var redirectWaitIndex = code.IndexOf(
+            "await _redirectSemaphore.WaitAsync()",
+            redirectSnapshotIndex,
+            StringComparison.Ordinal);
+        layoutIndex.Should().BeGreaterThan(commitIndex);
+        eventIndex.Should().BeGreaterThan(layoutIndex);
+        redirectWaitIndex.Should().BeGreaterThan(redirectSnapshotIndex);
         popupCode.Should().Contain("public bool CancelPendingContent(");
         popupCode.Should().Contain("ContentCommitAborted?.Invoke(");
     }

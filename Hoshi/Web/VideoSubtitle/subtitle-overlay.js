@@ -41,6 +41,16 @@
     });
   }
 
+  const clickPolicy = { dismissOnEmpty: true, isHover: false };
+  const hoverPolicy = { dismissOnEmpty: false, isHover: true };
+
+  function postLookupEmpty(policy) {
+    postToHost('lookupEmpty', {
+      dismissOnEmpty: policy?.dismissOnEmpty === true,
+      isHover: policy?.isHover === true,
+    });
+  }
+
   function isCodePointJapanese(codePoint) {
     return JAPANESE_RANGES.some(([start, end]) => codePoint >= start && codePoint <= end);
   }
@@ -159,22 +169,22 @@
       return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
     },
 
-    selectText(x, y) {
+    selectText(x, y, policy = clickPolicy) {
       const hit = this.getCharacterAtPoint(x, y);
       if (!hit) {
-        this.clearSelection();
-        postToHost('lookupEmpty');
+        if (policy.dismissOnEmpty) this.clearSelection();
+        postLookupEmpty(policy);
         return null;
       }
 
-      return this.selectHit(hit, x, y);
+      return this.selectHit(hit, x, y, undefined, policy);
     },
 
     selectTextAtOffset(request) {
       const node = textElement.firstChild;
       if (!node || node.nodeType !== Node.TEXT_NODE || !node.textContent.length) {
-        this.clearSelection();
-        postToHost('lookupEmpty');
+        if (request?.dismissOnEmpty === true) this.clearSelection();
+        postLookupEmpty(request);
         return null;
       }
 
@@ -189,12 +199,11 @@
         { node, offset },
         x + width / 2,
         y + height / 2,
-        { x, y, width, height });
+        { x, y, width, height },
+        request);
     },
 
-    selectHit(hit, x, y, anchorRect) {
-
-      this.clearSelection();
+    selectHit(hit, x, y, anchorRect, policy = clickPolicy) {
 
       const content = hit.node.textContent;
       if (hit.offset < content.length && !isCodePointJapanese(content.codePointAt(hit.offset))) {
@@ -229,11 +238,12 @@
       }
 
       if (!text) {
-        this.clearSelection();
-        postToHost('lookupEmpty');
+        if (policy.dismissOnEmpty) this.clearSelection();
+        postLookupEmpty(policy);
         return null;
       }
 
+      this.clearSelection();
       state.selection = {
         startNode: hit.node,
         startOffset: hit.offset,
@@ -351,17 +361,15 @@
   function lookupAtPoint(x, y) {
     const hit = selection.getCharacterAtPoint(x, y);
     if (!hit) {
-      const hadSelection = !!state.selection || state.lastShiftHoverKey !== '';
-      selection.clearSelection();
       state.lastShiftHoverKey = '';
-      if (hadSelection) postToHost('lookupEmpty');
+      postLookupEmpty(hoverPolicy);
       return;
     }
 
     const key = `${hit.offset}:${hit.node.textContent}`;
     if (key === state.lastShiftHoverKey) return;
     state.lastShiftHoverKey = key;
-    selection.selectText(x, y);
+    selection.selectText(x, y, hoverPolicy);
   }
 
   window.hoshiVideoSubtitle = {
