@@ -84,7 +84,7 @@ public class DictionaryPopupCommitCoordinatorTests
     public async Task SuccessfulResult_AndContentReady_CompleteIdempotently_AndRecoverOnceEachSignal()
     {
         var transaction = new DictionaryPopupDisplayTransaction();
-        transaction.BeginPending(5, "ready");
+        transaction.TryBeginPending(5, "ready", out _).Should().BeTrue();
         transaction.TryAcceptCommit(5);
         var completions = 0;
         var recoveries = 0;

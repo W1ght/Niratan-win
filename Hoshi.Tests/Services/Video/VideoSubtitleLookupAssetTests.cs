@@ -234,6 +234,10 @@ public class VideoSubtitleLookupAssetTests
         var prepareIndex = popupCode.IndexOf(
             "var generation = PrepareForPendingContent(",
             StringComparison.Ordinal);
+        var cancelPriorIndex = popupCode.LastIndexOf(
+            "CancelPendingContentBeforeStartingNextGeneration();",
+            prepareIndex,
+            StringComparison.Ordinal);
         var startStateIndex = popupCode.IndexOf(
             "request.State.TryStartGeneration()",
             prepareIndex,
@@ -246,16 +250,30 @@ public class VideoSubtitleLookupAssetTests
             "request.GenerationStarted?.Invoke(generation);",
             startStateIndex,
             StringComparison.Ordinal);
+        var beginPendingIndex = popupCode.IndexOf(
+            "_displayTransaction.TryBeginPending(",
+            generationCallbackIndex,
+            StringComparison.Ordinal);
+        var pendingFieldIndex = popupCode.IndexOf(
+            "_pendingContentGeneration = generation;",
+            beginPendingIndex,
+            StringComparison.Ordinal);
 
         popupCode.Should().Contain("_displayTransaction.TryCancelPending(");
+        popupCode.Should().Contain("_displayTransaction.TryGetPending(out var pending)");
+        popupCode.Should().Contain("CancelPendingContent(pending.Generation, pending.TraceId)");
         popupCode.Should().Contain("out var aborted");
         popupCode.Should().Contain("ContentCommitAborted?.Invoke(");
         popupCode.Should().Contain(
             "catch\n        {\n            CancelPendingContent(generation, request.TraceId);\n            throw;");
         popupCode.Should().Contain("if (CancelPendingContent(pendingGeneration, traceId))");
+        cancelPriorIndex.Should().BeGreaterThanOrEqualTo(0);
+        prepareIndex.Should().BeGreaterThan(cancelPriorIndex);
         startStateIndex.Should().BeGreaterThan(prepareIndex);
         terminalTryIndex.Should().BeGreaterThan(startStateIndex);
         generationCallbackIndex.Should().BeGreaterThan(terminalTryIndex);
+        beginPendingIndex.Should().BeGreaterThan(generationCallbackIndex);
+        pendingFieldIndex.Should().BeGreaterThan(beginPendingIndex);
         cancelSucceededIndex.Should().BeGreaterThanOrEqualTo(0);
         retainedOwnershipIndex.Should().BeGreaterThan(cancelSucceededIndex);
         overlayCode.Should().Contain(
