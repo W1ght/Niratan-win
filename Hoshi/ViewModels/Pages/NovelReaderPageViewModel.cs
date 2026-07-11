@@ -130,6 +130,9 @@ public partial class NovelReaderPageViewModel : ObservableObject
     private CancellationTokenSource? _saveCts;
     private Task? _saveTask;
     private readonly object _saveGate = new();
+    private Task _writerTail = Task.CompletedTask;
+    private bool _lifecycleWriterBarrier;
+    private bool _readerWriterClosed;
     private IReadOnlyList<int> _chapterCharacterCounts = [];
     private readonly object _lifecycleCloseGate = new();
     private readonly SemaphoreSlim _lifecycleCheckpointLock = new(1, 1);
@@ -414,28 +417,30 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
     private async Task PrepareForReaderLifecycleCloseCoreAsync()
     {
+        CloseProgressWriterAdmission();
         await _lifecycleCheckpointLock.WaitAsync();
         try
         {
             if (_didCompleteLifecycleClose)
                 return;
 
-            await SaveProgressNowAsync(
-                flushStatistics: false,
-                scheduleAutoSync: false,
-                ct: CancellationToken.None);
-            await CheckpointReadingAsync(
-                ReaderStatisticsCheckpointReason.Close,
-                CancellationToken.None);
-            if (CurrentBook != null)
+            Task boundary;
+            TaskCompletionSource admission;
+            lock (_saveGate)
             {
-                _readerAutoSyncCoordinator.ScheduleExport(CurrentBook);
-                await _readerAutoSyncCoordinator.FlushAsync(
-                    CurrentBook,
+                admission = CreateWriterAdmission();
+                boundary = RunLifecycleWriterBoundaryAsync(
+                    admission.Task,
+                    _writerTail,
+                    CaptureProgressSaveRequest(),
+                    ReaderStatisticsCheckpointReason.Close,
+                    cancelAfterFlush: true,
                     CancellationToken.None);
+                _writerTail = boundary;
             }
 
-            _readerAutoSyncCoordinator.Cancel();
+            admission.TrySetResult();
+            await boundary;
             _didCompleteLifecycleClose = true;
         }
         finally
@@ -452,15 +457,38 @@ public partial class NovelReaderPageViewModel : ObservableObject
             if (_didCompleteLifecycleClose)
                 return;
 
-            await SaveProgressNowAsync(
-                flushStatistics: false,
-                scheduleAutoSync: false,
-                ct: ct);
-            await CheckpointReadingAsync(ReaderStatisticsCheckpointReason.Background, ct);
-            if (CurrentBook != null)
+            Task boundary;
+            TaskCompletionSource admission;
+            lock (_saveGate)
             {
-                _readerAutoSyncCoordinator.ScheduleExport(CurrentBook);
-                await _readerAutoSyncCoordinator.FlushAsync(CurrentBook, ct);
+                if (_readerWriterClosed)
+                    return;
+
+                _lifecycleWriterBarrier = true;
+                _saveCts?.Cancel();
+                admission = CreateWriterAdmission();
+                boundary = RunLifecycleWriterBoundaryAsync(
+                    admission.Task,
+                    _writerTail,
+                    CaptureProgressSaveRequest(),
+                    ReaderStatisticsCheckpointReason.Background,
+                    cancelAfterFlush: false,
+                    ct);
+                _writerTail = boundary;
+            }
+
+            admission.TrySetResult();
+            try
+            {
+                await boundary;
+            }
+            finally
+            {
+                lock (_saveGate)
+                {
+                    if (!_readerWriterClosed)
+                        _lifecycleWriterBarrier = false;
+                }
             }
         }
         finally
@@ -558,63 +586,39 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
     public void SaveProgressDebounced()
     {
-        if (CurrentBook == null) return;
-
-        var owner = new CancellationTokenSource();
-        var bookId = CurrentBook.Id;
-        var book = CurrentBook;
-        var chapterIndex = CurrentChapterIndex;
-        var progress = Progress;
-        var currentCharacterCount = CurrentCharacterCount;
-        var totalCharacterCount = TotalCharacterCount;
-
         lock (_saveGate)
         {
+            var request = CaptureProgressSaveRequest();
+            if (!CanAdmitProgressWriter() || request == null)
+                return;
+
             _saveCts?.Cancel();
+            var owner = new CancellationTokenSource();
             _saveCts = owner;
             _saveTask = SaveProgressDebouncedCoreAsync(
-                bookId,
-                book,
-                chapterIndex,
-                progress,
-                currentCharacterCount,
-                totalCharacterCount,
+                _writerTail,
+                request,
                 owner);
+            _writerTail = _saveTask;
         }
     }
 
     private async Task SaveProgressDebouncedCoreAsync(
-        string bookId,
-        NovelBook book,
-        int chapterIndex,
-        double progress,
-        int currentCharacterCount,
-        int totalCharacterCount,
+        Task previousWriter,
+        ProgressSaveRequest request,
         CancellationTokenSource owner)
     {
         var token = owner.Token;
         try
         {
             await Task.Delay(500, token);
-            var result = await _novelLibraryService.SaveProgressAsync(
-                bookId,
-                chapterIndex,
-                progress,
-                currentCharacterCount,
-                totalCharacterCount,
+            await AwaitPreviousWriterCompletionAsync(previousWriter);
+            token.ThrowIfCancellationRequested();
+            await SaveProgressCoreAsync(
+                request,
+                flushStatistics: true,
+                scheduleAutoSync: true,
                 token);
-            token.ThrowIfCancellationRequested();
-            await FlushStatisticsAsync(ct: token);
-            token.ThrowIfCancellationRequested();
-            if (!result.IsSuccess)
-            {
-                if (!result.IsCancelled)
-                    _notificationService.ShowError(result.Error!, result.ErrorTitle!);
-                return;
-            }
-
-            _readerAutoSyncCoordinator.ScheduleExport(book);
-            _messenger.Send(new NovelLibraryChangedMessage());
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -634,35 +638,101 @@ public partial class NovelReaderPageViewModel : ObservableObject
         }
     }
 
-    private async Task CancelAndAwaitDebouncedSaveAsync(CancellationToken ct)
-    {
-        Task? saveTask;
-        lock (_saveGate)
-        {
-            _saveCts?.Cancel();
-            saveTask = _saveTask;
-        }
-
-        if (saveTask != null)
-            await saveTask.WaitAsync(ct);
-    }
-
-    public async Task SaveProgressNowAsync(
+    public Task SaveProgressNowAsync(
         bool flushStatistics = true,
         bool scheduleAutoSync = true,
         CancellationToken ct = default)
     {
-        if (CurrentBook == null) return;
-        await CancelAndAwaitDebouncedSaveAsync(ct);
-        var result = await _novelLibraryService.SaveProgressAsync(
-            CurrentBook.Id,
-            CurrentChapterIndex,
-            Progress,
-            CurrentCharacterCount,
-            TotalCharacterCount,
+        Task operation;
+        TaskCompletionSource admission;
+        lock (_saveGate)
+        {
+            var request = CaptureProgressSaveRequest();
+            if (!CanAdmitProgressWriter() || request == null)
+                return Task.CompletedTask;
+
+            _saveCts?.Cancel();
+            admission = CreateWriterAdmission();
+            operation = RunProgressWriterAsync(
+                admission.Task,
+                _writerTail,
+                request,
+                flushStatistics,
+                scheduleAutoSync,
+                ct);
+            _writerTail = operation;
+        }
+
+        admission.TrySetResult();
+        return operation;
+    }
+
+    private async Task RunProgressWriterAsync(
+        Task admission,
+        Task previousWriter,
+        ProgressSaveRequest request,
+        bool flushStatistics,
+        bool scheduleAutoSync,
+        CancellationToken ct)
+    {
+        await admission;
+        await AwaitPreviousWriterCompletionAsync(previousWriter);
+        ct.ThrowIfCancellationRequested();
+        await SaveProgressCoreAsync(
+            request,
+            flushStatistics,
+            scheduleAutoSync,
             ct);
+    }
+
+    private async Task RunLifecycleWriterBoundaryAsync(
+        Task admission,
+        Task previousWriter,
+        ProgressSaveRequest? request,
+        ReaderStatisticsCheckpointReason reason,
+        bool cancelAfterFlush,
+        CancellationToken ct)
+    {
+        await admission;
+        await AwaitPreviousWriterCompletionAsync(previousWriter);
+        ct.ThrowIfCancellationRequested();
+        if (request != null)
+        {
+            await SaveProgressCoreAsync(
+                request,
+                flushStatistics: false,
+                scheduleAutoSync: false,
+                ct);
+        }
+
+        await CheckpointReadingAsync(reason, ct);
+        if (request != null)
+        {
+            _readerAutoSyncCoordinator.ScheduleExport(request.Book);
+            await _readerAutoSyncCoordinator.FlushAsync(request.Book, ct);
+        }
+
+        if (cancelAfterFlush)
+            _readerAutoSyncCoordinator.Cancel();
+    }
+
+    private async Task SaveProgressCoreAsync(
+        ProgressSaveRequest request,
+        bool flushStatistics,
+        bool scheduleAutoSync,
+        CancellationToken ct)
+    {
+        var result = await _novelLibraryService.SaveProgressAsync(
+            request.Book.Id,
+            request.ChapterIndex,
+            request.Progress,
+            request.CurrentCharacterCount,
+            request.TotalCharacterCount,
+            ct);
+        ct.ThrowIfCancellationRequested();
         if (flushStatistics)
             await FlushStatisticsAsync(ct: ct);
+        ct.ThrowIfCancellationRequested();
         if (!result.IsSuccess)
         {
             if (!result.IsCancelled)
@@ -671,9 +741,53 @@ public partial class NovelReaderPageViewModel : ObservableObject
         }
 
         if (scheduleAutoSync)
-            _readerAutoSyncCoordinator.ScheduleExport(CurrentBook);
+            _readerAutoSyncCoordinator.ScheduleExport(request.Book);
         _messenger.Send(new NovelLibraryChangedMessage());
     }
+
+    private static async Task AwaitPreviousWriterCompletionAsync(Task previousWriter)
+    {
+        try
+        {
+            await previousWriter;
+        }
+        catch
+        {
+        }
+    }
+
+    private static TaskCompletionSource CreateWriterAdmission() =>
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private bool CanAdmitProgressWriter() =>
+        !_lifecycleWriterBarrier && !_readerWriterClosed;
+
+    private void CloseProgressWriterAdmission()
+    {
+        lock (_saveGate)
+        {
+            _readerWriterClosed = true;
+            _lifecycleWriterBarrier = true;
+            _saveCts?.Cancel();
+        }
+    }
+
+    private ProgressSaveRequest? CaptureProgressSaveRequest() =>
+        CurrentBook == null
+            ? null
+            : new ProgressSaveRequest(
+                CurrentBook,
+                CurrentChapterIndex,
+                Progress,
+                CurrentCharacterCount,
+                TotalCharacterCount);
+
+    private sealed record ProgressSaveRequest(
+        NovelBook Book,
+        int ChapterIndex,
+        double Progress,
+        int CurrentCharacterCount,
+        int TotalCharacterCount);
 
     private int CurrentChapterRemainingCharacters
     {

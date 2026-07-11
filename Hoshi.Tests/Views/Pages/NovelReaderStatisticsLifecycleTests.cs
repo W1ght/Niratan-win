@@ -43,6 +43,6 @@ public sealed class NovelReaderStatisticsLifecycleTests
         readerCode.Should().MatchRegex(new Regex(
             @"(?s)case string id when id == ReaderShortcutActions\.Close\.Id:\s*await ViewModel\.BackToLibraryCommand\.ExecuteAsync\(null\);\s*return true;"));
         readerCode.Should().MatchRegex(new Regex(
-            @"(?s)protected override void OnNavigatedFrom\(NavigationEventArgs e\).*?_ = ViewModel\.PrepareForReaderLifecycleCloseAsync\(\);"));
+            @"(?ms)^    protected override void OnNavigatedFrom\(NavigationEventArgs e\)\s*\{.*?_ = ViewModel\.PrepareForReaderLifecycleCloseAsync\(\);.*?^    \}"));
     }
 }
