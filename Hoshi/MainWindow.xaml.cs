@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
@@ -37,6 +38,7 @@ public sealed partial class MainWindow : Window, IRecipient<SetFullscreenMessage
     private readonly OverlappedPresenter _presenter;
 
     private readonly Frame _rootFrame = new() { Content = new SplashPage() };
+    private bool _wasMinimized;
 
     public MainWindow()
     {
@@ -73,6 +75,7 @@ public sealed partial class MainWindow : Window, IRecipient<SetFullscreenMessage
         _settingsService.SettingChanged += Settings_Changed;
         Content.KeyDown += OnKeyDown;
         Closed += MainWindow_Closed;
+        AppWindow.Changed += MainWindow_AppWindowChanged;
 
         _messenger.RegisterAll(this);
     }
@@ -146,6 +149,8 @@ public sealed partial class MainWindow : Window, IRecipient<SetFullscreenMessage
     {
         args.Handled = true;
 
+        await SendAppLifecycleCheckpointAsync(AppLifecycleCheckpointReason.Closing);
+
         var isMaximized = _presenter.State == OverlappedPresenterState.Maximized;
         var lastWindowState = new WindowState
         {
@@ -169,10 +174,40 @@ public sealed partial class MainWindow : Window, IRecipient<SetFullscreenMessage
 
         _settingsService.SettingChanged -= Settings_Changed;
         Closed -= MainWindow_Closed;
+        AppWindow.Changed -= MainWindow_AppWindowChanged;
 
         Log.Information("Hoshi closing — session ended");
         await Log.CloseAndFlushAsync();
         Close();
+    }
+
+    private async void MainWindow_AppWindowChanged(
+        AppWindow sender,
+        AppWindowChangedEventArgs args)
+    {
+        var isMinimized = _presenter.State == OverlappedPresenterState.Minimized;
+        if (isMinimized && !_wasMinimized)
+            await SendAppLifecycleCheckpointAsync(AppLifecycleCheckpointReason.Background);
+        _wasMinimized = isMinimized;
+    }
+
+    private async Task<bool> SendAppLifecycleCheckpointAsync(
+        AppLifecycleCheckpointReason reason)
+    {
+        var message = new AppBackgroundingMessage(reason);
+        _ = _messenger.Send(message);
+        if (!message.HasReceivedResponse)
+            return false;
+
+        try
+        {
+            return await message.Response;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[Reader] Lifecycle checkpoint failed: {Reason}", reason);
+            return false;
+        }
     }
 
     [DllImport("user32.dll")]
