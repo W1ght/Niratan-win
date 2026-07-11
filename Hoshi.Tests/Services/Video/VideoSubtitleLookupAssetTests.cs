@@ -72,7 +72,7 @@ public class VideoSubtitleLookupAssetTests
         xaml.Should().Contain("x:Name=\"PopupOverlayCanvas\"");
         xaml.Should().Contain("SizeChanged=\"PopupOverlayCanvas_SizeChanged\"");
         code.Should().Contain("_popupOverlay = new DictionaryPopupOverlay();");
-        code.Should().Contain("_popupOverlay.UseCanvas(PopupOverlayCanvas);");
+        code.Should().Contain("DictionaryPopupCanvasInputMode.VisibleHostsOnly");
         code.Should().NotContain("_popupOverlay.EmbedRoot(PopupOverlayCanvas)");
         code.Should().NotContain("IGlobalLookupPopupService");
         code.Should().NotContain("GlobalLookupPopupWindow");
@@ -92,6 +92,26 @@ public class VideoSubtitleLookupAssetTests
     }
 
     [Fact]
+    public void VideoSubtitleLookup_PopupEmptySpacePassesThrough()
+    {
+        var xaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.xaml"));
+        var code = ReadVideoPlayerWindowCode();
+        var overlayCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs"));
+
+        code.Should().Contain("DictionaryPopupCanvasInputMode.VisibleHostsOnly");
+        overlayCode.Should().Contain("RootContentCommitted");
+        xaml.Should().NotContain(
+            "x:Name=\"VideoDictionaryPanelChrome\"\r\n" +
+            "                        Canvas.ZIndex=\"100\"\r\n" +
+            "                        HorizontalAlignment=\"Stretch\"\r\n" +
+            "                        VerticalAlignment=\"Stretch\"\r\n" +
+            "                        Margin=\"16,16,16,120\"\r\n" +
+            "                        Background=\"Transparent\"");
+    }
+
+    [Fact]
     public void VideoSubtitleLookup_UsesLatestRequestWinsCoordination()
     {
         var code = ReadVideoPlayerWindowCode();
@@ -103,7 +123,7 @@ public class VideoSubtitleLookupAssetTests
         code.Should().Contain("_subtitleLookupCoordinator.IsCurrent(lookupRequest)");
         code.Should().Contain("lookupRequest.CancellationToken");
         code.Should().Contain("cancellationToken: lookupRequest.CancellationToken");
-        code.Should().Contain("lookupOverlay?.CancelShow(lookupTraceId)");
+        code.Should().Contain("ResolvePopupShowCancellation(");
         normalizedCode.Should().Contain("if (!IsCurrentSubtitleLookup(lookupRequest))");
         code.Should().Contain("stale request version={RequestVersion} failed after supersession");
         code.Should().Contain("popupRequest.TraceId");
@@ -112,18 +132,202 @@ public class VideoSubtitleLookupAssetTests
         overlayCode.Should().Contain("CancellationToken cancellationToken = default");
         overlayCode.Should().Contain("cancellationToken.ThrowIfCancellationRequested();");
         overlayCode.Should().Contain("cancellationToken: cancellationToken");
-        overlayCode.Should().Contain("public void CancelShow(string? traceId)");
+        overlayCode.Should().Contain(
+            "public DictionaryPopupShowCancellationResult CancelShow(string? traceId)");
+        overlayCode.Should().Contain("var contentCancelled = _rootHost.CancelPendingContent(");
+        overlayCode.Should().Contain("if (contentCancelled)");
+        overlayCode.Should().Contain("_rootStateCoordinator.TryAbort(generation, traceId)");
+        overlayCode.Should().Contain("RootContentAborted?.Invoke(this, e)");
     }
 
     [Fact]
-    public void VideoSubtitleLookup_EmptyCanvasHitCancelsThePendingRequest()
+    public void VideoSubtitleLookup_ReplacesVisiblePopupWithoutPredismiss()
+    {
+        var code = ReadVideoPlayerWindowCode();
+        var mainCode = ReadVideoPlayerWindowMainCode()
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var missStart = mainCode.IndexOf(
+            "if (popupRequest == null)",
+            StringComparison.Ordinal);
+        var missEnd = mainCode.IndexOf(
+            "lookupOverlay = EnsurePopupOverlay();",
+            missStart,
+            StringComparison.Ordinal);
+        var missCode = mainCode[missStart..missEnd];
+
+        code.Should().Contain(
+            "RootContentCommitted += PopupOverlay_RootContentCommitted");
+        code.Should().Contain(
+            "RootContentCommitted -= PopupOverlay_RootContentCommitted");
+        code.Should().Contain("StagePopupCommit(");
+        code.Should().Contain("TryTakePopupCommit(");
+        mainCode.Should().Contain("CreatePopupCommitIdentity(");
+        mainCode.Should().Contain("popupRequest.TraceId);");
+        mainCode.Should().Contain("traceId: lookupCommitId");
+        code.Should().Contain("!_isLookupPopupVisible");
+        code.Should().Contain("HasPopupCommitCandidates");
+        code.Should().Contain("ViewModel.StatusText = \"No dictionary results\"");
+        missCode.Should().NotContain("Dismiss(");
+        mainCode.Should().NotContain(
+            "await HighlightSubtitleCanvasSelectionAsync(sentenceOffset");
+        mainCode.Should().Contain(
+            "_subtitleLookupCoordinator.CancelCurrentRequest();\n" +
+            "            ResolvePopupShowCancellation(lookupOverlay, lookupCommitId);");
+        code.Should().Contain(
+            "RootContentAborted += PopupOverlay_RootContentAborted");
+        code.Should().Contain(
+            "RootContentAborted -= PopupOverlay_RootContentAborted");
+        code.Should().Contain("MarkPopupCommitAccepted(commitIdentity)");
+        code.Should().Contain("CancelPopupCommit(commitIdentity)");
+    }
+
+    [Fact]
+    public void VideoSubtitleLookup_ClickAndShiftHoverShareTheSameRequestPath()
+    {
+        var code = ReadVideoPlayerWindowCode();
+
+        code.Should().Contain(
+            "await LookupSubtitleAtCanvasPointAsync(point, isHoverLookup: false)");
+        code.Should().Contain(
+            "_ = LookupSubtitleAtCanvasPointAsync(point, isHoverLookup: true)");
+        code.Should().Contain("await StartSubtitleLookupAsync(");
+    }
+
+    [Fact]
+    public void VideoSubtitleLookup_QueuedShowDropReleasesExactCandidate()
+    {
+        var code = ReadVideoPlayerWindowCode();
+        var overlayCode = ReadProjectFile(
+            "Views", "Dictionary", "DictionaryPopupOverlay.cs");
+        var popupCode = ReadProjectFile(
+            "Views", "Dictionary", "DictionaryLookupPopup.cs");
+
+        popupCode.Should().Contain("QueuedShowDropped");
+        popupCode.Should().Contain("NotifyQueuedShowDropped(");
+        popupCode.Should().Contain("request.State.TryDropBeforeGeneration()");
+        popupCode.Should().Contain("request.State.TryStartGeneration()");
+        popupCode.Should().Contain("queuedRequest.CancellationToken.IsCancellationRequested");
+        overlayCode.Should().Contain("RootShowDropped");
+        overlayCode.Should().Contain("OnRootShowDropped");
+        code.Should().Contain("RootShowDropped += PopupOverlay_RootShowDropped");
+        code.Should().Contain("RootShowDropped -= PopupOverlay_RootShowDropped");
+        code.Should().Contain("PopupOverlay_RootShowDropped(");
+        code.Should().Contain("CancelPopupCommit(e.TraceId)");
+    }
+
+    [Fact]
+    public void DictionaryPopup_GenerationStartedAlwaysEndsWithCommitOrAbort()
+    {
+        var popupCode = ReadProjectFile(
+            "Views", "Dictionary", "DictionaryLookupPopup.cs")
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var overlayCode = ReadProjectFile(
+            "Views", "Dictionary", "DictionaryPopupOverlay.cs")
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var cancelSucceededIndex = overlayCode.IndexOf(
+            "if (contentCancelled)",
+            StringComparison.Ordinal);
+        var retainedOwnershipIndex = overlayCode.IndexOf(
+            "retainedGeneration == generation",
+            cancelSucceededIndex,
+            StringComparison.Ordinal);
+        var prepareIndex = popupCode.IndexOf(
+            "var generation = PrepareForPendingContent(",
+            StringComparison.Ordinal);
+        var cancelPriorIndex = popupCode.LastIndexOf(
+            "CancelPendingContentBeforeStartingNextGeneration();",
+            prepareIndex,
+            StringComparison.Ordinal);
+        var startStateIndex = popupCode.IndexOf(
+            "request.State.TryStartGeneration()",
+            prepareIndex,
+            StringComparison.Ordinal);
+        var terminalTryIndex = popupCode.IndexOf(
+            "try\n        {",
+            startStateIndex,
+            StringComparison.Ordinal);
+        var generationCallbackIndex = popupCode.IndexOf(
+            "request.GenerationStarted?.Invoke(generation);",
+            startStateIndex,
+            StringComparison.Ordinal);
+        var beginPendingIndex = popupCode.IndexOf(
+            "_displayTransaction.TryBeginPending(",
+            generationCallbackIndex,
+            StringComparison.Ordinal);
+        var pendingFieldIndex = popupCode.IndexOf(
+            "_pendingContentGeneration = generation;",
+            beginPendingIndex,
+            StringComparison.Ordinal);
+
+        popupCode.Should().Contain("_displayTransaction.TryCancelPending(");
+        popupCode.Should().Contain("_displayTransaction.TryGetPending(out var pending)");
+        popupCode.Should().Contain("CancelPendingContent(pending.Generation, pending.TraceId)");
+        popupCode.Should().Contain("out var aborted");
+        popupCode.Should().Contain("ContentCommitAborted?.Invoke(");
+        popupCode.Should().Contain(
+            "catch\n        {\n            CancelPendingContent(generation, request.TraceId);\n            throw;");
+        popupCode.Should().Contain("if (CancelPendingContent(pendingGeneration, traceId))");
+        cancelPriorIndex.Should().BeGreaterThanOrEqualTo(0);
+        prepareIndex.Should().BeGreaterThan(cancelPriorIndex);
+        startStateIndex.Should().BeGreaterThan(prepareIndex);
+        terminalTryIndex.Should().BeGreaterThan(startStateIndex);
+        generationCallbackIndex.Should().BeGreaterThan(terminalTryIndex);
+        beginPendingIndex.Should().BeGreaterThan(generationCallbackIndex);
+        pendingFieldIndex.Should().BeGreaterThan(beginPendingIndex);
+        cancelSucceededIndex.Should().BeGreaterThanOrEqualTo(0);
+        retainedOwnershipIndex.Should().BeGreaterThan(cancelSucceededIndex);
+        overlayCode.Should().Contain(
+            "return DictionaryPopupShowCancellationResult.Cancelled;");
+        overlayCode.Should().Contain(
+            "return DictionaryPopupShowCancellationResult.NoOwnership;");
+    }
+
+    [Fact]
+    public void VideoSubtitleLookup_ClickEmptyDismissesWhileHoverEmptyPreservesOwnership()
     {
         var code = ReadVideoPlayerWindowCode().Replace("\r\n", "\n", StringComparison.Ordinal);
+        var script = ReadProjectFile("Web", "VideoSubtitle", "subtitle-overlay.js")
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
 
         code.Should().Contain("ClearSubtitleLookupFromPointer");
         code.Should().Contain("_subtitleLookupCoordinator.CancelCurrent();");
         code.Should().Contain("_popupOverlay?.Dismiss();");
         code.Should().Contain("ClearSubtitleCanvasSelection();");
+        code.Should().Contain("VideoSubtitleLookupEmptyPolicy.FromCanvasLookup(isHoverLookup)");
+        code.Should().Contain("dismissOnEmpty = policy.DismissOnEmpty");
+        code.Should().Contain("isHover = policy.IsHover");
+        code.Should().Contain("VideoSubtitleLookupEmptyPolicy.FromWebPayload(payload)");
+        code.Should().Contain("if (!emptyPolicy.DismissOnEmpty)");
+        script.Should().Contain("function postLookupEmpty(policy)");
+        script.Should().Contain("dismissOnEmpty: policy?.dismissOnEmpty === true");
+        script.Should().Contain("isHover: policy?.isHover === true");
+        script.Should().Contain("const hoverPolicy = { dismissOnEmpty: false, isHover: true };");
+        script.Should().Contain("const clickPolicy = { dismissOnEmpty: true, isHover: false };");
+        script.Should().Contain("postLookupEmpty(hoverPolicy)");
+
+        var selectHitIndex = script.IndexOf(
+            "selectHit(hit, x, y, anchorRect, policy = clickPolicy)",
+            StringComparison.Ordinal);
+        var emptyCandidateIndex = script.IndexOf(
+            "if (!text)",
+            selectHitIndex,
+            StringComparison.Ordinal);
+        var acceptedSelectionClearIndex = script.IndexOf(
+            "this.clearSelection();\n      state.selection =",
+            emptyCandidateIndex,
+            StringComparison.Ordinal);
+        var legacyHoverIndex = script.IndexOf(
+            "function lookupAtPoint(x, y)",
+            StringComparison.Ordinal);
+        var legacyHoverEnd = script.IndexOf(
+            "window.hoshiVideoSubtitle =",
+            legacyHoverIndex,
+            StringComparison.Ordinal);
+        var legacyHoverCode = script[legacyHoverIndex..legacyHoverEnd];
+
+        emptyCandidateIndex.Should().BeGreaterThan(selectHitIndex);
+        acceptedSelectionClearIndex.Should().BeGreaterThan(emptyCandidateIndex);
+        legacyHoverCode.Should().NotContain("selection.clearSelection()");
     }
 
     [Fact]

@@ -25,8 +25,31 @@ public readonly record struct DictionaryPopupHostBounds(
     double Width,
     double Height);
 
+public enum DictionaryPopupCanvasInputMode
+{
+    ModalSurface,
+    VisibleHostsOnly,
+}
+
+public enum DictionaryPopupShowCancellationResult
+{
+    NoOwnership,
+    Cancelled,
+    CommitAccepted,
+}
+
 public sealed class DictionaryPopupOverlay : IDisposable
 {
+    private sealed record DictionaryPopupRootContext(
+        string? TraceId,
+        Dictionary<string, string> Styles,
+        DictionaryDisplaySettings DisplaySettings,
+        ThemeMode Theme,
+        AudioSettings AudioSettings,
+        AnkiSettings AnkiSettings,
+        AnkiMiningContext MiningContext,
+        bool IsVertical);
+
     private const double ScreenBorderPadding = DictionaryPopupLayoutCalculator.ScreenBorderPadding;
     private const int RootPopupZIndex = 10;
     private const int ChildPopupZIndexBase = 20;
@@ -43,28 +66,23 @@ public sealed class DictionaryPopupOverlay : IDisposable
     private string _lastRedirectQuery = "";
     private DictionaryLookupPopup? _lastRedirectParent;
     private DictionaryLookupPopup _rootHost = null!;
-    private Dictionary<string, string> _currentStyles = new();
-    private DictionaryDisplaySettings _displaySettings = new();
-    private double _rootPointX;
-    private double _rootPointY;
-    private double _rootSelectionWidth;
-    private double _rootSelectionHeight;
-    private bool _isVertical;
     private bool _rootWarm;
     private bool _rootVisible;
-    private ThemeMode _currentTheme;
-    private AudioSettings _currentAudioSettings = new();
-    private AnkiSettings _currentAnkiSettings = new();
-    private string? _currentTraceId;
-    private AnkiMiningContext _currentMiningContext = new();
     private Panel? _embeddedPanel;
     private XamlRoot? _currentXamlRoot;
     private Task? _prewarmTask;
     private double _rootReadyOpacity = 1;
     private bool _useStandaloneWindowVisuals;
     private bool _useNakedFloatingWindowVisuals;
+    private readonly DictionaryPopupRootStateCoordinator<
+        DictionaryPopupRootContext,
+        DictionaryPopupAnchorRect,
+        DictionaryPopupLayoutResult> _rootStateCoordinator = new();
 
     public event EventHandler? Dismissed;
+    public event EventHandler<DictionaryPopupContentCommittedEventArgs>? RootContentCommitted;
+    public event EventHandler<DictionaryPopupContentCommittedEventArgs>? RootContentAborted;
+    public event EventHandler<DictionaryPopupShowDroppedEventArgs>? RootShowDropped;
 
     public DictionaryPopupOverlay()
     {
@@ -80,7 +98,9 @@ public sealed class DictionaryPopupOverlay : IDisposable
     }
 
     /// <summary>Use the given canvas as the overlay surface (reader page). Must be called before PrewarmAsync.</summary>
-    public void UseCanvas(Canvas overlayCanvas)
+    public void UseCanvas(
+        Canvas overlayCanvas,
+        DictionaryPopupCanvasInputMode inputMode = DictionaryPopupCanvasInputMode.ModalSurface)
     {
         if (!ReferenceEquals(_canvas, overlayCanvas))
         {
@@ -89,7 +109,13 @@ public sealed class DictionaryPopupOverlay : IDisposable
             _canvas.PointerPressed += OnOverlayPointerPressed;
         }
 
-        _canvas.Background = new SolidColorBrush(Colors.Transparent);
+        _canvas.Background = inputMode switch
+        {
+            DictionaryPopupCanvasInputMode.ModalSurface =>
+                new SolidColorBrush(Colors.Transparent),
+            DictionaryPopupCanvasInputMode.VisibleHostsOnly => null,
+            _ => throw new ArgumentOutOfRangeException(nameof(inputMode)),
+        };
         _canvas.IsHitTestVisible = false;
         _canvas.Visibility = Visibility.Visible;
     }
@@ -154,6 +180,9 @@ public sealed class DictionaryPopupOverlay : IDisposable
         _rootHost.TapOutsideRequested += OnRootTapOutsideRequested;
         _rootHost.DismissRequested += OnPopupDismissRequested;
         _rootHost.Scrolled += OnRootScrolled;
+        _rootHost.ContentCommitted += OnRootContentCommitted;
+        _rootHost.ContentCommitAborted += OnRootContentCommitAborted;
+        _rootHost.QueuedShowDropped += OnRootShowDropped;
 
         if (_embeddedPanel != null)
         {
@@ -209,22 +238,22 @@ public sealed class DictionaryPopupOverlay : IDisposable
         Log.Information(
             "[LookupTrace] trace={TraceId} overlay show start entries={EntryCount} styles={StyleCount} embedded={Embedded}",
             traceId ?? "-", results.Count, styles.Count, _embeddedPanel != null);
-        _currentTraceId = traceId;
-        _currentStyles = styles;
-        _displaySettings = displaySettings;
-        _currentTheme = themeMode;
-        _rootPointX = pointX;
-        _rootPointY = pointY;
-        _rootSelectionWidth = selectionWidth;
-        _rootSelectionHeight = selectionHeight;
-        _isVertical = isVertical;
-
         var audio = audioSettings ?? App.GetService<ISettingsService>().Current.AudioSettings;
-        _currentAudioSettings = audio;
-
         var anki = ankiSettings ?? App.GetService<ISettingsService>().Current.AnkiSettings;
-        _currentAnkiSettings = anki;
-        _currentMiningContext = miningContext ?? new AnkiMiningContext();
+        var context = new DictionaryPopupRootContext(
+            traceId,
+            styles,
+            displaySettings,
+            themeMode,
+            audio,
+            anki,
+            miningContext ?? new AnkiMiningContext(),
+            isVertical);
+        var anchor = new DictionaryPopupAnchorRect(
+            pointX,
+            pointY,
+            selectionWidth,
+            selectionHeight);
 
         await EnsureWarmAsync(xamlRoot, themeMode);
         cancellationToken.ThrowIfCancellationRequested();
@@ -239,7 +268,31 @@ public sealed class DictionaryPopupOverlay : IDisposable
             "[LookupTrace] trace={TraceId} overlay cleared children in {Ms}ms total={TotalMs}ms",
             traceId ?? "-", clearSw.ElapsedMilliseconds, sw.ElapsedMilliseconds);
 
-        _rootHost.SetMiningContext(_currentMiningContext);
+        DictionaryPopupLayoutResult targetLayout;
+        if (_embeddedPanel != null)
+        {
+            targetLayout = new DictionaryPopupLayoutResult(
+                0,
+                0,
+                _embeddedPanel.ActualWidth > 0 ? _embeddedPanel.ActualWidth : double.NaN,
+                _embeddedPanel.ActualHeight > 0 ? _embeddedPanel.ActualHeight : double.NaN);
+        }
+        else
+        {
+            EnsureHostOnCanvas(_rootHost);
+            ApplyPopupZOrder();
+            UpdateCanvasBounds(xamlRoot);
+            targetLayout = ResolveHostLayout(
+                anchor.X,
+                anchor.Y,
+                anchor.Width,
+                anchor.Height,
+                isVertical,
+                displaySettings,
+                isRoot: true);
+        }
+
+        _rootHost.SetMiningContext(context.MiningContext);
         var injectSw = Stopwatch.StartNew();
         cancellationToken.ThrowIfCancellationRequested();
         await _rootHost.ShowResultsWarmAsync(
@@ -250,42 +303,33 @@ public sealed class DictionaryPopupOverlay : IDisposable
             audio,
             anki,
             traceId: traceId,
-            cancellationToken: cancellationToken);
+            cancellationToken: cancellationToken,
+            generationStarted: generation =>
+            {
+                if (!_rootStateCoordinator.TryStage(
+                        generation,
+                        traceId,
+                        context,
+                        anchor,
+                        targetLayout))
+                {
+                    throw new InvalidOperationException(
+                        $"Popup generation {generation} could not stage root ownership.");
+                }
+                if (!_rootHost.HasCommittedContent)
+                    ApplyHostLayout(_rootHost, targetLayout);
+            });
         cancellationToken.ThrowIfCancellationRequested();
         Log.Information(
             "[LookupTrace] trace={TraceId} root popup content injected in {Ms}ms total={TotalMs}ms entries={EntryCount}",
             traceId ?? "-", injectSw.ElapsedMilliseconds, sw.ElapsedMilliseconds, results.Count);
 
-        if (_embeddedPanel != null)
-        {
-            _rootHost.SetSize(
-                _embeddedPanel.ActualWidth > 0 ? _embeddedPanel.ActualWidth : double.NaN,
-                _embeddedPanel.ActualHeight > 0 ? _embeddedPanel.ActualHeight : double.NaN);
-            _embeddedPanel.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            // Add root host to canvas for positioning
-            EnsureHostOnCanvas(_rootHost);
-            ApplyPopupZOrder();
-
-            UpdateCanvasBounds(xamlRoot);
-
-            PositionHost(
-                _rootHost,
-                _rootPointX, _rootPointY,
-                _rootSelectionWidth, _rootSelectionHeight,
-                _isVertical);
-        }
         Log.Information(
-            "[LookupTrace] trace={TraceId} overlay root positioned/visible total={TotalMs}ms",
+            "[LookupTrace] trace={TraceId} overlay root content staged total={TotalMs}ms",
             traceId ?? "-", sw.ElapsedMilliseconds);
 
-        _rootVisible = true;
-        _canvas.IsHitTestVisible = true;
-        _canvas.Visibility = Visibility.Visible;
         Log.Information(
-            "[Lifecycle] Popup shown: entries={EntryCount} at=({X:F0},{Y:F0}) vertical={Vertical} embedded={Embedded}",
+            "[Lifecycle] Popup staged: entries={EntryCount} at=({X:F0},{Y:F0}) vertical={Vertical} embedded={Embedded}",
             results.Count, pointX, pointY, isVertical, _embeddedPanel != null);
     }
 
@@ -315,14 +359,71 @@ public sealed class DictionaryPopupOverlay : IDisposable
         Dismiss();
     }
 
+    private void OnRootContentCommitted(
+        object? sender,
+        DictionaryPopupContentCommittedEventArgs e)
+    {
+        if (!_rootStateCoordinator.TryCommit(
+                e.Generation,
+                e.TraceId,
+                out var committed))
+        {
+            return;
+        }
+
+        InvalidateRootRedirects();
+        ApplyHostLayout(_rootHost, committed.Layout);
+        _rootVisible = true;
+        if (_embeddedPanel != null)
+        {
+            _embeddedPanel.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            _canvas.IsHitTestVisible = true;
+            _canvas.Visibility = Visibility.Visible;
+        }
+
+        RootContentCommitted?.Invoke(this, e);
+    }
+
+    private void OnRootContentCommitAborted(
+        object? sender,
+        DictionaryPopupContentCommittedEventArgs e)
+    {
+        if (_rootStateCoordinator.TryAbort(e.Generation, e.TraceId))
+            RootContentAborted?.Invoke(this, e);
+    }
+
+    private void OnRootShowDropped(
+        object? sender,
+        DictionaryPopupShowDroppedEventArgs e)
+    {
+        RootShowDropped?.Invoke(this, e);
+    }
+
     private async Task HandleRedirectAsync(DictionaryPopupRedirectRequest request, DictionaryLookupPopup? parentHost)
     {
         var totalSw = Stopwatch.StartNew();
         var query = request.Query.Trim();
         if (string.IsNullOrWhiteSpace(query)) return;
+        if (!_rootStateCoordinator.TryGetCommitted(out var rootSnapshot))
+            return;
+        var parent = parentHost ?? _rootHost;
+        if (!TryGetRedirectParentGeneration(
+                parent,
+                rootSnapshot.Generation,
+                out var expectedParentGeneration))
+        {
+            return;
+        }
+
+        var context = rootSnapshot.Context;
+        var expectedRootGeneration = rootSnapshot.Generation;
+        var expectedRootTraceId = rootSnapshot.TraceId;
         var redirectVersion = Interlocked.Increment(ref _redirectVersion);
         var parentKind = parentHost is null || ReferenceEquals(parentHost, _rootHost) ? "root" : "child";
-        var traceId = $"{_currentTraceId ?? "popup-redirect"}-child-{redirectVersion}";
+        var traceId = $"{context.TraceId ?? "popup-redirect"}-child-{redirectVersion}";
 
         Log.Information(
             "[LookupTrace] trace={TraceId} child redirect received query='{Query}' parent={ParentKind} source={Source} selectedLength={SelectedLength} selectMs={SelectMs:F1} rectMs={RectMs:F1}",
@@ -341,10 +442,16 @@ public sealed class DictionaryPopupOverlay : IDisposable
             traceId, waitSw.ElapsedMilliseconds);
         try
         {
-            if (redirectVersion != Volatile.Read(ref _redirectVersion))
+            if (!IsRedirectCurrent(
+                    redirectVersion,
+                    expectedRootGeneration,
+                    expectedRootTraceId,
+                    parent,
+                    expectedParentGeneration))
+            {
                 return;
+            }
 
-            var parent = parentHost ?? _rootHost;
             var redirectMode = DictionaryPopupRedirectRouter.Resolve(request);
             if (redirectMode == DictionaryPopupRedirectMode.Nested
                 && ReferenceEquals(parent, _lastRedirectParent)
@@ -366,40 +473,80 @@ public sealed class DictionaryPopupOverlay : IDisposable
 
             var lookupSw = Stopwatch.StartNew();
             var redirectMaxResults = redirectMode == DictionaryPopupRedirectMode.InPlace
-                ? _displaySettings.MaxResults
-                : Math.Min(_displaySettings.MaxResults, NestedLookupMaxResults);
+                ? context.DisplaySettings.MaxResults
+                : Math.Min(context.DisplaySettings.MaxResults, NestedLookupMaxResults);
             var results = await _lookupService.LookupAsync(
                 query,
                 redirectMaxResults,
-                _displaySettings.ScanLength,
+                context.DisplaySettings.ScanLength,
                 traceId: traceId);
             Log.Information(
                 "[LookupTrace] trace={TraceId} child redirect lookup finished in {Ms}ms query='{Query}' max={MaxResults} results={Count}",
                 traceId, lookupSw.ElapsedMilliseconds, query, redirectMaxResults, results.Count);
-            if (redirectVersion != Volatile.Read(ref _redirectVersion))
+            if (!IsRedirectCurrent(
+                    redirectVersion,
+                    expectedRootGeneration,
+                    expectedRootTraceId,
+                    parent,
+                    expectedParentGeneration))
+            {
                 return;
+            }
             if (results.Count == 0) return;
 
             if (redirectMode == DictionaryPopupRedirectMode.InPlace)
             {
                 CloseChildrenOfParent(parent);
-                await parent.ShowRedirectResultsAsync(
+                var applied = await parent.ShowRedirectResultsAsync(
                     results,
-                    _currentStyles,
-                    _displaySettings,
-                    _currentTheme,
-                    _currentAudioSettings,
-                    _currentAnkiSettings,
+                    context.Styles,
+                    context.DisplaySettings,
+                    context.Theme,
+                    expectedParentGeneration,
+                    context.AudioSettings,
+                    context.AnkiSettings,
                     traceId);
+                if (!applied
+                    || !IsRedirectCurrent(
+                        redirectVersion,
+                        expectedRootGeneration,
+                        expectedRootTraceId,
+                        parent,
+                        expectedParentGeneration))
+                {
+                    return;
+                }
                 return;
             }
 
             var highlightSw = Stopwatch.StartNew();
-            await HighlightPopupSelectionAsync(parent, results[0].Matched);
+            var highlighted = await HighlightPopupSelectionAsync(
+                parent,
+                results[0].Matched,
+                expectedParentGeneration);
+            if (!highlighted
+                || !IsRedirectCurrent(
+                    redirectVersion,
+                    expectedRootGeneration,
+                    expectedRootTraceId,
+                    parent,
+                    expectedParentGeneration))
+            {
+                return;
+            }
             Log.Information(
                 "[LookupTrace] trace={TraceId} child parent highlight finished in {Ms}ms total={TotalMs}ms matched='{Matched}'",
                 traceId, highlightSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, results[0].Matched);
 
+            if (!IsRedirectCurrent(
+                    redirectVersion,
+                    expectedRootGeneration,
+                    expectedRootTraceId,
+                    parent,
+                    expectedParentGeneration))
+            {
+                return;
+            }
             var closeSw = Stopwatch.StartNew();
             CloseChildrenOfParent(parent);
             Log.Information(
@@ -411,24 +558,90 @@ public sealed class DictionaryPopupOverlay : IDisposable
             Log.Information(
                 "[LookupTrace] trace={TraceId} child host acquired in {Ms}ms warmed={Warmed} pool={PoolCount} active={ActiveCount}",
                 traceId, hostSw.ElapsedMilliseconds, child.IsWarmed, _childHostPool.Count, _childHosts.Count);
+            if (!IsRedirectCurrent(
+                    redirectVersion,
+                    expectedRootGeneration,
+                    expectedRootTraceId,
+                    parent,
+                    expectedParentGeneration))
+            {
+                return;
+            }
             EnsureHostOnCanvas(child);
             if (!_childHosts.Contains(child))
                 _childHosts.Add(child);
             ApplyPopupZOrder();
 
-            child.SetMiningContext(_currentMiningContext);
+            child.SetMiningContext(context.MiningContext);
             var injectSw = Stopwatch.StartNew();
-            await child.ShowResultsWarmAsync(results, _currentStyles, _displaySettings, _currentTheme, _currentAudioSettings, _currentAnkiSettings, traceId: traceId);
+            long? childGeneration = null;
+            try
+            {
+                await child.ShowResultsWarmAsync(
+                    results,
+                    context.Styles,
+                    context.DisplaySettings,
+                    context.Theme,
+                    context.AudioSettings,
+                    context.AnkiSettings,
+                    traceId: traceId,
+                    generationStarted: generation => childGeneration = generation);
+            }
+            catch when (!IsRedirectCurrent(
+                redirectVersion,
+                expectedRootGeneration,
+                expectedRootTraceId,
+                parent,
+                expectedParentGeneration))
+            {
+                DiscardStaleChild(child, childGeneration, traceId);
+                return;
+            }
+
+            if (!IsRedirectCurrent(
+                    redirectVersion,
+                    expectedRootGeneration,
+                    expectedRootTraceId,
+                    parent,
+                    expectedParentGeneration))
+            {
+                DiscardStaleChild(child, childGeneration, traceId);
+                return;
+            }
             Log.Information(
                 "[LookupTrace] trace={TraceId} child popup content injected in {Ms}ms total={TotalMs}ms entries={EntryCount}",
                 traceId, injectSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds, results.Count);
 
             // Make sure canvas is visible for child popups
+            if (!IsRedirectCurrent(
+                    redirectVersion,
+                    expectedRootGeneration,
+                    expectedRootTraceId,
+                    parent,
+                    expectedParentGeneration))
+            {
+                DiscardStaleChild(child, childGeneration, traceId);
+                return;
+            }
             _canvas.Visibility = Visibility.Visible;
             _canvas.IsHitTestVisible = true;
 
             var positionSw = Stopwatch.StartNew();
-            PositionChildHost(child, parent, request);
+            if (!IsRedirectCurrent(
+                    redirectVersion,
+                    expectedRootGeneration,
+                    expectedRootTraceId,
+                    parent,
+                    expectedParentGeneration))
+            {
+                DiscardStaleChild(child, childGeneration, traceId);
+                return;
+            }
+            PositionChildHost(
+                child,
+                parent,
+                request,
+                context.DisplaySettings);
             Log.Information(
                 "[LookupTrace] trace={TraceId} child positioned in {Ms}ms total={TotalMs}ms",
                 traceId, positionSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds);
@@ -634,17 +847,45 @@ public sealed class DictionaryPopupOverlay : IDisposable
         DictionaryLookupPopup host,
         double selectionX, double selectionY,
         double selectionWidth, double selectionHeight,
-        bool isVertical)
+        bool isVertical,
+        DictionaryDisplaySettings displaySettings,
+        bool isRoot = false)
     {
-        var (screenWidth, screenHeight) = GetOverlaySize();
+        ApplyHostLayout(
+            host,
+            ResolveHostLayout(
+                selectionX,
+                selectionY,
+                selectionWidth,
+                selectionHeight,
+                isVertical,
+                displaySettings,
+                isRoot));
+    }
+
+    private DictionaryPopupLayoutResult ResolveHostLayout(
+        double selectionX,
+        double selectionY,
+        double selectionWidth,
+        double selectionHeight,
+        bool isVertical,
+        DictionaryDisplaySettings displaySettings,
+        bool isRoot = false,
+        double? viewportWidth = null,
+        double? viewportHeight = null)
+    {
+        var (measuredWidth, measuredHeight) = GetOverlaySize();
+        var screenWidth = viewportWidth is > 0 ? viewportWidth.Value : measuredWidth;
+        var screenHeight = viewportHeight is > 0 ? viewportHeight.Value : measuredHeight;
+
         var maxWidth = Math.Min(
             Math.Max(0, screenWidth - ScreenBorderPadding * 2),
-            ConfiguredPopupWidth());
+            ConfiguredPopupWidth(displaySettings));
         var maxHeight = Math.Min(
             Math.Max(0, screenHeight - ScreenBorderPadding * 2),
-            ConfiguredPopupHeight());
+            ConfiguredPopupHeight(displaySettings));
 
-        var layout = DictionaryPopupLayoutCalculator.Resolve(
+        return DictionaryPopupLayoutCalculator.Resolve(
             new DictionaryPopupAnchorRect(selectionX, selectionY, selectionWidth, selectionHeight),
             screenWidth,
             screenHeight,
@@ -652,7 +893,13 @@ public sealed class DictionaryPopupOverlay : IDisposable
             maxHeight,
             DictionaryPopupAppearanceConstraints.MinWidth,
             isVertical,
-            _displaySettings.PopupFullWidth);
+            displaySettings.PopupFullWidth);
+    }
+
+    private static void ApplyHostLayout(
+        DictionaryLookupPopup host,
+        DictionaryPopupLayoutResult layout)
+    {
         host.SetSize(layout.Width, layout.Height);
         Canvas.SetLeft(host.VisualRoot, layout.Left);
         Canvas.SetTop(host.VisualRoot, layout.Top);
@@ -661,7 +908,8 @@ public sealed class DictionaryPopupOverlay : IDisposable
     private void PositionChildHost(
         DictionaryLookupPopup host,
         DictionaryLookupPopup parentHost,
-        DictionaryPopupRedirectRequest request)
+        DictionaryPopupRedirectRequest request,
+        DictionaryDisplaySettings displaySettings)
     {
         var (parentLeft, parentTop) = GetHostCanvasPosition(parentHost);
 
@@ -671,7 +919,14 @@ public sealed class DictionaryPopupOverlay : IDisposable
             var anchorY = parentTop + y;
             var anchorWidth = request.Width.GetValueOrDefault(1);
             var anchorHeight = request.Height.GetValueOrDefault(1);
-            PositionHost(host, anchorX, anchorY, anchorWidth, anchorHeight, isVertical: false);
+            PositionHost(
+                host,
+                anchorX,
+                anchorY,
+                anchorWidth,
+                anchorHeight,
+                isVertical: false,
+                displaySettings: displaySettings);
             return;
         }
 
@@ -682,21 +937,90 @@ public sealed class DictionaryPopupOverlay : IDisposable
             parentTop,
             parentWidth,
             parentHeight,
-            isVertical: false);
+            isVertical: false,
+            displaySettings: displaySettings);
     }
 
-    private static async Task HighlightPopupSelectionAsync(
+    private static async Task<bool> HighlightPopupSelectionAsync(
         DictionaryLookupPopup parent,
-        string matchedText)
+        string matchedText,
+        long expectedCommittedGeneration)
     {
         try
         {
-            await parent.HighlightSelectionAsync(matchedText);
+            return await parent.HighlightSelectionAsync(
+                matchedText,
+                expectedCommittedGeneration);
         }
         catch (Exception ex)
         {
             Log.Debug(ex, "[DictOverlay] Failed to highlight popup selection");
+            return false;
         }
+    }
+
+    private bool TryGetRedirectParentGeneration(
+        DictionaryLookupPopup parent,
+        long expectedRootGeneration,
+        out long generation)
+    {
+        generation = default;
+        if (ReferenceEquals(parent, _rootHost))
+        {
+            if (parent.CommittedGeneration != expectedRootGeneration)
+                return false;
+
+            generation = expectedRootGeneration;
+            return true;
+        }
+
+        if (!_childHosts.Contains(parent)
+            || parent.CommittedGeneration is not long childGeneration)
+        {
+            return false;
+        }
+
+        generation = childGeneration;
+        return true;
+    }
+
+    private bool IsRedirectCurrent(
+        long redirectVersion,
+        long expectedRootGeneration,
+        string? expectedRootTraceId,
+        DictionaryLookupPopup parent,
+        long expectedParentGeneration)
+    {
+        if (redirectVersion != Volatile.Read(ref _redirectVersion)
+            || !_rootStateCoordinator.IsCommitted(
+                expectedRootGeneration,
+                expectedRootTraceId)
+            || parent.CommittedGeneration != expectedParentGeneration)
+        {
+            return false;
+        }
+
+        return ReferenceEquals(parent, _rootHost)
+            || _childHosts.Contains(parent);
+    }
+
+    private void DiscardStaleChild(
+        DictionaryLookupPopup child,
+        long? generation,
+        string? traceId)
+    {
+        if (generation is long pendingGeneration)
+            child.CancelPendingContent(pendingGeneration, traceId);
+        HideChildHost(child);
+        _childHosts.Remove(child);
+        ApplyPopupZOrder();
+    }
+
+    private void InvalidateRootRedirects()
+    {
+        Interlocked.Increment(ref _redirectVersion);
+        ClearChildren();
+        ResetRedirectDeduplication();
     }
 
     private (double left, double top) GetHostCanvasPosition(DictionaryLookupPopup host)
@@ -743,11 +1067,11 @@ public sealed class DictionaryPopupOverlay : IDisposable
         return (left, top, width, height);
     }
 
-    private double ConfiguredPopupWidth() =>
-        DictionaryPopupAppearanceConstraints.NormalizeWidth(_displaySettings.PopupMaxWidth);
+    private static double ConfiguredPopupWidth(DictionaryDisplaySettings displaySettings) =>
+        DictionaryPopupAppearanceConstraints.NormalizeWidth(displaySettings.PopupMaxWidth);
 
-    private double ConfiguredPopupHeight() =>
-        DictionaryPopupAppearanceConstraints.NormalizeHeight(_displaySettings.PopupMaxHeight);
+    private static double ConfiguredPopupHeight(DictionaryDisplaySettings displaySettings) =>
+        DictionaryPopupAppearanceConstraints.NormalizeHeight(displaySettings.PopupMaxHeight);
 
     private (double width, double height) GetOverlaySize()
     {
@@ -762,12 +1086,77 @@ public sealed class DictionaryPopupOverlay : IDisposable
 
     public void UpdateRootSize(double width, double height)
     {
-        if (_rootWarm && _embeddedPanel != null)
+        if (!_rootWarm)
+            return;
+
+        var hasRootState = false;
+        if (_rootStateCoordinator.TryGetCommitted(out var committedSnapshot))
+        {
+            hasRootState = true;
+            var committedLayout = ResolveResizedRootLayout(
+                committedSnapshot,
+                width,
+                height);
+            if (_rootStateCoordinator.TryUpdateCommittedLayout(
+                    committedSnapshot.Generation,
+                    committedSnapshot.TraceId,
+                    committedLayout,
+                    out var resizedCommitted))
+            {
+                ApplyHostLayout(_rootHost, resizedCommitted.Layout);
+            }
+        }
+
+        if (_rootStateCoordinator.TryGetPending(out var pendingSnapshot))
+        {
+            hasRootState = true;
+            var pendingLayout = ResolveResizedRootLayout(
+                pendingSnapshot,
+                width,
+                height);
+            _rootStateCoordinator.TryUpdatePendingLayout(
+                pendingSnapshot.Generation,
+                pendingSnapshot.TraceId,
+                pendingLayout,
+                out _);
+        }
+
+        if (!hasRootState && _embeddedPanel != null)
         {
             _rootHost.SetSize(
                 width > 0 ? width : double.NaN,
                 height > 0 ? height : double.NaN);
         }
+    }
+
+    private DictionaryPopupLayoutResult ResolveResizedRootLayout(
+        DictionaryPopupRootState<
+            DictionaryPopupRootContext,
+            DictionaryPopupAnchorRect,
+            DictionaryPopupLayoutResult> snapshot,
+        double width,
+        double height)
+    {
+        if (_embeddedPanel != null)
+        {
+            return new DictionaryPopupLayoutResult(
+                0,
+                0,
+                width > 0 ? width : double.NaN,
+                height > 0 ? height : double.NaN);
+        }
+
+        var anchor = snapshot.Anchor;
+        return ResolveHostLayout(
+            anchor.X,
+            anchor.Y,
+            anchor.Width,
+            anchor.Height,
+            snapshot.Context.IsVertical,
+            snapshot.Context.DisplaySettings,
+            isRoot: true,
+            viewportWidth: width,
+            viewportHeight: height);
     }
 
     public DictionaryPopupHostBounds? GetRootPopupBounds()
@@ -804,6 +1193,9 @@ public sealed class DictionaryPopupOverlay : IDisposable
             _rootHost.TapOutsideRequested -= OnRootTapOutsideRequested;
             _rootHost.DismissRequested -= OnPopupDismissRequested;
             _rootHost.Scrolled -= OnRootScrolled;
+            _rootHost.ContentCommitted -= OnRootContentCommitted;
+            _rootHost.ContentCommitAborted -= OnRootContentCommitAborted;
+            _rootHost.QueuedShowDropped -= OnRootShowDropped;
             if (_embeddedPanel != null)
                 _embeddedPanel.Children.Remove(_rootHost.VisualRoot);
             _rootHost.Dispose();
@@ -830,10 +1222,10 @@ public sealed class DictionaryPopupOverlay : IDisposable
     {
         Log.Information("[Lifecycle] Popup dismissed: wasVisible={WasVisible}", _rootVisible);
         var wasVisible = _rootVisible;
+        InvalidateRootRedirects();
         if (_rootWarm)
             _rootHost.Hide();
-        ClearChildren();
-        ResetRedirectDeduplication();
+        _rootStateCoordinator.Clear();
         _rootVisible = false;
         _canvas.IsHitTestVisible = false;
         CollapseCanvasBounds();
@@ -845,15 +1237,33 @@ public sealed class DictionaryPopupOverlay : IDisposable
             Dismissed?.Invoke(this, EventArgs.Empty);
     }
 
-    public void CancelShow(string? traceId)
+    public DictionaryPopupShowCancellationResult CancelShow(string? traceId)
     {
-        if (!string.Equals(_currentTraceId, traceId, StringComparison.Ordinal))
-            return;
+        if (!_rootStateCoordinator.TryGetPendingGeneration(
+                traceId,
+                out var generation))
+            return DictionaryPopupShowCancellationResult.NoOwnership;
 
         Log.Debug(
             "[LookupTrace] trace={TraceId} overlay show cancelled before ownership commit",
             traceId ?? "-");
-        _currentTraceId = null;
-        Dismiss();
+        var contentCancelled = _rootHost.CancelPendingContent(generation, traceId);
+        if (contentCancelled)
+        {
+            _rootStateCoordinator.TryAbort(generation, traceId);
+            if (!_rootHost.HasCommittedContent)
+                Dismiss();
+            return DictionaryPopupShowCancellationResult.Cancelled;
+        }
+
+        if (_rootStateCoordinator.TryGetPendingGeneration(
+                traceId,
+                out var retainedGeneration)
+            && retainedGeneration == generation)
+        {
+            return DictionaryPopupShowCancellationResult.CommitAccepted;
+        }
+
+        return DictionaryPopupShowCancellationResult.NoOwnership;
     }
 }

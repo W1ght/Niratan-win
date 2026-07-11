@@ -86,7 +86,6 @@
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Stretch"
                         Margin="16,16,16,120"
-                        Background="Transparent"
                         BorderThickness="0"
                         Visibility="Collapsed">
                     <Canvas x:Name="PopupOverlayCanvas"

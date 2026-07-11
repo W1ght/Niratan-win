@@ -16,6 +16,7 @@ using Hoshi.Helpers;
 using Hoshi.Models.Shortcuts;
 using Hoshi.Services.Settings;
 using Hoshi.Services.Video;
+using Hoshi.Views.Dictionary;
 using Serilog;
 
 namespace Hoshi.Views.Video;
@@ -338,12 +339,12 @@ public sealed partial class VideoPlayerWindow
                     ApplySubtitleAppearance();
                     break;
                 case "lookupEmpty":
-                    _subtitleLookupCoordinator.CancelCurrent();
-                    _popupOverlay?.Dismiss();
-                    VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
-                    _isLookupPopupVisible = false;
-                    ApplySubtitleAppearance();
-                    await ClearSubtitleSelectionAsync();
+                    var emptyPolicy = VideoSubtitleLookupEmptyPolicy.FromWebPayload(payload);
+                    _lastSubtitleHoverCharacterIndex = -1;
+                    if (!emptyPolicy.DismissOnEmpty)
+                        break;
+
+                    ClearSubtitleLookupFromPointer();
                     RestoreVideoKeyboardFocusAfterSubtitleInteraction();
                     break;
                 case "lookupRequest":
@@ -422,10 +423,73 @@ public sealed partial class VideoPlayerWindow
 
     private void PopupOverlay_Dismissed(object? sender, EventArgs e)
     {
+        _subtitleLookupCoordinator.CancelCurrent();
         _isLookupPopupVisible = false;
         VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
         ApplySubtitleAppearance();
         _ = ClearSubtitleSelectionAsync();
+    }
+
+    private void ResolvePopupShowCancellation(
+        DictionaryPopupOverlay? overlay,
+        string? commitIdentity)
+    {
+        if (commitIdentity is null)
+            return;
+
+        var result = overlay?.CancelShow(commitIdentity)
+            ?? DictionaryPopupShowCancellationResult.NoOwnership;
+        if (result == DictionaryPopupShowCancellationResult.CommitAccepted)
+            _subtitleLookupCoordinator.MarkPopupCommitAccepted(commitIdentity);
+        else
+            _subtitleLookupCoordinator.CancelPopupCommit(commitIdentity);
+
+        CollapseVideoDictionarySurfaceIfUnowned();
+    }
+
+    private void PopupOverlay_RootContentAborted(
+        object? sender,
+        DictionaryPopupContentCommittedEventArgs e)
+    {
+        _subtitleLookupCoordinator.CancelPopupCommit(e.TraceId);
+        CollapseVideoDictionarySurfaceIfUnowned();
+    }
+
+    private void PopupOverlay_RootShowDropped(
+        object? sender,
+        DictionaryPopupShowDroppedEventArgs e)
+    {
+        _subtitleLookupCoordinator.CancelPopupCommit(e.TraceId);
+        CollapseVideoDictionarySurfaceIfUnowned();
+    }
+
+    private void CollapseVideoDictionarySurfaceIfUnowned()
+    {
+        if (!_isLookupPopupVisible
+            && !_subtitleLookupCoordinator.HasPopupCommitCandidates)
+        {
+            VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void PopupOverlay_RootContentCommitted(
+        object? sender,
+        DictionaryPopupContentCommittedEventArgs e)
+    {
+        if (!_subtitleLookupCoordinator.TryTakePopupCommit(
+                e.TraceId,
+                out var commit))
+        {
+            return;
+        }
+
+        _ = HighlightSubtitleCanvasSelectionAsync(
+            commit.SelectionStart,
+            commit.MatchedText);
+        _isLookupPopupVisible = true;
+        VideoDictionaryPanelChrome.Visibility = Visibility.Visible;
+        ViewModel.StatusText = "Lookup opened";
+        ApplySubtitleAppearance();
     }
 
     private void PopupOverlayCanvas_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -555,6 +619,7 @@ public sealed partial class VideoPlayerWindow
             return;
         }
 
+        var policy = VideoSubtitleLookupEmptyPolicy.FromCanvasLookup(isHoverLookup);
         var size = new Windows.Foundation.Size(
             SubtitleCanvas.ActualWidth,
             SubtitleCanvas.ActualHeight);
@@ -565,7 +630,8 @@ public sealed partial class VideoPlayerWindow
                 point,
                 out var hit))
         {
-            if (!isHoverLookup || _lastSubtitleHoverCharacterIndex >= 0)
+            _lastSubtitleHoverCharacterIndex = -1;
+            if (policy.DismissOnEmpty)
                 ClearSubtitleLookupFromPointer();
             return;
         }
@@ -581,6 +647,8 @@ public sealed partial class VideoPlayerWindow
             y = hit.Bounds.Y,
             width = hit.Bounds.Width,
             height = hit.Bounds.Height,
+            dismissOnEmpty = policy.DismissOnEmpty,
+            isHover = policy.IsHover,
         });
         await SubtitleWebView.CoreWebView2.ExecuteScriptAsync(
             $"window.hoshiVideoSubtitle?.lookupAtOffset({requestJson});");
