@@ -6,7 +6,7 @@
       xmlns:converters="using:Hoshi.Helpers.UI.Converters"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-      xmlns:novel="using:Hoshi.Models.Novel"
+      xmlns:controls="using:Hoshi.Views.Controls"
       xmlns:vmc="using:Hoshi.ViewModels.Components"
       mc:Ignorable="d">
 
@@ -129,44 +129,6 @@
             </Button>
         </DataTemplate>
 
-        <DataTemplate x:Key="StatisticsRankingTemplate" x:DataType="novel:NovelStatisticsBookRankingDisplayRow">
-            <Grid Padding="0,6"
-                  ColumnDefinitions="*,Auto"
-                  ColumnSpacing="8">
-                <StackPanel Spacing="2">
-                    <TextBlock Text="{x:Bind Title, Mode=OneWay}"
-                               TextTrimming="CharacterEllipsis"
-                               Style="{StaticResource BodyStrongTextBlockStyle}" />
-                    <TextBlock Text="{x:Bind ValueText, Mode=OneWay}"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                </StackPanel>
-            </Grid>
-        </DataTemplate>
-
-        <DataTemplate x:Key="StatisticsShelfTemplate" x:DataType="novel:NovelStatisticsShelfComparisonDisplayRow">
-            <Grid Padding="0,6" ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                <StackPanel Spacing="2">
-                    <TextBlock Text="{x:Bind Name}" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                    <TextBlock Text="{x:Bind DetailText}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                </StackPanel>
-                <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{x:Bind SpeedText}" />
-            </Grid>
-        </DataTemplate>
-
-        <DataTemplate x:Key="StatisticsTrendTemplate" x:DataType="novel:NovelStatisticsTrendDisplayPoint">
-            <StackPanel MinWidth="72" Spacing="3">
-                <TextBlock Text="{x:Bind ValueText}" FontWeight="SemiBold" />
-                <TextBlock Text="{x:Bind Label}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            </StackPanel>
-        </DataTemplate>
-
-        <DataTemplate x:Key="StatisticsCalendarTemplate" x:DataType="novel:NovelStatisticsCalendarDayDisplay">
-            <Border Width="32" Height="32" Margin="2" CornerRadius="5"
-                    Background="{ThemeResource SubtleFillColorSecondaryBrush}">
-                <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
-                           Text="{x:Bind TargetPercent}" />
-            </Border>
-        </DataTemplate>
     </Page.Resources>
 
     <Grid RowDefinitions="Auto,Auto,*"
@@ -198,231 +160,66 @@
                               ItemsSource="{x:Bind ViewModel.SortOptions, Mode=OneWay}"
                               DisplayMemberPath="DisplayName"
                               SelectedValuePath="Value"
-                              SelectedValue="{x:Bind ViewModel.SelectedSortOption, Mode=TwoWay}" />
+                              SelectedValue="{x:Bind ViewModel.SelectedSortOption, Mode=TwoWay}"
+                              Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
                 </Grid>
             </CommandBar.Content>
             <CommandBar.PrimaryCommands>
-                <AppBarToggleButton x:Name="NovelLibraryStatisticsButton"
-                                    x:Uid="NovelLibraryStatisticsButton"
-                                    AutomationProperties.AutomationId="NovelLibraryStatisticsButton"
-                                    AutomationProperties.Name="Statistics"
-                                    IsChecked="{x:Bind ViewModel.ShowStatisticsDashboard, Mode=TwoWay}">
-                    <AppBarToggleButton.Icon>
+                <AppBarButton x:Name="NovelLibraryStatisticsButton"
+                              x:Uid="NovelLibraryStatisticsButton"
+                              AutomationProperties.AutomationId="NovelLibraryStatisticsButton"
+                              AutomationProperties.Name="Statistics"
+                              Command="{x:Bind ViewModel.EnterStatisticsCommand}"
+                              Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                    <AppBarButton.Icon>
                         <SymbolIcon Symbol="Document" />
-                    </AppBarToggleButton.Icon>
-                </AppBarToggleButton>
+                    </AppBarButton.Icon>
+                </AppBarButton>
+                <AppBarButton x:Name="NovelStatisticsBackToBookshelfButton"
+                              AutomationProperties.AutomationId="NovelStatisticsBackToBookshelfButton"
+                              AutomationProperties.Name="Back to bookshelf"
+                              Command="{x:Bind ViewModel.ReturnToBookshelfCommand}"
+                              Visibility="{x:Bind ViewModel.ShowStatisticsDashboard, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                    <AppBarButton.Icon>
+                        <SymbolIcon Symbol="Library" />
+                    </AppBarButton.Icon>
+                </AppBarButton>
                 <AppBarButton x:Name="NovelShelfManagementButton"
                               x:Uid="NovelShelfManageButton"
                               AutomationProperties.AutomationId="NovelShelfManagementButton"
                               Icon="Folder"
-                              Click="ShelfManagementButton_Click" />
+                              Click="ShelfManagementButton_Click"
+                              Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
                 <AppBarButton x:Name="ImportNovelButton"
                               x:Uid="ImportNovelButton"
                               AutomationProperties.AutomationId="ImportNovelButton"
                               Icon="Add"
-                              Command="{x:Bind ViewModel.ImportNovelCommand}" />
+                              Command="{x:Bind ViewModel.ImportNovelCommand}"
+                              Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
             </CommandBar.PrimaryCommands>
             <CommandBar.SecondaryCommands>
                 <AppBarButton x:Name="NovelLibraryRefreshGoogleDriveButton"
                               x:Uid="NovelLibraryRefreshGoogleDriveButton"
                               AutomationProperties.AutomationId="NovelLibraryRefreshGoogleDriveButton"
                               Icon="Refresh"
-                              Command="{x:Bind ViewModel.RefreshRemoteBooksCommand}" />
+                              Command="{x:Bind ViewModel.RefreshRemoteBooksCommand}"
+                              Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
             </CommandBar.SecondaryCommands>
         </CommandBar>
 
         <StackPanel Grid.Row="1"
                     Margin="20,0,36,12"
-                    Spacing="10">
+                    Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
             <InfoBar x:Name="NovelStorageWarningInfoBar"
                      x:Uid="NovelStorageWarningInfoBar"
                      AutomationProperties.AutomationId="NovelStorageWarningInfoBar"
                      IsOpen="{x:Bind ViewModel.HasNovelStorageWarnings, Mode=OneWay}"
                      IsClosable="False"
                      Severity="Warning" />
-
-            <InfoBar x:Name="NovelLibraryStatisticsCorruptWarning"
-                     AutomationProperties.AutomationId="NovelLibraryStatisticsCorruptWarning"
-                     IsOpen="{x:Bind ViewModel.HasStatisticsCorruptBooks, Mode=OneWay}"
-                     IsClosable="False"
-                     Message="{x:Bind ViewModel.StatisticsCorruptWarningText, Mode=OneWay}"
-                     Severity="Warning" />
-
-            <Border Padding="16"
-                    CornerRadius="8"
-                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    AutomationProperties.AutomationId="NovelLibraryStatisticsDashboard"
-                    Visibility="{x:Bind ViewModel.ShowStatisticsDashboard, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
-                <ScrollViewer MaxHeight="560"
-                              HorizontalScrollBarVisibility="Disabled"
-                              VerticalScrollBarVisibility="Auto">
-                <Grid ColumnDefinitions="*,*,*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="18" RowSpacing="14">
-                    <ScrollViewer Grid.ColumnSpan="4"
-                                  HorizontalScrollBarVisibility="Auto"
-                                  HorizontalScrollMode="Enabled"
-                                  VerticalScrollBarVisibility="Disabled"
-                                  VerticalScrollMode="Disabled">
-                    <StackPanel Orientation="Horizontal" Spacing="12">
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Range" />
-                            <ComboBox Width="112"
-                                      AutomationProperties.AutomationId="NovelLibraryStatisticsRangeMode"
-                                      AutomationProperties.Name="Statistics range"
-                                      ItemsSource="{x:Bind ViewModel.StatisticsRangeModes}"
-                                      SelectedItem="{x:Bind ViewModel.SelectedStatisticsRangeMode, Mode=TwoWay}" />
-                        </StackPanel>
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Anchor" />
-                            <CalendarDatePicker Width="150"
-                                                AutomationProperties.AutomationId="NovelLibraryStatisticsAnchorDate"
-                                                AutomationProperties.Name="Statistics anchor date"
-                                                Date="{x:Bind ViewModel.StatisticsAnchorDate, Mode=TwoWay}" />
-                        </StackPanel>
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Time Grain" />
-                            <ComboBox Width="104"
-                                      AutomationProperties.AutomationId="NovelLibraryStatisticsTrendGrain"
-                                      AutomationProperties.Name="Trend time grain"
-                                      ItemsSource="{x:Bind ViewModel.StatisticsTrendGrains}"
-                                      SelectedItem="{x:Bind ViewModel.SelectedStatisticsTrendGrain, Mode=TwoWay}" />
-                        </StackPanel>
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Trend Metric" />
-                            <ComboBox Width="112"
-                                      AutomationProperties.AutomationId="NovelLibraryStatisticsTrendMetric"
-                                      AutomationProperties.Name="Trend metric"
-                                      ItemsSource="{x:Bind ViewModel.StatisticsTrendMetrics}"
-                                      SelectedItem="{x:Bind ViewModel.SelectedStatisticsTrendMetric, Mode=TwoWay}" />
-                        </StackPanel>
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Ranking Metric" />
-                            <ComboBox Width="112"
-                                      AutomationProperties.AutomationId="NovelLibraryStatisticsRankingMetric"
-                                      AutomationProperties.Name="Book ranking metric"
-                                      ItemsSource="{x:Bind ViewModel.StatisticsRankingMetrics}"
-                                      SelectedItem="{x:Bind ViewModel.SelectedStatisticsRankingMetric, Mode=TwoWay}" />
-                        </StackPanel>
-                    </StackPanel>
-                    </ScrollViewer>
-                    <ScrollViewer Grid.Row="1" Grid.ColumnSpan="4"
-                                  HorizontalScrollBarVisibility="Auto"
-                                  HorizontalScrollMode="Enabled"
-                                  VerticalScrollBarVisibility="Disabled"
-                                  VerticalScrollMode="Disabled">
-                    <StackPanel Orientation="Horizontal" Spacing="12">
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Goal Type" />
-                            <ComboBox Width="120"
-                                      AutomationProperties.AutomationId="NovelLibraryStatisticsGoalType"
-                                      AutomationProperties.Name="Daily goal type"
-                                      ItemsSource="{x:Bind ViewModel.StatisticsDailyTargetTypes}"
-                                      SelectedItem="{x:Bind ViewModel.SelectedStatisticsDailyTargetType, Mode=TwoWay}" />
-                        </StackPanel>
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Character Target" />
-                            <NumberBox Width="128" Minimum="500" Maximum="20000" SmallChange="500"
-                                       AutomationProperties.AutomationId="NovelLibraryStatisticsCharacterTarget"
-                                       AutomationProperties.Name="Daily character target"
-                                       Value="{x:Bind ViewModel.StatisticsDailyCharacterTargetValue, Mode=TwoWay}" />
-                        </StackPanel>
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Duration Target (min)" />
-                            <NumberBox Width="142" Minimum="5" Maximum="240" SmallChange="5"
-                                       AutomationProperties.AutomationId="NovelLibraryStatisticsDurationTarget"
-                                       AutomationProperties.Name="Daily duration target in minutes"
-                                       Value="{x:Bind ViewModel.StatisticsDailyDurationTargetMinutesValue, Mode=TwoWay}" />
-                        </StackPanel>
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Weekly Target Days" />
-                            <NumberBox Width="128" Minimum="1" Maximum="7" SmallChange="1"
-                                       AutomationProperties.AutomationId="NovelLibraryStatisticsWeeklyTarget"
-                                       AutomationProperties.Name="Weekly target days"
-                                       Value="{x:Bind ViewModel.StatisticsWeeklyTargetDaysValue, Mode=TwoWay}" />
-                        </StackPanel>
-                        <TextBlock VerticalAlignment="Bottom"
-                                   Margin="8,0,0,9"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   Text="Goals recalculate historical progress and streaks." />
-                    </StackPanel>
-                    </ScrollViewer>
-                    <StackPanel Grid.Row="2" Spacing="6">
-                        <TextBlock Text="Today"
-                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <TextBlock x:Name="NovelLibraryTodayStatisticsText"
-                                   AutomationProperties.AutomationId="NovelLibraryTodayStatisticsText"
-                                   Text="{x:Bind ViewModel.StatisticsTodayText, Mode=OneWay}"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    </StackPanel>
-                    <StackPanel Grid.Row="2" Grid.Column="1" Spacing="6">
-                        <TextBlock Text="This Week"
-                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <TextBlock x:Name="NovelLibraryWeekStatisticsText"
-                                   AutomationProperties.AutomationId="NovelLibraryWeekStatisticsText"
-                                   Text="{x:Bind ViewModel.StatisticsWeekText, Mode=OneWay}"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    </StackPanel>
-                    <StackPanel Grid.Row="2" Grid.Column="2" Spacing="6">
-                        <TextBlock Text="{x:Bind ViewModel.StatisticsRangeTitle, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <TextBlock Text="{x:Bind ViewModel.StatisticsRangeText, Mode=OneWay}"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    </StackPanel>
-                    <StackPanel Grid.Row="2" Grid.Column="3" Spacing="6">
-                        <TextBlock Text="Reading Speed" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <TextBlock Text="{x:Bind ViewModel.StatisticsSpeedText, Mode=OneWay}"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    </StackPanel>
-                    <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Spacing="6">
-                        <TextBlock Text="Book Ranking"
-                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <ItemsControl x:Name="NovelLibraryBookRankingList"
-                                      AutomationProperties.AutomationId="NovelLibraryBookRankingList"
-                                      ItemTemplate="{StaticResource StatisticsRankingTemplate}"
-                                      ItemsSource="{x:Bind ViewModel.StatisticsBookRankingRows, Mode=OneWay}" />
-                    </StackPanel>
-                    <StackPanel Grid.Row="3" Grid.Column="2" Grid.ColumnSpan="2" Spacing="6">
-                        <TextBlock Text="Shelf Comparison" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <ItemsControl x:Name="NovelLibraryShelfComparisonList"
-                                      AutomationProperties.AutomationId="NovelLibraryShelfComparisonList"
-                                      ItemTemplate="{StaticResource StatisticsShelfTemplate}"
-                                      ItemsSource="{x:Bind ViewModel.StatisticsShelfComparisonRows, Mode=OneWay}" />
-                    </StackPanel>
-                    <StackPanel Grid.Row="4" Grid.ColumnSpan="4" Spacing="6">
-                        <TextBlock Text="Range &amp; Trend" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <ItemsControl x:Name="NovelLibraryStatisticsTrend"
-                                      AutomationProperties.AutomationId="NovelLibraryStatisticsTrend"
-                                      ItemTemplate="{StaticResource StatisticsTrendTemplate}"
-                                      ItemsSource="{x:Bind ViewModel.StatisticsTrendPoints, Mode=OneWay}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="8" /></ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                        </ItemsControl>
-                    </StackPanel>
-                    <StackPanel Grid.Row="5" Grid.ColumnSpan="4" Spacing="6">
-                        <TextBlock Text="Reading Calendar" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <ListView x:Name="NovelLibraryStatisticsCalendar"
-                                  MaxHeight="190"
-                                  AutomationProperties.AutomationId="NovelLibraryStatisticsCalendar"
-                                  AutomationProperties.Name="Reading calendar"
-                                  ItemTemplate="{StaticResource StatisticsCalendarTemplate}"
-                                  ItemsSource="{x:Bind ViewModel.StatisticsCalendarDays, Mode=OneWay}"
-                                  SelectedItem="{x:Bind ViewModel.SelectedStatisticsCalendarDay, Mode=TwoWay}"
-                                  SelectionMode="Single"
-                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                                  ScrollViewer.HorizontalScrollMode="Enabled">
-                            <ListView.ItemsPanel>
-                                <ItemsPanelTemplate><ItemsWrapGrid MaximumRowsOrColumns="7" Orientation="Vertical" /></ItemsPanelTemplate>
-                            </ListView.ItemsPanel>
-                        </ListView>
-                        <TextBlock AutomationProperties.AutomationId="NovelLibraryStatisticsCalendarDetail"
-                                   Text="{x:Bind ViewModel.StatisticsCalendarDetailText, Mode=OneWay}"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    </StackPanel>
-                </Grid>
-                </ScrollViewer>
-            </Border>
         </StackPanel>
 
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="2"
+              Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
             <ScrollViewer VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Padding="20,0,36,24"
@@ -503,5 +300,11 @@
                        Text="No novels imported."
                        Visibility="{x:Bind ViewModel.NoNovels, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
         </Grid>
+
+        <controls:NovelStatisticsDashboardView Grid.Row="1"
+                                               Grid.RowSpan="2"
+                                               AutomationProperties.AutomationId="NovelStatisticsDashboardView"
+                                               DataContext="{x:Bind ViewModel.StatisticsDashboard, Mode=OneWay}"
+                                               Visibility="{x:Bind ViewModel.ShowStatisticsDashboard, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
     </Grid>
 </Page>
