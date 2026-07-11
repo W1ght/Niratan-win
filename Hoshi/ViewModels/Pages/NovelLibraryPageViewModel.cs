@@ -352,6 +352,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     private async Task EnterStatisticsAsync()
     {
         ShowStatisticsDashboard = true;
+        await Task.Yield();
         await StatisticsDashboard.ActivateAsync(
             NovelBooks.Select(item => item.Book).ToList(),
             _currentShelfState,
