@@ -51,8 +51,52 @@ public sealed class NovelStatisticsDashboardCacheTests
         File.Exists(cachePath).Should().BeFalse();
     }
 
+    [Fact]
+    public async Task CacheHit_ReturnsImmediatelyThenPublishesFreshSidecars()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var today = new DateOnly(2026, 7, 11);
+        var book = Book("book-1", temp.Path);
+        var statistics = new NovelStatisticsSidecarService();
+        await statistics.SaveAsync(
+            temp.Path,
+            [new NovelReadingStatistic("Book", "2026-07-11", 900, 600, 0, 0, 0, 0, 1)],
+            ct);
+        var cachePath = Path.Combine(temp.Path, NovelStatisticsDashboardCache.FileName);
+        var cache = new NovelStatisticsDashboardCache(
+            new NiratanJsonFileStore(), new WeakReferenceMessenger(), cachePath);
+        var cacheKey = NovelStatisticsDashboardCache.CreateKey([book], today);
+        var stale = new NovelStatisticsDashboardSnapshot(today, today, [], [], []);
+        await cache.StoreAsync(cacheKey, stale, ct);
+        var refreshed = new TaskCompletionSource<NovelStatisticsDashboardSnapshot>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new NovelStatisticsDashboardService(
+            statistics,
+            new NovelBookSidecarService(),
+            new FixedTimeProvider(),
+            cache);
+        service.SnapshotRefreshed += (_, snapshot) => refreshed.TrySetResult(snapshot);
+
+        var immediate = await service.LoadSnapshotAsync([book], ct);
+        var fresh = await refreshed.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
+
+        immediate.Should().Be(stale);
+        fresh.Days.Should().ContainSingle().Which.Characters.Should().Be(900);
+        (await cache.TryLoadAsync(cacheKey, ct))!.Days.Should().ContainSingle()
+            .Which.Characters.Should().Be(900);
+    }
+
     private static NovelBook Book(string id, string path) =>
         new() { Id = id, Title = id, ExtractedPath = path };
+
+    private sealed class FixedTimeProvider : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() =>
+            new(2026, 7, 11, 12, 0, 0, TimeSpan.Zero);
+
+        public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
+    }
 
     private sealed class TempDirectory : IDisposable
     {

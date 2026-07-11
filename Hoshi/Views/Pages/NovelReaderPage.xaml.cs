@@ -350,6 +350,9 @@ public sealed partial class NovelReaderPage : Page
             return;
         }
 
+        if (_programmaticNavigation.HasPending)
+            return;
+
         ViewModel.TickStatistics();
     }
 
@@ -358,6 +361,8 @@ public sealed partial class NovelReaderPage : Page
     {
         try
         {
+            if (_programmaticNavigation.HasPending)
+                ViewModel.ResetStatisticsBaseline();
             if (message.Reason == AppLifecycleCheckpointReason.Closing)
                 await ViewModel.PrepareForReaderLifecycleCloseAsync();
             else
