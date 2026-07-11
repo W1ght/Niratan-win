@@ -530,6 +530,7 @@ Fourth-review renderer epoch and recovery protocol:
 4. When commit reconciliation cannot reach the renderer, preserve accepted ownership and the latest queue. Reset warm state, navigate a fresh shell, and wait for its strictly newer epoch `shellReady`; only then exact-abort the old generation and start the latest request in the fresh epoch.
 5. If recovery fails, retain the old native committed context, accepted ownership, staged context, and latest queue. A future request retries recovery. Guard ProcessFailed, Hide, recovery failure, and recovery completion with generation + failed epoch + attempt tickets.
 6. Add executable tests proving Reset immediately faults an old warm caller and ignores its late success, stale epoch commands do not match a fresh document, recovery does not release the queue before a newer epoch is ready, failed attempts retain ownership, and the fresh epoch consumes only the latest request.
+7. At the unified accepted-completion boundary, reject the exact generation + failed epoch while its recovery ownership exists. This gate applies equally to late `contentReady` and successful commit/reconciliation callbacks from the old document, and remains active across failed/new attempts until fresh-shell completion or explicit Hide/cancel clears that recovery ownership.
 
 - [ ] **Step 8: Run GREEN**
 

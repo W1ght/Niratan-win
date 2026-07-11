@@ -98,6 +98,12 @@ internal sealed class DictionaryPopupRecoveryCoordinator
             return _generation == generation && _failedEpoch == failedEpoch;
     }
 
+    public bool CanCompleteAccepted(long generation, long documentEpoch)
+    {
+        lock (_gate)
+            return _generation != generation || _failedEpoch != documentEpoch;
+    }
+
     private bool MatchesActive(DictionaryPopupRecoveryTicket ticket) =>
         _generation == ticket.Generation
         && _failedEpoch == ticket.FailedEpoch
