@@ -30,6 +30,7 @@ public sealed class ReaderStatisticsEventClassifierTests
     [InlineData(ReaderPageNavigationResult.Limit, ReaderPageNavigationDirection.Backward, 0, 3, null)]
     [InlineData(ReaderPageNavigationResult.Limit, ReaderPageNavigationDirection.Forward, 2, 3, null)]
     [InlineData(ReaderPageNavigationResult.Scrolled, ReaderPageNavigationDirection.Forward, 0, 3, null)]
+    [InlineData(ReaderPageNavigationResult.Limit, (ReaderPageNavigationDirection)99, 1, 3, null)]
     public void AdjacentChapterTarget_OnlyReturnsInRangeNaturalBoundary(
         ReaderPageNavigationResult result,
         ReaderPageNavigationDirection direction,
@@ -67,6 +68,28 @@ public sealed class ReaderStatisticsEventClassifierTests
     {
         ReaderStatisticsEventClassifier.TryCreateEvent(
             result, direction, 0.5, out _).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void TryCreateEvent_RejectsNonFiniteProgress(double progress)
+    {
+        ReaderStatisticsEventClassifier.TryCreateEvent(
+            "scrolled", "forward", progress, out _).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(-0.25, 0.0)]
+    [InlineData(1.25, 1.0)]
+    public void TryCreateEvent_ClampsProgressToBridgeRange(
+        double progress,
+        double expectedProgress)
+    {
+        ReaderStatisticsEventClassifier.TryCreateEvent(
+            "scrolled", "forward", progress, out var readerEvent).Should().BeTrue();
+        readerEvent.Progress.Should().Be(expectedProgress);
     }
 
     [Theory]

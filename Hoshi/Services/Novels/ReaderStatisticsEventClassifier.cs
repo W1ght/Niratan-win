@@ -57,7 +57,7 @@ public static class ReaderStatisticsEventClassifier
         {
             ReaderPageNavigationDirection.Forward => currentChapter + 1,
             ReaderPageNavigationDirection.Backward => currentChapter - 1,
-            _ => currentChapter,
+            _ => -1,
         };
         return target >= 0 && target < chapterCount ? target : null;
     }

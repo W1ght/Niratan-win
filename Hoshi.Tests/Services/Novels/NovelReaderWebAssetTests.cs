@@ -169,6 +169,32 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void ReaderPage_ValidatesPageChangedPayloadBeforeReadingIt()
+    {
+        var pageCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
+        );
+
+        var pageChangedIndex = pageCode.IndexOf(
+            "case \"pageChanged\":",
+            StringComparison.Ordinal);
+        var payloadValidationIndex = pageCode.IndexOf(
+            "root.TryGetProperty(\"payload\", out var payload)",
+            pageChangedIndex,
+            StringComparison.Ordinal);
+        var resultReadIndex = pageCode.IndexOf(
+            "payload.TryGetProperty(\"result\"",
+            pageChangedIndex,
+            StringComparison.Ordinal);
+
+        pageChangedIndex.Should().BeGreaterThanOrEqualTo(0);
+        payloadValidationIndex.Should().BeGreaterThan(pageChangedIndex);
+        payloadValidationIndex.Should().BeLessThan(resultReadIndex);
+        pageCode.Should().Contain("payload.ValueKind != JsonValueKind.Object");
+        pageCode.Should().Contain("[NovelReader] Ignoring invalid pageChanged payload");
+    }
+
+    [Fact]
     public void ReaderPage_TreatsSasayakiAutoScrollAsPageTurnForStatistics()
     {
         var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));

@@ -1322,7 +1322,13 @@ public sealed partial class NovelReaderPage : Page
                     }
                     break;
                 case "pageChanged":
-                    var payload = root.GetProperty("payload");
+                    if (!root.TryGetProperty("payload", out var payload)
+                        || payload.ValueKind != JsonValueKind.Object)
+                    {
+                        Log.Warning("[NovelReader] Ignoring invalid pageChanged payload");
+                        break;
+                    }
+
                     var result = payload.TryGetProperty("result", out var resultElement)
                         && resultElement.ValueKind == JsonValueKind.String
                         ? resultElement.GetString()
