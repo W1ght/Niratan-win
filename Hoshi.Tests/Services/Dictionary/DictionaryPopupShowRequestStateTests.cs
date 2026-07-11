@@ -129,26 +129,24 @@ public class DictionaryPopupShowRequestStateTests
     public void SynchronousAbortBeforeCancelReturn_DoesNotTurnCancellationIntoAccepted()
     {
         var transaction = new DictionaryPopupDisplayTransaction();
-        var layout = new DictionaryPopupPendingLayoutCoordinator<string>();
+        var rootState = new DictionaryPopupRootStateCoordinator<string, string, string>();
         transaction.TryBeginPending(23, "reentrant", out _).Should().BeTrue();
-        layout.Stage(23, "reentrant", "layout");
+        rootState.TryStage(23, "reentrant", "context", "anchor", "layout")
+            .Should().BeTrue();
 
         var contentCancelled = transaction.TryCancelPending(
             23,
             "reentrant",
             out var aborted);
-        var abortEventClearedLayout = layout.TryAbort(
+        var abortEventClearedLayout = rootState.TryAbort(
             aborted.Generation,
             aborted.TraceId);
-        var secondLayoutCancellation = layout.TryCancel(
-            23,
-            "reentrant",
-            contentCancellationSucceeded: contentCancelled);
+        var secondLayoutCancellation = rootState.TryAbort(23, "reentrant");
 
         contentCancelled.Should().BeTrue();
         abortEventClearedLayout.Should().BeTrue();
         secondLayoutCancellation.Should().BeFalse();
-        layout.HasPending.Should().BeFalse();
+        rootState.TryGetPending(out _).Should().BeFalse();
     }
 
     [Fact]
@@ -171,31 +169,36 @@ public class DictionaryPopupShowRequestStateTests
     public void DequeuedBPending_CSupersedesWithAbortBeforeCStage_AndBLateCompletionIsHarmless()
     {
         var transaction = new DictionaryPopupDisplayTransaction();
-        var layout = new DictionaryPopupPendingLayoutCoordinator<string>();
+        var rootState = new DictionaryPopupRootStateCoordinator<string, string, string>();
         var requestB = new DictionaryPopupShowRequestState();
         var requestC = new DictionaryPopupShowRequestState();
         var ownershipOrder = new List<string>();
         transaction.TryBeginPending(39, "A", out _).Should().BeTrue();
         transaction.TryAcceptCommit(39).Should().BeTrue();
         transaction.TryCompleteCommit(39, out _).Should().BeTrue();
+        rootState.TryStage(39, "A", "A-context", "A-anchor", "A-layout")
+            .Should().BeTrue();
+        rootState.TryCommit(39, "A", out _).Should().BeTrue();
         transaction.TryBeginPending(40, "B", out var preserveA).Should().BeTrue();
         requestB.TryStartGeneration().Should().BeTrue();
-        layout.Stage(40, "B", "B-layout");
+        rootState.TryStage(40, "B", "B-context", "B-anchor", "B-layout")
+            .Should().BeTrue();
 
         transaction.TryBeginPending(41, "C", out _).Should().BeFalse();
         transaction.TryCancelPending(40, "B", out var abortedB).Should().BeTrue();
         ownershipOrder.Add($"abort:{abortedB.TraceId}");
-        layout.TryAbort(abortedB.Generation, abortedB.TraceId).Should().BeTrue();
+        rootState.TryAbort(abortedB.Generation, abortedB.TraceId).Should().BeTrue();
         transaction.HasCommittedContent.Should().BeTrue();
         transaction.CommittedGeneration.Should().Be(39);
         transaction.TryBeginPending(41, "C", out var preserveAForC).Should().BeTrue();
         requestC.TryStartGeneration().Should().BeTrue();
         ownershipOrder.Add("stage:C");
-        layout.Stage(41, "C", "C-layout");
+        rootState.TryStage(41, "C", "C-context", "C-anchor", "C-layout")
+            .Should().BeTrue();
 
         transaction.TryCancelPending(40, "B", out _).Should().BeFalse();
-        layout.TryAbort(40, "B").Should().BeFalse();
-        layout.TryComplete(41, "C", out var committedLayout).Should().BeTrue();
+        rootState.TryAbort(40, "B").Should().BeFalse();
+        rootState.TryCommit(41, "C", out var committedRoot).Should().BeTrue();
         transaction.TryAcceptCommit(41).Should().BeTrue();
         transaction.TryCompleteCommit(41, out var committedC).Should().BeTrue();
 
@@ -203,7 +206,7 @@ public class DictionaryPopupShowRequestStateTests
         preserveA.Should().BeTrue();
         preserveAForC.Should().BeTrue();
         ownershipOrder.Should().Equal("abort:B", "stage:C");
-        committedLayout.Should().Be("C-layout");
+        committedRoot.Layout.Should().Be("C-layout");
         committedC.Should().Be(new DictionaryPopupContentCommit(41, "C"));
     }
 }

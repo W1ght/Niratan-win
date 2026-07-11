@@ -143,6 +143,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     public Border VisualRoot { get; }
     public bool IsWarmed => _warmCoordinator.IsWarm;
     public bool HasCommittedContent => _displayTransaction.HasCommittedContent;
+    public long? CommittedGeneration => _displayTransaction.CommittedGeneration;
 
     public DictionaryLookupPopup()
     {
@@ -758,21 +759,25 @@ public sealed class DictionaryLookupPopup : IDisposable
         }
     }
 
-    public async Task HighlightSelectionAsync(string matchedText)
+    public async Task<bool> HighlightSelectionAsync(
+        string matchedText,
+        long expectedCommittedGeneration)
     {
         if (!_webViewReady
             || _contentWebView.CoreWebView2 == null
-            || string.IsNullOrEmpty(matchedText))
+            || string.IsNullOrEmpty(matchedText)
+            || _displayTransaction.CommittedGeneration != expectedCommittedGeneration)
         {
-            return;
+            return false;
         }
 
         var highlightCount = matchedText.EnumerateRunes().Count();
         if (highlightCount <= 0)
-            return;
+            return false;
 
-        await _contentWebView.CoreWebView2.ExecuteScriptAsync(
-            $"window.hoshiSelection.highlightSelection({highlightCount});");
+        var result = await _contentWebView.CoreWebView2.ExecuteScriptAsync(
+            $"window.hoshiHighlightPopupSelection?.({highlightCount}, {expectedCommittedGeneration});");
+        return string.Equals(result, "true", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task EnsureWebViewAsync(DictionaryPopupWarmLease lease)

@@ -46,6 +46,19 @@ internal sealed class DictionaryPopupRootStateCoordinator<TContext, TAnchor, TLa
         return true;
     }
 
+    public bool TryGetPending(
+        out DictionaryPopupRootState<TContext, TAnchor, TLayout> pending)
+    {
+        if (_pending is not { } current)
+        {
+            pending = default;
+            return false;
+        }
+
+        pending = current;
+        return true;
+    }
+
     public bool TryCommit(
         long generation,
         string? traceId,
@@ -80,6 +93,41 @@ internal sealed class DictionaryPopupRootStateCoordinator<TContext, TAnchor, TLa
         }
 
         committed = current;
+        return true;
+    }
+
+    public bool IsCommitted(long generation, string? traceId) =>
+        _committed is { } committed
+        && committed.Generation == generation
+        && string.Equals(committed.TraceId, traceId, StringComparison.Ordinal);
+
+    public bool TryUpdatePendingLayout(
+        long generation,
+        string? traceId,
+        TLayout layout,
+        out DictionaryPopupRootState<TContext, TAnchor, TLayout> updated)
+    {
+        updated = default;
+        if (!MatchesPending(generation, traceId))
+            return false;
+
+        updated = _pending!.Value with { Layout = layout };
+        _pending = updated;
+        return true;
+    }
+
+    public bool TryUpdateCommittedLayout(
+        long generation,
+        string? traceId,
+        TLayout layout,
+        out DictionaryPopupRootState<TContext, TAnchor, TLayout> updated)
+    {
+        updated = default;
+        if (!IsCommitted(generation, traceId))
+            return false;
+
+        updated = _committed!.Value with { Layout = layout };
+        _committed = updated;
         return true;
     }
 
