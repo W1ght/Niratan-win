@@ -21,6 +21,8 @@ public partial class VideoPlayerViewModel : ObservableObject
 {
     private readonly SubtitleParserService _subtitleParserService;
     private readonly IDictionaryPopupRequestService _popupRequestService;
+    private readonly ISettingsService? _settingsService;
+    private bool _isApplyingSettings;
 
     private VideoSubtitleDocument _subtitleDocument = new([]);
     private VideoSubtitleCue? _embeddedSubtitleCue;
@@ -305,8 +307,19 @@ public partial class VideoPlayerViewModel : ObservableObject
     {
         _subtitleParserService = subtitleParserService;
         _popupRequestService = popupRequestService;
-        if (settingsService != null)
-            ApplySettings(settingsService.Current.VideoSettings);
+        _settingsService = settingsService;
+        if (_settingsService is not null && settingsService is not null)
+        {
+            _isApplyingSettings = true;
+            try
+            {
+                ApplySettings(settingsService.Current.VideoSettings);
+            }
+            finally
+            {
+                _isApplyingSettings = false;
+            }
+        }
     }
 
     public async Task LoadVideoAsync(VideoItem video, CancellationToken ct = default)
@@ -1252,6 +1265,33 @@ public partial class VideoPlayerViewModel : ObservableObject
         SubtitleMaskHiddenOpacity = 0;
     }
 
+    private void SaveSubtitleAppearance()
+    {
+        if (_isApplyingSettings || _settingsService is null)
+            return;
+
+        var updatedSettings = _settingsService.Current.VideoSettings.Clone();
+        updatedSettings.SubtitleFontFamily = SubtitleFontFamily;
+        updatedSettings.SubtitleFontSize = SubtitleFontSize;
+        updatedSettings.SubtitleFontWeight = SubtitleFontWeight;
+        updatedSettings.SubtitleShadowRadius = SubtitleShadowRadius;
+        updatedSettings.SubtitleBackgroundOpacity = SubtitleBackgroundOpacity;
+        updatedSettings.SubtitleBackgroundDisabled = SubtitleBackgroundDisabled;
+        updatedSettings.SubtitleVerticalPosition = SubtitleVerticalPosition;
+        updatedSettings.SubtitleColorHex = SubtitleColorHex;
+        updatedSettings.SubtitleLookupHighlightColorHex = SubtitleLookupHighlightColorHex;
+        updatedSettings.SubtitleLookupHighlightTextColorHex = SubtitleLookupHighlightTextColorHex;
+        updatedSettings.SubtitleMaskEnabled = SubtitleMaskEnabled;
+        updatedSettings.SubtitleMaskMode = SubtitleMaskMode == "Transparent"
+            ? VideoSubtitleMaskMode.Transparent
+            : VideoSubtitleMaskMode.Blur;
+        updatedSettings.SubtitleMaskBlurRadius = SubtitleMaskBlurRadius;
+        updatedSettings.SubtitleMaskHiddenOpacity = SubtitleMaskHiddenOpacity;
+
+        _settingsService.Set(settings => settings.VideoSettings, updatedSettings);
+        _ = _settingsService.SaveAsync();
+    }
+
     public void SetAspectRatio(string value)
     {
         AspectRatioValue = NormalizeAspectRatioValue(value);
@@ -1552,45 +1592,83 @@ public partial class VideoPlayerViewModel : ObservableObject
     partial void OnSubtitleVerticalPositionChanged(double value)
     {
         SubtitleVerticalPositionText = $"{Math.Clamp(value, -200, 200):0}";
+        SaveSubtitleAppearance();
     }
 
     partial void OnSubtitleMaskHiddenOpacityChanged(double value)
     {
         SubtitleMaskHiddenOpacityText = $"{Math.Clamp(value, 0, 1) * 100:0}%";
+        SaveSubtitleAppearance();
     }
 
     partial void OnSubtitleBackgroundOpacityChanged(double value)
     {
         SubtitleBackgroundOpacityText = $"{Math.Clamp(value, 0, 1) * 100:0}%";
+        SaveSubtitleAppearance();
+    }
+
+    partial void OnSubtitleBackgroundDisabledChanged(bool value)
+    {
+        SaveSubtitleAppearance();
     }
 
     partial void OnSubtitleMaskBlurRadiusChanged(double value)
     {
         SubtitleMaskBlurRadiusText = $"{NormalizeSubtitleMaskBlurRadius(value):0} px";
         RefreshSubtitlePanelHeight();
+        SaveSubtitleAppearance();
     }
 
     partial void OnSubtitleShadowRadiusChanged(double value)
     {
         SubtitleShadowRadiusText = $"{NormalizeSubtitleShadowRadius(value):0.0}";
         RefreshSubtitlePanelHeight();
+        SaveSubtitleAppearance();
     }
 
     partial void OnSubtitleFontSizeChanged(double value)
     {
         SubtitleFontSizeText = $"{Math.Clamp(value, 12, 72):0} px";
         RefreshSubtitlePanelHeight();
+        SaveSubtitleAppearance();
     }
 
     partial void OnSubtitleFontWeightChanged(int value)
     {
         SubtitleFontWeightText = $"{Math.Clamp(value, 100, 900)}";
+        SaveSubtitleAppearance();
     }
 
     partial void OnSubtitleFontFamilyChanged(string value)
     {
         SubtitleFontFamilyText = JapaneseFontCatalog.FindBySubtitleFontFamily(value)?.Name
             ?? (string.IsNullOrWhiteSpace(value) ? "System Default" : value.Trim());
+        SaveSubtitleAppearance();
+    }
+
+    partial void OnSubtitleColorHexChanged(string value)
+    {
+        SaveSubtitleAppearance();
+    }
+
+    partial void OnSubtitleLookupHighlightColorHexChanged(string value)
+    {
+        SaveSubtitleAppearance();
+    }
+
+    partial void OnSubtitleLookupHighlightTextColorHexChanged(string value)
+    {
+        SaveSubtitleAppearance();
+    }
+
+    partial void OnSubtitleMaskEnabledChanged(bool value)
+    {
+        SaveSubtitleAppearance();
+    }
+
+    partial void OnSubtitleMaskModeChanged(string value)
+    {
+        SaveSubtitleAppearance();
     }
 
     partial void OnPrimarySubtitleNameChanged(string value)

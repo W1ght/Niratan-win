@@ -150,6 +150,8 @@ public sealed class VideoSettings
         set => _subtitleMaskHiddenOpacity = ClampFinite(value, 0, 1, 0);
     }
 
+    public VideoSettings Clone() => (VideoSettings)MemberwiseClone();
+
     private static int Clamp(int value, int min, int max) => Math.Clamp(value, min, max);
 
     private static double ClampEqualizer(double value) =>
