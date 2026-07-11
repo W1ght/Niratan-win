@@ -1,5 +1,20 @@
 # Changelog
 
+## 视频 popup 显示后无法继续查字幕
+
+**原因**：
+- 视频 popup 的透明外层和 overlay Canvas 覆盖字幕并参与命中，popup 显示后空白区域也会截获单击和 Shift hover。
+- 根 popup 替换曾在新首屏 ready 前隐藏或清空已显示内容；渲染器失联时 generation 所有权不明确，过期回调、无结果、取消或失败可能替换或关闭最后一次成功结果。
+- 视频查询与 popup 提交没有共同的 request-version 显示所有权，快速连续查询时，旧请求的迟到提交可能取得新锚点和高亮。
+
+**解决**：
+- 视频宿主启用 `DictionaryPopupCanvasInputMode.VisibleHostsOnly`：实际 popup host 保持可交互，透明空白把输入交给字幕 Canvas；默认 modal 行为不影响小说和其他宿主。
+- 根 popup 使用 committed/pending 两阶段事务。JavaScript 按 document epoch 暂存 DOM 和完整交互数据并发送 prepared；native 只接受精确 epoch + generation，线性化 commit 后再原子替换。提交状态无法确认时导航到新 epoch shell，待其 ready 后才精确终止旧 generation 并恢复 latest queue，旧文档迟到消息不能完成新事务。
+- 视频侧为每个 request version 分配唯一显示身份；只有当前或已被 renderer 接受的精确事务能在 committed 事件后提交锚点和高亮，queued drop、abort、显式关闭也按同一身份终止所有权。
+- 新查询无结果、被取代、取消或失败时保留最后一次 committed popup、交互上下文和高亮；只有新的成功 generation 原子提交后才整体切换。
+
+---
+
 ## 视频字幕软阴影出现双命中或黑色矩形
 
 **原因**：
