@@ -254,6 +254,7 @@
                                     </ItemsRepeater>
                                     <ItemsRepeater ItemTemplate="{StaticResource RemoteNovelBookTemplate}"
                                                    ItemsSource="{x:Bind RemoteBooks}"
+                                                   AutomationProperties.AutomationId="RemoteNovelBookItemsControl"
                                                    Visibility="{x:Bind ShowsRemoteBooks, Converter={StaticResource BooleanToVisibilityConverter}}">
                                         <ItemsRepeater.Layout>
                                             <UniformGridLayout MinItemWidth="180"
