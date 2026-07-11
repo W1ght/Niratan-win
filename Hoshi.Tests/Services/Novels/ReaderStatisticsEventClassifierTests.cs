@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Hoshi.Models.Novel;
 using Hoshi.Services.Novels;
 
 namespace Hoshi.Tests.Services.Novels;
@@ -6,40 +7,66 @@ namespace Hoshi.Tests.Services.Novels;
 public sealed class ReaderStatisticsEventClassifierTests
 {
     [Theory]
-    [InlineData("moved", 0.2, 0.3, true)]
-    [InlineData("moved", 0.2, 0.2, false)]
-    [InlineData("limit", 0.2, 0.3, false)]
-    [InlineData("unknown", 0.2, 0.3, false)]
-    public void IsActualPageMovement_RequiresMovedResultAndChangedProgress(
-        string result,
+    [InlineData(ReaderPageNavigationResult.Scrolled, 0.2, 0.3, true)]
+    [InlineData(ReaderPageNavigationResult.Scrolled, 0.2, 0.2, false)]
+    [InlineData(ReaderPageNavigationResult.Limit, 0.2, 0.3, false)]
+    public void IsActualPageMovement_RequiresScrolledResultAndChangedProgress(
+        ReaderPageNavigationResult result,
         double previous,
         double current,
         bool expected)
     {
         ReaderStatisticsEventClassifier.IsActualPageMovement(
-            result,
-            previous,
-            current).Should().Be(expected);
+            new ReaderPageNavigationEvent(
+                result,
+                ReaderPageNavigationDirection.Forward,
+                current),
+            previous).Should().Be(expected);
     }
 
     [Theory]
-    [InlineData("limit", "forward", 0, 3, 1)]
-    [InlineData("limit", "backward", 2, 3, 1)]
-    [InlineData("limit", "backward", 0, 3, null)]
-    [InlineData("limit", "forward", 2, 3, null)]
-    [InlineData("moved", "forward", 0, 3, null)]
+    [InlineData(ReaderPageNavigationResult.Limit, ReaderPageNavigationDirection.Forward, 0, 3, 1)]
+    [InlineData(ReaderPageNavigationResult.Limit, ReaderPageNavigationDirection.Backward, 2, 3, 1)]
+    [InlineData(ReaderPageNavigationResult.Limit, ReaderPageNavigationDirection.Backward, 0, 3, null)]
+    [InlineData(ReaderPageNavigationResult.Limit, ReaderPageNavigationDirection.Forward, 2, 3, null)]
+    [InlineData(ReaderPageNavigationResult.Scrolled, ReaderPageNavigationDirection.Forward, 0, 3, null)]
     public void AdjacentChapterTarget_OnlyReturnsInRangeNaturalBoundary(
-        string result,
-        string direction,
+        ReaderPageNavigationResult result,
+        ReaderPageNavigationDirection direction,
         int currentChapter,
         int chapterCount,
         int? expected)
     {
         ReaderStatisticsEventClassifier.AdjacentChapterTarget(
-            result,
-            direction,
+            new ReaderPageNavigationEvent(result, direction, 0.5),
             currentChapter,
             chapterCount).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("scrolled", "forward", 0.30, ReaderPageNavigationResult.Scrolled, ReaderPageNavigationDirection.Forward)]
+    [InlineData("limit", "backward", 0.00, ReaderPageNavigationResult.Limit, ReaderPageNavigationDirection.Backward)]
+    public void TryCreateEvent_AcceptsBridgeVocabulary(
+        string result,
+        string direction,
+        double progress,
+        ReaderPageNavigationResult expectedResult,
+        ReaderPageNavigationDirection expectedDirection)
+    {
+        ReaderStatisticsEventClassifier.TryCreateEvent(
+            result, direction, progress, out var readerEvent).Should().BeTrue();
+        readerEvent.Should().Be(new ReaderPageNavigationEvent(
+            expectedResult, expectedDirection, progress));
+    }
+
+    [Theory]
+    [InlineData("moved", "forward")]
+    [InlineData("unknown", "forward")]
+    [InlineData("scrolled", "sideways")]
+    public void TryCreateEvent_RejectsUnknownVocabulary(string result, string direction)
+    {
+        ReaderStatisticsEventClassifier.TryCreateEvent(
+            result, direction, 0.5, out _).Should().BeFalse();
     }
 
     [Theory]

@@ -1323,27 +1323,49 @@ public sealed partial class NovelReaderPage : Page
                     break;
                 case "pageChanged":
                     var payload = root.GetProperty("payload");
-                    var progress = payload.GetProperty("progress").GetDouble();
-                    var direction = payload.GetProperty("direction").GetString();
-                    var result = payload.GetProperty("result").GetString();
+                    var result = payload.TryGetProperty("result", out var resultElement)
+                        && resultElement.ValueKind == JsonValueKind.String
+                        ? resultElement.GetString()
+                        : null;
+                    var direction = payload.TryGetProperty("direction", out var directionElement)
+                        && directionElement.ValueKind == JsonValueKind.String
+                        ? directionElement.GetString()
+                        : null;
+                    var progress = default(double);
+                    var hasProgress = payload.TryGetProperty("progress", out var progressElement)
+                        && progressElement.ValueKind == JsonValueKind.Number
+                        && progressElement.TryGetDouble(out progress);
+                    if (!hasProgress
+                        || !ReaderStatisticsEventClassifier.TryCreateEvent(
+                            result,
+                            direction,
+                            progress,
+                            out var readerEvent))
+                    {
+                        Log.Warning(
+                            "[NovelReader] Ignoring invalid pageChanged event: direction={Dir}, result={Result}",
+                            direction,
+                            result);
+                        break;
+                    }
+
                     var previousProgress = ViewModel.Progress;
 
                     Log.Information(
                         "[NovelReader] Page changed: direction={Dir}, result={Result}, progress={Progress:F3}",
                         direction,
                         result,
-                        progress
+                        readerEvent.Progress
                     );
 
                     if (ReaderStatisticsEventClassifier.IsActualPageMovement(
-                        result,
-                        previousProgress,
-                        progress))
+                        readerEvent,
+                        previousProgress))
                     {
                         _navigationHistory.ClearForward();
                         RefreshReaderNavigationHistoryChrome();
-                        ViewModel.UpdateProgress(progress);
-                        _currentProgress = progress;
+                        ViewModel.UpdateProgress(readerEvent.Progress);
+                        _currentProgress = readerEvent.Progress;
                         StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
                         await ViewModel.SaveProgressNowAsync(flushStatistics: false);
                         await ViewModel.CheckpointReadingAsync(
@@ -1352,16 +1374,15 @@ public sealed partial class NovelReaderPage : Page
                     else
                     {
                         var adjacentTarget = ReaderStatisticsEventClassifier.AdjacentChapterTarget(
-                            result,
-                            direction,
+                            readerEvent,
                             ViewModel.CurrentChapterIndex,
                             ViewModel.ChapterCount);
                         if (adjacentTarget.HasValue)
                         {
                             _navigationHistory.ClearForward();
                             RefreshReaderNavigationHistoryChrome();
-                            ViewModel.UpdateProgress(progress);
-                            _currentProgress = progress;
+                            ViewModel.UpdateProgress(readerEvent.Progress);
+                            _currentProgress = readerEvent.Progress;
                             StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
                             await ViewModel.SaveProgressNowAsync(flushStatistics: false);
                             await ViewModel.CheckpointReadingAsync(
@@ -1371,7 +1392,7 @@ public sealed partial class NovelReaderPage : Page
                         }
                     }
 
-                    if (!string.Equals(result, "limit", StringComparison.Ordinal)
+                    if (readerEvent.Result != ReaderPageNavigationResult.Limit
                         && payload.TryGetProperty("state", out var pageState))
                     {
                         await CaptureReaderArtifactsAsync(pageState.GetRawText());

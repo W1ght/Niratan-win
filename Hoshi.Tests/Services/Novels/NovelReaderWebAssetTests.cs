@@ -157,6 +157,18 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void ReaderBridge_AndStatisticsClassifier_SharePageNavigationVocabulary()
+    {
+        var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
+        var classifier = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Services", "Novels", "ReaderStatisticsEventClassifier.cs"));
+
+        script.Should().Contain("return \"scrolled\";");
+        classifier.Should().Contain("ReaderPageNavigationResult.Scrolled");
+        classifier.Should().NotContain("\"moved\"");
+    }
+
+    [Fact]
     public void ReaderPage_TreatsSasayakiAutoScrollAsPageTurnForStatistics()
     {
         var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
