@@ -138,6 +138,7 @@ public partial class App : Application
         services.AddTransient<KeyboardShortcutsSettingsPageViewModel>();
         services.AddTransient<SasayakiSettingsPageViewModel>();
         services.AddTransient<StatisticsSettingsPageViewModel>();
+        services.AddTransient<NovelStatisticsDashboardViewModel>();
         services.AddTransient<TtuSyncSettingsPageViewModel>();
         services.AddTransient<AnkiSettingsPageViewModel>();
         services.AddTransient<NovelLibraryPageViewModel>();

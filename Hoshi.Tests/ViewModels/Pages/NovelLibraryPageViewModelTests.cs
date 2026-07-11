@@ -82,6 +82,25 @@ public class NovelLibraryPageViewModelTests
     }
 
     [Fact]
+    public async Task StatisticsSurfaceCommands_ActivateAndDeactivateDashboard()
+    {
+        var sut = CreateSut();
+        await sut.InitializeAsync();
+
+        await sut.EnterStatisticsCommand.ExecuteAsync(null);
+
+        sut.ShowStatisticsDashboard.Should().BeTrue();
+        sut.ShowBookshelf.Should().BeFalse();
+        sut.StatisticsDashboard.IsActive.Should().BeTrue();
+
+        sut.ReturnToBookshelfCommand.Execute(null);
+
+        sut.ShowStatisticsDashboard.Should().BeFalse();
+        sut.ShowBookshelf.Should().BeTrue();
+        sut.StatisticsDashboard.IsActive.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task MatchSasayakiCommand_PicksFilesAndRunsMatch()
     {
         var dialog = new Mock<IDialogService>();
@@ -398,6 +417,7 @@ public class NovelLibraryPageViewModelTests
             statisticsDashboardService: dashboard.Object);
 
         await sut.InitializeAsync();
+        await sut.EnterStatisticsCommand.ExecuteAsync(null);
         sut.SelectedStatisticsRangeMode = NovelStatisticsRangeMode.Day;
         sut.StatisticsAnchorDate = new DateTimeOffset(
             today.ToDateTime(TimeOnly.MinValue),
@@ -440,14 +460,21 @@ public class NovelLibraryPageViewModelTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new NovelStatisticsDashboardSnapshot([], []));
 
+        var effectiveSettings = settingsService
+            ?? Mock.Of<ISettingsService>(s => s.Current == new AppSettings());
+        var effectiveDashboardService = statisticsDashboardService
+            ?? dashboardMock.Object;
+
         return new NovelLibraryPageViewModel(
             novelService ?? serviceMock.Object,
             dialogService ?? Mock.Of<IDialogService>(),
             notificationService ?? Mock.Of<INotificationService>(),
             messenger ?? new FakeMessenger(),
             sasayakiMatchService ?? Mock.Of<ISasayakiMatchService>(),
-            settingsService ?? Mock.Of<ISettingsService>(s => s.Current == new AppSettings()),
-            statisticsDashboardService ?? dashboardMock.Object,
+            effectiveSettings,
+            new NovelStatisticsDashboardViewModel(
+                effectiveDashboardService,
+                effectiveSettings),
             shelfService ?? CreateDefaultShelfService(),
             syncRemoteStore ?? new FakeTtuSyncRemoteStore(),
             ttuBookImportService ?? new FakeTtuBookImportService(),

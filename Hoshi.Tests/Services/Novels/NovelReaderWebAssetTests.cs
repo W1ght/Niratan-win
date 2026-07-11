@@ -2150,6 +2150,9 @@ public class NovelReaderWebAssetTests
         var libraryViewModel = File.ReadAllText(
             Path.Combine(ProjectRoot, "ViewModels", "Pages", "NovelLibraryPageViewModel.cs")
         );
+        var dashboardViewModel = File.ReadAllText(
+            Path.Combine(ProjectRoot, "ViewModels", "Pages", "NovelStatisticsDashboardViewModel.cs")
+        );
         var appCode = File.ReadAllText(Path.Combine(ProjectRoot, "App.xaml.cs"));
         var dashboardServicePath = Path.Combine(
             ProjectRoot,
@@ -2179,7 +2182,8 @@ public class NovelReaderWebAssetTests
         libraryXaml.Should().Contain("NovelLibraryStatisticsCorruptWarning");
         libraryXaml.Should().NotContain("By Book");
 
-        libraryViewModel.Should().Contain("INovelStatisticsDashboardService");
+        libraryViewModel.Should().Contain("NovelStatisticsDashboardViewModel StatisticsDashboard");
+        libraryViewModel.Should().NotContain("INovelStatisticsDashboardService");
         libraryViewModel.Should().Contain("ShowStatisticsDashboard");
         libraryViewModel.Should().Contain("StatisticsTodayText");
         libraryViewModel.Should().Contain("StatisticsWeekText");
@@ -2189,6 +2193,11 @@ public class NovelReaderWebAssetTests
         libraryViewModel.Should().Contain("SelectedStatisticsTrendMetric");
         libraryViewModel.Should().Contain("HasStatisticsCorruptBooks");
         libraryViewModel.Should().NotContain("NovelStatisticsDistributionRow");
+
+        dashboardViewModel.Should().Contain("INovelStatisticsDashboardService");
+        dashboardViewModel.Should().Contain("NovelStatisticsDashboardCalculator");
+        dashboardViewModel.Should().Contain("ActivateAsync");
+        dashboardViewModel.Should().Contain("Deactivate");
 
         dashboardService.Should().Contain("NovelStatisticsDashboardCalculator");
         dashboardService.Should().Contain("LoadSnapshotAsync");
