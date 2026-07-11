@@ -13,24 +13,78 @@ namespace Hoshi.Services.Novels;
 public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardService
 {
     private readonly INovelStatisticsSidecarService _statisticsSidecarService;
+    private readonly INovelBookSidecarService? _bookSidecarService;
+    private readonly TimeProvider _timeProvider;
 
     public NovelStatisticsDashboardService(INovelStatisticsSidecarService statisticsSidecarService)
+        : this(statisticsSidecarService, null, TimeProvider.System)
+    {
+    }
+
+    public NovelStatisticsDashboardService(
+        INovelStatisticsSidecarService statisticsSidecarService,
+        INovelBookSidecarService bookSidecarService)
+        : this(statisticsSidecarService, bookSidecarService, TimeProvider.System)
+    {
+    }
+
+    public NovelStatisticsDashboardService(
+        INovelStatisticsSidecarService statisticsSidecarService,
+        INovelBookSidecarService? bookSidecarService,
+        TimeProvider timeProvider)
     {
         _statisticsSidecarService = statisticsSidecarService;
+        _bookSidecarService = bookSidecarService;
+        _timeProvider = timeProvider;
     }
 
     public async Task<NovelStatisticsDashboardSnapshot> LoadSnapshotAsync(
         IReadOnlyList<NovelBook> books,
         CancellationToken ct = default)
     {
+        var today = DateOnly.FromDateTime(_timeProvider.GetLocalNow().DateTime);
+        var windowStart = today.AddYears(-1).AddDays(1);
         var contributionsByDate = new Dictionary<DateOnly, List<NovelStatisticsBookContribution>>();
+        var bookRecords = new List<NovelStatisticsBookRecord>();
+        var skippedCorruptBookIds = new List<string>();
 
         foreach (var book in books)
         {
+            ct.ThrowIfCancellationRequested();
+            var totalCharacterCount = 0;
+            if (!string.IsNullOrWhiteSpace(book.ExtractedPath)
+                && _bookSidecarService != null)
+            {
+                totalCharacterCount = (await _bookSidecarService.LoadBookInfoAsync(
+                    book.ExtractedPath,
+                    ct))?.CharacterCount ?? 0;
+            }
+            bookRecords.Add(new NovelStatisticsBookRecord(
+                book.Id,
+                book.Title,
+                book.CoverPath,
+                totalCharacterCount));
+
             if (string.IsNullOrWhiteSpace(book.ExtractedPath))
                 continue;
 
-            var statistics = await _statisticsSidecarService.LoadAsync(book.ExtractedPath, ct);
+            var loadResult = await _statisticsSidecarService.LoadWithStatusAsync(
+                book.ExtractedPath,
+                ct);
+            if (loadResult == null)
+            {
+                loadResult = new NovelStatisticsSidecarLoadResult(
+                    NovelStatisticsSidecarLoadStatus.Loaded,
+                    await _statisticsSidecarService.LoadAsync(book.ExtractedPath, ct));
+            }
+            if (loadResult.Status is NovelStatisticsSidecarLoadStatus.Corrupt
+                or NovelStatisticsSidecarLoadStatus.Unavailable)
+            {
+                skippedCorruptBookIds.Add(book.Id);
+                continue;
+            }
+
+            var statistics = loadResult.Statistics;
             foreach (var statistic in statistics)
             {
                 if (statistic.CharactersRead <= 0 && statistic.ReadingTime <= 0)
@@ -44,13 +98,16 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
                 {
                     continue;
                 }
+                if (date < windowStart || date > today)
+                    continue;
 
                 var contribution = new NovelStatisticsBookContribution(
                     book.Id,
                     string.IsNullOrWhiteSpace(book.Title) ? statistic.Title : book.Title,
                     book.CoverPath,
                     statistic.CharactersRead,
-                    statistic.ReadingTime);
+                    statistic.ReadingTime,
+                    statistic.CharactersRead > 0 && statistic.ReadingTime >= 60);
                 contributionsByDate.GetOrAdd(date).Add(contribution);
             }
         }
@@ -70,7 +127,15 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
             .OrderBy(day => day.Date)
             .ToList();
 
-        return new NovelStatisticsDashboardSnapshot(days, []);
+        return new NovelStatisticsDashboardSnapshot(
+            windowStart,
+            today,
+            days,
+            bookRecords
+                .OrderBy(book => book.Title, StringComparer.CurrentCultureIgnoreCase)
+                .ThenBy(book => book.Id, StringComparer.Ordinal)
+                .ToList(),
+            skippedCorruptBookIds.Distinct(StringComparer.Ordinal).ToList());
     }
 }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Hoshi.Models.Settings;
 
 namespace Hoshi.Models.Novel;
@@ -17,7 +18,31 @@ public sealed record NovelStatisticsBookContribution(
     string Title,
     string? CoverPath,
     int Characters,
-    double ReadingTime);
+    double ReadingTime,
+    bool IsValidSpeedSample)
+{
+    public NovelStatisticsBookContribution(
+        string BookId,
+        string Title,
+        string? CoverPath,
+        int Characters,
+        double ReadingTime)
+        : this(
+            BookId,
+            Title,
+            CoverPath,
+            Characters,
+            ReadingTime,
+            Characters > 0 && ReadingTime >= 60)
+    {
+    }
+}
+
+public sealed record NovelStatisticsBookRecord(
+    string Id,
+    string Title,
+    string? CoverPath,
+    int TotalCharacterCount);
 
 public sealed record NovelStatisticsDayAggregate(
     DateOnly Date,
@@ -25,9 +50,39 @@ public sealed record NovelStatisticsDayAggregate(
     double ReadingTime,
     IReadOnlyList<NovelStatisticsBookContribution> BookContributions);
 
-public sealed record NovelStatisticsDashboardSnapshot(
+public sealed partial record NovelStatisticsDashboardSnapshot(
+    DateOnly WindowStart,
+    DateOnly WindowEnd,
     IReadOnlyList<NovelStatisticsDayAggregate> Days,
+    IReadOnlyList<NovelStatisticsBookRecord> Books,
     IReadOnlyList<string> SkippedCorruptBookIds);
+
+public sealed partial record NovelStatisticsDashboardSnapshot
+{
+    public NovelStatisticsDashboardSnapshot(
+        IReadOnlyList<NovelStatisticsDayAggregate> days,
+        IReadOnlyList<string> skippedCorruptBookIds)
+        : this(
+            days.Count == 0 ? DateOnly.MinValue : days.Min(day => day.Date),
+            days.Count == 0 ? DateOnly.MinValue : days.Max(day => day.Date),
+            days,
+            [],
+            skippedCorruptBookIds)
+    {
+    }
+}
+
+public enum NovelStatisticsSidecarLoadStatus
+{
+    Missing,
+    Loaded,
+    Corrupt,
+    Unavailable,
+}
+
+public sealed record NovelStatisticsSidecarLoadResult(
+    NovelStatisticsSidecarLoadStatus Status,
+    IReadOnlyList<NovelReadingStatistic> Statistics);
 
 public sealed record NovelStatisticsTodaySummary(
     DateOnly Date,
