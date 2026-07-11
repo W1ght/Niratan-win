@@ -94,4 +94,18 @@ public sealed class TtuSyncSettingsAssetTests
             zhResources.Should().Contain(key);
         }
     }
+
+    [Fact]
+    public void StatisticsSettingsPage_GatesGroupsWithoutResettingPreferences()
+    {
+        var pageXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "StatisticsSettingsPage.xaml"));
+        var viewModelCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "ViewModels", "Pages", "StatisticsSettingsPageViewModel.cs"));
+
+        pageXaml.Should().Contain("ViewModel.ShowStatisticsOptions");
+        pageXaml.Should().Contain("ViewModel.ShowStatisticsSyncOptions");
+        viewModelCode.Should().NotContain("EnableSync = false");
+        viewModelCode.Should().NotContain("SelectedSyncMode = StatisticsSyncMode.Merge;");
+    }
 }
