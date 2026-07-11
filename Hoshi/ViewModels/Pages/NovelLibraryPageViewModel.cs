@@ -51,10 +51,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     public partial ObservableCollection<RemoteNovelBookItemViewModel> RemoteBooks { get; set; } = new();
 
     [ObservableProperty]
-    public partial ObservableCollection<NovelShelfSectionViewModel> RailSections { get; set; } = new();
-
-    [ObservableProperty]
-    public partial ObservableCollection<NovelBookItemViewModel> UnshelvedBooks { get; set; } = new();
+    public partial ObservableCollection<NovelShelfSectionViewModel> ShelfSections { get; set; } = new();
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasNovelStorageWarnings))]
@@ -201,6 +198,9 @@ public partial class NovelLibraryPageViewModel : ObservableObject
                 remoteBooks
                     .Where(book => !localTitles.Contains(book.SanitizedTitle))
                     .Select(book => new RemoteNovelBookItemViewModel(book)));
+            RebuildShelfProjections(
+                _currentShelfState,
+                NovelBooks.Select(item => item.Book).ToList());
         }
         catch (OperationCanceledException)
         {
@@ -246,6 +246,9 @@ public partial class NovelLibraryPageViewModel : ObservableObject
             }
 
             RemoteBooks.Remove(item);
+            RebuildShelfProjections(
+                _currentShelfState,
+                NovelBooks.Select(book => book.Book).ToList());
             _notificationService.ShowSuccess("EPUB imported from Google Drive.", "Novel imported");
             await LoadNovelsAsync();
         }
@@ -479,40 +482,64 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     {
         _currentShelfState = state;
         var booksById = books.ToDictionary(book => book.Id, StringComparer.Ordinal);
-        var rails = new List<NovelShelfSectionViewModel>();
-        if (_settingsService.Current.BookshelfShowReading)
+        var sections = new List<NovelShelfSectionViewModel>();
+        var reading = SortBooks(books.Where(IsReading)).ToList();
+        if (reading.Count > 0)
         {
-            var reading = books
-                .Where(IsReading)
-                .Select(book => new NovelBookItemViewModel(book));
-            rails.Add(new NovelShelfSectionViewModel(
-                "reading",
-                ResourceStringHelper.GetString(
+            sections.Add(new NovelShelfSectionViewModel
+            {
+                Id = "reading",
+                DisplayName = ResourceStringHelper.GetString(
                     "NovelShelfReadingLabel/Text",
                     "Reading"),
-                IsDerived: true,
-                IsUnshelved: false,
-                new ObservableCollection<NovelBookItemViewModel>(reading)));
+                IsDerived = true,
+                Books = new(reading.Select(book => new NovelBookItemViewModel(book))),
+            });
         }
 
         foreach (var shelf in state.Shelves)
         {
-            var items = shelf.BookIds
+            var shelfBooks = shelf.BookIds
                 .Where(booksById.ContainsKey)
-                .Select(id => new NovelBookItemViewModel(booksById[id]));
-            rails.Add(new NovelShelfSectionViewModel(
-                "shelf:" + shelf.Name,
-                shelf.Name,
-                IsDerived: false,
-                IsUnshelved: false,
-                new ObservableCollection<NovelBookItemViewModel>(items)));
+                .Select(id => booksById[id]);
+            if (SelectedSortOption != NovelLibrarySortOption.Manual)
+                shelfBooks = SortBooks(shelfBooks);
+            sections.Add(new NovelShelfSectionViewModel
+            {
+                Id = "shelf:" + shelf.Name,
+                DisplayName = shelf.Name,
+                Books = new(shelfBooks.Select(book => new NovelBookItemViewModel(book))),
+            });
         }
 
-        RailSections = new ObservableCollection<NovelShelfSectionViewModel>(rails);
-        UnshelvedBooks = new ObservableCollection<NovelBookItemViewModel>(
-            state.UnshelvedBookOrder
-                .Where(booksById.ContainsKey)
-                .Select(id => new NovelBookItemViewModel(booksById[id])));
+        if (RemoteBooks.Count > 0)
+        {
+            sections.Add(new NovelShelfSectionViewModel
+            {
+                Id = "google-drive",
+                DisplayName = "Google Drive",
+                IsDerived = true,
+                IsRemote = true,
+                RemoteBooks = RemoteBooks,
+            });
+        }
+
+        var unshelvedBooks = state.UnshelvedBookOrder
+            .Where(booksById.ContainsKey)
+            .Select(id => booksById[id]);
+        if (SelectedSortOption != NovelLibrarySortOption.Manual)
+            unshelvedBooks = SortBooks(unshelvedBooks);
+        sections.Add(new NovelShelfSectionViewModel
+        {
+            Id = "unshelved",
+            DisplayName = ResourceStringHelper.GetString(
+                "NovelShelfUnshelvedLabel/Text",
+                "Unshelved"),
+            IsUnshelved = true,
+            Books = new(unshelvedBooks.Select(book => new NovelBookItemViewModel(book))),
+        });
+
+        ShelfSections = new(sections);
     }
 
     private static bool IsReading(NovelBook book) =>
@@ -536,6 +563,9 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
         NovelBooks = new ObservableCollection<NovelBookItemViewModel>(
             SortBookItems(NovelBooks));
+        RebuildShelfProjections(
+            _currentShelfState,
+            NovelBooks.Select(item => item.Book).ToList());
     }
 
     private IEnumerable<NovelBook> SortBooks(IEnumerable<NovelBook> books) =>

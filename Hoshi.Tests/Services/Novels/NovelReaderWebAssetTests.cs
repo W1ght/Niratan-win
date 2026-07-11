@@ -196,9 +196,7 @@ public class NovelReaderWebAssetTests
         libraryXaml
             .Should()
             .Contain("AutomationProperties.AutomationId=\"NovelShelfSectionsControl\"");
-        libraryXaml
-            .Should()
-            .Contain("AutomationProperties.AutomationId=\"NovelUnshelvedBooksRepeater\"");
+        libraryXaml.Should().NotContain("NovelUnshelvedBooksRepeater");
         libraryXaml
             .Should()
             .Contain("AutomationProperties.AutomationId=\"{x:Bind AutomationId");
@@ -2313,9 +2311,9 @@ public class NovelReaderWebAssetTests
         );
 
         libraryXaml.Should().Contain("<Button");
-        libraryXaml.Should().Contain("NovelBookButton_Click");
-        libraryCode.Should().Contain("NovelBookButton_Click");
-        libraryCode.Should().Contain("OpenNovelCommand.Execute");
+        libraryXaml.Should().Contain("Command=\"{Binding ViewModel.OpenNovelCommand, ElementName=ThisPage}\"");
+        libraryXaml.Should().Contain("CommandParameter=\"{x:Bind}\"");
+        libraryCode.Should().NotContain("NovelBookButton_Click");
     }
 
     [Fact]
@@ -2377,7 +2375,7 @@ public class NovelReaderWebAssetTests
         libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelLibrarySortComboBox\"");
         libraryXaml.Should().Contain("SelectedValue=\"{x:Bind ViewModel.SelectedSortOption, Mode=TwoWay}\"");
         libraryXaml.Should().Contain("x:Name=\"NovelShelfSectionsControl\"");
-        libraryXaml.Should().Contain("x:Name=\"NovelUnshelvedBooksRepeater\"");
+        libraryXaml.Should().NotContain("NovelUnshelvedBooksRepeater");
         libraryXaml.Should().Contain("<UniformGridLayout");
         libraryXaml.Should().Contain("Click=\"MoveNovelToShelfMenuItem_Click\"");
 
@@ -3735,7 +3733,7 @@ public class NovelReaderWebAssetTests
         libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelShelfSectionsControl\"");
         libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelShelfManagementButton\"");
         libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStorageWarningInfoBar\"");
-        libraryXaml.Should().Contain("ItemsSource=\"{x:Bind ViewModel.UnshelvedBooks, Mode=OneWay}\"");
+        libraryXaml.Should().Contain("ItemsSource=\"{x:Bind ViewModel.ShelfSections, Mode=OneWay}\"");
         dialogXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelShelfList\"");
         dialogXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelShelfCreateButton\"");
         dialogXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelShelfDeleteConfirmationFlyout\"");
