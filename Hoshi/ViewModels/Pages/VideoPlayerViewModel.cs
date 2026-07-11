@@ -1301,7 +1301,7 @@ public partial class VideoPlayerViewModel : ObservableObject
     private static double NormalizeSubtitleShadowRadius(double value)
     {
         if (!double.IsFinite(value))
-            return 3;
+            return 10;
 
         return Math.Clamp(Math.Round(value * 2, MidpointRounding.AwayFromZero) / 2, 0, 10);
     }
