@@ -27,9 +27,9 @@ public sealed class PopupHtmlGenerator
             : "";
     }
 
-    public string GenerateShellHtml(ThemeMode themeMode = ThemeMode.System, DictionaryDisplaySettings? settings = null, AudioSettings? audioSettings = null, AnkiSettings? ankiSettings = null, bool hidden = false)
+    public string GenerateShellHtml(ThemeMode themeMode = ThemeMode.System, DictionaryDisplaySettings? settings = null, AudioSettings? audioSettings = null, AnkiSettings? ankiSettings = null, bool hidden = false, long documentEpoch = 0)
     {
-        return GenerateHtml([], new Dictionary<string, string>(), settings, themeMode, audioSettings: audioSettings, ankiSettings: ankiSettings, hidden: hidden);
+        return GenerateHtml([], new Dictionary<string, string>(), settings, themeMode, audioSettings: audioSettings, ankiSettings: ankiSettings, hidden: hidden, documentEpoch: documentEpoch);
     }
 
     public string GenerateHtml(
@@ -40,7 +40,8 @@ public sealed class PopupHtmlGenerator
         long renderGeneration = 0,
         AudioSettings? audioSettings = null,
         AnkiSettings? ankiSettings = null,
-        bool hidden = false)
+        bool hidden = false,
+        long documentEpoch = 0)
     {
         var settings = displaySettings ?? new DictionaryDisplaySettings();
         var entriesJson = SerializeLookupEntries(results);
@@ -93,6 +94,7 @@ window.scanNonJapaneseText = {BoolToJs(settings.ScanNonJapaneseText)};
 window.maxResults = {settings.MaxResults};
 window.scanLength = {settings.ScanLength};
 window.popupRenderGeneration = {renderGeneration};
+window.hoshiPopupDocumentEpoch = {documentEpoch};
 window.lookupTraceId = '';
 window.audioSources = {SerializeAudioSources(audioSettings)};
 window.audioPlaybackMode = '{PlaybackModeText(audioSettings)}';
@@ -295,7 +297,8 @@ window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlos
         AudioSettings? audioSettings = null,
         AnkiSettings? ankiSettings = null,
         string? traceId = null,
-        int? totalResultCount = null) =>
+        int? totalResultCount = null,
+        long documentEpoch = 0) =>
         GenerateResultsInjectionScript(
             results,
             styles,
@@ -306,7 +309,8 @@ window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlos
             ankiSettings,
             traceId,
             totalResultCount,
-            "hoshiInjectResults");
+            documentEpoch,
+            stageRender: true);
 
     public string GenerateRedirectInjectionScript(
         List<DictionaryLookupResult> results,
@@ -327,7 +331,8 @@ window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlos
             ankiSettings,
             traceId,
             results.Count,
-            "hoshiRedirectResults");
+            documentEpoch: 0,
+            stageRender: false);
 
     private string GenerateResultsInjectionScript(
         List<DictionaryLookupResult> results,
@@ -339,7 +344,8 @@ window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlos
         AnkiSettings? ankiSettings,
         string? traceId,
         int? totalResultCount,
-        string injectionFunction)
+        long documentEpoch,
+        bool stageRender)
     {
         var settings = displaySettings ?? new DictionaryDisplaySettings();
         var entriesJson = SerializeLookupEntries(results);
@@ -350,7 +356,50 @@ window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlos
         var customCss = DictionaryPopupScaleCss.ScaleCustomCss(settings.CustomCSS);
         var (bgColor, textColor) = GetThemeColors(themeMode);
 
+        var runtime = $@"{{
+        colorScheme: '{(IsThemeDark(themeMode) ? "dark" : "light")}',
+        backgroundColor: '{bgColor}',
+        textColor: '{textColor}',
+        popupScaleDeclarations: {JsonSerializer.Serialize(popupScaleDeclarations)},
+        dictionaryStyles: {stylesJson},
+        compactGlossaries: {BoolToJs(settings.CompactGlossaries)},
+        compactPitchAccents: {BoolToJs(settings.CompactPitchAccents)},
+        harmonicFrequency: {BoolToJs(settings.HarmonicFrequency)},
+        deduplicatePitchAccents: {BoolToJs(settings.DeduplicatePitchAccents)},
+        expandFirstDictionary: {BoolToJs(settings.ExpandFirstDictionary)},
+        collapseMode: '{settings.CollapseModeText}',
+        collapsedDictionaries: {collapsedDictionariesJson},
+        showExpressionTags: {BoolToJs(settings.ShowExpressionTags)},
+        scanNonJapaneseText: {BoolToJs(settings.ScanNonJapaneseText)},
+        maxResults: {settings.MaxResults},
+        scanLength: {settings.ScanLength},
+        customCSS: {JsonSerializer.Serialize(customCss)},
+        lookupTraceId: {JsonSerializer.Serialize(traceId ?? "")},
+        audioSources: {SerializeAudioSources(audioSettings)},
+        audioPlaybackMode: '{PlaybackModeText(audioSettings)}',
+        audioEnableAutoplay: {BoolToJs(audioSettings?.EnableAutoplay ?? false)},
+        useAnkiConnect: {BoolToJs(ankiSettings?.PopupSettings.UseAnkiConnect ?? false)},
+        embedMedia: {BoolToJs(ankiSettings?.PopupSettings.EmbedMedia ?? false)},
+        allowDupes: {BoolToJs(ankiSettings?.PopupSettings.AllowDupes ?? false)},
+        needsAudio: {BoolToJs(ankiSettings?.PopupSettings.NeedsAudio ?? false)},
+        compactGlossariesAnki: {BoolToJs(ankiSettings?.PopupSettings.CompactGlossaries ?? false)}
+    }}";
+
+        if (stageRender)
+        {
+            return $@"
+window.hoshiStagePopupRender({{
+    documentEpoch: {documentEpoch},
+    generation: {renderGeneration},
+    entries: {entriesJson},
+    entryCount: {finalResultCount},
+    runtime: {runtime}
+}});";
+        }
+
         return $@"
+(() => {{
+if ({renderGeneration} !== (window.popupRenderGeneration || 0)) return false;
 document.documentElement.setAttribute('data-hoshi-color-scheme', '{(IsThemeDark(themeMode) ? "dark" : "light")}');
 document.documentElement.style.setProperty('--background-color', '{bgColor}');
 document.documentElement.style.setProperty('--text-color', '{textColor}');
@@ -369,7 +418,6 @@ window.scanNonJapaneseText = {BoolToJs(settings.ScanNonJapaneseText)};
 window.maxResults = {settings.MaxResults};
 window.scanLength = {settings.ScanLength};
 window.customCSS = {JsonSerializer.Serialize(customCss)};
-window.popupRenderGeneration = {renderGeneration};
 window.lookupTraceId = {JsonSerializer.Serialize(traceId ?? "")};
 window.audioSources = {SerializeAudioSources(audioSettings)};
 window.audioPlaybackMode = '{PlaybackModeText(audioSettings)}';
@@ -380,25 +428,21 @@ window.embedMedia = {BoolToJs(ankiSettings?.PopupSettings.EmbedMedia ?? false)};
 window.allowDupes = {BoolToJs(ankiSettings?.PopupSettings.AllowDupes ?? false)};
 window.needsAudio = {BoolToJs(ankiSettings?.PopupSettings.NeedsAudio ?? false)};
 window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlossaries ?? false)};
-if (typeof window.{injectionFunction} === 'function') {{
-    window.{injectionFunction}({entriesJson}, {finalResultCount});
-}} else {{
-    window.lookupEntries = {entriesJson};
-    window.entryCount = {finalResultCount};
-    window.renderPopup();
-}}";
+return window.hoshiRedirectResults?.({entriesJson}, {finalResultCount}, {renderGeneration}) === true;
+}})()";
     }
 
     public string GenerateAppendResultsScript(
         List<DictionaryLookupResult> results,
         int totalResultCount,
-        long renderGeneration)
+        long renderGeneration,
+        long documentEpoch = 0)
     {
         var entriesJson = SerializeLookupEntries(results);
         return $$"""
 (() => {
     if (typeof window.hoshiAppendResults !== 'function') return 'bridge-missing';
-    return window.hoshiAppendResults({{entriesJson}}, {{totalResultCount}}, {{renderGeneration}})
+    return window.hoshiAppendResults({{entriesJson}}, {{totalResultCount}}, {{documentEpoch}}, {{renderGeneration}})
         ? 'appended'
         : 'stale';
 })()

@@ -1429,6 +1429,7 @@ var pendingHistoryRestore = null;
 
 function postNavigationState() {
   postPopupMessage('navigationState', {
+    epoch: window.hoshiPopupDocumentEpoch,
     generation: Number(window.popupRenderGeneration || 0),
     canGoBack: backStack.length > 0,
     canGoForward: forwardStack.length > 0
@@ -1490,30 +1491,153 @@ window.replacePopupResults = function (count) {
   });
 };
 
-// Warm-root injection: takes entry data directly instead of relying on
-// a native bridge to supply entries. Used by Windows WebView2 host.
+function capturePopupRuntime() {
+  return {
+    colorScheme: document.documentElement.getAttribute('data-hoshi-color-scheme') || 'light',
+    backgroundColor: document.documentElement.style.getPropertyValue('--background-color'),
+    textColor: document.documentElement.style.getPropertyValue('--text-color'),
+    popupScaleDeclarations: window.popupScaleDeclarations,
+    dictionaryStyles: window.dictionaryStyles,
+    compactGlossaries: window.compactGlossaries,
+    compactPitchAccents: window.compactPitchAccents,
+    harmonicFrequency: window.harmonicFrequency,
+    deduplicatePitchAccents: window.deduplicatePitchAccents,
+    expandFirstDictionary: window.expandFirstDictionary,
+    collapseMode: window.collapseMode,
+    collapsedDictionaries: window.collapsedDictionaries,
+    showExpressionTags: window.showExpressionTags,
+    scanNonJapaneseText: window.scanNonJapaneseText,
+    maxResults: window.maxResults,
+    scanLength: window.scanLength,
+    customCSS: window.customCSS,
+    lookupTraceId: window.lookupTraceId,
+    audioSources: window.audioSources,
+    audioPlaybackMode: window.audioPlaybackMode,
+    audioEnableAutoplay: window.audioEnableAutoplay,
+    useAnkiConnect: window.useAnkiConnect,
+    embedMedia: window.embedMedia,
+    allowDupes: window.allowDupes,
+    needsAudio: window.needsAudio,
+    compactGlossariesAnki: window.compactGlossariesAnki
+  };
+}
+
+function applyPopupRuntime(runtime) {
+  window.dictionaryStyles = runtime.dictionaryStyles;
+  window.popupScaleDeclarations = runtime.popupScaleDeclarations;
+  window.compactGlossaries = runtime.compactGlossaries;
+  window.compactPitchAccents = runtime.compactPitchAccents;
+  window.harmonicFrequency = runtime.harmonicFrequency;
+  window.deduplicatePitchAccents = runtime.deduplicatePitchAccents;
+  window.expandFirstDictionary = runtime.expandFirstDictionary;
+  window.collapseMode = runtime.collapseMode;
+  window.collapsedDictionaries = runtime.collapsedDictionaries;
+  window.showExpressionTags = runtime.showExpressionTags;
+  window.scanNonJapaneseText = runtime.scanNonJapaneseText;
+  window.maxResults = runtime.maxResults;
+  window.scanLength = runtime.scanLength;
+  window.customCSS = runtime.customCSS;
+  window.lookupTraceId = runtime.lookupTraceId;
+  window.audioSources = runtime.audioSources;
+  window.audioPlaybackMode = runtime.audioPlaybackMode;
+  window.audioEnableAutoplay = runtime.audioEnableAutoplay;
+  window.useAnkiConnect = runtime.useAnkiConnect;
+  window.embedMedia = runtime.embedMedia;
+  window.allowDupes = runtime.allowDupes;
+  window.needsAudio = runtime.needsAudio;
+  window.compactGlossariesAnki = runtime.compactGlossariesAnki;
+}
+
+function applyPopupDocumentStyle(runtime) {
+  document.documentElement.setAttribute('data-hoshi-color-scheme', runtime.colorScheme || 'light');
+  document.documentElement.style.setProperty('--background-color', runtime.backgroundColor || '');
+  document.documentElement.style.setProperty('--text-color', runtime.textColor || '');
+  if (runtime.popupScaleDeclarations) {
+    document.documentElement.style.cssText += runtime.popupScaleDeclarations;
+    if (document.body) document.body.style.cssText += runtime.popupScaleDeclarations;
+  }
+}
+
+window.hoshiStagePopupRender = function (pendingPayload) {
+  if (!pendingPayload
+      || pendingPayload.documentEpoch !== window.hoshiPopupDocumentEpoch
+      || !Number.isSafeInteger(pendingPayload.generation)
+      || !Array.isArray(pendingPayload.entries)
+      || !Number.isSafeInteger(pendingPayload.entryCount)
+      || pendingPayload.entryCount < pendingPayload.entries.length
+      || !pendingPayload.runtime
+      || typeof pendingPayload.runtime !== 'object') return false;
+
+  var committedRuntime = capturePopupRuntime();
+  var committedEntries = window.lookupEntries;
+  var committedEntryCount = window.entryCount;
+  var committedGeneration = window.popupRenderGeneration;
+  try {
+    applyPopupRuntime(pendingPayload.runtime);
+    window.lookupEntries = pendingPayload.entries;
+    window.entryCount = pendingPayload.entryCount;
+    window.popupRenderGeneration = pendingPayload.generation;
+    window.renderPopup(pendingPayload);
+    return true;
+  } finally {
+    applyPopupRuntime(committedRuntime);
+    window.lookupEntries = committedEntries;
+    window.entryCount = committedEntryCount;
+    window.popupRenderGeneration = committedGeneration;
+  }
+};
+
+// Legacy bridge kept for callers which already populated the committed runtime.
 window.hoshiInjectResults = function (entriesJson, count) {
-  postPopupTrace('inject-results-start', { count: count });
-  closeOverlay();
-  flushPendingHistoryRestore();
-  backStack.length = 0;
-  forwardStack.length = 0;
-  document.documentElement.style.visibility = 'hidden';
-  window.lookupEntries = entriesJson;
-  window.entryCount = count;
-  selectedDictionaries = {};
-  audioUrls = {};
-  var container = document.getElementById('entries-container');
-  disconnectDictionaryColumns();
-  if (container) container.innerHTML = '';
-  window.renderPopup();
-  postNavigationState();
-  requestAnimationFrame(function () {
-    getPopupScrollElement().scrollTop = 0;
+  return window.hoshiStagePopupRender({
+    documentEpoch: window.hoshiPopupDocumentEpoch,
+    generation: window.popupRenderGeneration || 0,
+    entries: entriesJson,
+    entryCount: count,
+    runtime: capturePopupRuntime()
   });
 };
 
-window.hoshiRedirectResults = function (entriesJson, count) {
+window.hoshiCommitPopupRender = function (expectedEpoch, expectedGeneration) {
+  if (expectedEpoch !== window.hoshiPopupDocumentEpoch) return false;
+  var pending = window.hoshiPendingPopupRender;
+  if (!pending || pending.generation !== expectedGeneration) return false;
+  window.hoshiPendingPopupRender = null;
+  pending.commit();
+  return true;
+};
+
+window.hoshiHighlightPopupSelection = function (charCount, expectedGeneration) {
+  if (expectedGeneration !== (window.popupRenderGeneration || 0)) return false;
+  if (!window.hoshiSelection?.selection?.ranges?.length) return false;
+  window.hoshiSelection.highlightSelection(charCount);
+  return true;
+};
+
+window.hoshiCancelPopupRender = function (expectedEpoch, expectedGeneration) {
+  if (expectedEpoch !== window.hoshiPopupDocumentEpoch) return false;
+  var pending = window.hoshiPendingPopupRender;
+  if (!pending || pending.generation !== expectedGeneration) return false;
+  window.hoshiPendingPopupRender = null;
+  return true;
+};
+
+window.hoshiGetCommittedPopupGeneration = function (expectedEpoch) {
+  if (expectedEpoch !== window.hoshiPopupDocumentEpoch) return null;
+  var generation = window.popupRenderGeneration;
+  return Number.isSafeInteger(generation) ? generation : null;
+};
+
+window.hoshiDiscardPopupRender = function (expectedEpoch, expectedGeneration) {
+  if (expectedEpoch !== window.hoshiPopupDocumentEpoch) return false;
+  var pending = window.hoshiPendingPopupRender;
+  if (!pending || pending.generation !== expectedGeneration) return false;
+  window.hoshiPendingPopupRender = null;
+  return true;
+};
+
+window.hoshiRedirectResults = function (entriesJson, count, expectedGeneration) {
+  if (expectedGeneration !== (window.popupRenderGeneration || 0)) return false;
   closeOverlay();
   flushPendingHistoryRestore();
   backStack.push(snapshot());
@@ -1531,6 +1655,16 @@ window.hoshiRedirectResults = function (entriesJson, count) {
   requestAnimationFrame(function () {
     getPopupScrollElement().scrollTop = 0;
   });
+  return true;
+};
+
+window.hoshiAppendResults = function (entries, finalCount, expectedEpoch, expectedGeneration) {
+  if (expectedEpoch !== window.hoshiPopupDocumentEpoch) return false;
+  var pending = window.hoshiPendingPopupRender;
+  if (pending && pending.generation === expectedGeneration)
+    return pending.append(entries, finalCount);
+  return typeof window.hoshiCommittedPopupAppend === 'function'
+    && window.hoshiCommittedPopupAppend(entries, finalCount, expectedGeneration);
 };
 
 function snapshot() {
@@ -1683,12 +1817,24 @@ document.addEventListener('toggle', function () {
 
 // === Main render ===
 
-window.renderPopup = function () {
-  var container = document.getElementById('entries-container');
-  if (!window.entryCount) return;
+window.renderPopup = function (pendingPayload) {
+  var liveContainer = document.getElementById('entries-container');
+  if (!liveContainer || !window.entryCount) return;
+  var stagingContainer = document.createElement('div');
+  var container = stagingContainer;
+  var lookupEntries = window.lookupEntries;
+  var entryCount = window.entryCount;
   var generation = window.popupRenderGeneration || 0;
   var renderStart = performance.now();
   var firstFrameCommitted = false;
+  var pendingAutoplay = null;
+  var lastShiftLookupKey = '';
+  var lastShiftLookupQuery = '';
+  var lastShiftLookupAt = 0;
+
+  function isRenderCurrent() {
+    return !firstFrameCommitted || generation === (window.popupRenderGeneration || 0);
+  }
 
   function wrapRubyTextNodes(root) {
     var rubies = root.querySelectorAll('.glossary-content ruby');
@@ -1705,33 +1851,36 @@ window.renderPopup = function () {
     }
   }
 
+  function updateConfiguredStyle(id, enabled, css) {
+    var style = document.getElementById(id);
+    if (!enabled) {
+      style?.remove();
+      return;
+    }
+    if (!style) {
+      style = document.createElement('style');
+      style.id = id;
+      document.body.appendChild(style);
+    }
+    style.textContent = css;
+  }
+
   function applyConfiguredStyles() {
-    if (generation !== (window.popupRenderGeneration || 0)) return;
-    if (window.compactGlossaries && !document.getElementById('popup-compact-glossaries')) {
-      var glossaryStyle = document.createElement('style');
-      glossaryStyle.id = 'popup-compact-glossaries';
-      glossaryStyle.textContent = 'ul[data-sc-content="glossary"],ol[data-sc-content="glossary"],.glossary-list{list-style:none;padding-left:0;margin:0}ul[data-sc-content="glossary"]>li,ol[data-sc-content="glossary"]>li,.glossary-list>li{display:inline}ul[data-sc-content="glossary"]>li:not(:last-child)::after,ol[data-sc-content="glossary"]>li:not(:last-child)::after,.glossary-list>li:not(:last-child)::after{content:" | ";opacity:0.6}';
-      document.body.appendChild(glossaryStyle);
-    }
-
-    if (window.compactPitchAccents && !document.getElementById('popup-compact-pitch-accents')) {
-      var pitchStyle = document.createElement('style');
-      pitchStyle.id = 'popup-compact-pitch-accents';
-      pitchStyle.textContent = '.pitch-entries,.pitch-entries>li{display:inline}.pitch-entries>li{white-space:nowrap}.pitch-entries>li:not(:last-child)::after{content:" | ";opacity:0.6;white-space:normal}.pitch-dict-label{margin-right:4px}';
-      document.body.appendChild(pitchStyle);
-    }
-
-    if (window.customCSS && !document.getElementById('popup-custom-css')) {
-      var customStyle = document.createElement('style');
-      customStyle.id = 'popup-custom-css';
-      customStyle.textContent = window.customCSS;
-      document.body.appendChild(customStyle);
-    }
+    if (!isRenderCurrent()) return;
+    updateConfiguredStyle(
+      'popup-compact-glossaries',
+      !!window.compactGlossaries,
+      'ul[data-sc-content="glossary"],ol[data-sc-content="glossary"],.glossary-list{list-style:none;padding-left:0;margin:0}ul[data-sc-content="glossary"]>li,ol[data-sc-content="glossary"]>li,.glossary-list>li{display:inline}ul[data-sc-content="glossary"]>li:not(:last-child)::after,ol[data-sc-content="glossary"]>li:not(:last-child)::after,.glossary-list>li:not(:last-child)::after{content:" | ";opacity:0.6}');
+    updateConfiguredStyle(
+      'popup-compact-pitch-accents',
+      !!window.compactPitchAccents,
+      '.pitch-entries,.pitch-entries>li{display:inline}.pitch-entries>li{white-space:nowrap}.pitch-entries>li:not(:last-child)::after{content:" | ";opacity:0.6;white-space:normal}.pitch-dict-label{margin-right:4px}');
+    updateConfiguredStyle('popup-custom-css', !!window.customCSS, window.customCSS || '');
   }
 
   function renderEntry(idx, generation, onComplete) {
-    if (generation !== (window.popupRenderGeneration || 0)) return;
-    var entry = window.lookupEntries?.[idx];
+    if (!isRenderCurrent()) return;
+    var entry = lookupEntries?.[idx];
     if (!entry) {
       onComplete(null);
       return;
@@ -1745,12 +1894,14 @@ window.renderPopup = function () {
     if (window.audioEnableAutoplay && (window.audioSources || []).length && idx === 0) {
       var autoplayEntryIndex = idx;
       var autoplayAudioTraceId = nextAudioTraceId();
-      postAudioTrace(autoplayAudioTraceId, 'autoplay-scheduled', { entryIndex: autoplayEntryIndex, delayMs: 70 });
-      setTimeout(function () {
-        if (generation !== (window.popupRenderGeneration || 0)) return;
-        postAudioTrace(autoplayAudioTraceId, 'autoplay-fired', { entryIndex: autoplayEntryIndex });
-        playEntryAudio(autoplayEntryIndex, autoplayAudioTraceId, { deferResolutionToNative: true });
-      }, 70);
+      pendingAutoplay = function () {
+        postAudioTrace(autoplayAudioTraceId, 'autoplay-scheduled', { entryIndex: autoplayEntryIndex, delayMs: 70 });
+        setTimeout(function () {
+          if (generation !== (window.popupRenderGeneration || 0)) return;
+          postAudioTrace(autoplayAudioTraceId, 'autoplay-fired', { entryIndex: autoplayEntryIndex });
+          playEntryAudio(autoplayEntryIndex, autoplayAudioTraceId, { deferResolutionToNative: true });
+        }, 70);
+      };
     }
 
     var tags = createTags(entry);
@@ -1780,10 +1931,12 @@ window.renderPopup = function () {
 
     var dictIdx = 0;
     function nextDict() {
-      if (generation !== (window.popupRenderGeneration || 0)) return;
+      if (!isRenderCurrent()) return;
       if (dictIdx >= dictNames.length) {
-        observeDictionaryColumns(glossarySections);
-        layoutDictionaryColumns();
+        if (firstFrameCommitted) {
+          observeDictionaryColumns(glossarySections);
+          layoutDictionaryColumns();
+        }
         onComplete(entryDiv);
         return;
       }
@@ -1792,7 +1945,7 @@ window.renderPopup = function () {
       glossarySections.appendChild(createGlossarySection(
         dictName, grouped[dictName], dictIdx === 0, idx));
       dictIdx++;
-      scheduleDictionaryColumns();
+      if (firstFrameCommitted) scheduleDictionaryColumns();
       if (idx === 0) {
         nextDict();
       } else {
@@ -1806,24 +1959,72 @@ window.renderPopup = function () {
   function commitFirstFrame(generation, entryDiv) {
     if (firstFrameCommitted
       || !entryDiv
-      || generation !== (window.popupRenderGeneration || 0)) {
-      return false;
-    }
+      || generation !== (pendingPayload?.generation ?? (window.popupRenderGeneration || 0))) return false;
 
     wrapRubyTextNodes(entryDiv);
-    applyConfiguredStyles();
-    layoutDictionaryColumns();
-    document.documentElement.style.visibility = 'visible';
-    firstFrameCommitted = true;
-    postPopupTrace('first-frame-ready', {
-      generation: generation,
-      renderedEntries: 1,
-      renderedGlossaries: entryDiv.querySelectorAll('.glossary-content').length,
-      textLength: entryDiv.innerText.length,
-      elapsedMs: performance.now() - renderStart
-    });
-    postPopupMessage('contentReady', { generation: generation });
-    return true;
+
+    if (pendingPayload) {
+      window.hoshiPendingPopupRender = {
+        generation: generation,
+        payload: pendingPayload,
+        append: appendResults,
+        commit: function () {
+          return promoteFirstFrame();
+        }
+      };
+      postPopupMessage('contentPrepared', {
+        epoch: window.hoshiPopupDocumentEpoch,
+        generation: generation
+      });
+      return true;
+    }
+
+    return promoteFirstFrame();
+
+    function promoteFirstFrame() {
+      if (firstFrameCommitted) return false;
+      if (pendingPayload) {
+        applyPopupRuntime(pendingPayload.runtime);
+        applyPopupDocumentStyle(pendingPayload.runtime);
+        backStack.length = 0;
+        forwardStack.length = 0;
+      }
+      window.popupRenderGeneration = generation;
+      window.lookupEntries = lookupEntries;
+      window.entryCount = entryCount;
+      closeOverlay();
+      flushPendingHistoryRestore();
+      selectedDictionaries = {};
+      audioUrls = {};
+      disconnectDictionaryColumns();
+      liveContainer.replaceChildren.apply(liveContainer,
+        Array.from(stagingContainer.childNodes));
+      container = liveContainer;
+      firstFrameCommitted = true;
+      applyConfiguredStyles();
+      observeAllDictionarySections();
+      layoutDictionaryColumns();
+      document.documentElement.style.visibility = 'visible';
+      window.hoshiCommittedPopupAppend = appendResults;
+      attachPopupInteractionHandlers();
+      postPopupTrace('first-frame-ready', {
+        generation: generation,
+        renderedEntries: 1,
+        renderedGlossaries: entryDiv.querySelectorAll('.glossary-content').length,
+        textLength: entryDiv.innerText.length,
+        elapsedMs: performance.now() - renderStart
+      });
+      postPopupMessage('contentReady', {
+        epoch: window.hoshiPopupDocumentEpoch,
+        generation: generation
+      });
+      requestAnimationFrame(function () {
+        getPopupScrollElement().scrollTop = 0;
+      });
+      pendingAutoplay?.();
+      renderAvailableEntries();
+      return true;
+    }
   }
 
   var nextRenderIndex = 1;
@@ -1838,9 +2039,9 @@ window.renderPopup = function () {
         renderPumpActive = false;
         return;
       }
-      if (nextRenderIndex >= window.lookupEntries.length) {
+      if (nextRenderIndex >= lookupEntries.length) {
         renderPumpActive = false;
-        if (nextRenderIndex >= window.entryCount) finishRender();
+        if (nextRenderIndex >= entryCount) finishRender();
         return;
       }
 
@@ -1853,15 +2054,20 @@ window.renderPopup = function () {
     requestAnimationFrame(next);
   }
 
-  window.hoshiAppendResults = function (entries, finalCount, expectedGeneration) {
-    if (expectedGeneration !== generation
-        || expectedGeneration !== (window.popupRenderGeneration || 0)
-        || !Array.isArray(entries)) return false;
-    Array.prototype.push.apply(window.lookupEntries, entries);
-    window.entryCount = finalCount;
-    renderAvailableEntries();
+  function appendResults(entries, finalCount, expectedGeneration) {
+    if ((expectedGeneration !== undefined && expectedGeneration !== generation)
+        || !Array.isArray(entries)
+        || !Number.isSafeInteger(finalCount)
+        || finalCount < lookupEntries.length + entries.length) return false;
+    Array.prototype.push.apply(lookupEntries, entries);
+    entryCount = finalCount;
+    if (firstFrameCommitted) {
+      window.lookupEntries = lookupEntries;
+      window.entryCount = entryCount;
+      renderAvailableEntries();
+    }
     return true;
-  };
+  }
 
   function finishRender() {
     if (generation !== (window.popupRenderGeneration || 0)) return;
@@ -1870,7 +2076,7 @@ window.renderPopup = function () {
     layoutDictionaryColumns();
     postPopupTrace('render-finished', {
       generation: generation,
-      entryCount: window.entryCount || 0,
+      entryCount: entryCount || 0,
       renderedEntries: container.querySelectorAll('.entry').length,
       renderedGlossaries: container.querySelectorAll('.glossary-content').length,
       textLength: container.innerText.length,
@@ -1880,12 +2086,11 @@ window.renderPopup = function () {
 
   postPopupTrace('render-start', {
     generation: generation,
-    entryCount: window.entryCount || 0,
+    entryCount: entryCount || 0,
     existingChildren: container ? container.childNodes.length : 0
   });
   renderEntry(0, generation, function (firstEntryDiv) {
-    if (!commitFirstFrame(generation, firstEntryDiv)) return;
-    renderAvailableEntries();
+    commitFirstFrame(generation, firstEntryDiv);
   });
 
   function popupScanLength() {
@@ -1943,42 +2148,42 @@ window.renderPopup = function () {
     return true;
   }
 
-  if (container.clickAttached) return;
-  container.clickAttached = true;
-  container.addEventListener('click', function (e) {
-    var target = e.target && e.target.nodeType === Node.TEXT_NODE ? e.target.parentElement : e.target;
-    if (target && target.closest('summary')) return;
-    // Don't close popup when clicking audio/mine buttons
-    if (target && target.closest('.button-slot')) return;
-    if (!target || (!target.closest('.glossary-content') && !target.closest('.expr-tag'))) {
-      postPopupMessage('tapOutside', null);
-      return;
+  function attachPopupInteractionHandlers() {
+    if (!liveContainer.clickAttached) {
+      liveContainer.clickAttached = true;
+      liveContainer.addEventListener('click', function (e) {
+        var target = e.target && e.target.nodeType === Node.TEXT_NODE ? e.target.parentElement : e.target;
+        if (target && target.closest('summary')) return;
+        // Don't close popup when clicking audio/mine buttons
+        if (target && target.closest('.button-slot')) return;
+        if (!target || (!target.closest('.glossary-content') && !target.closest('.expr-tag'))) {
+          postPopupMessage('tapOutside', null);
+          return;
+        }
+        lookupAtPopupPoint(e.clientX, e.clientY, true);
+      });
     }
-    lookupAtPopupPoint(e.clientX, e.clientY, true);
-  });
 
-  if (!window.hoshiPopupShiftLookupAttached) {
-    window.hoshiPopupShiftLookupAttached = true;
-    var lastShiftLookupKey = '';
-    var lastShiftLookupQuery = '';
-    var lastShiftLookupAt = 0;
-    document.addEventListener('mousemove', function (e) {
-      if (!e.shiftKey) return;
-      var target = e.target && e.target.nodeType === Node.TEXT_NODE ? e.target.parentElement : e.target;
-      if (!target || (!target.closest('.glossary-content') && !target.closest('.expr-tag'))) return;
-      if (target.closest('.button-slot')) return;
-      var key = Math.round(e.clientX) + ':' + Math.round(e.clientY);
-      if (key === lastShiftLookupKey) return;
-      lastShiftLookupKey = key;
-      lookupAtPopupPoint(e.clientX, e.clientY, false, 'shift');
-    }, { passive: true });
-    document.addEventListener('keyup', function (e) {
-      if (e.key === 'Shift') {
-        lastShiftLookupKey = '';
-        lastShiftLookupQuery = '';
-        lastShiftLookupAt = 0;
-      }
-    });
+    if (!window.hoshiPopupShiftLookupAttached) {
+      window.hoshiPopupShiftLookupAttached = true;
+      document.addEventListener('mousemove', function (e) {
+        if (!e.shiftKey) return;
+        var target = e.target && e.target.nodeType === Node.TEXT_NODE ? e.target.parentElement : e.target;
+        if (!target || (!target.closest('.glossary-content') && !target.closest('.expr-tag'))) return;
+        if (target.closest('.button-slot')) return;
+        var key = Math.round(e.clientX) + ':' + Math.round(e.clientY);
+        if (key === lastShiftLookupKey) return;
+        lastShiftLookupKey = key;
+        lookupAtPopupPoint(e.clientX, e.clientY, false, 'shift');
+      }, { passive: true });
+      document.addEventListener('keyup', function (e) {
+        if (e.key === 'Shift') {
+          lastShiftLookupKey = '';
+          lastShiftLookupQuery = '';
+          lastShiftLookupAt = 0;
+        }
+      });
+    }
   }
 };
 
@@ -1988,4 +2193,4 @@ document.addEventListener('scroll', function (event) {
 }, { passive: true, capture: true });
 
 // Notify host that the popup shell is ready
-postPopupMessage('shellReady', null);
+postPopupMessage('shellReady', { epoch: window.hoshiPopupDocumentEpoch });
