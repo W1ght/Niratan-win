@@ -4,6 +4,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Hoshi.Helpers;
@@ -17,6 +18,8 @@ internal class SettingsService : ISettingsService
     private readonly ILogger<SettingsService> _logger;
 
     private readonly string _filePath;
+    private readonly Func<string, string, Task> _writeAllTextAsync;
+    private readonly SemaphoreSlim _saveSemaphore = new(1, 1);
     private readonly JsonSerializerOptions _jsonOptions;
     private AppSettings _current = new();
 
@@ -24,9 +27,21 @@ internal class SettingsService : ISettingsService
     public event EventHandler<SettingsChangedEventArgs>? SettingChanged;
 
     public SettingsService(ILogger<SettingsService> logger)
+        : this(
+            logger,
+            Path.Combine(AppDataHelper.GetAppDataPath(), "settings.json"),
+            static (path, contents) => File.WriteAllTextAsync(path, contents))
+    {
+    }
+
+    internal SettingsService(
+        ILogger<SettingsService> logger,
+        string filePath,
+        Func<string, string, Task> writeAllTextAsync)
     {
         _logger = logger;
-        _filePath = Path.Combine(AppDataHelper.GetAppDataPath(), "settings.json");
+        _filePath = filePath;
+        _writeAllTextAsync = writeAllTextAsync;
 
         _jsonOptions = new JsonSerializerOptions
         {
@@ -61,14 +76,19 @@ internal class SettingsService : ISettingsService
         var json = JsonSerializer.Serialize(_current, _jsonOptions);
         var tmpPath = _filePath + ".tmp";
 
+        await _saveSemaphore.WaitAsync();
         try
         {
-            await File.WriteAllTextAsync(tmpPath, json);
+            await _writeAllTextAsync(tmpPath, json);
             File.Move(tmpPath, _filePath, overwrite: true);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to save settings");
+        }
+        finally
+        {
+            _saveSemaphore.Release();
         }
     }
 
