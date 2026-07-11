@@ -11,6 +11,8 @@ public interface IGoogleDriveSyncCache
 
     void SetBookFolder(string bookTitle, string folderId);
 
+    void RemoveBookFolder(string bookTitle);
+
     void Clear();
 }
 
@@ -34,6 +36,14 @@ public sealed class GoogleDriveSyncCache : IGoogleDriveSyncCache
         lock (_gate)
         {
             _bookFolders[bookTitle] = folderId;
+        }
+    }
+
+    public void RemoveBookFolder(string bookTitle)
+    {
+        lock (_gate)
+        {
+            _bookFolders.Remove(bookTitle);
         }
     }
 

@@ -13,6 +13,11 @@ public sealed class UnconfiguredTtuSyncRemoteStore : ITtuSyncRemoteStore
         CancellationToken ct = default) =>
         throw CreateException();
 
+    public Task TrashRemoteBookAsync(
+        TtuRemoteBook remoteBook,
+        CancellationToken ct = default) =>
+        throw CreateException();
+
     public Task<TtuRemoteBookFiles> ListBookFilesAsync(
         string bookTitle,
         CancellationToken ct = default) =>

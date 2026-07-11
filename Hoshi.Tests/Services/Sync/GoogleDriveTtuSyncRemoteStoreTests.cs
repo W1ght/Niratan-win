@@ -70,6 +70,28 @@ public sealed class GoogleDriveTtuSyncRemoteStoreTests
     }
 
     [Fact]
+    public async Task TrashRemoteBookAsync_MovesTheBookFolderToGoogleDriveTrash()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var handler = new QueuedHttpMessageHandler(JsonResponse("{}"));
+        var store = CreateStore(handler);
+        var remoteBook = new TtuRemoteBook(
+            "book-folder",
+            "星を読む",
+            "星を読む",
+            new TtuRemoteBookFiles(null, null, null, null, null),
+            Progress: 0);
+
+        await store.TrashRemoteBookAsync(remoteBook, ct);
+
+        var request = handler.Requests.Single();
+        request.Method.Should().Be(HttpMethod.Patch);
+        request.RequestUri!.ToString().Should().Contain(
+            "/drive/v3/files/book-folder?supportsAllDrives=true");
+        handler.Bodies.Single().Should().Contain("\"trashed\":true");
+    }
+
+    [Fact]
     public async Task ListBookFilesAsync_FindsTtuRootAndSanitizedBookFolder()
     {
         var ct = TestContext.Current.CancellationToken;

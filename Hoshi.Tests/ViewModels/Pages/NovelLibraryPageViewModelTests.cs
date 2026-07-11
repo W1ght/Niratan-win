@@ -358,6 +358,32 @@ public class NovelLibraryPageViewModelTests
     }
 
     [Fact]
+    public async Task DeleteRemoteBookCommand_ConfirmsTrashesAndRemovesRemoteBook()
+    {
+        var remote = new FakeTtuSyncRemoteStore();
+        var dialog = new Mock<IDialogService>();
+        dialog.Setup(service => service.ConfirmAsync(
+                "Delete Google Drive book",
+                It.Is<string>(message => message.Contains("CLOUD", StringComparison.Ordinal))))
+            .ReturnsAsync(true);
+        var notification = new Mock<INotificationService>();
+        var sut = CreateSut(
+            syncRemoteStore: remote,
+            dialogService: dialog.Object,
+            notificationService: notification.Object);
+        var item = RemoteItem("cloud");
+        sut.RemoteBooks = new([item]);
+
+        await sut.DeleteRemoteBookCommand.ExecuteAsync(item);
+
+        remote.TrashedBooks.Should().Equal(item.Book);
+        sut.RemoteBooks.Should().BeEmpty();
+        notification.Verify(service => service.ShowSuccess(
+            "Remote book moved to Google Drive trash.",
+            "Google Drive book deleted"));
+    }
+
+    [Fact]
     public async Task DownloadRemoteBookCommand_RunsThreeImportsAndQueuesFourth()
     {
         var importer = new ControlledTtuBookImportService();
@@ -756,9 +782,16 @@ public class NovelLibraryPageViewModelTests
     private sealed class FakeTtuSyncRemoteStore : ITtuSyncRemoteStore
     {
         public IReadOnlyList<TtuRemoteBook> RemoteBooks { get; init; } = [];
+        public List<TtuRemoteBook> TrashedBooks { get; } = [];
 
         public Task<IReadOnlyList<TtuRemoteBook>> ListRemoteBooksAsync(CancellationToken ct = default) =>
             Task.FromResult(RemoteBooks);
+
+        public Task TrashRemoteBookAsync(TtuRemoteBook remoteBook, CancellationToken ct = default)
+        {
+            TrashedBooks.Add(remoteBook);
+            return Task.CompletedTask;
+        }
 
         public Task DownloadBookDataAsync(TtuRemoteFile file, string destinationFilePath, IProgress<double>? progress = null, CancellationToken ct = default) =>
             Task.CompletedTask;

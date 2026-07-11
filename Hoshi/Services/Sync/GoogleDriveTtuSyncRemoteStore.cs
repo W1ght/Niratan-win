@@ -83,6 +83,22 @@ public sealed class GoogleDriveTtuSyncRemoteStore : ITtuSyncRemoteStore
             .ToList();
     }
 
+    public async Task TrashRemoteBookAsync(
+        TtuRemoteBook remoteBook,
+        CancellationToken ct = default)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Patch,
+            new Uri(
+                DriveApiBase,
+                $"files/{Uri.EscapeDataString(remoteBook.Id)}?supportsAllDrives=true"))
+        {
+            Content = JsonContent(new DriveTrashMetadata(Trashed: true)),
+        };
+        using var response = await SendAuthorizedAsync(request, ct);
+        _cache.RemoveBookFolder(remoteBook.Title);
+    }
+
     public Task<TtuProgress?> GetProgressAsync(
         TtuRemoteFile file,
         CancellationToken ct = default) =>
@@ -387,6 +403,8 @@ public sealed class GoogleDriveTtuSyncRemoteStore : ITtuSyncRemoteStore
         string Name,
         string? MimeType,
         IReadOnlyList<string>? Parents);
+
+    private sealed record DriveTrashMetadata(bool Trashed);
 
     private sealed class UnixMillisecondsDateTimeOffsetConverter : JsonConverter<DateTimeOffset>
     {

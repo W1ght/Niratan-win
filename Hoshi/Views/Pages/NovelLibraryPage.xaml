@@ -91,6 +91,14 @@
                     BorderThickness="0"
                     Command="{Binding ViewModel.DownloadRemoteBookCommand, ElementName=ThisPage}"
                     CommandParameter="{x:Bind}">
+                <Button.ContextFlyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem Text="Delete from Google Drive"
+                                        AutomationProperties.AutomationId="RemoteNovelBookDeleteMenuItem"
+                                        Tag="{x:Bind}"
+                                        Click="DeleteRemoteNovelMenuItem_Click" />
+                    </MenuFlyout>
+                </Button.ContextFlyout>
                 <StackPanel Spacing="6">
                     <Border Height="250"
                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"

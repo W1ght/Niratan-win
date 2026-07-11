@@ -12,6 +12,10 @@ public interface ITtuSyncRemoteStore
     Task<IReadOnlyList<TtuRemoteBook>> ListRemoteBooksAsync(
         CancellationToken ct = default);
 
+    Task TrashRemoteBookAsync(
+        TtuRemoteBook remoteBook,
+        CancellationToken ct = default);
+
     Task<TtuRemoteBookFiles> ListBookFilesAsync(
         string bookTitle,
         CancellationToken ct = default);

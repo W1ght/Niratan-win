@@ -59,6 +59,9 @@ public sealed class TtuBookImportServiceTests
         public Task<IReadOnlyList<TtuRemoteBook>> ListRemoteBooksAsync(CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<TtuRemoteBook>>([]);
 
+        public Task TrashRemoteBookAsync(TtuRemoteBook remoteBook, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
         public async Task DownloadBookDataAsync(
             TtuRemoteFile file,
             string destinationFilePath,

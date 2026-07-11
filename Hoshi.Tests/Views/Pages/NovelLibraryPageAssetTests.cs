@@ -25,4 +25,17 @@ public sealed class NovelLibraryPageAssetTests
         xaml.Should().NotContain("NovelUnshelvedBooksRepeater");
         code.Should().NotContain("NovelBookButton_Click");
     }
+
+    [Fact]
+    public void RemoteNovelBookTemplate_ExposesExplicitDeleteAction()
+    {
+        var xaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelLibraryPage.xaml"));
+        var code = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelLibraryPage.xaml.cs"));
+
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"RemoteNovelBookDeleteMenuItem\"");
+        xaml.Should().Contain("Click=\"DeleteRemoteNovelMenuItem_Click\"");
+        code.Should().Contain("ViewModel.DeleteRemoteBookCommand.ExecuteAsync(remoteItem)");
+    }
 }

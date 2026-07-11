@@ -327,6 +327,39 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         }
     }
 
+    [RelayCommand]
+    private async Task DeleteRemoteBookAsync(RemoteNovelBookItemViewModel item)
+    {
+        if (item == null || item.DownloadState is
+            RemoteNovelDownloadState.Queued or RemoteNovelDownloadState.Downloading)
+            return;
+
+        var confirmed = await _dialogService.ConfirmAsync(
+            "Delete Google Drive book",
+            $"Move '{item.Book.Title}' and its sync data to the Google Drive trash?");
+        if (!confirmed)
+            return;
+
+        try
+        {
+            await _ttuSyncRemoteStore.TrashRemoteBookAsync(item.Book, _pageCts.Token);
+            RemoteBooks.Remove(item);
+            RebuildShelfProjections(
+                _currentShelfState,
+                NovelBooks.Select(book => book.Book).ToList());
+            _notificationService.ShowSuccess(
+                "Remote book moved to Google Drive trash.",
+                "Google Drive book deleted");
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError(ex.Message, "Delete Google Drive book failed");
+        }
+    }
+
     private async Task RefreshCatalogAfterImportAsync()
     {
         await _catalogRefreshGate.WaitAsync(_pageCts.Token);

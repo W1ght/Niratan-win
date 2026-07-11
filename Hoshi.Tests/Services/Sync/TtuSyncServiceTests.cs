@@ -226,6 +226,11 @@ public sealed class TtuSyncServiceTests
             CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<TtuRemoteBook>>([]);
 
+        public Task TrashRemoteBookAsync(
+            TtuRemoteBook remoteBook,
+            CancellationToken ct = default) =>
+            Task.CompletedTask;
+
         public Task<TtuRemoteBookFiles> ListBookFilesAsync(
             string bookTitle,
             CancellationToken ct = default) =>
