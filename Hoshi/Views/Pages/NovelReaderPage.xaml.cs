@@ -747,7 +747,8 @@ public sealed partial class NovelReaderPage : Page
                 ToggleReaderFocusMode();
                 return true;
             case string id when id == ReaderShortcutActions.ToggleStatistics.Id:
-                await ToggleStatisticsTrackingAsync();
+                await ViewModel.ToggleStatisticsTrackingCommand.ExecuteAsync(null);
+                RefreshStatisticsPanel();
                 return true;
             case string id when id == ReaderShortcutActions.ToggleLyricsMode.Id:
                 return await ToggleReaderLyricsModeShortcutAsync();
@@ -890,7 +891,7 @@ public sealed partial class NovelReaderPage : Page
             if (!CurrentStatisticsSettings.EnableStatistics && ViewModel.IsStatisticsTracking)
                 _ = ViewModel.StopStatisticsTrackingAsync();
             else
-                StartStatisticsForAutostart(StatisticsAutostartMode.On);
+                ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.On);
         }
     }
 
@@ -1062,31 +1063,6 @@ public sealed partial class NovelReaderPage : Page
         NovelReaderStatisticsText.Visibility = parts.Count > 0
             ? Visibility.Visible
             : Visibility.Collapsed;
-    }
-
-    private void StartStatisticsForAutostart(StatisticsAutostartMode trigger)
-    {
-        var settings = CurrentStatisticsSettings;
-        if (!settings.EnableStatistics || ViewModel.IsStatisticsTracking)
-            return;
-        if (settings.AutostartMode != trigger)
-            return;
-
-        ViewModel.StartStatisticsTracking();
-        RefreshStatisticsPanel();
-    }
-
-    private async Task ToggleStatisticsTrackingAsync()
-    {
-        if (!CurrentStatisticsSettings.EnableStatistics)
-            return;
-
-        if (ViewModel.IsStatisticsTracking)
-            await ViewModel.StopStatisticsTrackingAsync();
-        else
-            ViewModel.StartStatisticsTracking();
-
-        RefreshStatisticsPanel();
     }
 
     private void LoadChapter(int index, double? progressOverride = null)
@@ -1318,7 +1294,7 @@ public sealed partial class NovelReaderPage : Page
                     }
                     else if (!_programmaticNavigation.HasPending)
                     {
-                        StartStatisticsForAutostart(StatisticsAutostartMode.On);
+                        ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.On);
                     }
                     break;
                 case "pageChanged":
@@ -1355,8 +1331,6 @@ public sealed partial class NovelReaderPage : Page
                         break;
                     }
 
-                    var previousProgress = ViewModel.Progress;
-
                     Log.Information(
                         "[NovelReader] Page changed: direction={Dir}, result={Result}, progress={Progress:F3}",
                         direction,
@@ -1364,38 +1338,18 @@ public sealed partial class NovelReaderPage : Page
                         readerEvent.Progress
                     );
 
-                    if (ReaderStatisticsEventClassifier.IsActualPageMovement(
-                        readerEvent,
-                        previousProgress))
+                    var outcome = await ViewModel.HandleManualPageNavigationAsync(readerEvent);
+                    if (outcome.DidMove)
                     {
                         _navigationHistory.ClearForward();
                         RefreshReaderNavigationHistoryChrome();
-                        ViewModel.UpdateProgress(readerEvent.Progress);
                         _currentProgress = readerEvent.Progress;
-                        StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
-                        await ViewModel.SaveProgressNowAsync(flushStatistics: false);
-                        await ViewModel.CheckpointReadingAsync(
-                            ReaderStatisticsCheckpointReason.ReadingMovement);
                     }
-                    else
+
+                    if (outcome.AdjacentChapterIndex is int adjacentChapterIndex)
                     {
-                        var adjacentTarget = ReaderStatisticsEventClassifier.AdjacentChapterTarget(
-                            readerEvent,
-                            ViewModel.CurrentChapterIndex,
-                            ViewModel.ChapterCount);
-                        if (adjacentTarget.HasValue)
-                        {
-                            _navigationHistory.ClearForward();
-                            RefreshReaderNavigationHistoryChrome();
-                            ViewModel.UpdateProgress(readerEvent.Progress);
-                            _currentProgress = readerEvent.Progress;
-                            StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
-                            await ViewModel.SaveProgressNowAsync(flushStatistics: false);
-                            await ViewModel.CheckpointReadingAsync(
-                                ReaderStatisticsCheckpointReason.AdjacentChapter);
-                            LoadChapter(adjacentTarget.Value);
-                            await ViewModel.SaveProgressNowAsync(flushStatistics: false);
-                        }
+                        LoadChapter(adjacentChapterIndex);
+                        await ViewModel.SaveProgressNowAsync(flushStatistics: false);
                     }
 
                     if (readerEvent.Result != ReaderPageNavigationResult.Limit
@@ -1958,7 +1912,8 @@ public sealed partial class NovelReaderPage : Page
 
     private async void StatisticsStartStopButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
-        await ToggleStatisticsTrackingAsync();
+        await ViewModel.ToggleStatisticsTrackingCommand.ExecuteAsync(null);
+        RefreshStatisticsPanel();
     }
 
     private void RefreshStatisticsPanel()
@@ -3506,7 +3461,7 @@ public sealed partial class NovelReaderPage : Page
                 return false;
             }
 
-            StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
+            ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
             _currentProgress = progress;
             ViewModel.UpdateProgress(progress);
             RefreshReaderDisplayChrome();
@@ -3533,7 +3488,7 @@ public sealed partial class NovelReaderPage : Page
             return false;
         }
 
-        StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
+        ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
         LoadChapter(target.ChapterIndex, target.ChapterProgress);
         ViewModel.SaveProgressDebounced();
         return true;

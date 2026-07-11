@@ -12,8 +12,10 @@ using Hoshi.Messages;
 using Hoshi.Models;
 using Hoshi.Models.DTO;
 using Hoshi.Models.Novel;
+using Hoshi.Models.Settings;
 using Hoshi.Services.Novels;
 using Hoshi.Services.Profiles;
+using Hoshi.Services.Settings;
 using Hoshi.Services.UI;
 
 namespace Hoshi.ViewModels.Pages;
@@ -27,6 +29,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
     private readonly INovelBookSidecarService _novelBookSidecarService;
     private readonly IReaderStatisticsSession _statisticsSession;
     private readonly IProfileRuntimeService _profileRuntime;
+    private readonly ISettingsService _settingsService;
 
     [ObservableProperty]
     public partial NovelBook? CurrentBook { get; set; }
@@ -127,7 +130,8 @@ public partial class NovelReaderPageViewModel : ObservableObject
         IReaderHighlightService readerHighlightService,
         INovelBookSidecarService novelBookSidecarService,
         IReaderStatisticsSession statisticsSession,
-        IProfileRuntimeService profileRuntime
+        IProfileRuntimeService profileRuntime,
+        ISettingsService settingsService
     )
     {
         _novelLibraryService = novelLibraryService;
@@ -138,6 +142,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
         _statisticsSession = statisticsSession;
         _statisticsSession.StateChanged += OnStatisticsSessionStateChanged;
         _profileRuntime = profileRuntime;
+        _settingsService = settingsService;
     }
 
     public async Task InitializeAsync(NovelReaderNavigationArgs args)
@@ -233,6 +238,58 @@ public partial class NovelReaderPageViewModel : ObservableObject
     {
         _ = now;
         _statisticsSession.Start(new ReaderStatisticsPosition(CurrentCharacterCount));
+    }
+
+    public void StartStatisticsForAutostart(StatisticsAutostartMode trigger)
+    {
+        var settings = _settingsService.Current.StatisticsSettings;
+        if (!settings.EnableStatistics
+            || IsStatisticsTracking
+            || settings.AutostartMode != trigger)
+        {
+            return;
+        }
+
+        StartStatisticsTracking();
+    }
+
+    [RelayCommand]
+    private async Task ToggleStatisticsTrackingAsync()
+    {
+        if (!_settingsService.Current.StatisticsSettings.EnableStatistics)
+            return;
+
+        if (IsStatisticsTracking)
+            await StopStatisticsTrackingAsync();
+        else
+            StartStatisticsTracking();
+    }
+
+    public async Task<ReaderPageNavigationOutcome> HandleManualPageNavigationAsync(
+        ReaderPageNavigationEvent readerEvent,
+        CancellationToken ct = default)
+    {
+        StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
+
+        if (ReaderStatisticsEventClassifier.IsActualPageMovement(readerEvent, Progress))
+        {
+            UpdateProgress(readerEvent.Progress);
+            await SaveProgressNowAsync(flushStatistics: false, ct);
+            await CheckpointReadingAsync(ReaderStatisticsCheckpointReason.ReadingMovement, ct);
+            return ReaderPageNavigationOutcome.SameChapterMovement;
+        }
+
+        var adjacent = ReaderStatisticsEventClassifier.AdjacentChapterTarget(
+            readerEvent,
+            CurrentChapterIndex,
+            ChapterCount);
+        if (!adjacent.HasValue)
+            return ReaderPageNavigationOutcome.NoMovement;
+
+        UpdateProgress(readerEvent.Progress);
+        await SaveProgressNowAsync(flushStatistics: false, ct);
+        await CheckpointReadingAsync(ReaderStatisticsCheckpointReason.AdjacentChapter, ct);
+        return ReaderPageNavigationOutcome.AdjacentChapter(adjacent.Value);
     }
 
     public async Task StopStatisticsTrackingAsync(

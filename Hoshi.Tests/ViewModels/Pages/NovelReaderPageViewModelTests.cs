@@ -7,8 +7,10 @@ using Hoshi.Models.Common;
 using Hoshi.Models.DTO;
 using Hoshi.Models.Novel;
 using Hoshi.Models.Profiles;
+using Hoshi.Models.Settings;
 using Hoshi.Services.Novels;
 using Hoshi.Services.Profiles;
+using Hoshi.Services.Settings;
 using Hoshi.Services.UI;
 using Hoshi.Tests.TestUtils;
 using Hoshi.ViewModels.Pages;
@@ -37,6 +39,8 @@ public sealed class NovelReaderPageViewModelTests
                 FilePath = System.IO.Path.Combine(temp.Path, "book.epub"),
                 ExtractedPath = temp.Path,
             }));
+        var settings = new Mock<ISettingsService>();
+        settings.SetupGet(service => service.Current).Returns(new AppSettings());
 
         var sut = new NovelReaderPageViewModel(
             novelService.Object,
@@ -45,7 +49,8 @@ public sealed class NovelReaderPageViewModelTests
             highlightService,
             new NovelBookSidecarService(),
             new FakeReaderStatisticsSession(),
-            new NoOpProfileRuntimeService());
+            new NoOpProfileRuntimeService(ContentLanguageProfile.Japanese),
+            settings.Object);
         await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"));
         sut.SetChapterCharacterCounts([10, 20]);
         sut.SetChapter(1, count: 2);
@@ -141,6 +146,8 @@ public sealed class NovelReaderPageViewModelTests
                 150,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success());
+        var settings = new Mock<ISettingsService>();
+        settings.SetupGet(service => service.Current).Returns(new AppSettings());
         var sut = new NovelReaderPageViewModel(
             novelService.Object,
             Mock.Of<INotificationService>(),
@@ -148,7 +155,8 @@ public sealed class NovelReaderPageViewModelTests
             new ReaderHighlightService(),
             sidecarService,
             new FakeReaderStatisticsSession(),
-            new NoOpProfileRuntimeService());
+            new NoOpProfileRuntimeService(ContentLanguageProfile.Japanese),
+            settings.Object);
         await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"));
         sut.SetChapterCharacterCounts([100, 50]);
         sut.SetChapter(1, count: 2);
@@ -258,6 +266,8 @@ public sealed class NovelReaderPageViewModelTests
             .Setup(s => s.SaveProgressAsync(
                 "book-1", 0, 0.5, 50, 100, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result.Success());
+        var settings = new Mock<ISettingsService>();
+        settings.SetupGet(service => service.Current).Returns(new AppSettings());
         var statisticsSession = new FakeReaderStatisticsSession();
         var sut = new NovelReaderPageViewModel(
             novelService.Object,
@@ -266,7 +276,8 @@ public sealed class NovelReaderPageViewModelTests
             new ReaderHighlightService(),
             new NovelBookSidecarService(),
             statisticsSession,
-            new NoOpProfileRuntimeService());
+            new NoOpProfileRuntimeService(ContentLanguageProfile.Japanese),
+            settings.Object);
         await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"));
         sut.SetChapterCharacterCounts([100]);
         sut.SetChapter(0, 1);
@@ -315,11 +326,133 @@ public sealed class NovelReaderPageViewModelTests
         statisticsSession.StopPositions.Should().Equal(50);
     }
 
+    [Fact]
+    public async Task ManualSameChapterPageTurn_UpdatesBookmarkAndCheckpointsOnce()
+    {
+        using var temp = new TempBookDirectory();
+        var statisticsSession = new FakeReaderStatisticsSession();
+        var sut = CreateInitializedSut(
+            temp.Path,
+            new ReaderHighlightService(),
+            statisticsSession: statisticsSession,
+            statisticsSettings: new NovelStatisticsSettings
+            {
+                EnableStatistics = true,
+                AutostartMode = StatisticsAutostartMode.PageTurn,
+            });
+        sut.SetChapterCharacterCounts([100]);
+        sut.SetChapter(0, 1);
+        sut.UpdateProgress(0.20);
+
+        var outcome = await sut.HandleManualPageNavigationAsync(
+            new(
+                ReaderPageNavigationResult.Scrolled,
+                ReaderPageNavigationDirection.Forward,
+                0.30),
+            TestContext.Current.CancellationToken);
+
+        outcome.Should().Be(ReaderPageNavigationOutcome.SameChapterMovement);
+        sut.CurrentCharacterCount.Should().Be(30);
+        sut.IsStatisticsTracking.Should().BeTrue();
+        statisticsSession.Checkpoints.Should().Equal(
+            (30, ReaderStatisticsCheckpointReason.ReadingMovement));
+    }
+
+    [Fact]
+    public async Task ManualAdjacentChapterLimit_CheckpointsDepartureAndRequestsTargetChapter()
+    {
+        using var temp = new TempBookDirectory();
+        var statisticsSession = new FakeReaderStatisticsSession();
+        var sut = CreateInitializedSut(
+            temp.Path,
+            new ReaderHighlightService(),
+            statisticsSession: statisticsSession,
+            statisticsSettings: new NovelStatisticsSettings
+            {
+                EnableStatistics = true,
+                AutostartMode = StatisticsAutostartMode.PageTurn,
+            });
+        sut.SetChapterCharacterCounts([100, 200]);
+        sut.SetChapter(0, 2);
+        sut.UpdateProgress(0.90);
+
+        var outcome = await sut.HandleManualPageNavigationAsync(
+            new(
+                ReaderPageNavigationResult.Limit,
+                ReaderPageNavigationDirection.Forward,
+                1.0),
+            TestContext.Current.CancellationToken);
+
+        outcome.Should().Be(ReaderPageNavigationOutcome.AdjacentChapter(1));
+        sut.CurrentCharacterCount.Should().Be(100);
+        sut.IsStatisticsTracking.Should().BeTrue();
+        statisticsSession.Checkpoints.Should().Equal(
+            (100, ReaderStatisticsCheckpointReason.AdjacentChapter));
+    }
+
+    [Fact]
+    public async Task ManualFinalBookLimit_AutostartsPageTurnStatisticsWithoutCheckpoint()
+    {
+        using var temp = new TempBookDirectory();
+        var statisticsSession = new FakeReaderStatisticsSession();
+        var sut = CreateInitializedSut(
+            temp.Path,
+            new ReaderHighlightService(),
+            statisticsSession: statisticsSession,
+            statisticsSettings: new NovelStatisticsSettings
+            {
+                EnableStatistics = true,
+                AutostartMode = StatisticsAutostartMode.PageTurn,
+            });
+        sut.SetChapterCharacterCounts([100]);
+        sut.SetChapter(0, 1);
+        sut.UpdateProgress(0.90);
+
+        var outcome = await sut.HandleManualPageNavigationAsync(
+            new(
+                ReaderPageNavigationResult.Limit,
+                ReaderPageNavigationDirection.Forward,
+                1.0),
+            TestContext.Current.CancellationToken);
+
+        outcome.Should().Be(ReaderPageNavigationOutcome.NoMovement);
+        sut.CurrentCharacterCount.Should().Be(90);
+        sut.IsStatisticsTracking.Should().BeTrue();
+        statisticsSession.Checkpoints.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task StatisticsToggleCommand_StartsAndStopsWhenStatisticsAreEnabled()
+    {
+        using var temp = new TempBookDirectory();
+        var statisticsSession = new FakeReaderStatisticsSession();
+        var sut = CreateInitializedSut(
+            temp.Path,
+            new ReaderHighlightService(),
+            statisticsSession: statisticsSession,
+            statisticsSettings: new NovelStatisticsSettings
+            {
+                EnableStatistics = true,
+            });
+        sut.SetChapterCharacterCounts([100]);
+        sut.SetChapter(0, 1);
+        sut.UpdateProgress(0.40);
+
+        await sut.ToggleStatisticsTrackingCommand.ExecuteAsync(null);
+        await sut.ToggleStatisticsTrackingCommand.ExecuteAsync(null);
+
+        statisticsSession.StartPositions.Should().Equal(40);
+        statisticsSession.StopPositions.Should().Equal(40);
+        sut.IsStatisticsTracking.Should().BeFalse();
+    }
+
     private static NovelReaderPageViewModel CreateInitializedSut(
         string bookRootPath,
         IReaderHighlightService highlightService,
         INovelBookSidecarService? novelBookSidecarService = null,
-        IReaderStatisticsSession? statisticsSession = null)
+        IReaderStatisticsSession? statisticsSession = null,
+        NovelStatisticsSettings? statisticsSettings = null,
+        ContentLanguageProfile? language = null)
     {
         var novelService = new Mock<INovelLibraryService>();
         novelService
@@ -331,6 +464,18 @@ public sealed class NovelReaderPageViewModelTests
                 FilePath = System.IO.Path.Combine(bookRootPath, "book.epub"),
                 ExtractedPath = bookRootPath,
             }));
+        novelService
+            .Setup(service => service.MarkOpenedAsync(
+                "book-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        var appSettings = new AppSettings
+        {
+            StatisticsSettings = statisticsSettings ?? new NovelStatisticsSettings(),
+        };
+        var settings = new Mock<ISettingsService>();
+        settings.SetupGet(service => service.Current).Returns(appSettings);
+        var profile = new NoOpProfileRuntimeService(
+            language ?? ContentLanguageProfile.Japanese);
         var sut = new NovelReaderPageViewModel(
             novelService.Object,
             Mock.Of<INotificationService>(),
@@ -338,7 +483,8 @@ public sealed class NovelReaderPageViewModelTests
             highlightService,
             novelBookSidecarService ?? new NovelBookSidecarService(),
             statisticsSession ?? new FakeReaderStatisticsSession(),
-            new NoOpProfileRuntimeService());
+            profile,
+            settings.Object);
         sut.InitializeAsync(new NovelReaderNavigationArgs("book-1")).GetAwaiter().GetResult();
         return sut;
     }
@@ -381,8 +527,15 @@ public sealed class NovelReaderPageViewModelTests
             return Task.CompletedTask;
         }
 
-        public void Start(ReaderStatisticsPosition position) =>
+        public void Start(ReaderStatisticsPosition position)
+        {
             StartPositions.Add(position.RawCharacterCount);
+            Publish(State with
+            {
+                IsTracking = true,
+                IsPaused = false,
+            });
+        }
 
         public void Tick(ReaderStatisticsPosition position)
         {
@@ -407,6 +560,11 @@ public sealed class NovelReaderPageViewModelTests
             CancellationToken ct = default)
         {
             StopPositions.Add(position.RawCharacterCount);
+            Publish(State with
+            {
+                IsTracking = false,
+                IsPaused = false,
+            });
             return Task.CompletedTask;
         }
 
@@ -451,10 +609,18 @@ public sealed class NovelReaderPageViewModelTests
 
     private sealed class NoOpProfileRuntimeService : IProfileRuntimeService
     {
-        public ProfileResolution ActiveResolution { get; } = new(
-            new HoshiProfile(ProfileConstants.DefaultJapaneseProfileId, "Japanese EPUB", ContentLanguageProfile.Japanese.Id),
-            ContentLanguageProfile.Japanese,
-            ProfileContext.Global());
+        public NoOpProfileRuntimeService(ContentLanguageProfile language)
+        {
+            ActiveResolution = new ProfileResolution(
+                new HoshiProfile(
+                    ProfileConstants.DefaultJapaneseProfileId,
+                    "Japanese EPUB",
+                    language.Id),
+                language,
+                ProfileContext.Global());
+        }
+
+        public ProfileResolution ActiveResolution { get; }
 
         public string ActiveProfileId => ActiveResolution.Profile.Id;
 

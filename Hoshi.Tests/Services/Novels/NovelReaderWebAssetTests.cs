@@ -139,6 +139,9 @@ public class NovelReaderWebAssetTests
         var pageCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
         );
+        var viewModelCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "ViewModels", "Pages", "NovelReaderPageViewModel.cs")
+        );
 
         script.Should().Contain("window.hoshiReaderNavigate");
         script.Should().Contain("window.__hoshiReaderShortcutBindings");
@@ -152,8 +155,10 @@ public class NovelReaderWebAssetTests
         pageCode.Should().Contain("BuildReaderWebShortcutBindingsJson");
         pageCode.Should().Contain("window.__hoshiReaderShortcutBindings");
         pageCode.Should().Contain("case \"shortcut\":");
-        pageCode.Should().Contain("ReaderStatisticsEventClassifier.AdjacentChapterTarget");
-        pageCode.Should().Contain("LoadChapter(adjacentTarget.Value)");
+        pageCode.Should().Contain("ViewModel.HandleManualPageNavigationAsync(readerEvent)");
+        pageCode.Should().Contain("outcome.AdjacentChapterIndex is int adjacentChapterIndex");
+        pageCode.Should().Contain("LoadChapter(adjacentChapterIndex)");
+        viewModelCode.Should().Contain("ReaderStatisticsEventClassifier.AdjacentChapterTarget");
     }
 
     [Fact]
@@ -207,7 +212,7 @@ public class NovelReaderWebAssetTests
         script.Should().Contain("return Math.abs(afterProgress - beforeProgress) > 0.0001 ? afterProgress : null");
 
         pageCode.Should().Contain("TryApplySasayakiAutoScrollProgress");
-        pageCode.Should().Contain("StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn)");
+        pageCode.Should().Contain("ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn)");
         pageCode.Should().Contain("LoadChapterForSasayakiAutoScroll");
         pageCode.Should().Contain("if (CurrentSasayakiSettings.AutoScroll)");
     }
@@ -1174,8 +1179,8 @@ public class NovelReaderWebAssetTests
         appSettingsCode.Should().Contain("NovelStatisticsSettings StatisticsSettings");
         readerXaml.Should().Contain("x:Name=\"NovelReaderStatisticsButton\"");
         readerCode.Should().Contain("UpdateStatisticsButtonVisibility");
-        readerCode.Should().Contain("StartStatisticsForAutostart(StatisticsAutostartMode.On)");
-        readerCode.Should().Contain("StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn)");
+        readerCode.Should().Contain("ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.On)");
+        readerCode.Should().Contain("ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn)");
 
         foreach (var key in new[]
         {
@@ -2949,9 +2954,9 @@ public class NovelReaderWebAssetTests
         readerXaml.Should().Contain("StatisticsStartStopButton_Click");
         readerCode.Should().Contain("ViewModel.LoadStatisticsAsync");
         readerCode.Should().Contain("case \"restoreCompleted\":");
-        readerCode.Should().Contain("ReaderStatisticsEventClassifier.IsActualPageMovement");
-        readerCode.Should().Contain("ReaderStatisticsEventClassifier.AdjacentChapterTarget");
-        readerCode.Should().Contain("ReaderStatisticsCheckpointReason.AdjacentChapter");
+        readerCode.Should().Contain("ViewModel.HandleManualPageNavigationAsync(readerEvent)");
+        readerCode.Should().Contain("if (outcome.DidMove)");
+        readerCode.Should().Contain("outcome.AdjacentChapterIndex is int adjacentChapterIndex");
         readerCode.Should().Contain("BeginProgrammaticNavigationAsync");
         readerCode.Should().Contain("CompleteProgrammaticNavigationAsync");
         readerCode.Should().Contain("ReaderStatisticsCheckpointReason.ProgrammaticDeparture");
@@ -2965,6 +2970,11 @@ public class NovelReaderWebAssetTests
         viewModelCode.Should().Contain("FlushStatisticsAsync");
         viewModelCode.Should().Contain("IReaderStatisticsSession");
         viewModelCode.Should().Contain("CheckpointReadingAsync");
+        viewModelCode.Should().Contain("ReaderStatisticsEventClassifier.IsActualPageMovement");
+        viewModelCode.Should().Contain("ReaderStatisticsEventClassifier.AdjacentChapterTarget");
+        viewModelCode.Should().Contain("ReaderStatisticsCheckpointReason.AdjacentChapter");
+        viewModelCode.Should().Contain("HandleManualPageNavigationAsync");
+        viewModelCode.Should().Contain("ToggleStatisticsTrackingAsync");
         enResources.Should().Contain("NovelReaderStatisticsButton.AutomationProperties.Name");
         enResources.Should().Contain("ReaderStatisticsPanelDialog.Title");
         enResources.Should().Contain("ReaderStatisticsPanelDialog.CloseButtonText");
@@ -3134,7 +3144,7 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("ReaderTopChrome.Visibility");
         readerCode.Should().Contain("ReaderBottomChrome.Visibility");
         readerCode.Should().Contain("CloseReaderPanels();");
-        readerCode.Should().Contain("ToggleStatisticsTrackingAsync");
+        readerCode.Should().Contain("ViewModel.ToggleStatisticsTrackingCommand.ExecuteAsync(null)");
         readerCode.Should().Contain("ReaderShortcutActions.ToggleLyricsMode.Id");
         readerCode.Should().Contain("ToggleReaderLyricsModeShortcutAsync");
         readerCode.Should().Contain("CurrentStatisticsSettings.EnableStatistics");
