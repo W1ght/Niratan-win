@@ -743,6 +743,12 @@
   <data name="NovelShelfReadingLabel.Text" xml:space="preserve"><value>Reading</value></data>
   <data name="NovelShelfUnshelvedLabel.Text" xml:space="preserve"><value>Unshelved</value></data>
   <data name="NovelShelfGoogleDriveLabel.Text" xml:space="preserve"><value>Google Drive</value></data>
+  <data name="NovelLibraryStatisticsButton.Label" xml:space="preserve"><value>Statistics</value></data>
+  <data name="NovelLibraryStatisticsButton.AutomationProperties.Name" xml:space="preserve"><value>Statistics</value></data>
+  <data name="NovelLibraryRefreshGoogleDriveButton.Label" xml:space="preserve"><value>Sync Google Drive</value></data>
+  <data name="NovelLibraryRefreshGoogleDriveButton.AutomationProperties.Name" xml:space="preserve"><value>Sync Google Drive</value></data>
+  <data name="ImportNovelButton.Label" xml:space="preserve"><value>Import</value></data>
+  <data name="ImportNovelButton.AutomationProperties.Name" xml:space="preserve"><value>Import novels</value></data>
   <data name="NovelShelfManageButton.Label" xml:space="preserve"><value>Manage shelves</value></data>
   <data name="NovelShelfManageButton.AutomationProperties.Name" xml:space="preserve"><value>Manage shelves</value></data>
   <data name="NovelShelfManagementDialog.Title" xml:space="preserve"><value>Manage shelves</value></data>

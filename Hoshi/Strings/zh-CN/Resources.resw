@@ -743,6 +743,12 @@
   <data name="NovelShelfReadingLabel.Text" xml:space="preserve"><value>阅读中</value></data>
   <data name="NovelShelfUnshelvedLabel.Text" xml:space="preserve"><value>未归档</value></data>
   <data name="NovelShelfGoogleDriveLabel.Text" xml:space="preserve"><value>Google Drive</value></data>
+  <data name="NovelLibraryStatisticsButton.Label" xml:space="preserve"><value>统计</value></data>
+  <data name="NovelLibraryStatisticsButton.AutomationProperties.Name" xml:space="preserve"><value>统计</value></data>
+  <data name="NovelLibraryRefreshGoogleDriveButton.Label" xml:space="preserve"><value>同步 Google Drive</value></data>
+  <data name="NovelLibraryRefreshGoogleDriveButton.AutomationProperties.Name" xml:space="preserve"><value>同步 Google Drive</value></data>
+  <data name="ImportNovelButton.Label" xml:space="preserve"><value>导入</value></data>
+  <data name="ImportNovelButton.AutomationProperties.Name" xml:space="preserve"><value>导入小说</value></data>
   <data name="NovelShelfManageButton.Label" xml:space="preserve"><value>管理书架</value></data>
   <data name="NovelShelfManageButton.AutomationProperties.Name" xml:space="preserve"><value>管理书架</value></data>
   <data name="NovelShelfManagementDialog.Title" xml:space="preserve"><value>管理书架</value></data>
