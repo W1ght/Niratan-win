@@ -191,7 +191,12 @@ public partial class App : Application
             new ReaderStatisticsSession(
                 provider.GetRequiredService<INovelStatisticsSidecarService>(),
                 TimeProvider.System));
-        services.AddSingleton<INovelStatisticsDashboardService, NovelStatisticsDashboardService>();
+        services.AddSingleton<NovelStatisticsDashboardCache>();
+        services.AddSingleton<INovelStatisticsDashboardService>(provider =>
+            new NovelStatisticsDashboardService(
+                provider.GetRequiredService<INovelStatisticsSidecarService>(),
+                provider.GetRequiredService<INovelBookSidecarService>(),
+                provider.GetRequiredService<NovelStatisticsDashboardCache>()));
         services.AddSingleton<IReaderHighlightService, ReaderHighlightService>();
         services.AddSingleton<ISasayakiSidecarService, SasayakiSidecarService>();
         services.AddSingleton<ISasayakiMatchService, SasayakiMatchService>();
