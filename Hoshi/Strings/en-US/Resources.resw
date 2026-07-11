@@ -740,4 +740,85 @@
   <data name="TtuSyncUploadBooksToggle.Header" xml:space="preserve"><value>Upload Books</value></data>
   <data name="TtuSyncUploadBooksToggle.Description" xml:space="preserve"><value>Upload book data on first sync when no ッツ book data exists remotely</value></data>
   <data name="AboutSettingsPageTitle.Text" xml:space="preserve"><value>About</value></data>
+  <data name="NovelShelfReadingLabel.Text" xml:space="preserve"><value>Reading</value></data>
+  <data name="NovelShelfUnshelvedLabel.Text" xml:space="preserve"><value>Unshelved</value></data>
+  <data name="NovelShelfGoogleDriveLabel.Text" xml:space="preserve"><value>Google Drive</value></data>
+  <data name="NovelShelfManageButton.Label" xml:space="preserve"><value>Manage shelves</value></data>
+  <data name="NovelShelfManageButton.AutomationProperties.Name" xml:space="preserve"><value>Manage shelves</value></data>
+  <data name="NovelShelfManagementDialog.Title" xml:space="preserve"><value>Manage shelves</value></data>
+  <data name="NovelShelfManagementDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
+  <data name="NovelShelfNameBox.Header" xml:space="preserve"><value>New shelf</value></data>
+  <data name="NovelShelfNameBox.PlaceholderText" xml:space="preserve"><value>Shelf name</value></data>
+  <data name="NovelShelfRenameBox.Header" xml:space="preserve"><value>Selected shelf</value></data>
+  <data name="NovelShelfCreateButton.Content" xml:space="preserve"><value>Create</value></data>
+  <data name="NovelShelfRenameButton.Content" xml:space="preserve"><value>Rename</value></data>
+  <data name="NovelShelfDeleteButton.Content" xml:space="preserve"><value>Delete</value></data>
+  <data name="NovelBookMoveToShelfMenuItem.Text" xml:space="preserve"><value>Move to shelf…</value></data>
+  <data name="NovelStorageWarningInfoBar.Title" xml:space="preserve"><value>Book metadata needs attention</value></data>
+  <data name="NovelStorageWarningInfoBar.Message" xml:space="preserve"><value>Some book metadata could not be read. Original files were preserved.</value></data>
+  <data name="NovelShelfDeleteConfirmation.Title" xml:space="preserve"><value>Delete shelf</value></data>
+  <data name="NovelShelfDeleteConfirmation.Content" xml:space="preserve"><value>Delete '{0}'? Books will become unshelved.</value></data>
+  <data name="NovelShelfDeleteConfirmation.PrimaryButtonText" xml:space="preserve"><value>Delete</value></data>
+  <data name="NovelShelfDeleteConfirmation.CloseButtonText" xml:space="preserve"><value>Cancel</value></data>
+  <data name="NovelShelfConfirmDeleteButton.Content" xml:space="preserve"><value>Delete</value></data>
+  <data name="NovelShelfCancelDeleteButton.Content" xml:space="preserve"><value>Cancel</value></data>
+  <data name="NovelBookMoveDialog.Title" xml:space="preserve"><value>Move to shelf</value></data>
+  <data name="NovelBookMoveDialog.PrimaryButtonText" xml:space="preserve"><value>Move</value></data>
+  <data name="NovelBookMoveDialog.CloseButtonText" xml:space="preserve"><value>Cancel</value></data>
+  <data name="NovelStatisticsBackToBookshelfButton.Label" xml:space="preserve"><value>Bookshelf</value></data>
+  <data name="NovelStatisticsBackToBookshelfButton.AutomationProperties.Name" xml:space="preserve"><value>Back to bookshelf</value></data>
+  <data name="NovelStatisticsDashboardTitle.Text" xml:space="preserve"><value>Statistics</value></data>
+  <data name="NovelStatisticsDashboardSubtitle.Text" xml:space="preserve"><value>Your reading activity, goals, trends, and library comparisons.</value></data>
+  <data name="NovelStatisticsTrendCardTitle.Text" xml:space="preserve"><value>Range &amp; Trend</value></data>
+  <data name="NovelStatisticsRangeLabel.Text" xml:space="preserve"><value>Range</value></data>
+  <data name="NovelStatisticsAnchorLabel.Text" xml:space="preserve"><value>Anchor</value></data>
+  <data name="NovelStatisticsTrendGrainLabel.Text" xml:space="preserve"><value>Time Grain</value></data>
+  <data name="NovelStatisticsTrendMetricLabel.Text" xml:space="preserve"><value>Metric</value></data>
+  <data name="NovelStatisticsTrendStyleLabel.Text" xml:space="preserve"><value>Style</value></data>
+  <data name="NovelStatisticsTrendHelp.Text" xml:space="preserve"><value>Range filters all dashboard cards. Time Grain changes only the trend chart.</value></data>
+  <data name="NovelStatisticsTodayTitle.Text" xml:space="preserve"><value>Today</value></data>
+  <data name="NovelStatisticsGoalTitle.Text" xml:space="preserve"><value>Goal</value></data>
+  <data name="NovelStatisticsGoalTypeLabel.Text" xml:space="preserve"><value>Goal Type</value></data>
+  <data name="NovelStatisticsCharacterTargetLabel.Text" xml:space="preserve"><value>Character Target</value></data>
+  <data name="NovelStatisticsDurationTargetLabel.Text" xml:space="preserve"><value>Duration Target</value></data>
+  <data name="NovelStatisticsWeeklyTargetLabel.Text" xml:space="preserve"><value>Weekly Target Days</value></data>
+  <data name="NovelStatisticsGoalHelp.Text" xml:space="preserve"><value>Goals recalculate historical progress and streaks.</value></data>
+  <data name="NovelStatisticsWeekTitle.Text" xml:space="preserve"><value>This Week</value></data>
+  <data name="NovelStatisticsSelectedRangeTitle.Text" xml:space="preserve"><value>Selected Range</value></data>
+  <data name="NovelStatisticsSpeedTitle.Text" xml:space="preserve"><value>Speed Summary</value></data>
+  <data name="NovelStatisticsSpeedHelp.Text" xml:space="preserve"><value>Speed ignores reading samples under 1 minute.</value></data>
+  <data name="NovelStatisticsCalendarTitle.Text" xml:space="preserve"><value>Reading Calendar</value></data>
+  <data name="NovelStatisticsCalendarRecentYear.Text" xml:space="preserve"><value>Recent year</value></data>
+  <data name="NovelStatisticsRankingTitle.Text" xml:space="preserve"><value>Book Ranking</value></data>
+  <data name="NovelStatisticsShelfTitle.Text" xml:space="preserve"><value>Shelf Comparison</value></data>
+  <data name="NovelStatisticsLoadingText.Text" xml:space="preserve"><value>Loading statistics…</value></data>
+  <data name="NovelStatisticsEmptyTitle.Text" xml:space="preserve"><value>No reading statistics yet</value></data>
+  <data name="NovelStatisticsEmptyDescription.Text" xml:space="preserve"><value>Read a novel to start building your dashboard.</value></data>
+  <data name="NovelStatisticsMetricDuration.Text" xml:space="preserve"><value>Duration</value></data>
+  <data name="NovelStatisticsMetricCharacters.Text" xml:space="preserve"><value>Characters</value></data>
+  <data name="NovelStatisticsMetricSpeed.Text" xml:space="preserve"><value>Speed</value></data>
+  <data name="NovelStatisticsMetricStreak.Text" xml:space="preserve"><value>Streak</value></data>
+  <data name="NovelStatisticsMetricAverageCharacters.Text" xml:space="preserve"><value>Avg Characters</value></data>
+  <data name="NovelStatisticsMetricGoalProgress.Text" xml:space="preserve"><value>Goal Progress</value></data>
+  <data name="NovelStatisticsMetricDaysMet.Text" xml:space="preserve"><value>Days Met</value></data>
+  <data name="NovelStatisticsMetricWeighted.Text" xml:space="preserve"><value>Weighted</value></data>
+  <data name="NovelStatisticsMetricMedianActiveDay.Text" xml:space="preserve"><value>Median Active Day</value></data>
+  <data name="NovelStatisticsMetricLastSevenActiveDays.Text" xml:space="preserve"><value>Last 7 Active Days</value></data>
+  <data name="NovelStatisticsMetricChange.Text" xml:space="preserve"><value>Change</value></data>
+  <data name="NovelStatisticsMetricFastest.Text" xml:space="preserve"><value>Fastest</value></data>
+  <data name="NovelStatisticsMetricSlowest.Text" xml:space="preserve"><value>Slowest</value></data>
+  <data name="NovelStatisticsCorruptWarning.Text" xml:space="preserve"><value>Some statistics are temporarily unavailable. The affected sidecar files were left unchanged.</value></data>
+  <data name="NovelStatisticsNoReadingRecords.Text" xml:space="preserve"><value>No reading records</value></data>
+  <data name="NovelStatisticsRangeModeControl.AutomationProperties.Name" xml:space="preserve"><value>Statistics range</value></data>
+  <data name="NovelStatisticsAnchorDateControl.AutomationProperties.Name" xml:space="preserve"><value>Statistics anchor date</value></data>
+  <data name="NovelStatisticsTrendGrainControl.AutomationProperties.Name" xml:space="preserve"><value>Trend time grain</value></data>
+  <data name="NovelStatisticsTrendMetricControl.AutomationProperties.Name" xml:space="preserve"><value>Trend metric</value></data>
+  <data name="NovelStatisticsTrendStyleControl.AutomationProperties.Name" xml:space="preserve"><value>Trend style</value></data>
+  <data name="NovelStatisticsTrendChartControl.AutomationProperties.Name" xml:space="preserve"><value>Reading trend chart</value></data>
+  <data name="NovelStatisticsGoalTypeControl.AutomationProperties.Name" xml:space="preserve"><value>Daily goal type</value></data>
+  <data name="NovelStatisticsCharacterTargetControl.AutomationProperties.Name" xml:space="preserve"><value>Daily character target</value></data>
+  <data name="NovelStatisticsDurationTargetControl.AutomationProperties.Name" xml:space="preserve"><value>Daily duration target in minutes</value></data>
+  <data name="NovelStatisticsWeeklyTargetControl.AutomationProperties.Name" xml:space="preserve"><value>Weekly target days</value></data>
+  <data name="NovelStatisticsCalendarControl.AutomationProperties.Name" xml:space="preserve"><value>Reading calendar</value></data>
+  <data name="NovelStatisticsRankingMetricControl.AutomationProperties.Name" xml:space="preserve"><value>Book ranking metric</value></data>
 </root>

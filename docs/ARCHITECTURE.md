@@ -34,7 +34,7 @@ foliate-js 已于 2026-05-19 移除，禁止引回主阅读链路。
 | 变形还原 | C# 重实现 | 对齐 Android `deinflector.cpp` |
 
 重要原则：
-- hoshidicts 作为"字典查询后端"，SQLite 作为 App 业务数据库。
+- hoshidicts 作为“字典查询后端”；主 App SQLite 只保存视频业务数据，不保存小说、书架或小说统计。
 - 高频字典查询数据不塞进主 App SQLite。
 - `native/hoshidicts/` 不可修改，所有功能通过 C API DLL P/Invoke 实现。
 
@@ -42,10 +42,12 @@ foliate-js 已于 2026-05-19 移除，禁止引回主阅读链路。
 
 | 项 | 选型 | 原因 |
 |---|---|---|
-| 数据库 | SQLite | 轻量、启动快、IO 效率高 |
-| ORM | Dapper + Microsoft.Data.Sqlite | 轻量、透明、易调试 |
+| 小说/书架/统计 | Niratan 兼容 JSON sidecar | 每本书可独立迁移、备份和同步，文件即真源 |
+| 视频业务数据 | SQLite | 保留现有视频功能的关系型查询与迁移能力 |
+| 旧小说迁移 | Dapper + Microsoft.Data.Sqlite（只读入旧表） | 一次性导出后退役旧小说表 |
+| JSON | System.Text.Json + 原子替换 | 强类型、可恢复，不暴露半写文件 |
 
-第一版不建议 EF Core（对桌面阅读器偏重）。
+不引入 EF Core 或第二套数据库技术。外部音频数据库仍按原有只读边界访问，不成为 Hoshi 的业务真源。
 
 ### 1.5 测试
 
@@ -82,7 +84,7 @@ Hoshi/
     Novels/          NovelLibraryService, NovelReaderContentStyles, EpubParserService
     Dictionary/      DictionaryLookupService, DictionaryImportService, JapaneseDeinflector, PopupHtmlGenerator
     Audio/           AudioService
-    Storage/         DataService, DatabaseMigrator
+    Storage/         VideoDataService, DatabaseMigrator, NovelStorageMigrationService
     UI/              NavigationService
     Anki/            AnkiService, AnkiHandlebarRenderer, LapisPreset
     Sasayaki/        SasayakiPlayer, SasayakiMatcher
@@ -115,8 +117,9 @@ C# → JS:
 
 | 消息 | 用途 |
 |---|---|
-| `setChapter` | 章节信息 (index, totalChapters) |
-| `restoreProgress` | 恢复阅读进度 (0-1) |
+| `setChapter` | 章节信息、目标进度和可选 navigation generation |
+| `restoreProgress` | 恢复阅读进度 (0-1)，可携带 navigation generation |
+| `jumpToFragment` | 跳到当前章节锚点并回传最终分页进度 |
 
 JS → C#:
 
@@ -125,7 +128,8 @@ JS → C#:
 | `readerReady` | bridge 就绪 |
 | `chapterReady` | 章节渲染完成，含诊断状态 |
 | `pageChanged` | 翻页事件 (direction, result, progress) |
-| `restoreCompleted` | 进度恢复完成 |
+| `restoreCompleted` | 进度/fragment 恢复完成，回显 navigation generation |
+| `internalLink` | 被拦截的同源 EPUB 链接；native 校验并解析到 spine |
 | `error` | 错误信息 |
 
 消息格式: `{ version: 1, type: "...", payload: {...} }`
@@ -157,6 +161,31 @@ ruby { ruby-position: over; }
 - 翻页 scroll offset 按 `context.pageSize` 对齐，`column-gap` 只作间距，不得加进翻页步长。
 - 安全区：`column-width = pageWidth - 2 * safeInline`，`column-gap = 2 * safeInline`。
 - reflow 后优先按逻辑进度恢复位置。
+
+### 3.5 阅读统计会话与导航事务
+
+`ReaderStatisticsSession` 是阅读时间、字符基线、本地日期 rollover、TTU 统计公式和 `statistics.json` 写入的唯一所有者。`NovelReaderPageViewModel` 只投影状态并转发 typed operation；Page 只分类 WebView2/WinUI 事件。
+
+```text
+真实阅读移动
+  → 保存 canonical bookmark（不触发统计写）
+  → Checkpoint(ReadingMovement / AdjacentChapter)
+
+程序化跳转
+  → Checkpoint(ProgrammaticDeparture)       // 结算旧位置一次
+  → generation-scoped restore/fragment
+  → 保存解析后的 canonical bookmark         // 不二次 flush
+  → ResetBaseline                           // 新位置重新计时
+```
+
+- PageTurn 自动开始只接受真实 `moved`、自然相邻章节或实际 Sasayaki 自动滚动；边界 `limit` 和同进度回调不启动统计。
+- On 自动开始发生在普通初始 restore 完成后；程序化 restore 的 generation 回调不被误判为普通打开。
+- 目录、字符、搜索、高亮、内部链接、历史前进/后退和显式 Sasayaki 跳转共用程序化事务。
+- 内部链接只允许当前 virtual host 且必须解析到 EPUB spine；外部、危险或非 spine 链接不导航。
+- Reader history 保存章节/逻辑进度；自然手动翻页保留 back 栈但清空 forward 栈。
+- tracking 且未 paused 时，原生一秒计时器只更新内存投影；移动、最小化、关闭等 checkpoint 才落盘。
+- 最小化对应 Windows Background checkpoint；返回书架、页面消失和主窗口关闭共用一个可等待、幂等的 Close checkpoint。
+- 日期键使用 Windows 本地日期。跨日时先归档旧 Today、建立新日期，再把本次完整 checkpoint 计入新日期，保持 Niratan 当前语义。
 
 ---
 
@@ -251,62 +280,73 @@ NovelReaderPage
 
 ---
 
-## 6. 数据模型
+## 6. 数据模型与持久化边界
 
-### 6.1 books
+### 6.1 小说文件布局
 
-```sql
-CREATE TABLE books (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  author TEXT,
-  file_path TEXT NOT NULL,
-  cover_path TEXT,
-  imported_at TEXT NOT NULL,
-  last_opened_at TEXT,
-  language TEXT,
-  unique_identifier TEXT
-);
+```text
+AppData/Roaming/Hoshi/Novels/
+  book_order.json
+  shelves.json
+  novel_storage_migration_v1.json
+  <book-id>/
+    metadata.json
+    bookmark.json
+    bookinfo.json
+    statistics.json
+    highlights.json
+    <book-id>.epub
+    ...受控解包资源
 ```
 
-### 6.2 reading_progress
+- `metadata.json` 是书名、作者、相对 EPUB/封面路径、导入与最近打开时间的真源。
+- `bookmark.json` 保存章节、逻辑进度和字符位置；Reader 每次保存只写一次 canonical bookmark。
+- `bookinfo.json`、`statistics.json`、`highlights.json` 按 Niratan/Hoshi sidecar 语义独立演进。
+- `book_order.json` 保存全局/未归档顺序；`shelves.json` 保存自定义书架及书架内顺序。
+- 所有路径必须限制在对应书籍目录内；所有 JSON 写入使用同目录临时文件和原子替换。
+- JSON 缺失与损坏必须区分。损坏文件保留原件、显示非阻断警告，并禁止归一化流程覆盖它。
 
-```sql
-CREATE TABLE reading_progress (
-  book_id TEXT PRIMARY KEY,
-  location_json TEXT NOT NULL,
-  progression REAL,
-  chapter_href TEXT,
-  updated_at TEXT NOT NULL
-);
+### 6.2 服务边界
+
+```text
+NovelLibraryPage / NovelReaderPage
+  → ViewModel
+    → NovelLibraryService / NovelShelfService / NovelStatisticsService
+      → NovelBookStorageService / NovelBookSidecarService / NiratanJsonFileStore
 ```
 
-### 6.3 highlights
+ViewModel 不访问文件或 SQLite。`NovelShelfService` 串行化所有创建、重命名、删除、移动和排序操作；每次成功写入后返回完整 `NovelShelfState`，ViewModel 再重建 Reading、自定义书架和 Unshelved 投影。Google Drive 远端书籍保持独立 rail，不混入本地书架文件。
 
-```sql
-CREATE TABLE highlights (
-  id TEXT PRIMARY KEY,
-  book_id TEXT NOT NULL,
-  location_json TEXT NOT NULL,
-  selected_text TEXT NOT NULL,
-  note TEXT,
-  color TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
+### 6.3 SQLite 边界与旧数据迁移
+
+- `IVideoDataService` / `VideoDataService` 是主 App SQLite 的唯一业务入口，数据库迁移只创建视频相关表。
+- 旧 `NovelBooks`、`NovelReadingProgress`、`NovelReaderSettings` 仅由 `NovelStorageMigrationService` 在启动时读取。
+- 迁移顺序固定为：备份数据库 → 导出 sidecar → 重扫并校验 manifest → 同一事务退役旧小说表 → 最后原子写完成 manifest。
+- 任何导出或校验失败都 fail closed：保留旧表与备份，小说写入切为只读，原始文件不删除。
+- 如果进程在退役旧表后、写 manifest 前中断，下次启动校验文件目录后补写 manifest，不重建小说 SQLite 表。
+
+### 6.4 Niratan 统计 Dashboard
+
+```text
+metadata.json + bookinfo.json + statistics.json + shelves.json
+  → NovelStatisticsDashboardService（最近一年 immutable snapshot）
+    → NovelStatisticsDashboardCalculator（纯计算）
+      → Today / Week / Range / Speed / Trend / Calendar / Ranking / Shelves
+        → NovelStatisticsDashboardViewModel（展示投影 + selector 生命周期）
+          → NovelStatisticsDashboardView（WinUI 全页 Dashboard）
 ```
 
-### 6.4 reader_settings
-
-```sql
-CREATE TABLE reader_settings (
-  scope TEXT NOT NULL,
-  scope_id TEXT NOT NULL,
-  settings_json TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  PRIMARY KEY (scope, scope_id)
-);
-```
+- Dashboard 读取当前可见书籍；损坏 `statistics.json` 按书报告并跳过，绝不因扫描或缓存恢复覆盖原文件。
+- 总字符/时长包含所有合法记录；速度仅使用 `characters > 0 && readingTime >= 60s` 的贡献，避免短 burst 产生虚高速度。
+- 最近一年窗口以 Windows 本地今天结束。周从周一开始并固定提供 7 个 cell；未来日期没有目标百分比。
+- Speed 提供加权、active-day median、最近 7 active days、非重叠 14+14 active days 变化和最快/最慢日期。
+- Range 的 year/month/week/day 与 anchor 会重算所有 Dashboard 卡片；Trend 的 day/week/month grain 和 characters/duration/speed metric 独立切换，Ranking 也可按三种 metric 排序。
+- Calendar 覆盖最近一年并支持选择日期查看字符、时长和书籍数；目标类型、字符/时长阈值与周目标天数可在 Dashboard 内调整，修改后重算历史目标与 streak 并持久化到应用设置。
+- `statistics_dashboard_cache_v1.json` 只是 schema-versioned 派生缓存。key 包含本地日期、书籍身份及 metadata/bookinfo/statistics 文件投影；损坏、key/schema 不匹配或 `NovelLibraryChangedMessage` 只删除缓存自身。命中缓存时先同步展示，再后台重读 sidecar、更新缓存并在 UI 线程发布新 snapshot。
+- `NovelLibraryPageViewModel` 只负责 Bookshelf/Statistics 全页切换，并把当前可见书籍与 `NovelShelfState` 交给子 ViewModel；统计格式化、selector、目标设置和 refresh 订阅不再通过父 ViewModel 转发。
+- Dashboard 只有一个纵向 `ScrollViewer`。Trend 为全宽卡片；其余九个模块在 `1260` 与 `840` effective pixels 处切换三列、两列和单列布局。selector 行与最近一年七行 Calendar 只允许横向滚动。
+- `NovelStatisticsTrendChart` 是纯 UI 控件：消费已经归一化的 display points，在 Canvas 上绘制 Bar 或 `Polyline`，不依赖数据库、sidecar 或第三方图表包，并为每个点保留 tooltip/UI Automation 文本。
+- 每次激活创建 generation 与 linked cancellation source。离开 Dashboard、重复进入或书库重载会取消旧 generation；旧 load completion 与排队的 refresh 事件不能覆盖新页面。`SnapshotRefreshed` 只在激活期间订阅并回到捕获的 UI synchronization context 后应用。
 
 ---
 
@@ -317,7 +357,7 @@ CREATE TABLE reader_settings (
 - 尽量不要整本 EPUB 一次性读入内存。
 - 切换阅读设置时尽量复用 WebView2。
 - 阅读进度写入要 debounce。
-- 在翻页停止、App suspend、关闭书籍时保存进度。
+- 在翻页 checkpoint、窗口最小化和关闭书籍时保存进度。
 - 缓存封面和元数据。
 
 ### 7.2 字典
@@ -326,11 +366,12 @@ CREATE TABLE reader_settings (
 - 缓存最近查询和常见表层词的变形还原结果。
 - popup 首屏限制词条数量，详细释义按需展开。
 
-### 7.3 数据库
+### 7.3 存储
 
-- SQLite 使用 WAL mode。
-- 使用 migration。
-- 使用统一的 AppDbConnectionFactory。
+- 小说 sidecar 使用共享原子 JSON store，写入前校验目录边界。
+- 元数据损坏时不得覆盖原文件，书架归一化必须暂停。
+- 视频 SQLite 使用 WAL mode、migration 和统一的 `AppDbConnectionFactory`。
+- SQLite schema 不得重新引入小说、书架或小说统计表。
 - 没有明确理由不引入 EF Core。
 
 ---

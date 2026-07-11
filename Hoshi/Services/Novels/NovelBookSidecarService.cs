@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Hoshi.Models.Novel;
@@ -15,10 +13,17 @@ public sealed class NovelBookSidecarService : INovelBookSidecarService
     public const string BookmarkFileName = "bookmark.json";
     public const string BookInfoFileName = "bookinfo.json";
 
-    private static readonly DateTimeOffset MacAbsoluteDateReference =
-        new(2001, 1, 1, 0, 0, 0, TimeSpan.Zero);
+    private readonly INiratanJsonFileStore _json;
 
-    private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
+    public NovelBookSidecarService()
+        : this(new NiratanJsonFileStore())
+    {
+    }
+
+    internal NovelBookSidecarService(INiratanJsonFileStore json)
+    {
+        _json = json ?? throw new ArgumentNullException(nameof(json));
+    }
 
     public Task<NovelBookmark?> LoadBookmarkAsync(
         string bookRootPath,
@@ -31,7 +36,7 @@ public sealed class NovelBookSidecarService : INovelBookSidecarService
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(bookmark);
-        return WriteJsonAsync(Path.Combine(bookRootPath, BookmarkFileName), bookmark, ct);
+        return _json.WriteAsync(Path.Combine(bookRootPath, BookmarkFileName), bookmark, ct);
     }
 
     public Task<NovelBookInfo?> LoadBookInfoAsync(
@@ -45,7 +50,7 @@ public sealed class NovelBookSidecarService : INovelBookSidecarService
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(bookInfo);
-        return WriteJsonAsync(Path.Combine(bookRootPath, BookInfoFileName), bookInfo, ct);
+        return _json.WriteAsync(Path.Combine(bookRootPath, BookInfoFileName), bookInfo, ct);
     }
 
     public NovelBookInfo CreateBookInfo(
@@ -73,66 +78,13 @@ public sealed class NovelBookSidecarService : INovelBookSidecarService
         return new NovelBookInfo(currentTotal, chapterInfo);
     }
 
-    private static async Task<T?> TryReadAsync<T>(
+    private async Task<T?> TryReadAsync<T>(
         string path,
         CancellationToken ct)
         where T : class
     {
-        if (!File.Exists(path))
-            return null;
-
-        try
-        {
-            await using var stream = File.OpenRead(path);
-            return await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions, ct);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-        catch (IOException)
-        {
-            return null;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return null;
-        }
-    }
-
-    private static async Task WriteJsonAsync<T>(
-        string path,
-        T data,
-        CancellationToken ct)
-    {
-        var directory = Path.GetDirectoryName(path);
-        if (!string.IsNullOrWhiteSpace(directory))
-            Directory.CreateDirectory(directory);
-
-        var tempPath = path
-            + "."
-            + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)
-            + ".tmp";
-        try
-        {
-            await using (var stream = new FileStream(
-                tempPath,
-                FileMode.CreateNew,
-                FileAccess.Write,
-                FileShare.None,
-                bufferSize: 4096,
-                useAsync: true))
-            {
-                await JsonSerializer.SerializeAsync(stream, data, JsonOptions, ct);
-            }
-
-            File.Move(tempPath, path, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(tempPath))
-                File.Delete(tempPath);
-        }
+        var result = await _json.ReadAsync<T>(path, ct);
+        return result.Status == NovelJsonReadStatus.Success ? result.Value : null;
     }
 
     private static string GetChapterInfoKey(
@@ -162,48 +114,4 @@ public sealed class NovelBookSidecarService : INovelBookSidecarService
     private static string NormalizePath(string path) =>
         path.Replace('\\', '/');
 
-    private static JsonSerializerOptions CreateJsonOptions()
-    {
-        var options = new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = true,
-        };
-        options.Converters.Add(new MacAbsoluteDateTimeOffsetJsonConverter());
-        return options;
-    }
-
-    private sealed class MacAbsoluteDateTimeOffsetJsonConverter
-        : JsonConverter<DateTimeOffset>
-    {
-        public override DateTimeOffset Read(
-            ref Utf8JsonReader reader,
-            Type typeToConvert,
-            JsonSerializerOptions options)
-        {
-            if (reader.TokenType == JsonTokenType.Number)
-                return MacAbsoluteDateReference.AddSeconds(reader.GetDouble());
-
-            if (reader.TokenType == JsonTokenType.String
-                && DateTimeOffset.TryParse(
-                    reader.GetString(),
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                    out var parsed))
-            {
-                return parsed.ToUniversalTime();
-            }
-
-            throw new JsonException("Invalid Mac absolute date value.");
-        }
-
-        public override void Write(
-            Utf8JsonWriter writer,
-            DateTimeOffset value,
-            JsonSerializerOptions options)
-        {
-            var seconds = (value.ToUniversalTime() - MacAbsoluteDateReference).TotalSeconds;
-            writer.WriteNumberValue(seconds);
-        }
-    }
 }

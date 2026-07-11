@@ -6,7 +6,7 @@
       xmlns:converters="using:Hoshi.Helpers.UI.Converters"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-      xmlns:novel="using:Hoshi.Models.Novel"
+      xmlns:controls="using:Hoshi.Views.Controls"
       xmlns:vmc="using:Hoshi.ViewModels.Components"
       mc:Ignorable="d">
 
@@ -31,6 +31,9 @@
                                         Command="{Binding ViewModel.MatchSasayakiCommand, ElementName=ThisPage}"
                                         CommandParameter="{x:Bind}" />
                         <MenuFlyoutSeparator />
+                        <MenuFlyoutItem x:Uid="NovelBookMoveToShelfMenuItem"
+                                        Tag="{x:Bind}"
+                                        Click="MoveNovelToShelfMenuItem_Click" />
                         <MenuFlyoutItem Text="Delete"
                                         Command="{Binding ViewModel.DeleteNovelCommand, ElementName=ThisPage}"
                                         CommandParameter="{x:Bind}" />
@@ -126,164 +129,182 @@
             </Button>
         </DataTemplate>
 
-        <DataTemplate x:Key="StatisticsDistributionTemplate" x:DataType="novel:NovelStatisticsDistributionRow">
-            <Grid Padding="0,6"
-                  ColumnDefinitions="*,Auto"
-                  ColumnSpacing="8">
-                <StackPanel Spacing="2">
-                    <TextBlock Text="{x:Bind Title, Mode=OneWay}"
-                               TextTrimming="CharacterEllipsis"
-                               Style="{StaticResource BodyStrongTextBlockStyle}" />
-                    <TextBlock Text="{x:Bind CharactersText, Mode=OneWay}"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                </StackPanel>
-                <TextBlock Grid.Column="1"
-                           VerticalAlignment="Center"
-                           FontWeight="SemiBold"
-                           Text="{x:Bind PercentText, Mode=OneWay}" />
-            </Grid>
-        </DataTemplate>
     </Page.Resources>
 
-    <Grid RowDefinitions="Auto, Auto, *"
+    <Grid RowDefinitions="Auto,Auto,*"
           AllowDrop="True"
           DragOver="NovelLibrary_DragOver"
           Drop="NovelLibrary_Drop">
-        <Grid Grid.Row="0"
-              Padding="20,14,36,16"
-              ColumnDefinitions="Auto, *, Auto, Auto, Auto, Auto"
-              ColumnSpacing="12">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <FontIcon FontSize="24" Glyph="&#xE82D;" />
-                <TextBlock Margin="8,0,0,0"
-                           VerticalAlignment="Center"
-                           Style="{StaticResource TitleTextBlockStyle}"
-                           Text="Novels" />
-            </StackPanel>
+        <CommandBar x:Name="NovelLibraryCommandBar"
+                    Grid.Row="0"
+                    Margin="12,6,28,10"
+                    AutomationProperties.AutomationId="NovelLibraryCommandBar"
+                    DefaultLabelPosition="Right">
+            <CommandBar.Content>
+                <Grid ColumnDefinitions="Auto,*,Auto"
+                      ColumnSpacing="16">
+                    <StackPanel Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <FontIcon FontSize="24" Glyph="&#xE82D;" />
+                        <TextBlock Margin="8,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Style="{StaticResource TitleTextBlockStyle}"
+                                   Text="Novels" />
+                    </StackPanel>
+                    <ComboBox Grid.Column="2"
+                              Width="148"
+                              VerticalAlignment="Center"
+                              x:Uid="NovelLibrarySortComboBox"
+                              AutomationProperties.AutomationId="NovelLibrarySortComboBox"
+                              AutomationProperties.Name="Sort novels"
+                              ItemsSource="{x:Bind ViewModel.SortOptions, Mode=OneWay}"
+                              DisplayMemberPath="DisplayName"
+                              SelectedValuePath="Value"
+                              SelectedValue="{x:Bind ViewModel.SelectedSortOption, Mode=TwoWay}"
+                              Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                </Grid>
+            </CommandBar.Content>
+            <CommandBar.PrimaryCommands>
+                <AppBarButton x:Name="NovelLibraryStatisticsButton"
+                              x:Uid="NovelLibraryStatisticsButton"
+                              AutomationProperties.AutomationId="NovelLibraryStatisticsButton"
+                              AutomationProperties.Name="Statistics"
+                              Command="{x:Bind ViewModel.EnterStatisticsCommand}"
+                              Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                    <AppBarButton.Icon>
+                        <SymbolIcon Symbol="Document" />
+                    </AppBarButton.Icon>
+                </AppBarButton>
+                <AppBarButton x:Name="NovelStatisticsBackToBookshelfButton"
+                              x:Uid="NovelStatisticsBackToBookshelfButton"
+                              AutomationProperties.AutomationId="NovelStatisticsBackToBookshelfButton"
+                              Command="{x:Bind ViewModel.ReturnToBookshelfCommand}"
+                              Visibility="{x:Bind ViewModel.ShowStatisticsDashboard, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                    <AppBarButton.Icon>
+                        <SymbolIcon Symbol="Library" />
+                    </AppBarButton.Icon>
+                </AppBarButton>
+                <AppBarButton x:Name="NovelShelfManagementButton"
+                              x:Uid="NovelShelfManageButton"
+                              AutomationProperties.AutomationId="NovelShelfManagementButton"
+                              Icon="Folder"
+                              Click="ShelfManagementButton_Click"
+                              Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                <AppBarButton x:Name="ImportNovelButton"
+                              x:Uid="ImportNovelButton"
+                              AutomationProperties.AutomationId="ImportNovelButton"
+                              Icon="Add"
+                              Command="{x:Bind ViewModel.ImportNovelCommand}"
+                              Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+            </CommandBar.PrimaryCommands>
+            <CommandBar.SecondaryCommands>
+                <AppBarButton x:Name="NovelLibraryRefreshGoogleDriveButton"
+                              x:Uid="NovelLibraryRefreshGoogleDriveButton"
+                              AutomationProperties.AutomationId="NovelLibraryRefreshGoogleDriveButton"
+                              Icon="Refresh"
+                              Command="{x:Bind ViewModel.RefreshRemoteBooksCommand}"
+                              Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+            </CommandBar.SecondaryCommands>
+        </CommandBar>
 
-            <ToggleButton Grid.Column="2"
-                          x:Name="NovelLibraryStatisticsButton"
-                          x:Uid="NovelLibraryStatisticsButton"
-                          AutomationProperties.AutomationId="NovelLibraryStatisticsButton"
-                          AutomationProperties.Name="Statistics"
-                          IsChecked="{x:Bind ViewModel.ShowStatisticsDashboard, Mode=TwoWay}"
-                          ToolTipService.ToolTip="Statistics">
-                <FontIcon Glyph="&#xE9D2;" />
-            </ToggleButton>
+        <StackPanel Grid.Row="1"
+                    Margin="20,0,36,12"
+                    Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+            <InfoBar x:Name="NovelStorageWarningInfoBar"
+                     x:Uid="NovelStorageWarningInfoBar"
+                     AutomationProperties.AutomationId="NovelStorageWarningInfoBar"
+                     IsOpen="{x:Bind ViewModel.HasNovelStorageWarnings, Mode=OneWay}"
+                     IsClosable="False"
+                     Severity="Warning" />
+        </StackPanel>
 
-            <ComboBox Grid.Column="3"
-                      Width="148"
-                      VerticalAlignment="Center"
-                      x:Uid="NovelLibrarySortComboBox"
-                      AutomationProperties.AutomationId="NovelLibrarySortComboBox"
-                      AutomationProperties.Name="Sort novels"
-                      ItemsSource="{x:Bind ViewModel.SortOptions, Mode=OneWay}"
-                      DisplayMemberPath="DisplayName"
-                      SelectedValuePath="Value"
-                      SelectedValue="{x:Bind ViewModel.SelectedSortOption, Mode=TwoWay}"
-                      ToolTipService.ToolTip="Sort novels" />
+        <Grid Grid.Row="2"
+              Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Padding="20,0,36,24"
+                            Spacing="18">
+                    <ItemsControl x:Name="NovelShelfSectionsControl"
+                                  AutomationProperties.AutomationId="NovelShelfSectionsControl"
+                                  ItemsSource="{x:Bind ViewModel.RailSections, Mode=OneWay}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vmc:NovelShelfSectionViewModel">
+                                <StackPanel Margin="0,0,0,18"
+                                            Spacing="8">
+                                    <TextBlock Text="{x:Bind DisplayName}"
+                                               Style="{StaticResource SubtitleTextBlockStyle}" />
+                                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                                  HorizontalScrollMode="Enabled"
+                                                  VerticalScrollBarVisibility="Disabled"
+                                                  VerticalScrollMode="Disabled">
+                                        <ItemsControl ItemTemplate="{StaticResource NovelBookTemplate}"
+                                                      ItemsSource="{x:Bind Books}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal"
+                                                                Spacing="12" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
 
-            <Button Grid.Column="4"
-                    x:Uid="NovelLibraryRefreshGoogleDriveButton"
-                    AutomationProperties.AutomationId="NovelLibraryRefreshGoogleDriveButton"
-                    Command="{x:Bind ViewModel.RefreshRemoteBooksCommand}"
-                    ToolTipService.ToolTip="Refresh Google Drive books">
-                <Button.Content>
-                    <FontIcon Glyph="&#xE895;" />
-                </Button.Content>
-            </Button>
+                    <TextBlock x:Uid="NovelShelfUnshelvedLabel"
+                               Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <ItemsRepeater x:Name="NovelUnshelvedBooksRepeater"
+                                   AutomationProperties.AutomationId="NovelUnshelvedBooksRepeater"
+                                   ItemTemplate="{StaticResource NovelBookTemplate}"
+                                   ItemsSource="{x:Bind ViewModel.UnshelvedBooks, Mode=OneWay}">
+                        <ItemsRepeater.Layout>
+                            <UniformGridLayout MinItemWidth="180"
+                                               MinItemHeight="306"
+                                               MinColumnSpacing="12"
+                                               MinRowSpacing="16"
+                                               ItemsJustification="Start" />
+                        </ItemsRepeater.Layout>
+                    </ItemsRepeater>
 
-            <Button Grid.Column="5"
-                    AutomationProperties.AutomationId="ImportNovelButton"
-                    Command="{x:Bind ViewModel.ImportNovelCommand}"
-                    ToolTipService.ToolTip="Import EPUB">
-                <Button.Content>
-                    <FontIcon Glyph="&#xE8E5;" />
-                </Button.Content>
-            </Button>
+                    <TextBlock x:Uid="NovelShelfGoogleDriveLabel"
+                               Margin="0,8,0,0"
+                               Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                  HorizontalScrollMode="Enabled"
+                                  VerticalScrollBarVisibility="Disabled"
+                                  VerticalScrollMode="Disabled">
+                        <ItemsControl AutomationProperties.AutomationId="RemoteNovelBookItemsControl"
+                                      ItemTemplate="{StaticResource RemoteNovelBookTemplate}"
+                                      ItemsSource="{x:Bind ViewModel.RemoteBooks, Mode=OneWay}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"
+                                                Spacing="12" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </StackPanel>
+            </ScrollViewer>
+
+            <ProgressRing Width="60"
+                          Height="60"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          IsActive="{x:Bind ViewModel.IsContentLoading, Mode=OneWay}"
+                          Visibility="{x:Bind ViewModel.IsContentLoading, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+            <TextBlock HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource BodyLargeStrongTextBlockStyle}"
+                       Text="No novels imported."
+                       Visibility="{x:Bind ViewModel.NoNovels, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
         </Grid>
 
-        <Border Grid.Row="1"
-                Margin="20,0,36,16"
-                Padding="16"
-                CornerRadius="8"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                AutomationProperties.AutomationId="NovelLibraryStatisticsDashboard"
-                Visibility="{x:Bind ViewModel.ShowStatisticsDashboard, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
-            <Grid ColumnDefinitions="*,*,2*"
-                  ColumnSpacing="18">
-                <StackPanel Spacing="6">
-                    <TextBlock Text="Today"
-                               Style="{StaticResource BodyStrongTextBlockStyle}" />
-                    <TextBlock x:Name="NovelLibraryTodayStatisticsText"
-                               AutomationProperties.AutomationId="NovelLibraryTodayStatisticsText"
-                               Text="{x:Bind ViewModel.StatisticsTodayText, Mode=OneWay}"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                </StackPanel>
-
-                <StackPanel Grid.Column="1"
-                            Spacing="6">
-                    <TextBlock Text="This Week"
-                               Style="{StaticResource BodyStrongTextBlockStyle}" />
-                    <TextBlock x:Name="NovelLibraryWeekStatisticsText"
-                               AutomationProperties.AutomationId="NovelLibraryWeekStatisticsText"
-                               Text="{x:Bind ViewModel.StatisticsWeekText, Mode=OneWay}"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                </StackPanel>
-
-                <StackPanel Grid.Column="2"
-                            Spacing="6">
-                    <TextBlock Text="By Book"
-                               Style="{StaticResource BodyStrongTextBlockStyle}" />
-                    <ItemsControl x:Name="NovelLibraryByBookStatisticsList"
-                                  AutomationProperties.AutomationId="NovelLibraryByBookStatisticsList"
-                                  ItemTemplate="{StaticResource StatisticsDistributionTemplate}"
-                                  ItemsSource="{x:Bind ViewModel.StatisticsDistributionRows, Mode=OneWay}" />
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <ProgressRing Grid.Row="2"
-                      Width="60"
-                      Height="60"
-                      HorizontalAlignment="Center"
-                      VerticalAlignment="Center"
-                      IsActive="{x:Bind ViewModel.IsContentLoading, Mode=OneWay}"
-                      Visibility="{x:Bind ViewModel.IsContentLoading, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
-
-        <TextBlock Grid.Row="2"
-                   HorizontalAlignment="Center"
-                   VerticalAlignment="Center"
-                   Style="{StaticResource BodyLargeStrongTextBlockStyle}"
-                   Text="No novels imported."
-                   Visibility="{x:Bind ViewModel.NoNovels, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
-
-        <Grid Grid.Row="2" RowDefinitions="Auto,*">
-            <ItemsControl Grid.Row="0"
-                          Margin="0,0,16,16"
-                          Padding="20,0,0,0"
-                          AutomationProperties.AutomationId="RemoteNovelBookItemsControl"
-                          ItemTemplate="{StaticResource RemoteNovelBookTemplate}"
-                          ItemsSource="{x:Bind ViewModel.RemoteBooks, Mode=OneWay}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <ItemsWrapGrid Orientation="Horizontal" />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-            </ItemsControl>
-
-            <GridView Grid.Row="1"
-                      AutomationProperties.AutomationId="NovelBookGridView"
-                      AllowDrop="True"
-                      CanDragItems="True"
-                      CanReorderItems="True"
-                      DragItemsCompleted="NovelBookGridView_DragItemsCompleted"
-                      Padding="0,0,16,0"
-                      IsItemClickEnabled="True"
-                      ItemClick="GridView_ItemClick"
-                      ItemTemplate="{StaticResource NovelBookTemplate}"
-                      ItemsSource="{x:Bind ViewModel.NovelBooks, Mode=OneWay}"
-                      SelectionMode="None" />
-        </Grid>
+        <controls:NovelStatisticsDashboardView Grid.Row="1"
+                                               Grid.RowSpan="2"
+                                               AutomationProperties.AutomationId="NovelStatisticsDashboardView"
+                                               DataContext="{x:Bind ViewModel.StatisticsDashboard, Mode=OneWay}"
+                                               Visibility="{x:Bind ViewModel.ShowStatisticsDashboard, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
     </Grid>
 </Page>

@@ -12,6 +12,7 @@ using Microsoft.UI.Xaml;
 using Serilog;
 using Hoshi.Helpers;
 using Hoshi.Models;
+using Hoshi.Models.Novel;
 using Hoshi.Services;
 using Hoshi.Services.Anki;
 using Hoshi.Services.Audio;
@@ -27,6 +28,7 @@ using Hoshi.Services.Sync;
 using Hoshi.Services.UI;
 using Hoshi.Services.Video;
 using Hoshi.ViewModels.Pages;
+using Hoshi.ViewModels.Dialogs;
 using Hoshi.ViewModels.Windowing;
 
 namespace Hoshi;
@@ -136,9 +138,11 @@ public partial class App : Application
         services.AddTransient<KeyboardShortcutsSettingsPageViewModel>();
         services.AddTransient<SasayakiSettingsPageViewModel>();
         services.AddTransient<StatisticsSettingsPageViewModel>();
+        services.AddTransient<NovelStatisticsDashboardViewModel>();
         services.AddTransient<TtuSyncSettingsPageViewModel>();
         services.AddTransient<AnkiSettingsPageViewModel>();
         services.AddTransient<NovelLibraryPageViewModel>();
+        services.AddTransient<NovelShelfManagementViewModel>();
         services.AddTransient<VideoLibraryPageViewModel>();
         services.AddTransient<NovelLookupPageViewModel>();
         services.AddTransient<NovelReaderPageViewModel>();
@@ -161,7 +165,14 @@ public partial class App : Application
         services.AddSingleton<IDictionaryProfileContext>(provider =>
             provider.GetRequiredService<ProfileRuntimeService>());
         services.AddSingleton<IShortcutService, ShortcutService>();
-        services.AddSingleton<IDataService, DataService>();
+        services.AddSingleton<IVideoDataService, VideoDataService>();
+        services.AddSingleton<INiratanJsonFileStore, NiratanJsonFileStore>();
+        services.AddSingleton<INovelBookStorageService, NovelBookStorageService>();
+        services.AddSingleton<INovelShelfService, NovelShelfService>();
+        services.AddSingleton<INovelStorageMigrationService, NovelStorageMigrationService>();
+        services.AddSingleton<NovelStorageAccessState>();
+        services.AddSingleton<INovelStorageAccessState>(provider =>
+            provider.GetRequiredService<NovelStorageAccessState>());
         services.AddSingleton<IEpubParserService, EpubParserService>();
         services.AddSingleton<INovelEpubImportService, NovelEpubImportService>();
         services.AddSingleton<INovelLibraryService, NovelLibraryService>();
@@ -177,7 +188,16 @@ public partial class App : Application
         services.AddSingleton<SubtitleParserService>();
         services.AddSingleton<INovelBookSidecarService, NovelBookSidecarService>();
         services.AddSingleton<INovelStatisticsSidecarService, NovelStatisticsSidecarService>();
-        services.AddSingleton<INovelStatisticsDashboardService, NovelStatisticsDashboardService>();
+        services.AddTransient<IReaderStatisticsSession>(provider =>
+            new ReaderStatisticsSession(
+                provider.GetRequiredService<INovelStatisticsSidecarService>(),
+                TimeProvider.System));
+        services.AddSingleton<NovelStatisticsDashboardCache>();
+        services.AddSingleton<INovelStatisticsDashboardService>(provider =>
+            new NovelStatisticsDashboardService(
+                provider.GetRequiredService<INovelStatisticsSidecarService>(),
+                provider.GetRequiredService<INovelBookSidecarService>(),
+                provider.GetRequiredService<NovelStatisticsDashboardCache>()));
         services.AddSingleton<IReaderHighlightService, ReaderHighlightService>();
         services.AddSingleton<ISasayakiSidecarService, SasayakiSidecarService>();
         services.AddSingleton<ISasayakiMatchService, SasayakiMatchService>();
@@ -236,6 +256,17 @@ public partial class App : Application
             );
             await migrator.MigrateAsync();
             Log.Information("Database ready");
+
+            var novelMigrationResult = await GetService<INovelStorageMigrationService>()
+                .MigrateAsync();
+            GetService<NovelStorageAccessState>().Apply(novelMigrationResult);
+            if (novelMigrationResult.IsReadOnly)
+            {
+                GetService<INotificationService>().ShowError(
+                    novelMigrationResult.ErrorMessage
+                        ?? "Novel storage migration requires recovery.",
+                    "Novel library is read-only");
+            }
 
             await InitializeAppAsync();
 

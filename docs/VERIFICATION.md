@@ -21,6 +21,11 @@
 ```
 NovelNavItem
 ImportNovelButton
+NovelLibraryCommandBar
+NovelShelfSectionsControl
+NovelShelfManagementButton
+NovelStorageWarningInfoBar
+NovelUnshelvedBooksRepeater
 NovelBookCard
 NovelBookCard_<bookId>
 NovelReaderBackButton
@@ -108,6 +113,68 @@ YYYY-MM-DD-uia-tree.txt
 期望：打开后 reader host 不停在 Starting WebView2 bridge，不显示 Reader bridge error，
       状态进入 EPUB loaded，能看到实际 EPUB 内容。
 ```
+
+### 1.8 Niratan 文件存储与迁移验证
+
+自动化测试至少覆盖：
+
+- 新导入 EPUB 写入私有 `<book-id>` 目录，并生成合法 `metadata.json`；重新扫描后书名、封面、Profile、字符进度不变。
+- `bookmark.json` 的章节/字符位置在关闭 Reader、重启应用后可恢复，单次保存不产生第二条 SQLite 写入。
+- 旧 SQLite fixture 首次迁移前生成 `hoshi.db.pre-novel-files-v1.bak`，导出校验成功后旧小说表被退役，视频表仍存在。
+- 强制导出失败时，备份和旧小说表仍存在，小说库进入只读状态；修复 fixture 后重试可完成。
+- 缺失 JSON 可按定义初始化；损坏 `metadata.json`/`shelves.json` 必须保留原字节并显示可恢复警告，不能被自动覆盖。
+- fresh database 只创建视频业务表，不创建 `NovelBooks`、`NovelReadingProgress` 或 `NovelReaderSettings`。
+
+所有破坏性故障测试必须使用复制到临时目录的 fixture，禁止直接修改用户 AppData。
+
+### 1.9 书架交互与持久化验证
+
+1. 在小说库创建两个书架，验证同名（忽略大小写）被拒绝。
+2. 重命名、拖动调整书架顺序，关闭并重开管理窗口，顺序保持。
+3. 从书卡上下文菜单移动到自定义书架，再移动到 Unshelved；各区只出现一次。
+4. 调整书架内和 Unshelved 顺序，关闭并重启应用，顺序保持。
+5. 删除书架前必须出现确认；确认后仅删除书架，书籍进入 Unshelved，EPUB 不删除。
+6. 删除一本书后，`shelves.json` 与 `book_order.json` 不再包含该 ID。
+7. 开启 Reading rail 时，已有进度且未读完的书出现在派生 Reading 区；该派生区不写入 `shelves.json`。
+8. Google Drive 书籍保持独立 rail，不进入本地书架状态。
+9. 窄窗口下 CommandBar 可访问，页面只有一个纵向滚动所有者，横向 rail 不抢占纵向滚动。
+
+### 1.10 Niratan Reader 统计语义验证
+
+自动化测试必须覆盖 `ReaderStatisticsMathTests`、`ReaderStatisticsSessionTests`、`NovelReaderPageViewModelTests`、`ReaderProgrammaticNavigationTrackerTests`、`ReaderNavigationHistoryTests` 和 `NovelReaderStatisticsLifecycleTests`。
+
+手工验证矩阵：
+
+1. Off 模式下普通打开、翻页和跳转都不自动开始；手动开始后秒级时间持续更新。
+2. PageTurn 只在真实页移动、自然相邻章节或实际 Sasayaki 自动滚动后开始；首页向前/末页向后、同进度回调不开始。
+3. On 在普通 restore 完成后开始；目录、字符、搜索、高亮、内部链接、历史和显式 Sasayaki 跳转的 restore callback 不重复触发。
+4. 每个程序化跳转验证顺序：旧位置只 checkpoint 一次 → 最终分页位置写入 `bookmark.json` → baseline 重置；跳转距离不得增加 `charactersRead`。
+5. 同章节 `#fragment` 不重载章节；跨章节链接等待 fragment 对齐完成。外部 URL、`javascript:` 和非 spine 资源不得离开 Reader。
+6. 产生至少两个历史位置，验证 Back/Forward 显示目标字符位置且往返正确；历史恢复不计作阅读字符。
+7. tracking 时最小化窗口后检查 Background checkpoint；关闭主窗口或返回书架后检查 Close checkpoint 只有一次。
+8. 在本地时间午夜前开始、午夜后 checkpoint，确认旧日期归档，新日期只出现一条记录，并按 Niratan 语义接收完整跨日 checkpoint。
+9. 重启应用后 `bookmark.json` 与 `statistics.json` 可恢复；`statistics.json` 同一 `dateKey` 只保留 `lastStatisticModified` 最新记录。
+
+诊断失败时保留 Reader 日志，并重点搜索 `ProgrammaticDeparture`、`navigationGeneration`、`Background`、`Close` 和 `Restore completed`。
+
+### 1.11 Niratan Dashboard 验证
+
+1. 运行所有 `NovelStatisticsDashboard*Tests`，覆盖 repository、目标/区间、速度、趋势、日历、排名、书架和缓存。
+2. 准备一条 `<60s` 且字符数为正的记录：总字符/时长必须增加，所有速度模块不得使用该记录。
+3. 放入损坏的 `statistics.json`：Dashboard 显示/记录 skipped book，原文件 hash 不变，其余书籍仍正常聚合。
+4. 验证最近一年边界、周一到周日 7 格、未来周 cell 无百分比、目标完成度允许超过 100%。
+5. 逐一切换 year/month/week/day range、anchor、day/week/month grain、characters/duration/speed trend metric 和 ranking metric，确认所有卡片使用同一范围且显示单位正确。
+6. 点击 Calendar 任意日期，确认范围 anchor 与选择日期同步，详情显示字符、时长和 active books；Calendar 覆盖最近一年。
+7. 在 Dashboard 修改目标类型、字符/时长目标和周目标天数，确认 Today/Week/Selected Range/streak 立即重算，重启后设置仍保留。
+8. 验证 Book Ranking 最多 12 行，以及自定义书架/Unshelved 对比；损坏 sidecar 时必须显示可见警告。
+9. 重开 Dashboard 验证 `statistics_dashboard_cache_v1.json` 先命中再后台重读 sidecar；新 snapshot 发布后 UI 更新且缓存被替换。
+10. 人工损坏缓存只应删除缓存；任何书籍 sidecar、EPUB 和视频 SQLite 均不得改变。
+11. 从小说 CommandBar 进入 Statistics，确认书架 rail、排序、导入和书架管理退出布局；使用 Bookshelf 按钮返回后，原 rail 和书籍卡仍可操作。
+12. 验证全宽 Range & Trend，以及 Today、Goal、This Week、Reading Calendar、Selected Range、Speed Summary、Book Ranking、Shelf Comparison 全部存在；Bar/Line 切换不改变其他卡片数据。
+13. 分别把窗口调整到 `>=1260`、`840..1259` 和 `<840` effective pixels，确认三列、两列、单列状态生效，无裁切、重叠或第二个纵向滚动条；Calendar 保持七行横向滚动。
+14. 在加载未完成时返回 Bookshelf，再次进入 Dashboard；旧 load/refresh 不得覆盖新 snapshot，loading/refresh 状态不得残留，refresh 订阅始终只有一个。
+15. 在英文和简体中文下检查所有 header、metric、empty/loading/warning 文案；用键盘遍历 range、anchor、grain、metric、style、goal、calendar、ranking 和返回按钮，并确认 UI Automation name 非空。
+16. Light、Dark 与 High Contrast 下检查趋势线/柱、calendar heat、range/selection outline、ranking/shelf bars 和损坏警告均可辨认。
 
 ---
 

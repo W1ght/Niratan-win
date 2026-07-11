@@ -25,7 +25,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
     private readonly IMessenger _messenger;
     private readonly IReaderHighlightService _readerHighlightService;
     private readonly INovelBookSidecarService _novelBookSidecarService;
-    private readonly INovelStatisticsSidecarService _novelStatisticsSidecarService;
+    private readonly IReaderStatisticsSession _statisticsSession;
     private readonly IProfileRuntimeService _profileRuntime;
 
     [ObservableProperty]
@@ -49,10 +49,10 @@ public partial class NovelReaderPageViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsStatisticsTracking { get; set; }
 
+    [ObservableProperty]
+    public partial bool IsStatisticsPaused { get; set; }
+
     private IReadOnlyList<ReaderHighlight> _highlights = [];
-    private IReadOnlyList<NovelReadingStatistic> _statistics = [];
-    private DateTimeOffset? _lastStatisticsTimestamp;
-    private int _lastStatisticsCharacterCount;
 
     public IReadOnlyList<ReaderHighlight> Highlights
     {
@@ -60,9 +60,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
         private set => SetProperty(ref _highlights, value);
     }
 
-    private NovelReadingStatistic _sessionStatistics = DefaultStatistic(
-        "Novel reader",
-        DateTimeOffset.UtcNow);
+    private NovelReadingStatistic _sessionStatistics = InitialStatistic();
 
     public NovelReadingStatistic SessionStatistics
     {
@@ -70,9 +68,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
         private set => SetProperty(ref _sessionStatistics, value);
     }
 
-    private NovelReadingStatistic _todaysStatistics = DefaultStatistic(
-        "Novel reader",
-        DateTimeOffset.UtcNow);
+    private NovelReadingStatistic _todaysStatistics = InitialStatistic();
 
     public NovelReadingStatistic TodaysStatistics
     {
@@ -80,9 +76,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
         private set => SetProperty(ref _todaysStatistics, value);
     }
 
-    private NovelReadingStatistic _allTimeStatistics = DefaultStatistic(
-        "Novel reader",
-        DateTimeOffset.UtcNow);
+    private NovelReadingStatistic _allTimeStatistics = InitialStatistic();
 
     public NovelReadingStatistic AllTimeStatistics
     {
@@ -121,6 +115,10 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
     private CancellationTokenSource? _saveCts;
     private IReadOnlyList<int> _chapterCharacterCounts = [];
+    private readonly object _lifecycleCloseGate = new();
+    private readonly SemaphoreSlim _lifecycleCheckpointLock = new(1, 1);
+    private Task? _lifecycleCloseTask;
+    private bool _didCompleteLifecycleClose;
 
     public NovelReaderPageViewModel(
         INovelLibraryService novelLibraryService,
@@ -128,7 +126,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
         IMessenger messenger,
         IReaderHighlightService readerHighlightService,
         INovelBookSidecarService novelBookSidecarService,
-        INovelStatisticsSidecarService novelStatisticsSidecarService,
+        IReaderStatisticsSession statisticsSession,
         IProfileRuntimeService profileRuntime
     )
     {
@@ -137,7 +135,8 @@ public partial class NovelReaderPageViewModel : ObservableObject
         _messenger = messenger;
         _readerHighlightService = readerHighlightService;
         _novelBookSidecarService = novelBookSidecarService;
-        _novelStatisticsSidecarService = novelStatisticsSidecarService;
+        _statisticsSession = statisticsSession;
+        _statisticsSession.StateChanged += OnStatisticsSessionStateChanged;
         _profileRuntime = profileRuntime;
     }
 
@@ -208,85 +207,115 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
     public async Task LoadStatisticsAsync(CancellationToken ct = default)
     {
-        var now = DateTimeOffset.UtcNow;
         if (string.IsNullOrWhiteSpace(CurrentBook?.ExtractedPath))
         {
-            _statistics = [];
-        }
-        else
-        {
-            _statistics = await _novelStatisticsSidecarService.LoadAsync(
-                CurrentBook.ExtractedPath,
-                ct);
+            var empty = ReaderStatisticsMath.Empty(
+                ReaderTitle,
+                DateOnly.FromDateTime(DateTime.Now));
+            ApplyStatisticsState(new ReaderStatisticsSessionState(
+                false,
+                false,
+                empty,
+                empty,
+                empty,
+                []));
+            return;
         }
 
-        SessionStatistics = DefaultStatistic(ReaderTitle, now);
-        TodaysStatistics = _statistics.FirstOrDefault(s => s.DateKey == FormatDateKey(now))
-            ?? DefaultStatistic(ReaderTitle, now);
-        AllTimeStatistics = AggregateAllTime(ReaderTitle, now, _statistics);
-        OnStatisticsTextChanged();
+        await _statisticsSession.LoadAsync(
+            CurrentBook.ExtractedPath,
+            ReaderTitle,
+            new ReaderStatisticsPosition(CurrentCharacterCount),
+            ct);
     }
 
     public void StartStatisticsTracking(DateTimeOffset? now = null)
     {
-        IsStatisticsTracking = true;
-        _lastStatisticsTimestamp = now ?? DateTimeOffset.UtcNow;
-        _lastStatisticsCharacterCount = CurrentCharacterCount;
-        OnPropertyChanged(nameof(StatisticsTrackingButtonText));
+        _ = now;
+        _statisticsSession.Start(new ReaderStatisticsPosition(CurrentCharacterCount));
     }
 
     public async Task StopStatisticsTrackingAsync(
         DateTimeOffset? now = null,
         CancellationToken ct = default)
     {
-        await FlushStatisticsAsync(now, ct);
-        IsStatisticsTracking = false;
-        _lastStatisticsTimestamp = null;
-        OnPropertyChanged(nameof(StatisticsTrackingButtonText));
+        _ = now;
+        await _statisticsSession.StopAsync(
+            new ReaderStatisticsPosition(CurrentCharacterCount),
+            ct);
     }
 
     public async Task FlushStatisticsAsync(
         DateTimeOffset? now = null,
         CancellationToken ct = default)
     {
-        if (!IsStatisticsTracking || _lastStatisticsTimestamp == null)
-            return;
+        _ = now;
+        await CheckpointReadingAsync(
+            ReaderStatisticsCheckpointReason.ReadingMovement,
+            ct);
+    }
 
-        var timestamp = now ?? DateTimeOffset.UtcNow;
-        var timeDiff = Math.Max(0, (timestamp - _lastStatisticsTimestamp.Value).TotalSeconds);
-        if (timeDiff <= 0)
-            return;
+    public Task CheckpointReadingAsync(
+        ReaderStatisticsCheckpointReason reason,
+        CancellationToken ct = default) =>
+        _statisticsSession.CheckpointAsync(
+            new ReaderStatisticsPosition(CurrentCharacterCount),
+            reason,
+            ct);
 
-        var characterDiff = CurrentCharacterCount - _lastStatisticsCharacterCount;
-        var finalCharacterDiff = characterDiff < 0
-            && Math.Abs(characterDiff) > SessionStatistics.CharactersRead
-                ? -SessionStatistics.CharactersRead
-                : characterDiff;
-        var lastStatisticModified = timestamp.ToUnixTimeMilliseconds();
+    public Task PauseStatisticsAsync(CancellationToken ct = default) =>
+        _statisticsSession.PauseAsync(
+            new ReaderStatisticsPosition(CurrentCharacterCount),
+            ct);
 
-        SessionStatistics = UpdateStatistic(
-            SessionStatistics,
-            timeDiff,
-            finalCharacterDiff,
-            lastStatisticModified);
-        TodaysStatistics = UpdateStatistic(
-            EnsureTodayStatistic(timestamp),
-            timeDiff,
-            finalCharacterDiff,
-            lastStatisticModified);
-        AllTimeStatistics = UpdateStatistic(
-            AllTimeStatistics,
-            timeDiff,
-            finalCharacterDiff,
-            lastStatisticModified);
-        _lastStatisticsTimestamp = timestamp;
-        _lastStatisticsCharacterCount = CurrentCharacterCount;
+    public void TickStatistics() =>
+        _statisticsSession.Tick(new ReaderStatisticsPosition(CurrentCharacterCount));
 
-        UpsertTodayStatistic();
-        if (!string.IsNullOrWhiteSpace(CurrentBook?.ExtractedPath))
-            await _novelStatisticsSidecarService.SaveAsync(CurrentBook.ExtractedPath, _statistics, ct);
+    public void ResetStatisticsBaseline() =>
+        _statisticsSession.ResetBaseline(
+            new ReaderStatisticsPosition(CurrentCharacterCount));
 
-        OnStatisticsTextChanged();
+    public Task PrepareForReaderLifecycleCloseAsync(CancellationToken ct = default)
+    {
+        lock (_lifecycleCloseGate)
+        {
+            return _lifecycleCloseTask ??= PrepareForReaderLifecycleCloseCoreAsync(ct);
+        }
+    }
+
+    private async Task PrepareForReaderLifecycleCloseCoreAsync(CancellationToken ct)
+    {
+        await _lifecycleCheckpointLock.WaitAsync(ct);
+        try
+        {
+            if (_didCompleteLifecycleClose)
+                return;
+
+            await SaveProgressNowAsync(flushStatistics: false, ct);
+            await CheckpointReadingAsync(ReaderStatisticsCheckpointReason.Close, ct);
+            _didCompleteLifecycleClose = true;
+        }
+        finally
+        {
+            _lifecycleCheckpointLock.Release();
+        }
+    }
+
+    public async Task CheckpointAppBackgroundingAsync(CancellationToken ct = default)
+    {
+        await _lifecycleCheckpointLock.WaitAsync(ct);
+        try
+        {
+            if (_didCompleteLifecycleClose)
+                return;
+
+            await SaveProgressNowAsync(flushStatistics: false, ct);
+            await CheckpointReadingAsync(ReaderStatisticsCheckpointReason.Background, ct);
+        }
+        finally
+        {
+            _lifecycleCheckpointLock.Release();
+        }
     }
 
     public async Task SaveBookInfoSidecarAsync(
@@ -388,7 +417,6 @@ public partial class NovelReaderPageViewModel : ObservableObject
         var progress = Progress;
         var currentCharacterCount = CurrentCharacterCount;
         var totalCharacterCount = TotalCharacterCount;
-        var bookRootPath = CurrentBook.ExtractedPath;
 
         Task.Run(async () =>
         {
@@ -404,12 +432,6 @@ public partial class NovelReaderPageViewModel : ObservableObject
                         currentCharacterCount,
                         totalCharacterCount,
                         token);
-                    await SaveBookmarkSidecarAsync(
-                        bookRootPath,
-                        chapterIndex,
-                        progress,
-                        currentCharacterCount,
-                        token);
                     await FlushStatisticsAsync(ct: token);
                 }
             }
@@ -417,7 +439,9 @@ public partial class NovelReaderPageViewModel : ObservableObject
         }, token);
     }
 
-    public async Task SaveProgressNowAsync()
+    public async Task SaveProgressNowAsync(
+        bool flushStatistics = true,
+        CancellationToken ct = default)
     {
         if (CurrentBook == null) return;
         _saveCts?.Cancel();
@@ -426,53 +450,11 @@ public partial class NovelReaderPageViewModel : ObservableObject
             CurrentChapterIndex,
             Progress,
             CurrentCharacterCount,
-            TotalCharacterCount);
-        await SaveBookmarkSidecarAsync(
-            CurrentBook.ExtractedPath,
-            CurrentChapterIndex,
-            Progress,
-            CurrentCharacterCount,
-            CancellationToken.None);
-        await FlushStatisticsAsync();
-        _messenger.Send(new NovelLibraryChangedMessage());
-    }
-
-    private async Task SaveBookmarkSidecarAsync(
-        string? bookRootPath,
-        int chapterIndex,
-        double progress,
-        int currentCharacterCount,
-        CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(bookRootPath))
-            return;
-
-        await _novelBookSidecarService.SaveBookmarkAsync(
-            bookRootPath,
-            new NovelBookmark(
-                chapterIndex,
-                Math.Clamp(progress, 0, 1),
-                currentCharacterCount,
-                DateTimeOffset.UtcNow),
+            TotalCharacterCount,
             ct);
-    }
-
-    private NovelReadingStatistic EnsureTodayStatistic(DateTimeOffset now)
-    {
-        var dateKey = FormatDateKey(now);
-        return TodaysStatistics.DateKey == dateKey
-            ? TodaysStatistics
-            : _statistics.FirstOrDefault(s => s.DateKey == dateKey)
-                ?? DefaultStatistic(ReaderTitle, now);
-    }
-
-    private void UpsertTodayStatistic()
-    {
-        var remaining = _statistics
-            .Where(s => s.DateKey != TodaysStatistics.DateKey)
-            .ToList();
-        remaining.Add(TodaysStatistics);
-        _statistics = remaining;
+        if (flushStatistics)
+            await FlushStatisticsAsync(ct: ct);
+        _messenger.Send(new NovelLibraryChangedMessage());
     }
 
     private int CurrentChapterRemainingCharacters
@@ -498,79 +480,25 @@ public partial class NovelReaderPageViewModel : ObservableObject
             ? 0
             : Math.Max(0, remainingCharacters) / (SessionStatistics.LastReadingSpeed / 3600d);
 
-    private static NovelReadingStatistic UpdateStatistic(
-        NovelReadingStatistic statistic,
-        double timeDiff,
-        int characterDiff,
-        long lastStatisticModified)
-    {
-        var readingTime = statistic.ReadingTime + timeDiff;
-        var charactersRead = Math.Max(statistic.CharactersRead + characterDiff, 0);
-        var lastReadingSpeed = readingTime > 0
-            ? (int)((charactersRead / readingTime) * 3600d)
-            : 0;
-        var minReadingSpeed = statistic.MinReadingSpeed != 0
-            ? Math.Min(statistic.MinReadingSpeed, lastReadingSpeed)
-            : lastReadingSpeed;
-        var altMinReadingSpeed = characterDiff != 0
-            ? statistic.AltMinReadingSpeed != 0
-                ? Math.Min(statistic.AltMinReadingSpeed, lastReadingSpeed)
-                : lastReadingSpeed
-            : statistic.AltMinReadingSpeed;
+    private void OnStatisticsSessionStateChanged(
+        object? sender,
+        ReaderStatisticsSessionState state) =>
+        ApplyStatisticsState(state);
 
-        return statistic with
-        {
-            CharactersRead = charactersRead,
-            ReadingTime = readingTime,
-            MinReadingSpeed = minReadingSpeed,
-            AltMinReadingSpeed = altMinReadingSpeed,
-            LastReadingSpeed = lastReadingSpeed,
-            MaxReadingSpeed = Math.Max(statistic.MaxReadingSpeed, lastReadingSpeed),
-            LastStatisticModified = lastStatisticModified,
-        };
+    private void ApplyStatisticsState(ReaderStatisticsSessionState state)
+    {
+        IsStatisticsTracking = state.IsTracking;
+        IsStatisticsPaused = state.IsPaused;
+        SessionStatistics = state.Session;
+        TodaysStatistics = state.Today;
+        AllTimeStatistics = state.AllTime;
+        OnStatisticsTextChanged();
     }
 
-    private static NovelReadingStatistic AggregateAllTime(
-        string title,
-        DateTimeOffset now,
-        IReadOnlyList<NovelReadingStatistic> statistics)
-    {
-        var allTime = DefaultStatistic(title, now);
-        foreach (var statistic in statistics)
-        {
-            var readingTime = allTime.ReadingTime + statistic.ReadingTime;
-            var charactersRead = allTime.CharactersRead + statistic.CharactersRead;
-            allTime = allTime with
-            {
-                ReadingTime = readingTime,
-                CharactersRead = charactersRead,
-                LastReadingSpeed = readingTime > 0
-                    ? (int)((charactersRead / readingTime) * 3600d)
-                    : 0,
-                MaxReadingSpeed = Math.Max(allTime.MaxReadingSpeed, statistic.MaxReadingSpeed),
-                LastStatisticModified = Math.Max(
-                    allTime.LastStatisticModified,
-                    statistic.LastStatisticModified),
-            };
-        }
-
-        return allTime;
-    }
-
-    private static NovelReadingStatistic DefaultStatistic(string title, DateTimeOffset now) =>
-        new(
-            title,
-            FormatDateKey(now),
-            CharactersRead: 0,
-            ReadingTime: 0,
-            MinReadingSpeed: 0,
-            AltMinReadingSpeed: 0,
-            LastReadingSpeed: 0,
-            MaxReadingSpeed: 0,
-            LastStatisticModified: 0);
-
-    private static string FormatDateKey(DateTimeOffset value) =>
-        value.ToLocalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    private static NovelReadingStatistic InitialStatistic() =>
+        ReaderStatisticsMath.Empty(
+            "Novel reader",
+            DateOnly.FromDateTime(DateTime.Now));
 
     private static string FormatCount(int value) =>
         value.ToString("N0", CultureInfo.CurrentCulture);
@@ -619,7 +547,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
     [RelayCommand]
     private async Task BackToLibrary()
     {
-        await SaveProgressNowAsync();
+        await PrepareForReaderLifecycleCloseAsync();
         _messenger.Send(new SwitchAppModeMessage(AppMode.Navigation, null));
     }
 }

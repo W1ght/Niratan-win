@@ -36,7 +36,7 @@ public sealed class NovelStatisticsDashboardServiceTests
 
         var weekSummary = NovelStatisticsDashboardCalculator.WeekSummary(snapshot, today, settings);
         weekSummary.Range.Start.Should().Be(new DateOnly(2026, 6, 29));
-        weekSummary.Range.End.Should().Be(today);
+        weekSummary.Range.End.Should().Be(new DateOnly(2026, 7, 5));
         weekSummary.Characters.Should().Be(9_500);
         weekSummary.MetTargetDays.Should().Be(1);
         weekSummary.AverageSpeedPerHour.Should().Be(7_600);
@@ -48,12 +48,11 @@ public sealed class NovelStatisticsDashboardServiceTests
         rangeSummary.AverageSpeedPerHour.Should().Be(7_582);
         rangeSummary.TargetDays.Should().Be(3);
 
-        var distribution = NovelStatisticsDashboardCalculator.DistributionRows(
+        var ranking = NovelStatisticsDashboardCalculator.BookRankingRows(
             days,
             range,
-            StatisticsDailyTargetType.Characters);
-        distribution.Select(row => row.Title).Should().Equal("Alpha", "Beta");
-        distribution.Select(row => row.Percent).Should().Equal(77, 23);
+            NovelStatisticsBookRankingMetric.Characters);
+        ranking.Select(row => row.Title).Should().Equal("Alpha", "Beta");
     }
 
     [Fact]

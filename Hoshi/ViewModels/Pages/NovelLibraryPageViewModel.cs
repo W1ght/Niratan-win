@@ -9,10 +9,13 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Hoshi.Enums;
+using Hoshi.Helpers;
 using Hoshi.Messages;
 using Hoshi.Models;
+using Hoshi.Models.Common;
 using Hoshi.Models.DTO;
 using Hoshi.Models.Novel;
+using Hoshi.Models.Settings;
 using Hoshi.Models.Sync;
 using Hoshi.Services.Settings;
 using Hoshi.Services.Novels;
@@ -32,7 +35,8 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     private readonly IMessenger _messenger;
     private readonly ISasayakiMatchService _sasayakiMatchService;
     private readonly ISettingsService _settingsService;
-    private readonly INovelStatisticsDashboardService _statisticsDashboardService;
+    private readonly INovelShelfService _shelfService;
+    private NovelShelfState _currentShelfState = new([], []);
     private readonly ITtuSyncRemoteStore _ttuSyncRemoteStore;
     private readonly ITtuBookImportService _ttuBookImportService;
     private readonly IGoogleDriveAuthService _googleDriveAuthService;
@@ -47,19 +51,24 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     public partial ObservableCollection<RemoteNovelBookItemViewModel> RemoteBooks { get; set; } = new();
 
     [ObservableProperty]
+    public partial ObservableCollection<NovelShelfSectionViewModel> RailSections { get; set; } = new();
+
+    [ObservableProperty]
+    public partial ObservableCollection<NovelBookItemViewModel> UnshelvedBooks { get; set; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasNovelStorageWarnings))]
+    public partial ObservableCollection<string> NovelStorageWarnings { get; set; } = new();
+
+    [ObservableProperty]
     public partial NovelLibrarySortOption SelectedSortOption { get; set; } = NovelLibrarySortOption.Recent;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowBookshelf))]
     public partial bool ShowStatisticsDashboard { get; set; }
 
-    [ObservableProperty]
-    public partial string StatisticsTodayText { get; set; } = "0 chars";
-
-    [ObservableProperty]
-    public partial string StatisticsWeekText { get; set; } = "0 chars";
-
-    [ObservableProperty]
-    public partial ObservableCollection<NovelStatisticsDistributionRow> StatisticsDistributionRows { get; set; } = new();
+    public bool ShowBookshelf => !ShowStatisticsDashboard;
+    public NovelStatisticsDashboardViewModel StatisticsDashboard { get; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NoNovels))]
@@ -76,6 +85,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     ];
 
     public bool NoNovels => !IsContentLoading && NovelBooks.Count == 0;
+    public bool HasNovelStorageWarnings => NovelStorageWarnings.Count > 0;
 
     public NovelLibraryPageViewModel(
         INovelLibraryService novelLibraryService,
@@ -84,7 +94,8 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         IMessenger messenger,
         ISasayakiMatchService sasayakiMatchService,
         ISettingsService settingsService,
-        INovelStatisticsDashboardService statisticsDashboardService,
+        NovelStatisticsDashboardViewModel statisticsDashboard,
+        INovelShelfService shelfService,
         ITtuSyncRemoteStore ttuSyncRemoteStore,
         ITtuBookImportService ttuBookImportService,
         IGoogleDriveAuthService googleDriveAuthService
@@ -96,7 +107,8 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         _messenger = messenger;
         _sasayakiMatchService = sasayakiMatchService;
         _settingsService = settingsService;
-        _statisticsDashboardService = statisticsDashboardService;
+        StatisticsDashboard = statisticsDashboard;
+        _shelfService = shelfService;
         _ttuSyncRemoteStore = ttuSyncRemoteStore;
         _ttuBookImportService = ttuBookImportService;
         _googleDriveAuthService = googleDriveAuthService;
@@ -104,12 +116,16 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         _messenger.RegisterAll(this);
     }
 
-    public async Task InitializeAsync() => await LoadNovelsAsync();
+    public async Task InitializeAsync()
+    {
+        await LoadNovelsAsync();
+    }
 
     public void Receive(NovelLibraryChangedMessage message) => _ = LoadNovelsAsync();
 
     public void OnNavigatedFrom()
     {
+        StatisticsDashboard.Deactivate();
         _cts.Cancel();
     }
 
@@ -257,6 +273,23 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task EnterStatisticsAsync()
+    {
+        ShowStatisticsDashboard = true;
+        await StatisticsDashboard.ActivateAsync(
+            NovelBooks.Select(item => item.Book).ToList(),
+            _currentShelfState,
+            _cts.Token);
+    }
+
+    [RelayCommand]
+    private void ReturnToBookshelf()
+    {
+        StatisticsDashboard.Deactivate();
+        ShowStatisticsDashboard = false;
+    }
+
+    [RelayCommand]
     private async Task MoveNovelBeforeAsync(NovelBookMoveRequest request)
     {
         if (request.SourceBookId == request.TargetBookId)
@@ -289,6 +322,37 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     {
         SetManualSortOptionWithoutReapplying();
         await SaveCurrentManualOrderCoreAsync();
+    }
+
+    [RelayCommand]
+    private async Task MoveBooksToShelfAsync(NovelShelfMoveRequest request)
+    {
+        var result = await _shelfService.MoveBooksAsync(
+            request.BookIds,
+            request.TargetShelfName,
+            _cts.Token);
+        ApplyShelfResult(result);
+    }
+
+    [RelayCommand]
+    private async Task MoveBookAsync(NovelBookShelfMoveRequest request)
+    {
+        var result = await _shelfService.MoveBooksAsync(
+            [request.BookId],
+            request.TargetShelfName,
+            _cts.Token);
+        ApplyShelfResult(result);
+    }
+
+    [RelayCommand]
+    private async Task ReorderShelfBookAsync(NovelShelfBookReorderRequest request)
+    {
+        var result = await _shelfService.ReorderBookAsync(
+            request.SourceBookId,
+            request.TargetBookId,
+            request.ShelfName,
+            _cts.Token);
+        ApplyShelfResult(result);
     }
 
     [RelayCommand]
@@ -361,16 +425,100 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
         if (result.IsSuccess)
         {
-            var books = result.Value!;
+            var books = result.Value!.Books;
+            NovelStorageWarnings = new ObservableCollection<string>(
+                result.Value.CorruptMetadataPaths);
             NovelBooks = new ObservableCollection<NovelBookItemViewModel>(
                 SortBooks(books).Select(book => new NovelBookItemViewModel(book)));
-            await LoadStatisticsDashboardAsync(books);
+            var shelfResult = await _shelfService.LoadAsync(_cts.Token);
+            if (shelfResult.IsSuccess)
+                RebuildShelfProjections(shelfResult.Value!, books);
+            else
+            {
+                RebuildShelfProjections(
+                    new NovelShelfState([], books.Select(book => book.Id).ToList()),
+                    books);
+                if (!shelfResult.IsCancelled)
+                    _notificationService.ShowError(
+                        shelfResult.Error!,
+                        shelfResult.ErrorTitle ?? "Shelf load failed");
+            }
+            if (ShowStatisticsDashboard)
+            {
+                await StatisticsDashboard.ActivateAsync(
+                    books,
+                    _currentShelfState,
+                    _cts.Token);
+            }
         }
         else if (!result.IsCancelled)
             _notificationService.ShowError(result.Error!, result.ErrorTitle!);
 
         IsContentLoading = false;
     }
+
+    private void ApplyShelfResult(Result<NovelShelfState> result)
+    {
+        if (!result.IsSuccess)
+        {
+            if (!result.IsCancelled)
+                _notificationService.ShowError(
+                    result.Error!,
+                    result.ErrorTitle ?? "Shelf update failed");
+            return;
+        }
+
+        RebuildShelfProjections(
+            result.Value!,
+            NovelBooks.Select(item => item.Book).ToList());
+    }
+
+    private void RebuildShelfProjections(
+        NovelShelfState state,
+        IReadOnlyList<NovelBook> books)
+    {
+        _currentShelfState = state;
+        var booksById = books.ToDictionary(book => book.Id, StringComparer.Ordinal);
+        var rails = new List<NovelShelfSectionViewModel>();
+        if (_settingsService.Current.BookshelfShowReading)
+        {
+            var reading = books
+                .Where(IsReading)
+                .Select(book => new NovelBookItemViewModel(book));
+            rails.Add(new NovelShelfSectionViewModel(
+                "reading",
+                ResourceStringHelper.GetString(
+                    "NovelShelfReadingLabel/Text",
+                    "Reading"),
+                IsDerived: true,
+                IsUnshelved: false,
+                new ObservableCollection<NovelBookItemViewModel>(reading)));
+        }
+
+        foreach (var shelf in state.Shelves)
+        {
+            var items = shelf.BookIds
+                .Where(booksById.ContainsKey)
+                .Select(id => new NovelBookItemViewModel(booksById[id]));
+            rails.Add(new NovelShelfSectionViewModel(
+                "shelf:" + shelf.Name,
+                shelf.Name,
+                IsDerived: false,
+                IsUnshelved: false,
+                new ObservableCollection<NovelBookItemViewModel>(items)));
+        }
+
+        RailSections = new ObservableCollection<NovelShelfSectionViewModel>(rails);
+        UnshelvedBooks = new ObservableCollection<NovelBookItemViewModel>(
+            state.UnshelvedBookOrder
+                .Where(booksById.ContainsKey)
+                .Select(id => new NovelBookItemViewModel(booksById[id])));
+    }
+
+    private static bool IsReading(NovelBook book) =>
+        book.CurrentCharacterCount > 0
+        && (book.TotalCharacterCount <= 0
+            || book.CurrentCharacterCount < book.TotalCharacterCount);
 
     partial void OnSelectedSortOptionChanged(NovelLibrarySortOption value)
     {
@@ -422,51 +570,20 @@ public partial class NovelLibraryPageViewModel : ObservableObject
             _notificationService.ShowError(result.Error!, result.ErrorTitle!);
     }
 
-    private async Task LoadStatisticsDashboardAsync(IReadOnlyList<NovelBook> books)
-    {
-        var snapshot = await _statisticsDashboardService.LoadSnapshotAsync(books, _cts.Token);
-        var today = DateOnly.FromDateTime(DateTime.Now);
-        var settings = _settingsService.Current.StatisticsSettings;
-        var targetSettings = new NovelStatisticsDashboardTargetSettings(
-            settings.DailyTargetType,
-            settings.DailyCharacterTarget,
-            settings.DailyDurationTargetMinutes,
-            settings.WeeklyTargetDays);
-
-        var todaySummary = NovelStatisticsDashboardCalculator.TodaySummary(
-            snapshot,
-            today,
-            targetSettings);
-        var weekSummary = NovelStatisticsDashboardCalculator.WeekSummary(
-            snapshot,
-            today,
-            targetSettings);
-        var range = new NovelStatisticsDateRange(today.AddYears(-1).AddDays(1), today);
-        var distribution = NovelStatisticsDashboardCalculator.DistributionRows(
-            snapshot.Days,
-            range,
-            targetSettings.DailyTargetType);
-
-        StatisticsTodayText = $"{FormatCharacters(todaySummary.Characters)} chars · {FormatDuration(todaySummary.ReadingTime)} · {todaySummary.TargetPercent}%";
-        StatisticsWeekText = $"{FormatCharacters(weekSummary.Characters)} chars · {weekSummary.MetTargetDays}/{weekSummary.TargetDays} days";
-        StatisticsDistributionRows = new ObservableCollection<NovelStatisticsDistributionRow>(
-            distribution.Take(6));
-    }
-
-    private static string FormatCharacters(int characters) =>
-        characters.ToString("N0");
-
-    private static string FormatDuration(double seconds)
-    {
-        var minutes = Math.Max((int)Math.Round(seconds / 60), 0);
-        if (minutes < 60)
-            return $"{minutes}m";
-
-        var hours = minutes / 60;
-        var remainder = minutes % 60;
-        return remainder == 0 ? $"{hours}h" : $"{hours}h {remainder}m";
-    }
 }
+
+public sealed record NovelShelfMoveRequest(
+    IReadOnlyList<string> BookIds,
+    string? TargetShelfName);
+
+public sealed record NovelBookShelfMoveRequest(
+    string BookId,
+    string? TargetShelfName);
+
+public sealed record NovelShelfBookReorderRequest(
+    string SourceBookId,
+    string TargetBookId,
+    string? ShelfName);
 
 public sealed record NovelBookMoveRequest(string SourceBookId, string TargetBookId);
 

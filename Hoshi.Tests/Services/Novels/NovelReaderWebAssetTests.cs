@@ -45,6 +45,26 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void ReaderBridge_InterceptsInternalLinksAndSupportsFragmentTransactions()
+    {
+        var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+        var readerXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml"));
+
+        script.Should().Contain("\"a[href]\"");
+        script.Should().Contain("postToHost(\"internalLink\"");
+        script.Should().Contain("case \"jumpToFragment\"");
+        script.Should().Contain("navigationGeneration");
+        readerCode.Should().Contain("ReaderInternalLinkResolver.Resolve(");
+        readerCode.Should().Contain("ReaderNavigationHistory");
+        readerCode.Should().Contain("SendJumpToFragmentMessageAsync");
+        readerXaml.Should().Contain("NovelReaderHistoryBackButton");
+        readerXaml.Should().Contain("NovelReaderHistoryForwardButton");
+    }
+
+    [Fact]
     public void ReaderBridge_UsesHoshiStyleChapterMessages()
     {
         var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
@@ -132,9 +152,8 @@ public class NovelReaderWebAssetTests
         pageCode.Should().Contain("BuildReaderWebShortcutBindingsJson");
         pageCode.Should().Contain("window.__hoshiReaderShortcutBindings");
         pageCode.Should().Contain("case \"shortcut\":");
-        pageCode.Should().Contain("result == \"limit\"");
-        pageCode.Should().Contain("LoadChapter(ViewModel.CurrentChapterIndex + 1)");
-        pageCode.Should().Contain("LoadChapter(ViewModel.CurrentChapterIndex - 1)");
+        pageCode.Should().Contain("ReaderStatisticsEventClassifier.AdjacentChapterTarget");
+        pageCode.Should().Contain("LoadChapter(adjacentTarget.Value)");
     }
 
     [Fact]
@@ -176,7 +195,10 @@ public class NovelReaderWebAssetTests
             .Contain("AutomationProperties.AutomationId=\"ImportNovelButton\"");
         libraryXaml
             .Should()
-            .Contain("AutomationProperties.AutomationId=\"NovelBookGridView\"");
+            .Contain("AutomationProperties.AutomationId=\"NovelShelfSectionsControl\"");
+        libraryXaml
+            .Should()
+            .Contain("AutomationProperties.AutomationId=\"NovelUnshelvedBooksRepeater\"");
         libraryXaml
             .Should()
             .Contain("AutomationProperties.AutomationId=\"{x:Bind AutomationId");
@@ -2339,8 +2361,8 @@ public class NovelReaderWebAssetTests
         var libraryService = File.ReadAllText(
             Path.Combine(ProjectRoot, "Services", "Novels", "INovelLibraryService.cs")
         );
-        var dataService = File.ReadAllText(
-            Path.Combine(ProjectRoot, "Services", "Storage", "IDataService.cs")
+        var bookStorageService = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Services", "Novels", "INovelBookStorageService.cs")
         );
         var appSettings = File.ReadAllText(
             Path.Combine(ProjectRoot, "Models", "Settings", "AppSettings.cs")
@@ -2354,23 +2376,25 @@ public class NovelReaderWebAssetTests
         libraryXaml.Should().Contain("Drop=\"NovelLibrary_Drop\"");
         libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelLibrarySortComboBox\"");
         libraryXaml.Should().Contain("SelectedValue=\"{x:Bind ViewModel.SelectedSortOption, Mode=TwoWay}\"");
-        libraryXaml.Should().Contain("CanDragItems=\"True\"");
-        libraryXaml.Should().Contain("CanReorderItems=\"True\"");
-        libraryXaml.Should().Contain("DragItemsCompleted=\"NovelBookGridView_DragItemsCompleted\"");
+        libraryXaml.Should().Contain("x:Name=\"NovelShelfSectionsControl\"");
+        libraryXaml.Should().Contain("x:Name=\"NovelUnshelvedBooksRepeater\"");
+        libraryXaml.Should().Contain("<UniformGridLayout");
+        libraryXaml.Should().Contain("Click=\"MoveNovelToShelfMenuItem_Click\"");
 
         libraryCode.Should().Contain("GetStorageItemsAsync");
         libraryCode.Should().Contain("StorageFile");
         libraryCode.Should().Contain("ImportDroppedNovelsCommand");
-        libraryCode.Should().Contain("SaveCurrentManualOrderCommand");
+        libraryCode.Should().Contain("MoveBookCommand");
 
         libraryViewModel.Should().Contain("NovelLibrarySortOption");
         libraryViewModel.Should().Contain("SelectedSortOption");
         libraryViewModel.Should().Contain("ImportDroppedNovelsAsync");
         libraryViewModel.Should().Contain("MoveNovelBeforeAsync");
         libraryViewModel.Should().Contain("SaveCurrentManualOrderAsync");
+        libraryViewModel.Should().Contain("ReorderShelfBookAsync");
 
         libraryService.Should().Contain("SaveNovelBookOrderAsync");
-        dataService.Should().Contain("SaveNovelBookOrderAsync");
+        bookStorageService.Should().Contain("SaveBookOrderAsync");
         appSettings.Should().Contain("NovelLibrarySortOption");
         databaseMigrator.Should().Contain("new Migration_008()");
     }
@@ -2384,6 +2408,30 @@ public class NovelReaderWebAssetTests
         var libraryViewModel = File.ReadAllText(
             Path.Combine(ProjectRoot, "ViewModels", "Pages", "NovelLibraryPageViewModel.cs")
         );
+        var dashboardViewModel = File.ReadAllText(
+            Path.Combine(ProjectRoot, "ViewModels", "Pages", "NovelStatisticsDashboardViewModel.cs")
+        );
+        var dashboardXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Controls", "NovelStatisticsDashboardView.xaml")
+        );
+        var dashboardCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Controls", "NovelStatisticsDashboardView.xaml.cs")
+        );
+        var trendChartXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Controls", "NovelStatisticsTrendChart.xaml")
+        );
+        var trendChartCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Controls", "NovelStatisticsTrendChart.xaml.cs")
+        );
+        var dashboardModels = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Models", "Novel", "NovelStatisticsDashboardModels.cs")
+        );
+        var enResources = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "en-US", "Resources.resw")
+        );
+        var zhResources = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw")
+        );
         var appCode = File.ReadAllText(Path.Combine(ProjectRoot, "App.xaml.cs"));
         var dashboardServicePath = Path.Combine(
             ProjectRoot,
@@ -2395,21 +2443,120 @@ public class NovelReaderWebAssetTests
         var dashboardService = File.ReadAllText(dashboardServicePath);
 
         libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelLibraryStatisticsButton\"");
-        libraryXaml.Should().Contain("IsChecked=\"{x:Bind ViewModel.ShowStatisticsDashboard, Mode=TwoWay}\"");
-        libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelLibraryStatisticsDashboard\"");
-        libraryXaml.Should().Contain("NovelLibraryTodayStatisticsText");
-        libraryXaml.Should().Contain("NovelLibraryWeekStatisticsText");
-        libraryXaml.Should().Contain("NovelLibraryByBookStatisticsList");
+        libraryXaml.Should().Contain("Command=\"{x:Bind ViewModel.EnterStatisticsCommand}\"");
+        libraryXaml.Should().Contain("Command=\"{x:Bind ViewModel.ReturnToBookshelfCommand}\"");
+        libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsDashboardView\"");
+        libraryXaml.Should().Contain("Visibility=\"{x:Bind ViewModel.ShowBookshelf");
+        libraryXaml.Should().NotContain("AutomationProperties.AutomationId=\"NovelLibraryStatisticsDashboard\"");
+        libraryXaml.Should().NotContain("By Book");
 
-        libraryViewModel.Should().Contain("INovelStatisticsDashboardService");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsDashboardScrollViewer\"");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsLoadingStatus\"");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsEmptyState\"");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsCorruptWarning\"");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsTrendCard\"");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsTodayCard\"");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsGoalCard\"");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsWeekCard\"");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsSelectedRangeCard\"");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsSpeedCard\"");
+        dashboardXaml.Should().Contain("ItemsSource=\"{Binding WeekDays}\"");
+        dashboardXaml.Should().Contain("ItemsSource=\"{Binding TrendStyles}\"");
+        dashboardXaml.Should().Contain("controls:NovelStatisticsTrendChart");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsCalendarCard\"");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsBookRankingCard\"");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsShelfComparisonCard\"");
+        dashboardXaml.Should().Contain("x:Name=\"WideDashboardState\"");
+        dashboardXaml.Should().Contain("x:Name=\"MediumDashboardState\"");
+        dashboardXaml.Should().Contain("x:Name=\"NarrowDashboardState\"");
+        dashboardXaml.Should().Contain("MinWindowWidth=\"1260\"");
+        dashboardXaml.Should().Contain("MinWindowWidth=\"840\"");
+        dashboardXaml.Should().Contain("x:Name=\"DashboardPrimaryColumn\"");
+        dashboardXaml.Should().Contain("x:Name=\"DashboardSecondaryColumn\"");
+        dashboardXaml.Should().Contain("x:Name=\"DashboardTertiaryColumn\"");
+        dashboardXaml.Should().Contain("ScrollViewer.HorizontalScrollMode=\"Enabled\"");
+        dashboardXaml.Split("VerticalScrollBarVisibility=\"Auto\"").Should().HaveCount(2);
+        dashboardCode.Should().Contain("ApplyAdaptiveLayout");
+        dashboardCode.Should().Contain("width >= 1260");
+        dashboardCode.Should().Contain("width >= 840");
+        dashboardCode.Should().Contain("Grid.SetColumn");
+        trendChartXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsTrendChart\"");
+        trendChartCode.Should().Contain("Polyline");
+        dashboardModels.Should().Contain("NovelStatisticsTrendChartStyle");
+
+        string[] dashboardResourceUids =
+        [
+            "NovelStatisticsDashboardTitle",
+            "NovelStatisticsDashboardSubtitle",
+            "NovelStatisticsTrendCardTitle",
+            "NovelStatisticsRangeLabel",
+            "NovelStatisticsAnchorLabel",
+            "NovelStatisticsTrendGrainLabel",
+            "NovelStatisticsTrendMetricLabel",
+            "NovelStatisticsTrendStyleLabel",
+            "NovelStatisticsTrendHelp",
+            "NovelStatisticsTodayTitle",
+            "NovelStatisticsGoalTitle",
+            "NovelStatisticsGoalTypeLabel",
+            "NovelStatisticsCharacterTargetLabel",
+            "NovelStatisticsDurationTargetLabel",
+            "NovelStatisticsWeeklyTargetLabel",
+            "NovelStatisticsGoalHelp",
+            "NovelStatisticsWeekTitle",
+            "NovelStatisticsSelectedRangeTitle",
+            "NovelStatisticsSpeedTitle",
+            "NovelStatisticsSpeedHelp",
+            "NovelStatisticsCalendarTitle",
+            "NovelStatisticsCalendarRecentYear",
+            "NovelStatisticsRankingTitle",
+            "NovelStatisticsShelfTitle",
+            "NovelStatisticsLoadingText",
+            "NovelStatisticsEmptyTitle",
+            "NovelStatisticsEmptyDescription",
+        ];
+        foreach (var uid in dashboardResourceUids)
+        {
+            dashboardXaml.Should().Contain($"x:Uid=\"{uid}\"");
+            enResources.Should().Contain($"name=\"{uid}.Text\"");
+            zhResources.Should().Contain($"name=\"{uid}.Text\"");
+        }
+
+        string[] metricResourceKeys =
+        [
+            "NovelStatisticsMetricDuration.Text",
+            "NovelStatisticsMetricCharacters.Text",
+            "NovelStatisticsMetricSpeed.Text",
+            "NovelStatisticsMetricStreak.Text",
+            "NovelStatisticsMetricAverageCharacters.Text",
+            "NovelStatisticsMetricGoalProgress.Text",
+            "NovelStatisticsMetricDaysMet.Text",
+            "NovelStatisticsCorruptWarning.Text",
+        ];
+        foreach (var resourceKey in metricResourceKeys)
+        {
+            enResources.Should().Contain($"name=\"{resourceKey}\"");
+            zhResources.Should().Contain($"name=\"{resourceKey}\"");
+        }
+        libraryXaml.Should().Contain("x:Uid=\"NovelStatisticsBackToBookshelfButton\"");
+        enResources.Should().Contain("name=\"NovelStatisticsBackToBookshelfButton.Label\"");
+        zhResources.Should().Contain("name=\"NovelStatisticsBackToBookshelfButton.Label\"");
+
+        libraryViewModel.Should().Contain("NovelStatisticsDashboardViewModel StatisticsDashboard");
+        libraryViewModel.Should().NotContain("INovelStatisticsDashboardService");
         libraryViewModel.Should().Contain("ShowStatisticsDashboard");
-        libraryViewModel.Should().Contain("StatisticsTodayText");
-        libraryViewModel.Should().Contain("StatisticsWeekText");
-        libraryViewModel.Should().Contain("StatisticsDistributionRows");
+        libraryViewModel.Should().NotContain("StatisticsTodayText");
+        libraryViewModel.Should().NotContain("SelectedStatisticsRangeMode");
+        libraryViewModel.Should().NotContain("OnStatisticsDashboardPropertyChanged");
+        libraryViewModel.Should().NotContain("NovelStatisticsDistributionRow");
+
+        dashboardViewModel.Should().Contain("INovelStatisticsDashboardService");
+        dashboardViewModel.Should().Contain("NovelStatisticsDashboardCalculator");
+        dashboardViewModel.Should().Contain("ActivateAsync");
+        dashboardViewModel.Should().Contain("Deactivate");
 
         dashboardService.Should().Contain("NovelStatisticsDashboardCalculator");
         dashboardService.Should().Contain("LoadSnapshotAsync");
-        appCode.Should().Contain("INovelStatisticsDashboardService, NovelStatisticsDashboardService");
+        appCode.Should().Contain("AddSingleton<INovelStatisticsDashboardService>(provider =>");
     }
 
     [Fact]
@@ -2640,7 +2787,9 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("ReaderSearchPanelStatus.Failed");
         readerCode.Should().Contain("SetReaderSearchStatus");
         readerCode.Should().Contain("SearchResult_ItemClick");
-        readerCode.Should().Contain("LoadChapter(result.ChapterIndex, result.ChapterProgress)");
+        readerCode.Should().Contain("NavigateProgrammaticallyAsync(");
+        readerCode.Should().Contain("result.ChapterIndex,");
+        readerCode.Should().Contain("result.ChapterProgress);");
     }
 
     [Fact]
@@ -2685,7 +2834,8 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("_epubBook.Chapters");
         readerCode.Should().Contain("_epubBook.ContainerDirectory");
         viewModelCode.Should().Contain("SaveBookInfoSidecarAsync");
-        viewModelCode.Should().Contain("SaveBookmarkSidecarAsync");
+        viewModelCode.Should().NotContain("SaveBookmarkSidecarAsync");
+        viewModelCode.Should().Contain("_novelLibraryService.SaveProgressAsync");
         appCode.Should().Contain("INovelBookSidecarService, NovelBookSidecarService");
     }
 
@@ -2760,13 +2910,23 @@ public class NovelReaderWebAssetTests
         readerXaml.Should().Contain("StatisticsButton_Click");
         readerXaml.Should().Contain("StatisticsStartStopButton_Click");
         readerCode.Should().Contain("ViewModel.LoadStatisticsAsync");
+        readerCode.Should().Contain("case \"restoreCompleted\":");
+        readerCode.Should().Contain("ReaderStatisticsEventClassifier.IsActualPageMovement");
+        readerCode.Should().Contain("ReaderStatisticsEventClassifier.AdjacentChapterTarget");
+        readerCode.Should().Contain("ReaderStatisticsCheckpointReason.AdjacentChapter");
+        readerCode.Should().Contain("BeginProgrammaticNavigationAsync");
+        readerCode.Should().Contain("CompleteProgrammaticNavigationAsync");
+        readerCode.Should().Contain("ReaderStatisticsCheckpointReason.ProgrammaticDeparture");
+        readerCode.Should().Contain("SaveProgressNowAsync(flushStatistics: false)");
+        readerCode.Should().Contain("ResetStatisticsBaseline");
         readerCode.Should().Contain("StatisticsButton_Click");
         readerCode.Should().Contain("StatisticsStartStopButton_Click");
         readerCode.Should().Contain("RefreshStatisticsPanel");
         viewModelCode.Should().Contain("StartStatisticsTracking");
         viewModelCode.Should().Contain("StopStatisticsTrackingAsync");
         viewModelCode.Should().Contain("FlushStatisticsAsync");
-        viewModelCode.Should().Contain("INovelStatisticsSidecarService");
+        viewModelCode.Should().Contain("IReaderStatisticsSession");
+        viewModelCode.Should().Contain("CheckpointReadingAsync");
         enResources.Should().Contain("NovelReaderStatisticsButton.AutomationProperties.Name");
         enResources.Should().Contain("ReaderStatisticsPanelDialog.Title");
         enResources.Should().Contain("ReaderStatisticsPanelDialog.CloseButtonText");
@@ -2990,7 +3150,7 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
-    public void ReaderPage_DoesNotExposeUnusedSessionNavigationHistoryControls()
+    public void ReaderPage_ExposesActiveSessionNavigationHistoryControls()
     {
         var readerXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml")
@@ -2998,31 +3158,16 @@ public class NovelReaderWebAssetTests
         var readerCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
         );
-        var enResources = File.ReadAllText(
-            Path.Combine(ProjectRoot, "Strings", "en-US", "Resources.resw")
-        );
-        var zhResources = File.ReadAllText(
-            Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw")
-        );
+        readerXaml.Should().Contain("NovelReaderHistoryBackButton");
+        readerXaml.Should().Contain("NovelReaderHistoryForwardButton");
+        readerXaml.Should().Contain("HistoryBackButton_Click");
+        readerXaml.Should().Contain("HistoryForwardButton_Click");
 
-        readerXaml.Should().NotContain("NovelReaderHistoryBackButton");
-        readerXaml.Should().NotContain("NovelReaderHistoryForwardButton");
-        readerXaml.Should().NotContain("ReaderHistoryBackButton_Click");
-        readerXaml.Should().NotContain("ReaderHistoryForwardButton_Click");
-
-        readerCode.Should().NotContain("ReaderNavigationHistoryEntry");
-        readerCode.Should().NotContain("_readerBackHistory");
-        readerCode.Should().NotContain("_readerForwardHistory");
-        readerCode.Should().NotContain("RecordReaderHistoryEntry");
-        readerCode.Should().NotContain("RestoreReaderHistoryEntryAsync");
-        readerCode.Should().NotContain("ReaderHistoryBackButton_Click");
-        readerCode.Should().NotContain("ReaderHistoryForwardButton_Click");
-        readerCode.Should().NotContain("UpdateReaderHistoryButtons");
-
-        enResources.Should().NotContain("NovelReaderHistoryBackButton.AutomationProperties.Name");
-        enResources.Should().NotContain("NovelReaderHistoryForwardButton.AutomationProperties.Name");
-        zhResources.Should().NotContain("NovelReaderHistoryBackButton.AutomationProperties.Name");
-        zhResources.Should().NotContain("NovelReaderHistoryForwardButton.AutomationProperties.Name");
+        readerCode.Should().Contain("ReaderNavigationHistory");
+        readerCode.Should().Contain("_navigationHistory.Record(");
+        readerCode.Should().Contain("_navigationHistory.TryGoBack(");
+        readerCode.Should().Contain("_navigationHistory.TryGoForward(");
+        readerCode.Should().Contain("RefreshReaderNavigationHistoryChrome");
     }
 
     [Fact]
@@ -3568,5 +3713,48 @@ public class NovelReaderWebAssetTests
             StringComparison.Ordinal);
         invalidateAfterCommitIndex.Should().BeGreaterThan(commitIndex);
         publicCommitIndex.Should().BeGreaterThan(invalidateAfterCommitIndex);
+    }
+
+    [Fact]
+    public void NovelLibraryPage_ExposesNativeShelfSurfaceAndManagementDialog()
+    {
+        var libraryXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelLibraryPage.xaml"));
+        var dialogXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dialogs", "NovelShelfManagementDialog.xaml"));
+        var dialogCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dialogs", "NovelShelfManagementDialog.xaml.cs"));
+        var enResources = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "en-US", "Resources.resw"));
+        var zhResources = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw"));
+
+        libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelLibraryCommandBar\"");
+        libraryXaml.Should().Contain("<SymbolIcon Symbol=\"Document\" />");
+        libraryXaml.Should().NotContain("Icon=\"ReportDocument\"");
+        libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelShelfSectionsControl\"");
+        libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelShelfManagementButton\"");
+        libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStorageWarningInfoBar\"");
+        libraryXaml.Should().Contain("ItemsSource=\"{x:Bind ViewModel.UnshelvedBooks, Mode=OneWay}\"");
+        dialogXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelShelfList\"");
+        dialogXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelShelfCreateButton\"");
+        dialogXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelShelfDeleteConfirmationFlyout\"");
+        dialogCode.Should().NotContain("new ContentDialog");
+
+        foreach (var key in new[]
+                 {
+                     "NovelShelfReadingLabel.Text",
+                     "NovelShelfUnshelvedLabel.Text",
+                     "NovelShelfManageButton.Label",
+                     "NovelShelfCreateButton.Content",
+                     "NovelShelfRenameButton.Content",
+                     "NovelShelfDeleteButton.Content",
+                     "NovelShelfConfirmDeleteButton.Content",
+                     "NovelBookMoveToShelfMenuItem.Text",
+                 })
+        {
+            enResources.Should().Contain($"name=\"{key}\"");
+            zhResources.Should().Contain($"name=\"{key}\"");
+        }
     }
 }

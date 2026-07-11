@@ -13,6 +13,15 @@ namespace Hoshi.Tests.Services.Storage;
 public class VideoDataServiceTests
 {
     [Fact]
+    public void VideoDataInterface_DoesNotExposeNovelMembers()
+    {
+        typeof(IVideoDataService).GetMethods()
+            .Select(method => method.Name)
+            .Should()
+            .OnlyContain(name => !name.Contains("Novel", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Migration008_CreatesVideoItemsTable()
     {
         var ct = TestContext.Current.CancellationToken;
@@ -128,7 +137,7 @@ public class VideoDataServiceTests
         while (await reader.ReadAsync(ct))
             names.Add(reader.GetString(0));
 
-        names.Should().Equal("NovelBooks.ProfileId", "VideoItems.ProfileId");
+        names.Should().Equal("VideoItems.ProfileId");
     }
 
     [Fact]
@@ -258,7 +267,7 @@ public class VideoDataServiceTests
         {
             var connectionString = $"Data Source={dbPath};Pooling=False";
             await new DatabaseMigrator(NullLogger<DatabaseMigrator>.Instance, connectionString).MigrateAsync();
-            var service = new DataService(connectionString);
+            var service = new VideoDataService(connectionString);
 
             var video = new VideoItem
             {
@@ -301,7 +310,7 @@ public class VideoDataServiceTests
         {
             var connectionString = $"Data Source={dbPath};Pooling=False";
             await new DatabaseMigrator(NullLogger<DatabaseMigrator>.Instance, connectionString).MigrateAsync();
-            var service = new DataService(connectionString);
+            var service = new VideoDataService(connectionString);
             var filePath = @"D:\Anime\Episode 1.mkv";
 
             await service.UpsertVideoAsync(new VideoItem
