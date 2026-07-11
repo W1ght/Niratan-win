@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -Command \"$ext=[System.IO.Path]::GetExtension('${file}'); if ($ext -in '.cs','.xaml','.csproj') { dotnet build -p:Platform=x64 --no-restore 2>&1 | Select-Object -Last 5 }\""
+          }
+        ]
+      }
+    ]
+  }
+}
