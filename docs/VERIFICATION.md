@@ -135,9 +135,11 @@ YYYY-MM-DD-uia-tree.txt
 4. 调整书架内和 Unshelved 顺序，关闭并重启应用，顺序保持。
 5. 删除书架前必须出现确认；确认后仅删除书架，书籍进入 Unshelved，EPUB 不删除。
 6. 删除一本书后，`shelves.json` 与 `book_order.json` 不再包含该 ID。
-7. 开启 Reading rail 时，已有进度且未读完的书出现在派生 Reading 区；该派生区不写入 `shelves.json`。
-8. Google Drive 书籍保持独立 rail，不进入本地书架状态。
-9. 窄窗口下 CommandBar 可访问，页面只有一个纵向滚动所有者，横向 rail 不抢占纵向滚动。
+7. 已有进度且未读完的书始终出现在派生 Reading 区；该派生区不写入 `shelves.json`，为空时不显示。
+8. Reading、自定义书架、Google Drive、Unshelved 都使用自适应多行布局；未归档书卡可直接打开，窄窗口也不产生横向 rail。
+9. Google Drive 书籍保持独立分区，不进入本地书架状态；缩略图首次使用鉴权下载，刷新或重启后命中磁盘缓存。
+10. 同时点击 4 本云端书，前三本进入下载、第四本显示排队；任一本完成或失败不取消其他任务，失败卡片显示重试。
+11. 窄窗口下 CommandBar 可访问，页面只有一个纵向滚动所有者，书籍分区不抢占纵向滚动。
 
 ### 1.10 Niratan Reader 统计语义验证
 
@@ -168,10 +170,12 @@ YYYY-MM-DD-uia-tree.txt
 7. 在 Dashboard 修改目标类型、字符/时长目标和周目标天数，确认 Today/Week/Selected Range/streak 立即重算，重启后设置仍保留。
 8. 验证 Book Ranking 最多 12 行，以及自定义书架/Unshelved 对比；损坏 sidecar 时必须显示可见警告。
 9. 重开 Dashboard 验证 `statistics_dashboard_cache_v1.json` 先命中再后台重读 sidecar；新 snapshot 发布后 UI 更新且缓存被替换。
+   自动化测试必须创建第二个 cache 实例从磁盘读取 snapshot，不能只验证同一实例的内存命中。
 10. 人工损坏缓存只应删除缓存；任何书籍 sidecar、EPUB 和视频 SQLite 均不得改变。
 11. 从小说 CommandBar 进入 Statistics，确认书架 rail、排序、导入和书架管理退出布局；使用 Bookshelf 按钮返回后，原 rail 和书籍卡仍可操作。
 12. 验证全宽 Range & Trend，以及 Today、Goal、This Week、Reading Calendar、Selected Range、Speed Summary、Book Ranking、Shelf Comparison 全部存在；Bar/Line 切换不改变其他卡片数据。
 13. 分别把窗口调整到 `>=1260`、`840..1259` 和 `<840` effective pixels，确认三列、两列、单列状态生效，无裁切、重叠或第二个纵向滚动条；Calendar 保持七行横向滚动。
+    连续在断点两侧调整窗口，确认每次只发生一次布局切换，统计视图保持响应且不出现 DispatcherQueue 重排循环。
 14. 在加载未完成时返回 Bookshelf，再次进入 Dashboard；旧 load/refresh 不得覆盖新 snapshot，loading/refresh 状态不得残留，refresh 订阅始终只有一个。
 15. 在英文和简体中文下检查所有 header、metric、empty/loading/warning 文案；用键盘遍历 range、anchor、grain、metric、style、goal、calendar、ranking 和返回按钮，并确认 UI Automation name 非空。
 16. Light、Dark 与 High Contrast 下检查趋势线/柱、calendar heat、range/selection outline、ranking/shelf bars 和损坏警告均可辨认。

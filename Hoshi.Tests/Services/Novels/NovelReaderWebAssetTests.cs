@@ -2464,6 +2464,7 @@ public class NovelReaderWebAssetTests
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsCalendarCard\"");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsBookRankingCard\"");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsShelfComparisonCard\"");
+        dashboardXaml.Should().NotContain("AccentStrokeColorDefaultBrush");
         dashboardXaml.Should().NotContain("VisualStateManager.VisualStateGroups");
         dashboardXaml.Should().NotContain("AdaptiveTrigger");
         dashboardXaml.Should().Contain("x:Name=\"DashboardPrimaryColumn\"");

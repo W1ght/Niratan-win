@@ -61,7 +61,7 @@
                 <Border Background="{ThemeResource AccentFillColorDefaultBrush}"
                         CornerRadius="3"
                         Opacity="{x:Bind HeatOpacity}" />
-                <Border BorderBrush="{ThemeResource AccentStrokeColorDefaultBrush}"
+                <Border BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
                         BorderThickness="1"
                         CornerRadius="3"
                         Visibility="{x:Bind IsInSelectedRange, Converter={StaticResource BooleanToVisibilityConverter}}" />
