@@ -19,11 +19,11 @@ public sealed class VideoSettings
     private double _videoGamma;
     private double _videoHue;
     private string _subtitleFontFamily = JapaneseFontCatalog.DefaultSubtitleFontFamily;
-    private double _subtitleFontSize = 36;
+    private double _subtitleFontSize = 52;
     private int _subtitleFontWeight = 700;
-    private double _subtitleShadowRadius = 3;
+    private double _subtitleShadowRadius = 10;
     private double _subtitleBackgroundOpacity;
-    private double _subtitleVerticalPosition;
+    private double _subtitleVerticalPosition = -51;
     private string _subtitleColorHex = "#FFFFFFFF";
     private string _subtitleLookupHighlightColorHex = "#3EB5C1CB";
     private string _subtitleLookupHighlightTextColorHex = "#FFFFFFFF";
