@@ -40,6 +40,8 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     private readonly ITtuSyncRemoteStore _ttuSyncRemoteStore;
     private readonly ITtuBookImportService _ttuBookImportService;
     private readonly IGoogleDriveAuthService _googleDriveAuthService;
+    private readonly IGoogleDriveCoverCacheService _googleDriveCoverCacheService;
+    private readonly SemaphoreSlim _remoteCoverGate = new(6, 6);
     private CancellationTokenSource _cts = new();
     private bool _suppressSortApplication;
 
@@ -95,7 +97,8 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         INovelShelfService shelfService,
         ITtuSyncRemoteStore ttuSyncRemoteStore,
         ITtuBookImportService ttuBookImportService,
-        IGoogleDriveAuthService googleDriveAuthService
+        IGoogleDriveAuthService googleDriveAuthService,
+        IGoogleDriveCoverCacheService googleDriveCoverCacheService
     )
     {
         _novelLibraryService = novelLibraryService;
@@ -109,6 +112,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         _ttuSyncRemoteStore = ttuSyncRemoteStore;
         _ttuBookImportService = ttuBookImportService;
         _googleDriveAuthService = googleDriveAuthService;
+        _googleDriveCoverCacheService = googleDriveCoverCacheService;
         SelectedSortOption = _settingsService.Current.NovelLibrarySortOption;
         _messenger.RegisterAll(this);
     }
@@ -194,13 +198,16 @@ public partial class NovelLibraryPageViewModel : ObservableObject
             var localTitles = NovelBooks
                 .Select(item => TtuSyncFileNames.SanitizeTtuFilename(item.Book.Title))
                 .ToHashSet(StringComparer.Ordinal);
+            var items = remoteBooks
+                .Where(book => !localTitles.Contains(book.SanitizedTitle))
+                .Select(book => new RemoteNovelBookItemViewModel(book))
+                .ToList();
             RemoteBooks = new ObservableCollection<RemoteNovelBookItemViewModel>(
-                remoteBooks
-                    .Where(book => !localTitles.Contains(book.SanitizedTitle))
-                    .Select(book => new RemoteNovelBookItemViewModel(book)));
+                items);
             RebuildShelfProjections(
                 _currentShelfState,
                 NovelBooks.Select(item => item.Book).ToList());
+            await HydrateRemoteCoversAsync(items, _cts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -215,6 +222,28 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         {
             IsRemoteBooksLoading = false;
         }
+    }
+
+    private async Task HydrateRemoteCoversAsync(
+        IReadOnlyList<RemoteNovelBookItemViewModel> items,
+        CancellationToken ct)
+    {
+        var tasks = items.Select(async item =>
+        {
+            await _remoteCoverGate.WaitAsync(ct);
+            try
+            {
+                var path = await _googleDriveCoverCacheService.GetCoverPathAsync(
+                    item.Book.Files.Cover,
+                    ct);
+                item.ApplyCoverPath(path);
+            }
+            finally
+            {
+                _remoteCoverGate.Release();
+            }
+        });
+        await Task.WhenAll(tasks);
     }
 
     [RelayCommand]

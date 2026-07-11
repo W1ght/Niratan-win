@@ -294,6 +294,41 @@ public class NovelLibraryPageViewModelTests
     }
 
     [Fact]
+    public async Task RefreshRemoteBooksCommand_HydratesCoversWithoutReorderingCards()
+    {
+        using var temp = new TempDirectory();
+        var firstPath = WritePng(temp.Path, "first.png");
+        var secondPath = WritePng(temp.Path, "second.png");
+        var remote = new FakeTtuSyncRemoteStore
+        {
+            RemoteBooks =
+            [
+                RemoteBook("a", "A", "A", "cover-a"),
+                RemoteBook("b", "B", "B", "cover-b"),
+            ],
+        };
+        var covers = new FakeGoogleDriveCoverCacheService(new Dictionary<string, string>
+        {
+            ["cover-a"] = firstPath,
+            ["cover-b"] = secondPath,
+        });
+        var settings = Mock.Of<ISettingsService>(service => service.Current == new AppSettings
+        {
+            TtuSyncSettings = new TtuSyncSettings { EnableSync = true },
+        });
+        var sut = CreateSut(
+            syncRemoteStore: remote,
+            googleDriveCoverCacheService: covers,
+            settingsService: settings);
+
+        await sut.RefreshRemoteBooksCommand.ExecuteAsync(null);
+
+        sut.RemoteBooks.Select(item => item.Book.Id).Should().Equal("a", "b");
+        sut.RemoteBooks.Select(item => item.CoverPath)
+            .Should().Equal(firstPath, secondPath);
+    }
+
+    [Fact]
     public async Task DownloadRemoteBookCommand_ImportsRemoteBookAndRemovesItFromRemoteShelf()
     {
         var remoteBook = RemoteBook("folder-cloud", "雲の本", "雲の本");
@@ -473,7 +508,8 @@ public class NovelLibraryPageViewModelTests
         INovelShelfService? shelfService = null,
         ITtuSyncRemoteStore? syncRemoteStore = null,
         ITtuBookImportService? ttuBookImportService = null,
-        IGoogleDriveAuthService? googleDriveAuthService = null
+        IGoogleDriveAuthService? googleDriveAuthService = null,
+        IGoogleDriveCoverCacheService? googleDriveCoverCacheService = null
     )
     {
         var serviceMock = new Mock<INovelLibraryService>();
@@ -506,7 +542,9 @@ public class NovelLibraryPageViewModelTests
             shelfService ?? CreateDefaultShelfService(),
             syncRemoteStore ?? new FakeTtuSyncRemoteStore(),
             ttuBookImportService ?? new FakeTtuBookImportService(),
-            googleDriveAuthService ?? new FakeGoogleDriveAuthService { HasCredentials = true }
+            googleDriveAuthService ?? new FakeGoogleDriveAuthService { HasCredentials = true },
+            googleDriveCoverCacheService ?? new FakeGoogleDriveCoverCacheService(
+                new Dictionary<string, string>())
         );
     }
 
@@ -521,7 +559,8 @@ public class NovelLibraryPageViewModelTests
     private static TtuRemoteBook RemoteBook(
         string id,
         string title,
-        string sanitizedTitle) =>
+        string sanitizedTitle,
+        string? coverId = null) =>
         new(
             id,
             title,
@@ -531,8 +570,23 @@ public class NovelLibraryPageViewModelTests
                 Statistics: null,
                 AudioBook: null,
                 BookData: new TtuRemoteFile($"{id}-bookdata", "bookdata_1_6_1200_2000_1000.zip"),
-                Cover: null),
+                Cover: coverId == null
+                    ? null
+                    : new TtuRemoteFile(
+                        coverId,
+                        "cover_1_6.png",
+                        ThumbnailLink: $"https://thumb.test/{coverId}=s220")),
             Progress: 0.25);
+
+    private static readonly byte[] PngBytes = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+
+    private static string WritePng(string directory, string name)
+    {
+        var path = Path.Combine(directory, name);
+        File.WriteAllBytes(path, PngBytes);
+        return path;
+    }
 
     private static void SetSortOption(NovelLibraryPageViewModel sut, string optionName)
     {
@@ -672,6 +726,18 @@ public class NovelLibraryPageViewModelTests
                 FilePath = "D:\\Books\\remote.epub",
             }));
         }
+    }
+
+    private sealed class FakeGoogleDriveCoverCacheService(
+        IReadOnlyDictionary<string, string> paths) : IGoogleDriveCoverCacheService
+    {
+        public Task<string?> GetCoverPathAsync(
+            TtuRemoteFile? cover,
+            CancellationToken ct = default) =>
+            Task.FromResult(
+                cover != null && paths.TryGetValue(cover.Id, out var path)
+                    ? path
+                    : null);
     }
 
     private sealed class FakeGoogleDriveAuthService : IGoogleDriveAuthService

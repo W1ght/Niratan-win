@@ -95,11 +95,15 @@
                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                             CornerRadius="8">
                         <Grid>
+                            <Image Stretch="UniformToFill"
+                                   Source="{x:Bind CoverImage, Mode=OneWay}"
+                                   Visibility="{x:Bind HasCover, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
                             <FontIcon FontSize="48"
                                       Glyph="&#xEBD3;"
                                       Opacity="0.36"
                                       HorizontalAlignment="Center"
-                                      VerticalAlignment="Center" />
+                                      VerticalAlignment="Center"
+                                      Visibility="{x:Bind HasCover, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}" />
                         </Grid>
                     </Border>
                     <StackPanel Spacing="4">
