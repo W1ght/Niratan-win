@@ -40,6 +40,18 @@ public static class NovelReaderBridgeMessageFactory
         return JsonSerializer.Serialize(message, JsonOptions);
     }
 
+    public static string CreateJumpToFragmentMessage(
+        string fragment,
+        long navigationGeneration)
+    {
+        var payload = new JumpToFragmentPayload(fragment, navigationGeneration);
+        var message = new NovelReaderWebMessage<JumpToFragmentPayload>(
+            1,
+            "jumpToFragment",
+            payload);
+        return JsonSerializer.Serialize(message, JsonOptions);
+    }
+
     private sealed record SetChapterPayload(
         int Index,
         int TotalChapters,
@@ -49,4 +61,8 @@ public static class NovelReaderBridgeMessageFactory
     private sealed record RestoreProgressPayload(
         double Progress,
         long? NavigationGeneration);
+
+    private sealed record JumpToFragmentPayload(
+        string Fragment,
+        long NavigationGeneration);
 }

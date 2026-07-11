@@ -498,14 +498,43 @@
               x:Name="ReaderBottomChrome"
               Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
               RowDefinitions="Auto,Auto">
-            <TextBlock Grid.Row="0"
-                       x:Name="NovelReaderBottomProgressText"
-                       AutomationProperties.AutomationId="NovelReaderBottomProgressText"
-                       HorizontalAlignment="Center"
-                       Padding="16,6"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       Style="{StaticResource CaptionTextBlockStyle}"
-                       Visibility="Collapsed" />
+            <Grid Grid.Row="0"
+                  Padding="12,4"
+                  ColumnDefinitions="*,Auto,*">
+                <Button Grid.Column="0"
+                        x:Name="NovelReaderHistoryBackButton"
+                        AutomationProperties.AutomationId="NovelReaderHistoryBackButton"
+                        HorizontalAlignment="Left"
+                        Click="HistoryBackButton_Click"
+                        Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE7A7;" FontSize="14" />
+                        <TextBlock x:Name="NovelReaderHistoryBackText" />
+                    </StackPanel>
+                </Button>
+
+                <TextBlock Grid.Column="1"
+                           x:Name="NovelReaderBottomProgressText"
+                           AutomationProperties.AutomationId="NovelReaderBottomProgressText"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Padding="16,6"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Style="{StaticResource CaptionTextBlockStyle}"
+                           Visibility="Collapsed" />
+
+                <Button Grid.Column="2"
+                        x:Name="NovelReaderHistoryForwardButton"
+                        AutomationProperties.AutomationId="NovelReaderHistoryForwardButton"
+                        HorizontalAlignment="Right"
+                        Click="HistoryForwardButton_Click"
+                        Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock x:Name="NovelReaderHistoryForwardText" />
+                        <FontIcon Glyph="&#xE7A6;" FontSize="14" />
+                    </StackPanel>
+                </Button>
+            </Grid>
 
         </Grid>
 

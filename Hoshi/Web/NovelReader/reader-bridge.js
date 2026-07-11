@@ -532,7 +532,7 @@ window.hoshiReader = {
     });
   },
 
-  jumpToFragment: async function (fragment) {
+  jumpToFragment: async function (fragment, navigationGeneration) {
     await document.fonts.ready;
     var context = this.getScrollContext();
     var rawFragment = (fragment || "").trim();
@@ -542,7 +542,7 @@ window.hoshiReader = {
         document.getElementsByName(rawFragment)[0]);
     if (context.pageSize <= 0 || !target) {
       this.registerSnapScroll(this.getPagePosition(context));
-      notifyRestoreComplete();
+      notifyRestoreComplete(navigationGeneration);
       return false;
     }
     var rect = this.getRect(target);
@@ -554,7 +554,7 @@ window.hoshiReader = {
       var ctx = window.hoshiReader.getScrollContext();
       window.hoshiReader.setPagePosition(ctx, targetScroll);
       window.hoshiReader.registerSnapScroll(targetScroll);
-      requestAnimationFrame(function () { notifyRestoreComplete(); });
+      requestAnimationFrame(function () { notifyRestoreComplete(navigationGeneration); });
     });
     return true;
   },
@@ -890,6 +890,13 @@ async function handleMessage(event) {
         logDebug("restoreProgress-done", window.__hoshiReaderState);
         postToHost("chapterReady", window.__hoshiReaderState);
         break;
+      case "jumpToFragment":
+        await window.hoshiReader.jumpToFragment(
+          message.payload?.fragment ?? "",
+          message.payload?.navigationGeneration ?? null
+        );
+        updateDiagnostics();
+        break;
       default:
         throw new Error("Unsupported bridge message type: " + message.type);
     }
@@ -903,6 +910,22 @@ async function handleMessage(event) {
 
 window.chrome?.webview?.addEventListener("message", handleMessage);
 window.hoshiReaderNavigate = handleNavigate;
+
+document.addEventListener("click", function (event) {
+  var anchor = event.target?.closest?.("a[href]");
+  if (!anchor) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  try {
+    var url = new URL(anchor.getAttribute("href"), document.baseURI);
+    if (url.protocol === "https:" && url.host === window.location.host) {
+      postToHost("internalLink", { href: url.href });
+    }
+  } catch (_) {
+    // Malformed and external EPUB links are intentionally not navigated.
+  }
+}, true);
 
 document.addEventListener("keydown", function (event) {
   if (event.defaultPrevented) return;
