@@ -45,6 +45,40 @@ public sealed class NovelStatisticsDashboardViewModelTests
         sut.SelectedTrendStyle.Should().Be(NovelStatisticsTrendChartStyle.Line);
     }
 
+    [Theory]
+    [InlineData(NovelStatisticsTrendMetric.Characters, "chars")]
+    [InlineData(NovelStatisticsTrendMetric.Duration, "m")]
+    [InlineData(NovelStatisticsTrendMetric.Speed, "/ h")]
+    public async Task TrendMetric_ProjectsNormalizedValuesAndUnits(
+        NovelStatisticsTrendMetric metric,
+        string unit)
+    {
+        var sut = CreateSut(out _, out _);
+        await sut.ActivateAsync(Books(), Shelves(), CancellationToken.None);
+
+        sut.SelectedTrendMetric = metric;
+
+        sut.TrendPoints.Max(point => point.NormalizedValue).Should().Be(1);
+        sut.TrendPoints.Should().OnlyContain(
+            point => point.NormalizedValue >= 0 && point.NormalizedValue <= 1);
+        sut.TrendPoints.Should().Contain(point => point.ValueText.Contains(unit));
+    }
+
+    [Fact]
+    public async Task SpeedCard_ExposesAllSixNiratanMetrics()
+    {
+        var sut = CreateSut(out _, out _);
+        await sut.ActivateAsync(Books(), Shelves(), CancellationToken.None);
+
+        sut.SpeedMetrics.Select(metric => metric.Label).Should().Equal(
+            "Weighted",
+            "Median Active Day",
+            "Last 7 Active Days",
+            "Change",
+            "Fastest",
+            "Slowest");
+    }
+
     [Fact]
     public async Task CalendarSelection_UpdatesAnchorAndSelectedDetail()
     {
