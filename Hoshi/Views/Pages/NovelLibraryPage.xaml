@@ -129,7 +129,7 @@
             </Button>
         </DataTemplate>
 
-        <DataTemplate x:Key="StatisticsDistributionTemplate" x:DataType="novel:NovelStatisticsDistributionRow">
+        <DataTemplate x:Key="StatisticsRankingTemplate" x:DataType="novel:NovelStatisticsBookRankingRow">
             <Grid Padding="0,6"
                   ColumnDefinitions="*,Auto"
                   ColumnSpacing="8">
@@ -137,14 +137,39 @@
                     <TextBlock Text="{x:Bind Title, Mode=OneWay}"
                                TextTrimming="CharacterEllipsis"
                                Style="{StaticResource BodyStrongTextBlockStyle}" />
-                    <TextBlock Text="{x:Bind CharactersText, Mode=OneWay}"
+                    <TextBlock Text="{x:Bind Characters, Mode=OneWay}"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
                 <TextBlock Grid.Column="1"
                            VerticalAlignment="Center"
                            FontWeight="SemiBold"
-                           Text="{x:Bind PercentText, Mode=OneWay}" />
+                           Text="{x:Bind AverageSpeedPerHour, Mode=OneWay}" />
             </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="StatisticsShelfTemplate" x:DataType="novel:NovelStatisticsShelfComparisonRow">
+            <Grid Padding="0,6" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="{x:Bind Name}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <TextBlock Text="{x:Bind RecordedCharacters}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+                <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{x:Bind BookCount}" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="StatisticsTrendTemplate" x:DataType="novel:NovelStatisticsTrendPoint">
+            <StackPanel Width="72" Spacing="3">
+                <TextBlock Text="{x:Bind Characters}" FontWeight="SemiBold" />
+                <TextBlock Text="{x:Bind Label}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="StatisticsCalendarTemplate" x:DataType="novel:NovelStatisticsCalendarDay">
+            <Border Width="32" Height="32" Margin="2" CornerRadius="5"
+                    Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Text="{x:Bind TargetPercent}" />
+            </Border>
         </DataTemplate>
     </Page.Resources>
 
@@ -225,8 +250,7 @@
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     AutomationProperties.AutomationId="NovelLibraryStatisticsDashboard"
                     Visibility="{x:Bind ViewModel.ShowStatisticsDashboard, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
-                <Grid ColumnDefinitions="*,*,2*"
-                      ColumnSpacing="18">
+                <Grid ColumnDefinitions="*,*,*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="18" RowSpacing="14">
                     <StackPanel Spacing="6">
                         <TextBlock Text="Today"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
@@ -244,12 +268,51 @@
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
                     <StackPanel Grid.Column="2" Spacing="6">
-                        <TextBlock Text="By Book"
+                        <TextBlock Text="Recent Year" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="{x:Bind ViewModel.StatisticsRangeText, Mode=OneWay}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="3" Spacing="6">
+                        <TextBlock Text="Reading Speed" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <TextBlock Text="{x:Bind ViewModel.StatisticsSpeedText, Mode=OneWay}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Spacing="6">
+                        <TextBlock Text="Book Ranking"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <ItemsControl x:Name="NovelLibraryByBookStatisticsList"
-                                      AutomationProperties.AutomationId="NovelLibraryByBookStatisticsList"
-                                      ItemTemplate="{StaticResource StatisticsDistributionTemplate}"
-                                      ItemsSource="{x:Bind ViewModel.StatisticsDistributionRows, Mode=OneWay}" />
+                        <ItemsControl x:Name="NovelLibraryBookRankingList"
+                                      AutomationProperties.AutomationId="NovelLibraryBookRankingList"
+                                      ItemTemplate="{StaticResource StatisticsRankingTemplate}"
+                                      ItemsSource="{x:Bind ViewModel.StatisticsBookRankingRows, Mode=OneWay}" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Spacing="6">
+                        <TextBlock Text="Shelf Comparison" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <ItemsControl x:Name="NovelLibraryShelfComparisonList"
+                                      AutomationProperties.AutomationId="NovelLibraryShelfComparisonList"
+                                      ItemTemplate="{StaticResource StatisticsShelfTemplate}"
+                                      ItemsSource="{x:Bind ViewModel.StatisticsShelfComparisonRows, Mode=OneWay}" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Spacing="6">
+                        <TextBlock Text="Trend" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <ItemsControl x:Name="NovelLibraryStatisticsTrend"
+                                      AutomationProperties.AutomationId="NovelLibraryStatisticsTrend"
+                                      ItemTemplate="{StaticResource StatisticsTrendTemplate}"
+                                      ItemsSource="{x:Bind ViewModel.StatisticsTrendPoints, Mode=OneWay}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="8" /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
+                    <StackPanel Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2" Spacing="6">
+                        <TextBlock Text="Reading Calendar" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <ItemsControl x:Name="NovelLibraryStatisticsCalendar"
+                                      AutomationProperties.AutomationId="NovelLibraryStatisticsCalendar"
+                                      ItemTemplate="{StaticResource StatisticsCalendarTemplate}"
+                                      ItemsSource="{x:Bind ViewModel.StatisticsCalendarDays, Mode=OneWay}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><ItemsWrapGrid MaximumRowsOrColumns="7" Orientation="Horizontal" /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
                     </StackPanel>
                 </Grid>
             </Border>

@@ -36,6 +36,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     private readonly ISettingsService _settingsService;
     private readonly INovelStatisticsDashboardService _statisticsDashboardService;
     private readonly INovelShelfService _shelfService;
+    private NovelShelfState _currentShelfState = new([], []);
     private readonly ITtuSyncRemoteStore _ttuSyncRemoteStore;
     private readonly ITtuBookImportService _ttuBookImportService;
     private readonly IGoogleDriveAuthService _googleDriveAuthService;
@@ -72,7 +73,25 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     public partial string StatisticsWeekText { get; set; } = "0 chars";
 
     [ObservableProperty]
-    public partial ObservableCollection<NovelStatisticsDistributionRow> StatisticsDistributionRows { get; set; } = new();
+    public partial string StatisticsRangeText { get; set; } = "0 chars";
+
+    [ObservableProperty]
+    public partial string StatisticsSpeedText { get; set; } = "— / h";
+
+    [ObservableProperty]
+    public partial ObservableCollection<NovelStatisticsTrendPoint> StatisticsTrendPoints { get; set; } = new();
+
+    [ObservableProperty]
+    public partial ObservableCollection<NovelStatisticsCalendarDay> StatisticsCalendarDays { get; set; } = new();
+
+    [ObservableProperty]
+    public partial ObservableCollection<NovelStatisticsBookRankingRow> StatisticsBookRankingRows { get; set; } = new();
+
+    [ObservableProperty]
+    public partial ObservableCollection<NovelStatisticsShelfComparisonRow> StatisticsShelfComparisonRows { get; set; } = new();
+
+    [ObservableProperty]
+    public partial ObservableCollection<string> StatisticsSkippedCorruptBookIds { get; set; } = new();
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NoNovels))]
@@ -454,6 +473,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         NovelShelfState state,
         IReadOnlyList<NovelBook> books)
     {
+        _currentShelfState = state;
         var booksById = books.ToDictionary(book => book.Id, StringComparer.Ordinal);
         var rails = new List<NovelShelfSectionViewModel>();
         if (_settingsService.Current.BookshelfShowReading)
@@ -566,15 +586,40 @@ public partial class NovelLibraryPageViewModel : ObservableObject
             today,
             targetSettings);
         var range = new NovelStatisticsDateRange(today.AddYears(-1).AddDays(1), today);
-        var distribution = NovelStatisticsDashboardCalculator.DistributionRows(
+        var rangeSummary = NovelStatisticsDashboardCalculator.RangeSummary(
             snapshot.Days,
             range,
-            targetSettings.DailyTargetType);
+            targetSettings);
+        var speed = NovelStatisticsDashboardCalculator.SpeedSummary(snapshot.Days, range);
+        var trend = NovelStatisticsDashboardCalculator.TrendPoints(
+            NovelStatisticsTrendGrain.Month,
+            range,
+            snapshot.Days);
+        var calendar = NovelStatisticsDashboardCalculator.CalendarDays(
+            snapshot,
+            today,
+            targetSettings);
+        var ranking = NovelStatisticsDashboardCalculator.BookRankingRows(
+            snapshot.Days,
+            range,
+            NovelStatisticsBookRankingMetric.Characters);
+        var shelves = NovelStatisticsDashboardCalculator.ShelfComparisonRows(
+            snapshot,
+            _currentShelfState,
+            range,
+            ResourceStringHelper.GetString("NovelShelfUnshelvedLabel/Text", "Unshelved"));
 
         StatisticsTodayText = $"{FormatCharacters(todaySummary.Characters)} chars · {FormatDuration(todaySummary.ReadingTime)} · {todaySummary.TargetPercent}%";
         StatisticsWeekText = $"{FormatCharacters(weekSummary.Characters)} chars · {weekSummary.MetTargetDays}/{weekSummary.TargetDays} days";
-        StatisticsDistributionRows = new ObservableCollection<NovelStatisticsDistributionRow>(
-            distribution.Take(6));
+        StatisticsRangeText = $"{FormatCharacters(rangeSummary.Characters)} chars · {FormatDuration(rangeSummary.ReadingTime)}";
+        StatisticsSpeedText = speed.WeightedAveragePerHour is { } weighted
+            ? $"{FormatCharacters(weighted)} / h"
+            : "— / h";
+        StatisticsTrendPoints = new ObservableCollection<NovelStatisticsTrendPoint>(trend);
+        StatisticsCalendarDays = new ObservableCollection<NovelStatisticsCalendarDay>(calendar.TakeLast(35));
+        StatisticsBookRankingRows = new ObservableCollection<NovelStatisticsBookRankingRow>(ranking);
+        StatisticsShelfComparisonRows = new ObservableCollection<NovelStatisticsShelfComparisonRow>(shelves);
+        StatisticsSkippedCorruptBookIds = new ObservableCollection<string>(snapshot.SkippedCorruptBookIds);
     }
 
     private static string FormatCharacters(int characters) =>
