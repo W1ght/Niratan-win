@@ -1733,7 +1733,7 @@ public class NovelReaderWebAssetTests
         code.Should().Contain("window.hoshiCommitPopupRender");
         code.Should().Contain("_displayTransaction.TryAcceptCommit(preparedGeneration)");
         code.Should().Contain("_displayTransaction.TryCompleteCommit(generation, out var commit)");
-        code.Should().Contain("public void CancelPendingContent(long generation, string? traceId)");
+        code.Should().Contain("public bool CancelPendingContent(long generation, string? traceId)");
         code.Should().Contain("window.hoshiCancelPopupRender");
         code.Should().Contain("var generation = PrepareForPendingContent(");
         code.Should().Contain("request.CancellationToken,");
@@ -3275,13 +3275,20 @@ public class NovelReaderWebAssetTests
     {
         var code = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs"));
+        var popupCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryLookupPopup.cs"));
 
-        code.Should().Contain("PendingRootCommit");
+        code.Should().Contain("DictionaryPopupPendingLayoutCoordinator<DictionaryPopupLayoutResult>");
         code.Should().Contain("generationStarted: generation =>");
         code.Should().Contain("if (!_rootHost.HasCommittedContent)");
         code.Should().Contain("private void OnRootContentCommitted(");
-        code.Should().Contain("ApplyHostLayout(_rootHost, pending.Layout)");
-        code.Should().Contain("_rootHost.CancelPendingContent(pending.Generation, traceId)");
+        code.Should().Contain("_rootLayoutCoordinator.TryComplete(");
+        code.Should().Contain("out var layout");
+        code.Should().Contain("var contentCancelled = _rootHost.CancelPendingContent(");
+        code.Should().Contain("contentCancellationSucceeded: contentCancelled");
+        code.Should().Contain("ContentCommitAborted += OnRootContentCommitAborted");
         code.Should().Contain("RootContentCommitted?.Invoke(this, e)");
+        popupCode.Should().Contain("public bool CancelPendingContent(");
+        popupCode.Should().Contain("ContentCommitAborted?.Invoke(");
     }
 }

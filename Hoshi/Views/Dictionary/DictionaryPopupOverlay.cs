@@ -33,11 +33,6 @@ public enum DictionaryPopupCanvasInputMode
 
 public sealed class DictionaryPopupOverlay : IDisposable
 {
-    private readonly record struct PendingRootCommit(
-        long Generation,
-        string? TraceId,
-        DictionaryPopupLayoutResult Layout);
-
     private const double PopupPadding = DictionaryPopupLayoutCalculator.PopupPadding;
     private const double ScreenBorderPadding = DictionaryPopupLayoutCalculator.ScreenBorderPadding;
     private const double MinPopupWidth = 360;
@@ -81,7 +76,8 @@ public sealed class DictionaryPopupOverlay : IDisposable
     private double _rootReadyOpacity = 1;
     private bool _useStandaloneWindowVisuals;
     private bool _useNakedFloatingWindowVisuals;
-    private PendingRootCommit? _pendingRootCommit;
+    private readonly DictionaryPopupPendingLayoutCoordinator<DictionaryPopupLayoutResult>
+        _rootLayoutCoordinator = new();
 
     public event EventHandler? Dismissed;
     public event EventHandler<DictionaryPopupContentCommittedEventArgs>? RootContentCommitted;
@@ -183,6 +179,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         _rootHost.DismissRequested += OnPopupDismissRequested;
         _rootHost.Scrolled += OnRootScrolled;
         _rootHost.ContentCommitted += OnRootContentCommitted;
+        _rootHost.ContentCommitAborted += OnRootContentCommitAborted;
 
         if (_embeddedPanel != null)
         {
@@ -305,7 +302,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
             cancellationToken: cancellationToken,
             generationStarted: generation =>
             {
-                _pendingRootCommit = new PendingRootCommit(
+                _rootLayoutCoordinator.Stage(
                     generation,
                     traceId,
                     targetLayout);
@@ -356,15 +353,15 @@ public sealed class DictionaryPopupOverlay : IDisposable
         object? sender,
         DictionaryPopupContentCommittedEventArgs e)
     {
-        if (_pendingRootCommit is not PendingRootCommit pending
-            || pending.Generation != e.Generation
-            || !string.Equals(pending.TraceId, e.TraceId, StringComparison.Ordinal))
+        if (!_rootLayoutCoordinator.TryComplete(
+                e.Generation,
+                e.TraceId,
+                out var layout))
         {
             return;
         }
 
-        ApplyHostLayout(_rootHost, pending.Layout);
-        _pendingRootCommit = null;
+        ApplyHostLayout(_rootHost, layout);
         _rootVisible = true;
         if (_embeddedPanel != null)
         {
@@ -377,6 +374,13 @@ public sealed class DictionaryPopupOverlay : IDisposable
         }
 
         RootContentCommitted?.Invoke(this, e);
+    }
+
+    private void OnRootContentCommitAborted(
+        object? sender,
+        DictionaryPopupContentCommittedEventArgs e)
+    {
+        _rootLayoutCoordinator.TryAbort(e.Generation, e.TraceId);
     }
 
     private async Task HandleRedirectAsync(DictionaryPopupRedirectRequest request, DictionaryLookupPopup? parentHost)
@@ -943,6 +947,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
             _rootHost.DismissRequested -= OnPopupDismissRequested;
             _rootHost.Scrolled -= OnRootScrolled;
             _rootHost.ContentCommitted -= OnRootContentCommitted;
+            _rootHost.ContentCommitAborted -= OnRootContentCommitAborted;
             if (_embeddedPanel != null)
                 _embeddedPanel.Children.Remove(_rootHost.VisualRoot);
             _rootHost.Dispose();
@@ -971,7 +976,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         var wasVisible = _rootVisible;
         if (_rootWarm)
             _rootHost.Hide();
-        _pendingRootCommit = null;
+        _rootLayoutCoordinator.Clear();
         ClearChildren();
         ResetRedirectDeduplication();
         _rootVisible = false;
@@ -987,17 +992,21 @@ public sealed class DictionaryPopupOverlay : IDisposable
 
     public void CancelShow(string? traceId)
     {
-        if (_pendingRootCommit is not PendingRootCommit pending
-            || !string.Equals(pending.TraceId, traceId, StringComparison.Ordinal))
-        {
+        if (!_rootLayoutCoordinator.TryGetGeneration(traceId, out var generation))
             return;
-        }
 
         Log.Debug(
             "[LookupTrace] trace={TraceId} overlay show cancelled before ownership commit",
             traceId ?? "-");
-        _rootHost.CancelPendingContent(pending.Generation, traceId);
-        _pendingRootCommit = null;
+        var contentCancelled = _rootHost.CancelPendingContent(generation, traceId);
+        if (!_rootLayoutCoordinator.TryCancel(
+                generation,
+                traceId,
+                contentCancellationSucceeded: contentCancelled))
+        {
+            return;
+        }
+
         if (!_rootHost.HasCommittedContent)
             Dismiss();
     }

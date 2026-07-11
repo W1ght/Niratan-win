@@ -133,6 +133,8 @@ public class VideoSubtitleLookupAssetTests
         overlayCode.Should().Contain("cancellationToken.ThrowIfCancellationRequested();");
         overlayCode.Should().Contain("cancellationToken: cancellationToken");
         overlayCode.Should().Contain("public void CancelShow(string? traceId)");
+        overlayCode.Should().Contain("var contentCancelled = _rootHost.CancelPendingContent(");
+        overlayCode.Should().Contain("contentCancellationSucceeded: contentCancelled");
     }
 
     [Fact]
