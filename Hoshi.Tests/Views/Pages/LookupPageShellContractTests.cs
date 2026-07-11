@@ -56,4 +56,34 @@ public sealed class LookupPageShellContractTests
         enResources.Should().Contain("<data name=\"NovelLookupNavItem.Content\" xml:space=\"preserve\"><value>Lookup Window</value></data>");
         enResources.Should().Contain("<data name=\"NovelLookupPageTitle.Text\" xml:space=\"preserve\"><value>Lookup Window</value></data>");
     }
+
+    [Fact]
+    public void NovelLookupPage_PreservesEmbeddedResultsAcrossPagePointerPresses()
+    {
+        var lookupPageCode = ReadProjectFile("Views", "Pages", "NovelLookupPage.xaml.cs");
+
+        lookupPageCode.Should().NotContain("AddHandler(PointerPressedEvent");
+        lookupPageCode.Should().NotContain("RemoveHandler(PointerPressedEvent");
+        lookupPageCode.Should().NotContain("OnPagePointerPressed");
+    }
+
+    [Fact]
+    public void DictionaryPopupOverlay_EnablesCanvasHitTestingWhenRootContentCommits()
+    {
+        var overlayCode = ReadProjectFile("Views", "Dictionary", "DictionaryPopupOverlay.cs");
+        var handlerStart = overlayCode.IndexOf(
+            "private void OnRootContentCommitted(",
+            StringComparison.Ordinal);
+        var handlerEnd = overlayCode.IndexOf(
+            "private void OnRootContentCommitAborted(",
+            handlerStart,
+            StringComparison.Ordinal);
+
+        handlerStart.Should().BeGreaterThanOrEqualTo(0);
+        handlerEnd.Should().BeGreaterThan(handlerStart);
+
+        var commitHandler = overlayCode[handlerStart..handlerEnd].ReplaceLineEndings("\n");
+        commitHandler.Should().Contain(
+            "_rootVisible = true;\n        _canvas.IsHitTestVisible = true;\n        if (_embeddedPanel != null)");
+    }
 }

@@ -374,13 +374,13 @@ public sealed class DictionaryPopupOverlay : IDisposable
         InvalidateRootRedirects();
         ApplyHostLayout(_rootHost, committed.Layout);
         _rootVisible = true;
+        _canvas.IsHitTestVisible = true;
         if (_embeddedPanel != null)
         {
             _embeddedPanel.Visibility = Visibility.Visible;
         }
         else
         {
-            _canvas.IsHitTestVisible = true;
             _canvas.Visibility = Visibility.Visible;
         }
 

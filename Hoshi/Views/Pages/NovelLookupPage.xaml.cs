@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
 using Windows.System;
 using Hoshi.Services.Dictionary;
 using Hoshi.Services.Settings;
@@ -47,7 +46,6 @@ public sealed partial class NovelLookupPage : Page, IDisposable
     {
         var popupOverlay = EnsurePopupOverlay();
         DictionaryPanelRoot.SizeChanged += OnDictionaryPanelSizeChanged;
-        AddHandler(PointerPressedEvent, new PointerEventHandler(OnPagePointerPressed), true);
         _ = popupOverlay.PrewarmAsync(XamlRoot);
     }
 
@@ -67,22 +65,6 @@ public sealed partial class NovelLookupPage : Page, IDisposable
     private void OnPopupOverlayDismissed(object? sender, EventArgs e)
     {
         DictionaryPanelRoot.Visibility = Visibility.Collapsed;
-    }
-
-    private void OnPagePointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        if (_popupOverlay is null) return;
-        if (DictionaryPanelRoot.Visibility != Visibility.Visible) return;
-
-        var source = e.OriginalSource as DependencyObject;
-        while (source != null)
-        {
-            if (ReferenceEquals(source, DictionaryPanelRoot))
-                return; // Tap is inside the popup panel
-            source = VisualTreeHelper.GetParent(source);
-        }
-
-        _popupOverlay.Dismiss();
     }
 
     private void OnDictionaryPanelSizeChanged(object sender, SizeChangedEventArgs e)
@@ -177,7 +159,6 @@ public sealed partial class NovelLookupPage : Page, IDisposable
     {
         Loaded -= NovelLookupPage_Loaded;
         Unloaded -= NovelLookupPage_Unloaded;
-        RemoveHandler(PointerPressedEvent, new PointerEventHandler(OnPagePointerPressed));
         DictionaryPanelRoot.SizeChanged -= OnDictionaryPanelSizeChanged;
         if (_popupOverlay != null)
         {
