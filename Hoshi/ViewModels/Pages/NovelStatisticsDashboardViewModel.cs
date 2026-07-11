@@ -167,6 +167,18 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
     public partial string SpeedText { get; set; } = "— / h";
 
     [ObservableProperty]
+    public partial string TodayGoalPercentText { get; set; } = "0%";
+
+    [ObservableProperty]
+    public partial ObservableCollection<NovelStatisticsMetricDisplay> TodayMetrics { get; set; } = [];
+
+    [ObservableProperty]
+    public partial ObservableCollection<NovelStatisticsMetricDisplay> WeekMetrics { get; set; } = [];
+
+    [ObservableProperty]
+    public partial ObservableCollection<NovelStatisticsMetricDisplay> RangeMetrics { get; set; } = [];
+
+    [ObservableProperty]
     public partial ObservableCollection<NovelStatisticsWeekDayDisplay> WeekDays { get; set; } = [];
 
     [ObservableProperty]
@@ -294,6 +306,31 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
         WeekText = $"{FormatCharacters(Week.Characters)} chars · {Week.MetTargetDays}/{Week.TargetDays} days";
         RangeText = $"{FormatCharacters(SelectedRange.Characters)} chars · {FormatDuration(SelectedRange.ReadingTime)}";
         SpeedText = FormatSpeed(Speed.WeightedAveragePerHour);
+        TodayGoalPercentText = $"{Today.TargetPercent}%";
+
+        TodayMetrics = new(
+        [
+            new("Duration", FormatDuration(Today.ReadingTime)),
+            new("Characters", FormatCharacters(Today.Characters)),
+            new("Speed", FormatSpeed(Today.AverageSpeedPerHour)),
+            new("Streak", $"{Today.DailyStreakDays} days"),
+        ]);
+        WeekMetrics = new(
+        [
+            new("Duration", FormatDuration(Week.ReadingTime)),
+            new("Characters", FormatCharacters(Week.Characters)),
+            new("Avg Characters", FormatCharacters(Week.AverageCharactersPerElapsedDay)),
+            new("Speed", FormatSpeed(Week.AverageSpeedPerHour)),
+        ]);
+        RangeMetrics = new(
+        [
+            new("Duration", FormatDuration(SelectedRange.ReadingTime)),
+            new("Characters", FormatCharacters(SelectedRange.Characters)),
+            new("Speed", FormatSpeed(SelectedRange.AverageSpeedPerHour)),
+            SelectedRangeMode == NovelStatisticsRangeMode.Day
+                ? new("Goal Progress", $"{SelectedRange.TargetProgressPercent}%")
+                : new("Days Met", $"{SelectedRange.TargetDays} days"),
+        ]);
 
         WeekDays = new(Week.Days.Select(day => new NovelStatisticsWeekDayDisplay(
             day.Date,

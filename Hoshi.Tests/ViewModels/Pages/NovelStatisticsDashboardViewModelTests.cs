@@ -23,8 +23,11 @@ public sealed class NovelStatisticsDashboardViewModelTests
 
         sut.HasData.Should().BeTrue();
         sut.Today.Should().NotBeNull();
+        sut.TodayMetrics.Should().HaveCount(4);
         sut.WeekDays.Should().HaveCount(7);
+        sut.WeekMetrics.Should().HaveCount(4);
         sut.SelectedRange.Should().NotBeNull();
+        sut.RangeMetrics.Should().HaveCount(4);
         sut.SpeedMetrics.Should().HaveCount(6);
         sut.TrendPoints.Should().NotBeEmpty();
         sut.CalendarDays.Should().HaveCount(365);
@@ -77,6 +80,33 @@ public sealed class NovelStatisticsDashboardViewModelTests
             "Change",
             "Fastest",
             "Slowest");
+    }
+
+    [Fact]
+    public async Task Calendar_ProjectsRecentYearHeatAndSelectedRange()
+    {
+        var sut = CreateSut(out _, out _);
+        await sut.ActivateAsync(Books(), Shelves(), CancellationToken.None);
+
+        sut.CalendarDays.Should().HaveCount(365);
+        sut.CalendarDays.Should().OnlyContain(
+            day => day.HeatOpacity >= 0.08 && day.HeatOpacity <= 1);
+        sut.CalendarDays.Should().Contain(day => day.IsInSelectedRange);
+        sut.CalendarDays.Single(
+                day => day.Characters == sut.CalendarDays.Max(value => value.Characters))
+            .HeatOpacity.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task RankingAndShelves_NormalizeVisibleBars()
+    {
+        var sut = CreateSut(out _, out _);
+        await sut.ActivateAsync(Books(), Shelves(), CancellationToken.None);
+
+        sut.BookRankingRows.Max(row => row.NormalizedValue).Should().Be(1);
+        sut.ShelfComparisonRows.Max(row => row.NormalizedVolume).Should().Be(1);
+        sut.ShelfComparisonRows.Should().OnlyContain(
+            row => row.RecordedProgress >= 0 && row.RecordedProgress <= 1);
     }
 
     [Fact]
