@@ -741,7 +741,7 @@ public sealed partial class NovelReaderPage : Page
             case string id when id == ReaderShortcutActions.NextPage.Id:
                 return await NavigateReaderPageAsync("forward");
             case string id when id == ReaderShortcutActions.Close.Id:
-                ViewModel.BackToLibraryCommand.Execute(null);
+                await ViewModel.BackToLibraryCommand.ExecuteAsync(null);
                 return true;
             case string id when id == ReaderShortcutActions.ToggleFocusMode.Id:
                 ToggleReaderFocusMode();

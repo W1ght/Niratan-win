@@ -39,5 +39,7 @@ public sealed class NovelReaderStatisticsLifecycleTests
         readerCode.Should().Contain("Register<AppBackgroundingMessage>");
         readerCode.Should().Contain("CheckpointAppBackgroundingAsync");
         readerCode.Should().Contain("PrepareForReaderLifecycleCloseAsync");
+        readerCode.Should().Contain("await ViewModel.BackToLibraryCommand.ExecuteAsync(null)");
+        readerCode.Should().Contain("_ = ViewModel.PrepareForReaderLifecycleCloseAsync()");
     }
 }
