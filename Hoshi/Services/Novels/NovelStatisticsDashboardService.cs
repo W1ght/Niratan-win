@@ -236,40 +236,6 @@ public static partial class NovelStatisticsDashboardCalculator
             range.Start == range.End && rangeDays.Count == 1 ? Percent(TargetRatio(rangeDays[0], settings)) : 0);
     }
 
-    public static IReadOnlyList<NovelStatisticsDistributionRow> DistributionRows(
-        IEnumerable<NovelStatisticsDayAggregate> days,
-        NovelStatisticsDateRange range,
-        StatisticsDailyTargetType targetType)
-    {
-        var totals = days
-            .Where(day => day.Date >= range.Start && day.Date <= range.End)
-            .SelectMany(day => day.BookContributions)
-            .Where(contribution => contribution.Characters > 0 || contribution.ReadingTime > 0)
-            .GroupBy(contribution => contribution.BookId, StringComparer.Ordinal)
-            .Select(group =>
-            {
-                var first = group.First();
-                return new NovelStatisticsDistributionRow(
-                    first.BookId,
-                    first.Title,
-                    first.CoverPath,
-                    group.Sum(item => item.Characters),
-                    group.Sum(item => item.ReadingTime),
-                    Percent: 0);
-            })
-            .ToList();
-        var totalMetric = totals.Sum(row => MetricValue(row, targetType));
-
-        return totals
-            .Select(row => row with
-            {
-                Percent = totalMetric > 0 ? Percent(MetricValue(row, targetType) / totalMetric) : 0,
-            })
-            .OrderByDescending(row => MetricValue(row, targetType))
-            .ThenBy(row => row.Title, StringComparer.CurrentCultureIgnoreCase)
-            .ToList();
-    }
-
     public static DateOnly MondayStartOfWeek(DateOnly date)
     {
         var daysSinceMonday = ((int)date.DayOfWeek + 6) % 7;
@@ -385,9 +351,6 @@ public static partial class NovelStatisticsDashboardCalculator
             _ => 0,
         };
     }
-
-    private static double MetricValue(NovelStatisticsDistributionRow row, StatisticsDailyTargetType targetType) =>
-        targetType == StatisticsDailyTargetType.Duration ? row.ReadingTime : row.Characters;
 
     private static int Percent(double ratio) =>
         (int)Math.Round(ratio * 100);

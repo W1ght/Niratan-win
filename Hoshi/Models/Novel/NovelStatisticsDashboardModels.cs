@@ -184,14 +184,3 @@ public static class NovelStatisticsDashboardTargets
     }
 }
 
-public sealed record NovelStatisticsDistributionRow(
-    string BookId,
-    string Title,
-    string? CoverPath,
-    int Characters,
-    double ReadingTime,
-    int Percent)
-{
-    public string CharactersText => $"{Characters:N0} chars";
-    public string PercentText => $"{Percent}%";
-}

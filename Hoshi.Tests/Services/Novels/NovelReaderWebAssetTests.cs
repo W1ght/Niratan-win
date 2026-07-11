@@ -2165,17 +2165,23 @@ public class NovelReaderWebAssetTests
         libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelLibraryStatisticsDashboard\"");
         libraryXaml.Should().Contain("NovelLibraryTodayStatisticsText");
         libraryXaml.Should().Contain("NovelLibraryWeekStatisticsText");
-        libraryXaml.Should().Contain("NovelLibraryByBookStatisticsList");
+        libraryXaml.Should().Contain("NovelLibraryBookRankingList");
+        libraryXaml.Should().Contain("NovelLibraryShelfComparisonList");
+        libraryXaml.Should().Contain("NovelLibraryStatisticsTrend");
+        libraryXaml.Should().Contain("NovelLibraryStatisticsCalendar");
+        libraryXaml.Should().NotContain("By Book");
 
         libraryViewModel.Should().Contain("INovelStatisticsDashboardService");
         libraryViewModel.Should().Contain("ShowStatisticsDashboard");
         libraryViewModel.Should().Contain("StatisticsTodayText");
         libraryViewModel.Should().Contain("StatisticsWeekText");
-        libraryViewModel.Should().Contain("StatisticsDistributionRows");
+        libraryViewModel.Should().Contain("StatisticsBookRankingRows");
+        libraryViewModel.Should().Contain("StatisticsShelfComparisonRows");
+        libraryViewModel.Should().NotContain("NovelStatisticsDistributionRow");
 
         dashboardService.Should().Contain("NovelStatisticsDashboardCalculator");
         dashboardService.Should().Contain("LoadSnapshotAsync");
-        appCode.Should().Contain("INovelStatisticsDashboardService, NovelStatisticsDashboardService");
+        appCode.Should().Contain("AddSingleton<INovelStatisticsDashboardService>(provider =>");
     }
 
     [Fact]

@@ -48,12 +48,11 @@ public sealed class NovelStatisticsDashboardServiceTests
         rangeSummary.AverageSpeedPerHour.Should().Be(7_582);
         rangeSummary.TargetDays.Should().Be(3);
 
-        var distribution = NovelStatisticsDashboardCalculator.DistributionRows(
+        var ranking = NovelStatisticsDashboardCalculator.BookRankingRows(
             days,
             range,
-            StatisticsDailyTargetType.Characters);
-        distribution.Select(row => row.Title).Should().Equal("Alpha", "Beta");
-        distribution.Select(row => row.Percent).Should().Equal(77, 23);
+            NovelStatisticsBookRankingMetric.Characters);
+        ranking.Select(row => row.Title).Should().Equal("Alpha", "Beta");
     }
 
     [Fact]
