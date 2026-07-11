@@ -36,7 +36,7 @@ public sealed class NovelStatisticsDashboardServiceTests
 
         var weekSummary = NovelStatisticsDashboardCalculator.WeekSummary(snapshot, today, settings);
         weekSummary.Range.Start.Should().Be(new DateOnly(2026, 6, 29));
-        weekSummary.Range.End.Should().Be(today);
+        weekSummary.Range.End.Should().Be(new DateOnly(2026, 7, 5));
         weekSummary.Characters.Should().Be(9_500);
         weekSummary.MetTargetDays.Should().Be(1);
         weekSummary.AverageSpeedPerHour.Should().Be(7_600);

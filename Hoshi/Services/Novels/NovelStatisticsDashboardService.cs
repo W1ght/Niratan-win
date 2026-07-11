@@ -139,7 +139,7 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
     }
 }
 
-public static class NovelStatisticsDashboardCalculator
+public static partial class NovelStatisticsDashboardCalculator
 {
     public static NovelStatisticsTodaySummary TodaySummary(
         NovelStatisticsDashboardSnapshot snapshot,
@@ -153,7 +153,7 @@ public static class NovelStatisticsDashboardCalculator
             Percent(TargetRatio(aggregate, settings)),
             aggregate.Characters,
             aggregate.ReadingTime,
-            AverageSpeedPerHour(aggregate.Characters, aggregate.ReadingTime),
+            ValidAverageSpeedPerHour([aggregate]) ?? 0,
             DailyGoalStreak(daysByDate, today, settings));
     }
 
@@ -163,23 +163,33 @@ public static class NovelStatisticsDashboardCalculator
         NovelStatisticsDashboardTargetSettings settings)
     {
         var start = MondayStartOfWeek(today);
-        var range = new NovelStatisticsDateRange(start, today);
+        var range = new NovelStatisticsDateRange(start, start.AddDays(6));
         var daysByDate = DictionaryByDate(snapshot.Days);
         var days = DatesInRange(range).Select(date => daysByDate.GetValueOrDefault(date) ?? EmptyDay(date)).ToList();
         var characters = days.Sum(day => day.Characters);
         var readingTime = days.Sum(day => day.ReadingTime);
-        var elapsedDays = Math.Max(days.Count, 1);
+        var elapsedDays = Math.Clamp(today.DayNumber - start.DayNumber + 1, 1, 7);
 
         return new NovelStatisticsWeekSummary(
             range,
+            elapsedDays,
             characters,
             readingTime,
-            AverageSpeedPerHour(characters, readingTime),
+            ValidAverageSpeedPerHour(days),
             settings.WeeklyTargetDays,
             days.Count(day => TargetRatio(day, settings) >= 1),
             DailyGoalStreak(daysByDate, today, settings),
+            WeeklyGoalStreak(daysByDate, today, settings),
             (int)Math.Round(characters / (double)elapsedDays),
-            readingTime / elapsedDays);
+            readingTime / elapsedDays,
+            days.Select(day => new NovelStatisticsWeekDaySummary(
+                day.Date,
+                day.Date == today,
+                day.Date > today,
+                day.Date > today || (day.Characters <= 0 && day.ReadingTime <= 0)
+                    ? null
+                    : Percent(TargetRatio(day, settings)),
+                day.Date <= today && TargetRatio(day, settings) >= 1)).ToList());
     }
 
     public static NovelStatisticsRangeSummary RangeSummary(
@@ -193,7 +203,7 @@ public static class NovelStatisticsDashboardCalculator
         return new NovelStatisticsRangeSummary(
             characters,
             readingTime,
-            AverageSpeedPerHour(characters, readingTime),
+            ValidAverageSpeedPerHour(rangeDays) ?? 0,
             rangeDays.Count(day => TargetRatio(day, settings) >= 1),
             range.Start == range.End && rangeDays.Count == 1 ? Percent(TargetRatio(rangeDays[0], settings)) : 0);
     }
@@ -270,6 +280,61 @@ public static class NovelStatisticsDashboardCalculator
         }
 
         return streak;
+    }
+
+    private static int WeeklyGoalStreak(
+        IReadOnlyDictionary<DateOnly, NovelStatisticsDayAggregate> daysByDate,
+        DateOnly today,
+        NovelStatisticsDashboardTargetSettings settings)
+    {
+        var weekStart = MondayStartOfWeek(today);
+        if (!WeekMet(daysByDate, weekStart, settings))
+            weekStart = weekStart.AddDays(-7);
+
+        var streak = 0;
+        while (WeekMet(daysByDate, weekStart, settings))
+        {
+            streak++;
+            weekStart = weekStart.AddDays(-7);
+        }
+        return streak;
+    }
+
+    private static bool WeekMet(
+        IReadOnlyDictionary<DateOnly, NovelStatisticsDayAggregate> daysByDate,
+        DateOnly weekStart,
+        NovelStatisticsDashboardTargetSettings settings) =>
+        Enumerable.Range(0, 7).Count(offset =>
+            TargetRatio(daysByDate.GetValueOrDefault(weekStart.AddDays(offset))
+                ?? EmptyDay(weekStart.AddDays(offset)), settings) >= 1)
+        >= settings.WeeklyTargetDays;
+
+    private static int? ValidAverageSpeedPerHour(
+        IEnumerable<NovelStatisticsDayAggregate> days)
+    {
+        var samples = days.SelectMany(SpeedSamples).ToList();
+        return samples.Count == 0
+            ? null
+            : AverageSpeedPerHour(
+                samples.Sum(sample => sample.Characters),
+                samples.Sum(sample => sample.ReadingTime));
+    }
+
+    private static IEnumerable<(int Characters, double ReadingTime)> SpeedSamples(
+        NovelStatisticsDayAggregate day)
+    {
+        if (day.BookContributions.Count == 0)
+        {
+            if (day.Characters > 0 && day.ReadingTime >= 60)
+                yield return (day.Characters, day.ReadingTime);
+            yield break;
+        }
+
+        foreach (var contribution in day.BookContributions)
+        {
+            if (contribution.IsValidSpeedSample)
+                yield return (contribution.Characters, contribution.ReadingTime);
+        }
     }
 
     private static IReadOnlyDictionary<DateOnly, NovelStatisticsDayAggregate> DictionaryByDate(

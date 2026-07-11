@@ -13,6 +13,11 @@ public sealed record NovelStatisticsDashboardTargetSettings(
 
 public readonly record struct NovelStatisticsDateRange(DateOnly Start, DateOnly End);
 
+public enum NovelStatisticsRangeMode { Year, Month, Week, Day }
+public enum NovelStatisticsTrendMetric { Characters, Duration, Speed }
+public enum NovelStatisticsTrendGrain { Day, Week, Month }
+public enum NovelStatisticsBookRankingMetric { Characters, Duration, Speed }
+
 public sealed record NovelStatisticsBookContribution(
     string BookId,
     string Title,
@@ -94,14 +99,24 @@ public sealed record NovelStatisticsTodaySummary(
 
 public sealed record NovelStatisticsWeekSummary(
     NovelStatisticsDateRange Range,
+    int ElapsedDays,
     int Characters,
     double ReadingTime,
-    int AverageSpeedPerHour,
+    int? AverageSpeedPerHour,
     int TargetDays,
     int MetTargetDays,
     int DailyStreakDays,
+    int WeeklyStreakWeeks,
     int AverageCharactersPerElapsedDay,
-    double AverageReadingTimePerElapsedDay);
+    double AverageReadingTimePerElapsedDay,
+    IReadOnlyList<NovelStatisticsWeekDaySummary> Days);
+
+public sealed record NovelStatisticsWeekDaySummary(
+    DateOnly Date,
+    bool IsToday,
+    bool IsFuture,
+    int? Percent,
+    bool MetTarget);
 
 public sealed record NovelStatisticsRangeSummary(
     int Characters,
@@ -109,6 +124,65 @@ public sealed record NovelStatisticsRangeSummary(
     int AverageSpeedPerHour,
     int TargetDays,
     int TargetProgressPercent);
+
+public sealed record NovelStatisticsSpeedDay(DateOnly Date, int SpeedPerHour);
+
+public sealed record NovelStatisticsSpeedSummary(
+    int? WeightedAveragePerHour,
+    int? MedianActiveDayPerHour,
+    int? LastSevenActiveDaysPerHour,
+    int? ChangePercent,
+    NovelStatisticsSpeedDay? FastestDay,
+    NovelStatisticsSpeedDay? SlowestDay);
+
+public sealed record NovelStatisticsTrendBookBreakdown(string Title, int Characters);
+
+public sealed record NovelStatisticsTrendPoint(
+    string Id,
+    string Label,
+    int Characters,
+    double ReadingTime,
+    int? AverageSpeedPerHour,
+    IReadOnlyList<NovelStatisticsTrendBookBreakdown> TopBooks);
+
+public sealed record NovelStatisticsCalendarDay(
+    DateOnly Date,
+    int Characters,
+    double ReadingTime,
+    int ActiveBookCount,
+    int TargetPercent,
+    bool MetTarget,
+    bool IsToday);
+
+public sealed record NovelStatisticsBookRankingRow(
+    string Id,
+    string Title,
+    int Characters,
+    double ReadingTime,
+    int? AverageSpeedPerHour);
+
+public sealed record NovelStatisticsShelfComparisonRow(
+    string Id,
+    string Name,
+    int BookCount,
+    int TotalBookCharacters,
+    int RecordedCharacters,
+    double ReadingTime,
+    int? AverageSpeedPerHour);
+
+public static class NovelStatisticsDashboardTargets
+{
+    public static int SnapCharacterTarget(int value) => Snap(value, 500, 20_000, 500);
+    public static int SnapDurationTarget(int value) => Snap(value, 5, 240, 5);
+    public static int SnapWeeklyTargetDays(int value) => Math.Clamp(value, 1, 7);
+
+    private static int Snap(int value, int minimum, int maximum, int step)
+    {
+        var clamped = Math.Clamp(value, minimum, maximum);
+        var snapped = minimum + ((clamped - minimum + step / 2) / step) * step;
+        return Math.Clamp(snapped, minimum, maximum);
+    }
+}
 
 public sealed record NovelStatisticsDistributionRow(
     string BookId,
