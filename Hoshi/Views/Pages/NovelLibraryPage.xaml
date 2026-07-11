@@ -143,13 +143,13 @@
             </Grid>
         </DataTemplate>
 
-        <DataTemplate x:Key="StatisticsShelfTemplate" x:DataType="novel:NovelStatisticsShelfComparisonRow">
+        <DataTemplate x:Key="StatisticsShelfTemplate" x:DataType="novel:NovelStatisticsShelfComparisonDisplayRow">
             <Grid Padding="0,6" ColumnDefinitions="*,Auto" ColumnSpacing="8">
                 <StackPanel Spacing="2">
                     <TextBlock Text="{x:Bind Name}" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                    <TextBlock Text="{x:Bind RecordedCharacters}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock Text="{x:Bind DetailText}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
-                <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{x:Bind BookCount}" />
+                <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{x:Bind SpeedText}" />
             </Grid>
         </DataTemplate>
 
@@ -160,7 +160,7 @@
             </StackPanel>
         </DataTemplate>
 
-        <DataTemplate x:Key="StatisticsCalendarTemplate" x:DataType="novel:NovelStatisticsCalendarDay">
+        <DataTemplate x:Key="StatisticsCalendarTemplate" x:DataType="novel:NovelStatisticsCalendarDayDisplay">
             <Border Width="32" Height="32" Margin="2" CornerRadius="5"
                     Background="{ThemeResource SubtleFillColorSecondaryBrush}">
                 <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"

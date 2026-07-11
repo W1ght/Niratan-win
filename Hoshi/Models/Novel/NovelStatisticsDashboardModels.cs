@@ -16,6 +16,7 @@ public readonly record struct NovelStatisticsDateRange(DateOnly Start, DateOnly 
 public enum NovelStatisticsRangeMode { Year, Month, Week, Day }
 public enum NovelStatisticsTrendMetric { Characters, Duration, Speed }
 public enum NovelStatisticsTrendGrain { Day, Week, Month }
+public enum NovelStatisticsTrendChartStyle { Bar, Line }
 public enum NovelStatisticsBookRankingMetric { Characters, Duration, Speed }
 
 public sealed record NovelStatisticsBookContribution(
@@ -173,12 +174,69 @@ public sealed record NovelStatisticsShelfComparisonRow(
 public sealed record NovelStatisticsTrendDisplayPoint(
     string Id,
     string Label,
-    string ValueText);
+    string ValueText,
+    double NormalizedValue,
+    string ToolTipText)
+{
+    public NovelStatisticsTrendDisplayPoint(
+        string id,
+        string label,
+        string valueText)
+        : this(id, label, valueText, 0, valueText)
+    {
+    }
+}
 
 public sealed record NovelStatisticsBookRankingDisplayRow(
     string Id,
     string Title,
-    string ValueText);
+    string ValueText,
+    double NormalizedValue)
+{
+    public NovelStatisticsBookRankingDisplayRow(
+        string id,
+        string title,
+        string valueText)
+        : this(id, title, valueText, 0)
+    {
+    }
+}
+
+public sealed record NovelStatisticsMetricDisplay(string Label, string Value);
+
+public sealed record NovelStatisticsWeekDayDisplay(
+    DateOnly Date,
+    string Weekday,
+    string PercentText,
+    bool IsToday,
+    bool IsFuture,
+    bool MetTarget);
+
+public sealed record NovelStatisticsCalendarDayDisplay(
+    DateOnly Date,
+    int Characters,
+    double ReadingTime,
+    int ActiveBookCount,
+    int TargetPercent,
+    string AccessibleText,
+    double HeatOpacity,
+    bool IsInSelectedRange,
+    bool IsToday);
+
+public sealed record NovelStatisticsCalendarDetailDisplay(
+    DateOnly Date,
+    int Characters,
+    double ReadingTime,
+    int ActiveBookCount,
+    string Text);
+
+public sealed record NovelStatisticsShelfComparisonDisplayRow(
+    string Id,
+    string Name,
+    string DetailText,
+    string SpeedText,
+    double RecordedProgress,
+    double NormalizedVolume);
 
 public static class NovelStatisticsDashboardTargets
 {
