@@ -48,6 +48,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     private CancellationTokenSource? _catalogLoadCts;
     private CancellationTokenSource? _remoteListCts;
     private bool _suppressSortApplication;
+    private bool _hasExplicitSortSelection;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NoNovels))]
@@ -117,7 +118,9 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         _ttuBookImportService = ttuBookImportService;
         _googleDriveAuthService = googleDriveAuthService;
         _googleDriveCoverCacheService = googleDriveCoverCacheService;
+        _suppressSortApplication = true;
         SelectedSortOption = _settingsService.Current.NovelLibrarySortOption;
+        _suppressSortApplication = false;
         _messenger.RegisterAll(this);
     }
 
@@ -665,6 +668,9 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
     partial void OnSelectedSortOptionChanged(NovelLibrarySortOption value)
     {
+        if (!_suppressSortApplication)
+            _hasExplicitSortSelection = true;
+
         _settingsService.Set(settings => settings.NovelLibrarySortOption, value);
         _ = _settingsService.SaveAsync();
 
@@ -686,6 +692,9 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
     private void RestoreSelectedSortOption()
     {
+        if (_hasExplicitSortSelection)
+            return;
+
         var restored = _settingsService.Current.NovelLibrarySortOption;
         if (!Enum.IsDefined(restored))
             restored = NovelLibrarySortOption.Recent;
