@@ -212,6 +212,7 @@ public partial class App : Application
         services.AddSingleton<ITtuBookDataConverter, TtuBookDataConverter>();
         services.AddSingleton<ITtuBookImportService, TtuBookImportService>();
         services.AddSingleton<ITtuSyncService, TtuSyncService>();
+        services.AddTransient<IReaderAutoSyncCoordinator, ReaderAutoSyncCoordinator>();
         services.AddSingleton<ITtuSyncRemoteStore, GoogleDriveTtuSyncRemoteStore>();
         services.AddSingleton<IDictionaryLookupService, DictionaryLookupService>();
         services.AddSingleton<IDictionaryPopupRequestService, DictionaryPopupRequestService>();
