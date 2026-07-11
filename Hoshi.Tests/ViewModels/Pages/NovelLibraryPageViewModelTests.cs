@@ -341,7 +341,8 @@ public class NovelLibraryPageViewModelTests
                 ["a", "c"])));
         var settings = Mock.Of<ISettingsService>(service => service.Current == new AppSettings
         {
-            BookshelfShowReading = true,
+            BookshelfShowReading = false,
+            NovelLibrarySortOption = NovelLibrarySortOption.Manual,
         });
         var sut = CreateSut(
             novelService: library.Object,
@@ -350,12 +351,37 @@ public class NovelLibraryPageViewModelTests
 
         await sut.InitializeAsync();
 
-        sut.RailSections.Select(section => section.Id).Should().Equal("reading", "shelf:收藏");
-        sut.RailSections[0].Books.Select(item => item.Book.Id).Should().Equal("a");
-        sut.RailSections[1].Books.Select(item => item.Book.Id).Should().Equal("b");
-        sut.UnshelvedBooks.Select(item => item.Book.Id).Should().Equal("a", "c");
+        sut.ShelfSections.Select(section => section.Id)
+            .Should().Equal("reading", "shelf:收藏", "unshelved");
+        sut.ShelfSections[0].Books.Select(item => item.Book.Id).Should().Equal("a");
+        sut.ShelfSections[1].Books.Select(item => item.Book.Id).Should().Equal("b");
+        sut.ShelfSections[2].Books.Select(item => item.Book.Id).Should().Equal("a", "c");
         sut.HasNovelStorageWarnings.Should().BeTrue();
         sut.NovelStorageWarnings.Should().Equal("broken/metadata.json");
+    }
+
+    [Fact]
+    public async Task InitializeAsync_OmitsReadingWhenNoBookIsInProgress()
+    {
+        var library = new RecordingNovelLibraryService
+        {
+            Books =
+            [
+                new NovelBook { Id = "new", Title = "New" },
+                new NovelBook
+                {
+                    Id = "done",
+                    Title = "Done",
+                    CurrentCharacterCount = 10,
+                    TotalCharacterCount = 10,
+                },
+            ],
+        };
+        var sut = CreateSut(novelService: library);
+
+        await sut.InitializeAsync();
+
+        sut.ShelfSections.Select(section => section.Id).Should().Equal("unshelved");
     }
 
     [Fact]
@@ -385,9 +411,10 @@ public class NovelLibraryPageViewModelTests
         await sut.MoveBooksToShelfCommand.ExecuteAsync(
             new NovelShelfMoveRequest(["a"], "收藏"));
 
-        sut.RailSections.Should().ContainSingle();
-        sut.RailSections[0].Books.Select(item => item.Book.Id).Should().Equal("a");
-        sut.UnshelvedBooks.Select(item => item.Book.Id).Should().Equal("b");
+        sut.ShelfSections.Select(section => section.Id)
+            .Should().Equal("shelf:收藏", "unshelved");
+        sut.ShelfSections[0].Books.Select(item => item.Book.Id).Should().Equal("a");
+        sut.ShelfSections[1].Books.Select(item => item.Book.Id).Should().Equal("b");
         shelves.VerifyAll();
     }
 
