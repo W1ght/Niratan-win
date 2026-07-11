@@ -2156,6 +2156,15 @@ public class NovelReaderWebAssetTests
         var dashboardXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Controls", "NovelStatisticsDashboardView.xaml")
         );
+        var trendChartXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Controls", "NovelStatisticsTrendChart.xaml")
+        );
+        var trendChartCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Controls", "NovelStatisticsTrendChart.xaml.cs")
+        );
+        var dashboardModels = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Models", "Novel", "NovelStatisticsDashboardModels.cs")
+        );
         var appCode = File.ReadAllText(Path.Combine(ProjectRoot, "App.xaml.cs"));
         var dashboardServicePath = Path.Combine(
             ProjectRoot,
@@ -2178,6 +2187,18 @@ public class NovelReaderWebAssetTests
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsLoadingStatus\"");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsEmptyState\"");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsCorruptWarning\"");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsTrendCard\"");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsTodayCard\"");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsGoalCard\"");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsWeekCard\"");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsSelectedRangeCard\"");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsSpeedCard\"");
+        dashboardXaml.Should().Contain("ItemsSource=\"{Binding WeekDays}\"");
+        dashboardXaml.Should().Contain("ItemsSource=\"{Binding TrendStyles}\"");
+        dashboardXaml.Should().Contain("controls:NovelStatisticsTrendChart");
+        trendChartXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsTrendChart\"");
+        trendChartCode.Should().Contain("Polyline");
+        dashboardModels.Should().Contain("NovelStatisticsTrendChartStyle");
 
         libraryViewModel.Should().Contain("NovelStatisticsDashboardViewModel StatisticsDashboard");
         libraryViewModel.Should().NotContain("INovelStatisticsDashboardService");

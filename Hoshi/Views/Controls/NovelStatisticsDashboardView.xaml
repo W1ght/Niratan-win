@@ -2,10 +2,55 @@
 <UserControl x:Class="Hoshi.Views.Controls.NovelStatisticsDashboardView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:converters="using:Hoshi.Helpers.UI.Converters">
+             xmlns:controls="using:Hoshi.Views.Controls"
+             xmlns:converters="using:Hoshi.Helpers.UI.Converters"
+             xmlns:novel="using:Hoshi.Models.Novel">
 
     <UserControl.Resources>
         <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+
+        <Style x:Key="DashboardCardStyle"
+               TargetType="Border">
+            <Setter Property="Padding" Value="20" />
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+        </Style>
+
+        <DataTemplate x:Key="MetricTemplate"
+                      x:DataType="novel:NovelStatisticsMetricDisplay">
+            <StackPanel MinWidth="170"
+                        Padding="0,6"
+                        Spacing="4">
+                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="{x:Bind Label}" />
+                <TextBlock FontSize="18"
+                           FontWeight="SemiBold"
+                           Text="{x:Bind Value}" />
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="WeekDayTemplate"
+                      x:DataType="novel:NovelStatisticsWeekDayDisplay">
+            <Border MinWidth="68"
+                    MinHeight="58"
+                    Margin="3"
+                    Padding="8"
+                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                    CornerRadius="8"
+                    AutomationProperties.Name="{x:Bind Weekday}">
+                <StackPanel HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Spacing="4">
+                    <TextBlock HorizontalAlignment="Center"
+                               FontWeight="SemiBold"
+                               Text="{x:Bind Weekday}" />
+                    <TextBlock HorizontalAlignment="Center"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="{x:Bind PercentText}" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
     </UserControl.Resources>
 
     <Grid Padding="20,0,36,24">
@@ -31,12 +76,250 @@
                          Message="{Binding CorruptWarningText}"
                          Severity="Warning" />
 
-                <Border Padding="20"
-                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                        CornerRadius="8">
-                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               Text="Statistics dashboard modules are loading." />
+                <Border AutomationProperties.AutomationId="NovelStatisticsTrendCard"
+                        Style="{StaticResource DashboardCardStyle}">
+                    <StackPanel Spacing="14">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Spacing="3">
+                                <TextBlock Style="{StaticResource SubtitleTextBlockStyle}"
+                                           Text="Range &amp; Trend" />
+                                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Text="{Binding RangeTitle}" />
+                            </StackPanel>
+                            <TextBlock Grid.Column="1"
+                                       VerticalAlignment="Bottom"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="{Binding RangeText}" />
+                        </Grid>
+
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                      HorizontalScrollMode="Enabled"
+                                      VerticalScrollBarVisibility="Disabled"
+                                      VerticalScrollMode="Disabled">
+                            <StackPanel Orientation="Horizontal"
+                                        Spacing="12">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Range" />
+                                    <ComboBox MinWidth="110"
+                                              AutomationProperties.AutomationId="NovelStatisticsRangeMode"
+                                              ItemsSource="{Binding RangeModes}"
+                                              SelectedItem="{Binding SelectedRangeMode, Mode=TwoWay}" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Anchor" />
+                                    <CalendarDatePicker Width="158"
+                                                        AutomationProperties.AutomationId="NovelStatisticsAnchorDate"
+                                                        Date="{Binding AnchorDate, Mode=TwoWay}" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Time Grain" />
+                                    <ComboBox MinWidth="105"
+                                              AutomationProperties.AutomationId="NovelStatisticsTrendGrain"
+                                              ItemsSource="{Binding TrendGrains}"
+                                              SelectedItem="{Binding SelectedTrendGrain, Mode=TwoWay}" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Metric" />
+                                    <ComboBox MinWidth="116"
+                                              AutomationProperties.AutomationId="NovelStatisticsTrendMetric"
+                                              ItemsSource="{Binding TrendMetrics}"
+                                              SelectedItem="{Binding SelectedTrendMetric, Mode=TwoWay}" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Style" />
+                                    <ComboBox MinWidth="96"
+                                              AutomationProperties.AutomationId="NovelStatisticsTrendStyle"
+                                              ItemsSource="{Binding TrendStyles}"
+                                              SelectedItem="{Binding SelectedTrendStyle, Mode=TwoWay}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="Range filters all dashboard cards. Time Grain changes only the trend chart." />
+                        <controls:NovelStatisticsTrendChart ItemsSource="{Binding TrendPoints}"
+                                                            ChartStyle="{Binding SelectedTrendStyle}" />
+                    </StackPanel>
                 </Border>
+
+                <Grid ColumnDefinitions="*,*"
+                      RowDefinitions="Auto,Auto,Auto"
+                      ColumnSpacing="14"
+                      RowSpacing="14">
+                    <Border Grid.Row="0"
+                            Grid.Column="0"
+                            AutomationProperties.AutomationId="NovelStatisticsTodayCard"
+                            Style="{StaticResource DashboardCardStyle}">
+                        <StackPanel Spacing="14">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Spacing="3">
+                                    <TextBlock Style="{StaticResource SubtitleTextBlockStyle}"
+                                               Text="Today" />
+                                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               Text="{Binding TodayText}" />
+                                </StackPanel>
+                                <Grid Grid.Column="1"
+                                      Width="88"
+                                      Height="88">
+                                    <ProgressRing IsActive="True"
+                                                  IsIndeterminate="False"
+                                                  Maximum="100"
+                                                  Value="{Binding Today.TargetPercent}" />
+                                    <TextBlock HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               FontWeight="SemiBold"
+                                               Text="{Binding Today.TargetPercent}" />
+                                </Grid>
+                            </Grid>
+                            <Grid ColumnDefinitions="*,*"
+                                  ColumnSpacing="12">
+                                <StackPanel Spacing="3">
+                                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               Text="Characters" />
+                                    <TextBlock FontSize="18"
+                                               FontWeight="SemiBold"
+                                               Text="{Binding Today.Characters}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1"
+                                            Spacing="3">
+                                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               Text="Daily streak" />
+                                    <TextBlock FontSize="18"
+                                               FontWeight="SemiBold"
+                                               Text="{Binding Today.DailyStreakDays}" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Row="0"
+                            Grid.Column="1"
+                            AutomationProperties.AutomationId="NovelStatisticsGoalCard"
+                            Style="{StaticResource DashboardCardStyle}">
+                        <StackPanel Spacing="12">
+                            <TextBlock Style="{StaticResource SubtitleTextBlockStyle}"
+                                       Text="Goal" />
+                            <Grid ColumnDefinitions="*,Auto"
+                                  ColumnSpacing="12">
+                                <TextBlock VerticalAlignment="Center"
+                                           Text="Goal Type" />
+                                <ComboBox Grid.Column="1"
+                                          MinWidth="130"
+                                          AutomationProperties.AutomationId="NovelStatisticsGoalType"
+                                          ItemsSource="{Binding DailyTargetTypes}"
+                                          SelectedItem="{Binding SelectedDailyTargetType, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto"
+                                  ColumnSpacing="12">
+                                <TextBlock VerticalAlignment="Center"
+                                           Text="Character Target" />
+                                <NumberBox Grid.Column="1"
+                                           Width="126"
+                                           AutomationProperties.AutomationId="NovelStatisticsCharacterTarget"
+                                           Minimum="500"
+                                           Maximum="20000"
+                                           SmallChange="500"
+                                           Value="{Binding DailyCharacterTargetValue, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto"
+                                  ColumnSpacing="12">
+                                <TextBlock VerticalAlignment="Center"
+                                           Text="Duration Target" />
+                                <NumberBox Grid.Column="1"
+                                           Width="126"
+                                           AutomationProperties.AutomationId="NovelStatisticsDurationTarget"
+                                           Minimum="5"
+                                           Maximum="240"
+                                           SmallChange="5"
+                                           Value="{Binding DailyDurationTargetMinutesValue, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto"
+                                  ColumnSpacing="12">
+                                <TextBlock VerticalAlignment="Center"
+                                           Text="Weekly Target Days" />
+                                <NumberBox Grid.Column="1"
+                                           Width="126"
+                                           AutomationProperties.AutomationId="NovelStatisticsWeeklyTarget"
+                                           Minimum="1"
+                                           Maximum="7"
+                                           SmallChange="1"
+                                           Value="{Binding WeeklyTargetDaysValue, Mode=TwoWay}" />
+                            </Grid>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="Goals recalculate historical progress and streaks."
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Row="1"
+                            Grid.ColumnSpan="2"
+                            AutomationProperties.AutomationId="NovelStatisticsWeekCard"
+                            Style="{StaticResource DashboardCardStyle}">
+                        <StackPanel Spacing="12">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Style="{StaticResource SubtitleTextBlockStyle}"
+                                           Text="This Week" />
+                                <TextBlock Grid.Column="1"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Text="{Binding WeekText}" />
+                            </Grid>
+                            <ItemsControl AutomationProperties.AutomationId="NovelStatisticsWeekDays"
+                                          ItemTemplate="{StaticResource WeekDayTemplate}"
+                                          ItemsSource="{Binding WeekDays}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel HorizontalAlignment="Stretch"
+                                                    Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Row="2"
+                            Grid.Column="0"
+                            AutomationProperties.AutomationId="NovelStatisticsSelectedRangeCard"
+                            Style="{StaticResource DashboardCardStyle}">
+                        <StackPanel Spacing="12">
+                            <TextBlock Style="{StaticResource SubtitleTextBlockStyle}"
+                                       Text="Selected Range" />
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="{Binding RangeTitle}" />
+                            <TextBlock FontSize="22"
+                                       FontWeight="SemiBold"
+                                       Text="{Binding RangeText}" />
+                            <ProgressBar Maximum="100"
+                                         Value="{Binding SelectedRange.TargetProgressPercent}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Row="2"
+                            Grid.Column="1"
+                            AutomationProperties.AutomationId="NovelStatisticsSpeedCard"
+                            Style="{StaticResource DashboardCardStyle}">
+                        <StackPanel Spacing="12">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Style="{StaticResource SubtitleTextBlockStyle}"
+                                           Text="Speed Summary" />
+                                <TextBlock Grid.Column="1"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Text="{Binding SpeedText}" />
+                            </Grid>
+                            <ItemsControl ItemTemplate="{StaticResource MetricTemplate}"
+                                          ItemsSource="{Binding SpeedMetrics}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <ItemsWrapGrid ItemWidth="190"
+                                                       MaximumRowsOrColumns="3"
+                                                       Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="Speed ignores reading samples under 1 minute." />
+                        </StackPanel>
+                    </Border>
+                </Grid>
             </StackPanel>
         </ScrollViewer>
 

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl x:Class="Hoshi.Views.Controls.NovelStatisticsTrendChart"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             MinHeight="220"
+             AutomationProperties.AutomationId="NovelStatisticsTrendChart">
+    <Grid>
+        <Border x:Name="AccentBrushSource"
+                Background="{ThemeResource AccentFillColorDefaultBrush}"
+                Opacity="0" />
+        <Border x:Name="GridBrushSource"
+                Background="{ThemeResource DividerStrokeColorDefaultBrush}"
+                Opacity="0" />
+        <Canvas x:Name="ChartCanvas"
+                Margin="8,12,8,28" />
+        <ItemsControl Margin="8,0"
+                      VerticalAlignment="Bottom"
+                      AutomationProperties.AccessibilityView="Content"
+                      IsHitTestVisible="False"
+                      ItemsSource="{x:Bind ItemsSource, Mode=OneWay}"
+                      Opacity="0.001">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock AutomationProperties.Name="{Binding ToolTipText}"
+                               Text="{Binding ToolTipText}" />
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </Grid>
+</UserControl>
