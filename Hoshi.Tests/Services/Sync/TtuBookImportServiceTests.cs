@@ -126,8 +126,9 @@ public sealed class TtuBookImportServiceTests
             }));
         }
 
-        public Task<Result<IReadOnlyList<NovelBook>>> GetNovelBooksAsync(string? queryText = null, CancellationToken ct = default) =>
-            Task.FromResult(Result<IReadOnlyList<NovelBook>>.Success([]));
+        public Task<Result<NovelBookCatalogSnapshot>> GetNovelBooksAsync(string? queryText = null, CancellationToken ct = default) =>
+            Task.FromResult(Result<NovelBookCatalogSnapshot>.Success(
+                new NovelBookCatalogSnapshot([], [])));
 
         public Task<Result<NovelBook?>> GetNovelBookAsync(string bookId, CancellationToken ct = default) =>
             Task.FromResult(Result<NovelBook?>.Success(null));

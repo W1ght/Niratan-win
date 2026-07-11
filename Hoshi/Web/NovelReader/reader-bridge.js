@@ -454,7 +454,7 @@ window.hoshiReader = {
     }
   },
 
-  restoreProgress: async function (progress) {
+  restoreProgress: async function (progress, navigationGeneration) {
     await document.fonts.ready;
     var context = this.getScrollContext();
     if (context.pageSize <= 0 || progress <= 0) {
@@ -462,7 +462,7 @@ window.hoshiReader = {
       this.setPagePosition(context, firstPage);
       this.registerSnapScroll(firstPage);
       this.lastProgress = 0;
-      notifyRestoreComplete();
+      notifyRestoreComplete(navigationGeneration);
       return;
     }
     if (progress >= 0.99) {
@@ -474,7 +474,7 @@ window.hoshiReader = {
         window.hoshiReader.setPagePosition(ctx, Math.max(0, lp));
         window.hoshiReader.registerSnapScroll(lp);
         window.hoshiReader.lastProgress = 1;
-        requestAnimationFrame(function () { notifyRestoreComplete(); });
+        requestAnimationFrame(function () { notifyRestoreComplete(navigationGeneration); });
       });
       return;
     }
@@ -528,11 +528,11 @@ window.hoshiReader = {
       this.lastProgress = 0;
     }
     requestAnimationFrame(function () {
-      requestAnimationFrame(function () { notifyRestoreComplete(); });
+      requestAnimationFrame(function () { notifyRestoreComplete(navigationGeneration); });
     });
   },
 
-  jumpToFragment: async function (fragment) {
+  jumpToFragment: async function (fragment, navigationGeneration) {
     await document.fonts.ready;
     var context = this.getScrollContext();
     var rawFragment = (fragment || "").trim();
@@ -542,7 +542,7 @@ window.hoshiReader = {
         document.getElementsByName(rawFragment)[0]);
     if (context.pageSize <= 0 || !target) {
       this.registerSnapScroll(this.getPagePosition(context));
-      notifyRestoreComplete();
+      notifyRestoreComplete(navigationGeneration);
       return false;
     }
     var rect = this.getRect(target);
@@ -554,7 +554,7 @@ window.hoshiReader = {
       var ctx = window.hoshiReader.getScrollContext();
       window.hoshiReader.setPagePosition(ctx, targetScroll);
       window.hoshiReader.registerSnapScroll(targetScroll);
-      requestAnimationFrame(function () { notifyRestoreComplete(); });
+      requestAnimationFrame(function () { notifyRestoreComplete(navigationGeneration); });
     });
     return true;
   },
@@ -616,7 +616,7 @@ window.hoshiReader = {
     });
   },
 
-  initialize: function (initialProgress) {
+  initialize: function (initialProgress, navigationGeneration) {
     if (window.hoshiReader.didInitialize) return;
     window.hoshiReader.didInitialize = true;
 
@@ -695,7 +695,7 @@ window.hoshiReader = {
         if (window.hoshiHighlights) {
           window.hoshiHighlights.applyHighlights(window.__hoshiChapterHighlights || []);
         }
-        self.restoreProgress(progress).then(function () {
+        self.restoreProgress(progress, navigationGeneration).then(function () {
           self.lastProgress = self.calculateProgress();
           updateDiagnostics();
           postToHost("chapterReady", window.__hoshiReaderState);
@@ -704,9 +704,10 @@ window.hoshiReader = {
   },
 };
 
-function notifyRestoreComplete() {
+function notifyRestoreComplete(navigationGeneration) {
   postToHost("restoreCompleted", {
     progress: window.hoshiReader.calculateProgress(),
+    navigationGeneration: navigationGeneration ?? null,
   });
 }
 
@@ -868,7 +869,10 @@ async function handleMessage(event) {
         };
         var progress = message.payload?.progress ?? 0;
         logDebug("setChapter-received", { chapter: currentChapter, progress: progress });
-        window.hoshiReader.initialize(progress);
+        window.hoshiReader.initialize(
+          progress,
+          message.payload?.navigationGeneration ?? null
+        );
         break;
       case "restoreProgress":
         logDebug("restoreProgress-start", {
@@ -879,11 +883,19 @@ async function handleMessage(event) {
           bodyClientWidth: document.body.clientWidth,
         });
         await window.hoshiReader.restoreProgress(
-          message.payload?.progress ?? 0
+          message.payload?.progress ?? 0,
+          message.payload?.navigationGeneration ?? null
         );
         updateDiagnostics();
         logDebug("restoreProgress-done", window.__hoshiReaderState);
         postToHost("chapterReady", window.__hoshiReaderState);
+        break;
+      case "jumpToFragment":
+        await window.hoshiReader.jumpToFragment(
+          message.payload?.fragment ?? "",
+          message.payload?.navigationGeneration ?? null
+        );
+        updateDiagnostics();
         break;
       default:
         throw new Error("Unsupported bridge message type: " + message.type);
@@ -898,6 +910,22 @@ async function handleMessage(event) {
 
 window.chrome?.webview?.addEventListener("message", handleMessage);
 window.hoshiReaderNavigate = handleNavigate;
+
+document.addEventListener("click", function (event) {
+  var anchor = event.target?.closest?.("a[href]");
+  if (!anchor) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  try {
+    var url = new URL(anchor.getAttribute("href"), document.baseURI);
+    if (url.protocol === "https:" && url.host === window.location.host) {
+      postToHost("internalLink", { href: url.href });
+    }
+  } catch (_) {
+    // Malformed and external EPUB links are intentionally not navigated.
+  }
+}, true);
 
 document.addEventListener("keydown", function (event) {
   if (event.defaultPrevented) return;
@@ -1157,7 +1185,10 @@ if (window.__hoshiChapterInfo) {
   };
   var initProgress = window.__hoshiChapterInfo.progress ?? 0;
   logDebug("auto-initialize", { chapter: currentChapter, progress: initProgress });
-  window.hoshiReader.initialize(initProgress);
+  window.hoshiReader.initialize(
+    initProgress,
+    window.__hoshiChapterInfo.navigationGeneration ?? null
+  );
 } else {
   postToHost("readerReady", {});
 }

@@ -28,7 +28,8 @@ public class NovelLibraryPageViewModelTests
         service
             .Setup(s => s.GetNovelBooksAsync(null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(
-                Result<IReadOnlyList<NovelBook>>.Success(
+                Result<NovelBookCatalogSnapshot>.Success(
+                    new NovelBookCatalogSnapshot(
                     [
                         new NovelBook
                         {
@@ -36,7 +37,8 @@ public class NovelLibraryPageViewModelTests
                             Title = "Book One",
                             FilePath = "D:\\Books\\one.epub",
                         },
-                    ]
+                    ],
+                    [])
                 )
             );
 
@@ -77,6 +79,25 @@ public class NovelLibraryPageViewModelTests
         sut.OpenNovelCommand.Execute(new NovelBookItemViewModel(book));
 
         messenger.SentMessages.Should().Contain(m => m is SwitchAppModeMessage);
+    }
+
+    [Fact]
+    public async Task StatisticsSurfaceCommands_ActivateAndDeactivateDashboard()
+    {
+        var sut = CreateSut();
+        await sut.InitializeAsync();
+
+        await sut.EnterStatisticsCommand.ExecuteAsync(null);
+
+        sut.ShowStatisticsDashboard.Should().BeTrue();
+        sut.ShowBookshelf.Should().BeFalse();
+        sut.StatisticsDashboard.IsActive.Should().BeTrue();
+
+        sut.ReturnToBookshelfCommand.Execute(null);
+
+        sut.ShowStatisticsDashboard.Should().BeFalse();
+        sut.ShowBookshelf.Should().BeTrue();
+        sut.StatisticsDashboard.IsActive.Should().BeFalse();
     }
 
     [Fact]
@@ -300,6 +321,120 @@ public class NovelLibraryPageViewModelTests
             Times.Once);
     }
 
+    [Fact]
+    public async Task InitializeAsync_ProjectsReadingCustomAndUnshelvedSectionsWithWarnings()
+    {
+        var books = new[]
+        {
+            new NovelBook { Id = "a", Title = "Reading", CurrentCharacterCount = 10, TotalCharacterCount = 100 },
+            new NovelBook { Id = "b", Title = "Complete", CurrentCharacterCount = 100, TotalCharacterCount = 100 },
+            new NovelBook { Id = "c", Title = "New" },
+        };
+        var library = new Mock<INovelLibraryService>();
+        library.Setup(service => service.GetNovelBooksAsync(null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelBookCatalogSnapshot>.Success(
+                new NovelBookCatalogSnapshot(books, ["broken/metadata.json"])));
+        var shelves = new Mock<INovelShelfService>();
+        shelves.Setup(service => service.LoadAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelShelfState>.Success(new NovelShelfState(
+                [new NovelShelf("收藏", ["b"])],
+                ["a", "c"])));
+        var settings = Mock.Of<ISettingsService>(service => service.Current == new AppSettings
+        {
+            BookshelfShowReading = true,
+        });
+        var sut = CreateSut(
+            novelService: library.Object,
+            shelfService: shelves.Object,
+            settingsService: settings);
+
+        await sut.InitializeAsync();
+
+        sut.RailSections.Select(section => section.Id).Should().Equal("reading", "shelf:收藏");
+        sut.RailSections[0].Books.Select(item => item.Book.Id).Should().Equal("a");
+        sut.RailSections[1].Books.Select(item => item.Book.Id).Should().Equal("b");
+        sut.UnshelvedBooks.Select(item => item.Book.Id).Should().Equal("a", "c");
+        sut.HasNovelStorageWarnings.Should().BeTrue();
+        sut.NovelStorageWarnings.Should().Equal("broken/metadata.json");
+    }
+
+    [Fact]
+    public async Task MoveBooksToShelfCommand_RebuildsProjectionFromServiceResult()
+    {
+        var library = new RecordingNovelLibraryService
+        {
+            Books =
+            [
+                new NovelBook { Id = "a", Title = "A" },
+                new NovelBook { Id = "b", Title = "B" },
+            ],
+        };
+        var shelves = new Mock<INovelShelfService>();
+        shelves.Setup(service => service.LoadAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelShelfState>.Success(new NovelShelfState([], ["a", "b"])));
+        shelves.Setup(service => service.MoveBooksAsync(
+                It.Is<IReadOnlyList<string>>(ids => ids.SequenceEqual(new[] { "a" })),
+                "收藏",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelShelfState>.Success(new NovelShelfState(
+                [new NovelShelf("收藏", ["a"])],
+                ["b"])));
+        var sut = CreateSut(novelService: library, shelfService: shelves.Object);
+        await sut.InitializeAsync();
+
+        await sut.MoveBooksToShelfCommand.ExecuteAsync(
+            new NovelShelfMoveRequest(["a"], "收藏"));
+
+        sut.RailSections.Should().ContainSingle();
+        sut.RailSections[0].Books.Select(item => item.Book.Id).Should().Equal("a");
+        sut.UnshelvedBooks.Select(item => item.Book.Id).Should().Equal("b");
+        shelves.VerifyAll();
+    }
+
+    [Fact]
+    public async Task StatisticsControls_ReprojectRangeMetricsCalendarAndCorruptWarning()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var contribution = new NovelStatisticsBookContribution(
+            "a", "A", null, 1_200, 600, true);
+        var day = new NovelStatisticsDayAggregate(
+            today, 1_200, 600, [contribution]);
+        var snapshot = new NovelStatisticsDashboardSnapshot(
+            today.AddYears(-1).AddDays(1),
+            today,
+            [day],
+            [new NovelStatisticsBookRecord("a", "A", null, 2_000)],
+            ["broken-book"]);
+        var dashboard = new Mock<INovelStatisticsDashboardService>();
+        dashboard.Setup(service => service.LoadSnapshotAsync(
+                It.IsAny<IReadOnlyList<NovelBook>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(snapshot);
+        var settings = new Mock<ISettingsService>();
+        settings.SetupGet(service => service.Current).Returns(new AppSettings());
+        var sut = CreateSut(
+            settingsService: settings.Object,
+            statisticsDashboardService: dashboard.Object);
+
+        await sut.InitializeAsync();
+        await sut.EnterStatisticsCommand.ExecuteAsync(null);
+        var statistics = sut.StatisticsDashboard;
+        statistics.SelectedRangeMode = NovelStatisticsRangeMode.Day;
+        statistics.AnchorDate = new DateTimeOffset(
+            today.ToDateTime(TimeOnly.MinValue),
+            TimeZoneInfo.Local.GetUtcOffset(today.ToDateTime(TimeOnly.MinValue)));
+        statistics.SelectedTrendMetric = NovelStatisticsTrendMetric.Duration;
+        statistics.SelectedRankingMetric = NovelStatisticsBookRankingMetric.Duration;
+        statistics.SelectedCalendarDay = statistics.CalendarDays.Single(day => day.Date == today);
+
+        statistics.HasCorruptBooks.Should().BeTrue();
+        statistics.RangeTitle.Should().Be(today.ToString("yyyy-MM-dd"));
+        statistics.RangeText.Should().Contain("1,200");
+        statistics.TrendPoints.Should().ContainSingle().Which.ValueText.Should().Be("10m");
+        statistics.BookRankingRows.Should().ContainSingle().Which.ValueText.Should().Be("10m");
+        statistics.CalendarDetail.Text.Should().Contain("1,200 chars").And.Contain("1 book");
+    }
+
     private static NovelLibraryPageViewModel CreateSut(
         INovelLibraryService? novelService = null,
         IDialogService? dialogService = null,
@@ -307,8 +442,8 @@ public class NovelLibraryPageViewModelTests
         FakeMessenger? messenger = null,
         ISasayakiMatchService? sasayakiMatchService = null,
         ISettingsService? settingsService = null,
-        INovelStatisticsDashboardService? statisticsDashboardService = null
-        ,
+        INovelStatisticsDashboardService? statisticsDashboardService = null,
+        INovelShelfService? shelfService = null,
         ITtuSyncRemoteStore? syncRemoteStore = null,
         ITtuBookImportService? ttuBookImportService = null,
         IGoogleDriveAuthService? googleDriveAuthService = null
@@ -317,7 +452,8 @@ public class NovelLibraryPageViewModelTests
         var serviceMock = new Mock<INovelLibraryService>();
         serviceMock
             .Setup(s => s.GetNovelBooksAsync(null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<IReadOnlyList<NovelBook>>.Success([]));
+            .ReturnsAsync(Result<NovelBookCatalogSnapshot>.Success(
+                new NovelBookCatalogSnapshot([], [])));
         var dashboardMock = new Mock<INovelStatisticsDashboardService>();
         dashboardMock
             .Setup(s => s.LoadSnapshotAsync(
@@ -325,18 +461,34 @@ public class NovelLibraryPageViewModelTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new NovelStatisticsDashboardSnapshot([], []));
 
+        var effectiveSettings = settingsService
+            ?? Mock.Of<ISettingsService>(s => s.Current == new AppSettings());
+        var effectiveDashboardService = statisticsDashboardService
+            ?? dashboardMock.Object;
+
         return new NovelLibraryPageViewModel(
             novelService ?? serviceMock.Object,
             dialogService ?? Mock.Of<IDialogService>(),
             notificationService ?? Mock.Of<INotificationService>(),
             messenger ?? new FakeMessenger(),
             sasayakiMatchService ?? Mock.Of<ISasayakiMatchService>(),
-            settingsService ?? Mock.Of<ISettingsService>(s => s.Current == new AppSettings()),
-            statisticsDashboardService ?? dashboardMock.Object,
+            effectiveSettings,
+            new NovelStatisticsDashboardViewModel(
+                effectiveDashboardService,
+                effectiveSettings),
+            shelfService ?? CreateDefaultShelfService(),
             syncRemoteStore ?? new FakeTtuSyncRemoteStore(),
             ttuBookImportService ?? new FakeTtuBookImportService(),
             googleDriveAuthService ?? new FakeGoogleDriveAuthService { HasCredentials = true }
         );
+    }
+
+    private static INovelShelfService CreateDefaultShelfService()
+    {
+        var service = new Mock<INovelShelfService>();
+        service.Setup(value => value.LoadAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelShelfState>.Success(new NovelShelfState([], [])));
+        return service.Object;
     }
 
     private static TtuRemoteBook RemoteBook(
@@ -393,10 +545,11 @@ public class NovelLibraryPageViewModelTests
         public List<string> ImportedPaths { get; } = [];
         public List<IReadOnlyList<string>> SavedOrders { get; } = [];
 
-        public Task<Result<IReadOnlyList<NovelBook>>> GetNovelBooksAsync(
+        public Task<Result<NovelBookCatalogSnapshot>> GetNovelBooksAsync(
             string? queryText = null,
             CancellationToken ct = default) =>
-            Task.FromResult(Result<IReadOnlyList<NovelBook>>.Success(Books));
+            Task.FromResult(Result<NovelBookCatalogSnapshot>.Success(
+                new NovelBookCatalogSnapshot(Books, [])));
 
         public Task<Result<NovelBook>> ImportEpubAsync(string filePath, CancellationToken ct = default)
         {

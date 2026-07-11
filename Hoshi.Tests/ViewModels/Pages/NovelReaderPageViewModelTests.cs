@@ -44,7 +44,7 @@ public sealed class NovelReaderPageViewModelTests
             new FakeMessenger(),
             highlightService,
             new NovelBookSidecarService(),
-            new NovelStatisticsSidecarService(),
+            new FakeReaderStatisticsSession(),
             new NoOpProfileRuntimeService());
         await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"));
         sut.SetChapterCharacterCounts([10, 20]);
@@ -117,7 +117,7 @@ public sealed class NovelReaderPageViewModelTests
     }
 
     [Fact]
-    public async Task SaveProgressNowAsync_WritesBookmarkSidecarBesideDatabaseProgress()
+    public async Task SaveProgressNowAsync_DelegatesCanonicalBookmarkWriteOnce()
     {
         var ct = TestContext.Current.CancellationToken;
         using var temp = new TempBookDirectory();
@@ -147,21 +147,23 @@ public sealed class NovelReaderPageViewModelTests
             new FakeMessenger(),
             new ReaderHighlightService(),
             sidecarService,
-            new NovelStatisticsSidecarService(),
+            new FakeReaderStatisticsSession(),
             new NoOpProfileRuntimeService());
         await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"));
         sut.SetChapterCharacterCounts([100, 50]);
         sut.SetChapter(1, count: 2);
         sut.UpdateProgress(0.5);
 
-        await sut.SaveProgressNowAsync();
+        await sut.SaveProgressNowAsync(ct: ct);
 
-        var bookmark = await sidecarService.LoadBookmarkAsync(temp.Path, ct);
-        bookmark.Should().NotBeNull();
-        bookmark!.ChapterIndex.Should().Be(1);
-        bookmark.Progress.Should().Be(0.5);
-        bookmark.CharacterCount.Should().Be(125);
-        bookmark.LastModified.Should().NotBeNull();
+        (await sidecarService.LoadBookmarkAsync(temp.Path, ct)).Should().BeNull();
+        novelService.Verify(s => s.SaveProgressAsync(
+            "book-1",
+            1,
+            0.5,
+            125,
+            150,
+            It.IsAny<CancellationToken>()), Times.Once);
         novelService.VerifyAll();
     }
 
@@ -200,76 +202,124 @@ public sealed class NovelReaderPageViewModelTests
     }
 
     [Fact]
-    public async Task FlushStatisticsAsync_TracksSessionTodayAndAllTimeStatistics()
+    public async Task StatisticsSessionState_ProjectsSessionTodayAndAllTimeText()
     {
         var ct = TestContext.Current.CancellationToken;
         using var temp = new TempBookDirectory();
-        var statisticsService = new NovelStatisticsSidecarService();
+        var statisticsSession = new FakeReaderStatisticsSession();
         var sut = CreateInitializedSut(
             temp.Path,
             new ReaderHighlightService(),
-            novelStatisticsSidecarService: statisticsService);
+            statisticsSession: statisticsSession);
         sut.SetChapterCharacterCounts([100, 100]);
         sut.SetChapter(0, count: 2);
         sut.UpdateProgress(0.25);
         await sut.LoadStatisticsAsync(ct);
 
-        sut.StartStatisticsTracking(new DateTimeOffset(2026, 6, 24, 0, 0, 0, TimeSpan.Zero));
-        sut.UpdateProgress(0.85);
-        await sut.FlushStatisticsAsync(
-            new DateTimeOffset(2026, 6, 24, 0, 2, 0, TimeSpan.Zero),
-            ct);
+        statisticsSession.Publish(new ReaderStatisticsSessionState(
+            IsTracking: true,
+            IsPaused: false,
+            Statistic(60, 120, 1_800),
+            Statistic(70, 180, 1_400),
+            Statistic(600, 1_200, 1_800),
+            []));
 
         sut.SessionStatistics.CharactersRead.Should().Be(60);
         sut.SessionStatistics.ReadingTime.Should().Be(120);
-        sut.SessionStatistics.LastReadingSpeed.Should().Be(1800);
-        sut.TodaysStatistics.CharactersRead.Should().Be(60);
-        sut.AllTimeStatistics.CharactersRead.Should().Be(60);
+        sut.SessionStatistics.LastReadingSpeed.Should().Be(1_800);
+        sut.TodaysStatistics.CharactersRead.Should().Be(70);
+        sut.AllTimeStatistics.CharactersRead.Should().Be(600);
+        sut.IsStatisticsTracking.Should().BeTrue();
+        sut.IsStatisticsPaused.Should().BeFalse();
         sut.StatisticsSessionCharactersText.Should().Be("60");
         sut.StatisticsSessionSpeedText.Should().Be("1,800 / h");
         sut.StatisticsSessionTimeText.Should().Be("2m 0s");
         sut.StatisticsSessionChromeTimeText.Should().Be("0:02");
-        sut.StatisticsTodayTimeText.Should().Be("2m 0s");
-        sut.StatisticsAllTimeTimeText.Should().Be("2m 0s");
-
-        var saved = await statisticsService.LoadAsync(temp.Path, ct);
-        saved.Should().ContainSingle().Which.Should().BeEquivalentTo(
-            sut.TodaysStatistics,
-            options => options.Excluding(s => s.LastStatisticModified));
-        saved.Single().LastStatisticModified.Should().BeGreaterThan(0);
+        sut.StatisticsTodayTimeText.Should().Be("3m 0s");
+        sut.StatisticsAllTimeTimeText.Should().Be("20m 0s");
     }
 
     [Fact]
-    public async Task FlushStatisticsAsync_UsesAndroidFloorCharacterProgressForTotalsAndSpeed()
+    public async Task LifecycleCheckpoints_SaveBackgroundAndCloseExactlyOnce()
     {
         var ct = TestContext.Current.CancellationToken;
         using var temp = new TempBookDirectory();
+        var novelService = new Mock<INovelLibraryService>();
+        novelService
+            .Setup(s => s.GetNovelBookAsync("book-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelBook?>.Success(new NovelBook
+            {
+                Id = "book-1",
+                Title = "Book One",
+                FilePath = System.IO.Path.Combine(temp.Path, "book.epub"),
+                ExtractedPath = temp.Path,
+            }));
+        novelService
+            .Setup(s => s.SaveProgressAsync(
+                "book-1", 0, 0.5, 50, 100, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        var statisticsSession = new FakeReaderStatisticsSession();
+        var sut = new NovelReaderPageViewModel(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            new ReaderHighlightService(),
+            new NovelBookSidecarService(),
+            statisticsSession,
+            new NoOpProfileRuntimeService());
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"));
+        sut.SetChapterCharacterCounts([100]);
+        sut.SetChapter(0, 1);
+        sut.UpdateProgress(0.5);
+
+        await sut.CheckpointAppBackgroundingAsync(ct);
+        await Task.WhenAll(
+            sut.PrepareForReaderLifecycleCloseAsync(ct),
+            sut.PrepareForReaderLifecycleCloseAsync(ct));
+
+        novelService.Verify(s => s.SaveProgressAsync(
+            "book-1", 0, 0.5, 50, 100, It.IsAny<CancellationToken>()), Times.Exactly(2));
+        statisticsSession.Checkpoints.Should().Equal(
+            (50, ReaderStatisticsCheckpointReason.Background),
+            (50, ReaderStatisticsCheckpointReason.Close));
+    }
+
+    [Fact]
+    public async Task StatisticsCommands_DelegateCurrentRawPositionAndReason()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var statisticsSession = new FakeReaderStatisticsSession();
         var sut = CreateInitializedSut(
             temp.Path,
             new ReaderHighlightService(),
-            novelStatisticsSidecarService: new NovelStatisticsSidecarService());
-        sut.SetChapterCharacterCounts([3]);
+            statisticsSession: statisticsSession);
+        sut.SetChapterCharacterCounts([100]);
         sut.SetChapter(0, count: 1);
+        sut.UpdateProgress(0.25);
         await sut.LoadStatisticsAsync(ct);
 
-        sut.StartStatisticsTracking(new DateTimeOffset(2026, 6, 24, 0, 0, 0, TimeSpan.Zero));
+        sut.StartStatisticsTracking();
         sut.UpdateProgress(0.5);
-        await sut.FlushStatisticsAsync(
-            new DateTimeOffset(2026, 6, 24, 1, 0, 0, TimeSpan.Zero),
+        await sut.CheckpointReadingAsync(
+            ReaderStatisticsCheckpointReason.AdjacentChapter,
             ct);
+        sut.ResetStatisticsBaseline();
+        await sut.StopStatisticsTrackingAsync(ct: ct);
 
-        sut.SessionStatistics.CharactersRead.Should().Be(1);
-        sut.SessionStatistics.ReadingTime.Should().Be(3600);
-        sut.SessionStatistics.LastReadingSpeed.Should().Be(1);
-        sut.TodaysStatistics.CharactersRead.Should().Be(1);
-        sut.AllTimeStatistics.CharactersRead.Should().Be(1);
+        statisticsSession.LoadRequest.Should().Be((temp.Path, "Book One", 25));
+        statisticsSession.StartPositions.Should().Equal(25);
+        statisticsSession.Checkpoints.Should().ContainSingle()
+            .Which.Should().Be((50, ReaderStatisticsCheckpointReason.AdjacentChapter));
+        statisticsSession.ResetPositions.Should().Equal(50);
+        statisticsSession.StopPositions.Should().Equal(50);
     }
 
     private static NovelReaderPageViewModel CreateInitializedSut(
         string bookRootPath,
         IReaderHighlightService highlightService,
         INovelBookSidecarService? novelBookSidecarService = null,
-        INovelStatisticsSidecarService? novelStatisticsSidecarService = null)
+        IReaderStatisticsSession? statisticsSession = null)
     {
         var novelService = new Mock<INovelLibraryService>();
         novelService
@@ -287,10 +337,87 @@ public sealed class NovelReaderPageViewModelTests
             new FakeMessenger(),
             highlightService,
             novelBookSidecarService ?? new NovelBookSidecarService(),
-            novelStatisticsSidecarService ?? new NovelStatisticsSidecarService(),
+            statisticsSession ?? new FakeReaderStatisticsSession(),
             new NoOpProfileRuntimeService());
         sut.InitializeAsync(new NovelReaderNavigationArgs("book-1")).GetAwaiter().GetResult();
         return sut;
+    }
+
+    private static NovelReadingStatistic Statistic(
+        int characters,
+        double readingTime,
+        int speed) =>
+        new("Book One", "2026-07-11", characters, readingTime, speed, speed, speed, speed, 1);
+
+    private sealed class FakeReaderStatisticsSession : IReaderStatisticsSession
+    {
+        private static readonly NovelReadingStatistic Empty = ReaderStatisticsMath.Empty(
+            "Book One",
+            new DateOnly(2026, 7, 11));
+
+        public ReaderStatisticsSessionState State { get; private set; } = new(
+            false,
+            false,
+            Empty,
+            Empty,
+            Empty,
+            []);
+
+        public (string Root, string Title, int Position)? LoadRequest { get; private set; }
+        public List<int> StartPositions { get; } = [];
+        public List<(int Position, ReaderStatisticsCheckpointReason Reason)> Checkpoints { get; } = [];
+        public List<int> ResetPositions { get; } = [];
+        public List<int> StopPositions { get; } = [];
+
+        public event EventHandler<ReaderStatisticsSessionState>? StateChanged;
+
+        public Task LoadAsync(
+            string bookRoot,
+            string title,
+            ReaderStatisticsPosition position,
+            CancellationToken ct = default)
+        {
+            LoadRequest = (bookRoot, title, position.RawCharacterCount);
+            return Task.CompletedTask;
+        }
+
+        public void Start(ReaderStatisticsPosition position) =>
+            StartPositions.Add(position.RawCharacterCount);
+
+        public void Tick(ReaderStatisticsPosition position)
+        {
+        }
+
+        public Task CheckpointAsync(
+            ReaderStatisticsPosition position,
+            ReaderStatisticsCheckpointReason reason,
+            CancellationToken ct = default)
+        {
+            Checkpoints.Add((position.RawCharacterCount, reason));
+            return Task.CompletedTask;
+        }
+
+        public Task PauseAsync(
+            ReaderStatisticsPosition position,
+            CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task StopAsync(
+            ReaderStatisticsPosition position,
+            CancellationToken ct = default)
+        {
+            StopPositions.Add(position.RawCharacterCount);
+            return Task.CompletedTask;
+        }
+
+        public void ResetBaseline(ReaderStatisticsPosition position) =>
+            ResetPositions.Add(position.RawCharacterCount);
+
+        public void Publish(ReaderStatisticsSessionState state)
+        {
+            State = state;
+            StateChanged?.Invoke(this, state);
+        }
     }
 
     private static ReaderHighlight HighlightAt(

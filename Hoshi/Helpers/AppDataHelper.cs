@@ -20,8 +20,11 @@ public static class AppDataHelper
     public static string GetPluginsPath() =>
         EnsureDirectory(Path.Combine(GetAppDataPath(), "Plugins"));
 
+    public static string GetNovelBooksPath() =>
+        EnsureDirectory(Path.Combine(GetDataPath(), "Novels"));
+
     public static string GetNovelBookPath(string bookId) =>
-        EnsureDirectory(Path.Combine(GetDataPath(), "Novels", bookId));
+        EnsureDirectory(Path.Combine(GetNovelBooksPath(), bookId));
 
     public static string CopyDllToPluginsDirectory(string sourceDllPath)
     {

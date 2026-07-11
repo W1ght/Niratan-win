@@ -6,9 +6,7 @@ using Hoshi.Models.Settings;
 using Hoshi.Models.Sync;
 using Hoshi.Services.Novels;
 using Hoshi.Services.Sasayaki;
-using Hoshi.Services.Storage;
 using Hoshi.Services.Sync;
-using Moq;
 
 namespace Hoshi.Tests.Services.Sync;
 
@@ -59,8 +57,7 @@ public sealed class TtuSyncServiceTests
                 Progress: 0.625,
                 LastBookmarkModified: DateTimeOffset.FromUnixTimeMilliseconds(2000)),
         };
-        var dataService = new Mock<IDataService>();
-        var sut = CreateSut(sidecars, remote, dataService);
+        var sut = CreateSut(sidecars, remote);
 
         var result = await sut.SyncBookAsync(
             CreateBook(temp.Path),
@@ -75,15 +72,6 @@ public sealed class TtuSyncServiceTests
             Progress: 0.25,
             CharacterCount: 1250,
             LastModified: DateTimeOffset.FromUnixTimeMilliseconds(2000)));
-        dataService.Verify(
-            service => service.SaveNovelProgressAsync(
-                "book-1",
-                1,
-                0.25,
-                1250,
-                2000,
-                It.IsAny<CancellationToken>()),
-            Times.Once);
     }
 
     [Fact]
@@ -187,13 +175,11 @@ public sealed class TtuSyncServiceTests
 
     private static TtuSyncService CreateSut(
         Sidecars sidecars,
-        ITtuSyncRemoteStore remote,
-        Mock<IDataService>? dataService = null) =>
+        ITtuSyncRemoteStore remote) =>
         new(
             sidecars.Book,
             sidecars.Statistics,
             sidecars.Sasayaki,
-            dataService?.Object ?? Mock.Of<IDataService>(),
             remote);
 
     private static NovelBook CreateBook(string rootPath) => new()

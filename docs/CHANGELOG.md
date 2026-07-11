@@ -29,6 +29,52 @@
 - 新查询无结果、被取代、取消或失败时保留最后一次 committed popup、交互上下文和高亮；只有新的成功 generation 原子提交后才整体切换。
 - overlay 的 context、anchor 与 layout 按 generation + trace 暂存；嵌套查词在每个异步边界校验 root/parent generation，root 高亮脚本也拒绝不同 generation 的 DOM；resize 同时刷新 committed 与 exact pending layout 但只显示 committed，精确 commit 才整体提升，abort/drop/stale terminal 不改变旧状态。
 - Canvas → JS → native 显式传递 `dismissOnEmpty` / `isHover`：点击空白仍关闭，Shift hover 的空白、间隙和扫描失败只重置 hover 去重并保留 committed popup、高亮及 accepted transaction。
+---
+
+## 小说统计已有完整数据，但书架内联面板无法呈现 Niratan Dashboard
+
+**原因**：
+- typed sidecar repository 与纯计算器已经覆盖最近一年、目标、速度、趋势、日历、排行和书架对比，但 UI 仍是书架顶部的限高内联面板。
+- 统计展示状态和格式化通过 `NovelLibraryPageViewModel` 转发，无法建立 Niratan 的全页切换、独立生命周期、三档自适应布局和完整键盘/UI Automation 契约。
+- 该问题是展示投影和页面架构缺口，不是统计引擎或 `statistics.json` 数据缺失。
+
+**解决**：
+- 新增独立 `NovelStatisticsDashboardViewModel` 与全页 `NovelStatisticsDashboardView`；父 ViewModel 只切换 Bookshelf/Statistics 并提供当前书籍、书架状态。
+- 补齐 Range & Trend、Today、Goal、This Week、Reading Calendar、Selected Range、Speed Summary、Book Ranking、Shelf Comparison；自研 UI-only Canvas 控件绘制 Bar/Line，不新增图表依赖。
+- Dashboard 使用单一纵向滚动所有者，在 1260/840 effective pixels 切换三列、两列、单列；Calendar 仅横向滚动，所有 selector 有稳定 AutomationId 与中英文资源。
+- 激活 generation、linked cancellation source 与激活期 refresh 订阅保证离开/重进时旧 load 和旧 refresh 不能覆盖新 snapshot；损坏 sidecar 仍保持原文件不变。
+- 小说、书架和统计继续以 JSON sidecar 为真源；SQLite 只保留视频业务边界，视频功能未移除。
+
+---
+
+## Reader 跳转会污染阅读统计，关闭时可能丢失最后一段时间
+
+**原因**：
+- Reader ViewModel 曾同时负责时钟、字符差、日期聚合和 sidecar 写入，真实翻页、程序化跳转与生命周期事件没有统一 checkpoint 边界。
+- 搜索、目录、高亮、字符和 Sasayaki 跳转直接改写章节/进度，分页对齐后的回调无法区分普通 restore 与跳转 restore，长距离跳转可能被计为阅读字符。
+- Reader 没有 generation-scoped destination、内部链接/history 事务、一秒投影和可等待的窗口关闭边界。
+
+**解决**：
+- `ReaderStatisticsSession` 独占 TTU 公式、TimeProvider、本地日期 rollover、基线和 `statistics.json` 写入，ViewModel 只投影状态。
+- 真实阅读移动使用 typed checkpoint；所有程序化入口统一执行“结算旧位置 → 等待 generation 目标 → 保存最终书签 → 重置基线”，过期 bridge callback 不能完成新跳转。
+- WebView2 拦截 EPUB 链接，native 只允许同源 spine 目标；补齐 fragment 与 Back/Forward 历史导航并复用同一统计事务。
+- tracking 且未 paused 时每秒更新内存统计；窗口最小化写 Background checkpoint，返回书架、页面消失和主窗口关闭共享幂等 Close checkpoint。
+- Dashboard 改为最近一年 typed snapshot 与纯计算器，补齐可选范围/anchor、目标、速度窗口、趋势粒度与指标、日历详情、Book Ranking 指标和 Shelf Comparison，并移除旧 By Book distribution。
+- 损坏统计 sidecar 会显示可见警告并保持原文件不变；派生 Dashboard cache 使用 schema/key 校验和书库事件失效，命中后后台重读 sidecar，缓存损坏只删除缓存自身。
+
+---
+
+## 小说存储与书架状态曾被 SQLite 绑定
+
+**原因**：
+- 小说元数据、进度与排序曾以主 App SQLite 为真源，无法按 Niratan 的单书 sidecar 结构独立迁移、恢复和同步。
+- 书架缺少持久化服务边界，书籍移动、书架排序和损坏 JSON 恢复无法保证原子性。
+
+**解决**：
+- 小说元数据、书签、书籍信息、统计和高亮改为每书目录 sidecar；全局顺序与书架分别写入 `book_order.json`、`shelves.json`。
+- 启动时先备份并校验导出旧小说表，再退役小说 SQLite schema；失败时保留旧表和原文件并切换为只读恢复模式。
+- 主 App SQLite 缩小为视频业务边界，视频功能和外部只读音频数据库保持不变。
+- 新增 Reading、自定义书架、Unshelved 与独立 Google Drive rail，以及创建、重命名、删除、排序和书籍移动入口。
 
 ---
 
