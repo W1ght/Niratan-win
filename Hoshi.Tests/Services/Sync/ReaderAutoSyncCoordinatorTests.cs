@@ -142,6 +142,68 @@ public sealed class ReaderAutoSyncCoordinatorTests
     }
 
     [Fact]
+    public void ScheduleExport_AfterCancelDoesNotEvaluateExternalGate()
+    {
+        var sync = new Mock<ITtuSyncService>(MockBehavior.Strict);
+        var settings = new Mock<ISettingsService>();
+        settings.SetupGet(service => service.Current)
+            .Throws(new CredentialStoreException("settings must not be read"));
+        var auth = new Mock<IGoogleDriveAuthService>();
+        auth.SetupGet(service => service.HasCredentials)
+            .Throws(new CredentialStoreException("credentials must not be read"));
+        var sut = new ReaderAutoSyncCoordinator(
+            sync.Object,
+            settings.Object,
+            auth.Object,
+            Mock.Of<ILogger<ReaderAutoSyncCoordinator>>());
+
+        sut.Cancel();
+        var act = () => sut.ScheduleExport(Book);
+
+        act.Should().NotThrow();
+        settings.VerifyGet(service => service.Current, Times.Never);
+        auth.VerifyGet(service => service.HasCredentials, Times.Never);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ScheduleExport_ContainsAndSafelyLogsGateFailure(bool credentialFailure)
+    {
+        const string sensitiveMessage = "credential payload must not escape";
+        var sync = new Mock<ITtuSyncService>(MockBehavior.Strict);
+        var settings = new Mock<ISettingsService>();
+        var auth = new Mock<IGoogleDriveAuthService>();
+        if (credentialFailure)
+        {
+            settings.SetupGet(service => service.Current).Returns(EnabledSettings());
+            auth.SetupGet(service => service.HasCredentials)
+                .Throws(new CredentialStoreException(sensitiveMessage));
+        }
+        else
+        {
+            settings.SetupGet(service => service.Current)
+                .Throws(new CredentialStoreException(sensitiveMessage));
+        }
+        var logger = new RecordingLogger<ReaderAutoSyncCoordinator>();
+        var sut = new ReaderAutoSyncCoordinator(
+            sync.Object,
+            settings.Object,
+            auth.Object,
+            logger);
+
+        var act = () => sut.ScheduleExport(Book);
+
+        act.Should().NotThrow();
+        logger.Messages.Should().ContainSingle()
+            .Which.Should().ContainAll(Book.Id, nameof(CredentialStoreException));
+        logger.Messages[0].Should().NotContain(sensitiveMessage);
+        auth.VerifyGet(
+            service => service.HasCredentials,
+            credentialFailure ? Times.Once() : Times.Never());
+    }
+
+    [Fact]
     public async Task ScheduleExport_CoalescesChangesIntoOneThirtySecondDelay()
     {
         var delay = new ControlledDelay();
@@ -529,6 +591,150 @@ public sealed class ReaderAutoSyncCoordinatorTests
         callCount.Should().Be(1);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FlushAsync_RechecksActiveFlushAfterGateReturnsFalseOrThrows(
+        bool throwGateFailure)
+    {
+        const string sensitiveMessage = "credential response must not escape";
+        using var lateCallerCts = new CancellationTokenSource();
+        var lateGateEvaluated = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseLateCaller = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var exportStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishExport = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var credentialRead = 0;
+        var gateHookCall = 0;
+        var exportCount = 0;
+        var settings = new Mock<ISettingsService>();
+        settings.SetupGet(service => service.Current).Returns(EnabledSettings());
+        var auth = new Mock<IGoogleDriveAuthService>();
+        auth.SetupGet(service => service.HasCredentials).Returns(() =>
+        {
+            if (Interlocked.Increment(ref credentialRead) != 1)
+                return true;
+            if (throwGateFailure)
+                throw new CredentialStoreException(sensitiveMessage);
+            return false;
+        });
+        var sync = new Mock<ITtuSyncService>();
+        sync.Setup(service => service.SyncBookAsync(
+                Book,
+                It.IsAny<TtuSyncOptions>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                Interlocked.Increment(ref exportCount);
+                exportStarted.TrySetResult();
+                await finishExport.Task;
+                return new TtuSyncResult(TtuSyncResultKind.Exported, Book.Title);
+            });
+        var logger = new RecordingLogger<ReaderAutoSyncCoordinator>();
+        var hooks = new ReaderAutoSyncCoordinatorTestHooks
+        {
+            AfterFlushGateEvaluatedAsync = () =>
+            {
+                if (Interlocked.Increment(ref gateHookCall) != 1)
+                    return Task.CompletedTask;
+                lateGateEvaluated.TrySetResult();
+                return releaseLateCaller.Task;
+            },
+        };
+        var sut = new ReaderAutoSyncCoordinator(
+            sync.Object,
+            settings.Object,
+            auth.Object,
+            logger,
+            (duration, ct) => Task.Delay(duration, ct),
+            hooks);
+
+        var lateFlush = sut.FlushAsync(Book, lateCallerCts.Token);
+        await lateGateEvaluated.Task.WaitAsync(
+            TimeSpan.FromSeconds(5),
+            TestContext.Current.CancellationToken);
+
+        var activeFlush = sut.FlushAsync(Book, TestContext.Current.CancellationToken);
+        await exportStarted.Task.WaitAsync(
+            TimeSpan.FromSeconds(5),
+            TestContext.Current.CancellationToken);
+        lateCallerCts.Cancel();
+        releaseLateCaller.TrySetResult();
+
+        var lateAct = async () => await lateFlush;
+        await lateAct.Should().ThrowAsync<OperationCanceledException>();
+        exportCount.Should().Be(1);
+        finishExport.TrySetResult();
+        await activeFlush.WaitAsync(
+            TimeSpan.FromSeconds(5),
+            TestContext.Current.CancellationToken);
+
+        if (throwGateFailure)
+        {
+            logger.Messages.Should().ContainSingle();
+            logger.Messages[0].Should().NotContain(sensitiveMessage);
+        }
+    }
+
+    [Fact]
+    public async Task FlushAsync_PublishesCompletionBeforeReleasingActiveOwnership()
+    {
+        var completionPublished = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releasePublicationWindow = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var publicationHookCall = 0;
+        var exportCount = 0;
+        var sync = new Mock<ITtuSyncService>();
+        sync.Setup(service => service.SyncBookAsync(
+                Book,
+                It.IsAny<TtuSyncOptions>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() =>
+            {
+                Interlocked.Increment(ref exportCount);
+                return new TtuSyncResult(TtuSyncResultKind.Exported, Book.Title);
+            });
+        var settings = new Mock<ISettingsService>();
+        settings.SetupGet(service => service.Current).Returns(EnabledSettings());
+        var auth = new Mock<IGoogleDriveAuthService>();
+        auth.SetupGet(service => service.HasCredentials).Returns(true);
+        var hooks = new ReaderAutoSyncCoordinatorTestHooks
+        {
+            AfterFlushCompletionPublishedAsync = () =>
+            {
+                if (Interlocked.Increment(ref publicationHookCall) != 1)
+                    return Task.CompletedTask;
+                completionPublished.TrySetResult();
+                return releasePublicationWindow.Task;
+            },
+        };
+        var sut = new ReaderAutoSyncCoordinator(
+            sync.Object,
+            settings.Object,
+            auth.Object,
+            Mock.Of<ILogger<ReaderAutoSyncCoordinator>>(),
+            (duration, ct) => Task.Delay(duration, ct),
+            hooks);
+
+        var ownerFlush = sut.FlushAsync(Book, TestContext.Current.CancellationToken);
+        await completionPublished.Task.WaitAsync(
+            TimeSpan.FromSeconds(5),
+            TestContext.Current.CancellationToken);
+
+        await sut.FlushAsync(Book, TestContext.Current.CancellationToken)
+            .WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        exportCount.Should().Be(1);
+        releasePublicationWindow.TrySetResult();
+        await ownerFlush.WaitAsync(
+            TimeSpan.FromSeconds(5),
+            TestContext.Current.CancellationToken);
+    }
+
     [Fact]
     public async Task FlushAsync_RestoresConsumedChangeWhenActiveExportIsCancelled()
     {
@@ -624,7 +830,7 @@ public sealed class ReaderAutoSyncCoordinatorTests
         services.AddSingleton(Mock.Of<ISettingsService>());
         services.AddSingleton(Mock.Of<IGoogleDriveAuthService>());
         services.AddSingleton(Mock.Of<ILogger<ReaderAutoSyncCoordinator>>());
-        services.AddTransient<IReaderAutoSyncCoordinator, ReaderAutoSyncCoordinator>();
+        Hoshi.App.RegisterReaderAutoSyncCoordinator(services);
         using var provider = services.BuildServiceProvider();
 
         var first = provider.GetRequiredService<IReaderAutoSyncCoordinator>();
@@ -744,4 +950,24 @@ public sealed class ReaderAutoSyncCoordinatorTests
     }
 
     private sealed class CredentialStoreException(string message) : Exception(message);
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<string> _messages = new();
+
+        public IReadOnlyList<string> Messages => _messages.ToArray();
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter) =>
+            _messages.Enqueue(formatter(state, exception));
+    }
 }

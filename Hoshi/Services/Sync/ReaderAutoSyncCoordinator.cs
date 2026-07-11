@@ -18,6 +18,8 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
     private readonly ILogger<ReaderAutoSyncCoordinator> _logger;
     private readonly Func<TimeSpan, CancellationToken, Task> _delayAsync;
     private readonly Func<Task> _onDebounceDrainedAsync;
+    private readonly Func<Task> _afterFlushGateEvaluatedAsync;
+    private readonly Func<Task> _afterFlushCompletionPublishedAsync;
     private readonly object _stateGate = new();
     private readonly SemaphoreSlim _exportGate = new(1, 1);
 
@@ -56,7 +58,7 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
             googleDriveAuthService,
             logger,
             delayAsync,
-            static () => Task.CompletedTask)
+            new ReaderAutoSyncCoordinatorTestHooks())
     {
     }
 
@@ -67,13 +69,35 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
         ILogger<ReaderAutoSyncCoordinator> logger,
         Func<TimeSpan, CancellationToken, Task> delayAsync,
         Func<Task> onDebounceDrainedAsync)
+        : this(
+            ttuSyncService,
+            settingsService,
+            googleDriveAuthService,
+            logger,
+            delayAsync,
+            new ReaderAutoSyncCoordinatorTestHooks
+            {
+                AfterDebounceDrainedAsync = onDebounceDrainedAsync,
+            })
+    {
+    }
+
+    internal ReaderAutoSyncCoordinator(
+        ITtuSyncService ttuSyncService,
+        ISettingsService settingsService,
+        IGoogleDriveAuthService googleDriveAuthService,
+        ILogger<ReaderAutoSyncCoordinator> logger,
+        Func<TimeSpan, CancellationToken, Task> delayAsync,
+        ReaderAutoSyncCoordinatorTestHooks testHooks)
     {
         _ttuSyncService = ttuSyncService;
         _settingsService = settingsService;
         _googleDriveAuthService = googleDriveAuthService;
         _logger = logger;
         _delayAsync = delayAsync;
-        _onDebounceDrainedAsync = onDebounceDrainedAsync;
+        _onDebounceDrainedAsync = testHooks.AfterDebounceDrainedAsync;
+        _afterFlushGateEvaluatedAsync = testHooks.AfterFlushGateEvaluatedAsync;
+        _afterFlushCompletionPublishedAsync = testHooks.AfterFlushCompletionPublishedAsync;
     }
 
     public async Task<bool> ImportOnOpenAsync(
@@ -116,7 +140,24 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
 
     public void ScheduleExport(NovelBook book)
     {
-        if (!CanAutoSync())
+        lock (_stateGate)
+        {
+            if (_cancelled)
+                return;
+        }
+
+        bool canAutoSync;
+        try
+        {
+            canAutoSync = CanAutoSync();
+        }
+        catch (Exception ex)
+        {
+            LogContainedFailure("schedule gate", book, ex);
+            return;
+        }
+
+        if (!canAutoSync)
             return;
 
         lock (_stateGate)
@@ -151,21 +192,24 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
         }
 
         bool canAutoSync;
+        Exception? gateFailure = null;
         try
         {
             canAutoSync = CanAutoSync();
         }
         catch (Exception ex)
         {
-            LogContainedFailure("flush gate", book, ex);
-            return;
+            gateFailure = ex;
+            canAutoSync = false;
         }
 
-        if (!canAutoSync)
-            return;
+        await _afterFlushGateEvaluatedAsync();
+
+        if (gateFailure != null)
+            LogContainedFailure("flush gate", book, gateFailure);
 
         TaskCompletionSource? ownedCompletion = null;
-        Task sharedFlush;
+        Task? sharedFlush = null;
         Task? debounceTask = null;
         lock (_stateGate)
         {
@@ -176,7 +220,7 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
             {
                 sharedFlush = _flushCompletion.Task;
             }
-            else
+            else if (canAutoSync)
             {
                 ownedCompletion = new TaskCompletionSource(
                     TaskCreationOptions.RunContinuationsAsynchronously);
@@ -190,6 +234,9 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
                 _debounceCts?.Cancel();
             }
         }
+
+        if (sharedFlush == null)
+            return;
 
         if (ownedCompletion == null)
         {
@@ -212,10 +259,7 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
                     if (_cancelled || !_pending)
                     {
                         if (ReferenceEquals(_flushCompletion, ownedCompletion))
-                        {
-                            _flushCompletion = null;
-                            _flushInProgress = false;
-                        }
+                            ownedCompletion.TrySetResult();
 
                         return;
                     }
@@ -229,26 +273,36 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
         }
         finally
         {
-            lock (_stateGate)
+            if (!ownedCompletion.Task.IsCompleted)
             {
-                if (ReferenceEquals(_flushCompletion, ownedCompletion))
+                if (failure is OperationCanceledException && ct.IsCancellationRequested)
+                    ownedCompletion.TrySetCanceled(ct);
+                else if (failure != null)
                 {
-                    _flushCompletion = null;
-                    _flushInProgress = false;
-                    if (!_cancelled && _pending && _debounceTask == null)
-                        StartDebounceLocked();
+                    ownedCompletion.TrySetException(failure);
+                    _ = ownedCompletion.Task.Exception;
                 }
+                else
+                    ownedCompletion.TrySetResult();
             }
 
-            if (failure is OperationCanceledException && ct.IsCancellationRequested)
-                ownedCompletion.TrySetCanceled(ct);
-            else if (failure != null)
+            try
             {
-                ownedCompletion.TrySetException(failure);
-                _ = ownedCompletion.Task.Exception;
+                await _afterFlushCompletionPublishedAsync();
             }
-            else
-                ownedCompletion.TrySetResult();
+            finally
+            {
+                lock (_stateGate)
+                {
+                    if (ReferenceEquals(_flushCompletion, ownedCompletion))
+                    {
+                        _flushCompletion = null;
+                        _flushInProgress = false;
+                        if (!_cancelled && _pending && _debounceTask == null)
+                            StartDebounceLocked();
+                    }
+                }
+            }
         }
     }
 
@@ -434,13 +488,31 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
         NovelBook book,
         Exception exception)
     {
-        _logger.LogWarning(
-            "Reader {Operation} sync failed for {BookId} ({ExceptionType})",
-            operation,
-            book.Id,
-            exception.GetType().Name);
+        try
+        {
+            _logger.LogWarning(
+                "Reader {Operation} sync failed for {BookId} ({ExceptionType})",
+                operation,
+                book.Id,
+                exception.GetType().Name);
+        }
+        catch
+        {
+        }
     }
 
     private static Task DefaultDelay(TimeSpan delay, CancellationToken ct) =>
         Task.Delay(delay, ct);
+}
+
+internal sealed class ReaderAutoSyncCoordinatorTestHooks
+{
+    public Func<Task> AfterDebounceDrainedAsync { get; init; } =
+        static () => Task.CompletedTask;
+
+    public Func<Task> AfterFlushGateEvaluatedAsync { get; init; } =
+        static () => Task.CompletedTask;
+
+    public Func<Task> AfterFlushCompletionPublishedAsync { get; init; } =
+        static () => Task.CompletedTask;
 }
