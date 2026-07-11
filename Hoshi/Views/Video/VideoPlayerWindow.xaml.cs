@@ -891,7 +891,9 @@ public sealed partial class VideoPlayerWindow : Window
 
         _popupOverlay = new DictionaryPopupOverlay();
         _popupOverlay.Dismissed += PopupOverlay_Dismissed;
-        _popupOverlay.UseCanvas(PopupOverlayCanvas);
+        _popupOverlay.UseCanvas(
+            PopupOverlayCanvas,
+            DictionaryPopupCanvasInputMode.VisibleHostsOnly);
         return _popupOverlay;
     }
 

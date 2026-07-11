@@ -3258,4 +3258,30 @@ public class NovelReaderWebAssetTests
         overlayCode.Should().Contain("private void OnPopupDismissRequested");
         overlayCode.Should().Contain("Dismiss();");
     }
+
+    [Fact]
+    public void DictionaryPopupOverlay_DefaultInputModeRemainsModal()
+    {
+        var code = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs"));
+
+        code.Should().Contain("DictionaryPopupCanvasInputMode.ModalSurface");
+        code.Should().Contain("DictionaryPopupCanvasInputMode.VisibleHostsOnly");
+        code.Should().Contain("new SolidColorBrush(Colors.Transparent)");
+    }
+
+    [Fact]
+    public void DictionaryPopupOverlay_CommitsPendingRootLayoutByGeneration()
+    {
+        var code = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs"));
+
+        code.Should().Contain("PendingRootCommit");
+        code.Should().Contain("generationStarted: generation =>");
+        code.Should().Contain("if (!_rootHost.HasCommittedContent)");
+        code.Should().Contain("private void OnRootContentCommitted(");
+        code.Should().Contain("ApplyHostLayout(_rootHost, pending.Layout)");
+        code.Should().Contain("_rootHost.CancelPendingContent(pending.Generation, traceId)");
+        code.Should().Contain("RootContentCommitted?.Invoke(this, e)");
+    }
 }

@@ -72,7 +72,7 @@ public class VideoSubtitleLookupAssetTests
         xaml.Should().Contain("x:Name=\"PopupOverlayCanvas\"");
         xaml.Should().Contain("SizeChanged=\"PopupOverlayCanvas_SizeChanged\"");
         code.Should().Contain("_popupOverlay = new DictionaryPopupOverlay();");
-        code.Should().Contain("_popupOverlay.UseCanvas(PopupOverlayCanvas);");
+        code.Should().Contain("DictionaryPopupCanvasInputMode.VisibleHostsOnly");
         code.Should().NotContain("_popupOverlay.EmbedRoot(PopupOverlayCanvas)");
         code.Should().NotContain("IGlobalLookupPopupService");
         code.Should().NotContain("GlobalLookupPopupWindow");
@@ -89,6 +89,26 @@ public class VideoSubtitleLookupAssetTests
         popupCode.Should().NotContain("SetSnapshotAcrylicBackgroundAsync");
         popupCode.Should().NotContain("has-snapshot-acrylic");
         overlayCode.Should().NotContain("_currentMiningContext.VideoScreenshotPath");
+    }
+
+    [Fact]
+    public void VideoSubtitleLookup_PopupEmptySpacePassesThrough()
+    {
+        var xaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.xaml"));
+        var code = ReadVideoPlayerWindowCode();
+        var overlayCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs"));
+
+        code.Should().Contain("DictionaryPopupCanvasInputMode.VisibleHostsOnly");
+        overlayCode.Should().Contain("RootContentCommitted");
+        xaml.Should().NotContain(
+            "x:Name=\"VideoDictionaryPanelChrome\"\r\n" +
+            "                        Canvas.ZIndex=\"100\"\r\n" +
+            "                        HorizontalAlignment=\"Stretch\"\r\n" +
+            "                        VerticalAlignment=\"Stretch\"\r\n" +
+            "                        Margin=\"16,16,16,120\"\r\n" +
+            "                        Background=\"Transparent\"");
     }
 
     [Fact]

@@ -25,8 +25,19 @@ public readonly record struct DictionaryPopupHostBounds(
     double Width,
     double Height);
 
+public enum DictionaryPopupCanvasInputMode
+{
+    ModalSurface,
+    VisibleHostsOnly,
+}
+
 public sealed class DictionaryPopupOverlay : IDisposable
 {
+    private readonly record struct PendingRootCommit(
+        long Generation,
+        string? TraceId,
+        DictionaryPopupLayoutResult Layout);
+
     private const double PopupPadding = DictionaryPopupLayoutCalculator.PopupPadding;
     private const double ScreenBorderPadding = DictionaryPopupLayoutCalculator.ScreenBorderPadding;
     private const double MinPopupWidth = 360;
@@ -70,8 +81,10 @@ public sealed class DictionaryPopupOverlay : IDisposable
     private double _rootReadyOpacity = 1;
     private bool _useStandaloneWindowVisuals;
     private bool _useNakedFloatingWindowVisuals;
+    private PendingRootCommit? _pendingRootCommit;
 
     public event EventHandler? Dismissed;
+    public event EventHandler<DictionaryPopupContentCommittedEventArgs>? RootContentCommitted;
 
     public DictionaryPopupOverlay()
     {
@@ -87,7 +100,9 @@ public sealed class DictionaryPopupOverlay : IDisposable
     }
 
     /// <summary>Use the given canvas as the overlay surface (reader page). Must be called before PrewarmAsync.</summary>
-    public void UseCanvas(Canvas overlayCanvas)
+    public void UseCanvas(
+        Canvas overlayCanvas,
+        DictionaryPopupCanvasInputMode inputMode = DictionaryPopupCanvasInputMode.ModalSurface)
     {
         if (!ReferenceEquals(_canvas, overlayCanvas))
         {
@@ -96,7 +111,13 @@ public sealed class DictionaryPopupOverlay : IDisposable
             _canvas.PointerPressed += OnOverlayPointerPressed;
         }
 
-        _canvas.Background = new SolidColorBrush(Colors.Transparent);
+        _canvas.Background = inputMode switch
+        {
+            DictionaryPopupCanvasInputMode.ModalSurface =>
+                new SolidColorBrush(Colors.Transparent),
+            DictionaryPopupCanvasInputMode.VisibleHostsOnly => null,
+            _ => throw new ArgumentOutOfRangeException(nameof(inputMode)),
+        };
         _canvas.IsHitTestVisible = false;
         _canvas.Visibility = Visibility.Visible;
     }
@@ -161,6 +182,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         _rootHost.TapOutsideRequested += OnRootTapOutsideRequested;
         _rootHost.DismissRequested += OnPopupDismissRequested;
         _rootHost.Scrolled += OnRootScrolled;
+        _rootHost.ContentCommitted += OnRootContentCommitted;
 
         if (_embeddedPanel != null)
         {
@@ -246,6 +268,29 @@ public sealed class DictionaryPopupOverlay : IDisposable
             "[LookupTrace] trace={TraceId} overlay cleared children in {Ms}ms total={TotalMs}ms",
             traceId ?? "-", clearSw.ElapsedMilliseconds, sw.ElapsedMilliseconds);
 
+        DictionaryPopupLayoutResult targetLayout;
+        if (_embeddedPanel != null)
+        {
+            targetLayout = new DictionaryPopupLayoutResult(
+                0,
+                0,
+                _embeddedPanel.ActualWidth > 0 ? _embeddedPanel.ActualWidth : double.NaN,
+                _embeddedPanel.ActualHeight > 0 ? _embeddedPanel.ActualHeight : double.NaN);
+        }
+        else
+        {
+            EnsureHostOnCanvas(_rootHost);
+            ApplyPopupZOrder();
+            UpdateCanvasBounds(xamlRoot);
+            targetLayout = ResolveHostLayout(
+                _rootPointX,
+                _rootPointY,
+                _rootSelectionWidth,
+                _rootSelectionHeight,
+                _isVertical,
+                isRoot: true);
+        }
+
         _rootHost.SetMiningContext(_currentMiningContext);
         var injectSw = Stopwatch.StartNew();
         cancellationToken.ThrowIfCancellationRequested();
@@ -257,43 +302,27 @@ public sealed class DictionaryPopupOverlay : IDisposable
             audio,
             anki,
             traceId: traceId,
-            cancellationToken: cancellationToken);
+            cancellationToken: cancellationToken,
+            generationStarted: generation =>
+            {
+                _pendingRootCommit = new PendingRootCommit(
+                    generation,
+                    traceId,
+                    targetLayout);
+                if (!_rootHost.HasCommittedContent)
+                    ApplyHostLayout(_rootHost, targetLayout);
+            });
         cancellationToken.ThrowIfCancellationRequested();
         Log.Information(
             "[LookupTrace] trace={TraceId} root popup content injected in {Ms}ms total={TotalMs}ms entries={EntryCount}",
             traceId ?? "-", injectSw.ElapsedMilliseconds, sw.ElapsedMilliseconds, results.Count);
 
-        if (_embeddedPanel != null)
-        {
-            _rootHost.SetSize(
-                _embeddedPanel.ActualWidth > 0 ? _embeddedPanel.ActualWidth : double.NaN,
-                _embeddedPanel.ActualHeight > 0 ? _embeddedPanel.ActualHeight : double.NaN);
-            _embeddedPanel.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            // Add root host to canvas for positioning
-            EnsureHostOnCanvas(_rootHost);
-            ApplyPopupZOrder();
-
-            UpdateCanvasBounds(xamlRoot);
-
-            PositionHost(
-                _rootHost,
-                _rootPointX, _rootPointY,
-                _rootSelectionWidth, _rootSelectionHeight,
-                _isVertical,
-                isRoot: true);
-        }
         Log.Information(
-            "[LookupTrace] trace={TraceId} overlay root positioned/visible total={TotalMs}ms",
+            "[LookupTrace] trace={TraceId} overlay root content staged total={TotalMs}ms",
             traceId ?? "-", sw.ElapsedMilliseconds);
 
-        _rootVisible = true;
-        _canvas.IsHitTestVisible = true;
-        _canvas.Visibility = Visibility.Visible;
         Log.Information(
-            "[Lifecycle] Popup shown: entries={EntryCount} at=({X:F0},{Y:F0}) vertical={Vertical} embedded={Embedded}",
+            "[Lifecycle] Popup staged: entries={EntryCount} at=({X:F0},{Y:F0}) vertical={Vertical} embedded={Embedded}",
             results.Count, pointX, pointY, isVertical, _embeddedPanel != null);
     }
 
@@ -321,6 +350,33 @@ public sealed class DictionaryPopupOverlay : IDisposable
     private void OnPopupDismissRequested(object? sender, EventArgs e)
     {
         Dismiss();
+    }
+
+    private void OnRootContentCommitted(
+        object? sender,
+        DictionaryPopupContentCommittedEventArgs e)
+    {
+        if (_pendingRootCommit is not PendingRootCommit pending
+            || pending.Generation != e.Generation
+            || !string.Equals(pending.TraceId, e.TraceId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        ApplyHostLayout(_rootHost, pending.Layout);
+        _pendingRootCommit = null;
+        _rootVisible = true;
+        if (_embeddedPanel != null)
+        {
+            _embeddedPanel.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            _canvas.IsHitTestVisible = true;
+            _canvas.Visibility = Visibility.Visible;
+        }
+
+        RootContentCommitted?.Invoke(this, e);
     }
 
     private async Task HandleRedirectAsync(DictionaryPopupRedirectRequest request, DictionaryLookupPopup? parentHost)
@@ -620,6 +676,25 @@ public sealed class DictionaryPopupOverlay : IDisposable
         bool isVertical,
         bool isRoot = false)
     {
+        ApplyHostLayout(
+            host,
+            ResolveHostLayout(
+                selectionX,
+                selectionY,
+                selectionWidth,
+                selectionHeight,
+                isVertical,
+                isRoot));
+    }
+
+    private DictionaryPopupLayoutResult ResolveHostLayout(
+        double selectionX,
+        double selectionY,
+        double selectionWidth,
+        double selectionHeight,
+        bool isVertical,
+        bool isRoot = false)
+    {
         var (screenWidth, screenHeight) = GetOverlaySize();
 
         double maxWidth, maxHeight;
@@ -640,7 +715,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
             maxHeight = Math.Min(screenHeight * 0.50, ConfiguredChildMaxHeight());
         }
 
-        var layout = DictionaryPopupLayoutCalculator.Resolve(
+        return DictionaryPopupLayoutCalculator.Resolve(
             new DictionaryPopupAnchorRect(selectionX, selectionY, selectionWidth, selectionHeight),
             screenWidth,
             screenHeight,
@@ -648,6 +723,12 @@ public sealed class DictionaryPopupOverlay : IDisposable
             maxHeight,
             MinPopupWidth,
             isVertical);
+    }
+
+    private static void ApplyHostLayout(
+        DictionaryLookupPopup host,
+        DictionaryPopupLayoutResult layout)
+    {
         host.SetSize(layout.Width, layout.Height);
         Canvas.SetLeft(host.VisualRoot, layout.Left);
         Canvas.SetTop(host.VisualRoot, layout.Top);
@@ -861,6 +942,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
             _rootHost.TapOutsideRequested -= OnRootTapOutsideRequested;
             _rootHost.DismissRequested -= OnPopupDismissRequested;
             _rootHost.Scrolled -= OnRootScrolled;
+            _rootHost.ContentCommitted -= OnRootContentCommitted;
             if (_embeddedPanel != null)
                 _embeddedPanel.Children.Remove(_rootHost.VisualRoot);
             _rootHost.Dispose();
@@ -889,6 +971,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         var wasVisible = _rootVisible;
         if (_rootWarm)
             _rootHost.Hide();
+        _pendingRootCommit = null;
         ClearChildren();
         ResetRedirectDeduplication();
         _rootVisible = false;
@@ -904,13 +987,18 @@ public sealed class DictionaryPopupOverlay : IDisposable
 
     public void CancelShow(string? traceId)
     {
-        if (!string.Equals(_currentTraceId, traceId, StringComparison.Ordinal))
+        if (_pendingRootCommit is not PendingRootCommit pending
+            || !string.Equals(pending.TraceId, traceId, StringComparison.Ordinal))
+        {
             return;
+        }
 
         Log.Debug(
             "[LookupTrace] trace={TraceId} overlay show cancelled before ownership commit",
             traceId ?? "-");
-        _currentTraceId = null;
-        Dismiss();
+        _rootHost.CancelPendingContent(pending.Generation, traceId);
+        _pendingRootCommit = null;
+        if (!_rootHost.HasCommittedContent)
+            Dismiss();
     }
 }
