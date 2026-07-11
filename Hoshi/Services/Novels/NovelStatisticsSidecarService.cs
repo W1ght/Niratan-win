@@ -22,11 +22,16 @@ public sealed class NovelStatisticsSidecarService : INovelStatisticsSidecarServi
 
     public async Task<IReadOnlyList<NovelReadingStatistic>> LoadAsync(
         string bookRootPath,
+        CancellationToken ct = default) =>
+        (await LoadWithStatusAsync(bookRootPath, ct)).Statistics;
+
+    public async Task<NovelStatisticsSidecarLoadResult> LoadWithStatusAsync(
+        string bookRootPath,
         CancellationToken ct = default)
     {
         var path = Path.Combine(bookRootPath, StatisticsFileName);
         if (!File.Exists(path))
-            return [];
+            return new(NovelStatisticsSidecarLoadStatus.Missing, []);
 
         try
         {
@@ -35,19 +40,21 @@ public sealed class NovelStatisticsSidecarService : INovelStatisticsSidecarServi
                 stream,
                 JsonOptions,
                 ct);
-            return Deduplicate(statistics ?? []);
+            return new(
+                NovelStatisticsSidecarLoadStatus.Loaded,
+                Deduplicate(statistics ?? []));
         }
         catch (JsonException)
         {
-            return [];
+            return new(NovelStatisticsSidecarLoadStatus.Corrupt, []);
         }
         catch (IOException)
         {
-            return [];
+            return new(NovelStatisticsSidecarLoadStatus.Unavailable, []);
         }
         catch (UnauthorizedAccessException)
         {
-            return [];
+            return new(NovelStatisticsSidecarLoadStatus.Unavailable, []);
         }
     }
 

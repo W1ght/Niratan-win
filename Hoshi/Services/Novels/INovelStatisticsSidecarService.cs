@@ -7,6 +7,10 @@ namespace Hoshi.Services.Novels;
 
 public interface INovelStatisticsSidecarService
 {
+    Task<NovelStatisticsSidecarLoadResult> LoadWithStatusAsync(
+        string bookRootPath,
+        CancellationToken ct = default);
+
     Task<IReadOnlyList<NovelReadingStatistic>> LoadAsync(
         string bookRootPath,
         CancellationToken ct = default);
