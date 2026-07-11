@@ -31,6 +31,13 @@ public enum DictionaryPopupCanvasInputMode
     VisibleHostsOnly,
 }
 
+public enum DictionaryPopupShowCancellationResult
+{
+    NoOwnership,
+    Cancelled,
+    CommitAccepted,
+}
+
 public sealed class DictionaryPopupOverlay : IDisposable
 {
     private const double PopupPadding = DictionaryPopupLayoutCalculator.PopupPadding;
@@ -81,6 +88,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
 
     public event EventHandler? Dismissed;
     public event EventHandler<DictionaryPopupContentCommittedEventArgs>? RootContentCommitted;
+    public event EventHandler<DictionaryPopupContentCommittedEventArgs>? RootContentAborted;
 
     public DictionaryPopupOverlay()
     {
@@ -380,7 +388,8 @@ public sealed class DictionaryPopupOverlay : IDisposable
         object? sender,
         DictionaryPopupContentCommittedEventArgs e)
     {
-        _rootLayoutCoordinator.TryAbort(e.Generation, e.TraceId);
+        if (_rootLayoutCoordinator.TryAbort(e.Generation, e.TraceId))
+            RootContentAborted?.Invoke(this, e);
     }
 
     private async Task HandleRedirectAsync(DictionaryPopupRedirectRequest request, DictionaryLookupPopup? parentHost)
@@ -990,10 +999,10 @@ public sealed class DictionaryPopupOverlay : IDisposable
             Dismissed?.Invoke(this, EventArgs.Empty);
     }
 
-    public void CancelShow(string? traceId)
+    public DictionaryPopupShowCancellationResult CancelShow(string? traceId)
     {
         if (!_rootLayoutCoordinator.TryGetGeneration(traceId, out var generation))
-            return;
+            return DictionaryPopupShowCancellationResult.NoOwnership;
 
         Log.Debug(
             "[LookupTrace] trace={TraceId} overlay show cancelled before ownership commit",
@@ -1004,10 +1013,12 @@ public sealed class DictionaryPopupOverlay : IDisposable
                 traceId,
                 contentCancellationSucceeded: contentCancelled))
         {
-            return;
+            return DictionaryPopupShowCancellationResult.CommitAccepted;
         }
 
         if (!_rootHost.HasCommittedContent)
             Dismiss();
+
+        return DictionaryPopupShowCancellationResult.Cancelled;
     }
 }

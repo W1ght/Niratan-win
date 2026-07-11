@@ -640,7 +640,7 @@ public sealed partial class VideoPlayerWindow : Window
         double? anchorHeight = null)
     {
         DictionaryPopupOverlay? lookupOverlay = null;
-        string? lookupTraceId = null;
+        string? lookupCommitId = null;
         try
         {
             var query = string.IsNullOrWhiteSpace(queryOverride)
@@ -666,7 +666,8 @@ public sealed partial class VideoPlayerWindow : Window
                 return;
             if (popupRequest == null)
             {
-                if (!_isLookupPopupVisible)
+                if (!_isLookupPopupVisible
+                    && !_subtitleLookupCoordinator.HasPopupCommitCandidates)
                 {
                     ClearSubtitleCanvasSelection();
                     VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
@@ -677,14 +678,16 @@ public sealed partial class VideoPlayerWindow : Window
             }
 
             lookupOverlay = EnsurePopupOverlay();
-            lookupTraceId = popupRequest.TraceId ?? $"video-{lookupRequest.Version}";
+            lookupCommitId = _subtitleLookupCoordinator.CreatePopupCommitIdentity(
+                lookupRequest,
+                popupRequest.TraceId);
             EnsureVideoDictionaryOverlaySurfaceVisible(lookupOverlay);
             var point = anchorPoint
                 ?? SubtitleCanvas.TransformToVisual(PopupOverlayCanvas)
                     .TransformPoint(new Windows.Foundation.Point(0, 0));
             _subtitleLookupCoordinator.StagePopupCommit(
                 lookupRequest,
-                lookupTraceId,
+                lookupCommitId,
                 sentenceOffset,
                 popupRequest.Results[0].Matched);
             await lookupOverlay.ShowLookupAsync(
@@ -701,23 +704,23 @@ public sealed partial class VideoPlayerWindow : Window
                 popupRequest.AudioSettings,
                 popupRequest.AnkiSettings,
                 popupRequest.MiningContext,
-                traceId: lookupTraceId,
+                traceId: lookupCommitId,
                 cancellationToken: lookupRequest.CancellationToken);
             if (!IsCurrentSubtitleLookup(lookupRequest))
             {
-                lookupOverlay?.CancelShow(lookupTraceId);
+                ResolvePopupShowCancellation(lookupOverlay, lookupCommitId);
                 return;
             }
         }
         catch (OperationCanceledException) when (lookupRequest.CancellationToken.IsCancellationRequested)
         {
-            lookupOverlay?.CancelShow(lookupTraceId);
+            ResolvePopupShowCancellation(lookupOverlay, lookupCommitId);
         }
         catch (Exception ex)
         {
             if (!IsCurrentSubtitleLookup(lookupRequest))
             {
-                lookupOverlay?.CancelShow(lookupTraceId);
+                ResolvePopupShowCancellation(lookupOverlay, lookupCommitId);
                 Log.Debug(
                     ex,
                     "[VideoLookup] stale request version={RequestVersion} failed after supersession",
@@ -725,9 +728,10 @@ public sealed partial class VideoPlayerWindow : Window
                 return;
             }
 
-            _subtitleLookupCoordinator.CancelCurrent();
-            lookupOverlay?.CancelShow(lookupTraceId);
-            if (!_isLookupPopupVisible)
+            _subtitleLookupCoordinator.CancelCurrentRequest();
+            ResolvePopupShowCancellation(lookupOverlay, lookupCommitId);
+            if (!_isLookupPopupVisible
+                && !_subtitleLookupCoordinator.HasPopupCommitCandidates)
             {
                 _popupOverlay?.Dismiss();
                 ClearSubtitleCanvasSelection();
@@ -897,6 +901,7 @@ public sealed partial class VideoPlayerWindow : Window
         _popupOverlay = new DictionaryPopupOverlay();
         _popupOverlay.Dismissed += PopupOverlay_Dismissed;
         _popupOverlay.RootContentCommitted += PopupOverlay_RootContentCommitted;
+        _popupOverlay.RootContentAborted += PopupOverlay_RootContentAborted;
         _popupOverlay.UseCanvas(
             PopupOverlayCanvas,
             DictionaryPopupCanvasInputMode.VisibleHostsOnly);
@@ -939,6 +944,7 @@ public sealed partial class VideoPlayerWindow : Window
             {
                 _popupOverlay.Dismissed -= PopupOverlay_Dismissed;
                 _popupOverlay.RootContentCommitted -= PopupOverlay_RootContentCommitted;
+                _popupOverlay.RootContentAborted -= PopupOverlay_RootContentAborted;
             }
             _subtitleLookupCoordinator.Dispose();
             _popupOverlay?.Dispose();

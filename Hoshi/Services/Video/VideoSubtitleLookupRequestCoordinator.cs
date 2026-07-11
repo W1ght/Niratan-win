@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 
 namespace Hoshi.Services.Video;
@@ -15,13 +16,23 @@ internal sealed class VideoSubtitleLookupRequestCoordinator : IDisposable
 {
     private readonly record struct PendingPopupCommit(
         long RequestVersion,
-        string TraceId,
-        VideoSubtitlePopupCommit Commit);
+        VideoSubtitlePopupCommit Commit,
+        bool IsAccepted = false);
 
     private readonly object _gate = new();
+    private readonly Dictionary<string, PendingPopupCommit> _popupCommits =
+        new(StringComparer.Ordinal);
     private long _version;
     private CancellationTokenSource? _currentCts;
-    private PendingPopupCommit? _pendingPopupCommit;
+
+    public bool HasPopupCommitCandidates
+    {
+        get
+        {
+            lock (_gate)
+                return _popupCommits.Count > 0;
+        }
+    }
 
     public VideoSubtitleLookupRequest BeginRequest()
     {
@@ -31,7 +42,6 @@ internal sealed class VideoSubtitleLookupRequestCoordinator : IDisposable
         {
             previous = _currentCts;
             _currentCts = new CancellationTokenSource();
-            _pendingPopupCommit = null;
             request = new VideoSubtitleLookupRequest(++_version, _currentCts.Token);
         }
 
@@ -51,7 +61,7 @@ internal sealed class VideoSubtitleLookupRequestCoordinator : IDisposable
 
     public void StagePopupCommit(
         VideoSubtitleLookupRequest request,
-        string traceId,
+        string commitIdentity,
         int selectionStart,
         string matchedText)
     {
@@ -63,49 +73,118 @@ internal sealed class VideoSubtitleLookupRequestCoordinator : IDisposable
                 return;
             }
 
-            _pendingPopupCommit = new PendingPopupCommit(
+            RemoveCandidatesForRequest(request.Version);
+
+            _popupCommits[commitIdentity] = new PendingPopupCommit(
                 request.Version,
-                traceId,
                 new VideoSubtitlePopupCommit(selectionStart, matchedText));
         }
     }
 
+    public string CreatePopupCommitIdentity(
+        VideoSubtitleLookupRequest request,
+        string? sourceTraceId) =>
+        $"video-{request.Version}:{sourceTraceId ?? "-"}";
+
+    public void MarkPopupCommitAccepted(string commitIdentity)
+    {
+        lock (_gate)
+        {
+            if (_popupCommits.TryGetValue(commitIdentity, out var pending))
+            {
+                _popupCommits[commitIdentity] = pending with { IsAccepted = true };
+                RemoveSupersededCandidatesExcept(commitIdentity);
+            }
+        }
+    }
+
+    public void CancelPopupCommit(string? commitIdentity)
+    {
+        if (commitIdentity is null)
+            return;
+
+        lock (_gate)
+            _popupCommits.Remove(commitIdentity);
+    }
+
     public bool TryTakePopupCommit(
-        string? traceId,
+        string? commitIdentity,
         out VideoSubtitlePopupCommit commit)
     {
         lock (_gate)
         {
             commit = default;
-            if (_pendingPopupCommit is not PendingPopupCommit pending
-                || pending.RequestVersion != _version
-                || !string.Equals(
-                    pending.TraceId,
-                    traceId,
-                    StringComparison.Ordinal))
+            if (commitIdentity is null
+                || !_popupCommits.Remove(commitIdentity, out var pending))
             {
                 return false;
             }
 
             commit = pending.Commit;
-            _pendingPopupCommit = null;
             return true;
         }
     }
 
+    public void CancelCurrentRequest()
+    {
+        var current = InvalidateCurrentRequest(clearPopupCommits: false);
+        current?.Cancel();
+        current?.Dispose();
+    }
+
     public void CancelCurrent()
     {
-        CancellationTokenSource? current;
+        var current = InvalidateCurrentRequest(clearPopupCommits: true);
+        current?.Cancel();
+        current?.Dispose();
+    }
+
+    private CancellationTokenSource? InvalidateCurrentRequest(bool clearPopupCommits)
+    {
         lock (_gate)
         {
             _version++;
-            current = _currentCts;
+            var current = _currentCts;
             _currentCts = null;
-            _pendingPopupCommit = null;
+            if (clearPopupCommits)
+                _popupCommits.Clear();
+            return current;
+        }
+    }
+
+    private void RemoveCandidatesForRequest(long requestVersion)
+    {
+        string? existingTraceId = null;
+        foreach (var pair in _popupCommits)
+        {
+            if (pair.Value.RequestVersion == requestVersion)
+            {
+                existingTraceId = pair.Key;
+                break;
+            }
         }
 
-        current?.Cancel();
-        current?.Dispose();
+        if (existingTraceId is not null)
+            _popupCommits.Remove(existingTraceId);
+    }
+
+    private void RemoveSupersededCandidatesExcept(string acceptedTraceId)
+    {
+        List<string>? staleTraceIds = null;
+        foreach (var pair in _popupCommits)
+        {
+            if (!string.Equals(pair.Key, acceptedTraceId, StringComparison.Ordinal)
+                && pair.Value.RequestVersion != _version)
+            {
+                (staleTraceIds ??= []).Add(pair.Key);
+            }
+        }
+
+        if (staleTraceIds is null)
+            return;
+
+        foreach (var traceId in staleTraceIds)
+            _popupCommits.Remove(traceId);
     }
 
     public void Dispose() => CancelCurrent();
