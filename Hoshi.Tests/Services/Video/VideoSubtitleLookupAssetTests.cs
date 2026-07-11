@@ -135,7 +135,8 @@ public class VideoSubtitleLookupAssetTests
         overlayCode.Should().Contain(
             "public DictionaryPopupShowCancellationResult CancelShow(string? traceId)");
         overlayCode.Should().Contain("var contentCancelled = _rootHost.CancelPendingContent(");
-        overlayCode.Should().Contain("contentCancellationSucceeded: contentCancelled");
+        overlayCode.Should().Contain("if (contentCancelled)");
+        overlayCode.Should().Contain("contentCancellationSucceeded: true");
         overlayCode.Should().Contain("RootContentAborted?.Invoke(this, e)");
     }
 
@@ -212,6 +213,55 @@ public class VideoSubtitleLookupAssetTests
         code.Should().Contain("RootShowDropped -= PopupOverlay_RootShowDropped");
         code.Should().Contain("PopupOverlay_RootShowDropped(");
         code.Should().Contain("CancelPopupCommit(e.TraceId)");
+    }
+
+    [Fact]
+    public void DictionaryPopup_GenerationStartedAlwaysEndsWithCommitOrAbort()
+    {
+        var popupCode = ReadProjectFile(
+            "Views", "Dictionary", "DictionaryLookupPopup.cs")
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var overlayCode = ReadProjectFile(
+            "Views", "Dictionary", "DictionaryPopupOverlay.cs")
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var cancelSucceededIndex = overlayCode.IndexOf(
+            "if (contentCancelled)",
+            StringComparison.Ordinal);
+        var retainedOwnershipIndex = overlayCode.IndexOf(
+            "retainedGeneration == generation",
+            cancelSucceededIndex,
+            StringComparison.Ordinal);
+        var prepareIndex = popupCode.IndexOf(
+            "var generation = PrepareForPendingContent(",
+            StringComparison.Ordinal);
+        var startStateIndex = popupCode.IndexOf(
+            "request.State.TryStartGeneration()",
+            prepareIndex,
+            StringComparison.Ordinal);
+        var terminalTryIndex = popupCode.IndexOf(
+            "try\n        {",
+            startStateIndex,
+            StringComparison.Ordinal);
+        var generationCallbackIndex = popupCode.IndexOf(
+            "request.GenerationStarted?.Invoke(generation);",
+            startStateIndex,
+            StringComparison.Ordinal);
+
+        popupCode.Should().Contain("_displayTransaction.TryCancelPending(");
+        popupCode.Should().Contain("out var aborted");
+        popupCode.Should().Contain("ContentCommitAborted?.Invoke(");
+        popupCode.Should().Contain(
+            "catch\n        {\n            CancelPendingContent(generation, request.TraceId);\n            throw;");
+        popupCode.Should().Contain("if (CancelPendingContent(pendingGeneration, traceId))");
+        startStateIndex.Should().BeGreaterThan(prepareIndex);
+        terminalTryIndex.Should().BeGreaterThan(startStateIndex);
+        generationCallbackIndex.Should().BeGreaterThan(terminalTryIndex);
+        cancelSucceededIndex.Should().BeGreaterThanOrEqualTo(0);
+        retainedOwnershipIndex.Should().BeGreaterThan(cancelSucceededIndex);
+        overlayCode.Should().Contain(
+            "return DictionaryPopupShowCancellationResult.Cancelled;");
+        overlayCode.Should().Contain(
+            "return DictionaryPopupShowCancellationResult.NoOwnership;");
     }
 
     [Fact]

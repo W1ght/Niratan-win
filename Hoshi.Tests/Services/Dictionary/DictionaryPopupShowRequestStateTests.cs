@@ -95,4 +95,75 @@ public class DictionaryPopupShowRequestStateTests
         cleared.State.TryDropBeforeGeneration().Should().BeFalse();
         acceptedA.TryDropBeforeGeneration().Should().BeFalse();
     }
+
+    [Fact]
+    public void ActiveCallerCancellationDuringInjection_EmitsAbortTerminalOnce()
+    {
+        var transaction = new DictionaryPopupDisplayTransaction();
+        transaction.BeginPending(21, "active");
+        var request = new DictionaryPopupShowRequestState();
+        request.TryStartGeneration().Should().BeTrue();
+
+        transaction.TryCancelPending(21, "active", out var aborted).Should().BeTrue();
+
+        aborted.Should().Be(new DictionaryPopupContentCommit(21, "active"));
+        transaction.TryCancelPending(21, "active", out _).Should().BeFalse();
+        request.TryDropBeforeGeneration().Should().BeFalse();
+    }
+
+    [Fact]
+    public void QueuedGenerationStartedException_UsesAbortTerminalInsteadOfQueuedDrop()
+    {
+        var transaction = new DictionaryPopupDisplayTransaction();
+        transaction.BeginPending(22, "queued-started");
+        var request = new DictionaryPopupShowRequestState();
+        request.TryStartGeneration().Should().BeTrue();
+
+        transaction.TryCancelPending(22, "queued-started", out var aborted).Should().BeTrue();
+
+        aborted.Should().Be(new DictionaryPopupContentCommit(22, "queued-started"));
+        request.TryDropBeforeGeneration().Should().BeFalse();
+    }
+
+    [Fact]
+    public void SynchronousAbortBeforeCancelReturn_DoesNotTurnCancellationIntoAccepted()
+    {
+        var transaction = new DictionaryPopupDisplayTransaction();
+        var layout = new DictionaryPopupPendingLayoutCoordinator<string>();
+        transaction.BeginPending(23, "reentrant");
+        layout.Stage(23, "reentrant", "layout");
+
+        var contentCancelled = transaction.TryCancelPending(
+            23,
+            "reentrant",
+            out var aborted);
+        var abortEventClearedLayout = layout.TryAbort(
+            aborted.Generation,
+            aborted.TraceId);
+        var secondLayoutCancellation = layout.TryCancel(
+            23,
+            "reentrant",
+            contentCancellationSucceeded: contentCancelled);
+
+        contentCancelled.Should().BeTrue();
+        abortEventClearedLayout.Should().BeTrue();
+        secondLayoutCancellation.Should().BeFalse();
+        layout.HasPending.Should().BeFalse();
+    }
+
+    [Fact]
+    public void AcceptedCancellationRejected_EmitsNoAbortOrQueuedDrop()
+    {
+        var transaction = new DictionaryPopupDisplayTransaction();
+        transaction.BeginPending(24, "accepted");
+        var request = new DictionaryPopupShowRequestState();
+        request.TryStartGeneration().Should().BeTrue();
+        transaction.TryAcceptCommit(24).Should().BeTrue();
+
+        transaction.TryCancelPending(24, "accepted", out _).Should().BeFalse();
+        request.TryDropBeforeGeneration().Should().BeFalse();
+        transaction.TryCompleteCommit(24, out var committed).Should().BeTrue();
+
+        committed.Should().Be(new DictionaryPopupContentCommit(24, "accepted"));
+    }
 }
