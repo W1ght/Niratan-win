@@ -36,8 +36,9 @@
                                         Tag="{x:Bind}"
                                         Click="MoveNovelToShelfMenuItem_Click" />
                         <MenuFlyoutItem Text="Delete"
-                                        Command="{Binding ViewModel.DeleteNovelCommand, ElementName=ThisPage}"
-                                        CommandParameter="{x:Bind}" />
+                                        AutomationProperties.AutomationId="NovelBookDeleteMenuItem"
+                                        Tag="{x:Bind}"
+                                        Click="DeleteNovelMenuItem_Click" />
                     </MenuFlyout>
                 </Button.ContextFlyout>
                 <StackPanel Spacing="6">

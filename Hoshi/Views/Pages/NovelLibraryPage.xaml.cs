@@ -108,5 +108,13 @@ public sealed partial class NovelLibraryPage : Page
         }
     }
 
+    private async void DeleteNovelMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as MenuFlyoutItem)?.Tag is not NovelBookItemViewModel novelItem)
+            return;
+
+        await ViewModel.DeleteNovelCommand.ExecuteAsync(novelItem);
+    }
+
     private sealed record NovelShelfTarget(string DisplayName, string? ShelfName);
 }

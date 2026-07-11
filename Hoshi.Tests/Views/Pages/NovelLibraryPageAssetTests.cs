@@ -18,6 +18,8 @@ public sealed class NovelLibraryPageAssetTests
         xaml.Should().Contain("ItemsSource=\"{x:Bind ViewModel.ShelfSections, Mode=OneWay}\"");
         xaml.Should().Contain("Command=\"{Binding ViewModel.OpenNovelCommand, ElementName=ThisPage}\"");
         xaml.Should().Contain("CommandParameter=\"{x:Bind}\"");
+        xaml.Should().Contain("Click=\"DeleteNovelMenuItem_Click\"");
+        code.Should().Contain("ViewModel.DeleteNovelCommand.ExecuteAsync(novelItem)");
         xaml.Should().Contain("<UniformGridLayout");
         xaml.Should().NotContain("HorizontalScrollMode=\"Enabled\"");
         xaml.Should().NotContain("NovelUnshelvedBooksRepeater");
