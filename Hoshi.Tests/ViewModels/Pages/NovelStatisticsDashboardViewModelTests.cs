@@ -68,18 +68,15 @@ public sealed class NovelStatisticsDashboardViewModelTests
     }
 
     [Fact]
-    public async Task SpeedCard_ExposesAllSixNiratanMetrics()
+    public async Task SpeedCard_ExposesSixLocalizedNiratanMetrics()
     {
         var sut = CreateSut(out _, out _);
         await sut.ActivateAsync(Books(), Shelves(), CancellationToken.None);
 
-        sut.SpeedMetrics.Select(metric => metric.Label).Should().Equal(
-            "Weighted",
-            "Median Active Day",
-            "Last 7 Active Days",
-            "Change",
-            "Fastest",
-            "Slowest");
+        sut.SpeedMetrics.Should().HaveCount(6);
+        sut.SpeedMetrics.Select(metric => metric.Label)
+            .Should().OnlyHaveUniqueItems()
+            .And.OnlyContain(label => !string.IsNullOrWhiteSpace(label));
     }
 
     [Fact]
@@ -161,12 +158,98 @@ public sealed class NovelStatisticsDashboardViewModelTests
         sut.Today!.Characters.Should().Be(3_000);
     }
 
+    [Fact]
+    public async Task Deactivate_IgnoresLaterSnapshotRefresh()
+    {
+        var sut = CreateSut(out var service, out _);
+        await sut.ActivateAsync(Books(), Shelves(), CancellationToken.None);
+        sut.Deactivate();
+
+        service.Publish(Snapshot() with
+        {
+            Days =
+            [
+                new NovelStatisticsDayAggregate(
+                    Today,
+                    9_000,
+                    900,
+                    [new NovelStatisticsBookContribution("a", "A", null, 9_000, 900, true)]),
+            ],
+        });
+
+        sut.Today!.Characters.Should().Be(1_200);
+        sut.IsActive.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task DeactivateBeforeInitialLoad_IgnoresStaleCompletion()
+    {
+        var service = new ControlledDashboardService();
+        var settings = CreateSettings();
+        var sut = new NovelStatisticsDashboardViewModel(
+            service,
+            settings.Object,
+            new FixedTimeProvider());
+
+        var activation = sut.ActivateAsync(Books(), Shelves(), CancellationToken.None);
+        sut.Deactivate();
+        service.CompleteNext(Snapshot());
+        await activation;
+
+        sut.HasData.Should().BeFalse();
+        sut.IsLoading.Should().BeFalse();
+        sut.IsActive.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task NewerActivation_WinsWhenOlderLoadCompletesLater()
+    {
+        var service = new ControlledDashboardService();
+        var settings = CreateSettings();
+        var sut = new NovelStatisticsDashboardViewModel(
+            service,
+            settings.Object,
+            new FixedTimeProvider());
+        var replacement = Snapshot() with
+        {
+            Days =
+            [
+                new NovelStatisticsDayAggregate(
+                    Today,
+                    4_200,
+                    600,
+                    [new NovelStatisticsBookContribution("a", "A", null, 4_200, 600, true)]),
+            ],
+        };
+
+        var first = sut.ActivateAsync(Books(), Shelves(), CancellationToken.None);
+        var second = sut.ActivateAsync(Books(), Shelves(), CancellationToken.None);
+        service.CompleteAt(1, replacement);
+        await second;
+        service.CompleteAt(0, Snapshot());
+        await first;
+
+        sut.Today!.Characters.Should().Be(4_200);
+        service.ActiveSubscriptions.Should().Be(1);
+        sut.Deactivate();
+        service.ActiveSubscriptions.Should().Be(0);
+    }
+
     private static NovelStatisticsDashboardViewModel CreateSut(
         out RecordingDashboardService service,
         out Mock<ISettingsService> settings)
     {
         service = new RecordingDashboardService(Snapshot());
-        settings = new Mock<ISettingsService>();
+        settings = CreateSettings();
+        return new NovelStatisticsDashboardViewModel(
+            service,
+            settings.Object,
+            new FixedTimeProvider());
+    }
+
+    private static Mock<ISettingsService> CreateSettings()
+    {
+        var settings = new Mock<ISettingsService>();
         settings.SetupGet(value => value.Current).Returns(new AppSettings
         {
             StatisticsSettings = new NovelStatisticsSettings
@@ -179,10 +262,7 @@ public sealed class NovelStatisticsDashboardViewModelTests
             },
         });
         settings.Setup(value => value.SaveAsync()).Returns(Task.CompletedTask);
-        return new NovelStatisticsDashboardViewModel(
-            service,
-            settings.Object,
-            new FixedTimeProvider());
+        return settings;
     }
 
     private static IReadOnlyList<NovelBook> Books() =>
@@ -227,6 +307,37 @@ public sealed class NovelStatisticsDashboardViewModelTests
 
         public void Publish(NovelStatisticsDashboardSnapshot value) =>
             SnapshotRefreshed?.Invoke(this, value);
+    }
+
+    private sealed class ControlledDashboardService : INovelStatisticsDashboardService
+    {
+        private readonly List<TaskCompletionSource<NovelStatisticsDashboardSnapshot>> _loads = [];
+        private EventHandler<NovelStatisticsDashboardSnapshot>? _snapshotRefreshed;
+
+        public event EventHandler<NovelStatisticsDashboardSnapshot>? SnapshotRefreshed
+        {
+            add => _snapshotRefreshed += value;
+            remove => _snapshotRefreshed -= value;
+        }
+
+        public int ActiveSubscriptions =>
+            _snapshotRefreshed?.GetInvocationList().Length ?? 0;
+
+        public Task<NovelStatisticsDashboardSnapshot> LoadSnapshotAsync(
+            IReadOnlyList<NovelBook> books,
+            CancellationToken ct = default)
+        {
+            var source = new TaskCompletionSource<NovelStatisticsDashboardSnapshot>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            _loads.Add(source);
+            return source.Task.WaitAsync(ct);
+        }
+
+        public void CompleteNext(NovelStatisticsDashboardSnapshot snapshot) =>
+            _loads.First(source => !source.Task.IsCompleted).SetResult(snapshot);
+
+        public void CompleteAt(int index, NovelStatisticsDashboardSnapshot snapshot) =>
+            _loads[index].SetResult(snapshot);
     }
 
     private sealed class FixedTimeProvider : TimeProvider

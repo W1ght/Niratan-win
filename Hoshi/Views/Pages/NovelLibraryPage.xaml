@@ -176,8 +176,8 @@
                     </AppBarButton.Icon>
                 </AppBarButton>
                 <AppBarButton x:Name="NovelStatisticsBackToBookshelfButton"
+                              x:Uid="NovelStatisticsBackToBookshelfButton"
                               AutomationProperties.AutomationId="NovelStatisticsBackToBookshelfButton"
-                              AutomationProperties.Name="Back to bookshelf"
                               Command="{x:Bind ViewModel.ReturnToBookshelfCommand}"
                               Visibility="{x:Bind ViewModel.ShowStatisticsDashboard, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
                     <AppBarButton.Icon>

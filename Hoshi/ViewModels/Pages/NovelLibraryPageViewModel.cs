@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -71,86 +70,6 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     public bool ShowBookshelf => !ShowStatisticsDashboard;
     public NovelStatisticsDashboardViewModel StatisticsDashboard { get; }
 
-    public string StatisticsTodayText => StatisticsDashboard.TodayText;
-    public string StatisticsWeekText => StatisticsDashboard.WeekText;
-    public string StatisticsRangeText => StatisticsDashboard.RangeText;
-    public string StatisticsSpeedText => StatisticsDashboard.SpeedText;
-    public string StatisticsRangeTitle => StatisticsDashboard.RangeTitle;
-
-    public NovelStatisticsRangeMode SelectedStatisticsRangeMode
-    {
-        get => StatisticsDashboard.SelectedRangeMode;
-        set => StatisticsDashboard.SelectedRangeMode = value;
-    }
-
-    public DateTimeOffset? StatisticsAnchorDate
-    {
-        get => StatisticsDashboard.AnchorDate;
-        set => StatisticsDashboard.AnchorDate = value;
-    }
-
-    public NovelStatisticsTrendGrain SelectedStatisticsTrendGrain
-    {
-        get => StatisticsDashboard.SelectedTrendGrain;
-        set => StatisticsDashboard.SelectedTrendGrain = value;
-    }
-
-    public NovelStatisticsTrendMetric SelectedStatisticsTrendMetric
-    {
-        get => StatisticsDashboard.SelectedTrendMetric;
-        set => StatisticsDashboard.SelectedTrendMetric = value;
-    }
-
-    public NovelStatisticsBookRankingMetric SelectedStatisticsRankingMetric
-    {
-        get => StatisticsDashboard.SelectedRankingMetric;
-        set => StatisticsDashboard.SelectedRankingMetric = value;
-    }
-
-    public StatisticsDailyTargetType SelectedStatisticsDailyTargetType
-    {
-        get => StatisticsDashboard.SelectedDailyTargetType;
-        set => StatisticsDashboard.SelectedDailyTargetType = value;
-    }
-
-    public int StatisticsDailyCharacterTarget => StatisticsDashboard.DailyCharacterTarget;
-
-    public double StatisticsDailyCharacterTargetValue
-    {
-        get => StatisticsDashboard.DailyCharacterTargetValue;
-        set => StatisticsDashboard.DailyCharacterTargetValue = value;
-    }
-
-    public int StatisticsDailyDurationTargetMinutes => StatisticsDashboard.DailyDurationTargetMinutes;
-
-    public double StatisticsDailyDurationTargetMinutesValue
-    {
-        get => StatisticsDashboard.DailyDurationTargetMinutesValue;
-        set => StatisticsDashboard.DailyDurationTargetMinutesValue = value;
-    }
-
-    public int StatisticsWeeklyTargetDays => StatisticsDashboard.WeeklyTargetDays;
-
-    public double StatisticsWeeklyTargetDaysValue
-    {
-        get => StatisticsDashboard.WeeklyTargetDaysValue;
-        set => StatisticsDashboard.WeeklyTargetDaysValue = value;
-    }
-
-    public ObservableCollection<NovelStatisticsTrendDisplayPoint> StatisticsTrendPoints => StatisticsDashboard.TrendPoints;
-    public ObservableCollection<NovelStatisticsCalendarDayDisplay> StatisticsCalendarDays => StatisticsDashboard.CalendarDays;
-    public ObservableCollection<NovelStatisticsBookRankingDisplayRow> StatisticsBookRankingRows => StatisticsDashboard.BookRankingRows;
-    public ObservableCollection<NovelStatisticsShelfComparisonDisplayRow> StatisticsShelfComparisonRows => StatisticsDashboard.ShelfComparisonRows;
-    public ObservableCollection<string> StatisticsSkippedCorruptBookIds => StatisticsDashboard.SkippedCorruptBookIds;
-
-    public NovelStatisticsCalendarDayDisplay? SelectedStatisticsCalendarDay
-    {
-        get => StatisticsDashboard.SelectedCalendarDay;
-        set => StatisticsDashboard.SelectedCalendarDay = value;
-    }
-
-    public string StatisticsCalendarDetailText => StatisticsDashboard.CalendarDetail.Text;
-
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NoNovels))]
     public partial bool IsContentLoading { get; set; }
@@ -165,16 +84,8 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         new(NovelLibrarySortOption.Manual, "Manual"),
     ];
 
-    public NovelStatisticsRangeMode[] StatisticsRangeModes => StatisticsDashboard.RangeModes;
-    public NovelStatisticsTrendGrain[] StatisticsTrendGrains => StatisticsDashboard.TrendGrains;
-    public NovelStatisticsTrendMetric[] StatisticsTrendMetrics => StatisticsDashboard.TrendMetrics;
-    public NovelStatisticsBookRankingMetric[] StatisticsRankingMetrics => StatisticsDashboard.RankingMetrics;
-    public StatisticsDailyTargetType[] StatisticsDailyTargetTypes => StatisticsDashboard.DailyTargetTypes;
-
     public bool NoNovels => !IsContentLoading && NovelBooks.Count == 0;
     public bool HasNovelStorageWarnings => NovelStorageWarnings.Count > 0;
-    public bool HasStatisticsCorruptBooks => StatisticsDashboard.HasCorruptBooks;
-    public string StatisticsCorruptWarningText => StatisticsDashboard.CorruptWarningText;
 
     public NovelLibraryPageViewModel(
         INovelLibraryService novelLibraryService,
@@ -202,7 +113,6 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         _ttuBookImportService = ttuBookImportService;
         _googleDriveAuthService = googleDriveAuthService;
         SelectedSortOption = _settingsService.Current.NovelLibrarySortOption;
-        StatisticsDashboard.PropertyChanged += OnStatisticsDashboardPropertyChanged;
         _messenger.RegisterAll(this);
     }
 
@@ -660,56 +570,6 @@ public partial class NovelLibraryPageViewModel : ObservableObject
             _notificationService.ShowError(result.Error!, result.ErrorTitle!);
     }
 
-    private void OnStatisticsDashboardPropertyChanged(
-        object? sender,
-        PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(NovelStatisticsDashboardViewModel.DailyCharacterTarget))
-        {
-            OnPropertyChanged(nameof(StatisticsDailyCharacterTarget));
-            OnPropertyChanged(nameof(StatisticsDailyCharacterTargetValue));
-            return;
-        }
-        if (e.PropertyName == nameof(NovelStatisticsDashboardViewModel.DailyDurationTargetMinutes))
-        {
-            OnPropertyChanged(nameof(StatisticsDailyDurationTargetMinutes));
-            OnPropertyChanged(nameof(StatisticsDailyDurationTargetMinutesValue));
-            return;
-        }
-        if (e.PropertyName == nameof(NovelStatisticsDashboardViewModel.WeeklyTargetDays))
-        {
-            OnPropertyChanged(nameof(StatisticsWeeklyTargetDays));
-            OnPropertyChanged(nameof(StatisticsWeeklyTargetDaysValue));
-            return;
-        }
-
-        var propertyName = e.PropertyName switch
-        {
-            nameof(NovelStatisticsDashboardViewModel.TodayText) => nameof(StatisticsTodayText),
-            nameof(NovelStatisticsDashboardViewModel.WeekText) => nameof(StatisticsWeekText),
-            nameof(NovelStatisticsDashboardViewModel.RangeText) => nameof(StatisticsRangeText),
-            nameof(NovelStatisticsDashboardViewModel.SpeedText) => nameof(StatisticsSpeedText),
-            nameof(NovelStatisticsDashboardViewModel.RangeTitle) => nameof(StatisticsRangeTitle),
-            nameof(NovelStatisticsDashboardViewModel.SelectedRangeMode) => nameof(SelectedStatisticsRangeMode),
-            nameof(NovelStatisticsDashboardViewModel.AnchorDate) => nameof(StatisticsAnchorDate),
-            nameof(NovelStatisticsDashboardViewModel.SelectedTrendGrain) => nameof(SelectedStatisticsTrendGrain),
-            nameof(NovelStatisticsDashboardViewModel.SelectedTrendMetric) => nameof(SelectedStatisticsTrendMetric),
-            nameof(NovelStatisticsDashboardViewModel.SelectedRankingMetric) => nameof(SelectedStatisticsRankingMetric),
-            nameof(NovelStatisticsDashboardViewModel.SelectedDailyTargetType) => nameof(SelectedStatisticsDailyTargetType),
-            nameof(NovelStatisticsDashboardViewModel.TrendPoints) => nameof(StatisticsTrendPoints),
-            nameof(NovelStatisticsDashboardViewModel.CalendarDays) => nameof(StatisticsCalendarDays),
-            nameof(NovelStatisticsDashboardViewModel.BookRankingRows) => nameof(StatisticsBookRankingRows),
-            nameof(NovelStatisticsDashboardViewModel.ShelfComparisonRows) => nameof(StatisticsShelfComparisonRows),
-            nameof(NovelStatisticsDashboardViewModel.SkippedCorruptBookIds) => nameof(StatisticsSkippedCorruptBookIds),
-            nameof(NovelStatisticsDashboardViewModel.HasCorruptBooks) => nameof(HasStatisticsCorruptBooks),
-            nameof(NovelStatisticsDashboardViewModel.CorruptWarningText) => nameof(StatisticsCorruptWarningText),
-            nameof(NovelStatisticsDashboardViewModel.SelectedCalendarDay) => nameof(SelectedStatisticsCalendarDay),
-            nameof(NovelStatisticsDashboardViewModel.CalendarDetail) => nameof(StatisticsCalendarDetailText),
-            _ => null,
-        };
-        if (propertyName != null)
-            OnPropertyChanged(propertyName);
-    }
 }
 
 public sealed record NovelShelfMoveRequest(

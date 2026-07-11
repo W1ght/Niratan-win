@@ -2156,6 +2156,9 @@ public class NovelReaderWebAssetTests
         var dashboardXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Controls", "NovelStatisticsDashboardView.xaml")
         );
+        var dashboardCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Controls", "NovelStatisticsDashboardView.xaml.cs")
+        );
         var trendChartXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Controls", "NovelStatisticsTrendChart.xaml")
         );
@@ -2164,6 +2167,12 @@ public class NovelReaderWebAssetTests
         );
         var dashboardModels = File.ReadAllText(
             Path.Combine(ProjectRoot, "Models", "Novel", "NovelStatisticsDashboardModels.cs")
+        );
+        var enResources = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "en-US", "Resources.resw")
+        );
+        var zhResources = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw")
         );
         var appCode = File.ReadAllText(Path.Combine(ProjectRoot, "App.xaml.cs"));
         var dashboardServicePath = Path.Combine(
@@ -2209,20 +2218,77 @@ public class NovelReaderWebAssetTests
         dashboardXaml.Should().Contain("x:Name=\"DashboardTertiaryColumn\"");
         dashboardXaml.Should().Contain("ScrollViewer.HorizontalScrollMode=\"Enabled\"");
         dashboardXaml.Split("VerticalScrollBarVisibility=\"Auto\"").Should().HaveCount(2);
+        dashboardCode.Should().Contain("ApplyAdaptiveLayout");
+        dashboardCode.Should().Contain("width >= 1260");
+        dashboardCode.Should().Contain("width >= 840");
+        dashboardCode.Should().Contain("Grid.SetColumn");
         trendChartXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsTrendChart\"");
         trendChartCode.Should().Contain("Polyline");
         dashboardModels.Should().Contain("NovelStatisticsTrendChartStyle");
 
+        string[] dashboardResourceUids =
+        [
+            "NovelStatisticsDashboardTitle",
+            "NovelStatisticsDashboardSubtitle",
+            "NovelStatisticsTrendCardTitle",
+            "NovelStatisticsRangeLabel",
+            "NovelStatisticsAnchorLabel",
+            "NovelStatisticsTrendGrainLabel",
+            "NovelStatisticsTrendMetricLabel",
+            "NovelStatisticsTrendStyleLabel",
+            "NovelStatisticsTrendHelp",
+            "NovelStatisticsTodayTitle",
+            "NovelStatisticsGoalTitle",
+            "NovelStatisticsGoalTypeLabel",
+            "NovelStatisticsCharacterTargetLabel",
+            "NovelStatisticsDurationTargetLabel",
+            "NovelStatisticsWeeklyTargetLabel",
+            "NovelStatisticsGoalHelp",
+            "NovelStatisticsWeekTitle",
+            "NovelStatisticsSelectedRangeTitle",
+            "NovelStatisticsSpeedTitle",
+            "NovelStatisticsSpeedHelp",
+            "NovelStatisticsCalendarTitle",
+            "NovelStatisticsCalendarRecentYear",
+            "NovelStatisticsRankingTitle",
+            "NovelStatisticsShelfTitle",
+            "NovelStatisticsLoadingText",
+            "NovelStatisticsEmptyTitle",
+            "NovelStatisticsEmptyDescription",
+        ];
+        foreach (var uid in dashboardResourceUids)
+        {
+            dashboardXaml.Should().Contain($"x:Uid=\"{uid}\"");
+            enResources.Should().Contain($"name=\"{uid}.Text\"");
+            zhResources.Should().Contain($"name=\"{uid}.Text\"");
+        }
+
+        string[] metricResourceKeys =
+        [
+            "NovelStatisticsMetricDuration.Text",
+            "NovelStatisticsMetricCharacters.Text",
+            "NovelStatisticsMetricSpeed.Text",
+            "NovelStatisticsMetricStreak.Text",
+            "NovelStatisticsMetricAverageCharacters.Text",
+            "NovelStatisticsMetricGoalProgress.Text",
+            "NovelStatisticsMetricDaysMet.Text",
+            "NovelStatisticsCorruptWarning.Text",
+        ];
+        foreach (var resourceKey in metricResourceKeys)
+        {
+            enResources.Should().Contain($"name=\"{resourceKey}\"");
+            zhResources.Should().Contain($"name=\"{resourceKey}\"");
+        }
+        libraryXaml.Should().Contain("x:Uid=\"NovelStatisticsBackToBookshelfButton\"");
+        enResources.Should().Contain("name=\"NovelStatisticsBackToBookshelfButton.Label\"");
+        zhResources.Should().Contain("name=\"NovelStatisticsBackToBookshelfButton.Label\"");
+
         libraryViewModel.Should().Contain("NovelStatisticsDashboardViewModel StatisticsDashboard");
         libraryViewModel.Should().NotContain("INovelStatisticsDashboardService");
         libraryViewModel.Should().Contain("ShowStatisticsDashboard");
-        libraryViewModel.Should().Contain("StatisticsTodayText");
-        libraryViewModel.Should().Contain("StatisticsWeekText");
-        libraryViewModel.Should().Contain("StatisticsBookRankingRows");
-        libraryViewModel.Should().Contain("StatisticsShelfComparisonRows");
-        libraryViewModel.Should().Contain("SelectedStatisticsRangeMode");
-        libraryViewModel.Should().Contain("SelectedStatisticsTrendMetric");
-        libraryViewModel.Should().Contain("HasStatisticsCorruptBooks");
+        libraryViewModel.Should().NotContain("StatisticsTodayText");
+        libraryViewModel.Should().NotContain("SelectedStatisticsRangeMode");
+        libraryViewModel.Should().NotContain("OnStatisticsDashboardPropertyChanged");
         libraryViewModel.Should().NotContain("NovelStatisticsDistributionRow");
 
         dashboardViewModel.Should().Contain("INovelStatisticsDashboardService");

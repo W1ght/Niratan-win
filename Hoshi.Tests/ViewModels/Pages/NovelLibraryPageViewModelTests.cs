@@ -418,20 +418,21 @@ public class NovelLibraryPageViewModelTests
 
         await sut.InitializeAsync();
         await sut.EnterStatisticsCommand.ExecuteAsync(null);
-        sut.SelectedStatisticsRangeMode = NovelStatisticsRangeMode.Day;
-        sut.StatisticsAnchorDate = new DateTimeOffset(
+        var statistics = sut.StatisticsDashboard;
+        statistics.SelectedRangeMode = NovelStatisticsRangeMode.Day;
+        statistics.AnchorDate = new DateTimeOffset(
             today.ToDateTime(TimeOnly.MinValue),
             TimeZoneInfo.Local.GetUtcOffset(today.ToDateTime(TimeOnly.MinValue)));
-        sut.SelectedStatisticsTrendMetric = NovelStatisticsTrendMetric.Duration;
-        sut.SelectedStatisticsRankingMetric = NovelStatisticsBookRankingMetric.Duration;
-        sut.SelectedStatisticsCalendarDay = sut.StatisticsCalendarDays.Single(day => day.Date == today);
+        statistics.SelectedTrendMetric = NovelStatisticsTrendMetric.Duration;
+        statistics.SelectedRankingMetric = NovelStatisticsBookRankingMetric.Duration;
+        statistics.SelectedCalendarDay = statistics.CalendarDays.Single(day => day.Date == today);
 
-        sut.HasStatisticsCorruptBooks.Should().BeTrue();
-        sut.StatisticsRangeTitle.Should().Be(today.ToString("yyyy-MM-dd"));
-        sut.StatisticsRangeText.Should().Contain("1,200");
-        sut.StatisticsTrendPoints.Should().ContainSingle().Which.ValueText.Should().Be("10m");
-        sut.StatisticsBookRankingRows.Should().ContainSingle().Which.ValueText.Should().Be("10m");
-        sut.StatisticsCalendarDetailText.Should().Contain("1,200 chars").And.Contain("1 book");
+        statistics.HasCorruptBooks.Should().BeTrue();
+        statistics.RangeTitle.Should().Be(today.ToString("yyyy-MM-dd"));
+        statistics.RangeText.Should().Contain("1,200");
+        statistics.TrendPoints.Should().ContainSingle().Which.ValueText.Should().Be("10m");
+        statistics.BookRankingRows.Should().ContainSingle().Which.ValueText.Should().Be("10m");
+        statistics.CalendarDetail.Text.Should().Contain("1,200 chars").And.Contain("1 book");
     }
 
     private static NovelLibraryPageViewModel CreateSut(

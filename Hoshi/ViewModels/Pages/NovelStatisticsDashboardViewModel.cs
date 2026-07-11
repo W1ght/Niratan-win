@@ -23,6 +23,9 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
     private NovelStatisticsDashboardSnapshot? _snapshot;
     private NovelShelfState _shelfState = new([], []);
     private bool _isInitializing = true;
+    private CancellationTokenSource? _activationCts;
+    private SynchronizationContext? _uiContext;
+    private int _activationGeneration;
 
     public NovelStatisticsDashboardViewModel(
         INovelStatisticsDashboardService dashboardService,
@@ -203,7 +206,9 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
 
     public bool HasCorruptBooks => SkippedCorruptBookIds.Count > 0;
     public string CorruptWarningText => HasCorruptBooks
-        ? "Some statistics are temporarily unavailable. The affected sidecar files were left unchanged."
+        ? Localized(
+            "NovelStatisticsCorruptWarning",
+            "Some statistics are temporarily unavailable. The affected sidecar files were left unchanged.")
         : string.Empty;
 
     [ObservableProperty]
@@ -211,13 +216,19 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
 
     [ObservableProperty]
     public partial NovelStatisticsCalendarDetailDisplay CalendarDetail { get; set; } =
-        new(default, 0, 0, 0, "No reading records");
+        new(default, 0, 0, 0, Localized("NovelStatisticsNoReadingRecords", "No reading records"));
 
     public async Task ActivateAsync(
         IReadOnlyList<NovelBook> books,
         NovelShelfState shelfState,
         CancellationToken ct)
     {
+        _activationCts?.Cancel();
+        _activationCts?.Dispose();
+        var activationCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _activationCts = activationCts;
+        var generation = ++_activationGeneration;
+        _uiContext = SynchronizationContext.Current;
         _shelfState = shelfState;
         _dashboardService.SnapshotRefreshed -= OnSnapshotRefreshed;
         _dashboardService.SnapshotRefreshed += OnSnapshotRefreshed;
@@ -225,17 +236,39 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
         IsLoading = true;
         try
         {
-            ApplySnapshot(await _dashboardService.LoadSnapshotAsync(books, ct));
+            var snapshot = await _dashboardService.LoadSnapshotAsync(
+                books,
+                activationCts.Token);
+            if (generation == _activationGeneration
+                && IsActive
+                && !activationCts.IsCancellationRequested)
+            {
+                ApplySnapshot(snapshot);
+            }
+        }
+        catch (OperationCanceledException) when (activationCts.IsCancellationRequested)
+        {
         }
         finally
         {
-            IsLoading = false;
+            if (generation == _activationGeneration)
+                IsLoading = false;
+            if (ReferenceEquals(_activationCts, activationCts))
+            {
+                _activationCts = null;
+                activationCts.Dispose();
+            }
         }
     }
 
     public void Deactivate()
     {
+        _activationGeneration++;
+        _activationCts?.Cancel();
+        _activationCts?.Dispose();
+        _activationCts = null;
         IsActive = false;
+        IsLoading = false;
         IsRefreshing = false;
         _dashboardService.SnapshotRefreshed -= OnSnapshotRefreshed;
     }
@@ -244,7 +277,26 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
         object? sender,
         NovelStatisticsDashboardSnapshot snapshot)
     {
+        var generation = _activationGeneration;
         if (!IsActive)
+            return;
+
+        if (_uiContext != null && SynchronizationContext.Current != _uiContext)
+        {
+            _uiContext.Post(
+                _ => ApplyRefreshedSnapshot(snapshot, generation),
+                null);
+            return;
+        }
+
+        ApplyRefreshedSnapshot(snapshot, generation);
+    }
+
+    private void ApplyRefreshedSnapshot(
+        NovelStatisticsDashboardSnapshot snapshot,
+        int generation)
+    {
+        if (!IsActive || generation != _activationGeneration)
             return;
 
         IsRefreshing = true;
@@ -310,26 +362,26 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
 
         TodayMetrics = new(
         [
-            new("Duration", FormatDuration(Today.ReadingTime)),
-            new("Characters", FormatCharacters(Today.Characters)),
-            new("Speed", FormatSpeed(Today.AverageSpeedPerHour)),
-            new("Streak", $"{Today.DailyStreakDays} days"),
+            new(Localized("NovelStatisticsMetricDuration", "Duration"), FormatDuration(Today.ReadingTime)),
+            new(Localized("NovelStatisticsMetricCharacters", "Characters"), FormatCharacters(Today.Characters)),
+            new(Localized("NovelStatisticsMetricSpeed", "Speed"), FormatSpeed(Today.AverageSpeedPerHour)),
+            new(Localized("NovelStatisticsMetricStreak", "Streak"), $"{Today.DailyStreakDays} days"),
         ]);
         WeekMetrics = new(
         [
-            new("Duration", FormatDuration(Week.ReadingTime)),
-            new("Characters", FormatCharacters(Week.Characters)),
-            new("Avg Characters", FormatCharacters(Week.AverageCharactersPerElapsedDay)),
-            new("Speed", FormatSpeed(Week.AverageSpeedPerHour)),
+            new(Localized("NovelStatisticsMetricDuration", "Duration"), FormatDuration(Week.ReadingTime)),
+            new(Localized("NovelStatisticsMetricCharacters", "Characters"), FormatCharacters(Week.Characters)),
+            new(Localized("NovelStatisticsMetricAverageCharacters", "Avg Characters"), FormatCharacters(Week.AverageCharactersPerElapsedDay)),
+            new(Localized("NovelStatisticsMetricSpeed", "Speed"), FormatSpeed(Week.AverageSpeedPerHour)),
         ]);
         RangeMetrics = new(
         [
-            new("Duration", FormatDuration(SelectedRange.ReadingTime)),
-            new("Characters", FormatCharacters(SelectedRange.Characters)),
-            new("Speed", FormatSpeed(SelectedRange.AverageSpeedPerHour)),
+            new(Localized("NovelStatisticsMetricDuration", "Duration"), FormatDuration(SelectedRange.ReadingTime)),
+            new(Localized("NovelStatisticsMetricCharacters", "Characters"), FormatCharacters(SelectedRange.Characters)),
+            new(Localized("NovelStatisticsMetricSpeed", "Speed"), FormatSpeed(SelectedRange.AverageSpeedPerHour)),
             SelectedRangeMode == NovelStatisticsRangeMode.Day
-                ? new("Goal Progress", $"{SelectedRange.TargetProgressPercent}%")
-                : new("Days Met", $"{SelectedRange.TargetDays} days"),
+                ? new(Localized("NovelStatisticsMetricGoalProgress", "Goal Progress"), $"{SelectedRange.TargetProgressPercent}%")
+                : new(Localized("NovelStatisticsMetricDaysMet", "Days Met"), $"{SelectedRange.TargetDays} days"),
         ]);
 
         WeekDays = new(Week.Days.Select(day => new NovelStatisticsWeekDayDisplay(
@@ -341,12 +393,12 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
             day.MetTarget)));
         SpeedMetrics = new(
         [
-            new("Weighted", FormatSpeed(Speed.WeightedAveragePerHour)),
-            new("Median Active Day", FormatSpeed(Speed.MedianActiveDayPerHour)),
-            new("Last 7 Active Days", FormatSpeed(Speed.LastSevenActiveDaysPerHour)),
-            new("Change", Speed.ChangePercent is { } change ? $"{change:+0;-0;0}%" : "—"),
-            new("Fastest", FormatSpeedDay(Speed.FastestDay)),
-            new("Slowest", FormatSpeedDay(Speed.SlowestDay)),
+            new(Localized("NovelStatisticsMetricWeighted", "Weighted"), FormatSpeed(Speed.WeightedAveragePerHour)),
+            new(Localized("NovelStatisticsMetricMedianActiveDay", "Median Active Day"), FormatSpeed(Speed.MedianActiveDayPerHour)),
+            new(Localized("NovelStatisticsMetricLastSevenActiveDays", "Last 7 Active Days"), FormatSpeed(Speed.LastSevenActiveDaysPerHour)),
+            new(Localized("NovelStatisticsMetricChange", "Change"), Speed.ChangePercent is { } change ? $"{change:+0;-0;0}%" : "—"),
+            new(Localized("NovelStatisticsMetricFastest", "Fastest"), FormatSpeedDay(Speed.FastestDay)),
+            new(Localized("NovelStatisticsMetricSlowest", "Slowest"), FormatSpeedDay(Speed.SlowestDay)),
         ]);
 
         var trend = NovelStatisticsDashboardCalculator.TrendPoints(
@@ -482,7 +534,7 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
     {
         var day = SelectedCalendarDay;
         CalendarDetail = day == null
-            ? new(default, 0, 0, 0, "No reading records")
+            ? new(default, 0, 0, 0, Localized("NovelStatisticsNoReadingRecords", "No reading records"))
             : new(
                 day.Date,
                 day.Characters,
@@ -504,11 +556,14 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
         NovelStatisticsRangeMode mode,
         NovelStatisticsDateRange range) => mode switch
         {
-            NovelStatisticsRangeMode.Year => "Recent year",
+            NovelStatisticsRangeMode.Year => Localized("NovelStatisticsCalendarRecentYear", "Recent year"),
             NovelStatisticsRangeMode.Month => range.Start.ToString("yyyy-MM"),
             NovelStatisticsRangeMode.Week => $"{range.Start:MM-dd} – {range.End:MM-dd}",
             _ => range.Start.ToString("yyyy-MM-dd"),
         };
+
+    private static string Localized(string uid, string fallback) =>
+        ResourceStringHelper.GetString($"{uid}/Text", fallback);
 
     private double TrendRawValue(NovelStatisticsTrendPoint point) =>
         SelectedTrendMetric switch
