@@ -5,6 +5,26 @@ namespace Hoshi.Tests.Services.Dictionary;
 
 public class DictionaryPopupRecoveryCoordinatorTests
 {
+    [Theory]
+    [InlineData("contentReady")]
+    [InlineData("commitScriptResult")]
+    public void ActiveRecovery_RejectsLateFailedEpochCompletionFromEitherSignal(
+        string completionSignal)
+    {
+        var recovery = new DictionaryPopupRecoveryCoordinator();
+        var transaction = new DictionaryPopupDisplayTransaction();
+        transaction.BeginPending(8, completionSignal);
+        transaction.TryAcceptCommit(8).Should().BeTrue();
+        recovery.TryStartAttempt(8, 21, out _).Should().BeTrue();
+
+        var completed = recovery.CanCompleteAccepted(8, 21)
+            && transaction.TryCompleteCommit(8, out _);
+
+        completed.Should().BeFalse();
+        transaction.CommitInFlightGeneration.Should().Be(8);
+        transaction.CommittedGeneration.Should().BeNull();
+    }
+
     [Fact]
     public void Recovery_DoesNotReleaseLatestQueueUntilFreshEpochIsReady()
     {
@@ -44,7 +64,15 @@ public class DictionaryPopupRecoveryCoordinatorTests
         recovery.IsRecovering(4, 10).Should().BeTrue();
         recovery.TryStartAttempt(4, 10, out var retry).Should().BeTrue();
         recovery.Cancel(first).Should().BeFalse();
+        recovery.CanCompleteAccepted(4, 10).Should().BeFalse(
+            "an old ticket must not reopen completion during a newer attempt");
+        recovery.CanCompleteAccepted(5, 10).Should().BeTrue(
+            "a recovery ticket must not block another generation");
+        recovery.CanCompleteAccepted(4, 11).Should().BeTrue(
+            "a recovery ticket must not block another document epoch");
         recovery.Cancel(retry).Should().BeTrue();
         recovery.IsRecovering(4, 10).Should().BeFalse();
+        recovery.CanCompleteAccepted(4, 10).Should().BeTrue(
+            "Hide/cancel removes the recovery gate without harming later normal completion");
     }
 }

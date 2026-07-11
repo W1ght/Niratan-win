@@ -1512,6 +1512,7 @@ public sealed class DictionaryLookupPopup : IDisposable
             || _stagedNativeContext is not { } context
             || context.Generation != generation
             || context.DocumentEpoch != documentEpoch
+            || !_recoveryCoordinator.CanCompleteAccepted(generation, documentEpoch)
             || !DictionaryPopupDocumentEpoch.Matches(_rendererEpoch, documentEpoch))
         {
             return;

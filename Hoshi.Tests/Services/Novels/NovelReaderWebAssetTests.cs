@@ -1752,6 +1752,9 @@ public class NovelReaderWebAssetTests
         code.Should().Contain("_warmCoordinator.Reset();");
         code.Should().Contain("DictionaryPopupCommitCoordinator.ObserveAsync(");
         code.Should().Contain("private void CompleteAcceptedCommit(long generation, long documentEpoch)");
+        code.Should().Contain("CompleteAcceptedCommit(readyGeneration, readyEpoch)");
+        code.Should().Contain("CompleteAcceptedCommit(generation, documentEpoch)");
+        code.Should().Contain("!_recoveryCoordinator.CanCompleteAccepted(generation, documentEpoch)");
         code.Should().Contain("private void AbortAcceptedCommit(long generation, long documentEpoch)");
         code.Should().Contain("_displayTransaction.TryAbortCommit(generation)");
         code.Should().Contain("OnPopupWebViewProcessFailed");

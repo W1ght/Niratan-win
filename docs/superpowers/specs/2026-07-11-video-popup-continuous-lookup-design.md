@@ -94,6 +94,8 @@ native commit acknowledgement 由非阻塞 async helper 执行并观察 `Execute
 
 JavaScript 只暴露 epoch + generation-scoped 的 `hoshiGetCommittedPopupGeneration(epoch)` 与必要的 `hoshiDiscardPopupRender(epoch, generation)`；查询不得返回词条或扩大 native API。若 commit/query 无法确认 renderer 状态，不能立即 abort accepted generation：native 保持旧 committed native context、accepted ownership 和唯一 latest queue，强制使 warm shell 失效并导航到带新 epoch 的空 shell。只有收到该新 epoch 的 `shellReady` 后，旧 DOM 已被导航销毁，native 才精确 abort 旧 accepted generation、清理 staged context，并在新 epoch shell 中启动 latest request。恢复失败只结束本次 recovery attempt，不释放 ownership 或 queue；后续请求触发同一 generation + failed epoch 的新 attempt。
 
+recovery ticket 一旦为 accepted generation + failed epoch 建立，该组合立刻进入不可完成状态。无论迟到的 `contentReady` 还是 commit/reconcile 成功结果，都必须在统一的 `CompleteAcceptedCommit` 边界被拒绝；不能因为 fresh shell 尚未 ready、`_rendererEpoch` 暂时仍等于 failed epoch 而提升旧 staged context。只有 fresh epoch `shellReady` 完成 recovery ticket 后，恢复路径才能精确 abort 旧 accepted generation 并启动 latest queue；普通 generation/epoch、Hide 后的新事务以及旧 ticket 回调不受该 gate 误伤。
+
 `WarmAsync` 的 single-flight operation 带 cancellation/version lease。`Reset` 必须立即取消旧 caller；旧 operation 在订阅事件、导航、接受 shell-ready、完成和返回前都验证 lease，迟到成功不能把 warm 标记为成功或重复初始化。WebView 事件订阅只安装一次。ProcessFailed、Hide 和 recovery completion 都用 recovery ticket 的 generation、failed epoch 和 attempt guard，过期回调不能操作新 transaction。
 
 `_currentTraceId`、音频设置、Anki 设置、mining context 和 Sasayaki 控件上下文也属于 committed native interaction context。新查询只把这些值放进 generation-scoped pending context；收到匹配 `contentReady` 后才整体提升。旧 popup 可交互期间始终使用旧 native context。
