@@ -79,6 +79,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     public event EventHandler? Scrolled;
     public event EventHandler? ContentReady;
     public event EventHandler<DictionaryPopupContentCommittedEventArgs>? ContentCommitted;
+    public event EventHandler<DictionaryPopupContentCommittedEventArgs>? ContentCommitAborted;
 
     private readonly Grid _surfaceRoot;
     private readonly SolidColorBrush _surfaceBrush;
@@ -671,14 +672,16 @@ public sealed class DictionaryLookupPopup : IDisposable
         VisualRoot.IsHitTestVisible = false;
     }
 
-    public void CancelPendingContent(long generation, string? traceId)
+    public bool CancelPendingContent(long generation, string? traceId)
     {
         var documentEpoch = _stagedNativeContext?.Generation == generation
             ? _stagedNativeContext.DocumentEpoch
             : _rendererEpoch;
         if (_pendingContentGeneration != generation
             || !_displayTransaction.CancelPending(generation, traceId))
-            return;
+        {
+            return false;
+        }
 
         _pendingContentGeneration = null;
         _pendingContentCancellationToken = default;
@@ -694,6 +697,8 @@ public sealed class DictionaryLookupPopup : IDisposable
 
         if (!_displayTransaction.HasCommittedContent)
             Hide();
+
+        return true;
     }
 
     public void SetSize(double width, double height)
@@ -1555,6 +1560,11 @@ public sealed class DictionaryLookupPopup : IDisposable
             return;
 
         ClearPendingGeneration(generation);
+        ContentCommitAborted?.Invoke(
+            this,
+            new DictionaryPopupContentCommittedEventArgs(
+                generation,
+                context.TraceId));
         if (!_displayTransaction.HasCommittedContent)
         {
             VisualRoot.Opacity = 0;
