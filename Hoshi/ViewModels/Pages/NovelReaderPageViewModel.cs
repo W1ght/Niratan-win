@@ -337,16 +337,28 @@ public partial class NovelReaderPageViewModel : ObservableObject
         CancellationToken ct = default)
     {
         _ = now;
-        await CheckpointReadingAsync(
-            ReaderStatisticsCheckpointReason.ReadingMovement,
-            ct);
+        await FlushStatisticsAtPositionAsync(CurrentCharacterCount, ct);
     }
 
     public Task CheckpointReadingAsync(
         ReaderStatisticsCheckpointReason reason,
         CancellationToken ct = default) =>
+        CheckpointReadingAtPositionAsync(reason, CurrentCharacterCount, ct);
+
+    private Task FlushStatisticsAtPositionAsync(
+        int characterCount,
+        CancellationToken ct) =>
+        CheckpointReadingAtPositionAsync(
+            ReaderStatisticsCheckpointReason.ReadingMovement,
+            characterCount,
+            ct);
+
+    private Task CheckpointReadingAtPositionAsync(
+        ReaderStatisticsCheckpointReason reason,
+        int characterCount,
+        CancellationToken ct) =>
         _statisticsSession.CheckpointAsync(
-            new ReaderStatisticsPosition(CurrentCharacterCount),
+            new ReaderStatisticsPosition(characterCount),
             reason,
             ct);
 
@@ -430,11 +442,15 @@ public partial class NovelReaderPageViewModel : ObservableObject
             TaskCompletionSource admission;
             lock (_saveGate)
             {
+                var request = CaptureProgressSaveRequest();
+                var statisticsCharacterCount = request?.CurrentCharacterCount
+                    ?? CurrentCharacterCount;
                 admission = CreateWriterAdmission();
                 boundary = RunLifecycleWriterBoundaryAsync(
                     admission.Task,
                     _writerTail,
-                    CaptureProgressSaveRequest(),
+                    request,
+                    statisticsCharacterCount,
                     ReaderStatisticsCheckpointReason.Close,
                     cancelAfterFlush: true,
                     CancellationToken.None);
@@ -468,11 +484,15 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
                 _lifecycleWriterBarrier = true;
                 _saveCts?.Cancel();
+                var request = CaptureProgressSaveRequest();
+                var statisticsCharacterCount = request?.CurrentCharacterCount
+                    ?? CurrentCharacterCount;
                 admission = CreateWriterAdmission();
                 boundary = RunLifecycleWriterBoundaryAsync(
                     admission.Task,
                     _writerTail,
-                    CaptureProgressSaveRequest(),
+                    request,
+                    statisticsCharacterCount,
                     ReaderStatisticsCheckpointReason.Background,
                     cancelAfterFlush: false,
                     ct);
@@ -729,7 +749,10 @@ public partial class NovelReaderPageViewModel : ObservableObject
             flushStatistics: false,
             scheduleAutoSync: true,
             ct);
-        await CheckpointReadingAsync(reason, ct);
+        await CheckpointReadingAtPositionAsync(
+            reason,
+            request.CurrentCharacterCount,
+            ct);
     }
 
     public Task SaveProgressAndResetStatisticsBaselineAsync(
@@ -779,6 +802,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
         Task admission,
         Task previousWriter,
         ProgressSaveRequest? request,
+        int statisticsCharacterCount,
         ReaderStatisticsCheckpointReason reason,
         bool cancelAfterFlush,
         CancellationToken ct)
@@ -795,7 +819,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
                 ct);
         }
 
-        await CheckpointReadingAsync(reason, ct);
+        await CheckpointReadingAtPositionAsync(reason, statisticsCharacterCount, ct);
         if (request != null)
         {
             _readerAutoSyncCoordinator.ScheduleExport(request.Book);
@@ -821,7 +845,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
             ct);
         ct.ThrowIfCancellationRequested();
         if (flushStatistics)
-            await FlushStatisticsAsync(ct: ct);
+            await FlushStatisticsAtPositionAsync(request.CurrentCharacterCount, ct);
         ct.ThrowIfCancellationRequested();
         if (!result.IsSuccess)
         {
