@@ -23,6 +23,9 @@ public static class AppDataHelper
     public static string GetNovelBooksPath() =>
         EnsureDirectory(Path.Combine(GetDataPath(), "Novels"));
 
+    public static string GetGoogleDriveCoverCachePath() =>
+        EnsureDirectory(Path.Combine(GetAppDataPath(), "Cache", "GoogleDriveCovers"));
+
     public static string GetNovelBookPath(string bookId) =>
         EnsureDirectory(Path.Combine(GetNovelBooksPath(), bookId));
 
