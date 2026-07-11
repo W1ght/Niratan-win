@@ -12,6 +12,7 @@ using Hoshi.Messages;
 using Hoshi.Models;
 using Hoshi.Models.DTO;
 using Hoshi.Models.Novel;
+using Hoshi.Models.Profiles;
 using Hoshi.Models.Settings;
 using Hoshi.Services.Novels;
 using Hoshi.Services.Profiles;
@@ -101,19 +102,27 @@ public partial class NovelReaderPageViewModel : ObservableObject
     public bool CanGoNext => CurrentChapterIndex < ChapterCount - 1;
     public bool CanGoPrevious => CurrentChapterIndex > 0;
     public string StatisticsTrackingButtonText => IsStatisticsTracking ? "Pause" : "Start";
-    public string StatisticsSessionCharactersText => FormatCount(SessionStatistics.CharactersRead);
-    public string StatisticsSessionSpeedText => FormatSpeed(SessionStatistics.LastReadingSpeed);
+    public bool IsEnglishStatisticsContent =>
+        _profileRuntime.ActiveLanguage.Id == ContentLanguageProfile.English.Id;
+    public string StatisticsSessionCharactersText =>
+        FormatStatisticsCount(SessionStatistics.CharactersRead);
+    public string StatisticsSessionSpeedText =>
+        FormatStatisticsSpeed(SessionStatistics.LastReadingSpeed);
     public string StatisticsSessionTimeText => FormatDuration(SessionStatistics.ReadingTime);
     public string StatisticsSessionChromeTimeText => FormatChromeReadingTime(SessionStatistics.ReadingTime);
     public string StatisticsBookRemainingTimeText => FormatDuration(
         EstimateRemainingSeconds(TotalCharacterCount - CurrentCharacterCount));
     public string StatisticsChapterRemainingTimeText => FormatDuration(
         EstimateRemainingSeconds(CurrentChapterRemainingCharacters));
-    public string StatisticsTodayCharactersText => FormatCount(TodaysStatistics.CharactersRead);
-    public string StatisticsTodaySpeedText => FormatSpeed(TodaysStatistics.LastReadingSpeed);
+    public string StatisticsTodayCharactersText =>
+        FormatStatisticsCount(TodaysStatistics.CharactersRead);
+    public string StatisticsTodaySpeedText =>
+        FormatStatisticsSpeed(TodaysStatistics.LastReadingSpeed);
     public string StatisticsTodayTimeText => FormatDuration(TodaysStatistics.ReadingTime);
-    public string StatisticsAllTimeCharactersText => FormatCount(AllTimeStatistics.CharactersRead);
-    public string StatisticsAllTimeSpeedText => FormatSpeed(AllTimeStatistics.LastReadingSpeed);
+    public string StatisticsAllTimeCharactersText =>
+        FormatStatisticsCount(AllTimeStatistics.CharactersRead);
+    public string StatisticsAllTimeSpeedText =>
+        FormatStatisticsSpeed(AllTimeStatistics.LastReadingSpeed);
     public string StatisticsAllTimeTimeText => FormatDuration(AllTimeStatistics.ReadingTime);
 
     private CancellationTokenSource? _saveCts;
@@ -560,8 +569,14 @@ public partial class NovelReaderPageViewModel : ObservableObject
     private static string FormatCount(int value) =>
         value.ToString("N0", CultureInfo.CurrentCulture);
 
-    private static string FormatSpeed(int value) =>
-        $"{FormatCount(value)} / h";
+    private int DisplayStatisticsUnits(int rawCharacters) =>
+        _profileRuntime.ActiveLanguage.DisplayUnitsFromRawCharacters(rawCharacters);
+
+    private string FormatStatisticsCount(int rawCharacters) =>
+        FormatCount(DisplayStatisticsUnits(rawCharacters));
+
+    private string FormatStatisticsSpeed(int rawCharactersPerHour) =>
+        $"{FormatCount(DisplayStatisticsUnits(rawCharactersPerHour))} / h";
 
     private static string FormatDuration(double seconds)
     {
@@ -587,6 +602,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
     private void OnStatisticsTextChanged()
     {
         OnPropertyChanged(nameof(StatisticsTrackingButtonText));
+        OnPropertyChanged(nameof(IsEnglishStatisticsContent));
         OnPropertyChanged(nameof(StatisticsSessionCharactersText));
         OnPropertyChanged(nameof(StatisticsSessionSpeedText));
         OnPropertyChanged(nameof(StatisticsSessionTimeText));

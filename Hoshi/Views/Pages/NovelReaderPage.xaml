@@ -364,119 +364,17 @@
         <ContentDialog x:Name="ReaderStatisticsPanelDialog"
                        x:Uid="ReaderStatisticsPanelDialog"
                        AutomationProperties.AutomationId="NovelReaderStatisticsPanelDialog"
-                       MinWidth="1120"
-                       MaxWidth="1600"
+                       MinWidth="520"
+                       MaxWidth="560"
                        CloseButtonText="Close"
                        DefaultButton="Close">
             <ContentDialog.Resources>
-                <x:Double x:Key="ContentDialogMaxWidth">1600</x:Double>
-                <x:Double x:Key="ContentDialogMinWidth">1120</x:Double>
+                <x:Double x:Key="ContentDialogMaxWidth">560</x:Double>
+                <x:Double x:Key="ContentDialogMinWidth">520</x:Double>
             </ContentDialog.Resources>
-            <Grid Width="1120"
-                  Height="560"
-                  RowDefinitions="Auto,*"
-                  RowSpacing="16">
-                <Button x:Name="ReaderStatisticsStartStopButton"
-                        x:Uid="ReaderStatisticsStartStopButton"
-                        AutomationProperties.AutomationId="NovelReaderStatisticsStartStopButton"
-                        HorizontalAlignment="Right"
-                        Click="StatisticsStartStopButton_Click">
-                    <FontIcon x:Name="ReaderStatisticsStartStopIcon" Glyph="&#xE768;" />
-                </Button>
-
-                <ScrollViewer Grid.Row="1">
-                    <StackPanel Spacing="14">
-                        <TextBlock x:Uid="ReaderStatisticsSessionHeader"
-                                   FontWeight="SemiBold"
-                                   Text="Session" />
-                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="8">
-                            <TextBlock x:Uid="ReaderStatisticsCharactersLabel"
-                                       Text="Characters Read" />
-                            <TextBlock Grid.Column="1"
-                                       FontWeight="SemiBold"
-                                       Text="{x:Bind ViewModel.StatisticsSessionCharactersText, Mode=OneWay}" />
-                            <TextBlock Grid.Row="1"
-                                       x:Uid="ReaderStatisticsSpeedLabel"
-                                       Text="Reading Speed" />
-                            <TextBlock Grid.Row="1"
-                                       Grid.Column="1"
-                                       FontWeight="SemiBold"
-                                       Text="{x:Bind ViewModel.StatisticsSessionSpeedText, Mode=OneWay}" />
-                            <TextBlock Grid.Row="2"
-                                       x:Uid="ReaderStatisticsTimeLabel"
-                                       Text="Reading Time" />
-                            <TextBlock Grid.Row="2"
-                                       Grid.Column="1"
-                                       FontWeight="SemiBold"
-                                       Text="{x:Bind ViewModel.StatisticsSessionTimeText, Mode=OneWay}" />
-                            <TextBlock Grid.Row="3"
-                                       x:Uid="ReaderStatisticsBookRemainingLabel"
-                                       Text="Time to finish Book" />
-                            <TextBlock Grid.Row="3"
-                                       Grid.Column="1"
-                                       FontWeight="SemiBold"
-                                       Text="{x:Bind ViewModel.StatisticsBookRemainingTimeText, Mode=OneWay}" />
-                            <TextBlock Grid.Row="4"
-                                       x:Uid="ReaderStatisticsChapterRemainingLabel"
-                                       Text="Time to finish Chapter" />
-                            <TextBlock Grid.Row="4"
-                                       Grid.Column="1"
-                                       FontWeight="SemiBold"
-                                       Text="{x:Bind ViewModel.StatisticsChapterRemainingTimeText, Mode=OneWay}" />
-                        </Grid>
-
-                        <TextBlock x:Uid="ReaderStatisticsTodayHeader"
-                                   FontWeight="SemiBold"
-                                   Text="Today" />
-                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
-                            <TextBlock x:Uid="ReaderStatisticsCharactersLabel"
-                                       Text="Characters Read" />
-                            <TextBlock Grid.Column="1"
-                                       FontWeight="SemiBold"
-                                       Text="{x:Bind ViewModel.StatisticsTodayCharactersText, Mode=OneWay}" />
-                            <TextBlock Grid.Row="1"
-                                       x:Uid="ReaderStatisticsSpeedLabel"
-                                       Text="Reading Speed" />
-                            <TextBlock Grid.Row="1"
-                                       Grid.Column="1"
-                                       FontWeight="SemiBold"
-                                       Text="{x:Bind ViewModel.StatisticsTodaySpeedText, Mode=OneWay}" />
-                            <TextBlock Grid.Row="2"
-                                       x:Uid="ReaderStatisticsTimeLabel"
-                                       Text="Reading Time" />
-                            <TextBlock Grid.Row="2"
-                                       Grid.Column="1"
-                                       FontWeight="SemiBold"
-                                       Text="{x:Bind ViewModel.StatisticsTodayTimeText, Mode=OneWay}" />
-                        </Grid>
-
-                        <TextBlock x:Uid="ReaderStatisticsAllTimeHeader"
-                                   FontWeight="SemiBold"
-                                   Text="All Time" />
-                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
-                            <TextBlock x:Uid="ReaderStatisticsCharactersLabel"
-                                       Text="Characters Read" />
-                            <TextBlock Grid.Column="1"
-                                       FontWeight="SemiBold"
-                                       Text="{x:Bind ViewModel.StatisticsAllTimeCharactersText, Mode=OneWay}" />
-                            <TextBlock Grid.Row="1"
-                                       x:Uid="ReaderStatisticsSpeedLabel"
-                                       Text="Reading Speed" />
-                            <TextBlock Grid.Row="1"
-                                       Grid.Column="1"
-                                       FontWeight="SemiBold"
-                                       Text="{x:Bind ViewModel.StatisticsAllTimeSpeedText, Mode=OneWay}" />
-                            <TextBlock Grid.Row="2"
-                                       x:Uid="ReaderStatisticsTimeLabel"
-                                       Text="Reading Time" />
-                            <TextBlock Grid.Row="2"
-                                       Grid.Column="1"
-                                       FontWeight="SemiBold"
-                                       Text="{x:Bind ViewModel.StatisticsAllTimeTimeText, Mode=OneWay}" />
-                        </Grid>
-                    </StackPanel>
-                </ScrollViewer>
-            </Grid>
+            <controls:ReaderStatisticsPanelContent
+                MaxWidth="520"
+                DataContext="{x:Bind ViewModel, Mode=OneWay}" />
         </ContentDialog>
 
         <ContentDialog x:Name="ReaderAppearancePanelDialog"

@@ -247,6 +247,64 @@ public sealed class NovelReaderPageViewModelTests
         sut.StatisticsAllTimeTimeText.Should().Be("20m 0s");
     }
 
+    [Theory]
+    [InlineData("ja", false, "11", "1,805 / h")]
+    [InlineData("en", true, "3", "361 / h")]
+    public async Task StatisticsPanel_UsesActiveContentLanguageUnits(
+        string languageId,
+        bool expectedEnglish,
+        string expectedCount,
+        string expectedSpeed)
+    {
+        using var temp = new TempBookDirectory();
+        var statistics = new FakeReaderStatisticsSession();
+        var sut = CreateInitializedSut(
+            temp.Path,
+            new ReaderHighlightService(),
+            language: ContentLanguageProfile.FromId(languageId),
+            statisticsSession: statistics);
+        await sut.LoadStatisticsAsync(TestContext.Current.CancellationToken);
+
+        statistics.Publish(new ReaderStatisticsSessionState(
+            true,
+            false,
+            Statistic(11, 60, 1_805),
+            Statistic(11, 60, 1_805),
+            Statistic(11, 60, 1_805),
+            []));
+
+        sut.IsEnglishStatisticsContent.Should().Be(expectedEnglish);
+        sut.StatisticsSessionCharactersText.Should().Be(expectedCount);
+        sut.StatisticsSessionSpeedText.Should().Be(expectedSpeed);
+    }
+
+    [Fact]
+    public async Task StatisticsPanel_RemainingTimeUsesRawCharactersAndRawSpeed()
+    {
+        using var temp = new TempBookDirectory();
+        var statistics = new FakeReaderStatisticsSession();
+        var sut = CreateInitializedSut(
+            temp.Path,
+            new ReaderHighlightService(),
+            language: ContentLanguageProfile.English,
+            statisticsSession: statistics);
+        sut.SetChapterCharacterCounts([11]);
+        sut.SetChapter(0, count: 1);
+        sut.UpdateProgress(0.1);
+        await sut.LoadStatisticsAsync(TestContext.Current.CancellationToken);
+
+        statistics.Publish(new ReaderStatisticsSessionState(
+            true,
+            false,
+            Statistic(1, 60, 11),
+            Statistic(1, 60, 11),
+            Statistic(1, 60, 11),
+            []));
+
+        sut.StatisticsBookRemainingTimeText.Should().Be("54m 32s");
+        sut.StatisticsChapterRemainingTimeText.Should().Be("54m 32s");
+    }
+
     [Fact]
     public async Task LifecycleCheckpoints_SaveBackgroundAndCloseExactlyOnce()
     {

@@ -748,7 +748,6 @@ public sealed partial class NovelReaderPage : Page
                 return true;
             case string id when id == ReaderShortcutActions.ToggleStatistics.Id:
                 await ViewModel.ToggleStatisticsTrackingCommand.ExecuteAsync(null);
-                RefreshStatisticsPanel();
                 return true;
             case string id when id == ReaderShortcutActions.ToggleLyricsMode.Id:
                 return await ToggleReaderLyricsModeShortcutAsync();
@@ -1905,22 +1904,7 @@ public sealed partial class NovelReaderPage : Page
 
     private async void StatisticsButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
-        await ViewModel.FlushStatisticsAsync();
-        RefreshStatisticsPanel();
         await ShowReaderPanelDialogAsync(ReaderStatisticsPanelDialog);
-    }
-
-    private async void StatisticsStartStopButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
-    {
-        await ViewModel.ToggleStatisticsTrackingCommand.ExecuteAsync(null);
-        RefreshStatisticsPanel();
-    }
-
-    private void RefreshStatisticsPanel()
-    {
-        ReaderStatisticsStartStopIcon.Glyph = ViewModel.IsStatisticsTracking ? "\uE769" : "\uE768";
-        RefreshReaderStatisticsChrome();
-        Bindings.Update();
     }
 
     private async void SearchButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)

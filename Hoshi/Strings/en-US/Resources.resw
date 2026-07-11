@@ -465,6 +465,8 @@
   <data name="NovelReaderCharacterJumpStatus.Text" xml:space="preserve"><value>Current character position</value></data>
   <data name="NovelReaderStatisticsButton.AutomationProperties.Name" xml:space="preserve"><value>Statistics</value></data>
   <data name="ReaderStatisticsStartStopButton.AutomationProperties.Name" xml:space="preserve"><value>Start or pause statistics tracking</value></data>
+  <data name="ReaderStatisticsStartButton.AutomationProperties.Name" xml:space="preserve"><value>Start statistics tracking</value></data>
+  <data name="ReaderStatisticsStopButton.AutomationProperties.Name" xml:space="preserve"><value>Stop statistics tracking</value></data>
   <data name="ReaderStatisticsPanelTitle.Text" xml:space="preserve"><value>Statistics</value></data>
   <data name="ReaderStatisticsPanelDialog.Title" xml:space="preserve"><value>Statistics</value></data>
   <data name="ReaderStatisticsPanelDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
@@ -472,6 +474,7 @@
   <data name="ReaderStatisticsTodayHeader.Text" xml:space="preserve"><value>Today</value></data>
   <data name="ReaderStatisticsAllTimeHeader.Text" xml:space="preserve"><value>All Time</value></data>
   <data name="ReaderStatisticsCharactersLabel.Text" xml:space="preserve"><value>Characters Read</value></data>
+  <data name="ReaderStatisticsApproximateWordsLabel.Text" xml:space="preserve"><value>Approximate Words Read</value></data>
   <data name="ReaderStatisticsSpeedLabel.Text" xml:space="preserve"><value>Reading Speed</value></data>
   <data name="ReaderStatisticsTimeLabel.Text" xml:space="preserve"><value>Reading Time</value></data>
   <data name="ReaderStatisticsBookRemainingLabel.Text" xml:space="preserve"><value>Time to finish Book</value></data>

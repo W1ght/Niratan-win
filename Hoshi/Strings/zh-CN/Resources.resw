@@ -465,6 +465,8 @@
   <data name="NovelReaderCharacterJumpStatus.Text" xml:space="preserve"><value>当前字符位置</value></data>
   <data name="NovelReaderStatisticsButton.AutomationProperties.Name" xml:space="preserve"><value>统计</value></data>
   <data name="ReaderStatisticsStartStopButton.AutomationProperties.Name" xml:space="preserve"><value>开始或暂停阅读统计</value></data>
+  <data name="ReaderStatisticsStartButton.AutomationProperties.Name" xml:space="preserve"><value>开始阅读统计</value></data>
+  <data name="ReaderStatisticsStopButton.AutomationProperties.Name" xml:space="preserve"><value>停止阅读统计</value></data>
   <data name="ReaderStatisticsPanelTitle.Text" xml:space="preserve"><value>统计</value></data>
   <data name="ReaderStatisticsPanelDialog.Title" xml:space="preserve"><value>统计</value></data>
   <data name="ReaderStatisticsPanelDialog.CloseButtonText" xml:space="preserve"><value>关闭</value></data>
@@ -472,6 +474,7 @@
   <data name="ReaderStatisticsTodayHeader.Text" xml:space="preserve"><value>今天</value></data>
   <data name="ReaderStatisticsAllTimeHeader.Text" xml:space="preserve"><value>全部时间</value></data>
   <data name="ReaderStatisticsCharactersLabel.Text" xml:space="preserve"><value>已读字数</value></data>
+  <data name="ReaderStatisticsApproximateWordsLabel.Text" xml:space="preserve"><value>已读近似词数</value></data>
   <data name="ReaderStatisticsSpeedLabel.Text" xml:space="preserve"><value>阅读速度</value></data>
   <data name="ReaderStatisticsTimeLabel.Text" xml:space="preserve"><value>阅读时间</value></data>
   <data name="ReaderStatisticsBookRemainingLabel.Text" xml:space="preserve"><value>读完整本预计时间</value></data>

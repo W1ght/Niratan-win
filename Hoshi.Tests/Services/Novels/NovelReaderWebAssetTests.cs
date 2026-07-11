@@ -2949,9 +2949,8 @@ public class NovelReaderWebAssetTests
         readerXaml.Should().Contain("x:Uid=\"NovelReaderStatisticsButton\"");
         readerXaml.Should().Contain("x:Name=\"ReaderStatisticsPanelDialog\"");
         readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderStatisticsPanelDialog\"");
-        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderStatisticsStartStopButton\"");
+        readerXaml.Should().Contain("<controls:ReaderStatisticsPanelContent");
         readerXaml.Should().Contain("StatisticsButton_Click");
-        readerXaml.Should().Contain("StatisticsStartStopButton_Click");
         readerCode.Should().Contain("ViewModel.LoadStatisticsAsync");
         readerCode.Should().Contain("case \"restoreCompleted\":");
         readerCode.Should().Contain("ViewModel.HandleManualPageNavigationAsync(readerEvent)");
@@ -2963,8 +2962,9 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("SaveProgressNowAsync(flushStatistics: false)");
         readerCode.Should().Contain("ResetStatisticsBaseline");
         readerCode.Should().Contain("StatisticsButton_Click");
-        readerCode.Should().Contain("StatisticsStartStopButton_Click");
-        readerCode.Should().Contain("RefreshStatisticsPanel");
+        readerCode.Should().NotContain("await ViewModel.FlushStatisticsAsync();");
+        readerCode.Should().NotContain("StatisticsStartStopButton_Click");
+        readerCode.Should().NotContain("RefreshStatisticsPanel");
         viewModelCode.Should().Contain("StartStatisticsTracking");
         viewModelCode.Should().Contain("StopStatisticsTrackingAsync");
         viewModelCode.Should().Contain("FlushStatisticsAsync");
@@ -2980,11 +2980,56 @@ public class NovelReaderWebAssetTests
         enResources.Should().Contain("ReaderStatisticsPanelDialog.CloseButtonText");
         enResources.Should().Contain("ReaderStatisticsPanelTitle.Text");
         enResources.Should().Contain("ReaderStatisticsSessionHeader.Text");
+        enResources.Should().Contain("ReaderStatisticsTodayHeader.Text");
+        enResources.Should().Contain("ReaderStatisticsAllTimeHeader.Text");
+        enResources.Should().Contain("ReaderStatisticsCharactersLabel.Text");
+        enResources.Should().Contain("ReaderStatisticsApproximateWordsLabel.Text");
+        enResources.Should().Contain("ReaderStatisticsSpeedLabel.Text");
+        enResources.Should().Contain("ReaderStatisticsTimeLabel.Text");
+        enResources.Should().Contain("ReaderStatisticsBookRemainingLabel.Text");
+        enResources.Should().Contain("ReaderStatisticsChapterRemainingLabel.Text");
+        enResources.Should().Contain("ReaderStatisticsStartButton.AutomationProperties.Name");
+        enResources.Should().Contain("ReaderStatisticsStopButton.AutomationProperties.Name");
         zhResources.Should().Contain("NovelReaderStatisticsButton.AutomationProperties.Name");
         zhResources.Should().Contain("ReaderStatisticsPanelDialog.Title");
         zhResources.Should().Contain("ReaderStatisticsPanelDialog.CloseButtonText");
         zhResources.Should().Contain("ReaderStatisticsPanelTitle.Text");
         zhResources.Should().Contain("ReaderStatisticsSessionHeader.Text");
+        zhResources.Should().Contain("ReaderStatisticsTodayHeader.Text");
+        zhResources.Should().Contain("ReaderStatisticsAllTimeHeader.Text");
+        zhResources.Should().Contain("ReaderStatisticsCharactersLabel.Text");
+        zhResources.Should().Contain("ReaderStatisticsApproximateWordsLabel.Text");
+        zhResources.Should().Contain("ReaderStatisticsSpeedLabel.Text");
+        zhResources.Should().Contain("ReaderStatisticsTimeLabel.Text");
+        zhResources.Should().Contain("ReaderStatisticsBookRemainingLabel.Text");
+        zhResources.Should().Contain("ReaderStatisticsChapterRemainingLabel.Text");
+        zhResources.Should().Contain("ReaderStatisticsStartButton.AutomationProperties.Name");
+        zhResources.Should().Contain("ReaderStatisticsStopButton.AutomationProperties.Name");
+    }
+
+    [Fact]
+    public void ReaderPage_UsesCompactStatisticsPanelControl()
+    {
+        var panelXaml = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Views", "Controls", "ReaderStatisticsPanelContent.xaml"));
+        var readerXaml = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml"));
+        var statisticsDialogStart = readerXaml.IndexOf(
+            "<ContentDialog x:Name=\"ReaderStatisticsPanelDialog\"",
+            StringComparison.Ordinal);
+        var statisticsDialogEnd = readerXaml.IndexOf(
+            "<ContentDialog x:Name=\"ReaderAppearancePanelDialog\"",
+            statisticsDialogStart,
+            StringComparison.Ordinal);
+        var statisticsDialogXaml = readerXaml[statisticsDialogStart..statisticsDialogEnd];
+
+        panelXaml.Should().Contain("ReaderStatisticsSessionSection");
+        panelXaml.Should().Contain("ReaderStatisticsTodaySection");
+        panelXaml.Should().Contain("ReaderStatisticsAllTimeSection");
+        panelXaml.Should().Contain("ToggleStatisticsTrackingCommand");
+        statisticsDialogXaml.Should().Contain("<controls:ReaderStatisticsPanelContent");
+        statisticsDialogXaml.Should().Contain("MinWidth=\"520\"");
+        statisticsDialogXaml.Should().NotContain("<Grid Width=\"1120\"");
     }
 
     [Fact]
@@ -3512,7 +3557,7 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
-    public void ReaderPage_UsesWideSheetDialogContentForReaderPanels()
+    public void ReaderPage_UsesWideSheetDialogContentForNonStatisticsReaderPanels()
     {
         var readerXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml")
@@ -3526,14 +3571,14 @@ public class NovelReaderWebAssetTests
         readerXaml.Should().Contain("<StackPanel Width=\"1120\"");
         readerXaml.Should().Contain("MaxWidth=\"1120\"");
         (readerXaml.Split("<x:Double x:Key=\"ContentDialogMaxWidth\">1600</x:Double>").Length - 1)
-            .Should().Be(6);
-        (readerXaml.Split("<x:Double x:Key=\"ContentDialogMinWidth\">1120</x:Double>").Length - 1)
             .Should().Be(5);
+        (readerXaml.Split("<x:Double x:Key=\"ContentDialogMinWidth\">1120</x:Double>").Length - 1)
+            .Should().Be(4);
         readerXaml.Should().Contain("<x:Double x:Key=\"ContentDialogMinWidth\">1280</x:Double>");
         appearanceContentXaml.Should().Contain("MaxWidth=\"1280\"");
 
-        readerXaml.Should().NotContain("Width=\"560\"");
-        readerXaml.Should().NotContain("MaxWidth=\"560\"");
+        readerXaml.Should().NotContain("<Grid Width=\"560\"");
+        readerXaml.Should().Contain("MaxWidth=\"560\"");
         readerXaml.Should().NotContain("Width=\"640\"");
         appearanceContentXaml.Should().NotContain("MaxWidth=\"1000\"");
     }
