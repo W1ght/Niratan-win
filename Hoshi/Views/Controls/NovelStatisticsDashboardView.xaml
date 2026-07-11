@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl x:Class="Hoshi.Views.Controls.NovelStatisticsDashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="using:Hoshi.Helpers.UI.Converters">
+
+    <UserControl.Resources>
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </UserControl.Resources>
+
+    <Grid Padding="20,0,36,24">
+        <ScrollViewer AutomationProperties.AutomationId="NovelStatisticsDashboardScrollViewer"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto"
+                      VerticalScrollMode="Enabled"
+                      Visibility="{Binding HasData, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <StackPanel MaxWidth="1440"
+                        HorizontalAlignment="Stretch"
+                        Spacing="18">
+                <StackPanel Margin="0,8,0,6"
+                            Spacing="4">
+                    <TextBlock Style="{StaticResource TitleTextBlockStyle}"
+                               Text="Statistics" />
+                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="Your reading activity, goals, trends, and library comparisons." />
+                </StackPanel>
+
+                <InfoBar AutomationProperties.AutomationId="NovelStatisticsCorruptWarning"
+                         IsClosable="False"
+                         IsOpen="{Binding HasCorruptBooks}"
+                         Message="{Binding CorruptWarningText}"
+                         Severity="Warning" />
+
+                <Border Padding="20"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        CornerRadius="8">
+                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="Statistics dashboard modules are loading." />
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    AutomationProperties.AutomationId="NovelStatisticsLoadingStatus"
+                    Spacing="12"
+                    Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <ProgressRing Width="48"
+                          Height="48"
+                          IsActive="{Binding IsLoading}" />
+            <TextBlock Text="Loading statistics…" />
+        </StackPanel>
+
+        <StackPanel HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    AutomationProperties.AutomationId="NovelStatisticsEmptyState"
+                    Spacing="8"
+                    Visibility="{Binding HasNoData, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <FontIcon FontSize="36"
+                      Glyph="&#xE9D9;"
+                      Opacity="0.5" />
+            <TextBlock Style="{StaticResource BodyLargeStrongTextBlockStyle}"
+                       Text="No reading statistics yet" />
+            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       Text="Read a novel to start building your dashboard." />
+        </StackPanel>
+    </Grid>
+</UserControl>
