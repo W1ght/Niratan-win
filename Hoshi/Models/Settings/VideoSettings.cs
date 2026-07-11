@@ -88,7 +88,7 @@ public sealed class VideoSettings
     public double SubtitleFontSize
     {
         get => _subtitleFontSize;
-        set => _subtitleFontSize = ClampFinite(value, 12, 72, 36);
+        set => _subtitleFontSize = ClampFinite(value, 12, 72, 52);
     }
 
     public int SubtitleFontWeight
@@ -100,7 +100,7 @@ public sealed class VideoSettings
     public double SubtitleShadowRadius
     {
         get => _subtitleShadowRadius;
-        set => _subtitleShadowRadius = ClampRoundedHalf(value, 0, 10, 3);
+        set => _subtitleShadowRadius = ClampRoundedHalf(value, 0, 10, 10);
     }
 
     public double SubtitleBackgroundOpacity
@@ -114,7 +114,7 @@ public sealed class VideoSettings
     public double SubtitleVerticalPosition
     {
         get => _subtitleVerticalPosition;
-        set => _subtitleVerticalPosition = ClampFinite(value, -200, 200, 0);
+        set => _subtitleVerticalPosition = ClampFinite(value, -200, 200, -51);
     }
 
     public string SubtitleColorHex

@@ -88,4 +88,37 @@ public sealed class VideoSettingsTests
         settings.SubtitleMaskBlurRadius.Should().Be(20);
         settings.SubtitleMaskHiddenOpacity.Should().Be(0);
     }
+
+    [Fact]
+    public void InvalidSubtitleFontSize_FallsBackToApprovedDefault()
+    {
+        var settings = new VideoSettings
+        {
+            SubtitleFontSize = double.NaN,
+        };
+
+        settings.SubtitleFontSize.Should().Be(52);
+    }
+
+    [Fact]
+    public void InvalidSubtitleShadowRadius_FallsBackToApprovedDefault()
+    {
+        var settings = new VideoSettings
+        {
+            SubtitleShadowRadius = double.NaN,
+        };
+
+        settings.SubtitleShadowRadius.Should().Be(10);
+    }
+
+    [Fact]
+    public void InvalidSubtitleVerticalPosition_FallsBackToApprovedDefault()
+    {
+        var settings = new VideoSettings
+        {
+            SubtitleVerticalPosition = double.NaN,
+        };
+
+        settings.SubtitleVerticalPosition.Should().Be(-51);
+    }
 }

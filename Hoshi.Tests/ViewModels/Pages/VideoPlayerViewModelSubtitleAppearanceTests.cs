@@ -50,6 +50,10 @@ public class VideoPlayerViewModelSubtitleAppearanceTests
         Get<double>(sut, "SubtitleShadowRadius").Should().Be(5);
         Get<string>(sut, "SubtitleShadowRadiusText").Should().Be("5.0");
 
+        setShadow.Invoke(sut, [double.NaN]);
+        Get<double>(sut, "SubtitleShadowRadius").Should().Be(10);
+        Get<string>(sut, "SubtitleShadowRadiusText").Should().Be("10.0");
+
         setFontFamily!.Invoke(sut, ["  Yu Gothic UI  "]);
         Get<string>(sut, "SubtitleFontFamily").Should().Be("Yu Gothic UI");
         Get<string>(sut, "SubtitleFontFamilyText").Should().Be("Yu Gothic UI");
