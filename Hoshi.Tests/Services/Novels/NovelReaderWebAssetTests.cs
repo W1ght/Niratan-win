@@ -1762,8 +1762,11 @@ public class NovelReaderWebAssetTests
         code.Should().Contain("private void StartForcedShellRecovery(long generation, long failedEpoch)");
         code.Should().Contain("CompleteForcedShellRecovery(ticket, freshEpoch)");
         code.Should().Contain("_recoveryCoordinator.TryComplete(ticket, freshEpoch)");
-        code.Should().Contain("_queuedShowRequests.Replace(request);");
-        code.Should().Contain("_queuedShowRequests.Clear();");
+        code.Should().Contain("QueueShowRequest(request);");
+        code.Should().Contain("NotifyQueuedShowDropped(_queuedShowRequests.Clear());");
+        code.Should().Contain("QueuedShowDropped?.Invoke(");
+        code.Should().Contain("request.State.TryDropBeforeGeneration()");
+        code.Should().Contain("request.State.TryStartGeneration()");
         code.Should().Contain("_displayTransaction.CommitInFlightGeneration is not null");
         code.Should().Contain("_isCompletingContentReady");
         code.Should().Contain("_ = ProcessQueuedShowAsync();");

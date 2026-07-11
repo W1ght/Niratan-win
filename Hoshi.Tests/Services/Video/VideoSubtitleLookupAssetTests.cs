@@ -193,6 +193,28 @@ public class VideoSubtitleLookupAssetTests
     }
 
     [Fact]
+    public void VideoSubtitleLookup_QueuedShowDropReleasesExactCandidate()
+    {
+        var code = ReadVideoPlayerWindowCode();
+        var overlayCode = ReadProjectFile(
+            "Views", "Dictionary", "DictionaryPopupOverlay.cs");
+        var popupCode = ReadProjectFile(
+            "Views", "Dictionary", "DictionaryLookupPopup.cs");
+
+        popupCode.Should().Contain("QueuedShowDropped");
+        popupCode.Should().Contain("NotifyQueuedShowDropped(");
+        popupCode.Should().Contain("request.State.TryDropBeforeGeneration()");
+        popupCode.Should().Contain("request.State.TryStartGeneration()");
+        popupCode.Should().Contain("queuedRequest.CancellationToken.IsCancellationRequested");
+        overlayCode.Should().Contain("RootShowDropped");
+        overlayCode.Should().Contain("OnRootShowDropped");
+        code.Should().Contain("RootShowDropped += PopupOverlay_RootShowDropped");
+        code.Should().Contain("RootShowDropped -= PopupOverlay_RootShowDropped");
+        code.Should().Contain("PopupOverlay_RootShowDropped(");
+        code.Should().Contain("CancelPopupCommit(e.TraceId)");
+    }
+
+    [Fact]
     public void VideoSubtitleLookup_EmptyCanvasHitCancelsThePendingRequest()
     {
         var code = ReadVideoPlayerWindowCode().Replace("\r\n", "\n", StringComparison.Ordinal);

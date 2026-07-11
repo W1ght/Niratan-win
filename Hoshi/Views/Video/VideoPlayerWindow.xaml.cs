@@ -902,6 +902,7 @@ public sealed partial class VideoPlayerWindow : Window
         _popupOverlay.Dismissed += PopupOverlay_Dismissed;
         _popupOverlay.RootContentCommitted += PopupOverlay_RootContentCommitted;
         _popupOverlay.RootContentAborted += PopupOverlay_RootContentAborted;
+        _popupOverlay.RootShowDropped += PopupOverlay_RootShowDropped;
         _popupOverlay.UseCanvas(
             PopupOverlayCanvas,
             DictionaryPopupCanvasInputMode.VisibleHostsOnly);
@@ -945,6 +946,7 @@ public sealed partial class VideoPlayerWindow : Window
                 _popupOverlay.Dismissed -= PopupOverlay_Dismissed;
                 _popupOverlay.RootContentCommitted -= PopupOverlay_RootContentCommitted;
                 _popupOverlay.RootContentAborted -= PopupOverlay_RootContentAborted;
+                _popupOverlay.RootShowDropped -= PopupOverlay_RootShowDropped;
             }
             _subtitleLookupCoordinator.Dispose();
             _popupOverlay?.Dispose();

@@ -455,6 +455,14 @@ public sealed partial class VideoPlayerWindow
         CollapseVideoDictionarySurfaceIfUnowned();
     }
 
+    private void PopupOverlay_RootShowDropped(
+        object? sender,
+        DictionaryPopupShowDroppedEventArgs e)
+    {
+        _subtitleLookupCoordinator.CancelPopupCommit(e.TraceId);
+        CollapseVideoDictionarySurfaceIfUnowned();
+    }
+
     private void CollapseVideoDictionarySurfaceIfUnowned()
     {
         if (!_isLookupPopupVisible
