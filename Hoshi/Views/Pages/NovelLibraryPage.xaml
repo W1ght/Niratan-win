@@ -22,7 +22,8 @@
                     AutomationProperties.Name="{x:Bind Book.Title, Mode=OneTime}"
                     Background="Transparent"
                     BorderThickness="0"
-                    Click="NovelBookButton_Click">
+                    Command="{Binding ViewModel.OpenNovelCommand, ElementName=ThisPage}"
+                    CommandParameter="{x:Bind}">
                 <Button.ContextFlyout>
                     <MenuFlyout>
                         <MenuFlyoutItem x:Uid="NovelBookMatchSasayakiMenuItem"
@@ -94,11 +95,15 @@
                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                             CornerRadius="8">
                         <Grid>
+                            <Image Stretch="UniformToFill"
+                                   Source="{x:Bind CoverImage, Mode=OneWay}"
+                                   Visibility="{x:Bind HasCover, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
                             <FontIcon FontSize="48"
                                       Glyph="&#xEBD3;"
                                       Opacity="0.36"
                                       HorizontalAlignment="Center"
-                                      VerticalAlignment="Center" />
+                                      VerticalAlignment="Center"
+                                      Visibility="{x:Bind HasCover, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}" />
                         </Grid>
                     </Border>
                     <StackPanel Spacing="4">
@@ -121,6 +126,9 @@
                                      Maximum="1"
                                      Value="{x:Bind DownloadProgress, Mode=OneWay}"
                                      Visibility="{x:Bind IsDownloading, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="{x:Bind DownloadStatusText, Mode=OneWay}"
+                                   Visibility="{x:Bind HasDownloadStatus, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
                         <TextBlock Text="{x:Bind Book.Title, Mode=OneTime}"
                                    TextWrapping="Wrap"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
@@ -226,65 +234,40 @@
                             Spacing="18">
                     <ItemsControl x:Name="NovelShelfSectionsControl"
                                   AutomationProperties.AutomationId="NovelShelfSectionsControl"
-                                  ItemsSource="{x:Bind ViewModel.RailSections, Mode=OneWay}">
+                                  ItemsSource="{x:Bind ViewModel.ShelfSections, Mode=OneWay}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vmc:NovelShelfSectionViewModel">
                                 <StackPanel Margin="0,0,0,18"
                                             Spacing="8">
                                     <TextBlock Text="{x:Bind DisplayName}"
                                                Style="{StaticResource SubtitleTextBlockStyle}" />
-                                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                                                  HorizontalScrollMode="Enabled"
-                                                  VerticalScrollBarVisibility="Disabled"
-                                                  VerticalScrollMode="Disabled">
-                                        <ItemsControl ItemTemplate="{StaticResource NovelBookTemplate}"
-                                                      ItemsSource="{x:Bind Books}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate>
-                                                    <StackPanel Orientation="Horizontal"
-                                                                Spacing="12" />
-                                                </ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                        </ItemsControl>
-                                    </ScrollViewer>
+                                    <ItemsRepeater ItemTemplate="{StaticResource NovelBookTemplate}"
+                                                   ItemsSource="{x:Bind Books}"
+                                                   Visibility="{x:Bind ShowsLocalBooks, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <ItemsRepeater.Layout>
+                                            <UniformGridLayout MinItemWidth="180"
+                                                               MinItemHeight="306"
+                                                               MinColumnSpacing="12"
+                                                               MinRowSpacing="16"
+                                                               ItemsJustification="Start" />
+                                        </ItemsRepeater.Layout>
+                                    </ItemsRepeater>
+                                    <ItemsRepeater ItemTemplate="{StaticResource RemoteNovelBookTemplate}"
+                                                   ItemsSource="{x:Bind RemoteBooks}"
+                                                   AutomationProperties.AutomationId="RemoteNovelBookItemsControl"
+                                                   Visibility="{x:Bind ShowsRemoteBooks, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <ItemsRepeater.Layout>
+                                            <UniformGridLayout MinItemWidth="180"
+                                                               MinItemHeight="306"
+                                                               MinColumnSpacing="12"
+                                                               MinRowSpacing="16"
+                                                               ItemsJustification="Start" />
+                                        </ItemsRepeater.Layout>
+                                    </ItemsRepeater>
                                 </StackPanel>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-
-                    <TextBlock x:Uid="NovelShelfUnshelvedLabel"
-                               Style="{StaticResource SubtitleTextBlockStyle}" />
-                    <ItemsRepeater x:Name="NovelUnshelvedBooksRepeater"
-                                   AutomationProperties.AutomationId="NovelUnshelvedBooksRepeater"
-                                   ItemTemplate="{StaticResource NovelBookTemplate}"
-                                   ItemsSource="{x:Bind ViewModel.UnshelvedBooks, Mode=OneWay}">
-                        <ItemsRepeater.Layout>
-                            <UniformGridLayout MinItemWidth="180"
-                                               MinItemHeight="306"
-                                               MinColumnSpacing="12"
-                                               MinRowSpacing="16"
-                                               ItemsJustification="Start" />
-                        </ItemsRepeater.Layout>
-                    </ItemsRepeater>
-
-                    <TextBlock x:Uid="NovelShelfGoogleDriveLabel"
-                               Margin="0,8,0,0"
-                               Style="{StaticResource SubtitleTextBlockStyle}" />
-                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                                  HorizontalScrollMode="Enabled"
-                                  VerticalScrollBarVisibility="Disabled"
-                                  VerticalScrollMode="Disabled">
-                        <ItemsControl AutomationProperties.AutomationId="RemoteNovelBookItemsControl"
-                                      ItemTemplate="{StaticResource RemoteNovelBookTemplate}"
-                                      ItemsSource="{x:Bind ViewModel.RemoteBooks, Mode=OneWay}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal"
-                                                Spacing="12" />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                        </ItemsControl>
-                    </ScrollViewer>
                 </StackPanel>
             </ScrollViewer>
 

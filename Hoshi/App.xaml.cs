@@ -208,6 +208,7 @@ public partial class App : Application
         services.AddSingleton<IBrowserLauncher, SystemBrowserLauncher>();
         services.AddSingleton<IGoogleDriveAuthService, GoogleDriveAuthService>();
         services.AddSingleton<IGoogleDriveSyncCache, GoogleDriveSyncCache>();
+        services.AddSingleton<IGoogleDriveCoverCacheService, GoogleDriveCoverCacheService>();
         services.AddSingleton<ITtuBookDataConverter, TtuBookDataConverter>();
         services.AddSingleton<ITtuBookImportService, TtuBookImportService>();
         services.AddSingleton<ITtuSyncService, TtuSyncService>();

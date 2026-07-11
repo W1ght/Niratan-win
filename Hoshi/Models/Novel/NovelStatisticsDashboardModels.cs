@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 using Hoshi.Models.Settings;
 
 namespace Hoshi.Models.Novel;
@@ -56,6 +57,7 @@ public sealed record NovelStatisticsDayAggregate(
     double ReadingTime,
     IReadOnlyList<NovelStatisticsBookContribution> BookContributions);
 
+[method: JsonConstructor]
 public sealed partial record NovelStatisticsDashboardSnapshot(
     DateOnly WindowStart,
     DateOnly WindowEnd,

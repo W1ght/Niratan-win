@@ -821,4 +821,7 @@
   <data name="NovelStatisticsWeeklyTargetControl.AutomationProperties.Name" xml:space="preserve"><value>Weekly target days</value></data>
   <data name="NovelStatisticsCalendarControl.AutomationProperties.Name" xml:space="preserve"><value>Reading calendar</value></data>
   <data name="NovelStatisticsRankingMetricControl.AutomationProperties.Name" xml:space="preserve"><value>Book ranking metric</value></data>
+  <data name="RemoteNovelDownloadQueued" xml:space="preserve"><value>Queued</value></data>
+  <data name="RemoteNovelDownloading" xml:space="preserve"><value>Downloading</value></data>
+  <data name="RemoteNovelDownloadRetry" xml:space="preserve"><value>Retry</value></data>
 </root>

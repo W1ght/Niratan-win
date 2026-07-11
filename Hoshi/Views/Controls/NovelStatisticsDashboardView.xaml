@@ -61,7 +61,7 @@
                 <Border Background="{ThemeResource AccentFillColorDefaultBrush}"
                         CornerRadius="3"
                         Opacity="{x:Bind HeatOpacity}" />
-                <Border BorderBrush="{ThemeResource AccentStrokeColorDefaultBrush}"
+                <Border BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
                         BorderThickness="1"
                         CornerRadius="3"
                         Visibility="{x:Bind IsInSelectedRange, Converter={StaticResource BooleanToVisibilityConverter}}" />
@@ -248,95 +248,6 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <VisualStateManager.VisualStateGroups>
-                        <VisualStateGroup x:Name="DashboardLayoutStates">
-                            <VisualState x:Name="NarrowDashboardState">
-                                <VisualState.StateTriggers>
-                                    <AdaptiveTrigger MinWindowWidth="0" />
-                                </VisualState.StateTriggers>
-                                <VisualState.Setters>
-                                    <Setter Target="DashboardSecondaryColumn.Width" Value="0" />
-                                    <Setter Target="DashboardTertiaryColumn.Width" Value="0" />
-                                    <Setter Target="TodayCard.(Grid.Row)" Value="0" />
-                                    <Setter Target="TodayCard.(Grid.Column)" Value="0" />
-                                    <Setter Target="GoalCard.(Grid.Row)" Value="1" />
-                                    <Setter Target="GoalCard.(Grid.Column)" Value="0" />
-                                    <Setter Target="WeekCard.(Grid.Row)" Value="2" />
-                                    <Setter Target="WeekCard.(Grid.Column)" Value="0" />
-                                    <Setter Target="WeekCard.(Grid.ColumnSpan)" Value="1" />
-                                    <Setter Target="SelectedRangeCard.(Grid.Row)" Value="4" />
-                                    <Setter Target="SelectedRangeCard.(Grid.Column)" Value="0" />
-                                    <Setter Target="SpeedCard.(Grid.Row)" Value="5" />
-                                    <Setter Target="SpeedCard.(Grid.Column)" Value="0" />
-                                    <Setter Target="CalendarCard.(Grid.Row)" Value="3" />
-                                    <Setter Target="CalendarCard.(Grid.Column)" Value="0" />
-                                    <Setter Target="CalendarCard.(Grid.ColumnSpan)" Value="1" />
-                                    <Setter Target="RankingCard.(Grid.Row)" Value="6" />
-                                    <Setter Target="RankingCard.(Grid.Column)" Value="0" />
-                                    <Setter Target="RankingCard.(Grid.ColumnSpan)" Value="1" />
-                                    <Setter Target="ShelfCard.(Grid.Row)" Value="7" />
-                                    <Setter Target="ShelfCard.(Grid.Column)" Value="0" />
-                                </VisualState.Setters>
-                            </VisualState>
-                            <VisualState x:Name="MediumDashboardState">
-                                <VisualState.StateTriggers>
-                                    <AdaptiveTrigger MinWindowWidth="840" />
-                                </VisualState.StateTriggers>
-                                <VisualState.Setters>
-                                    <Setter Target="DashboardSecondaryColumn.Width" Value="*" />
-                                    <Setter Target="DashboardTertiaryColumn.Width" Value="0" />
-                                    <Setter Target="TodayCard.(Grid.Row)" Value="0" />
-                                    <Setter Target="TodayCard.(Grid.Column)" Value="0" />
-                                    <Setter Target="GoalCard.(Grid.Row)" Value="1" />
-                                    <Setter Target="GoalCard.(Grid.Column)" Value="0" />
-                                    <Setter Target="WeekCard.(Grid.Row)" Value="2" />
-                                    <Setter Target="WeekCard.(Grid.Column)" Value="0" />
-                                    <Setter Target="WeekCard.(Grid.ColumnSpan)" Value="1" />
-                                    <Setter Target="SelectedRangeCard.(Grid.Row)" Value="0" />
-                                    <Setter Target="SelectedRangeCard.(Grid.Column)" Value="1" />
-                                    <Setter Target="SpeedCard.(Grid.Row)" Value="1" />
-                                    <Setter Target="SpeedCard.(Grid.Column)" Value="1" />
-                                    <Setter Target="CalendarCard.(Grid.Row)" Value="3" />
-                                    <Setter Target="CalendarCard.(Grid.Column)" Value="0" />
-                                    <Setter Target="CalendarCard.(Grid.ColumnSpan)" Value="1" />
-                                    <Setter Target="RankingCard.(Grid.Row)" Value="2" />
-                                    <Setter Target="RankingCard.(Grid.Column)" Value="1" />
-                                    <Setter Target="RankingCard.(Grid.ColumnSpan)" Value="1" />
-                                    <Setter Target="ShelfCard.(Grid.Row)" Value="4" />
-                                    <Setter Target="ShelfCard.(Grid.Column)" Value="0" />
-                                </VisualState.Setters>
-                            </VisualState>
-                            <VisualState x:Name="WideDashboardState">
-                                <VisualState.StateTriggers>
-                                    <AdaptiveTrigger MinWindowWidth="1260" />
-                                </VisualState.StateTriggers>
-                                <VisualState.Setters>
-                                    <Setter Target="DashboardSecondaryColumn.Width" Value="*" />
-                                    <Setter Target="DashboardTertiaryColumn.Width" Value="*" />
-                                    <Setter Target="TodayCard.(Grid.Row)" Value="0" />
-                                    <Setter Target="TodayCard.(Grid.Column)" Value="0" />
-                                    <Setter Target="GoalCard.(Grid.Row)" Value="1" />
-                                    <Setter Target="GoalCard.(Grid.Column)" Value="0" />
-                                    <Setter Target="WeekCard.(Grid.Row)" Value="2" />
-                                    <Setter Target="WeekCard.(Grid.Column)" Value="0" />
-                                    <Setter Target="WeekCard.(Grid.ColumnSpan)" Value="1" />
-                                    <Setter Target="SelectedRangeCard.(Grid.Row)" Value="0" />
-                                    <Setter Target="SelectedRangeCard.(Grid.Column)" Value="2" />
-                                    <Setter Target="SpeedCard.(Grid.Row)" Value="1" />
-                                    <Setter Target="SpeedCard.(Grid.Column)" Value="2" />
-                                    <Setter Target="CalendarCard.(Grid.Row)" Value="0" />
-                                    <Setter Target="CalendarCard.(Grid.Column)" Value="1" />
-                                    <Setter Target="CalendarCard.(Grid.ColumnSpan)" Value="1" />
-                                    <Setter Target="RankingCard.(Grid.Row)" Value="2" />
-                                    <Setter Target="RankingCard.(Grid.Column)" Value="1" />
-                                    <Setter Target="RankingCard.(Grid.ColumnSpan)" Value="2" />
-                                    <Setter Target="ShelfCard.(Grid.Row)" Value="1" />
-                                    <Setter Target="ShelfCard.(Grid.Column)" Value="1" />
-                                </VisualState.Setters>
-                            </VisualState>
-                        </VisualStateGroup>
-                    </VisualStateManager.VisualStateGroups>
-
                     <Border x:Name="TodayCard"
                             Grid.Row="0"
                             Grid.Column="0"
