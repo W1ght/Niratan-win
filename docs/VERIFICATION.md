@@ -139,6 +139,37 @@ YYYY-MM-DD-uia-tree.txt
 8. Google Drive 书籍保持独立 rail，不进入本地书架状态。
 9. 窄窗口下 CommandBar 可访问，页面只有一个纵向滚动所有者，横向 rail 不抢占纵向滚动。
 
+### 1.10 Niratan Reader 统计语义验证
+
+自动化测试必须覆盖 `ReaderStatisticsMathTests`、`ReaderStatisticsSessionTests`、`NovelReaderPageViewModelTests`、`ReaderProgrammaticNavigationTrackerTests`、`ReaderNavigationHistoryTests` 和 `NovelReaderStatisticsLifecycleTests`。
+
+手工验证矩阵：
+
+1. Off 模式下普通打开、翻页和跳转都不自动开始；手动开始后秒级时间持续更新。
+2. PageTurn 只在真实页移动、自然相邻章节或实际 Sasayaki 自动滚动后开始；首页向前/末页向后、同进度回调不开始。
+3. On 在普通 restore 完成后开始；目录、字符、搜索、高亮、内部链接、历史和显式 Sasayaki 跳转的 restore callback 不重复触发。
+4. 每个程序化跳转验证顺序：旧位置只 checkpoint 一次 → 最终分页位置写入 `bookmark.json` → baseline 重置；跳转距离不得增加 `charactersRead`。
+5. 同章节 `#fragment` 不重载章节；跨章节链接等待 fragment 对齐完成。外部 URL、`javascript:` 和非 spine 资源不得离开 Reader。
+6. 产生至少两个历史位置，验证 Back/Forward 显示目标字符位置且往返正确；历史恢复不计作阅读字符。
+7. tracking 时最小化窗口后检查 Background checkpoint；关闭主窗口或返回书架后检查 Close checkpoint 只有一次。
+8. 在本地时间午夜前开始、午夜后 checkpoint，确认旧日期归档，新日期只出现一条记录，并按 Niratan 语义接收完整跨日 checkpoint。
+9. 重启应用后 `bookmark.json` 与 `statistics.json` 可恢复；`statistics.json` 同一 `dateKey` 只保留 `lastStatisticModified` 最新记录。
+
+诊断失败时保留 Reader 日志，并重点搜索 `ProgrammaticDeparture`、`navigationGeneration`、`Background`、`Close` 和 `Restore completed`。
+
+### 1.11 Niratan Dashboard 验证
+
+1. 运行所有 `NovelStatisticsDashboard*Tests`，覆盖 repository、目标/区间、速度、趋势、日历、排名、书架和缓存。
+2. 准备一条 `<60s` 且字符数为正的记录：总字符/时长必须增加，所有速度模块不得使用该记录。
+3. 放入损坏的 `statistics.json`：Dashboard 显示/记录 skipped book，原文件 hash 不变，其余书籍仍正常聚合。
+4. 验证最近一年边界、周一到周日 7 格、未来周 cell 无百分比、目标完成度允许超过 100%。
+5. 逐一切换 year/month/week/day range、anchor、day/week/month grain、characters/duration/speed trend metric 和 ranking metric，确认所有卡片使用同一范围且显示单位正确。
+6. 点击 Calendar 任意日期，确认范围 anchor 与选择日期同步，详情显示字符、时长和 active books；Calendar 覆盖最近一年。
+7. 在 Dashboard 修改目标类型、字符/时长目标和周目标天数，确认 Today/Week/Selected Range/streak 立即重算，重启后设置仍保留。
+8. 验证 Book Ranking 最多 12 行，以及自定义书架/Unshelved 对比；损坏 sidecar 时必须显示可见警告。
+9. 重开 Dashboard 验证 `statistics_dashboard_cache_v1.json` 先命中再后台重读 sidecar；新 snapshot 发布后 UI 更新且缓存被替换。
+10. 人工损坏缓存只应删除缓存；任何书籍 sidecar、EPUB 和视频 SQLite 均不得改变。
+
 ---
 
 ## 2. Reader 修改后的强制验证

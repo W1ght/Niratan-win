@@ -1,5 +1,22 @@
 # Changelog
 
+## Reader 跳转会污染阅读统计，关闭时可能丢失最后一段时间
+
+**原因**：
+- Reader ViewModel 曾同时负责时钟、字符差、日期聚合和 sidecar 写入，真实翻页、程序化跳转与生命周期事件没有统一 checkpoint 边界。
+- 搜索、目录、高亮、字符和 Sasayaki 跳转直接改写章节/进度，分页对齐后的回调无法区分普通 restore 与跳转 restore，长距离跳转可能被计为阅读字符。
+- Reader 没有 generation-scoped destination、内部链接/history 事务、一秒投影和可等待的窗口关闭边界。
+
+**解决**：
+- `ReaderStatisticsSession` 独占 TTU 公式、TimeProvider、本地日期 rollover、基线和 `statistics.json` 写入，ViewModel 只投影状态。
+- 真实阅读移动使用 typed checkpoint；所有程序化入口统一执行“结算旧位置 → 等待 generation 目标 → 保存最终书签 → 重置基线”，过期 bridge callback 不能完成新跳转。
+- WebView2 拦截 EPUB 链接，native 只允许同源 spine 目标；补齐 fragment 与 Back/Forward 历史导航并复用同一统计事务。
+- tracking 且未 paused 时每秒更新内存统计；窗口最小化写 Background checkpoint，返回书架、页面消失和主窗口关闭共享幂等 Close checkpoint。
+- Dashboard 改为最近一年 typed snapshot 与纯计算器，补齐可选范围/anchor、目标、速度窗口、趋势粒度与指标、日历详情、Book Ranking 指标和 Shelf Comparison，并移除旧 By Book distribution。
+- 损坏统计 sidecar 会显示可见警告并保持原文件不变；派生 Dashboard cache 使用 schema/key 校验和书库事件失效，命中后后台重读 sidecar，缓存损坏只删除缓存自身。
+
+---
+
 ## 小说存储与书架状态曾被 SQLite 绑定
 
 **原因**：
