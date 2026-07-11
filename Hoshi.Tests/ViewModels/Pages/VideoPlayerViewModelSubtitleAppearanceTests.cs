@@ -1,6 +1,10 @@
+using System;
+using System.Linq.Expressions;
 using FluentAssertions;
 using Moq;
+using Hoshi.Models.Settings;
 using Hoshi.Services.Dictionary;
+using Hoshi.Services.Settings;
 using Hoshi.Services.Video;
 using Hoshi.ViewModels.Pages;
 
@@ -110,6 +114,32 @@ public class VideoPlayerViewModelSubtitleAppearanceTests
         sut.SubtitlePanelHeight.Should().BeGreaterThan(240);
     }
 
+    [Fact]
+    public void SubtitleAppearanceChanges_PersistAndAreRestoredForNextPlayer()
+    {
+        var appSettings = new AppSettings { VideoSettings = new VideoSettings { SeekIntervalSeconds = 9 } };
+        VideoSettings? saved = null;
+        var settingsService = CreateSettingsService(appSettings, value => saved = value);
+        var first = CreateSut(settingsService.Object);
+
+        first.SetSubtitleFontFamily("Yu Gothic");
+        first.SubtitleFontSize = 43;
+        first.SubtitleFontWeight = 600;
+        first.SetSubtitleShadowRadius(8.5);
+        first.SubtitleVerticalPosition = -24;
+        first.SetSubtitleColor("#112233");
+
+        saved.Should().NotBeNull();
+        saved!.SeekIntervalSeconds.Should().Be(9);
+        saved.SubtitleVerticalPosition.Should().Be(-24);
+
+        var second = CreateSut(settingsService.Object);
+        second.SubtitleFontFamily.Should().Be("Yu Gothic");
+        second.SubtitleFontSize.Should().Be(43);
+        second.SubtitleShadowRadius.Should().Be(8.5);
+        second.SubtitleVerticalPosition.Should().Be(-24);
+    }
+
     private static T Get<T>(object instance, string propertyName)
     {
         var property = instance.GetType().GetProperty(propertyName);
@@ -121,10 +151,25 @@ public class VideoPlayerViewModelSubtitleAppearanceTests
         return value.Should().BeAssignableTo<T>().Subject;
     }
 
-    private static VideoPlayerViewModel CreateSut()
+    private static Mock<ISettingsService> CreateSettingsService(
+        AppSettings appSettings,
+        Action<VideoSettings>? onSaved = null)
     {
-        return new VideoPlayerViewModel(
-            new SubtitleParserService(),
-            Mock.Of<IDictionaryPopupRequestService>());
+        var service = new Mock<ISettingsService>();
+        service.SetupGet(candidate => candidate.Current).Returns(appSettings);
+        service.Setup(candidate => candidate.Set(
+                It.IsAny<Expression<Func<AppSettings, VideoSettings>>>(),
+                It.IsAny<VideoSettings>()))
+            .Callback<Expression<Func<AppSettings, VideoSettings>>, VideoSettings>(
+                (_, value) =>
+                {
+                    appSettings.VideoSettings = value;
+                    onSaved?.Invoke(value);
+                });
+        service.Setup(candidate => candidate.SaveAsync()).Returns(Task.CompletedTask);
+        return service;
     }
+
+    private static VideoPlayerViewModel CreateSut(ISettingsService? settingsService = null) =>
+        new(new SubtitleParserService(), Mock.Of<IDictionaryPopupRequestService>(), settingsService);
 }
