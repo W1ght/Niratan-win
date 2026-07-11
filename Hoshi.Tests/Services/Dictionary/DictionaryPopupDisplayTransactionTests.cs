@@ -5,15 +5,39 @@ namespace Hoshi.Tests.Services.Dictionary;
 
 public class DictionaryPopupDisplayTransactionTests
 {
+    private static bool BeginPending(
+        DictionaryPopupDisplayTransaction state,
+        long generation,
+        string? traceId)
+    {
+        state.TryBeginPending(generation, traceId, out var preserveCommitted)
+            .Should().BeTrue();
+        return preserveCommitted;
+    }
+
+    [Fact]
+    public void TryBeginPending_RejectsSilentPendingOverwrite()
+    {
+        var state = new DictionaryPopupDisplayTransaction();
+
+        state.TryBeginPending(30, "B", out var preserveB).Should().BeTrue();
+        state.TryBeginPending(31, "C", out _).Should().BeFalse();
+
+        preserveB.Should().BeFalse();
+        state.PendingGeneration.Should().Be(30);
+        state.TryCancelPending(30, "B", out var aborted).Should().BeTrue();
+        aborted.Should().Be(new DictionaryPopupContentCommit(30, "B"));
+    }
+
     [Fact]
     public void Replacement_PreservesCommittedContentUntilCurrentGenerationCommits()
     {
         var state = new DictionaryPopupDisplayTransaction();
-        state.BeginPending(1, "first").Should().BeFalse();
+        BeginPending(state, 1, "first").Should().BeFalse();
         state.TryAcceptCommit(1).Should().BeTrue();
         state.TryCompleteCommit(1, out _).Should().BeTrue();
 
-        state.BeginPending(2, "second").Should().BeTrue();
+        BeginPending(state, 2, "second").Should().BeTrue();
         state.TryAcceptCommit(1).Should().BeFalse();
         state.TryAcceptCommit(2).Should().BeTrue();
         state.TryCompleteCommit(2, out var commit).Should().BeTrue();
@@ -26,15 +50,15 @@ public class DictionaryPopupDisplayTransactionTests
     public void CancelPending_PreservesCommit_AndDismissClearsIt()
     {
         var state = new DictionaryPopupDisplayTransaction();
-        state.BeginPending(1, "shown");
+        BeginPending(state, 1, "shown");
         state.TryAcceptCommit(1);
         state.TryCompleteCommit(1, out _);
-        state.BeginPending(2, "cancelled");
+        BeginPending(state, 2, "cancelled");
 
         state.TryCancelPending(2, "cancelled", out _).Should().BeTrue();
         state.HasCommittedContent.Should().BeTrue();
 
-        state.BeginPending(3, "newer");
+        BeginPending(state, 3, "newer");
         state.TryCancelPending(2, "cancelled", out _).Should().BeFalse();
         state.PendingGeneration.Should().Be(3);
 
@@ -48,7 +72,7 @@ public class DictionaryPopupDisplayTransactionTests
     public void CancelPending_RequiresExactGenerationAndTrace()
     {
         var state = new DictionaryPopupDisplayTransaction();
-        state.BeginPending(7, "current");
+        BeginPending(state, 7, "current");
 
         state.TryCancelPending(6, "current", out _).Should().BeFalse();
         state.TryCancelPending(7, null, out _).Should().BeFalse();
@@ -63,12 +87,12 @@ public class DictionaryPopupDisplayTransactionTests
     public void CommitInFlight_RejectsReplacementAndCancellationUntilCompletion()
     {
         var state = new DictionaryPopupDisplayTransaction();
-        state.BeginPending(11, "accepted");
+        BeginPending(state, 11, "accepted");
         state.TryAcceptCommit(11).Should().BeTrue();
 
         state.CommitInFlightGeneration.Should().Be(11);
         state.TryCancelPending(11, "accepted", out _).Should().BeFalse();
-        state.BeginPending(12, "newer");
+        state.TryBeginPending(12, "newer", out _).Should().BeFalse();
         state.PendingGeneration.Should().BeNull();
         state.TryAcceptCommit(12).Should().BeFalse();
         state.TryCompleteCommit(12, out _).Should().BeFalse();
@@ -82,10 +106,10 @@ public class DictionaryPopupDisplayTransactionTests
     public void TryAbortCommit_RequiresExactInFlightGeneration_AndPreservesCommit()
     {
         var state = new DictionaryPopupDisplayTransaction();
-        state.BeginPending(1, "committed");
+        BeginPending(state, 1, "committed");
         state.TryAcceptCommit(1);
         state.TryCompleteCommit(1, out _);
-        state.BeginPending(2, "accepted");
+        BeginPending(state, 2, "accepted");
         state.TryAcceptCommit(2);
 
         state.TryAbortCommit(1).Should().BeFalse();
@@ -101,7 +125,7 @@ public class DictionaryPopupDisplayTransactionTests
     public void PendingCancellation_ReturnsExactAbortTerminalOnlyOnce()
     {
         var state = new DictionaryPopupDisplayTransaction();
-        state.BeginPending(12, "queued-B");
+        BeginPending(state, 12, "queued-B");
 
         state.TryCancelPending(12, "queued-B", out var aborted).Should().BeTrue();
         state.TryCancelPending(12, "queued-B", out _).Should().BeFalse();
@@ -113,7 +137,7 @@ public class DictionaryPopupDisplayTransactionTests
     public void AcceptedCancellation_IsRejectedAndCommitOwnsTheSingleTerminal()
     {
         var state = new DictionaryPopupDisplayTransaction();
-        state.BeginPending(13, "accepted-A");
+        BeginPending(state, 13, "accepted-A");
         state.TryAcceptCommit(13).Should().BeTrue();
 
         state.TryCancelPending(13, "accepted-A", out _).Should().BeFalse();

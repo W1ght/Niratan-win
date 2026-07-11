@@ -13,7 +13,7 @@ public class DictionaryPopupRecoveryCoordinatorTests
     {
         var recovery = new DictionaryPopupRecoveryCoordinator();
         var transaction = new DictionaryPopupDisplayTransaction();
-        transaction.BeginPending(8, completionSignal);
+        transaction.TryBeginPending(8, completionSignal, out _).Should().BeTrue();
         transaction.TryAcceptCommit(8).Should().BeTrue();
         recovery.TryStartAttempt(8, 21, out _).Should().BeTrue();
 
@@ -31,7 +31,7 @@ public class DictionaryPopupRecoveryCoordinatorTests
         var recovery = new DictionaryPopupRecoveryCoordinator();
         var transaction = new DictionaryPopupDisplayTransaction();
         var queue = new DictionaryPopupLatestRequestQueue<string>();
-        transaction.BeginPending(8, "accepted");
+        transaction.TryBeginPending(8, "accepted", out _).Should().BeTrue();
         transaction.TryAcceptCommit(8).Should().BeTrue();
         queue.Replace("first");
         queue.Replace("latest");
@@ -49,7 +49,7 @@ public class DictionaryPopupRecoveryCoordinatorTests
 
         queue.TryTake(out var request).Should().BeTrue();
         request.Should().Be("latest");
-        transaction.BeginPending(9, "latest");
+        transaction.TryBeginPending(9, "latest", out _).Should().BeTrue();
         transaction.PendingGeneration.Should().Be(9,
             "the latest request starts only after the fresh epoch releases old ownership");
     }

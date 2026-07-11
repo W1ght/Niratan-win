@@ -1727,7 +1727,8 @@ public class NovelReaderWebAssetTests
 
         code.Should().Contain("public bool HasCommittedContent => _displayTransaction.HasCommittedContent;");
         code.Should().Contain("EventHandler<DictionaryPopupContentCommittedEventArgs>? ContentCommitted");
-        code.Should().Contain("var preserveCommittedContent = _displayTransaction.BeginPending(");
+        code.Should().Contain("_displayTransaction.TryBeginPending(");
+        code.Should().Contain("out var preserveCommittedContent");
         code.Should().Contain("if (!preserveCommittedContent)");
         code.Should().Contain("case \"contentPrepared\":");
         code.Should().Contain("window.hoshiCommitPopupRender");

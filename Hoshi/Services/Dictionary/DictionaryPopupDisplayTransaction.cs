@@ -14,14 +14,21 @@ internal sealed class DictionaryPopupDisplayTransaction
     public long? CommitInFlightGeneration { get; private set; }
     public long? CommittedGeneration { get; private set; }
 
-    public bool BeginPending(long generation, string? traceId)
+    public bool TryBeginPending(
+        long generation,
+        string? traceId,
+        out bool preserveCommittedContent)
     {
-        if (CommitInFlightGeneration is not null)
-            return HasCommittedContent;
+        preserveCommittedContent = HasCommittedContent;
+        if (CommitInFlightGeneration is not null
+            || _pendingGeneration is not null)
+        {
+            return false;
+        }
 
         _pendingGeneration = generation;
         _pendingTraceId = traceId;
-        return HasCommittedContent;
+        return true;
     }
 
     public bool TryAcceptCommit(long generation)
@@ -31,6 +38,18 @@ internal sealed class DictionaryPopupDisplayTransaction
 
         CommitInFlightGeneration = generation;
         _pendingGeneration = null;
+        return true;
+    }
+
+    public bool TryGetPending(out DictionaryPopupContentCommit pending)
+    {
+        if (_pendingGeneration is not long generation)
+        {
+            pending = default;
+            return false;
+        }
+
+        pending = new DictionaryPopupContentCommit(generation, _pendingTraceId);
         return true;
     }
 

@@ -500,6 +500,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         var ranges = DictionaryPopupBatchPlanner.Create(request.Results.Count);
         var initialRange = ranges[0];
         var initialResults = request.Results.GetRange(initialRange.Offset, initialRange.Count);
+        CancelPendingContentBeforeStartingNextGeneration();
         var generation = PrepareForPendingContent(
             request.CancellationToken,
             request.TraceId);
@@ -1323,12 +1324,18 @@ public sealed class DictionaryLookupPopup : IDisposable
         string? traceId)
     {
         var generation = ++_displayGeneration;
+        if (!_displayTransaction.TryBeginPending(
+                generation,
+                traceId,
+                out var preserveCommittedContent))
+        {
+            throw new InvalidOperationException(
+                $"Popup generation {generation} could not acquire pending ownership.");
+        }
+
         _pendingContentGeneration = generation;
         _pendingContentCancellationToken = cancellationToken;
         _pendingContentStopwatch = null;
-        var preserveCommittedContent = _displayTransaction.BeginPending(
-            generation,
-            traceId);
 
         if (!preserveCommittedContent)
         {
@@ -1338,6 +1345,18 @@ public sealed class DictionaryLookupPopup : IDisposable
         }
 
         return generation;
+    }
+
+    private void CancelPendingContentBeforeStartingNextGeneration()
+    {
+        if (!_displayTransaction.TryGetPending(out var pending))
+            return;
+
+        if (!CancelPendingContent(pending.Generation, pending.TraceId))
+        {
+            throw new InvalidOperationException(
+                $"Popup generation {pending.Generation} retained unexpected pending ownership.");
+        }
     }
 
     private static async Task WaitForShellReadyAsync(
