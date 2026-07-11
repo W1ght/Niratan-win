@@ -339,12 +339,12 @@ public sealed partial class VideoPlayerWindow
                     ApplySubtitleAppearance();
                     break;
                 case "lookupEmpty":
-                    _subtitleLookupCoordinator.CancelCurrent();
-                    _popupOverlay?.Dismiss();
-                    VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
-                    _isLookupPopupVisible = false;
-                    ApplySubtitleAppearance();
-                    await ClearSubtitleSelectionAsync();
+                    var emptyPolicy = VideoSubtitleLookupEmptyPolicy.FromWebPayload(payload);
+                    _lastSubtitleHoverCharacterIndex = -1;
+                    if (!emptyPolicy.DismissOnEmpty)
+                        break;
+
+                    ClearSubtitleLookupFromPointer();
                     RestoreVideoKeyboardFocusAfterSubtitleInteraction();
                     break;
                 case "lookupRequest":
@@ -619,6 +619,7 @@ public sealed partial class VideoPlayerWindow
             return;
         }
 
+        var policy = VideoSubtitleLookupEmptyPolicy.FromCanvasLookup(isHoverLookup);
         var size = new Windows.Foundation.Size(
             SubtitleCanvas.ActualWidth,
             SubtitleCanvas.ActualHeight);
@@ -629,7 +630,8 @@ public sealed partial class VideoPlayerWindow
                 point,
                 out var hit))
         {
-            if (!isHoverLookup || _lastSubtitleHoverCharacterIndex >= 0)
+            _lastSubtitleHoverCharacterIndex = -1;
+            if (policy.DismissOnEmpty)
                 ClearSubtitleLookupFromPointer();
             return;
         }
@@ -645,6 +647,8 @@ public sealed partial class VideoPlayerWindow
             y = hit.Bounds.Y,
             width = hit.Bounds.Width,
             height = hit.Bounds.Height,
+            dismissOnEmpty = policy.DismissOnEmpty,
+            isHover = policy.IsHover,
         });
         await SubtitleWebView.CoreWebView2.ExecuteScriptAsync(
             $"window.hoshiVideoSubtitle?.lookupAtOffset({requestJson});");
