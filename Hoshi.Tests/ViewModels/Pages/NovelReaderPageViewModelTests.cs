@@ -1,4 +1,5 @@
 using System.Text.Json;
+using CommunityToolkit.Mvvm.Messaging;
 using FluentAssertions;
 using Moq;
 using Hoshi.Messages;
@@ -24,6 +25,7 @@ public sealed class NovelReaderPageViewModelTests
     public async Task InitializeAsync_WhenOpenSyncImports_ReloadsBookBeforeRestore()
     {
         var ct = TestContext.Current.CancellationToken;
+        var events = new List<string>();
         var local = new NovelBook
         {
             Id = "book-1",
@@ -39,16 +41,23 @@ public sealed class NovelReaderPageViewModelTests
             CurrentChapterIndex = 2,
         };
         var library = new Mock<INovelLibraryService>();
-        library.SetupSequence(service => service.GetNovelBookAsync(
+        var loadCount = 0;
+        library.Setup(service => service.GetNovelBookAsync(
                 "book-1", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<NovelBook?>.Success(local))
-            .ReturnsAsync(Result<NovelBook?>.Success(imported));
+            .ReturnsAsync(() =>
+            {
+                loadCount++;
+                events.Add(loadCount == 1 ? "load-local" : "load-imported");
+                return Result<NovelBook?>.Success(loadCount == 1 ? local : imported);
+            });
         library.Setup(service => service.MarkOpenedAsync(
                 "book-1", It.IsAny<CancellationToken>()))
+            .Callback(() => events.Add("mark-opened"))
             .ReturnsAsync(Result.Success());
         var autoSync = CreateAutoSyncCoordinator(imported: true);
         autoSync.Setup(service => service.ImportOnOpenAsync(
                 local, It.IsAny<CancellationToken>()))
+            .Callback(() => events.Add("import-open"))
             .ReturnsAsync(true);
         var settings = new Mock<ISettingsService>();
         settings.SetupGet(service => service.Current).Returns(new AppSettings());
@@ -59,7 +68,9 @@ public sealed class NovelReaderPageViewModelTests
             new ReaderHighlightService(),
             new NovelBookSidecarService(),
             new FakeReaderStatisticsSession(),
-            new NoOpProfileRuntimeService(ContentLanguageProfile.Japanese),
+            new NoOpProfileRuntimeService(
+                ContentLanguageProfile.Japanese,
+                _ => events.Add("activate-profile")),
             settings.Object,
             autoSync.Object);
 
@@ -71,6 +82,12 @@ public sealed class NovelReaderPageViewModelTests
             "book-1", It.IsAny<CancellationToken>()), Times.Exactly(2));
         autoSync.Verify(service => service.ImportOnOpenAsync(
             local, It.IsAny<CancellationToken>()), Times.Once);
+        events.Should().Equal(
+            "load-local",
+            "activate-profile",
+            "import-open",
+            "load-imported",
+            "mark-opened");
     }
 
     [Fact]
@@ -268,12 +285,12 @@ public sealed class NovelReaderPageViewModelTests
     }
 
     [Fact]
-    public async Task SaveProgressDebounced_WhenBookmarkWriteSucceeds_SchedulesExportAfterWrite()
+    public async Task SaveProgressDebounced_WhenBookmarkWriteSucceeds_BroadcastsOnCallingContext()
     {
         var ct = TestContext.Current.CancellationToken;
         using var temp = new TempBookDirectory();
         var events = new List<string>();
-        var scheduled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var broadcast = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var novelService = CreateNovelService(temp.Path);
         novelService.Setup(service => service.SaveProgressAsync(
                 "book-1", 0, 0, 0, 0, It.IsAny<CancellationToken>()))
@@ -281,23 +298,71 @@ public sealed class NovelReaderPageViewModelTests
             .ReturnsAsync(Result.Success());
         var autoSync = CreateAutoSyncCoordinator();
         autoSync.Setup(service => service.ScheduleExport(It.IsAny<NovelBook>()))
-            .Callback(() =>
-            {
-                events.Add("schedule-export");
-                scheduled.TrySetResult();
-            });
+            .Callback(() => events.Add("schedule-export"));
+        var messenger = new WeakReferenceMessenger();
+        var recipient = new object();
+        SynchronizationContext? broadcastContext = null;
+        messenger.Register<NovelLibraryChangedMessage>(recipient, (_, _) =>
+        {
+            events.Add("broadcast-library-change");
+            broadcastContext = SynchronizationContext.Current;
+            broadcast.TrySetResult();
+        });
         var sut = CreateSut(
             novelService.Object,
             Mock.Of<INotificationService>(),
-            new FakeMessenger(),
+            messenger,
             new FakeReaderStatisticsSession(),
             autoSync.Object);
         await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
 
-        sut.SaveProgressDebounced();
-        await scheduled.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        var callingContext = new InlineRecordingSynchronizationContext();
+        RunWithSynchronizationContext(callingContext, sut.SaveProgressDebounced);
+        await broadcast.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
 
-        events.Should().Equal("save-bookmark", "schedule-export");
+        events.Should().Equal(
+            "save-bookmark",
+            "schedule-export",
+            "broadcast-library-change");
+        broadcastContext.Should().BeSameAs(callingContext);
+        callingContext.PostCount.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task SaveProgressDebounced_WhenBookmarkWriteFails_NotifiesOnCallingContext()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1", 0, 0, 0, 0, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Failure("write failed", "Bookmark"));
+        var notified = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var notifications = new Mock<INotificationService>();
+        SynchronizationContext? notificationContext = null;
+        notifications.Setup(service => service.ShowError("write failed", "Bookmark"))
+            .Callback(() =>
+            {
+                notificationContext = SynchronizationContext.Current;
+                notified.TrySetResult();
+            });
+        var messenger = new FakeMessenger();
+        var autoSync = CreateAutoSyncCoordinator();
+        var sut = CreateSut(
+            novelService.Object,
+            notifications.Object,
+            messenger,
+            new FakeReaderStatisticsSession(),
+            autoSync.Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+
+        var callingContext = new InlineRecordingSynchronizationContext();
+        RunWithSynchronizationContext(callingContext, sut.SaveProgressDebounced);
+        await notified.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        notificationContext.Should().BeSameAs(callingContext);
+        messenger.SentMessages.Should().BeEmpty();
+        autoSync.Verify(service => service.ScheduleExport(It.IsAny<NovelBook>()), Times.Never);
     }
 
     [Fact]
@@ -502,6 +567,234 @@ public sealed class NovelReaderPageViewModelTests
         autoSync.Verify(service => service.ScheduleExport(It.IsAny<NovelBook>()), Times.Exactly(2));
         autoSync.Verify(service => service.FlushAsync(
             It.IsAny<NovelBook>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+        autoSync.Verify(service => service.Cancel(), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LifecycleBoundary_WaitsForInFlightDebounceAndSuppressesItsStaleEffects(
+        bool close)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var events = new List<string>();
+        var debounceSaveStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseDebounceSave = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var saveCount = 0;
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1",
+                It.IsAny<int>(),
+                It.IsAny<double>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(async (
+                string bookId,
+                int chapterIndex,
+                double progress,
+                int currentCharacterCount,
+                int totalCharacterCount,
+                CancellationToken saveToken) =>
+            {
+                _ = (bookId, chapterIndex, progress, currentCharacterCount, totalCharacterCount, saveToken);
+                if (Interlocked.Increment(ref saveCount) == 1)
+                {
+                    events.Add("debounce-save-start");
+                    debounceSaveStarted.TrySetResult();
+                    await releaseDebounceSave.Task;
+                    events.Add("debounce-save-end");
+                    return Result.Success();
+                }
+
+                events.Add("final-save");
+                return Result.Success();
+            });
+        var statistics = new FakeReaderStatisticsSession
+        {
+            CheckpointRecorded = reason => events.Add($"checkpoint-{reason}"),
+        };
+        var autoSync = CreateAutoSyncCoordinator();
+        autoSync.Setup(service => service.ScheduleExport(It.IsAny<NovelBook>()))
+            .Callback(() => events.Add("schedule-export"));
+        autoSync.Setup(service => service.FlushAsync(
+                It.IsAny<NovelBook>(), It.IsAny<CancellationToken>()))
+            .Callback(() => events.Add("flush-export"))
+            .Returns(Task.CompletedTask);
+        autoSync.Setup(service => service.Cancel())
+            .Callback(() => events.Add("cancel"));
+        var messenger = new FakeMessenger();
+        var sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            messenger,
+            statistics,
+            autoSync.Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+        sut.SetChapterCharacterCounts([100]);
+        sut.SetChapter(0, 1);
+        sut.UpdateProgress(0.5);
+
+        sut.SaveProgressDebounced();
+        await debounceSaveStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        var boundary = close
+            ? sut.PrepareForReaderLifecycleCloseAsync(ct)
+            : sut.CheckpointAppBackgroundingAsync(ct);
+
+        boundary.IsCompleted.Should().BeFalse();
+        Volatile.Read(ref saveCount).Should().Be(1);
+        releaseDebounceSave.TrySetResult();
+        await boundary.WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        var reason = close
+            ? ReaderStatisticsCheckpointReason.Close
+            : ReaderStatisticsCheckpointReason.Background;
+        statistics.Checkpoints.Should().Equal((50, reason));
+        messenger.SentMessages.OfType<NovelLibraryChangedMessage>().Should().ContainSingle();
+        events.Should().Equal(close
+            ? [
+                "debounce-save-start",
+                "debounce-save-end",
+                "final-save",
+                "checkpoint-Close",
+                "schedule-export",
+                "flush-export",
+                "cancel",
+            ]
+            : [
+                "debounce-save-start",
+                "debounce-save-end",
+                "final-save",
+                "checkpoint-Background",
+                "schedule-export",
+                "flush-export",
+            ]);
+        autoSync.Verify(service => service.ScheduleExport(It.IsAny<NovelBook>()), Times.Once);
+        autoSync.Verify(service => service.Cancel(), close ? Times.Once() : Times.Never());
+    }
+
+    [Fact]
+    public async Task LifecycleClose_CallerCancellationDoesNotCancelSharedInFlightClose()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1",
+                It.IsAny<int>(),
+                It.IsAny<double>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        var flushStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFlush = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var autoSync = CreateAutoSyncCoordinator();
+        autoSync.Setup(service => service.FlushAsync(
+                It.IsAny<NovelBook>(), It.IsAny<CancellationToken>()))
+            .Returns((NovelBook book, CancellationToken flushToken) =>
+            {
+                _ = book;
+                flushStarted.TrySetResult();
+                return releaseFlush.Task.WaitAsync(flushToken);
+            });
+        var sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            new FakeReaderStatisticsSession(),
+            autoSync.Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+        using var callerCancellation = new CancellationTokenSource();
+
+        var cancelledWait = sut.PrepareForReaderLifecycleCloseAsync(callerCancellation.Token);
+        await flushStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        var sharedWait = sut.PrepareForReaderLifecycleCloseAsync(ct);
+        callerCancellation.Cancel();
+
+        await cancelledWait.Invoking(task => task)
+            .Should().ThrowAsync<OperationCanceledException>();
+        sharedWait.IsCompleted.Should().BeFalse();
+        autoSync.Verify(service => service.Cancel(), Times.Never);
+
+        releaseFlush.TrySetResult();
+        await sharedWait.WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        novelService.Verify(service => service.SaveProgressAsync(
+            "book-1",
+            It.IsAny<int>(),
+            It.IsAny<double>(),
+            It.IsAny<int>(),
+            It.IsAny<int>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        autoSync.Verify(service => service.FlushAsync(
+            It.IsAny<NovelBook>(), It.IsAny<CancellationToken>()), Times.Once);
+        autoSync.Verify(service => service.Cancel(), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LifecycleClose_WhenFlushFails_CanRetryAndComplete(bool cancelFlush)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1",
+                It.IsAny<int>(),
+                It.IsAny<double>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        var flushCount = 0;
+        var autoSync = CreateAutoSyncCoordinator();
+        autoSync.Setup(service => service.FlushAsync(
+                It.IsAny<NovelBook>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                if (Interlocked.Increment(ref flushCount) > 1)
+                    return Task.CompletedTask;
+                return cancelFlush
+                    ? Task.FromCanceled(new CancellationToken(canceled: true))
+                    : Task.FromException(new InvalidOperationException("flush failed"));
+            });
+        var statistics = new FakeReaderStatisticsSession();
+        var sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            statistics,
+            autoSync.Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+
+        var first = sut.PrepareForReaderLifecycleCloseAsync(ct);
+        if (cancelFlush)
+        {
+            await first.Invoking(task => task)
+                .Should().ThrowAsync<OperationCanceledException>();
+        }
+        else
+        {
+            await first.Invoking(task => task)
+                .Should().ThrowAsync<InvalidOperationException>();
+        }
+        autoSync.Verify(service => service.Cancel(), Times.Never);
+
+        await sut.PrepareForReaderLifecycleCloseAsync(ct);
+        await sut.PrepareForReaderLifecycleCloseAsync(ct);
+
+        Volatile.Read(ref flushCount).Should().Be(2);
+        statistics.Checkpoints.Should().Equal(
+            (0, ReaderStatisticsCheckpointReason.Close),
+            (0, ReaderStatisticsCheckpointReason.Close));
+        autoSync.Verify(service => service.ScheduleExport(It.IsAny<NovelBook>()), Times.Exactly(2));
         autoSync.Verify(service => service.Cancel(), Times.Once);
     }
 
@@ -729,7 +1022,7 @@ public sealed class NovelReaderPageViewModelTests
     private static NovelReaderPageViewModel CreateSut(
         INovelLibraryService novelService,
         INotificationService notificationService,
-        FakeMessenger messenger,
+        IMessenger messenger,
         IReaderStatisticsSession statisticsSession,
         IReaderAutoSyncCoordinator autoSync)
     {
@@ -878,8 +1171,13 @@ public sealed class NovelReaderPageViewModelTests
 
     private sealed class NoOpProfileRuntimeService : IProfileRuntimeService
     {
-        public NoOpProfileRuntimeService(ContentLanguageProfile language)
+        private readonly Action<NovelBook>? _onActivateForBook;
+
+        public NoOpProfileRuntimeService(
+            ContentLanguageProfile language,
+            Action<NovelBook>? onActivateForBook = null)
         {
+            _onActivateForBook = onActivateForBook;
             ActiveResolution = new ProfileResolution(
                 new HoshiProfile(
                     ProfileConstants.DefaultJapaneseProfileId,
@@ -911,12 +1209,42 @@ public sealed class NovelReaderPageViewModelTests
             CancellationToken ct = default) =>
             Task.CompletedTask;
 
-        public Task ActivateForBookAsync(NovelBook book, CancellationToken ct = default) =>
-            Task.CompletedTask;
+        public Task ActivateForBookAsync(NovelBook book, CancellationToken ct = default)
+        {
+            _onActivateForBook?.Invoke(book);
+            return Task.CompletedTask;
+        }
 
         public Task ActivateForVideoAsync(VideoItem video, CancellationToken ct = default) =>
             Task.CompletedTask;
 
         public Task SaveActiveSettingsAsync(CancellationToken ct = default) => Task.CompletedTask;
+    }
+
+    private sealed class InlineRecordingSynchronizationContext : SynchronizationContext
+    {
+        public int PostCount { get; private set; }
+
+        public override void Post(SendOrPostCallback callback, object? state)
+        {
+            PostCount++;
+            RunWithSynchronizationContext(this, () => callback(state));
+        }
+    }
+
+    private static void RunWithSynchronizationContext(
+        SynchronizationContext context,
+        Action action)
+    {
+        var previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(context);
+        try
+        {
+            action();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
     }
 }

@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using FluentAssertions;
 
 namespace Hoshi.Tests.Views.Pages;
@@ -39,7 +40,9 @@ public sealed class NovelReaderStatisticsLifecycleTests
         readerCode.Should().Contain("Register<AppBackgroundingMessage>");
         readerCode.Should().Contain("CheckpointAppBackgroundingAsync");
         readerCode.Should().Contain("PrepareForReaderLifecycleCloseAsync");
-        readerCode.Should().Contain("await ViewModel.BackToLibraryCommand.ExecuteAsync(null)");
-        readerCode.Should().Contain("_ = ViewModel.PrepareForReaderLifecycleCloseAsync()");
+        readerCode.Should().MatchRegex(new Regex(
+            @"(?s)case string id when id == ReaderShortcutActions\.Close\.Id:\s*await ViewModel\.BackToLibraryCommand\.ExecuteAsync\(null\);\s*return true;"));
+        readerCode.Should().MatchRegex(new Regex(
+            @"(?s)protected override void OnNavigatedFrom\(NavigationEventArgs e\).*?_ = ViewModel\.PrepareForReaderLifecycleCloseAsync\(\);"));
     }
 }
