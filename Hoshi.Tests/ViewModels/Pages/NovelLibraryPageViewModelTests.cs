@@ -52,6 +52,50 @@ public class NovelLibraryPageViewModelTests
     }
 
     [Fact]
+    public async Task InitializeAsync_UsesRecentWhenNoSortPreferenceHasBeenStored()
+    {
+        var settings = new AppSettings();
+        var service = Mock.Of<ISettingsService>(value => value.Current == settings);
+        var sut = CreateSut(settingsService: service);
+
+        await sut.InitializeAsync();
+
+        sut.SelectedSortOption.Should().Be(NovelLibrarySortOption.Recent);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ReflectsTheCurrentPersistedSortPreference()
+    {
+        var settings = new AppSettings
+        {
+            NovelLibrarySortOption = NovelLibrarySortOption.Recent,
+        };
+        var service = Mock.Of<ISettingsService>(value => value.Current == settings);
+        var sut = CreateSut(settingsService: service);
+        settings.NovelLibrarySortOption = NovelLibrarySortOption.Manual;
+
+        await sut.InitializeAsync();
+
+        sut.SelectedSortOption.Should().Be(NovelLibrarySortOption.Manual);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ExposesThePersistedSortOptionInstanceForTheComboBox()
+    {
+        var settings = new AppSettings
+        {
+            NovelLibrarySortOption = NovelLibrarySortOption.Title,
+        };
+        var service = Mock.Of<ISettingsService>(value => value.Current == settings);
+        var sut = CreateSut(settingsService: service);
+
+        await sut.InitializeAsync();
+
+        sut.SelectedSortOptionItem.Should().BeSameAs(
+            sut.SortOptions.Single(option => option.Value == NovelLibrarySortOption.Title));
+    }
+
+    [Fact]
     public async Task ImportCommand_ShowsNoError_WhenPickerCancelled()
     {
         var dialog = new Mock<IDialogService>();

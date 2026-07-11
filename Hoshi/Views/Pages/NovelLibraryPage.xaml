@@ -176,8 +176,7 @@
                               AutomationProperties.Name="Sort novels"
                               ItemsSource="{x:Bind ViewModel.SortOptions, Mode=OneWay}"
                               DisplayMemberPath="DisplayName"
-                              SelectedValuePath="Value"
-                              SelectedValue="{x:Bind ViewModel.SelectedSortOption, Mode=TwoWay}"
+                              SelectedItem="{x:Bind ViewModel.SelectedSortOptionItem, Mode=TwoWay}"
                               Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
                 </Grid>
             </CommandBar.Content>
@@ -185,11 +184,10 @@
                 <AppBarButton x:Name="NovelLibraryStatisticsButton"
                               x:Uid="NovelLibraryStatisticsButton"
                               AutomationProperties.AutomationId="NovelLibraryStatisticsButton"
-                              AutomationProperties.Name="Statistics"
                               Command="{x:Bind ViewModel.EnterStatisticsCommand}"
                               Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
                     <AppBarButton.Icon>
-                        <SymbolIcon Symbol="Document" />
+                        <FontIcon Glyph="&#xE9D2;" />
                     </AppBarButton.Icon>
                 </AppBarButton>
                 <AppBarButton x:Name="NovelStatisticsBackToBookshelfButton"
@@ -207,6 +205,12 @@
                               Icon="Folder"
                               Click="ShelfManagementButton_Click"
                               Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                <AppBarButton x:Name="NovelLibraryRefreshGoogleDriveButton"
+                              x:Uid="NovelLibraryRefreshGoogleDriveButton"
+                              AutomationProperties.AutomationId="NovelLibraryRefreshGoogleDriveButton"
+                              Icon="Refresh"
+                              Command="{x:Bind ViewModel.RefreshRemoteBooksCommand}"
+                              Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
                 <AppBarButton x:Name="ImportNovelButton"
                               x:Uid="ImportNovelButton"
                               AutomationProperties.AutomationId="ImportNovelButton"
@@ -214,14 +218,6 @@
                               Command="{x:Bind ViewModel.ImportNovelCommand}"
                               Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
             </CommandBar.PrimaryCommands>
-            <CommandBar.SecondaryCommands>
-                <AppBarButton x:Name="NovelLibraryRefreshGoogleDriveButton"
-                              x:Uid="NovelLibraryRefreshGoogleDriveButton"
-                              AutomationProperties.AutomationId="NovelLibraryRefreshGoogleDriveButton"
-                              Icon="Refresh"
-                              Command="{x:Bind ViewModel.RefreshRemoteBooksCommand}"
-                              Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
-            </CommandBar.SecondaryCommands>
         </CommandBar>
 
         <StackPanel Grid.Row="1"

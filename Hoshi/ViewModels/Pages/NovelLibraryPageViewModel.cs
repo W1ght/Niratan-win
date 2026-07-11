@@ -48,6 +48,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     private CancellationTokenSource? _catalogLoadCts;
     private CancellationTokenSource? _remoteListCts;
     private bool _suppressSortApplication;
+    private bool _hasExplicitSortSelection;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NoNovels))]
@@ -65,6 +66,9 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
     [ObservableProperty]
     public partial NovelLibrarySortOption SelectedSortOption { get; set; } = NovelLibrarySortOption.Recent;
+
+    [ObservableProperty]
+    public partial NovelLibrarySortOptionItem? SelectedSortOptionItem { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowBookshelf))]
@@ -117,12 +121,16 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         _ttuBookImportService = ttuBookImportService;
         _googleDriveAuthService = googleDriveAuthService;
         _googleDriveCoverCacheService = googleDriveCoverCacheService;
+        _suppressSortApplication = true;
         SelectedSortOption = _settingsService.Current.NovelLibrarySortOption;
+        SelectedSortOptionItem = FindSortOptionItem(SelectedSortOption);
+        _suppressSortApplication = false;
         _messenger.RegisterAll(this);
     }
 
     public async Task InitializeAsync()
     {
+        RestoreSelectedSortOption();
         await LoadNovelsAsync();
     }
 
@@ -664,11 +672,22 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
     partial void OnSelectedSortOptionChanged(NovelLibrarySortOption value)
     {
+        SelectedSortOptionItem = FindSortOptionItem(value);
+
+        if (!_suppressSortApplication)
+            _hasExplicitSortSelection = true;
+
         _settingsService.Set(settings => settings.NovelLibrarySortOption, value);
         _ = _settingsService.SaveAsync();
 
         if (!_suppressSortApplication)
             ApplyCurrentSort();
+    }
+
+    partial void OnSelectedSortOptionItemChanged(NovelLibrarySortOptionItem? value)
+    {
+        if (value is not null && SelectedSortOption != value.Value)
+            SelectedSortOption = value.Value;
     }
 
     private void ApplyCurrentSort()
@@ -682,6 +701,24 @@ public partial class NovelLibraryPageViewModel : ObservableObject
             _currentShelfState,
             NovelBooks.Select(item => item.Book).ToList());
     }
+
+    private void RestoreSelectedSortOption()
+    {
+        if (_hasExplicitSortSelection)
+            return;
+
+        var restored = _settingsService.Current.NovelLibrarySortOption;
+        if (!Enum.IsDefined(restored))
+            restored = NovelLibrarySortOption.Recent;
+
+        _suppressSortApplication = true;
+        SelectedSortOption = restored;
+        SelectedSortOptionItem = FindSortOptionItem(restored);
+        _suppressSortApplication = false;
+    }
+
+    private NovelLibrarySortOptionItem? FindSortOptionItem(NovelLibrarySortOption option) =>
+        SortOptions.FirstOrDefault(item => item.Value == option);
 
     private IEnumerable<NovelBook> SortBooks(IEnumerable<NovelBook> books) =>
         SelectedSortOption switch

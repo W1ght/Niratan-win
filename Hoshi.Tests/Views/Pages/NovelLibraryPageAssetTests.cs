@@ -38,4 +38,51 @@ public sealed class NovelLibraryPageAssetTests
         xaml.Should().Contain("Click=\"DeleteRemoteNovelMenuItem_Click\"");
         code.Should().Contain("ViewModel.DeleteRemoteBookCommand.ExecuteAsync(remoteItem)");
     }
+
+    [Fact]
+    public void CommandBar_UsesVisiblePrimaryActionsAndStatisticsIcon()
+    {
+        var xaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelLibraryPage.xaml"));
+        var englishResources = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "en-US", "Resources.resw"));
+        var chineseResources = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw"));
+
+        xaml.Should().Contain("<FontIcon Glyph=\"&#xE9D2;\" />");
+        var primaryCommandsStart = xaml.IndexOf(
+            "<CommandBar.PrimaryCommands>",
+            StringComparison.Ordinal);
+        var primaryCommandsEnd = xaml.IndexOf(
+            "</CommandBar.PrimaryCommands>",
+            StringComparison.Ordinal);
+        var googleDriveButton = xaml.IndexOf(
+            "NovelLibraryRefreshGoogleDriveButton",
+            StringComparison.Ordinal);
+        googleDriveButton.Should().BeGreaterThan(primaryCommandsStart)
+            .And.BeLessThan(primaryCommandsEnd);
+
+        foreach (var key in new[]
+                 {
+                     "NovelLibraryStatisticsButton.Label",
+                     "NovelLibraryRefreshGoogleDriveButton.Label",
+                     "ImportNovelButton.Label",
+                 })
+        {
+            englishResources.Should().Contain($"name=\"{key}\"");
+            chineseResources.Should().Contain($"name=\"{key}\"");
+        }
+    }
+
+    [Fact]
+    public void SortComboBox_BindsToTheSelectedOptionInstance()
+    {
+        var xaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelLibraryPage.xaml"));
+
+        xaml.Should().Contain(
+            "SelectedItem=\"{x:Bind ViewModel.SelectedSortOptionItem, Mode=TwoWay}\"");
+        xaml.Should().NotContain(
+            "SelectedValue=\"{x:Bind ViewModel.SelectedSortOption, Mode=TwoWay}\"");
+    }
 }
