@@ -1018,17 +1018,23 @@ public sealed class DictionaryPopupOverlay : IDisposable
             "[LookupTrace] trace={TraceId} overlay show cancelled before ownership commit",
             traceId ?? "-");
         var contentCancelled = _rootHost.CancelPendingContent(generation, traceId);
-        if (!_rootLayoutCoordinator.TryCancel(
+        if (contentCancelled)
+        {
+            _rootLayoutCoordinator.TryCancel(
                 generation,
                 traceId,
-                contentCancellationSucceeded: contentCancelled))
+                contentCancellationSucceeded: true);
+            if (!_rootHost.HasCommittedContent)
+                Dismiss();
+            return DictionaryPopupShowCancellationResult.Cancelled;
+        }
+
+        if (_rootLayoutCoordinator.TryGetGeneration(traceId, out var retainedGeneration)
+            && retainedGeneration == generation)
         {
             return DictionaryPopupShowCancellationResult.CommitAccepted;
         }
 
-        if (!_rootHost.HasCommittedContent)
-            Dismiss();
-
-        return DictionaryPopupShowCancellationResult.Cancelled;
+        return DictionaryPopupShowCancellationResult.NoOwnership;
     }
 }

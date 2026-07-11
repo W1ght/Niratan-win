@@ -58,8 +58,12 @@ internal sealed class DictionaryPopupDisplayTransaction
         return true;
     }
 
-    public bool CancelPending(long generation, string? traceId)
+    public bool TryCancelPending(
+        long generation,
+        string? traceId,
+        out DictionaryPopupContentCommit aborted)
     {
+        aborted = default;
         if (_pendingGeneration != generation)
             return false;
         if (!string.Equals(traceId, _pendingTraceId, StringComparison.Ordinal))
@@ -67,6 +71,7 @@ internal sealed class DictionaryPopupDisplayTransaction
 
         _pendingGeneration = null;
         _pendingTraceId = null;
+        aborted = new DictionaryPopupContentCommit(generation, traceId);
         return true;
     }
 

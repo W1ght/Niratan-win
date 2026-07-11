@@ -500,70 +500,77 @@ public sealed class DictionaryLookupPopup : IDisposable
         var ranges = DictionaryPopupBatchPlanner.Create(request.Results.Count);
         var initialRange = ranges[0];
         var initialResults = request.Results.GetRange(initialRange.Offset, initialRange.Count);
-        if (!request.State.TryStartGeneration())
-            return;
-
         var generation = PrepareForPendingContent(
             request.CancellationToken,
             request.TraceId);
-        request.GenerationStarted?.Invoke(generation);
-        _stagedNativeContext = new DictionaryPopupNativeContext(
-            generation,
-            _rendererEpoch,
-            request.TraceId,
-            request.ThemeMode,
-            request.AudioSettings,
-            request.AnkiSettings,
-            request.MiningContext,
-            request.SasayakiControls);
-        _pendingContentStopwatch = Stopwatch.StartNew();
-        var serializeSw = Stopwatch.StartNew();
-        var injectionScript = _htmlGenerator.GenerateInjectionScript(initialResults,
-            request.Styles,
-            request.DisplaySettings,
-            request.ThemeMode,
-            generation,
-            request.AudioSettings,
-            request.AnkiSettings,
-            traceId: request.TraceId,
-            totalResultCount: request.Results.Count,
-            documentEpoch: _rendererEpoch);
-        var payloadBytes = Encoding.UTF8.GetByteCount(injectionScript);
-        Log.Information(
-            "[LookupTrace] trace={TraceId} popup initial serialized in {Ms}ms bytes={Bytes} entries={EntryCount} total={TotalCount}",
-            request.TraceId ?? "-",
-            serializeSw.ElapsedMilliseconds,
-            payloadBytes,
-            initialResults.Count,
-            request.Results.Count);
-        var executeSw = Stopwatch.StartNew();
-        await _contentWebView.CoreWebView2.ExecuteScriptAsync(injectionScript);
-        if (request.CancellationToken.IsCancellationRequested)
+        if (!request.State.TryStartGeneration())
         {
             CancelPendingContent(generation, request.TraceId);
-            request.CancellationToken.ThrowIfCancellationRequested();
+            return;
         }
-        Log.Information(
-            "[LookupTrace] trace={TraceId} popup initial ExecuteScriptAsync finished in {Ms}ms total={TotalMs}ms gen={Gen} entries={EntryCount}",
-            request.TraceId ?? "-", executeSw.ElapsedMilliseconds, sw.ElapsedMilliseconds, generation, initialResults.Count);
-        Log.Information("[Lifecycle] Popup initial content injected: entries={EntryCount} total={TotalCount} gen={Gen}",
-            initialResults.Count, request.Results.Count, generation);
-        PrefetchAudioUrls(request.Results, request.AudioSettings, request.TraceId);
 
-        if (ranges.Count > 1)
+        try
         {
-            var deferredCts = request.CancellationToken.CanBeCanceled
-                ? CancellationTokenSource.CreateLinkedTokenSource(request.CancellationToken)
-                : new CancellationTokenSource();
-            _deferredResultsCts = deferredCts;
-            _ = AppendDeferredResultsAsync(
-                request.Results,
-                ranges.Skip(1).ToArray(),
-                request.Results.Count,
+            request.GenerationStarted?.Invoke(generation);
+            _stagedNativeContext = new DictionaryPopupNativeContext(
                 generation,
                 _rendererEpoch,
                 request.TraceId,
-                deferredCts);
+                request.ThemeMode,
+                request.AudioSettings,
+                request.AnkiSettings,
+                request.MiningContext,
+                request.SasayakiControls);
+            _pendingContentStopwatch = Stopwatch.StartNew();
+            var serializeSw = Stopwatch.StartNew();
+            var injectionScript = _htmlGenerator.GenerateInjectionScript(initialResults,
+                request.Styles,
+                request.DisplaySettings,
+                request.ThemeMode,
+                generation,
+                request.AudioSettings,
+                request.AnkiSettings,
+                traceId: request.TraceId,
+                totalResultCount: request.Results.Count,
+                documentEpoch: _rendererEpoch);
+            var payloadBytes = Encoding.UTF8.GetByteCount(injectionScript);
+            Log.Information(
+                "[LookupTrace] trace={TraceId} popup initial serialized in {Ms}ms bytes={Bytes} entries={EntryCount} total={TotalCount}",
+                request.TraceId ?? "-",
+                serializeSw.ElapsedMilliseconds,
+                payloadBytes,
+                initialResults.Count,
+                request.Results.Count);
+            var executeSw = Stopwatch.StartNew();
+            await _contentWebView.CoreWebView2.ExecuteScriptAsync(injectionScript);
+            request.CancellationToken.ThrowIfCancellationRequested();
+            Log.Information(
+                "[LookupTrace] trace={TraceId} popup initial ExecuteScriptAsync finished in {Ms}ms total={TotalMs}ms gen={Gen} entries={EntryCount}",
+                request.TraceId ?? "-", executeSw.ElapsedMilliseconds, sw.ElapsedMilliseconds, generation, initialResults.Count);
+            Log.Information("[Lifecycle] Popup initial content injected: entries={EntryCount} total={TotalCount} gen={Gen}",
+                initialResults.Count, request.Results.Count, generation);
+            PrefetchAudioUrls(request.Results, request.AudioSettings, request.TraceId);
+
+            if (ranges.Count > 1)
+            {
+                var deferredCts = request.CancellationToken.CanBeCanceled
+                    ? CancellationTokenSource.CreateLinkedTokenSource(request.CancellationToken)
+                    : new CancellationTokenSource();
+                _deferredResultsCts = deferredCts;
+                _ = AppendDeferredResultsAsync(
+                    request.Results,
+                    ranges.Skip(1).ToArray(),
+                    request.Results.Count,
+                    generation,
+                    _rendererEpoch,
+                    request.TraceId,
+                    deferredCts);
+            }
+        }
+        catch
+        {
+            CancelPendingContent(generation, request.TraceId);
+            throw;
         }
     }
 
@@ -691,7 +698,10 @@ public sealed class DictionaryLookupPopup : IDisposable
             ? _stagedNativeContext.DocumentEpoch
             : _rendererEpoch;
         if (_pendingContentGeneration != generation
-            || !_displayTransaction.CancelPending(generation, traceId))
+            || !_displayTransaction.TryCancelPending(
+                generation,
+                traceId,
+                out var aborted))
         {
             return false;
         }
@@ -707,6 +717,12 @@ public sealed class DictionaryLookupPopup : IDisposable
             _ = _contentWebView.CoreWebView2.ExecuteScriptAsync(
                 $"window.hoshiCancelPopupRender?.({documentEpoch}, {generation});");
         }
+
+        ContentCommitAborted?.Invoke(
+            this,
+            new DictionaryPopupContentCommittedEventArgs(
+                aborted.Generation,
+                aborted.TraceId));
 
         if (!_displayTransaction.HasCommittedContent)
             Hide();
@@ -848,9 +864,8 @@ public sealed class DictionaryLookupPopup : IDisposable
                 var traceId = _stagedNativeContext?.Generation == pendingGeneration
                     ? _stagedNativeContext.TraceId
                     : null;
-                if (_displayTransaction.CancelPending(pendingGeneration, traceId))
+                if (CancelPendingContent(pendingGeneration, traceId))
                 {
-                    ClearPendingGeneration(pendingGeneration);
                     _ = ProcessQueuedShowAsync();
                 }
             }

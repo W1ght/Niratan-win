@@ -3288,7 +3288,8 @@ public class NovelReaderWebAssetTests
         code.Should().Contain("_rootLayoutCoordinator.TryComplete(");
         code.Should().Contain("out var layout");
         code.Should().Contain("var contentCancelled = _rootHost.CancelPendingContent(");
-        code.Should().Contain("contentCancellationSucceeded: contentCancelled");
+        code.Should().Contain("if (contentCancelled)");
+        code.Should().Contain("contentCancellationSucceeded: true");
         code.Should().Contain("ContentCommitAborted += OnRootContentCommitAborted");
         code.Should().Contain("RootContentCommitted?.Invoke(this, e)");
         popupCode.Should().Contain("public bool CancelPendingContent(");
