@@ -176,8 +176,7 @@
                               AutomationProperties.Name="Sort novels"
                               ItemsSource="{x:Bind ViewModel.SortOptions, Mode=OneWay}"
                               DisplayMemberPath="DisplayName"
-                              SelectedValuePath="Value"
-                              SelectedValue="{x:Bind ViewModel.SelectedSortOption, Mode=TwoWay}"
+                              SelectedItem="{x:Bind ViewModel.SelectedSortOptionItem, Mode=TwoWay}"
                               Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
                 </Grid>
             </CommandBar.Content>

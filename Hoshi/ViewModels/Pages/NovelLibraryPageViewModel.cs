@@ -68,6 +68,9 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     public partial NovelLibrarySortOption SelectedSortOption { get; set; } = NovelLibrarySortOption.Recent;
 
     [ObservableProperty]
+    public partial NovelLibrarySortOptionItem? SelectedSortOptionItem { get; set; }
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowBookshelf))]
     public partial bool ShowStatisticsDashboard { get; set; }
 
@@ -120,6 +123,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         _googleDriveCoverCacheService = googleDriveCoverCacheService;
         _suppressSortApplication = true;
         SelectedSortOption = _settingsService.Current.NovelLibrarySortOption;
+        SelectedSortOptionItem = FindSortOptionItem(SelectedSortOption);
         _suppressSortApplication = false;
         _messenger.RegisterAll(this);
     }
@@ -668,6 +672,8 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
     partial void OnSelectedSortOptionChanged(NovelLibrarySortOption value)
     {
+        SelectedSortOptionItem = FindSortOptionItem(value);
+
         if (!_suppressSortApplication)
             _hasExplicitSortSelection = true;
 
@@ -676,6 +682,12 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
         if (!_suppressSortApplication)
             ApplyCurrentSort();
+    }
+
+    partial void OnSelectedSortOptionItemChanged(NovelLibrarySortOptionItem? value)
+    {
+        if (value is not null && SelectedSortOption != value.Value)
+            SelectedSortOption = value.Value;
     }
 
     private void ApplyCurrentSort()
@@ -701,8 +713,12 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
         _suppressSortApplication = true;
         SelectedSortOption = restored;
+        SelectedSortOptionItem = FindSortOptionItem(restored);
         _suppressSortApplication = false;
     }
+
+    private NovelLibrarySortOptionItem? FindSortOptionItem(NovelLibrarySortOption option) =>
+        SortOptions.FirstOrDefault(item => item.Value == option);
 
     private IEnumerable<NovelBook> SortBooks(IEnumerable<NovelBook> books) =>
         SelectedSortOption switch

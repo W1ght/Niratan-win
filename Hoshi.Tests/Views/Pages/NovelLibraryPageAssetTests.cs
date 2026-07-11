@@ -73,4 +73,16 @@ public sealed class NovelLibraryPageAssetTests
             chineseResources.Should().Contain($"name=\"{key}\"");
         }
     }
+
+    [Fact]
+    public void SortComboBox_BindsToTheSelectedOptionInstance()
+    {
+        var xaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelLibraryPage.xaml"));
+
+        xaml.Should().Contain(
+            "SelectedItem=\"{x:Bind ViewModel.SelectedSortOptionItem, Mode=TwoWay}\"");
+        xaml.Should().NotContain(
+            "SelectedValue=\"{x:Bind ViewModel.SelectedSortOption, Mode=TwoWay}\"");
+    }
 }

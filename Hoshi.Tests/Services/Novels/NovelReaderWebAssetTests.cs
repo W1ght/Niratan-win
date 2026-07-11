@@ -2373,7 +2373,7 @@ public class NovelReaderWebAssetTests
         libraryXaml.Should().Contain("DragOver=\"NovelLibrary_DragOver\"");
         libraryXaml.Should().Contain("Drop=\"NovelLibrary_Drop\"");
         libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelLibrarySortComboBox\"");
-        libraryXaml.Should().Contain("SelectedValue=\"{x:Bind ViewModel.SelectedSortOption, Mode=TwoWay}\"");
+        libraryXaml.Should().Contain("SelectedItem=\"{x:Bind ViewModel.SelectedSortOptionItem, Mode=TwoWay}\"");
         libraryXaml.Should().Contain("x:Name=\"NovelShelfSectionsControl\"");
         libraryXaml.Should().NotContain("NovelUnshelvedBooksRepeater");
         libraryXaml.Should().Contain("<UniformGridLayout");
@@ -3730,7 +3730,7 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw"));
 
         libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelLibraryCommandBar\"");
-        libraryXaml.Should().Contain("<SymbolIcon Symbol=\"Document\" />");
+        libraryXaml.Should().Contain("<FontIcon Glyph=\"&#xE9D2;\" />");
         libraryXaml.Should().NotContain("Icon=\"ReportDocument\"");
         libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelShelfSectionsControl\"");
         libraryXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelShelfManagementButton\"");
