@@ -123,6 +123,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
+        RestoreSelectedSortOption();
         await LoadNovelsAsync();
     }
 
@@ -681,6 +682,17 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         RebuildShelfProjections(
             _currentShelfState,
             NovelBooks.Select(item => item.Book).ToList());
+    }
+
+    private void RestoreSelectedSortOption()
+    {
+        var restored = _settingsService.Current.NovelLibrarySortOption;
+        if (!Enum.IsDefined(restored))
+            restored = NovelLibrarySortOption.Recent;
+
+        _suppressSortApplication = true;
+        SelectedSortOption = restored;
+        _suppressSortApplication = false;
     }
 
     private IEnumerable<NovelBook> SortBooks(IEnumerable<NovelBook> books) =>
