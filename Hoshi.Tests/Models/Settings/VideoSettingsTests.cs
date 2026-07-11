@@ -22,13 +22,13 @@ public sealed class VideoSettingsTests
         settings.VideoSaturation.Should().Be(0);
         settings.VideoGamma.Should().Be(0);
         settings.VideoHue.Should().Be(0);
-        settings.SubtitleFontFamily.Should().Be("Klee One");
-        settings.SubtitleFontSize.Should().Be(36);
+        settings.SubtitleFontFamily.Should().Be("Noto Serif CJK JP");
+        settings.SubtitleFontSize.Should().Be(52);
         settings.SubtitleFontWeight.Should().Be(700);
-        settings.SubtitleShadowRadius.Should().Be(3);
+        settings.SubtitleShadowRadius.Should().Be(10);
         settings.SubtitleBackgroundOpacity.Should().Be(0);
         settings.SubtitleBackgroundDisabled.Should().BeTrue();
-        settings.SubtitleVerticalPosition.Should().Be(0);
+        settings.SubtitleVerticalPosition.Should().Be(-51);
         settings.SubtitleColorHex.Should().Be("#FFFFFFFF");
         settings.SubtitleLookupHighlightColorHex.Should().Be("#3EB5C1CB");
         settings.SubtitleLookupHighlightTextColorHex.Should().Be("#FFFFFFFF");

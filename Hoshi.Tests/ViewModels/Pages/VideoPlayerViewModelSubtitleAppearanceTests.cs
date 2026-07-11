@@ -13,12 +13,13 @@ public class VideoPlayerViewModelSubtitleAppearanceTests
     {
         var sut = CreateSut();
 
-        Get<double>(sut, "SubtitleFontSize").Should().Be(36);
+        Get<double>(sut, "SubtitleFontSize").Should().Be(52);
         Get<int>(sut, "SubtitleFontWeight").Should().Be(700);
-        Get<double>(sut, "SubtitleShadowRadius").Should().Be(3);
-        Get<string>(sut, "SubtitleShadowRadiusText").Should().Be("3.0");
-        Get<string>(sut, "SubtitleFontFamily").Should().Be("Klee One");
-        Get<string>(sut, "SubtitleFontFamilyText").Should().Be("Klee One");
+        Get<double>(sut, "SubtitleShadowRadius").Should().Be(10);
+        Get<string>(sut, "SubtitleShadowRadiusText").Should().Be("10.0");
+        Get<string>(sut, "SubtitleFontFamily").Should().Be("Noto Serif CJK JP");
+        Get<string>(sut, "SubtitleFontFamilyText").Should().Be("Noto Serif CJK JP");
+        Get<double>(sut, "SubtitleVerticalPosition").Should().Be(-51);
         Get<string>(sut, "SubtitleColorHex").Should().Be("#FFFFFFFF");
         Get<string>(sut, "SubtitleLookupHighlightColorHex").Should().Be("#3EB5C1CB");
         Get<string>(sut, "SubtitleLookupHighlightTextColorHex").Should().Be("#FFFFFFFF");
@@ -76,16 +77,18 @@ public class VideoPlayerViewModelSubtitleAppearanceTests
         sut.GetType().GetMethod("SetSubtitleColor", [typeof(string)])!.Invoke(sut, ["#FF223344"]);
         sut.SubtitleFontSize = 48;
         sut.SubtitleFontWeight = 300;
+        sut.SubtitleVerticalPosition = 42;
 
         var reset = sut.GetType().GetMethod("ResetSubtitleAppearance");
         reset.Should().NotBeNull();
         reset!.Invoke(sut, []);
 
-        Get<double>(sut, "SubtitleFontSize").Should().Be(36);
+        Get<double>(sut, "SubtitleFontSize").Should().Be(52);
         Get<int>(sut, "SubtitleFontWeight").Should().Be(700);
-        Get<string>(sut, "SubtitleFontFamily").Should().Be("Klee One");
-        Get<string>(sut, "SubtitleFontFamilyText").Should().Be("Klee One");
-        Get<double>(sut, "SubtitleShadowRadius").Should().Be(3);
+        Get<string>(sut, "SubtitleFontFamily").Should().Be("Noto Serif CJK JP");
+        Get<string>(sut, "SubtitleFontFamilyText").Should().Be("Noto Serif CJK JP");
+        Get<double>(sut, "SubtitleShadowRadius").Should().Be(10);
+        Get<double>(sut, "SubtitleVerticalPosition").Should().Be(-51);
         Get<string>(sut, "SubtitleColorHex").Should().Be("#FFFFFFFF");
     }
 

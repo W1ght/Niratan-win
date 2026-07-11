@@ -125,7 +125,7 @@ public partial class VideoPlayerViewModel : ObservableObject
     public partial double SubtitlePanelHeight { get; set; }
 
     [ObservableProperty]
-    public partial double SubtitleFontSize { get; set; } = 36;
+    public partial double SubtitleFontSize { get; set; } = 52;
 
     [ObservableProperty]
     public partial int SubtitleFontWeight { get; set; } = 700;
@@ -142,10 +142,10 @@ public partial class VideoPlayerViewModel : ObservableObject
     public IReadOnlyList<JapaneseFontOption> AvailableSubtitleFonts { get; } = JapaneseFontCatalog.Fonts;
 
     [ObservableProperty]
-    public partial double SubtitleShadowRadius { get; set; } = 3;
+    public partial double SubtitleShadowRadius { get; set; } = 10;
 
     [ObservableProperty]
-    public partial string SubtitleShadowRadiusText { get; set; } = "3.0";
+    public partial string SubtitleShadowRadiusText { get; set; } = "10.0";
 
     [ObservableProperty]
     public partial double SubtitleBackgroundOpacity { get; set; }
@@ -256,10 +256,10 @@ public partial class VideoPlayerViewModel : ObservableObject
     public partial string VideoRotationText { get; set; } = "0°";
 
     [ObservableProperty]
-    public partial double SubtitleVerticalPosition { get; set; }
+    public partial double SubtitleVerticalPosition { get; set; } = -51;
 
     [ObservableProperty]
-    public partial string SubtitleVerticalPositionText { get; set; } = "0";
+    public partial string SubtitleVerticalPositionText { get; set; } = "-51";
 
     [ObservableProperty]
     public partial bool SubtitleMaskEnabled { get; set; }
@@ -280,7 +280,7 @@ public partial class VideoPlayerViewModel : ObservableObject
     public partial string SubtitleMaskHiddenOpacityText { get; set; } = "0%";
 
     [ObservableProperty]
-    public partial string SubtitleFontSizeText { get; set; } = "36 px";
+    public partial string SubtitleFontSizeText { get; set; } = "52 px";
 
     public VideoItem? CurrentVideo { get; private set; }
     public VideoSubtitleCue? CurrentCue { get; private set; }
@@ -1236,13 +1236,13 @@ public partial class VideoPlayerViewModel : ObservableObject
 
     public void ResetSubtitleAppearance()
     {
-        SubtitleFontSize = 36;
+        SubtitleFontSize = 52;
         SubtitleFontWeight = 700;
         SubtitleFontFamily = JapaneseFontCatalog.DefaultSubtitleFontFamily;
-        SubtitleShadowRadius = 3;
+        SubtitleShadowRadius = 10;
         SubtitleBackgroundOpacity = 0;
         SubtitleBackgroundDisabled = true;
-        SubtitleVerticalPosition = 0;
+        SubtitleVerticalPosition = -51;
         SubtitleColorHex = "#FFFFFFFF";
         SubtitleLookupHighlightColorHex = "#3EB5C1CB";
         SubtitleLookupHighlightTextColorHex = "#FFFFFFFF";

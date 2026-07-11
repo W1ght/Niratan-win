@@ -9,12 +9,12 @@ public sealed record JapaneseFontOption(string Name, string ReaderCssValue, stri
 public static class JapaneseFontCatalog
 {
     public const string DefaultReaderCssValue = "'Klee One', 'Yu Mincho', serif";
-    public const string DefaultSubtitleFontFamily = "Klee One";
+    public const string DefaultSubtitleFontFamily = "Noto Serif CJK JP";
 
     public static IReadOnlyList<JapaneseFontOption> Fonts { get; } =
     [
         new("System Default", "system-ui, sans-serif", ""),
-        new("Klee One", DefaultReaderCssValue, DefaultSubtitleFontFamily),
+        new("Klee One", DefaultReaderCssValue, "Klee One"),
         new("Noto Serif CJK JP", "'Noto Serif CJK JP', serif", "Noto Serif CJK JP"),
         new("Noto Sans CJK JP", "'Noto Sans CJK JP', sans-serif", "Noto Sans CJK JP"),
         new("Yu Mincho", "'Yu Mincho', serif", "Yu Mincho"),
@@ -25,7 +25,7 @@ public static class JapaneseFontCatalog
         new("Microsoft YaHei", "'Microsoft YaHei', sans-serif", "Microsoft YaHei"),
     ];
 
-    public static JapaneseFontOption DefaultFont { get; } = Fonts[1];
+    public static JapaneseFontOption DefaultFont { get; } = Fonts[2];
 
     public static JapaneseFontOption? FindByReaderCssValue(string? cssValue) =>
         Fonts.FirstOrDefault(
