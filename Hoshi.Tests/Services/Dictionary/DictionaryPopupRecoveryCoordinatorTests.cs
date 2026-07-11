@@ -47,7 +47,7 @@ public class DictionaryPopupRecoveryCoordinatorTests
         recovery.TryComplete(retry, 22).Should().BeTrue();
         transaction.TryAbortCommit(8).Should().BeTrue();
 
-        queue.TryTake(_ => true, out var request).Should().BeTrue();
+        queue.TryTake(out var request).Should().BeTrue();
         request.Should().Be("latest");
         transaction.BeginPending(9, "latest");
         transaction.PendingGeneration.Should().Be(9,

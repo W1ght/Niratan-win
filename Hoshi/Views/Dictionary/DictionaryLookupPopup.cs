@@ -48,6 +48,12 @@ public sealed class DictionaryPopupContentCommittedEventArgs(
     public string? TraceId { get; } = traceId;
 }
 
+public sealed class DictionaryPopupShowDroppedEventArgs(
+    string? traceId) : EventArgs
+{
+    public string? TraceId { get; } = traceId;
+}
+
 public sealed class DictionaryLookupPopup : IDisposable
 {
     private sealed record DictionaryPopupShowRequest(
@@ -61,7 +67,10 @@ public sealed class DictionaryLookupPopup : IDisposable
         SasayakiPopupControls? SasayakiControls,
         string? TraceId,
         CancellationToken CancellationToken,
-        Action<long>? GenerationStarted);
+        Action<long>? GenerationStarted)
+    {
+        public DictionaryPopupShowRequestState State { get; } = new();
+    }
 
     private sealed record DictionaryPopupNativeContext(
         long Generation,
@@ -80,6 +89,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     public event EventHandler? ContentReady;
     public event EventHandler<DictionaryPopupContentCommittedEventArgs>? ContentCommitted;
     public event EventHandler<DictionaryPopupContentCommittedEventArgs>? ContentCommitAborted;
+    public event EventHandler<DictionaryPopupShowDroppedEventArgs>? QueuedShowDropped;
 
     private readonly Grid _surfaceRoot;
     private readonly SolidColorBrush _surfaceBrush;
@@ -455,7 +465,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         if (_displayTransaction.CommitInFlightGeneration is not null
             || _isCompletingContentReady)
         {
-            _queuedShowRequests.Replace(request);
+            QueueShowRequest(request);
             RetryForcedShellRecoveryIfNeeded();
             return;
         }
@@ -482,7 +492,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         if (_displayTransaction.CommitInFlightGeneration is not null
             || _isCompletingContentReady)
         {
-            _queuedShowRequests.Replace(request);
+            QueueShowRequest(request);
             RetryForcedShellRecoveryIfNeeded();
             return;
         }
@@ -490,6 +500,9 @@ public sealed class DictionaryLookupPopup : IDisposable
         var ranges = DictionaryPopupBatchPlanner.Create(request.Results.Count);
         var initialRange = ranges[0];
         var initialResults = request.Results.GetRange(initialRange.Offset, initialRange.Count);
+        if (!request.State.TryStartGeneration())
+            return;
+
         var generation = PrepareForPendingContent(
             request.CancellationToken,
             request.TraceId);
@@ -661,7 +674,7 @@ public sealed class DictionaryLookupPopup : IDisposable
             _activeRecoveryTicket = null;
             _warmCoordinator.Reset();
         }
-        _queuedShowRequests.Clear();
+        NotifyQueuedShowDropped(_queuedShowRequests.Clear());
         _stagedNativeContext = null;
         _displayTransaction.Dismiss();
         _displayGeneration++;
@@ -1599,11 +1612,15 @@ public sealed class DictionaryLookupPopup : IDisposable
 
     private async Task ProcessQueuedShowAsync()
     {
-        if (!_queuedShowRequests.TryTake(
-                request => !request.CancellationToken.IsCancellationRequested,
-                out var request))
+        if (!_queuedShowRequests.TryTake(out var request))
             return;
         var queuedRequest = request!;
+
+        if (queuedRequest.CancellationToken.IsCancellationRequested)
+        {
+            NotifyQueuedShowDropped(queuedRequest);
+            return;
+        }
 
         try
         {
@@ -1611,17 +1628,34 @@ public sealed class DictionaryLookupPopup : IDisposable
         }
         catch (OperationCanceledException) when (queuedRequest.CancellationToken.IsCancellationRequested)
         {
+            NotifyQueuedShowDropped(queuedRequest);
             Log.Debug(
                 "[LookupTrace] trace={TraceId} queued popup show cancelled",
                 queuedRequest.TraceId ?? "-");
         }
         catch (Exception ex)
         {
+            NotifyQueuedShowDropped(queuedRequest);
             Log.Warning(
                 ex,
                 "[LookupTrace] trace={TraceId} queued popup show failed",
                 queuedRequest.TraceId ?? "-");
         }
+    }
+
+    private void QueueShowRequest(DictionaryPopupShowRequest request)
+    {
+        NotifyQueuedShowDropped(_queuedShowRequests.Replace(request));
+    }
+
+    private void NotifyQueuedShowDropped(DictionaryPopupShowRequest? request)
+    {
+        if (request is null || !request.State.TryDropBeforeGeneration())
+            return;
+
+        QueuedShowDropped?.Invoke(
+            this,
+            new DictionaryPopupShowDroppedEventArgs(request.TraceId));
     }
 
     private bool IsCurrentContentReady(JsonElement payload)

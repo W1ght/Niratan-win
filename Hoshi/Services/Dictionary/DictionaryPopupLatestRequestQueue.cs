@@ -7,34 +7,35 @@ internal sealed class DictionaryPopupLatestRequestQueue<T> where T : class
     private readonly object _gate = new();
     private T? _latest;
 
-    public void Replace(T request)
+    public T? Replace(T request)
     {
         ArgumentNullException.ThrowIfNull(request);
         lock (_gate)
+        {
+            var displaced = _latest;
             _latest = request;
+            return displaced;
+        }
     }
 
-    public bool TryTake(Func<T, bool> isEligible, out T? request)
+    public bool TryTake(out T? request)
     {
-        ArgumentNullException.ThrowIfNull(isEligible);
         lock (_gate)
         {
             request = _latest;
             _latest = null;
         }
 
-        if (request is null || !isEligible(request))
-        {
-            request = null;
-            return false;
-        }
-
-        return true;
+        return request is not null;
     }
 
-    public void Clear()
+    public T? Clear()
     {
         lock (_gate)
+        {
+            var cleared = _latest;
             _latest = null;
+            return cleared;
+        }
     }
 }

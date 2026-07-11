@@ -89,6 +89,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
     public event EventHandler? Dismissed;
     public event EventHandler<DictionaryPopupContentCommittedEventArgs>? RootContentCommitted;
     public event EventHandler<DictionaryPopupContentCommittedEventArgs>? RootContentAborted;
+    public event EventHandler<DictionaryPopupShowDroppedEventArgs>? RootShowDropped;
 
     public DictionaryPopupOverlay()
     {
@@ -188,6 +189,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         _rootHost.Scrolled += OnRootScrolled;
         _rootHost.ContentCommitted += OnRootContentCommitted;
         _rootHost.ContentCommitAborted += OnRootContentCommitAborted;
+        _rootHost.QueuedShowDropped += OnRootShowDropped;
 
         if (_embeddedPanel != null)
         {
@@ -390,6 +392,13 @@ public sealed class DictionaryPopupOverlay : IDisposable
     {
         if (_rootLayoutCoordinator.TryAbort(e.Generation, e.TraceId))
             RootContentAborted?.Invoke(this, e);
+    }
+
+    private void OnRootShowDropped(
+        object? sender,
+        DictionaryPopupShowDroppedEventArgs e)
+    {
+        RootShowDropped?.Invoke(this, e);
     }
 
     private async Task HandleRedirectAsync(DictionaryPopupRedirectRequest request, DictionaryLookupPopup? parentHost)
@@ -957,6 +966,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
             _rootHost.Scrolled -= OnRootScrolled;
             _rootHost.ContentCommitted -= OnRootContentCommitted;
             _rootHost.ContentCommitAborted -= OnRootContentCommitAborted;
+            _rootHost.QueuedShowDropped -= OnRootShowDropped;
             if (_embeddedPanel != null)
                 _embeddedPanel.Children.Remove(_rootHost.VisualRoot);
             _rootHost.Dispose();
