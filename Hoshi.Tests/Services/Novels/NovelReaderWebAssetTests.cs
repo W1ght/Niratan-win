@@ -2464,19 +2464,17 @@ public class NovelReaderWebAssetTests
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsCalendarCard\"");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsBookRankingCard\"");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsShelfComparisonCard\"");
-        dashboardXaml.Should().Contain("x:Name=\"WideDashboardState\"");
-        dashboardXaml.Should().Contain("x:Name=\"MediumDashboardState\"");
-        dashboardXaml.Should().Contain("x:Name=\"NarrowDashboardState\"");
-        dashboardXaml.Should().Contain("MinWindowWidth=\"1260\"");
-        dashboardXaml.Should().Contain("MinWindowWidth=\"840\"");
+        dashboardXaml.Should().NotContain("VisualStateManager.VisualStateGroups");
+        dashboardXaml.Should().NotContain("AdaptiveTrigger");
         dashboardXaml.Should().Contain("x:Name=\"DashboardPrimaryColumn\"");
         dashboardXaml.Should().Contain("x:Name=\"DashboardSecondaryColumn\"");
         dashboardXaml.Should().Contain("x:Name=\"DashboardTertiaryColumn\"");
         dashboardXaml.Should().Contain("ScrollViewer.HorizontalScrollMode=\"Enabled\"");
         dashboardXaml.Split("VerticalScrollBarVisibility=\"Auto\"").Should().HaveCount(2);
         dashboardCode.Should().Contain("ApplyAdaptiveLayout");
-        dashboardCode.Should().Contain("width >= 1260");
-        dashboardCode.Should().Contain("width >= 840");
+        dashboardCode.Should().Contain("NovelStatisticsDashboardLayout.Select(width)");
+        dashboardCode.Should().Contain("if (_layoutMode == layoutMode)");
+        dashboardCode.Should().NotContain("DispatcherQueue.TryEnqueue");
         dashboardCode.Should().Contain("Grid.SetColumn");
         trendChartXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsTrendChart\"");
         trendChartCode.Should().Contain("Polyline");
@@ -2554,6 +2552,9 @@ public class NovelReaderWebAssetTests
 
         dashboardService.Should().Contain("NovelStatisticsDashboardCalculator");
         dashboardService.Should().Contain("LoadSnapshotAsync");
+        dashboardService.Should().Contain("Task.Run(");
+        dashboardService.Should().Contain("ConfigureAwait(false)");
+        libraryViewModel.Should().Contain("await Task.Yield()");
         appCode.Should().Contain("AddSingleton<INovelStatisticsDashboardService>(provider =>");
     }
 

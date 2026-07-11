@@ -64,9 +64,11 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
         CancellationToken ct = default)
     {
         var today = DateOnly.FromDateTime(_timeProvider.GetLocalNow().DateTime);
-        var cacheKey = NovelStatisticsDashboardCache.CreateKey(books, today);
+        var cacheKey = await Task.Run(
+            () => NovelStatisticsDashboardCache.CreateKey(books, today),
+            ct).ConfigureAwait(false);
         if (_cache != null
-            && await _cache.TryLoadAsync(cacheKey, ct) is { } cached)
+            && await _cache.TryLoadAsync(cacheKey, ct).ConfigureAwait(false) is { } cached)
         {
             _ = RefreshCachedSnapshotAsync(
                 books,
@@ -75,7 +77,8 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
                 SynchronizationContext.Current);
             return cached;
         }
-        return await RebuildSnapshotAsync(books, today, cacheKey, ct);
+        return await RebuildSnapshotAsync(books, today, cacheKey, ct)
+            .ConfigureAwait(false);
     }
 
     private async Task RefreshCachedSnapshotAsync(
@@ -90,7 +93,7 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
                 books,
                 today,
                 cacheKey,
-                CancellationToken.None);
+                CancellationToken.None).ConfigureAwait(false);
             if (synchronizationContext != null)
                 synchronizationContext.Post(_ => SnapshotRefreshed?.Invoke(this, snapshot), null);
             else
@@ -122,7 +125,7 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
             {
                 totalCharacterCount = (await _bookSidecarService.LoadBookInfoAsync(
                     book.ExtractedPath,
-                    ct))?.CharacterCount ?? 0;
+                    ct).ConfigureAwait(false))?.CharacterCount ?? 0;
             }
             bookRecords.Add(new NovelStatisticsBookRecord(
                 book.Id,
@@ -135,12 +138,13 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
 
             var loadResult = await _statisticsSidecarService.LoadWithStatusAsync(
                 book.ExtractedPath,
-                ct);
+                ct).ConfigureAwait(false);
             if (loadResult == null)
             {
                 loadResult = new NovelStatisticsSidecarLoadResult(
                     NovelStatisticsSidecarLoadStatus.Loaded,
-                    await _statisticsSidecarService.LoadAsync(book.ExtractedPath, ct));
+                    await _statisticsSidecarService.LoadAsync(book.ExtractedPath, ct)
+                        .ConfigureAwait(false));
             }
             if (loadResult.Status is NovelStatisticsSidecarLoadStatus.Corrupt
                 or NovelStatisticsSidecarLoadStatus.Unavailable)
@@ -202,7 +206,7 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
                 .ToList(),
             skippedCorruptBookIds.Distinct(StringComparer.Ordinal).ToList());
         if (_cache != null)
-            await _cache.StoreAsync(cacheKey, snapshot, ct);
+            await _cache.StoreAsync(cacheKey, snapshot, ct).ConfigureAwait(false);
         return snapshot;
     }
 }
