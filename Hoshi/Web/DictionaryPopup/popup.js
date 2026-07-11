@@ -1591,6 +1591,13 @@ window.hoshiCommitPopupRender = function (expectedEpoch, expectedGeneration) {
   return true;
 };
 
+window.hoshiHighlightPopupSelection = function (charCount, expectedGeneration) {
+  if (expectedGeneration !== (window.popupRenderGeneration || 0)) return false;
+  if (!window.hoshiSelection?.selection?.ranges?.length) return false;
+  window.hoshiSelection.highlightSelection(charCount);
+  return true;
+};
+
 window.hoshiCancelPopupRender = function (expectedEpoch, expectedGeneration) {
   if (expectedEpoch !== window.hoshiPopupDocumentEpoch) return false;
   var pending = window.hoshiPendingPopupRender;

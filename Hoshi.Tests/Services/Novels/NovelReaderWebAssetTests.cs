@@ -311,8 +311,8 @@ public class NovelReaderWebAssetTests
     public void DictionaryPopupHide_KeepsWebView2InVisualTree()
     {
         var popupCode = File.ReadAllText(
-            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryLookupPopup.cs")
-        );
+                Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryLookupPopup.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
         popupCode.Should().NotContain("VisualRoot.Visibility = Visibility.Collapsed;");
         popupCode.Should().NotContain("HideWebContent(");
         popupCode.Should().Contain("VisualRoot.Opacity = 0;");
@@ -1225,7 +1225,8 @@ public class NovelReaderWebAssetTests
         waitIndex.Should().BeGreaterThanOrEqualTo(0);
         lookupIndex.Should().BeGreaterThanOrEqualTo(0);
         waitIndex.Should().BeLessThan(lookupIndex);
-        overlayCode.Should().Contain("if (redirectVersion != Volatile.Read(ref _redirectVersion))");
+        overlayCode.Should().Contain("if (!IsRedirectCurrent(");
+        overlayCode.Should().Contain("redirectVersion != Volatile.Read(ref _redirectVersion)");
     }
 
     [Fact]
@@ -1813,13 +1814,17 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs")
         );
         var popupCode = File.ReadAllText(
-            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryLookupPopup.cs")
-        );
+                Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryLookupPopup.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
         var popupGenerator = File.ReadAllText(
             Path.Combine(ProjectRoot, "Services", "Dictionary", "PopupHtmlGenerator.cs")
         );
+        var popupJs = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.js")
+        );
 
-        overlayCode.Should().Contain("HighlightPopupSelectionAsync(parent, results[0].Matched)");
+        overlayCode.Should().Contain("HighlightPopupSelectionAsync(");
+        overlayCode.Should().Contain("expectedParentGeneration");
         overlayCode.Should().Contain("var anchorX = parentLeft + x;");
         overlayCode.Should().Contain("var anchorY = parentTop + y;");
         overlayCode.Should().Contain("var anchorWidth = request.Width.GetValueOrDefault(1);");
@@ -1830,8 +1835,13 @@ public class NovelReaderWebAssetTests
         overlayCode.Should().Contain("anchorHeight,");
         overlayCode.Should().Contain("displaySettings: displaySettings");
         overlayCode.Should().NotContain("PositionHostAboveOrBelowParent(host, parentHost, parentLeft + x)");
-        popupCode.Should().Contain("public async Task HighlightSelectionAsync(string matchedText)");
-        popupCode.Should().Contain("window.hoshiSelection.highlightSelection");
+        popupCode.Should().Contain(
+            "public async Task<bool> HighlightSelectionAsync(\n        string matchedText,\n        long expectedCommittedGeneration)");
+        popupCode.Should().Contain("window.hoshiHighlightPopupSelection?.(");
+        popupJs.Should().Contain(
+            "window.hoshiHighlightPopupSelection = function (charCount, expectedGeneration)");
+        popupJs.Should().Contain(
+            "expectedGeneration !== (window.popupRenderGeneration || 0)");
         popupGenerator.Should().Contain("highlightSelection: function (charCount)");
         popupGenerator.Should().Contain("selectionCharacterRanges: function (charCount)");
         popupGenerator.Should().Contain("CSS.highlights?.set('hoshi-selection', new Highlight(...highlights))");
@@ -3305,7 +3315,10 @@ public class NovelReaderWebAssetTests
         code.Should().Contain("_rootStateCoordinator.TryAbort(generation, traceId)");
         code.Should().Contain("ContentCommitAborted += OnRootContentCommitAborted");
         code.Should().Contain("RootContentCommitted?.Invoke(this, e)");
-        code.Should().Contain("var anchor = rootSnapshot.Anchor;");
+        code.Should().Contain("_rootStateCoordinator.TryGetPending(out var pendingSnapshot)");
+        code.Should().Contain("_rootStateCoordinator.TryUpdatePendingLayout(");
+        code.Should().Contain("_rootStateCoordinator.TryUpdateCommittedLayout(");
+        code.Should().NotContain("DictionaryPopupPendingLayoutCoordinator");
 
         var commitIndex = code.IndexOf(
             "_rootStateCoordinator.TryCommit(",
@@ -3330,5 +3343,42 @@ public class NovelReaderWebAssetTests
         redirectWaitIndex.Should().BeGreaterThan(redirectSnapshotIndex);
         popupCode.Should().Contain("public bool CancelPendingContent(");
         popupCode.Should().Contain("ContentCommitAborted?.Invoke(");
+    }
+
+    [Fact]
+    public void DictionaryPopupOverlay_InvalidatesRedirectWorkAcrossRootGenerationChanges()
+    {
+        var code = File.ReadAllText(
+                Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        code.Should().Contain("InvalidateRootRedirects();");
+        code.Should().Contain("rootSnapshot.Generation");
+        code.Should().Contain("rootSnapshot.TraceId");
+        code.Should().Contain("IsRedirectCurrent(");
+        code.Should().Contain("expectedParentGeneration");
+        code.Should().Contain("parent.CommittedGeneration");
+        code.Should().Contain("generationStarted: generation => childGeneration = generation");
+        code.Should().Contain("DiscardStaleChild(");
+
+        var guardCount = System.Text.RegularExpressions.Regex.Matches(
+            code,
+            @"if \(!IsRedirectCurrent\(").Count;
+        guardCount.Should().BeGreaterThanOrEqualTo(6,
+            "root/parent ownership must be rechecked after each async boundary and before UI mutation");
+
+        var commitIndex = code.IndexOf(
+            "_rootStateCoordinator.TryCommit(",
+            StringComparison.Ordinal);
+        var invalidateAfterCommitIndex = code.IndexOf(
+            "InvalidateRootRedirects();",
+            commitIndex,
+            StringComparison.Ordinal);
+        var publicCommitIndex = code.IndexOf(
+            "RootContentCommitted?.Invoke(this, e)",
+            invalidateAfterCommitIndex,
+            StringComparison.Ordinal);
+        invalidateAfterCommitIndex.Should().BeGreaterThan(commitIndex);
+        publicCommitIndex.Should().BeGreaterThan(invalidateAfterCommitIndex);
     }
 }
