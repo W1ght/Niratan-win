@@ -123,7 +123,7 @@ public class VideoSubtitleLookupAssetTests
         code.Should().Contain("_subtitleLookupCoordinator.IsCurrent(lookupRequest)");
         code.Should().Contain("lookupRequest.CancellationToken");
         code.Should().Contain("cancellationToken: lookupRequest.CancellationToken");
-        code.Should().Contain("lookupOverlay?.CancelShow(lookupTraceId)");
+        code.Should().Contain("ResolvePopupShowCancellation(");
         normalizedCode.Should().Contain("if (!IsCurrentSubtitleLookup(lookupRequest))");
         code.Should().Contain("stale request version={RequestVersion} failed after supersession");
         code.Should().Contain("popupRequest.TraceId");
@@ -132,9 +132,11 @@ public class VideoSubtitleLookupAssetTests
         overlayCode.Should().Contain("CancellationToken cancellationToken = default");
         overlayCode.Should().Contain("cancellationToken.ThrowIfCancellationRequested();");
         overlayCode.Should().Contain("cancellationToken: cancellationToken");
-        overlayCode.Should().Contain("public void CancelShow(string? traceId)");
+        overlayCode.Should().Contain(
+            "public DictionaryPopupShowCancellationResult CancelShow(string? traceId)");
         overlayCode.Should().Contain("var contentCancelled = _rootHost.CancelPendingContent(");
         overlayCode.Should().Contain("contentCancellationSucceeded: contentCancelled");
+        overlayCode.Should().Contain("RootContentAborted?.Invoke(this, e)");
     }
 
     [Fact]
@@ -158,18 +160,24 @@ public class VideoSubtitleLookupAssetTests
             "RootContentCommitted -= PopupOverlay_RootContentCommitted");
         code.Should().Contain("StagePopupCommit(");
         code.Should().Contain("TryTakePopupCommit(");
-        mainCode.Should().Contain(
-            "popupRequest.TraceId ?? $\"video-{lookupRequest.Version}\"");
-        mainCode.Should().Contain("traceId: lookupTraceId");
-        code.Should().Contain("if (!_isLookupPopupVisible)");
+        mainCode.Should().Contain("CreatePopupCommitIdentity(");
+        mainCode.Should().Contain("popupRequest.TraceId);");
+        mainCode.Should().Contain("traceId: lookupCommitId");
+        code.Should().Contain("!_isLookupPopupVisible");
+        code.Should().Contain("HasPopupCommitCandidates");
         code.Should().Contain("ViewModel.StatusText = \"No dictionary results\"");
         missCode.Should().NotContain("Dismiss(");
         mainCode.Should().NotContain(
             "await HighlightSubtitleCanvasSelectionAsync(sentenceOffset");
         mainCode.Should().Contain(
-            "_subtitleLookupCoordinator.CancelCurrent();\n" +
-            "            lookupOverlay?.CancelShow(lookupTraceId);\n" +
-            "            if (!_isLookupPopupVisible)");
+            "_subtitleLookupCoordinator.CancelCurrentRequest();\n" +
+            "            ResolvePopupShowCancellation(lookupOverlay, lookupCommitId);");
+        code.Should().Contain(
+            "RootContentAborted += PopupOverlay_RootContentAborted");
+        code.Should().Contain(
+            "RootContentAborted -= PopupOverlay_RootContentAborted");
+        code.Should().Contain("MarkPopupCommitAccepted(commitIdentity)");
+        code.Should().Contain("CancelPopupCommit(commitIdentity)");
     }
 
     [Fact]

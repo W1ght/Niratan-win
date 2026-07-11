@@ -430,6 +430,40 @@ public sealed partial class VideoPlayerWindow
         _ = ClearSubtitleSelectionAsync();
     }
 
+    private void ResolvePopupShowCancellation(
+        DictionaryPopupOverlay? overlay,
+        string? commitIdentity)
+    {
+        if (commitIdentity is null)
+            return;
+
+        var result = overlay?.CancelShow(commitIdentity)
+            ?? DictionaryPopupShowCancellationResult.NoOwnership;
+        if (result == DictionaryPopupShowCancellationResult.CommitAccepted)
+            _subtitleLookupCoordinator.MarkPopupCommitAccepted(commitIdentity);
+        else
+            _subtitleLookupCoordinator.CancelPopupCommit(commitIdentity);
+
+        CollapseVideoDictionarySurfaceIfUnowned();
+    }
+
+    private void PopupOverlay_RootContentAborted(
+        object? sender,
+        DictionaryPopupContentCommittedEventArgs e)
+    {
+        _subtitleLookupCoordinator.CancelPopupCommit(e.TraceId);
+        CollapseVideoDictionarySurfaceIfUnowned();
+    }
+
+    private void CollapseVideoDictionarySurfaceIfUnowned()
+    {
+        if (!_isLookupPopupVisible
+            && !_subtitleLookupCoordinator.HasPopupCommitCandidates)
+        {
+            VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
+        }
+    }
+
     private void PopupOverlay_RootContentCommitted(
         object? sender,
         DictionaryPopupContentCommittedEventArgs e)
