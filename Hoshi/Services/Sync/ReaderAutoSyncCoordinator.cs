@@ -1,5 +1,4 @@
 using System;
-using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Hoshi.Models;
@@ -18,16 +17,18 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
     private readonly IGoogleDriveAuthService _googleDriveAuthService;
     private readonly ILogger<ReaderAutoSyncCoordinator> _logger;
     private readonly Func<TimeSpan, CancellationToken, Task> _delayAsync;
+    private readonly Func<Task> _onDebounceDrainedAsync;
     private readonly object _stateGate = new();
     private readonly SemaphoreSlim _exportGate = new(1, 1);
-    private readonly SemaphoreSlim _flushGate = new(1, 1);
 
     private bool _cancelled;
     private bool _pending;
+    private long _pendingGeneration;
     private bool _flushInProgress;
     private NovelBook? _pendingBook;
     private CancellationTokenSource? _debounceCts;
     private Task? _debounceTask;
+    private TaskCompletionSource? _flushCompletion;
 
     public ReaderAutoSyncCoordinator(
         ITtuSyncService ttuSyncService,
@@ -49,23 +50,53 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
         IGoogleDriveAuthService googleDriveAuthService,
         ILogger<ReaderAutoSyncCoordinator> logger,
         Func<TimeSpan, CancellationToken, Task> delayAsync)
+        : this(
+            ttuSyncService,
+            settingsService,
+            googleDriveAuthService,
+            logger,
+            delayAsync,
+            static () => Task.CompletedTask)
+    {
+    }
+
+    internal ReaderAutoSyncCoordinator(
+        ITtuSyncService ttuSyncService,
+        ISettingsService settingsService,
+        IGoogleDriveAuthService googleDriveAuthService,
+        ILogger<ReaderAutoSyncCoordinator> logger,
+        Func<TimeSpan, CancellationToken, Task> delayAsync,
+        Func<Task> onDebounceDrainedAsync)
     {
         _ttuSyncService = ttuSyncService;
         _settingsService = settingsService;
         _googleDriveAuthService = googleDriveAuthService;
         _logger = logger;
         _delayAsync = delayAsync;
+        _onDebounceDrainedAsync = onDebounceDrainedAsync;
     }
 
     public async Task<bool> ImportOnOpenAsync(
         NovelBook book,
         CancellationToken ct = default)
     {
-        if (!CanAutoSync())
-            return false;
-
         try
         {
+            lock (_stateGate)
+            {
+                if (_cancelled)
+                    return false;
+            }
+
+            if (!CanAutoSync())
+                return false;
+
+            lock (_stateGate)
+            {
+                if (_cancelled)
+                    return false;
+            }
+
             var result = await _ttuSyncService.SyncBookAsync(
                 book,
                 CreateOptions(TtuSyncDirection.Auto, importOnly: true),
@@ -76,12 +107,7 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
         {
             return false;
         }
-        catch (OperationCanceledException ex)
-        {
-            LogContainedFailure("open import", book, ex);
-            return false;
-        }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        catch (Exception ex)
         {
             LogContainedFailure("open import", book, ex);
             return false;
@@ -100,6 +126,7 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
 
             _pending = true;
             _pendingBook = book;
+            _pendingGeneration++;
             if (_flushInProgress || _debounceTask != null)
                 return;
 
@@ -109,25 +136,70 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
 
     public async Task FlushAsync(NovelBook book, CancellationToken ct = default)
     {
-        if (!CanAutoSync())
-            return;
+        Task? activeFlush;
+        lock (_stateGate)
+        {
+            if (_cancelled)
+                return;
+            activeFlush = _flushCompletion?.Task;
+        }
 
-        await _flushGate.WaitAsync(ct);
+        if (activeFlush != null)
+        {
+            await activeFlush.WaitAsync(ct);
+            return;
+        }
+
+        bool canAutoSync;
         try
         {
-            Task? debounceTask;
-            lock (_stateGate)
-            {
-                if (_cancelled)
-                    return;
+            canAutoSync = CanAutoSync();
+        }
+        catch (Exception ex)
+        {
+            LogContainedFailure("flush gate", book, ex);
+            return;
+        }
 
+        if (!canAutoSync)
+            return;
+
+        TaskCompletionSource? ownedCompletion = null;
+        Task sharedFlush;
+        Task? debounceTask = null;
+        lock (_stateGate)
+        {
+            if (_cancelled)
+                return;
+
+            if (_flushCompletion != null)
+            {
+                sharedFlush = _flushCompletion.Task;
+            }
+            else
+            {
+                ownedCompletion = new TaskCompletionSource(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+                _flushCompletion = ownedCompletion;
+                sharedFlush = ownedCompletion.Task;
                 _flushInProgress = true;
                 _pending = true;
                 _pendingBook = book;
+                _pendingGeneration++;
                 debounceTask = _debounceTask;
                 _debounceCts?.Cancel();
             }
+        }
 
+        if (ownedCompletion == null)
+        {
+            await sharedFlush.WaitAsync(ct);
+            return;
+        }
+
+        Exception? failure = null;
+        try
+        {
             if (debounceTask != null)
                 await debounceTask.WaitAsync(ct);
 
@@ -138,20 +210,45 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
                 lock (_stateGate)
                 {
                     if (_cancelled || !_pending)
+                    {
+                        if (ReferenceEquals(_flushCompletion, ownedCompletion))
+                        {
+                            _flushCompletion = null;
+                            _flushInProgress = false;
+                        }
+
                         return;
+                    }
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+            throw;
         }
         finally
         {
             lock (_stateGate)
             {
-                _flushInProgress = false;
-                if (!_cancelled && _pending && _debounceTask == null)
-                    StartDebounceLocked();
+                if (ReferenceEquals(_flushCompletion, ownedCompletion))
+                {
+                    _flushCompletion = null;
+                    _flushInProgress = false;
+                    if (!_cancelled && _pending && _debounceTask == null)
+                        StartDebounceLocked();
+                }
             }
 
-            _flushGate.Release();
+            if (failure is OperationCanceledException && ct.IsCancellationRequested)
+                ownedCompletion.TrySetCanceled(ct);
+            else if (failure != null)
+            {
+                ownedCompletion.TrySetException(failure);
+                _ = ownedCompletion.Task.Exception;
+            }
+            else
+                ownedCompletion.TrySetResult();
         }
     }
 
@@ -214,6 +311,7 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
         {
             await _delayAsync(ExportDelay, owner.Token);
             await RunPendingExportsAsync(CancellationToken.None);
+            await _onDebounceDrainedAsync();
         }
         catch (OperationCanceledException) when (owner.IsCancellationRequested)
         {
@@ -242,12 +340,40 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
         {
             while (true)
             {
-                if (!CanAutoSync())
+                NovelBook? candidate;
+                long candidateGeneration;
+                lock (_stateGate)
+                {
+                    if (_cancelled || !_pending)
+                        return;
+
+                    candidate = _pendingBook;
+                    candidateGeneration = _pendingGeneration;
+                }
+
+                if (candidate == null)
+                    return;
+
+                bool canAutoSync;
+                try
+                {
+                    canAutoSync = CanAutoSync();
+                }
+                catch (Exception ex)
+                {
+                    LogContainedFailure("export gate", candidate, ex);
+                    canAutoSync = false;
+                }
+
+                if (!canAutoSync)
                 {
                     lock (_stateGate)
                     {
-                        _pending = false;
-                        _pendingBook = null;
+                        if (_pending && _pendingGeneration == candidateGeneration)
+                        {
+                            _pending = false;
+                            _pendingBook = null;
+                        }
                     }
 
                     return;
@@ -258,6 +384,9 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
                 {
                     if (_cancelled || !_pending)
                         return;
+
+                    if (_pendingGeneration != candidateGeneration)
+                        continue;
 
                     _pending = false;
                     book = _pendingBook;
@@ -276,6 +405,16 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
+                    lock (_stateGate)
+                    {
+                        if (!_cancelled && !_pending)
+                        {
+                            _pending = true;
+                            _pendingBook = book;
+                            _pendingGeneration++;
+                        }
+                    }
+
                     throw;
                 }
                 catch (Exception ex)

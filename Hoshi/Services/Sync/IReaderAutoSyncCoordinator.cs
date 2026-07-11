@@ -10,6 +10,11 @@ public interface IReaderAutoSyncCoordinator
 
     void ScheduleExport(NovelBook book);
 
+    /// <summary>
+    /// Cancels the debounce and drains pending work. Concurrent callers join the
+    /// same in-flight flush and do not create duplicate exports. The first caller
+    /// owns work cancellation; later callers can cancel only their own wait.
+    /// </summary>
     Task FlushAsync(NovelBook book, CancellationToken ct = default);
 
     void Cancel();
