@@ -49,6 +49,9 @@ public partial class NovelReaderPageViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsStatisticsTracking { get; set; }
 
+    [ObservableProperty]
+    public partial bool IsStatisticsPaused { get; set; }
+
     private IReadOnlyList<ReaderHighlight> _highlights = [];
 
     public IReadOnlyList<ReaderHighlight> Highlights
@@ -112,6 +115,10 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
     private CancellationTokenSource? _saveCts;
     private IReadOnlyList<int> _chapterCharacterCounts = [];
+    private readonly object _lifecycleCloseGate = new();
+    private readonly SemaphoreSlim _lifecycleCheckpointLock = new(1, 1);
+    private Task? _lifecycleCloseTask;
+    private bool _didCompleteLifecycleClose;
 
     public NovelReaderPageViewModel(
         INovelLibraryService novelLibraryService,
@@ -267,6 +274,49 @@ public partial class NovelReaderPageViewModel : ObservableObject
     public void ResetStatisticsBaseline() =>
         _statisticsSession.ResetBaseline(
             new ReaderStatisticsPosition(CurrentCharacterCount));
+
+    public Task PrepareForReaderLifecycleCloseAsync(CancellationToken ct = default)
+    {
+        lock (_lifecycleCloseGate)
+        {
+            return _lifecycleCloseTask ??= PrepareForReaderLifecycleCloseCoreAsync(ct);
+        }
+    }
+
+    private async Task PrepareForReaderLifecycleCloseCoreAsync(CancellationToken ct)
+    {
+        await _lifecycleCheckpointLock.WaitAsync(ct);
+        try
+        {
+            if (_didCompleteLifecycleClose)
+                return;
+
+            await SaveProgressNowAsync(flushStatistics: false, ct);
+            await CheckpointReadingAsync(ReaderStatisticsCheckpointReason.Close, ct);
+            _didCompleteLifecycleClose = true;
+        }
+        finally
+        {
+            _lifecycleCheckpointLock.Release();
+        }
+    }
+
+    public async Task CheckpointAppBackgroundingAsync(CancellationToken ct = default)
+    {
+        await _lifecycleCheckpointLock.WaitAsync(ct);
+        try
+        {
+            if (_didCompleteLifecycleClose)
+                return;
+
+            await SaveProgressNowAsync(flushStatistics: false, ct);
+            await CheckpointReadingAsync(ReaderStatisticsCheckpointReason.Background, ct);
+        }
+        finally
+        {
+            _lifecycleCheckpointLock.Release();
+        }
+    }
 
     public async Task SaveBookInfoSidecarAsync(
         IReadOnlyList<EpubChapter> chapters,
@@ -438,6 +488,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
     private void ApplyStatisticsState(ReaderStatisticsSessionState state)
     {
         IsStatisticsTracking = state.IsTracking;
+        IsStatisticsPaused = state.IsPaused;
         SessionStatistics = state.Session;
         TodaysStatistics = state.Today;
         AllTimeStatistics = state.AllTime;
@@ -496,7 +547,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
     [RelayCommand]
     private async Task BackToLibrary()
     {
-        await SaveProgressNowAsync();
+        await PrepareForReaderLifecycleCloseAsync();
         _messenger.Send(new SwitchAppModeMessage(AppMode.Navigation, null));
     }
 }

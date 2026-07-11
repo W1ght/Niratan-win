@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.UI;
@@ -20,6 +21,7 @@ using Microsoft.UI.Xaml.Navigation;
 using Windows.UI;
 using WinRT.Interop;
 using Hoshi.Helpers;
+using Hoshi.Messages;
 using Hoshi.Models;
 using Hoshi.Models.Anki;
 using Hoshi.Services.Settings;
@@ -75,6 +77,8 @@ public sealed partial class NovelReaderPage : Page
     private readonly SemaphoreSlim _lookupSemaphore = new(1, 1);
     private readonly Dictionary<KeyboardAccelerator, string> _keyboardAcceleratorActionIds = [];
     private readonly IShortcutService _shortcutService;
+    private readonly IMessenger _messenger;
+    private DispatcherQueueTimer? _statisticsProjectionTimer;
     private long _lookupRequestVersion;
     private bool _readerFocusMode;
     private KeyboardShortcutBinding _lastKeyDownShortcutBinding;
@@ -124,6 +128,7 @@ public sealed partial class NovelReaderPage : Page
         DataContext = ViewModel;
         _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         _shortcutService = App.GetService<IShortcutService>();
+        _messenger = App.GetService<IMessenger>();
         _shortcutService.ShortcutsChanged += OnReaderShortcutsChanged;
         AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(NovelReaderPage_KeyDown), true);
         RegisterReaderKeyboardAccelerators();
@@ -244,6 +249,11 @@ public sealed partial class NovelReaderPage : Page
     protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        _messenger.Unregister<AppBackgroundingMessage>(this);
+        _messenger.Register<AppBackgroundingMessage>(
+            this,
+            static (recipient, message) =>
+                message.Reply(((NovelReaderPage)recipient).HandleAppLifecycleCheckpointAsync(message)));
         if (e.Parameter is NovelReaderNavigationArgs args)
         {
             await ViewModel.InitializeAsync(args);
@@ -254,6 +264,9 @@ public sealed partial class NovelReaderPage : Page
     protected override void OnNavigatedFrom(NavigationEventArgs e)
     {
         base.OnNavigatedFrom(e);
+        StopStatisticsProjectionTimer();
+        _messenger.Unregister<AppBackgroundingMessage>(this);
+        _ = ViewModel.PrepareForReaderLifecycleCloseAsync();
         _programmaticNavigation.Cancel();
         _pendingProgrammaticFragment = null;
         _reloadCts?.Cancel();
@@ -295,6 +308,67 @@ public sealed partial class NovelReaderPage : Page
         _sasayakiPlayer = null;
 
         CloseReaderPanels();
+    }
+
+    private void EnsureStatisticsProjectionTimer()
+    {
+        if (_statisticsProjectionTimer != null)
+            return;
+
+        _statisticsProjectionTimer = _dispatcherQueue.CreateTimer();
+        _statisticsProjectionTimer.Interval = TimeSpan.FromSeconds(1);
+        _statisticsProjectionTimer.IsRepeating = true;
+        _statisticsProjectionTimer.Tick += StatisticsProjectionTimer_Tick;
+    }
+
+    private void UpdateStatisticsProjectionTimer()
+    {
+        EnsureStatisticsProjectionTimer();
+        if (ViewModel.IsStatisticsTracking && !ViewModel.IsStatisticsPaused)
+            _statisticsProjectionTimer!.Start();
+        else
+            _statisticsProjectionTimer!.Stop();
+    }
+
+    private void StopStatisticsProjectionTimer()
+    {
+        if (_statisticsProjectionTimer == null)
+            return;
+
+        _statisticsProjectionTimer.Stop();
+        _statisticsProjectionTimer.Tick -= StatisticsProjectionTimer_Tick;
+        _statisticsProjectionTimer = null;
+    }
+
+    private void StatisticsProjectionTimer_Tick(
+        DispatcherQueueTimer sender,
+        object args)
+    {
+        if (!ViewModel.IsStatisticsTracking || ViewModel.IsStatisticsPaused)
+        {
+            UpdateStatisticsProjectionTimer();
+            return;
+        }
+
+        ViewModel.TickStatistics();
+    }
+
+    private async Task<bool> HandleAppLifecycleCheckpointAsync(
+        AppBackgroundingMessage message)
+    {
+        try
+        {
+            if (message.Reason == AppLifecycleCheckpointReason.Closing)
+                await ViewModel.PrepareForReaderLifecycleCloseAsync();
+            else
+                await ViewModel.CheckpointAppBackgroundingAsync();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[Reader] Failed lifecycle checkpoint: {Reason}", message.Reason);
+            return false;
+        }
     }
 
     private async System.Threading.Tasks.Task InitializeReaderAsync()
@@ -381,6 +455,7 @@ public sealed partial class NovelReaderPage : Page
         ViewModel.SetChapter(initialChapterIndex, _epubBook.Chapters.Count);
         ViewModel.UpdateProgress(ViewModel.CurrentBook?.Progress ?? 0);
         await ViewModel.LoadStatisticsAsync();
+        UpdateStatisticsProjectionTimer();
         UpdateStatisticsButtonVisibility();
         RefreshReaderDisplayChrome();
         RefreshReaderStatisticsChrome();
@@ -534,6 +609,12 @@ public sealed partial class NovelReaderPage : Page
             or nameof(ViewModel.IsStatisticsTracking))
         {
             RefreshReaderStatisticsChrome();
+        }
+
+        if (e.PropertyName is nameof(ViewModel.IsStatisticsTracking)
+            or nameof(ViewModel.IsStatisticsPaused))
+        {
+            UpdateStatisticsProjectionTimer();
         }
 
         if (e.PropertyName is nameof(ViewModel.ReaderTitle)

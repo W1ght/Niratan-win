@@ -230,12 +230,58 @@ public sealed class NovelReaderPageViewModelTests
         sut.TodaysStatistics.CharactersRead.Should().Be(70);
         sut.AllTimeStatistics.CharactersRead.Should().Be(600);
         sut.IsStatisticsTracking.Should().BeTrue();
+        sut.IsStatisticsPaused.Should().BeFalse();
         sut.StatisticsSessionCharactersText.Should().Be("60");
         sut.StatisticsSessionSpeedText.Should().Be("1,800 / h");
         sut.StatisticsSessionTimeText.Should().Be("2m 0s");
         sut.StatisticsSessionChromeTimeText.Should().Be("0:02");
         sut.StatisticsTodayTimeText.Should().Be("3m 0s");
         sut.StatisticsAllTimeTimeText.Should().Be("20m 0s");
+    }
+
+    [Fact]
+    public async Task LifecycleCheckpoints_SaveBackgroundAndCloseExactlyOnce()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var novelService = new Mock<INovelLibraryService>();
+        novelService
+            .Setup(s => s.GetNovelBookAsync("book-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelBook?>.Success(new NovelBook
+            {
+                Id = "book-1",
+                Title = "Book One",
+                FilePath = System.IO.Path.Combine(temp.Path, "book.epub"),
+                ExtractedPath = temp.Path,
+            }));
+        novelService
+            .Setup(s => s.SaveProgressAsync(
+                "book-1", 0, 0.5, 50, 100, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        var statisticsSession = new FakeReaderStatisticsSession();
+        var sut = new NovelReaderPageViewModel(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            new ReaderHighlightService(),
+            new NovelBookSidecarService(),
+            statisticsSession,
+            new NoOpProfileRuntimeService());
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"));
+        sut.SetChapterCharacterCounts([100]);
+        sut.SetChapter(0, 1);
+        sut.UpdateProgress(0.5);
+
+        await sut.CheckpointAppBackgroundingAsync(ct);
+        await Task.WhenAll(
+            sut.PrepareForReaderLifecycleCloseAsync(ct),
+            sut.PrepareForReaderLifecycleCloseAsync(ct));
+
+        novelService.Verify(s => s.SaveProgressAsync(
+            "book-1", 0, 0.5, 50, 100, It.IsAny<CancellationToken>()), Times.Exactly(2));
+        statisticsSession.Checkpoints.Should().Equal(
+            (50, ReaderStatisticsCheckpointReason.Background),
+            (50, ReaderStatisticsCheckpointReason.Close));
     }
 
     [Fact]
