@@ -22,7 +22,10 @@ public partial class VideoPlayerViewModel : ObservableObject
     private readonly SubtitleParserService _subtitleParserService;
     private readonly IDictionaryPopupRequestService _popupRequestService;
     private readonly ISettingsService? _settingsService;
+    private readonly object _subtitleAppearanceSaveLock = new();
     private bool _isApplyingSettings;
+    private bool _isSubtitleAppearanceSaveQueued;
+    private Task? _subtitleAppearanceSaveTask;
 
     private VideoSubtitleDocument _subtitleDocument = new([]);
     private VideoSubtitleCue? _embeddedSubtitleCue;
@@ -1289,7 +1292,38 @@ public partial class VideoPlayerViewModel : ObservableObject
         updatedSettings.SubtitleMaskHiddenOpacity = SubtitleMaskHiddenOpacity;
 
         _settingsService.Set(settings => settings.VideoSettings, updatedSettings);
-        _ = _settingsService.SaveAsync();
+        QueueSubtitleAppearanceSave(_settingsService);
+    }
+
+    private void QueueSubtitleAppearanceSave(ISettingsService settingsService)
+    {
+        lock (_subtitleAppearanceSaveLock)
+        {
+            _isSubtitleAppearanceSaveQueued = true;
+            if (_subtitleAppearanceSaveTask is { IsCompleted: false })
+                return;
+
+            _subtitleAppearanceSaveTask = SaveQueuedSubtitleAppearanceAsync(settingsService);
+        }
+    }
+
+    private async Task SaveQueuedSubtitleAppearanceAsync(ISettingsService settingsService)
+    {
+        while (true)
+        {
+            lock (_subtitleAppearanceSaveLock)
+            {
+                if (!_isSubtitleAppearanceSaveQueued)
+                {
+                    _subtitleAppearanceSaveTask = null;
+                    return;
+                }
+
+                _isSubtitleAppearanceSaveQueued = false;
+            }
+
+            await settingsService.SaveAsync();
+        }
     }
 
     public void SetAspectRatio(string value)
