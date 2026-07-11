@@ -75,4 +75,16 @@ public class NovelReaderBridgeMessageFactoryTests
         restore.RootElement.GetProperty("payload")
             .GetProperty("navigationGeneration").GetInt64().Should().Be(18);
     }
+
+    [Fact]
+    public void CreateJumpToFragmentMessage_SerializesTypedDestination()
+    {
+        using var document = JsonDocument.Parse(
+            NovelReaderBridgeMessageFactory.CreateJumpToFragmentMessage("section 2", 19));
+
+        document.RootElement.GetProperty("type").GetString().Should().Be("jumpToFragment");
+        var payload = document.RootElement.GetProperty("payload");
+        payload.GetProperty("fragment").GetString().Should().Be("section 2");
+        payload.GetProperty("navigationGeneration").GetInt64().Should().Be(19);
+    }
 }

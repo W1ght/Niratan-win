@@ -45,6 +45,26 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void ReaderBridge_InterceptsInternalLinksAndSupportsFragmentTransactions()
+    {
+        var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+        var readerXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml"));
+
+        script.Should().Contain("\"a[href]\"");
+        script.Should().Contain("postToHost(\"internalLink\"");
+        script.Should().Contain("case \"jumpToFragment\"");
+        script.Should().Contain("navigationGeneration");
+        readerCode.Should().Contain("ReaderInternalLinkResolver.Resolve(");
+        readerCode.Should().Contain("ReaderNavigationHistory");
+        readerCode.Should().Contain("SendJumpToFragmentMessageAsync");
+        readerXaml.Should().Contain("NovelReaderHistoryBackButton");
+        readerXaml.Should().Contain("NovelReaderHistoryForwardButton");
+    }
+
+    [Fact]
     public void ReaderBridge_UsesHoshiStyleChapterMessages()
     {
         var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
@@ -2749,7 +2769,7 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
-    public void ReaderPage_DoesNotExposeUnusedSessionNavigationHistoryControls()
+    public void ReaderPage_ExposesActiveSessionNavigationHistoryControls()
     {
         var readerXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml")
@@ -2757,31 +2777,16 @@ public class NovelReaderWebAssetTests
         var readerCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
         );
-        var enResources = File.ReadAllText(
-            Path.Combine(ProjectRoot, "Strings", "en-US", "Resources.resw")
-        );
-        var zhResources = File.ReadAllText(
-            Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw")
-        );
+        readerXaml.Should().Contain("NovelReaderHistoryBackButton");
+        readerXaml.Should().Contain("NovelReaderHistoryForwardButton");
+        readerXaml.Should().Contain("HistoryBackButton_Click");
+        readerXaml.Should().Contain("HistoryForwardButton_Click");
 
-        readerXaml.Should().NotContain("NovelReaderHistoryBackButton");
-        readerXaml.Should().NotContain("NovelReaderHistoryForwardButton");
-        readerXaml.Should().NotContain("ReaderHistoryBackButton_Click");
-        readerXaml.Should().NotContain("ReaderHistoryForwardButton_Click");
-
-        readerCode.Should().NotContain("ReaderNavigationHistoryEntry");
-        readerCode.Should().NotContain("_readerBackHistory");
-        readerCode.Should().NotContain("_readerForwardHistory");
-        readerCode.Should().NotContain("RecordReaderHistoryEntry");
-        readerCode.Should().NotContain("RestoreReaderHistoryEntryAsync");
-        readerCode.Should().NotContain("ReaderHistoryBackButton_Click");
-        readerCode.Should().NotContain("ReaderHistoryForwardButton_Click");
-        readerCode.Should().NotContain("UpdateReaderHistoryButtons");
-
-        enResources.Should().NotContain("NovelReaderHistoryBackButton.AutomationProperties.Name");
-        enResources.Should().NotContain("NovelReaderHistoryForwardButton.AutomationProperties.Name");
-        zhResources.Should().NotContain("NovelReaderHistoryBackButton.AutomationProperties.Name");
-        zhResources.Should().NotContain("NovelReaderHistoryForwardButton.AutomationProperties.Name");
+        readerCode.Should().Contain("ReaderNavigationHistory");
+        readerCode.Should().Contain("_navigationHistory.Record(");
+        readerCode.Should().Contain("_navigationHistory.TryGoBack(");
+        readerCode.Should().Contain("_navigationHistory.TryGoForward(");
+        readerCode.Should().Contain("RefreshReaderNavigationHistoryChrome");
     }
 
     [Fact]
