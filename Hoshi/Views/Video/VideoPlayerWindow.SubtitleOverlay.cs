@@ -16,6 +16,7 @@ using Hoshi.Helpers;
 using Hoshi.Models.Shortcuts;
 using Hoshi.Services.Settings;
 using Hoshi.Services.Video;
+using Hoshi.Views.Dictionary;
 using Serilog;
 
 namespace Hoshi.Views.Video;
@@ -422,10 +423,31 @@ public sealed partial class VideoPlayerWindow
 
     private void PopupOverlay_Dismissed(object? sender, EventArgs e)
     {
+        _subtitleLookupCoordinator.CancelCurrent();
         _isLookupPopupVisible = false;
         VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
         ApplySubtitleAppearance();
         _ = ClearSubtitleSelectionAsync();
+    }
+
+    private void PopupOverlay_RootContentCommitted(
+        object? sender,
+        DictionaryPopupContentCommittedEventArgs e)
+    {
+        if (!_subtitleLookupCoordinator.TryTakePopupCommit(
+                e.TraceId,
+                out var commit))
+        {
+            return;
+        }
+
+        _ = HighlightSubtitleCanvasSelectionAsync(
+            commit.SelectionStart,
+            commit.MatchedText);
+        _isLookupPopupVisible = true;
+        VideoDictionaryPanelChrome.Visibility = Visibility.Visible;
+        ViewModel.StatusText = "Lookup opened";
+        ApplySubtitleAppearance();
     }
 
     private void PopupOverlayCanvas_SizeChanged(object sender, SizeChangedEventArgs e)

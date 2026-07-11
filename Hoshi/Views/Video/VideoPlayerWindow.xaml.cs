@@ -666,25 +666,27 @@ public sealed partial class VideoPlayerWindow : Window
                 return;
             if (popupRequest == null)
             {
-                ClearSubtitleCanvasSelection();
-                _popupOverlay?.Dismiss();
-                VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
-                _isLookupPopupVisible = false;
+                if (!_isLookupPopupVisible)
+                {
+                    ClearSubtitleCanvasSelection();
+                    VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
+                }
+
                 ViewModel.StatusText = "No dictionary results";
                 return;
             }
 
-            await HighlightSubtitleCanvasSelectionAsync(sentenceOffset, popupRequest.Results[0].Matched);
-            if (!IsCurrentSubtitleLookup(lookupRequest))
-                return;
-
             lookupOverlay = EnsurePopupOverlay();
-            lookupTraceId = popupRequest.TraceId;
+            lookupTraceId = popupRequest.TraceId ?? $"video-{lookupRequest.Version}";
             EnsureVideoDictionaryOverlaySurfaceVisible(lookupOverlay);
             var point = anchorPoint
                 ?? SubtitleCanvas.TransformToVisual(PopupOverlayCanvas)
                     .TransformPoint(new Windows.Foundation.Point(0, 0));
-            ViewModel.StatusText = "Lookup opened";
+            _subtitleLookupCoordinator.StagePopupCommit(
+                lookupRequest,
+                lookupTraceId,
+                sentenceOffset,
+                popupRequest.Results[0].Matched);
             await lookupOverlay.ShowLookupAsync(
                 popupRequest.Results,
                 popupRequest.Styles,
@@ -699,15 +701,13 @@ public sealed partial class VideoPlayerWindow : Window
                 popupRequest.AudioSettings,
                 popupRequest.AnkiSettings,
                 popupRequest.MiningContext,
-                traceId: popupRequest.TraceId,
+                traceId: lookupTraceId,
                 cancellationToken: lookupRequest.CancellationToken);
             if (!IsCurrentSubtitleLookup(lookupRequest))
             {
                 lookupOverlay?.CancelShow(lookupTraceId);
                 return;
             }
-            _isLookupPopupVisible = true;
-            ApplySubtitleAppearance();
         }
         catch (OperationCanceledException) when (lookupRequest.CancellationToken.IsCancellationRequested)
         {
@@ -725,11 +725,16 @@ public sealed partial class VideoPlayerWindow : Window
                 return;
             }
 
-            _popupOverlay?.Dismiss();
-            ClearSubtitleCanvasSelection();
-            VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
-            _isLookupPopupVisible = false;
-            ApplySubtitleAppearance();
+            _subtitleLookupCoordinator.CancelCurrent();
+            lookupOverlay?.CancelShow(lookupTraceId);
+            if (!_isLookupPopupVisible)
+            {
+                _popupOverlay?.Dismiss();
+                ClearSubtitleCanvasSelection();
+                VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
+                ApplySubtitleAppearance();
+            }
+
             ViewModel.StatusText = ex.Message;
         }
     }
@@ -891,6 +896,7 @@ public sealed partial class VideoPlayerWindow : Window
 
         _popupOverlay = new DictionaryPopupOverlay();
         _popupOverlay.Dismissed += PopupOverlay_Dismissed;
+        _popupOverlay.RootContentCommitted += PopupOverlay_RootContentCommitted;
         _popupOverlay.UseCanvas(
             PopupOverlayCanvas,
             DictionaryPopupCanvasInputMode.VisibleHostsOnly);
@@ -930,7 +936,10 @@ public sealed partial class VideoPlayerWindow : Window
             if (SubtitleWebView.CoreWebView2 != null)
                 SubtitleWebView.CoreWebView2.WebMessageReceived -= OnSubtitleWebMessageReceived;
             if (_popupOverlay != null)
+            {
                 _popupOverlay.Dismissed -= PopupOverlay_Dismissed;
+                _popupOverlay.RootContentCommitted -= PopupOverlay_RootContentCommitted;
+            }
             _subtitleLookupCoordinator.Dispose();
             _popupOverlay?.Dispose();
             _popupOverlay = null;
