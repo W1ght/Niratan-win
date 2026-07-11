@@ -763,4 +763,60 @@
   <data name="NovelBookMoveDialog.Title" xml:space="preserve"><value>移动到书架</value></data>
   <data name="NovelBookMoveDialog.PrimaryButtonText" xml:space="preserve"><value>移动</value></data>
   <data name="NovelBookMoveDialog.CloseButtonText" xml:space="preserve"><value>取消</value></data>
+  <data name="NovelStatisticsBackToBookshelfButton.Label" xml:space="preserve"><value>书架</value></data>
+  <data name="NovelStatisticsBackToBookshelfButton.AutomationProperties.Name" xml:space="preserve"><value>返回书架</value></data>
+  <data name="NovelStatisticsDashboardTitle.Text" xml:space="preserve"><value>统计</value></data>
+  <data name="NovelStatisticsDashboardSubtitle.Text" xml:space="preserve"><value>查看阅读活动、目标、趋势与书库对比。</value></data>
+  <data name="NovelStatisticsTrendCardTitle.Text" xml:space="preserve"><value>区间与趋势</value></data>
+  <data name="NovelStatisticsRangeLabel.Text" xml:space="preserve"><value>区间</value></data>
+  <data name="NovelStatisticsAnchorLabel.Text" xml:space="preserve"><value>锚点日期</value></data>
+  <data name="NovelStatisticsTrendGrainLabel.Text" xml:space="preserve"><value>时间粒度</value></data>
+  <data name="NovelStatisticsTrendMetricLabel.Text" xml:space="preserve"><value>指标</value></data>
+  <data name="NovelStatisticsTrendStyleLabel.Text" xml:space="preserve"><value>样式</value></data>
+  <data name="NovelStatisticsTrendHelp.Text" xml:space="preserve"><value>区间会筛选所有统计卡片；时间粒度只影响趋势图。</value></data>
+  <data name="NovelStatisticsTodayTitle.Text" xml:space="preserve"><value>今日</value></data>
+  <data name="NovelStatisticsGoalTitle.Text" xml:space="preserve"><value>目标</value></data>
+  <data name="NovelStatisticsGoalTypeLabel.Text" xml:space="preserve"><value>目标类型</value></data>
+  <data name="NovelStatisticsCharacterTargetLabel.Text" xml:space="preserve"><value>字符目标</value></data>
+  <data name="NovelStatisticsDurationTargetLabel.Text" xml:space="preserve"><value>时长目标</value></data>
+  <data name="NovelStatisticsWeeklyTargetLabel.Text" xml:space="preserve"><value>每周目标天数</value></data>
+  <data name="NovelStatisticsGoalHelp.Text" xml:space="preserve"><value>调整目标会重新计算历史进度和连续记录。</value></data>
+  <data name="NovelStatisticsWeekTitle.Text" xml:space="preserve"><value>本周</value></data>
+  <data name="NovelStatisticsSelectedRangeTitle.Text" xml:space="preserve"><value>所选区间</value></data>
+  <data name="NovelStatisticsSpeedTitle.Text" xml:space="preserve"><value>速度摘要</value></data>
+  <data name="NovelStatisticsSpeedHelp.Text" xml:space="preserve"><value>速度计算会忽略不足 1 分钟的阅读样本。</value></data>
+  <data name="NovelStatisticsCalendarTitle.Text" xml:space="preserve"><value>阅读日历</value></data>
+  <data name="NovelStatisticsCalendarRecentYear.Text" xml:space="preserve"><value>最近一年</value></data>
+  <data name="NovelStatisticsRankingTitle.Text" xml:space="preserve"><value>书籍排行</value></data>
+  <data name="NovelStatisticsShelfTitle.Text" xml:space="preserve"><value>书架对比</value></data>
+  <data name="NovelStatisticsLoadingText.Text" xml:space="preserve"><value>正在加载统计…</value></data>
+  <data name="NovelStatisticsEmptyTitle.Text" xml:space="preserve"><value>暂无阅读统计</value></data>
+  <data name="NovelStatisticsEmptyDescription.Text" xml:space="preserve"><value>开始阅读小说后，这里会生成统计仪表盘。</value></data>
+  <data name="NovelStatisticsMetricDuration.Text" xml:space="preserve"><value>时长</value></data>
+  <data name="NovelStatisticsMetricCharacters.Text" xml:space="preserve"><value>字符数</value></data>
+  <data name="NovelStatisticsMetricSpeed.Text" xml:space="preserve"><value>速度</value></data>
+  <data name="NovelStatisticsMetricStreak.Text" xml:space="preserve"><value>连续天数</value></data>
+  <data name="NovelStatisticsMetricAverageCharacters.Text" xml:space="preserve"><value>日均字符</value></data>
+  <data name="NovelStatisticsMetricGoalProgress.Text" xml:space="preserve"><value>目标进度</value></data>
+  <data name="NovelStatisticsMetricDaysMet.Text" xml:space="preserve"><value>达标天数</value></data>
+  <data name="NovelStatisticsMetricWeighted.Text" xml:space="preserve"><value>加权平均</value></data>
+  <data name="NovelStatisticsMetricMedianActiveDay.Text" xml:space="preserve"><value>活跃日中位数</value></data>
+  <data name="NovelStatisticsMetricLastSevenActiveDays.Text" xml:space="preserve"><value>最近 7 个活跃日</value></data>
+  <data name="NovelStatisticsMetricChange.Text" xml:space="preserve"><value>变化</value></data>
+  <data name="NovelStatisticsMetricFastest.Text" xml:space="preserve"><value>最快</value></data>
+  <data name="NovelStatisticsMetricSlowest.Text" xml:space="preserve"><value>最慢</value></data>
+  <data name="NovelStatisticsCorruptWarning.Text" xml:space="preserve"><value>部分统计暂时不可用，受影响的 sidecar 文件保持未修改。</value></data>
+  <data name="NovelStatisticsNoReadingRecords.Text" xml:space="preserve"><value>无阅读记录</value></data>
+  <data name="NovelStatisticsRangeModeControl.AutomationProperties.Name" xml:space="preserve"><value>统计区间</value></data>
+  <data name="NovelStatisticsAnchorDateControl.AutomationProperties.Name" xml:space="preserve"><value>统计锚点日期</value></data>
+  <data name="NovelStatisticsTrendGrainControl.AutomationProperties.Name" xml:space="preserve"><value>趋势时间粒度</value></data>
+  <data name="NovelStatisticsTrendMetricControl.AutomationProperties.Name" xml:space="preserve"><value>趋势指标</value></data>
+  <data name="NovelStatisticsTrendStyleControl.AutomationProperties.Name" xml:space="preserve"><value>趋势样式</value></data>
+  <data name="NovelStatisticsTrendChartControl.AutomationProperties.Name" xml:space="preserve"><value>阅读趋势图</value></data>
+  <data name="NovelStatisticsGoalTypeControl.AutomationProperties.Name" xml:space="preserve"><value>每日目标类型</value></data>
+  <data name="NovelStatisticsCharacterTargetControl.AutomationProperties.Name" xml:space="preserve"><value>每日字符目标</value></data>
+  <data name="NovelStatisticsDurationTargetControl.AutomationProperties.Name" xml:space="preserve"><value>每日时长目标（分钟）</value></data>
+  <data name="NovelStatisticsWeeklyTargetControl.AutomationProperties.Name" xml:space="preserve"><value>每周目标天数</value></data>
+  <data name="NovelStatisticsCalendarControl.AutomationProperties.Name" xml:space="preserve"><value>阅读日历</value></data>
+  <data name="NovelStatisticsRankingMetricControl.AutomationProperties.Name" xml:space="preserve"><value>书籍排行指标</value></data>
 </root>

@@ -332,7 +332,8 @@ metadata.json + bookinfo.json + statistics.json + shelves.json
   → NovelStatisticsDashboardService（最近一年 immutable snapshot）
     → NovelStatisticsDashboardCalculator（纯计算）
       → Today / Week / Range / Speed / Trend / Calendar / Ranking / Shelves
-        → NovelLibraryPageViewModel → WinUI Dashboard
+        → NovelStatisticsDashboardViewModel（展示投影 + selector 生命周期）
+          → NovelStatisticsDashboardView（WinUI 全页 Dashboard）
 ```
 
 - Dashboard 读取当前可见书籍；损坏 `statistics.json` 按书报告并跳过，绝不因扫描或缓存恢复覆盖原文件。
@@ -342,6 +343,10 @@ metadata.json + bookinfo.json + statistics.json + shelves.json
 - Range 的 year/month/week/day 与 anchor 会重算所有 Dashboard 卡片；Trend 的 day/week/month grain 和 characters/duration/speed metric 独立切换，Ranking 也可按三种 metric 排序。
 - Calendar 覆盖最近一年并支持选择日期查看字符、时长和书籍数；目标类型、字符/时长阈值与周目标天数可在 Dashboard 内调整，修改后重算历史目标与 streak 并持久化到应用设置。
 - `statistics_dashboard_cache_v1.json` 只是 schema-versioned 派生缓存。key 包含本地日期、书籍身份及 metadata/bookinfo/statistics 文件投影；损坏、key/schema 不匹配或 `NovelLibraryChangedMessage` 只删除缓存自身。命中缓存时先同步展示，再后台重读 sidecar、更新缓存并在 UI 线程发布新 snapshot。
+- `NovelLibraryPageViewModel` 只负责 Bookshelf/Statistics 全页切换，并把当前可见书籍与 `NovelShelfState` 交给子 ViewModel；统计格式化、selector、目标设置和 refresh 订阅不再通过父 ViewModel 转发。
+- Dashboard 只有一个纵向 `ScrollViewer`。Trend 为全宽卡片；其余九个模块在 `1260` 与 `840` effective pixels 处切换三列、两列和单列布局。selector 行与最近一年七行 Calendar 只允许横向滚动。
+- `NovelStatisticsTrendChart` 是纯 UI 控件：消费已经归一化的 display points，在 Canvas 上绘制 Bar 或 `Polyline`，不依赖数据库、sidecar 或第三方图表包，并为每个点保留 tooltip/UI Automation 文本。
+- 每次激活创建 generation 与 linked cancellation source。离开 Dashboard、重复进入或书库重载会取消旧 generation；旧 load completion 与排队的 refresh 事件不能覆盖新页面。`SnapshotRefreshed` 只在激活期间订阅并回到捕获的 UI synchronization context 后应用。
 
 ---
 

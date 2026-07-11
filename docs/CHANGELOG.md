@@ -1,5 +1,21 @@
 # Changelog
 
+## 小说统计已有完整数据，但书架内联面板无法呈现 Niratan Dashboard
+
+**原因**：
+- typed sidecar repository 与纯计算器已经覆盖最近一年、目标、速度、趋势、日历、排行和书架对比，但 UI 仍是书架顶部的限高内联面板。
+- 统计展示状态和格式化通过 `NovelLibraryPageViewModel` 转发，无法建立 Niratan 的全页切换、独立生命周期、三档自适应布局和完整键盘/UI Automation 契约。
+- 该问题是展示投影和页面架构缺口，不是统计引擎或 `statistics.json` 数据缺失。
+
+**解决**：
+- 新增独立 `NovelStatisticsDashboardViewModel` 与全页 `NovelStatisticsDashboardView`；父 ViewModel 只切换 Bookshelf/Statistics 并提供当前书籍、书架状态。
+- 补齐 Range & Trend、Today、Goal、This Week、Reading Calendar、Selected Range、Speed Summary、Book Ranking、Shelf Comparison；自研 UI-only Canvas 控件绘制 Bar/Line，不新增图表依赖。
+- Dashboard 使用单一纵向滚动所有者，在 1260/840 effective pixels 切换三列、两列、单列；Calendar 仅横向滚动，所有 selector 有稳定 AutomationId 与中英文资源。
+- 激活 generation、linked cancellation source 与激活期 refresh 订阅保证离开/重进时旧 load 和旧 refresh 不能覆盖新 snapshot；损坏 sidecar 仍保持原文件不变。
+- 小说、书架和统计继续以 JSON sidecar 为真源；SQLite 只保留视频业务边界，视频功能未移除。
+
+---
+
 ## Reader 跳转会污染阅读统计，关闭时可能丢失最后一段时间
 
 **原因**：
