@@ -44,4 +44,18 @@ public sealed class ReaderProgrammaticNavigationTrackerTests
 
         tracker.TryBeginCompletion(generation, 1, 0.5).Should().BeFalse();
     }
+
+    [Fact]
+    public void AbortCommit_ReleasesOnlyTheMatchingCommittingDestination()
+    {
+        var tracker = new ReaderProgrammaticNavigationTracker();
+        var generation = tracker.Begin(1);
+        tracker.TryBeginCompletion(generation, 1, 0.5).Should().BeTrue();
+
+        tracker.AbortCommit(generation + 1, 1).Should().BeFalse();
+        tracker.AbortCommit(generation, 2).Should().BeFalse();
+        tracker.CanAcceptReaderInput.Should().BeFalse();
+        tracker.AbortCommit(generation, 1).Should().BeTrue();
+        tracker.CanAcceptReaderInput.Should().BeTrue();
+    }
 }

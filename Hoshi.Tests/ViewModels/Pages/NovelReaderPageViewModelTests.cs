@@ -1844,6 +1844,145 @@ public sealed class NovelReaderPageViewModelTests
     }
 
     [Fact]
+    public async Task AdjacentCompletion_WhenBookmarkWriteFails_DoesNotPublishOrResetBaseline()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1", 1, 0.5, 150, 200, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Failure("write failed", "Bookmark"));
+        var statistics = new FakeReaderStatisticsSession();
+        var sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            statistics,
+            CreateAutoSyncCoordinator().Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+        sut.SetChapterCharacterCounts([100, 100]);
+        sut.SetChapter(0, 2);
+        sut.UpdateProgress(0.8);
+
+        var committed = await sut.CompleteAdjacentChapterNavigationAsync(1, 0.5, ct);
+
+        committed.Should().BeFalse();
+        sut.CurrentChapterIndex.Should().Be(0);
+        sut.Progress.Should().Be(0.8);
+        sut.CurrentCharacterCount.Should().Be(80);
+        statistics.ResetPositions.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AdjacentCompletion_WhenNewerPositionIsPublished_DropsStaleDestinationAndLifecycleUsesNewerTuple()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var firstSaveStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstSave = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var saves = new List<(int Chapter, int Characters)>();
+        var call = 0;
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1", It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int>(), 200,
+                It.IsAny<CancellationToken>()))
+            .Returns(async (string _, int chapter, double _, int characters, int _, CancellationToken _) =>
+            {
+                lock (saves)
+                    saves.Add((chapter, characters));
+                if (Interlocked.Increment(ref call) == 1)
+                {
+                    firstSaveStarted.TrySetResult();
+                    await releaseFirstSave.Task;
+                }
+                return Result.Success();
+            });
+        var statistics = new FakeReaderStatisticsSession();
+        var autoSync = CreateAutoSyncCoordinator();
+        autoSync.Setup(service => service.FlushAsync(It.IsAny<NovelBook>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            statistics,
+            autoSync.Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+        sut.SetChapterCharacterCounts([100, 100]);
+        sut.SetChapter(0, 2);
+        sut.UpdateProgress(0.4);
+        var prior = sut.SaveProgressNowAsync(flushStatistics: false, scheduleAutoSync: false, ct: ct);
+        await firstSaveStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        var adjacent = sut.CompleteAdjacentChapterNavigationAsync(1, 0.5, ct);
+
+        sut.SetChapter(0, 2);
+        sut.UpdateProgress(0.7);
+        var close = sut.PrepareForReaderLifecycleCloseAsync(ct);
+        releaseFirstSave.TrySetResult();
+        var committed = await adjacent;
+        await Task.WhenAll(prior, close).WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        committed.Should().BeFalse();
+        saves.Should().Equal((0, 40), (0, 70));
+        statistics.ResetPositions.Should().BeEmpty();
+        statistics.Checkpoints.Should().ContainSingle()
+            .Which.Should().Be((70, ReaderStatisticsCheckpointReason.Close));
+    }
+
+    [Fact]
+    public async Task AdjacentCompletion_CancelledBeforeApplyIsRetiredAcrossBackgroundAndClose()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var firstSaveStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstSave = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var saves = new List<(int Chapter, int Characters)>();
+        var call = 0;
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1", It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int>(), 200,
+                It.IsAny<CancellationToken>()))
+            .Returns(async (string _, int chapter, double _, int characters, int _, CancellationToken _) =>
+            {
+                lock (saves)
+                    saves.Add((chapter, characters));
+                if (Interlocked.Increment(ref call) == 1)
+                {
+                    firstSaveStarted.TrySetResult();
+                    await releaseFirstSave.Task;
+                }
+                return Result.Success();
+            });
+        var autoSync = CreateAutoSyncCoordinator();
+        autoSync.Setup(service => service.FlushAsync(It.IsAny<NovelBook>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            new FakeReaderStatisticsSession(),
+            autoSync.Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+        sut.SetChapterCharacterCounts([100, 100]);
+        sut.SetChapter(0, 2);
+        sut.UpdateProgress(0.4);
+        var prior = sut.SaveProgressNowAsync(flushStatistics: false, scheduleAutoSync: false, ct: ct);
+        await firstSaveStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        using var adjacentCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var adjacent = sut.CompleteAdjacentChapterNavigationAsync(1, 0.5, adjacentCts.Token);
+        var background = sut.CheckpointAppBackgroundingAsync(ct);
+        adjacentCts.Cancel();
+        releaseFirstSave.TrySetResult();
+
+        var cancelled = async () => await adjacent;
+        await cancelled.Should().ThrowAsync<OperationCanceledException>();
+        await Task.WhenAll(prior, background);
+        await sut.PrepareForReaderLifecycleCloseAsync(ct);
+
+        saves.Should().Equal((0, 40), (0, 40), (0, 40));
+    }
+
+    [Fact]
     public async Task ManualFinalBookLimit_AutostartsPageTurnStatisticsWithoutCheckpoint()
     {
         using var temp = new TempBookDirectory();
@@ -2230,8 +2369,9 @@ public sealed class NovelReaderPageViewModelTests
             autoSync.Object);
         await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
 
-        await sut.SaveProgressAndResetStatisticsBaselineAsync(ct);
+        var committed = await sut.SaveProgressAndResetStatisticsBaselineAsync(ct);
 
+        committed.Should().BeFalse();
         statistics.ResetPositions.Should().BeEmpty();
         notifications.Verify(service => service.ShowError("write failed", "Bookmark"), Times.Once);
         autoSync.Verify(service => service.ScheduleExport(It.IsAny<NovelBook>()), Times.Never);

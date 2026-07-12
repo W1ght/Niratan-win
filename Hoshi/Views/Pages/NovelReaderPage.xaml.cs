@@ -71,6 +71,7 @@ public sealed partial class NovelReaderPage : Page
     private CancellationTokenSource? _searchCts;
     private long _searchRequestVersion;
     private readonly ReaderProgrammaticNavigationTracker _programmaticNavigation = new();
+    private readonly ReaderAdjacentNavigationCommitCoordinator _adjacentCommitCoordinator;
     private readonly ReaderNavigationHistory _navigationHistory = new();
     private string? _pendingProgrammaticFragment;
     private bool _pendingAdjacentChapterNavigation;
@@ -133,6 +134,8 @@ public sealed partial class NovelReaderPage : Page
         _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         _shortcutService = App.GetService<IShortcutService>();
         _messenger = App.GetService<IMessenger>();
+        _adjacentCommitCoordinator = new ReaderAdjacentNavigationCommitCoordinator(
+            _programmaticNavigation);
         _shortcutService.ShortcutsChanged += OnReaderShortcutsChanged;
         AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(NovelReaderPage_KeyDown), true);
         RegisterReaderKeyboardAccelerators();
@@ -1216,7 +1219,9 @@ public sealed partial class NovelReaderPage : Page
             if (_sasayakiNav.CurrentMatch is { } match
                 && match.ChapterIndex == destinationChapterIndex)
             {
-                await HighlightSasayakiCueAsync(match);
+                await HighlightSasayakiCueAsync(
+                    match,
+                    allowAutoScroll: !_pendingAdjacentChapterNavigation);
             }
             else
             {
@@ -1311,26 +1316,32 @@ public sealed partial class NovelReaderPage : Page
                     {
                         var completionChapterIndex = _pendingAdjacentChapterIndex
                             ?? ViewModel.CurrentChapterIndex;
-                        if (!_programmaticNavigation.TryBeginCompletion(
+                        if (_pendingAdjacentChapterNavigation)
+                        {
+                            await _adjacentCommitCoordinator.CommitAsync(
                                 navigationGeneration,
                                 completionChapterIndex,
-                                restoredProgress))
-                        {
-                            Log.Warning("[NovelReader] Ignoring stale restore completion: generation={Generation}", navigationGeneration);
+                                restoredProgress,
+                                commitCt => ViewModel.CompleteAdjacentChapterNavigationAsync(
+                                    completionChapterIndex,
+                                    restoredProgress,
+                                    commitCt),
+                                CommitAdjacentChapterVisibleStateAsync,
+                                RecoverAdjacentChapterNavigationAsync,
+                                CancellationToken.None);
                             break;
                         }
 
-                        if (_pendingAdjacentChapterNavigation)
-                            await CompleteAdjacentChapterNavigationAsync(restoredProgress);
-                        else
-                        {
-                            ViewModel.UpdateProgress(restoredProgress);
-                            _currentProgress = restoredProgress;
-                            await CompleteProgrammaticNavigationAsync();
-                        }
-                        _programmaticNavigation.CompleteCommit(
+                        await _adjacentCommitCoordinator.CommitAsync(
                             navigationGeneration,
-                            completionChapterIndex);
+                            completionChapterIndex,
+                            restoredProgress,
+                            ViewModel.SaveProgressAndResetStatisticsBaselineAsync,
+                            CompleteProgrammaticNavigationVisibleStateAsync,
+                            RecoverProgrammaticNavigationAsync,
+                            CancellationToken.None,
+                            prepareAsync: () =>
+                                PrepareProgrammaticNavigationVisibleStateAsync(restoredProgress));
                     }
                     else if (!_programmaticNavigation.HasPending)
                     {
@@ -1822,27 +1833,54 @@ public sealed partial class NovelReaderPage : Page
         _programmaticNavigation.Begin(chapterIndex);
     }
 
-    private async Task CompleteProgrammaticNavigationAsync()
+    private Task CompleteProgrammaticNavigationVisibleStateAsync()
     {
         _pendingProgrammaticFragment = null;
-        await ViewModel.SaveProgressAndResetStatisticsBaselineAsync();
         RefreshReaderDisplayChrome();
+        return Task.CompletedTask;
     }
 
-    private async Task CompleteAdjacentChapterNavigationAsync(double resolvedProgress)
+    private Task PrepareProgrammaticNavigationVisibleStateAsync(double restoredProgress)
     {
-        if (_pendingAdjacentChapterIndex is not int adjacentChapterIndex)
-            return;
+        ViewModel.UpdateProgress(restoredProgress);
+        _currentProgress = restoredProgress;
+        return Task.CompletedTask;
+    }
 
-        await ViewModel.CompleteAdjacentChapterNavigationAsync(
-            adjacentChapterIndex,
-            resolvedProgress);
+    private Task RecoverProgrammaticNavigationAsync()
+    {
+        _pendingProgrammaticFragment = null;
+        _currentProgress = ViewModel.Progress;
+        RefreshReaderDisplayChrome();
+        LoadChapter(
+            ViewModel.CurrentChapterIndex,
+            progressOverride: ViewModel.Progress);
+        return Task.CompletedTask;
+    }
+
+    private Task CommitAdjacentChapterVisibleStateAsync()
+    {
         _currentProgress = ViewModel.Progress;
         _pendingAdjacentChapterNavigation = false;
         _pendingAdjacentChapterIndex = null;
         _pendingAdjacentChapterRestoreTarget = null;
         RefreshReaderDisplayChrome();
         RevealAdjacentChapterWhenCommitted();
+        return Task.CompletedTask;
+    }
+
+    private Task RecoverAdjacentChapterNavigationAsync()
+    {
+        _pendingAdjacentChapterNavigation = false;
+        _pendingAdjacentChapterIndex = null;
+        _pendingAdjacentChapterRestoreTarget = null;
+        _pendingAdjacentChapterReady = false;
+        _currentProgress = ViewModel.Progress;
+        RefreshReaderDisplayChrome();
+        LoadChapter(
+            ViewModel.CurrentChapterIndex,
+            progressOverride: ViewModel.Progress);
+        return Task.CompletedTask;
     }
 
     private void RevealAdjacentChapterWhenCommitted()
@@ -3480,7 +3518,9 @@ public sealed partial class NovelReaderPage : Page
         });
     }
 
-    private async Task HighlightSasayakiCueAsync(SasayakiMatch match)
+    private async Task HighlightSasayakiCueAsync(
+        SasayakiMatch match,
+        bool allowAutoScroll = true)
     {
         if (NovelWebView.CoreWebView2 == null)
             return;
@@ -3497,7 +3537,8 @@ public sealed partial class NovelReaderPage : Page
                 : settings.LightBackgroundColor;
             var textColorJson = JsonSerializer.Serialize(textColor);
             var backgroundColorJson = JsonSerializer.Serialize(backgroundColor);
-            var autoScrollJson = JsonSerializer.Serialize(settings.AutoScroll);
+            var autoScrollJson = JsonSerializer.Serialize(
+                allowAutoScroll && settings.AutoScroll);
             var progressJson = await NovelWebView.CoreWebView2.ExecuteScriptAsync(
                 $$"""
                 (() => {
@@ -3510,7 +3551,8 @@ public sealed partial class NovelReaderPage : Page
                   return window.hoshiSasayaki.highlightCue({{match.StartCodePoint}}, {{match.Length}}, {{autoScrollJson}});
                 })();
                 """);
-            if (generation == Volatile.Read(ref _sasayakiHighlightGeneration))
+            if (allowAutoScroll
+                && generation == Volatile.Read(ref _sasayakiHighlightGeneration))
                 TryApplySasayakiAutoScrollProgress(progressJson);
         }
         catch (Exception ex)

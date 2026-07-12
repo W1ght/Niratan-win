@@ -2989,7 +2989,7 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("if (outcome.DidMove)");
         readerCode.Should().Contain("outcome.AdjacentChapterIndex is int adjacentChapterIndex");
         readerCode.Should().Contain("outcome.AdjacentChapterRestoreTarget is ReaderChapterRestoreTarget restoreTarget");
-        readerCode.Should().Contain("CompleteAdjacentChapterNavigationAsync");
+        readerCode.Should().Contain("ReaderAdjacentNavigationCommitCoordinator");
         var adjacentNavigationBody = Regex.Match(
             readerCode,
             @"(?s)if \(outcome\.AdjacentChapterIndex.*?\n\s*\}\s*\n\s*if \(readerEvent\.Result").Value;
@@ -2999,17 +2999,16 @@ public class NovelReaderWebAssetTests
         adjacentNavigationBody.Should().NotContain("SaveProgressNowAsync");
         adjacentNavigationBody.Should().NotContain("ViewModel.UpdateProgress");
         readerCode.Should().Contain("ViewModel.CompleteAdjacentChapterNavigationAsync(");
-        readerCode.Should().Contain("if (!_programmaticNavigation.TryBeginCompletion(");
-        readerCode.Should().Contain("_programmaticNavigation.CompleteCommit(");
-        readerCode.Should().Contain("Log.Warning(\"[NovelReader] Ignoring stale restore completion");
+        readerCode.Should().Contain("_adjacentCommitCoordinator.CommitAsync(");
         readerCode.Should().Contain("if (_pendingAdjacentChapterNavigation)");
         readerCode.Should().Contain("NovelWebView.Opacity = 0");
         readerCode.Should().Contain("RevealAdjacentChapterWhenCommitted");
         readerCode.Should().Contain("BeginProgrammaticNavigationAsync");
-        readerCode.Should().Contain("CompleteProgrammaticNavigationAsync");
+        readerCode.Should().Contain("CompleteProgrammaticNavigationVisibleStateAsync");
         readerCode.Should().Contain("ViewModel.CheckpointProgrammaticDepartureAsync");
-        readerCode.Should().MatchRegex(
-            @"(?s)private async Task CompleteProgrammaticNavigationAsync\(\)\s*\{\s*_pendingProgrammaticFragment = null;\s*await ViewModel\.SaveProgressAndResetStatisticsBaselineAsync\(\);\s*RefreshReaderDisplayChrome\(\);\s*\}");
+        readerCode.Should().Contain("ViewModel.SaveProgressAndResetStatisticsBaselineAsync");
+        readerCode.Should().Contain("RecoverProgrammaticNavigationAsync");
+        readerCode.Should().Contain("PrepareProgrammaticNavigationVisibleStateAsync(restoredProgress)");
         readerCode.Should().Contain("ResetStatisticsBaseline");
         readerCode.Should().Contain("StatisticsButton_Click");
         var statisticsButtonBody = Regex.Match(
@@ -3633,9 +3632,10 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
 
         readerCode.Should().Contain("if (!_programmaticNavigation.CanAcceptReaderInput)");
-        readerCode.Should().Contain("TryBeginCompletion(");
-        readerCode.Should().Contain("CompleteCommit(");
+        readerCode.Should().Contain("_adjacentCommitCoordinator.CommitAsync(");
         readerCode.Should().Contain("if (!_programmaticNavigation.CanAcceptReaderInput)\n            return;");
+        readerCode.Should().Contain("ReaderAdjacentNavigationCommitCoordinator");
+        readerCode.Should().Contain("RecoverAdjacentChapterNavigationAsync");
     }
 
     [Fact]
@@ -3647,6 +3647,10 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("var destinationChapterIndex = _pendingAdjacentChapterIndex ?? ViewModel.CurrentChapterIndex;");
         readerCode.Should().Contain("ViewModel.GetChapterHighlightsJson(destinationChapterIndex)");
         readerCode.Should().Contain("match.ChapterIndex == destinationChapterIndex");
+        readerCode.Should().Contain(
+            "HighlightSasayakiCueAsync(\n                    match,\n                    allowAutoScroll: !_pendingAdjacentChapterNavigation)");
+        readerCode.Should().Contain("allowAutoScroll && settings.AutoScroll");
+        readerCode.Should().Contain("if (allowAutoScroll");
     }
 
     [Fact]

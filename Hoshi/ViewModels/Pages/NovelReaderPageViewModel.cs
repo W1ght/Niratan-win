@@ -526,15 +526,12 @@ public partial class NovelReaderPageViewModel : ObservableObject
             TaskCompletionSource admission;
             lock (_saveGate)
             {
-                var request = CaptureLifecycleProgressSaveRequest();
-                var statisticsCharacterCount = request?.CurrentCharacterCount
-                    ?? CurrentCharacterCount;
+                var snapshot = CaptureLifecycleBoundarySnapshot();
                 admission = CreateWriterAdmission();
                 boundary = RunLifecycleWriterBoundaryAsync(
                     admission.Task,
                     _writerTail,
-                    request,
-                    statisticsCharacterCount,
+                    snapshot,
                     ReaderStatisticsCheckpointReason.Close,
                     cancelAfterFlush: true,
                     CancellationToken.None);
@@ -568,15 +565,12 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
                 _lifecycleWriterBarrier = true;
                 _saveCts?.Cancel();
-                var request = CaptureLifecycleProgressSaveRequest();
-                var statisticsCharacterCount = request?.CurrentCharacterCount
-                    ?? CurrentCharacterCount;
+                var snapshot = CaptureLifecycleBoundarySnapshot();
                 admission = CreateWriterAdmission();
                 boundary = RunLifecycleWriterBoundaryAsync(
                     admission.Task,
                     _writerTail,
-                    request,
-                    statisticsCharacterCount,
+                    snapshot,
                     ReaderStatisticsCheckpointReason.Background,
                     cancelAfterFlush: false,
                     ct);
@@ -735,6 +729,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
         }
         finally
         {
+            RetireAdmittedProgressRequest(request);
             lock (_saveGate)
             {
                 if (ReferenceEquals(_saveCts, owner))
@@ -786,14 +781,21 @@ public partial class NovelReaderPageViewModel : ObservableObject
         bool scheduleAutoSync,
         CancellationToken ct)
     {
-        await admission;
-        await AwaitPreviousWriterCompletionAsync(previousWriter);
-        ct.ThrowIfCancellationRequested();
-        await SaveProgressCoreAsync(
-            request,
-            flushStatistics,
-            scheduleAutoSync,
-            ct);
+        try
+        {
+            await admission;
+            await AwaitPreviousWriterCompletionAsync(previousWriter);
+            ct.ThrowIfCancellationRequested();
+            await SaveProgressCoreAsync(
+                request,
+                flushStatistics,
+                scheduleAutoSync,
+                ct);
+        }
+        finally
+        {
+            RetireAdmittedProgressRequest(request);
+        }
     }
 
     private Task SaveProgressAndCheckpointAsync(
@@ -831,20 +833,27 @@ public partial class NovelReaderPageViewModel : ObservableObject
         ReaderStatisticsCheckpointReason reason,
         CancellationToken ct)
     {
-        await admission;
-        await AwaitPreviousWriterCompletionAsync(previousWriter);
-        ct.ThrowIfCancellationRequested();
-        var saved = await SaveProgressCoreAsync(
-            request,
-            flushStatistics: false,
-            scheduleAutoSync: true,
-            ct);
-        if (!saved)
-            return;
-        await CheckpointReadingAtPositionAsync(
-            reason,
-            request.CurrentCharacterCount,
-            ct);
+        try
+        {
+            await admission;
+            await AwaitPreviousWriterCompletionAsync(previousWriter);
+            ct.ThrowIfCancellationRequested();
+            var saved = await SaveProgressCoreAsync(
+                request,
+                flushStatistics: false,
+                scheduleAutoSync: true,
+                ct);
+            if (!saved)
+                return;
+            await CheckpointReadingAtPositionAsync(
+                reason,
+                request.CurrentCharacterCount,
+                ct);
+        }
+        finally
+        {
+            RetireAdmittedProgressRequest(request);
+        }
     }
 
     private async Task RunCheckpointWriterAsync(
@@ -860,16 +869,16 @@ public partial class NovelReaderPageViewModel : ObservableObject
         await CheckpointReadingAtPositionAsync(reason, position, ct);
     }
 
-    public Task SaveProgressAndResetStatisticsBaselineAsync(
+    public Task<bool> SaveProgressAndResetStatisticsBaselineAsync(
         CancellationToken ct = default)
     {
-        Task operation;
+        Task<bool> operation;
         TaskCompletionSource admission;
         lock (_saveGate)
         {
             var request = CaptureProgressSaveRequest();
             if (!CanAdmitProgressWriter() || request == null)
-                return Task.CompletedTask;
+                return Task.FromResult(false);
 
             _saveCts?.Cancel();
             _latestAdmittedProgressRequest = request;
@@ -886,12 +895,12 @@ public partial class NovelReaderPageViewModel : ObservableObject
         return operation;
     }
 
-    public Task CompleteAdjacentChapterNavigationAsync(
+    public Task<bool> CompleteAdjacentChapterNavigationAsync(
         int chapterIndex,
         double resolvedProgress,
         CancellationToken ct = default)
     {
-        Task operation;
+        Task<bool> operation;
         TaskCompletionSource admission;
         lock (_saveGate)
         {
@@ -901,7 +910,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
                 || chapterIndex >= ChapterCount
                 || !double.IsFinite(resolvedProgress))
             {
-                return Task.CompletedTask;
+                return Task.FromResult(false);
             }
 
             var progress = Math.Clamp(resolvedProgress, 0, 1);
@@ -927,25 +936,40 @@ public partial class NovelReaderPageViewModel : ObservableObject
         return operation;
     }
 
-    private async Task RunAdjacentChapterCompletionWriterAsync(
+    private async Task<bool> RunAdjacentChapterCompletionWriterAsync(
         Task admission,
         Task previousWriter,
         ProgressSaveRequest request,
         CancellationToken ct)
     {
-        await admission;
-        await AwaitPreviousWriterCompletionAsync(previousWriter);
-        ct.ThrowIfCancellationRequested();
-        ApplyResolvedChapterPosition(request);
-        var saved = await SaveProgressCoreAsync(
-            request,
-            flushStatistics: false,
-            scheduleAutoSync: true,
-            ct);
-        if (!saved)
-            return;
-        _statisticsSession.ResetBaseline(
-            new ReaderStatisticsPosition(request.CurrentCharacterCount));
+        try
+        {
+            await admission;
+            await AwaitPreviousWriterCompletionAsync(previousWriter);
+            ct.ThrowIfCancellationRequested();
+            lock (_saveGate)
+            {
+                if (request.PositionRevision < _currentPositionRevision)
+                    return false;
+            }
+
+            var saved = await SaveProgressCoreAsync(
+                request,
+                flushStatistics: false,
+                scheduleAutoSync: true,
+                ct);
+            if (!saved)
+                return false;
+
+            _statisticsSession.ResetBaseline(
+                new ReaderStatisticsPosition(request.CurrentCharacterCount));
+            ApplyResolvedChapterPosition(request);
+            return true;
+        }
+        finally
+        {
+            RetireAdmittedProgressRequest(request);
+        }
     }
 
     private void ApplyResolvedChapterPosition(ProgressSaveRequest request)
@@ -996,31 +1020,38 @@ public partial class NovelReaderPageViewModel : ObservableObject
             base.OnPropertyChanged(e);
     }
 
-    private async Task RunProgressWriterWithBaselineResetAsync(
+    private async Task<bool> RunProgressWriterWithBaselineResetAsync(
         Task admission,
         Task previousWriter,
         ProgressSaveRequest request,
         CancellationToken ct)
     {
-        await admission;
-        await AwaitPreviousWriterCompletionAsync(previousWriter);
-        ct.ThrowIfCancellationRequested();
-        var saved = await SaveProgressCoreAsync(
-            request,
-            flushStatistics: false,
-            scheduleAutoSync: true,
-            ct);
-        if (!saved)
-            return;
-        _statisticsSession.ResetBaseline(
-            new ReaderStatisticsPosition(request.CurrentCharacterCount));
+        try
+        {
+            await admission;
+            await AwaitPreviousWriterCompletionAsync(previousWriter);
+            ct.ThrowIfCancellationRequested();
+            var saved = await SaveProgressCoreAsync(
+                request,
+                flushStatistics: false,
+                scheduleAutoSync: true,
+                ct);
+            if (!saved)
+                return false;
+            _statisticsSession.ResetBaseline(
+                new ReaderStatisticsPosition(request.CurrentCharacterCount));
+            return true;
+        }
+        finally
+        {
+            RetireAdmittedProgressRequest(request);
+        }
     }
 
     private async Task RunLifecycleWriterBoundaryAsync(
         Task admission,
         Task previousWriter,
-        ProgressSaveRequest? request,
-        int statisticsCharacterCount,
+        LifecycleBoundarySnapshot snapshot,
         ReaderStatisticsCheckpointReason reason,
         bool cancelAfterFlush,
         CancellationToken ct)
@@ -1028,6 +1059,16 @@ public partial class NovelReaderPageViewModel : ObservableObject
         await admission;
         await AwaitPreviousWriterCompletionAsync(previousWriter);
         ct.ThrowIfCancellationRequested();
+        ProgressSaveRequest? request;
+        lock (_saveGate)
+        {
+            request = snapshot.PendingCandidate != null
+                && _currentPositionRevision == snapshot.PendingCandidate.PositionRevision
+                    ? CaptureProgressSaveRequest()
+                    : snapshot.CurrentAtAdmission;
+        }
+        var statisticsCharacterCount = request?.CurrentCharacterCount
+            ?? CurrentCharacterCount;
         var saved = request == null;
         if (request != null)
         {
@@ -1120,12 +1161,23 @@ public partial class NovelReaderPageViewModel : ObservableObject
                 TotalCharacterCount,
                 _currentPositionRevision);
 
-    private ProgressSaveRequest? CaptureLifecycleProgressSaveRequest()
+    private LifecycleBoundarySnapshot CaptureLifecycleBoundarySnapshot()
     {
         var current = CaptureProgressSaveRequest();
-        return _latestAdmittedProgressRequest?.PositionRevision > current?.PositionRevision
-            ? _latestAdmittedProgressRequest
-            : current;
+        var pendingCandidate = _latestAdmittedProgressRequest?.PositionRevision
+            > current?.PositionRevision
+                ? _latestAdmittedProgressRequest
+                : null;
+        return new LifecycleBoundarySnapshot(current, pendingCandidate);
+    }
+
+    private void RetireAdmittedProgressRequest(ProgressSaveRequest request)
+    {
+        lock (_saveGate)
+        {
+            if (ReferenceEquals(_latestAdmittedProgressRequest, request))
+                _latestAdmittedProgressRequest = null;
+        }
     }
 
     private int CharacterCountAt(int chapterIndex, double progress)
@@ -1150,6 +1202,10 @@ public partial class NovelReaderPageViewModel : ObservableObject
         int CurrentCharacterCount,
         int TotalCharacterCount,
         long PositionRevision);
+
+    private sealed record LifecycleBoundarySnapshot(
+        ProgressSaveRequest? CurrentAtAdmission,
+        ProgressSaveRequest? PendingCandidate);
 
     private enum StatisticsMutation
     {

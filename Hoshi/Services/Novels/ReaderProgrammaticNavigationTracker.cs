@@ -51,6 +51,19 @@ public sealed class ReaderProgrammaticNavigationTracker
         return true;
     }
 
+    public bool AbortCommit(long generation, int chapterIndex)
+    {
+        if (_pending is not { IsCommitting: true } pending
+            || pending.Generation != generation
+            || pending.ChapterIndex != chapterIndex)
+        {
+            return false;
+        }
+
+        _pending = null;
+        return true;
+    }
+
     public void Cancel()
     {
         _generation++;
