@@ -110,6 +110,26 @@ public sealed class ReaderNavigationTransactionCoordinatorTests
     }
 
     [Fact]
+    public async Task CompleteCommit_ValueEqualButUnissuedLeaseIsRejected()
+    {
+        var sut = new ReaderNavigationTransactionCoordinator();
+        var render = sut.TryBegin(Source(), ReaderNavigationDestination.AtChapterEnd(0));
+        var original = sut.TryBeginCommit(render!.Generation, Resolved());
+        var forged = original! with { };
+        var settlement = sut.WaitForSettlementAsync();
+
+        forged.Should().Be(original);
+        forged.Should().NotBeSameAs(original);
+        sut.CompleteCommit(forged, committed: true).Should().BeNull();
+        settlement.IsCompleted.Should().BeFalse();
+        sut.BlocksPositionMutation.Should().BeTrue();
+
+        var settled = sut.CompleteCommit(original, committed: true);
+        settled.Should().NotBeNull();
+        (await settlement).Should().Be(settled);
+    }
+
+    [Fact]
     public async Task CompleteCommit_StaleLeaseReturnsNullWithoutMutatingCurrentCommit()
     {
         var sut = new ReaderNavigationTransactionCoordinator();

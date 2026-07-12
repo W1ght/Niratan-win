@@ -111,14 +111,15 @@ public sealed class ReaderNavigationTransactionCoordinator
         lock (_gate)
         {
             if (_active is not { Phase: TransactionPhase.Committing } active
-                || active.CommitLease != lease)
+                || active.CommitLease is not { } issuedLease
+                || !ReferenceEquals(issuedLease, lease))
             {
                 return null;
             }
 
             return Settle(
                 active,
-                committed ? lease.ResolvedDestination : lease.Source,
+                committed ? issuedLease.ResolvedDestination : issuedLease.Source,
                 shouldRevealDestination: committed);
         }
     }
