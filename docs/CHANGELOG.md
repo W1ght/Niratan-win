@@ -1,5 +1,17 @@
 # Changelog
 
+## Reader 同章翻页未结算统计且最终同步可能混用位置
+
+**原因**：
+- Web bridge 的 `scrolled` 只表示同章滚动成功，native 曾把它当成命令已处理而不是位置已 `moved`；只有章节边界进入统计 checkpoint，导致同章翻页未及时更新字符、Session/Today 和 sidecar。
+- bookmark、statistics 与延迟同步曾读取可变的当前进度；writer 排队或 Close/Background final flush 期间位置从 X 变为 Y 时，可能把不同时间点的数据写入同一次提交，或在最后 export 完成前取消 coordinator。
+
+**解决**：
+- 用 `ReaderPageNavigationEvent` 明确传递 `Scrolled`/`Limit`、方向与最终进度，再由 `ReaderPageNavigationOutcome` 统一表达 `DidMove`、同章移动或相邻章节；真实同章移动立即保存 bookmark 并写一次 typed reading checkpoint，程序化跳转仍保持独立事务。
+- Reader writer 按 admission 顺序串行，并为 bookmark、statistics 和 sync 捕获同一份进度 snapshot；自动同步 coordinator 负责 open import、30 秒 debounce、single-flight follow-up，以及 Close/Background 的可等待 final flush，Close 只在最终 export 后取消。
+
+---
+
 ## 小说书架分区、云端导入与统计入口回归
 
 **原因**：

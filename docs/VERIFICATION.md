@@ -159,6 +159,44 @@ YYYY-MM-DD-uia-tree.txt
 
 诊断失败时保留 Reader 日志，并重点搜索 `ProgrammaticDeparture`、`navigationGeneration`、`Background`、`Close` 和 `Restore completed`。
 
+#### 1.10.1 同章翻页与 typed movement 回归
+
+自动化测试必须同时覆盖 WebView 与 native 两侧的 typed contract：
+
+- `reader-bridge.js` 对每次手动翻页返回 `ReaderPageNavigationEvent` 等价数据，明确区分 `Scrolled` / `Limit`、`Forward` / `Backward` 和最终 `Progress`；禁止把“命令已处理”当作“位置已移动”。
+- native 将结果归一为 `ReaderPageNavigationOutcome`：同章实际滚动为 `SameChapterMovement`，跨章边界为 `AdjacentChapter(index)`，首章向前、末章向后和同位置回调为 `NoMovement`。
+- Page Turn 自动开始模式下，同章向前或向后翻一页必须立即更新 `progress`、当前字符、`bookmark.json`、Session/Today 与 `statistics.json`，并且只产生一次 `ReadingMovement` checkpoint；不必等到跨章才结算。
+- 覆盖分页与 continuous mode、自然相邻章节、首/末边界、resize/reflow 和 reopen；程序化目录/字符/搜索/高亮/history/internal-link/Sasayaki 跳转继续走程序化事务，不得伪装成真实 page movement 或增加阅读字符。
+
+真实运行时使用 `C:\Users\Wight\Downloads\哈利波特1魔法石.epub`：在同一章节内记录翻页前后的 `pageIndex`、`pageCount`、`progress`、`scrollPosition`、当前字符和 sidecar hash/mtime。断言 `pageIndex` 与 `scrollPosition / pageSize` 对齐、所有值无越界，而且 `statistics.json` 在跨章前已经变化。
+
+#### 1.10.2 Reader compact statistics panel
+
+1. 打开 `NovelReaderStatisticsPanelDialog`，确认 compact dialog 宽度约为 520–560 effective pixels，只有一个纵向滚动所有者；窗口缩小时无裁切、嵌套滚动或不可达操作。
+2. Session、Today、All Time 三组均显示字符/近似词数、时间和速度；日文内容使用 characters，英文内容使用 approximate words，语言切换后单位和数值投影一致。
+3. Start/Stop 与 Reader chrome 状态同步；remaining time 使用原始字符余量与原始速度计算，速度不足时显示可理解的占位状态。
+4. 使用键盘、鼠标和触摸完成打开、滚动、Start/Stop 和关闭；在 200% text scaling 下无截断，Automation name 非空。
+5. Light、Dark、High Contrast 下检查 Session/Today/All Time、按钮、分隔和滚动提示均可辨认。
+
+#### 1.10.3 Reader 自动同步、writer 与生命周期
+
+自动化必须使用 mock remote store/coordinator，不得依赖真实 Google Drive：
+
+1. Open：仅在全局 Sync、凭据、自动导入及 statistics 选项都允许时执行一次 import；若导入改变书籍，必须先重新加载 sidecar，再恢复 Reader 位置。取消、缺凭据和受控远端失败不得让 Reader 打不开。
+2. Debounce：连续 bookmark/statistics 变化合并为一次 30 秒延迟 export；延迟期间再次变化重置/合并 pending work。
+3. Single-flight：export 运行中到达新变化时不能并行上传，只允许当前 export 完成后再跑一次 follow-up；并发 `FlushAsync` 调用加入同一个 active export。
+4. Final boundary：Background 和 Close 都先阻止/排空旧 writer，保存最终 bookmark 与 statistics checkpoint，再 `FlushAsync`；Close 最后才 `Cancel()` 且幂等，Background 完成后恢复 writer admission。mock 调用序列必须证明最后一次 export 看见最终 checkpoint。
+5. Writer lifecycle：让 writer A 以位置 X 入队并阻塞，随后把 UI 位置改为 Y，再放行 A；断言 bookmark、statistics checkpoint 和 sync schedule 对每个 admitted request 使用同一份 snapshot，A 不得混入 Y。后续 writer/final Close/Background 必须明确使用它们各自 admission 时的 Y（或更新后）snapshot。
+6. 设置页：关闭全局 Google Drive/ッツ Sync 时，statistics Sync 控件隐藏或禁用，但 `EnableStatisticsSync`、同步模式等已存值保持不变；重新开启全局 Sync 后恢复显示和值。断开凭据也不得静默重置统计偏好。
+
+必跑自动化命令：
+
+```powershell
+dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Statistics|FullyQualifiedName~TtuSync|FullyQualifiedName~GoogleDrive|FullyQualifiedName~NovelReaderWebAssetTests"
+```
+
+真实 UI/runtime 还要确认 Hoshi 顶层窗口响应、Reader 可打开、同章翻页与 compact panel 状态同步，并在返回书架、最小化/恢复和关闭路径检查最终 sidecar。真实 Google Drive import/export 会修改远端账户或书籍，**只有用户显式确认可修改的测试账户与测试书后才允许执行**；否则以 coordinator/mock 测试为远端调用证据，并在报告中明确写“真实 Drive 未执行”。
+
 ### 1.11 Niratan Dashboard 验证
 
 1. 运行所有 `NovelStatisticsDashboard*Tests`，覆盖 repository、目标/区间、速度、趋势、日历、排名、书架和缓存。
