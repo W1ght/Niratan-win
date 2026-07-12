@@ -16,6 +16,7 @@ public sealed class ReaderProgrammaticNavigationTrackerTests
         tracker.TryComplete(second, 1, 0.75).Should().BeFalse();
         tracker.TryComplete(second, 2, double.NaN).Should().BeFalse();
         tracker.TryComplete(second, 2, 0.5).Should().BeTrue();
+        tracker.TryComplete(second, 2, 0.5).Should().BeFalse();
         tracker.HasPending.Should().BeFalse();
     }
 

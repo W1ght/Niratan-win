@@ -74,6 +74,9 @@ public sealed partial class NovelReaderPage : Page
     private readonly ReaderNavigationHistory _navigationHistory = new();
     private string? _pendingProgrammaticFragment;
     private bool _pendingAdjacentChapterNavigation;
+    private int? _pendingAdjacentChapterIndex;
+    private ReaderChapterRestoreTarget? _pendingAdjacentChapterRestoreTarget;
+    private bool _pendingAdjacentChapterReady;
     private DictionaryPopupOverlay? _popupOverlay;
     private readonly SemaphoreSlim _lookupSemaphore = new(1, 1);
     private readonly Dictionary<KeyboardAccelerator, string> _keyboardAcceleratorActionIds = [];
@@ -1065,7 +1068,10 @@ public sealed partial class NovelReaderPage : Page
             : Visibility.Collapsed;
     }
 
-    private void LoadChapter(int index, double? progressOverride = null)
+    private void LoadChapter(
+        int index,
+        double? progressOverride = null,
+        ReaderChapterRestoreTarget? adjacentChapterRestoreTarget = null)
     {
         if (_epubBook == null || NovelWebView.CoreWebView2 == null)
             return;
@@ -1073,7 +1079,12 @@ public sealed partial class NovelReaderPage : Page
         if (index < 0 || index >= _epubBook.Chapters.Count)
             return;
 
-        if (progressOverride.HasValue)
+        if (adjacentChapterRestoreTarget.HasValue)
+        {
+            // Keep the departure snapshot visible until WebView reports its one
+            // final, page-aligned destination for this navigation generation.
+        }
+        else if (progressOverride.HasValue)
         {
             _currentProgress = Math.Clamp(progressOverride.Value, 0, 1);
         }
@@ -1092,9 +1103,12 @@ public sealed partial class NovelReaderPage : Page
         }
         _previousChapterIndex = index;
 
-        ViewModel.SetChapter(index, _epubBook.Chapters.Count);
-        ViewModel.UpdateProgress(_currentProgress);
-        RefreshReaderDisplayChrome();
+        if (!adjacentChapterRestoreTarget.HasValue)
+        {
+            ViewModel.SetChapter(index, _epubBook.Chapters.Count);
+            ViewModel.UpdateProgress(_currentProgress);
+            RefreshReaderDisplayChrome();
+        }
 
         var chapter = _epubBook.Chapters[index];
         var relativePath = Path
@@ -1148,9 +1162,12 @@ public sealed partial class NovelReaderPage : Page
         {
             var chapterInfo = JsonSerializer.Serialize(new
             {
-                index = ViewModel.CurrentChapterIndex,
+                index = _pendingAdjacentChapterIndex ?? ViewModel.CurrentChapterIndex,
                 totalChapters = _epubBook.Chapters.Count,
-                progress = _currentProgress,
+                progress = _pendingAdjacentChapterRestoreTarget.HasValue
+                    ? (double?)null
+                    : _currentProgress,
+                restoreTarget = PendingAdjacentRestoreTargetValue(),
                 navigationGeneration = _pendingProgrammaticFragment == null
                     ? _programmaticNavigation.PendingGeneration
                     : null,
@@ -1269,7 +1286,10 @@ public sealed partial class NovelReaderPage : Page
                     await SendSetChapterMessageAsync();
                     break;
                 case "chapterReady":
-                    NovelWebView.Opacity = 1;
+                    if (_pendingAdjacentChapterNavigation)
+                        _pendingAdjacentChapterReady = true;
+                    else
+                        NovelWebView.Opacity = 1;
                     Log.Information("[NovelReader] Chapter ready, capturing artifacts");
                     await CaptureReaderArtifactsAsync(
                         root.GetProperty("payload").GetRawText()
@@ -1280,20 +1300,33 @@ public sealed partial class NovelReaderPage : Page
                     Log.Information("[NovelReader] Restore completed");
                     var restorePayload = root.GetProperty("payload");
                     var restoredProgress = restorePayload.GetProperty("progress").GetDouble();
-                    if (restorePayload.TryGetProperty("navigationGeneration", out var generationElement)
+                    var navigationGeneration = 0L;
+                    var hasNavigationGeneration = restorePayload.TryGetProperty(
+                            "navigationGeneration",
+                            out var generationElement)
                         && generationElement.ValueKind == JsonValueKind.Number
-                        && generationElement.TryGetInt64(out var navigationGeneration)
-                        && _programmaticNavigation.TryComplete(
-                            navigationGeneration,
-                            ViewModel.CurrentChapterIndex,
-                            restoredProgress))
+                        && generationElement.TryGetInt64(out navigationGeneration);
+                    if (hasNavigationGeneration)
                     {
-                        ViewModel.UpdateProgress(restoredProgress);
-                        _currentProgress = restoredProgress;
+                        var completionChapterIndex = _pendingAdjacentChapterIndex
+                            ?? ViewModel.CurrentChapterIndex;
+                        if (!_programmaticNavigation.TryComplete(
+                                navigationGeneration,
+                                completionChapterIndex,
+                                restoredProgress))
+                        {
+                            Log.Warning("[NovelReader] Ignoring stale restore completion: generation={Generation}", navigationGeneration);
+                            break;
+                        }
+
                         if (_pendingAdjacentChapterNavigation)
-                            await CompleteAdjacentChapterNavigationAsync();
+                            await CompleteAdjacentChapterNavigationAsync(restoredProgress);
                         else
+                        {
+                            ViewModel.UpdateProgress(restoredProgress);
+                            _currentProgress = restoredProgress;
                             await CompleteProgrammaticNavigationAsync();
+                        }
                     }
                     else if (!_programmaticNavigation.HasPending)
                     {
@@ -1350,10 +1383,12 @@ public sealed partial class NovelReaderPage : Page
                     }
 
                     if (outcome.AdjacentChapterIndex is int adjacentChapterIndex
-                        && outcome.AdjacentChapterProgress is double adjacentChapterProgress)
+                        && outcome.AdjacentChapterRestoreTarget is ReaderChapterRestoreTarget restoreTarget)
                     {
-                        BeginAdjacentChapterNavigation(adjacentChapterIndex);
-                        LoadChapter(adjacentChapterIndex, adjacentChapterProgress);
+                        BeginAdjacentChapterNavigation(adjacentChapterIndex, restoreTarget);
+                        LoadChapter(
+                            adjacentChapterIndex,
+                            adjacentChapterRestoreTarget: restoreTarget);
                     }
 
                     if (readerEvent.Result != ReaderPageNavigationResult.Limit
@@ -1390,6 +1425,9 @@ public sealed partial class NovelReaderPage : Page
                         _programmaticNavigation.Cancel();
                         _pendingProgrammaticFragment = null;
                         _pendingAdjacentChapterNavigation = false;
+                        _pendingAdjacentChapterIndex = null;
+                        _pendingAdjacentChapterRestoreTarget = null;
+                        _pendingAdjacentChapterReady = false;
                         await ViewModel.ResetStatisticsBaselineAsync();
                         RefreshReaderNavigationHistoryChrome();
                     }
@@ -1701,12 +1739,13 @@ public sealed partial class NovelReaderPage : Page
             return;
 
         var message = NovelReaderBridgeMessageFactory.CreateSetChapterMessage(
-            ViewModel.CurrentChapterIndex,
+            _pendingAdjacentChapterIndex ?? ViewModel.CurrentChapterIndex,
             _epubBook.Chapters.Count,
-            _currentProgress,
+            _pendingAdjacentChapterRestoreTarget.HasValue ? null : _currentProgress,
             _pendingProgrammaticFragment == null
                 ? _programmaticNavigation.PendingGeneration
-                : null
+                : null,
+            _pendingAdjacentChapterRestoreTarget
         );
         Log.Information("[NovelReader] Sending setChapter: {Msg}", message);
         NovelWebView.CoreWebView2.PostWebMessageAsJson(message);
@@ -1756,13 +1795,21 @@ public sealed partial class NovelReaderPage : Page
     {
         await ViewModel.CheckpointProgrammaticDepartureAsync();
         _pendingAdjacentChapterNavigation = false;
+        _pendingAdjacentChapterIndex = null;
+        _pendingAdjacentChapterRestoreTarget = null;
+        _pendingAdjacentChapterReady = false;
         return _programmaticNavigation.Begin(chapterIndex);
     }
 
-    private void BeginAdjacentChapterNavigation(int chapterIndex)
+    private void BeginAdjacentChapterNavigation(
+        int chapterIndex,
+        ReaderChapterRestoreTarget restoreTarget)
     {
         _pendingProgrammaticFragment = null;
         _pendingAdjacentChapterNavigation = true;
+        _pendingAdjacentChapterIndex = chapterIndex;
+        _pendingAdjacentChapterRestoreTarget = restoreTarget;
+        _pendingAdjacentChapterReady = false;
         _programmaticNavigation.Begin(chapterIndex);
     }
 
@@ -1773,12 +1820,38 @@ public sealed partial class NovelReaderPage : Page
         RefreshReaderDisplayChrome();
     }
 
-    private async Task CompleteAdjacentChapterNavigationAsync()
+    private async Task CompleteAdjacentChapterNavigationAsync(double resolvedProgress)
     {
+        if (_pendingAdjacentChapterIndex is not int adjacentChapterIndex)
+            return;
+
+        await ViewModel.CompleteAdjacentChapterNavigationAsync(
+            adjacentChapterIndex,
+            resolvedProgress);
+        _currentProgress = ViewModel.Progress;
         _pendingAdjacentChapterNavigation = false;
-        await ViewModel.SaveProgressAndResetStatisticsBaselineAsync();
+        _pendingAdjacentChapterIndex = null;
+        _pendingAdjacentChapterRestoreTarget = null;
         RefreshReaderDisplayChrome();
+        RevealAdjacentChapterWhenCommitted();
     }
+
+    private void RevealAdjacentChapterWhenCommitted()
+    {
+        if (!_pendingAdjacentChapterReady)
+            return;
+
+        _pendingAdjacentChapterReady = false;
+        NovelWebView.Opacity = 1;
+    }
+
+    private string? PendingAdjacentRestoreTargetValue() =>
+        _pendingAdjacentChapterRestoreTarget switch
+        {
+            ReaderChapterRestoreTarget.Start => "start",
+            ReaderChapterRestoreTarget.End => "end",
+            _ => null,
+        };
 
     private async Task<bool> NavigateProgrammaticallyAsync(
         int chapterIndex,

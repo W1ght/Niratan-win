@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Hoshi.Models.DTO;
+using Hoshi.Models.Novel;
 
 namespace Hoshi.Services.Novels;
 
@@ -15,14 +16,21 @@ public static class NovelReaderBridgeMessageFactory
     public static string CreateSetChapterMessage(
         int index,
         int totalChapters,
-        double progress = 0,
-        long? navigationGeneration = null)
+        double? progress = 0,
+        long? navigationGeneration = null,
+        ReaderChapterRestoreTarget? restoreTarget = null)
     {
         var payload = new SetChapterPayload(
             index,
             totalChapters,
             progress,
-            navigationGeneration);
+            navigationGeneration,
+            restoreTarget switch
+            {
+                ReaderChapterRestoreTarget.Start => "start",
+                ReaderChapterRestoreTarget.End => "end",
+                _ => null,
+            });
         var message = new NovelReaderWebMessage<SetChapterPayload>(1, "setChapter", payload);
         return JsonSerializer.Serialize(message, JsonOptions);
     }
@@ -55,8 +63,9 @@ public static class NovelReaderBridgeMessageFactory
     private sealed record SetChapterPayload(
         int Index,
         int TotalChapters,
-        double Progress,
-        long? NavigationGeneration);
+        double? Progress,
+        long? NavigationGeneration,
+        string? RestoreTarget);
 
     private sealed record RestoreProgressPayload(
         double Progress,

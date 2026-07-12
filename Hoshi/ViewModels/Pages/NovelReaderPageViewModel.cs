@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
@@ -138,6 +139,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
     private readonly SemaphoreSlim _lifecycleCheckpointLock = new(1, 1);
     private Task? _lifecycleCloseTask;
     private bool _didCompleteLifecycleClose;
+    private bool _suppressPositionNotifications;
 
     public NovelReaderPageViewModel(
         INovelLibraryService novelLibraryService,
@@ -869,6 +871,110 @@ public partial class NovelReaderPageViewModel : ObservableObject
         return operation;
     }
 
+    public Task CompleteAdjacentChapterNavigationAsync(
+        int chapterIndex,
+        double resolvedProgress,
+        CancellationToken ct = default)
+    {
+        Task operation;
+        TaskCompletionSource admission;
+        lock (_saveGate)
+        {
+            if (!CanAdmitProgressWriter()
+                || CurrentBook == null
+                || chapterIndex < 0
+                || chapterIndex >= ChapterCount
+                || !double.IsFinite(resolvedProgress))
+            {
+                return Task.CompletedTask;
+            }
+
+            var progress = Math.Clamp(resolvedProgress, 0, 1);
+            var request = new ProgressSaveRequest(
+                CurrentBook,
+                chapterIndex,
+                progress,
+                CharacterCountAt(chapterIndex, progress),
+                TotalCharacterCount);
+            _saveCts?.Cancel();
+            admission = CreateWriterAdmission();
+            operation = RunAdjacentChapterCompletionWriterAsync(
+                admission.Task,
+                _writerTail,
+                request,
+                ct);
+            _writerTail = operation;
+        }
+
+        admission.TrySetResult();
+        return operation;
+    }
+
+    private async Task RunAdjacentChapterCompletionWriterAsync(
+        Task admission,
+        Task previousWriter,
+        ProgressSaveRequest request,
+        CancellationToken ct)
+    {
+        await admission;
+        await AwaitPreviousWriterCompletionAsync(previousWriter);
+        ct.ThrowIfCancellationRequested();
+        ApplyResolvedChapterPosition(request);
+        await SaveProgressCoreAsync(
+            request,
+            flushStatistics: false,
+            scheduleAutoSync: true,
+            ct);
+        _statisticsSession.ResetBaseline(
+            new ReaderStatisticsPosition(request.CurrentCharacterCount));
+    }
+
+    private void ApplyResolvedChapterPosition(ProgressSaveRequest request)
+    {
+        var propertyNames = new[]
+        {
+            nameof(Progress),
+            nameof(CurrentChapterIndex),
+            nameof(CurrentCharacterCount),
+        };
+        foreach (var propertyName in propertyNames)
+            base.OnPropertyChanging(new PropertyChangingEventArgs(propertyName));
+
+        _suppressPositionNotifications = true;
+        try
+        {
+            Progress = request.Progress;
+            CurrentChapterIndex = request.ChapterIndex;
+            CurrentCharacterCount = request.CurrentCharacterCount;
+        }
+        finally
+        {
+            _suppressPositionNotifications = false;
+        }
+
+        foreach (var propertyName in propertyNames)
+            base.OnPropertyChanged(new PropertyChangedEventArgs(propertyName));
+        OnPropertyChanged(nameof(ChapterTitle));
+        OnPropertyChanged(nameof(OverallProgress));
+        OnPropertyChanged(nameof(OverallProgressText));
+        OnPropertyChanged(nameof(ReaderProgressText));
+        OnPropertyChanged(nameof(CanGoNext));
+        OnPropertyChanged(nameof(CanGoPrevious));
+        OnStatisticsTextChanged();
+    }
+
+    protected override void OnPropertyChanging(PropertyChangingEventArgs e)
+    {
+        if (!_suppressPositionNotifications)
+            base.OnPropertyChanging(e);
+    }
+
+    protected override void OnPropertyChanged(PropertyChangedEventArgs e)
+    {
+        if (!_suppressPositionNotifications)
+            base.OnPropertyChanged(e);
+    }
+
     private async Task RunProgressWriterWithBaselineResetAsync(
         Task admission,
         Task previousWriter,
@@ -984,6 +1090,21 @@ public partial class NovelReaderPageViewModel : ObservableObject
                 Progress,
                 CurrentCharacterCount,
                 TotalCharacterCount);
+
+    private int CharacterCountAt(int chapterIndex, double progress)
+    {
+        if (_chapterCharacterCounts.Count == 0)
+            return 0;
+
+        var safeIndex = Math.Clamp(chapterIndex, 0, _chapterCharacterCounts.Count - 1);
+        var priorCount = 0;
+        for (var i = 0; i < safeIndex; i++)
+            priorCount += _chapterCharacterCounts[i];
+
+        var chapterOffset = (int)(
+            _chapterCharacterCounts[safeIndex] * Math.Clamp(progress, 0, 1));
+        return Math.Clamp(priorCount + chapterOffset, 0, TotalCharacterCount);
+    }
 
     private sealed record ProgressSaveRequest(
         NovelBook Book,

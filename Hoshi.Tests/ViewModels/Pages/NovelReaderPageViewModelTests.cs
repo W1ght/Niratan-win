@@ -1658,7 +1658,8 @@ public sealed class NovelReaderPageViewModelTests
         outcome.Should().Be(ReaderPageNavigationOutcome.AdjacentChapter(
             0,
             ReaderPageNavigationDirection.Backward));
-        outcome.AdjacentChapterProgress.Should().Be(1);
+        outcome.AdjacentChapterRestoreTarget.Should().Be(ReaderChapterRestoreTarget.End);
+        sut.Progress.Should().Be(0);
         sut.CurrentCharacterCount.Should().Be(100);
         statisticsSession.Checkpoints.Should().Equal(
             (100, ReaderStatisticsCheckpointReason.AdjacentChapter));
@@ -1700,9 +1701,21 @@ public sealed class NovelReaderPageViewModelTests
                 ReaderPageNavigationDirection.Forward,
                 0.8),
             ct);
-        sut.SetChapter(forward.AdjacentChapterIndex!.Value, 2);
-        sut.UpdateProgress(0);
-        await sut.SaveProgressAndResetStatisticsBaselineAsync(ct);
+        var visiblePositionSequence = new List<(int Chapter, double Progress, int Character)>();
+        sut.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(NovelReaderPageViewModel.Progress))
+            {
+                visiblePositionSequence.Add((
+                    sut.CurrentChapterIndex,
+                    sut.Progress,
+                    sut.CurrentCharacterCount));
+            }
+        };
+        await sut.CompleteAdjacentChapterNavigationAsync(
+            forward.AdjacentChapterIndex!.Value,
+            resolvedProgress: 0,
+            ct);
 
         var backward = await sut.HandleManualPageNavigationAsync(
             new ReaderPageNavigationEvent(
@@ -1710,12 +1723,16 @@ public sealed class NovelReaderPageViewModelTests
                 ReaderPageNavigationDirection.Backward,
                 0),
             ct);
-        sut.SetChapter(backward.AdjacentChapterIndex!.Value, 2);
-        sut.UpdateProgress(0.8);
-        await sut.SaveProgressAndResetStatisticsBaselineAsync(ct);
+        await sut.CompleteAdjacentChapterNavigationAsync(
+            backward.AdjacentChapterIndex!.Value,
+            resolvedProgress: 0.8,
+            ct);
 
-        forward.AdjacentChapterProgress.Should().Be(0);
-        backward.AdjacentChapterProgress.Should().Be(1);
+        forward.AdjacentChapterRestoreTarget.Should().Be(ReaderChapterRestoreTarget.Start);
+        backward.AdjacentChapterRestoreTarget.Should().Be(ReaderChapterRestoreTarget.End);
+        visiblePositionSequence.Should().Equal(
+            (1, 0d, 100),
+            (0, 0.8, 80));
         saves.Should().Equal(
             (0, 0.8, 80),
             (1, 0d, 100),

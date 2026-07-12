@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FluentAssertions;
+using Hoshi.Models.Novel;
 using Hoshi.Services.Novels;
 
 namespace Hoshi.Tests.Services.Novels;
@@ -74,6 +75,23 @@ public class NovelReaderBridgeMessageFactoryTests
             .GetProperty("navigationGeneration").GetInt64().Should().Be(17);
         restore.RootElement.GetProperty("payload")
             .GetProperty("navigationGeneration").GetInt64().Should().Be(18);
+    }
+
+    [Fact]
+    public void CreateSetChapterMessage_UsesTypedEndTargetWithoutApproximateProgress()
+    {
+        using var chapter = JsonDocument.Parse(
+            NovelReaderBridgeMessageFactory.CreateSetChapterMessage(
+                1,
+                3,
+                progress: null,
+                navigationGeneration: 21,
+                restoreTarget: ReaderChapterRestoreTarget.End));
+
+        var payload = chapter.RootElement.GetProperty("payload");
+        payload.GetProperty("restoreTarget").GetString().Should().Be("end");
+        payload.TryGetProperty("progress", out _).Should().BeFalse();
+        payload.GetProperty("navigationGeneration").GetInt64().Should().Be(21);
     }
 
     [Fact]

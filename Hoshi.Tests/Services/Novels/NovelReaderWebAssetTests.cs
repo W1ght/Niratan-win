@@ -79,6 +79,34 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void ReaderBridge_ResolvesTypedChapterEndpointsOnceBeforeChapterReady()
+    {
+        var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
+        var restoreBody = Regex.Match(
+            script,
+            @"(?s)restoreProgress: async function \(.*?\n\s*\},\s*\n\s*jumpToFragment:").Value;
+
+        restoreBody.Should().NotBeEmpty();
+        restoreBody.Should().Contain("restoreTarget === \"start\"");
+        restoreBody.Should().Contain("restoreTarget === \"end\"");
+        restoreBody.Should().Contain("contentLastPageScroll(context)");
+        restoreBody.Should().NotContain("this.lastProgress = 1");
+        Regex.Matches(restoreBody, "notifyRestoreComplete\\(navigationGeneration\\)")
+            .Count.Should().Be(1);
+        restoreBody.IndexOf("restoreTarget === \"start\"", StringComparison.Ordinal)
+            .Should().BeLessThan(
+                restoreBody.IndexOf("progress <= 0", StringComparison.Ordinal));
+        restoreBody.IndexOf("restoreTarget === \"end\"", StringComparison.Ordinal)
+            .Should().BeLessThan(
+                restoreBody.IndexOf("progress <= 0", StringComparison.Ordinal));
+        script.Should().Contain("message.payload?.restoreTarget ?? null");
+        script.Should().Contain("window.__hoshiChapterInfo.restoreTarget ?? null");
+        script.IndexOf("notifyRestoreComplete(navigationGeneration)", StringComparison.Ordinal)
+            .Should().BeLessThan(
+                script.IndexOf("postToHost(\"chapterReady\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void VendorDirectory_DoesNotExist()
     {
         var vendorPath = Path.Combine(ReaderRoot, "Vendor");
@@ -158,9 +186,10 @@ public class NovelReaderWebAssetTests
         pageCode.Should().Contain("case \"shortcut\":");
         pageCode.Should().Contain("ViewModel.HandleManualPageNavigationAsync(readerEvent)");
         pageCode.Should().Contain("outcome.AdjacentChapterIndex is int adjacentChapterIndex");
-        pageCode.Should().Contain("outcome.AdjacentChapterProgress is double adjacentChapterProgress");
-        pageCode.Should().Contain("BeginAdjacentChapterNavigation(adjacentChapterIndex)");
-        pageCode.Should().Contain("LoadChapter(adjacentChapterIndex, adjacentChapterProgress)");
+        pageCode.Should().Contain("outcome.AdjacentChapterRestoreTarget is ReaderChapterRestoreTarget restoreTarget");
+        pageCode.Should().Contain("BeginAdjacentChapterNavigation(adjacentChapterIndex, restoreTarget)");
+        pageCode.Should().MatchRegex(
+            @"LoadChapter\(\s*adjacentChapterIndex,\s*adjacentChapterRestoreTarget: restoreTarget\)");
         viewModelCode.Should().Contain("ReaderStatisticsEventClassifier.AdjacentChapterTarget");
     }
 
@@ -2959,14 +2988,22 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("ViewModel.HandleManualPageNavigationAsync(readerEvent)");
         readerCode.Should().Contain("if (outcome.DidMove)");
         readerCode.Should().Contain("outcome.AdjacentChapterIndex is int adjacentChapterIndex");
-        readerCode.Should().Contain("outcome.AdjacentChapterProgress is double adjacentChapterProgress");
+        readerCode.Should().Contain("outcome.AdjacentChapterRestoreTarget is ReaderChapterRestoreTarget restoreTarget");
         readerCode.Should().Contain("CompleteAdjacentChapterNavigationAsync");
         var adjacentNavigationBody = Regex.Match(
             readerCode,
             @"(?s)if \(outcome\.AdjacentChapterIndex.*?\n\s*\}\s*\n\s*if \(readerEvent\.Result").Value;
-        adjacentNavigationBody.Should().Contain("BeginAdjacentChapterNavigation(adjacentChapterIndex)");
-        adjacentNavigationBody.Should().Contain("LoadChapter(adjacentChapterIndex, adjacentChapterProgress)");
+        adjacentNavigationBody.Should().Contain("BeginAdjacentChapterNavigation(adjacentChapterIndex, restoreTarget)");
+        adjacentNavigationBody.Should().MatchRegex(
+            @"LoadChapter\(\s*adjacentChapterIndex,\s*adjacentChapterRestoreTarget: restoreTarget\)");
         adjacentNavigationBody.Should().NotContain("SaveProgressNowAsync");
+        adjacentNavigationBody.Should().NotContain("ViewModel.UpdateProgress");
+        readerCode.Should().Contain("ViewModel.CompleteAdjacentChapterNavigationAsync(");
+        readerCode.Should().Contain("if (!_programmaticNavigation.TryComplete(");
+        readerCode.Should().Contain("Log.Warning(\"[NovelReader] Ignoring stale restore completion");
+        readerCode.Should().Contain("if (_pendingAdjacentChapterNavigation)");
+        readerCode.Should().Contain("NovelWebView.Opacity = 0");
+        readerCode.Should().Contain("RevealAdjacentChapterWhenCommitted");
         readerCode.Should().Contain("BeginProgrammaticNavigationAsync");
         readerCode.Should().Contain("CompleteProgrammaticNavigationAsync");
         readerCode.Should().Contain("ViewModel.CheckpointProgrammaticDepartureAsync");

@@ -12,6 +12,12 @@ public enum ReaderPageNavigationDirection
     Backward,
 }
 
+public enum ReaderChapterRestoreTarget
+{
+    Start,
+    End,
+}
+
 public readonly record struct ReaderPageNavigationEvent(
     ReaderPageNavigationResult Result,
     ReaderPageNavigationDirection Direction,
@@ -20,7 +26,7 @@ public readonly record struct ReaderPageNavigationEvent(
 public readonly record struct ReaderPageNavigationOutcome(
     bool DidMove,
     int? AdjacentChapterIndex,
-    double? AdjacentChapterProgress)
+    ReaderChapterRestoreTarget? AdjacentChapterRestoreTarget)
 {
     public static ReaderPageNavigationOutcome NoMovement => new(false, null, null);
     public static ReaderPageNavigationOutcome SameChapterMovement => new(true, null, null);
@@ -31,5 +37,7 @@ public readonly record struct ReaderPageNavigationOutcome(
         new(
             true,
             index,
-            direction == ReaderPageNavigationDirection.Backward ? 1 : 0);
+            direction == ReaderPageNavigationDirection.Backward
+                ? ReaderChapterRestoreTarget.End
+                : ReaderChapterRestoreTarget.Start);
 }

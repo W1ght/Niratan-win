@@ -454,82 +454,74 @@ window.hoshiReader = {
     }
   },
 
-  restoreProgress: async function (progress, navigationGeneration) {
+  restoreProgress: async function (progress, navigationGeneration, restoreTarget) {
     await document.fonts.ready;
     var context = this.getScrollContext();
-    if (context.pageSize <= 0 || progress <= 0) {
-      var firstPage = this.contentFirstPageScroll(context);
-      this.setPagePosition(context, firstPage);
-      this.registerSnapScroll(firstPage);
-      this.lastProgress = 0;
-      notifyRestoreComplete(navigationGeneration);
-      return;
-    }
-    if (progress >= 0.99) {
-      var lastPage = this.contentLastPageScroll(context);
-      this.setPagePosition(context, Math.max(0, lastPage));
-      requestAnimationFrame(function () {
-        var ctx = window.hoshiReader.getScrollContext();
-        var lp = window.hoshiReader.contentLastPageScroll(ctx);
-        window.hoshiReader.setPagePosition(ctx, Math.max(0, lp));
-        window.hoshiReader.registerSnapScroll(lp);
-        window.hoshiReader.lastProgress = 1;
-        requestAnimationFrame(function () { notifyRestoreComplete(navigationGeneration); });
-      });
-      return;
-    }
-    var walker = this.createWalker();
-    var totalChars = 0;
-    var node;
-    while ((node = walker.nextNode())) {
-      totalChars += this.countChars(node.textContent);
-    }
-    var targetCharCount = Math.ceil(totalChars * progress);
-    var runningSum = 0;
-    var targetNode = null;
-    var targetOffset = 0;
-    walker = this.createWalker();
-    while ((node = walker.nextNode())) {
-      var nodeLen = this.countChars(node.textContent);
-      if (runningSum + nodeLen > targetCharCount) {
-        targetNode = node;
-        targetOffset = this.textOffsetForCharCount(
-          node,
-          Math.max(0, targetCharCount - runningSum)
-        );
-        break;
-      }
-      runningSum += nodeLen;
-    }
-    if (targetNode) {
-      var range = document.createRange();
-      var targetText = targetNode.textContent || "";
-      var targetChar = String.fromCodePoint(targetText.codePointAt(targetOffset));
-      range.setStart(targetNode, targetOffset);
-      range.setEnd(
-        targetNode,
-        Math.min(targetText.length, targetOffset + Math.max(1, targetChar.length))
-      );
-      var rect = this.getRect(range);
-      var currentScroll = this.getPagePosition(context);
-      var anchor =
-        (context.vertical ? rect.top : rect.left) + currentScroll;
-      var targetScroll = this.alignToPage(context, anchor);
-      this.setPagePosition(context, targetScroll);
-      requestAnimationFrame(function () {
-        var ctx = window.hoshiReader.getScrollContext();
-        window.hoshiReader.setPagePosition(ctx, targetScroll);
-        window.hoshiReader.registerSnapScroll(targetScroll);
-        window.hoshiReader.lastProgress = window.hoshiReader.calculateProgress();
-      });
+    var targetScroll;
+    if (restoreTarget === "start") {
+      targetScroll = this.contentFirstPageScroll(context);
+    } else if (restoreTarget === "end") {
+      targetScroll = this.contentLastPageScroll(context);
+    } else if (context.pageSize <= 0 || progress <= 0) {
+      targetScroll = this.contentFirstPageScroll(context);
+    } else if (progress >= 0.99) {
+      targetScroll = this.contentLastPageScroll(context);
     } else {
-      this.setPagePosition(context, 0);
-      this.registerSnapScroll(0);
-      this.lastProgress = 0;
+      var walker = this.createWalker();
+      var totalChars = 0;
+      var node;
+      while ((node = walker.nextNode())) {
+        totalChars += this.countChars(node.textContent);
+      }
+      var targetCharCount = Math.ceil(totalChars * progress);
+      var runningSum = 0;
+      var targetNode = null;
+      var targetOffset = 0;
+      walker = this.createWalker();
+      while ((node = walker.nextNode())) {
+        var nodeLen = this.countChars(node.textContent);
+        if (runningSum + nodeLen > targetCharCount) {
+          targetNode = node;
+          targetOffset = this.textOffsetForCharCount(
+            node,
+            Math.max(0, targetCharCount - runningSum)
+          );
+          break;
+        }
+        runningSum += nodeLen;
+      }
+      if (targetNode) {
+        var range = document.createRange();
+        var targetText = targetNode.textContent || "";
+        var targetChar = String.fromCodePoint(targetText.codePointAt(targetOffset));
+        range.setStart(targetNode, targetOffset);
+        range.setEnd(
+          targetNode,
+          Math.min(targetText.length, targetOffset + Math.max(1, targetChar.length))
+        );
+        var rect = this.getRect(range);
+        var currentScroll = this.getPagePosition(context);
+        var anchor =
+          (context.vertical ? rect.top : rect.left) + currentScroll;
+        targetScroll = this.alignToPage(context, anchor);
+      } else {
+        targetScroll = this.contentFirstPageScroll(context);
+      }
     }
-    requestAnimationFrame(function () {
-      requestAnimationFrame(function () { notifyRestoreComplete(navigationGeneration); });
+
+    this.setPagePosition(context, Math.max(0, targetScroll));
+    await new Promise(function (resolve) {
+      requestAnimationFrame(function () { requestAnimationFrame(resolve); });
     });
+    context = this.getScrollContext();
+    if (restoreTarget === "start")
+      targetScroll = this.contentFirstPageScroll(context);
+    else if (restoreTarget === "end")
+      targetScroll = this.contentLastPageScroll(context);
+    this.setPagePosition(context, Math.max(0, targetScroll));
+    this.registerSnapScroll(targetScroll);
+    this.lastProgress = this.calculateProgress();
+    notifyRestoreComplete(navigationGeneration);
   },
 
   jumpToFragment: async function (fragment, navigationGeneration) {
@@ -616,7 +608,7 @@ window.hoshiReader = {
     });
   },
 
-  initialize: function (initialProgress, navigationGeneration) {
+  initialize: function (initialProgress, navigationGeneration, restoreTarget) {
     if (window.hoshiReader.didInitialize) return;
     window.hoshiReader.didInitialize = true;
 
@@ -695,7 +687,7 @@ window.hoshiReader = {
         if (window.hoshiHighlights) {
           window.hoshiHighlights.applyHighlights(window.__hoshiChapterHighlights || []);
         }
-        self.restoreProgress(progress, navigationGeneration).then(function () {
+        self.restoreProgress(progress, navigationGeneration, restoreTarget).then(function () {
           self.lastProgress = self.calculateProgress();
           updateDiagnostics();
           postToHost("chapterReady", window.__hoshiReaderState);
@@ -871,7 +863,8 @@ async function handleMessage(event) {
         logDebug("setChapter-received", { chapter: currentChapter, progress: progress });
         window.hoshiReader.initialize(
           progress,
-          message.payload?.navigationGeneration ?? null
+          message.payload?.navigationGeneration ?? null,
+          message.payload?.restoreTarget ?? null
         );
         break;
       case "restoreProgress":
@@ -1187,7 +1180,8 @@ if (window.__hoshiChapterInfo) {
   logDebug("auto-initialize", { chapter: currentChapter, progress: initProgress });
   window.hoshiReader.initialize(
     initProgress,
-    window.__hoshiChapterInfo.navigationGeneration ?? null
+    window.__hoshiChapterInfo.navigationGeneration ?? null,
+    window.__hoshiChapterInfo.restoreTarget ?? null
   );
 } else {
   postToHost("readerReady", {});
