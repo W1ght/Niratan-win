@@ -157,7 +157,7 @@ public ReaderNavigationCommitLease? TryBeginCommit(
     ReaderNavigationPosition resolvedDestination);
 public ReaderNavigationSettlement? TryCancelRendering(long generation);
 public Task<ReaderNavigationSettlement?> HandleBridgeErrorAsync();
-public ReaderNavigationSettlement CompleteCommit(
+public ReaderNavigationSettlement? CompleteCommit(
     ReaderNavigationCommitLease lease,
     bool committed);
 public Task<ReaderNavigationSettlement?> WaitForSettlementAsync();
