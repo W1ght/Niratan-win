@@ -2887,7 +2887,7 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("_highlightsJs");
         readerCode.Should().Contain("highlights.js");
         readerCode.Should().Contain("ViewModel.LoadHighlightsAsync");
-        readerCode.Should().Contain("ViewModel.GetCurrentChapterHighlightsJson()");
+        readerCode.Should().Contain("ViewModel.GetChapterHighlightsJson(destinationChapterIndex)");
         readerCode.Should().Contain("window.__hoshiChapterHighlights");
         bridgeScript.Should().Contain("window.hoshiHighlights.applyHighlights(window.__hoshiChapterHighlights || [])");
         appCode.Should().Contain("IReaderHighlightService, ReaderHighlightService");
@@ -2999,7 +2999,8 @@ public class NovelReaderWebAssetTests
         adjacentNavigationBody.Should().NotContain("SaveProgressNowAsync");
         adjacentNavigationBody.Should().NotContain("ViewModel.UpdateProgress");
         readerCode.Should().Contain("ViewModel.CompleteAdjacentChapterNavigationAsync(");
-        readerCode.Should().Contain("if (!_programmaticNavigation.TryComplete(");
+        readerCode.Should().Contain("if (!_programmaticNavigation.TryBeginCompletion(");
+        readerCode.Should().Contain("_programmaticNavigation.CompleteCommit(");
         readerCode.Should().Contain("Log.Warning(\"[NovelReader] Ignoring stale restore completion");
         readerCode.Should().Contain("if (_pendingAdjacentChapterNavigation)");
         readerCode.Should().Contain("NovelWebView.Opacity = 0");
@@ -3081,7 +3082,8 @@ public class NovelReaderWebAssetTests
         panelXaml.Should().Contain("ReaderStatisticsAllTimeSection");
         panelXaml.Should().Contain("ToggleStatisticsTrackingCommand");
         statisticsDialogXaml.Should().Contain("<controls:ReaderStatisticsPanelContent");
-        statisticsDialogXaml.Should().Contain("MinWidth=\"520\"");
+        statisticsDialogXaml.Should().Contain("MaxWidth=\"520\"");
+        statisticsDialogXaml.Should().NotContain("ContentDialogMinWidth");
         statisticsDialogXaml.Should().NotContain("<Grid Width=\"1120\"");
     }
 
@@ -3607,6 +3609,44 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("ShowReaderPanelDialogAsync");
         readerCode.Should().NotContain("OpenReaderPanel(");
         readerCode.Should().NotContain("PositionReaderPanel");
+    }
+
+    [Fact]
+    public void ReaderPage_StatisticsDialogClampsWithoutHardMinimumWidth()
+    {
+        var readerXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml"));
+        var dialogStart = readerXaml.IndexOf("x:Name=\"ReaderStatisticsPanelDialog\"", StringComparison.Ordinal);
+        var dialogEnd = readerXaml.IndexOf("</ContentDialog>", dialogStart, StringComparison.Ordinal);
+        var dialog = readerXaml[dialogStart..dialogEnd];
+
+        dialog.Should().NotContain("MinWidth=\"520\"");
+        dialog.Should().NotContain("ContentDialogMinWidth");
+        dialog.Should().Contain("MaxWidth=\"560\"");
+        dialog.Should().Contain("HorizontalAlignment=\"Stretch\"");
+    }
+
+    [Fact]
+    public void ReaderPage_AdjacentCommitRejectsPageAndTickInputUntilDestinationCommitCompletes()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+
+        readerCode.Should().Contain("if (!_programmaticNavigation.CanAcceptReaderInput)");
+        readerCode.Should().Contain("TryBeginCompletion(");
+        readerCode.Should().Contain("CompleteCommit(");
+        readerCode.Should().Contain("if (!_programmaticNavigation.CanAcceptReaderInput)\n            return;");
+    }
+
+    [Fact]
+    public void ReaderPage_AdjacentLoadResolvesHighlightsAndSasayakiAgainstDestinationChapter()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+
+        readerCode.Should().Contain("var destinationChapterIndex = _pendingAdjacentChapterIndex ?? ViewModel.CurrentChapterIndex;");
+        readerCode.Should().Contain("ViewModel.GetChapterHighlightsJson(destinationChapterIndex)");
+        readerCode.Should().Contain("match.ChapterIndex == destinationChapterIndex");
     }
 
     [Fact]

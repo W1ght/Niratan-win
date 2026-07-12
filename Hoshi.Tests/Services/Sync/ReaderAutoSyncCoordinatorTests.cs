@@ -44,6 +44,29 @@ public sealed class ReaderAutoSyncCoordinatorTests
         sync.VerifyAll();
     }
 
+    [Fact]
+    public async Task ImportOnOpenAsync_WhenStatisticsAreDisabled_PreservesPreferenceButDoesNotSyncStatistics()
+    {
+        TtuSyncOptions? observed = null;
+        var sync = new Mock<ITtuSyncService>();
+        sync.Setup(service => service.SyncBookAsync(
+                Book,
+                It.IsAny<TtuSyncOptions>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<NovelBook, TtuSyncOptions, CancellationToken>((_, options, _) => observed = options)
+            .ReturnsAsync(new TtuSyncResult(TtuSyncResultKind.Synced, Book.Title));
+        var settings = EnabledSettings();
+        settings.StatisticsSettings.EnableStatistics = false;
+        settings.StatisticsSettings.EnableSync.Should().BeTrue();
+        var sut = CreateCoordinator(sync.Object, settings, credentials: true);
+
+        await sut.ImportOnOpenAsync(Book, TestContext.Current.CancellationToken);
+
+        observed.Should().NotBeNull();
+        observed!.SyncStatistics.Should().BeFalse();
+        settings.StatisticsSettings.EnableSync.Should().BeTrue();
+    }
+
     [Theory]
     [InlineData(false, true, true)]
     [InlineData(true, false, true)]
@@ -862,6 +885,7 @@ public sealed class ReaderAutoSyncCoordinatorTests
         },
         StatisticsSettings = new NovelStatisticsSettings
         {
+            EnableStatistics = true,
             EnableSync = true,
             SyncMode = StatisticsSyncMode.Replace,
         },

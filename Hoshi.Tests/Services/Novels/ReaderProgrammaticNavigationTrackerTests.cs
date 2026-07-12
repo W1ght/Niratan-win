@@ -12,12 +12,16 @@ public sealed class ReaderProgrammaticNavigationTrackerTests
         var first = tracker.Begin(chapterIndex: 1);
         var second = tracker.Begin(chapterIndex: 2);
 
-        tracker.TryComplete(first, 1, 0.25).Should().BeFalse();
-        tracker.TryComplete(second, 1, 0.75).Should().BeFalse();
-        tracker.TryComplete(second, 2, double.NaN).Should().BeFalse();
-        tracker.TryComplete(second, 2, 0.5).Should().BeTrue();
-        tracker.TryComplete(second, 2, 0.5).Should().BeFalse();
+        tracker.TryBeginCompletion(first, 1, 0.25).Should().BeFalse();
+        tracker.TryBeginCompletion(second, 1, 0.75).Should().BeFalse();
+        tracker.TryBeginCompletion(second, 2, double.NaN).Should().BeFalse();
+        tracker.TryBeginCompletion(second, 2, 0.5).Should().BeTrue();
+        tracker.HasPending.Should().BeTrue();
+        tracker.CanAcceptReaderInput.Should().BeFalse();
+        tracker.TryBeginCompletion(second, 2, 0.5).Should().BeFalse();
+        tracker.CompleteCommit(second, 2).Should().BeTrue();
         tracker.HasPending.Should().BeFalse();
+        tracker.CanAcceptReaderInput.Should().BeTrue();
     }
 
     [Fact]
@@ -26,7 +30,8 @@ public sealed class ReaderProgrammaticNavigationTrackerTests
         var tracker = new ReaderProgrammaticNavigationTracker();
         var generation = tracker.Begin(0);
 
-        tracker.TryComplete(generation, 0, 0.25).Should().BeTrue();
+        tracker.TryBeginCompletion(generation, 0, 0.25).Should().BeTrue();
+        tracker.CompleteCommit(generation, 0).Should().BeTrue();
     }
 
     [Fact]
@@ -37,6 +42,6 @@ public sealed class ReaderProgrammaticNavigationTrackerTests
 
         tracker.Cancel();
 
-        tracker.TryComplete(generation, 1, 0.5).Should().BeFalse();
+        tracker.TryBeginCompletion(generation, 1, 0.5).Should().BeFalse();
     }
 }

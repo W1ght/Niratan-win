@@ -132,6 +132,9 @@ public partial class NovelReaderPageViewModel : ObservableObject
     private Task? _saveTask;
     private readonly object _saveGate = new();
     private Task _writerTail = Task.CompletedTask;
+    private ProgressSaveRequest? _latestAdmittedProgressRequest;
+    private long _positionRevision;
+    private long _currentPositionRevision;
     private bool _lifecycleWriterBarrier;
     private bool _readerWriterClosed;
     private IReadOnlyList<int> _chapterCharacterCounts = [];
@@ -196,6 +199,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
     public void SetChapter(int index, int count)
     {
+        _currentPositionRevision = ++_positionRevision;
         CurrentChapterIndex = index;
         ChapterCount = count;
         UpdateCharacterProgress();
@@ -210,6 +214,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
     public void UpdateProgress(double progress)
     {
+        _currentPositionRevision = ++_positionRevision;
         Progress = Math.Clamp(progress, 0, 1);
         UpdateCharacterProgress();
         OnPropertyChanged(nameof(OverallProgress));
@@ -220,6 +225,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
     public void SetChapterCharacterCounts(IReadOnlyList<int> chapterCharacterCounts)
     {
+        _currentPositionRevision = ++_positionRevision;
         _chapterCharacterCounts = chapterCharacterCounts;
         TotalCharacterCount = chapterCharacterCounts.Sum();
         UpdateCharacterProgress();
@@ -520,7 +526,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
             TaskCompletionSource admission;
             lock (_saveGate)
             {
-                var request = CaptureProgressSaveRequest();
+                var request = CaptureLifecycleProgressSaveRequest();
                 var statisticsCharacterCount = request?.CurrentCharacterCount
                     ?? CurrentCharacterCount;
                 admission = CreateWriterAdmission();
@@ -562,7 +568,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
                 _lifecycleWriterBarrier = true;
                 _saveCts?.Cancel();
-                var request = CaptureProgressSaveRequest();
+                var request = CaptureLifecycleProgressSaveRequest();
                 var statisticsCharacterCount = request?.CurrentCharacterCount
                     ?? CurrentCharacterCount;
                 admission = CreateWriterAdmission();
@@ -613,11 +619,14 @@ public partial class NovelReaderPageViewModel : ObservableObject
     }
 
     public string? GetCurrentChapterHighlightsJson()
+        => GetChapterHighlightsJson(CurrentChapterIndex);
+
+    public string? GetChapterHighlightsJson(int chapterIndex)
     {
         var chapterHighlights = _readerHighlightService.GetChapterHighlights(
             Highlights,
             _chapterCharacterCounts,
-            CurrentChapterIndex);
+            chapterIndex);
         return _readerHighlightService.SerializeForWebView(chapterHighlights);
     }
 
@@ -693,6 +702,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
                 return;
 
             _saveCts?.Cancel();
+            _latestAdmittedProgressRequest = request;
             var owner = new CancellationTokenSource();
             _saveCts = owner;
             _saveTask = SaveProgressDebouncedCoreAsync(
@@ -752,6 +762,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
                 return Task.CompletedTask;
 
             _saveCts?.Cancel();
+            _latestAdmittedProgressRequest = request;
             admission = CreateWriterAdmission();
             operation = RunProgressWriterAsync(
                 admission.Task,
@@ -798,6 +809,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
                 return Task.CompletedTask;
 
             _saveCts?.Cancel();
+            _latestAdmittedProgressRequest = request;
             admission = CreateWriterAdmission();
             operation = RunProgressWriterWithCheckpointAsync(
                 admission.Task,
@@ -822,11 +834,13 @@ public partial class NovelReaderPageViewModel : ObservableObject
         await admission;
         await AwaitPreviousWriterCompletionAsync(previousWriter);
         ct.ThrowIfCancellationRequested();
-        await SaveProgressCoreAsync(
+        var saved = await SaveProgressCoreAsync(
             request,
             flushStatistics: false,
             scheduleAutoSync: true,
             ct);
+        if (!saved)
+            return;
         await CheckpointReadingAtPositionAsync(
             reason,
             request.CurrentCharacterCount,
@@ -858,6 +872,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
                 return Task.CompletedTask;
 
             _saveCts?.Cancel();
+            _latestAdmittedProgressRequest = request;
             admission = CreateWriterAdmission();
             operation = RunProgressWriterWithBaselineResetAsync(
                 admission.Task,
@@ -895,8 +910,10 @@ public partial class NovelReaderPageViewModel : ObservableObject
                 chapterIndex,
                 progress,
                 CharacterCountAt(chapterIndex, progress),
-                TotalCharacterCount);
+                TotalCharacterCount,
+                ++_positionRevision);
             _saveCts?.Cancel();
+            _latestAdmittedProgressRequest = request;
             admission = CreateWriterAdmission();
             operation = RunAdjacentChapterCompletionWriterAsync(
                 admission.Task,
@@ -920,11 +937,13 @@ public partial class NovelReaderPageViewModel : ObservableObject
         await AwaitPreviousWriterCompletionAsync(previousWriter);
         ct.ThrowIfCancellationRequested();
         ApplyResolvedChapterPosition(request);
-        await SaveProgressCoreAsync(
+        var saved = await SaveProgressCoreAsync(
             request,
             flushStatistics: false,
             scheduleAutoSync: true,
             ct);
+        if (!saved)
+            return;
         _statisticsSession.ResetBaseline(
             new ReaderStatisticsPosition(request.CurrentCharacterCount));
     }
@@ -943,6 +962,8 @@ public partial class NovelReaderPageViewModel : ObservableObject
         _suppressPositionNotifications = true;
         try
         {
+            _positionRevision = Math.Max(_positionRevision, request.PositionRevision);
+            _currentPositionRevision = request.PositionRevision;
             Progress = request.Progress;
             CurrentChapterIndex = request.ChapterIndex;
             CurrentCharacterCount = request.CurrentCharacterCount;
@@ -984,11 +1005,13 @@ public partial class NovelReaderPageViewModel : ObservableObject
         await admission;
         await AwaitPreviousWriterCompletionAsync(previousWriter);
         ct.ThrowIfCancellationRequested();
-        await SaveProgressCoreAsync(
+        var saved = await SaveProgressCoreAsync(
             request,
             flushStatistics: false,
             scheduleAutoSync: true,
             ct);
+        if (!saved)
+            return;
         _statisticsSession.ResetBaseline(
             new ReaderStatisticsPosition(request.CurrentCharacterCount));
     }
@@ -1005,14 +1028,18 @@ public partial class NovelReaderPageViewModel : ObservableObject
         await admission;
         await AwaitPreviousWriterCompletionAsync(previousWriter);
         ct.ThrowIfCancellationRequested();
+        var saved = request == null;
         if (request != null)
         {
-            await SaveProgressCoreAsync(
+            saved = await SaveProgressCoreAsync(
                 request,
                 flushStatistics: false,
                 scheduleAutoSync: false,
                 ct);
         }
+
+        if (!saved)
+            throw new InvalidOperationException("Reader bookmark could not be saved at the lifecycle boundary.");
 
         await CheckpointReadingAtPositionAsync(reason, statisticsCharacterCount, ct);
         if (request != null)
@@ -1025,7 +1052,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
             _readerAutoSyncCoordinator.Cancel();
     }
 
-    private async Task SaveProgressCoreAsync(
+    private async Task<bool> SaveProgressCoreAsync(
         ProgressSaveRequest request,
         bool flushStatistics,
         bool scheduleAutoSync,
@@ -1039,19 +1066,20 @@ public partial class NovelReaderPageViewModel : ObservableObject
             request.TotalCharacterCount,
             ct);
         ct.ThrowIfCancellationRequested();
-        if (flushStatistics)
-            await FlushStatisticsAtPositionAsync(request.CurrentCharacterCount, ct);
-        ct.ThrowIfCancellationRequested();
         if (!result.IsSuccess)
         {
             if (!result.IsCancelled)
                 _notificationService.ShowError(result.Error!, result.ErrorTitle!);
-            return;
+            return false;
         }
 
+        if (flushStatistics)
+            await FlushStatisticsAtPositionAsync(request.CurrentCharacterCount, ct);
+        ct.ThrowIfCancellationRequested();
         if (scheduleAutoSync)
             _readerAutoSyncCoordinator.ScheduleExport(request.Book);
         _messenger.Send(new NovelLibraryChangedMessage());
+        return true;
     }
 
     private static async Task AwaitPreviousWriterCompletionAsync(Task previousWriter)
@@ -1089,7 +1117,16 @@ public partial class NovelReaderPageViewModel : ObservableObject
                 CurrentChapterIndex,
                 Progress,
                 CurrentCharacterCount,
-                TotalCharacterCount);
+                TotalCharacterCount,
+                _currentPositionRevision);
+
+    private ProgressSaveRequest? CaptureLifecycleProgressSaveRequest()
+    {
+        var current = CaptureProgressSaveRequest();
+        return _latestAdmittedProgressRequest?.PositionRevision > current?.PositionRevision
+            ? _latestAdmittedProgressRequest
+            : current;
+    }
 
     private int CharacterCountAt(int chapterIndex, double progress)
     {
@@ -1111,7 +1148,8 @@ public partial class NovelReaderPageViewModel : ObservableObject
         int ChapterIndex,
         double Progress,
         int CurrentCharacterCount,
-        int TotalCharacterCount);
+        int TotalCharacterCount,
+        long PositionRevision);
 
     private enum StatisticsMutation
     {

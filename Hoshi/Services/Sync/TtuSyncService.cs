@@ -93,7 +93,7 @@ public sealed class TtuSyncService : ITtuSyncService
         if (options.SyncStatistics && remoteFiles.Statistics != null)
         {
             var remoteStatistics = await _remoteStore.GetStatisticsAsync(remoteFiles.Statistics, ct);
-            if (remoteStatistics is { Count: > 0 })
+            if (remoteStatistics != null)
             {
                 var localStatistics = await _statisticsSidecars.LoadAsync(book.ExtractedPath, ct);
                 importedStatistics = MergeStatistics(
@@ -183,7 +183,7 @@ public sealed class TtuSyncService : ITtuSyncService
                 remoteStatistics,
                 localStatistics,
                 options.StatisticsSyncMode);
-            if (merged.Count > 0)
+            if (merged.Count > 0 || options.StatisticsSyncMode == StatisticsSyncMode.Replace)
                 await _remoteStore.UpsertStatisticsAsync(book.Title, merged, remoteFiles.Statistics, ct);
         }
 
@@ -312,9 +312,9 @@ public sealed class TtuSyncService : ITtuSyncService
         StatisticsSyncMode syncMode)
     {
         if (syncMode == StatisticsSyncMode.Replace)
-            return externalStatistics;
+            return DeduplicateStatistics(externalStatistics);
 
-        var grouped = localStatistics.ToDictionary(
+        var grouped = DeduplicateStatistics(localStatistics).ToDictionary(
             statistic => statistic.DateKey,
             StringComparer.Ordinal);
         foreach (var statistic in externalStatistics)
@@ -331,6 +331,14 @@ public sealed class TtuSyncService : ITtuSyncService
             .OrderBy(statistic => statistic.DateKey, StringComparer.Ordinal)
             .ToList();
     }
+
+    private static IReadOnlyList<NovelReadingStatistic> DeduplicateStatistics(
+        IReadOnlyList<NovelReadingStatistic> statistics) =>
+        statistics
+            .GroupBy(statistic => statistic.DateKey, StringComparer.Ordinal)
+            .Select(group => group.MaxBy(statistic => statistic.LastStatisticModified)!)
+            .OrderBy(statistic => statistic.DateKey, StringComparer.Ordinal)
+            .ToList();
 
     private sealed record ReaderPosition(int ChapterIndex, double ChapterProgress);
 

@@ -364,16 +364,15 @@
         <ContentDialog x:Name="ReaderStatisticsPanelDialog"
                        x:Uid="ReaderStatisticsPanelDialog"
                        AutomationProperties.AutomationId="NovelReaderStatisticsPanelDialog"
-                       MinWidth="520"
                        MaxWidth="560"
                        CloseButtonText="Close"
                        DefaultButton="Close">
             <ContentDialog.Resources>
                 <x:Double x:Key="ContentDialogMaxWidth">560</x:Double>
-                <x:Double x:Key="ContentDialogMinWidth">520</x:Double>
             </ContentDialog.Resources>
             <controls:ReaderStatisticsPanelContent
                 MaxWidth="520"
+                HorizontalAlignment="Stretch"
                 DataContext="{x:Bind ViewModel, Mode=OneWay}" />
         </ContentDialog>
 

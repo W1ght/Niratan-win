@@ -354,7 +354,7 @@ public sealed partial class NovelReaderPage : Page
             return;
         }
 
-        if (_programmaticNavigation.HasPending)
+        if (!_programmaticNavigation.CanAcceptReaderInput)
             return;
 
         await ViewModel.TickStatisticsAsync();
@@ -1160,9 +1160,10 @@ public sealed partial class NovelReaderPage : Page
 
         try
         {
+            var destinationChapterIndex = _pendingAdjacentChapterIndex ?? ViewModel.CurrentChapterIndex;
             var chapterInfo = JsonSerializer.Serialize(new
             {
-                index = _pendingAdjacentChapterIndex ?? ViewModel.CurrentChapterIndex,
+                index = destinationChapterIndex,
                 totalChapters = _epubBook.Chapters.Count,
                 progress = _pendingAdjacentChapterRestoreTarget.HasValue
                     ? (double?)null
@@ -1174,7 +1175,7 @@ public sealed partial class NovelReaderPage : Page
             });
             await sender.ExecuteScriptAsync(
                 $"window.__hoshiChapterInfo = {chapterInfo};");
-            var highlightsJson = ViewModel.GetCurrentChapterHighlightsJson() ?? "[]";
+            var highlightsJson = ViewModel.GetChapterHighlightsJson(destinationChapterIndex) ?? "[]";
             await sender.ExecuteScriptAsync(
                 $"window.__hoshiChapterHighlights = {highlightsJson};");
 
@@ -1213,7 +1214,7 @@ public sealed partial class NovelReaderPage : Page
 
             // Re-highlight Sasayaki cue if it matches the newly loaded chapter
             if (_sasayakiNav.CurrentMatch is { } match
-                && match.ChapterIndex == ViewModel.CurrentChapterIndex)
+                && match.ChapterIndex == destinationChapterIndex)
             {
                 await HighlightSasayakiCueAsync(match);
             }
@@ -1310,7 +1311,7 @@ public sealed partial class NovelReaderPage : Page
                     {
                         var completionChapterIndex = _pendingAdjacentChapterIndex
                             ?? ViewModel.CurrentChapterIndex;
-                        if (!_programmaticNavigation.TryComplete(
+                        if (!_programmaticNavigation.TryBeginCompletion(
                                 navigationGeneration,
                                 completionChapterIndex,
                                 restoredProgress))
@@ -1327,6 +1328,9 @@ public sealed partial class NovelReaderPage : Page
                             _currentProgress = restoredProgress;
                             await CompleteProgrammaticNavigationAsync();
                         }
+                        _programmaticNavigation.CompleteCommit(
+                            navigationGeneration,
+                            completionChapterIndex);
                     }
                     else if (!_programmaticNavigation.HasPending)
                     {
@@ -1334,6 +1338,11 @@ public sealed partial class NovelReaderPage : Page
                     }
                     break;
                 case "pageChanged":
+                    if (!_programmaticNavigation.CanAcceptReaderInput)
+                    {
+                        Log.Information("[NovelReader] Ignoring pageChanged while destination commit is pending");
+                        break;
+                    }
                     if (!root.TryGetProperty("payload", out var payload)
                         || payload.ValueKind != JsonValueKind.Object)
                     {

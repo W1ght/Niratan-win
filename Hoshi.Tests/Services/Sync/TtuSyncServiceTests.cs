@@ -274,6 +274,86 @@ public sealed class TtuSyncServiceTests
             .Be(20);
     }
 
+    [Fact]
+    public async Task SyncBookAsync_ReplaceImport_ValidEmptyRemoteClearsLocalStatistics()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var sidecars = await CreateSidecarsAsync(temp.Path, ct);
+        await sidecars.Statistics.SaveAsync(
+            temp.Path,
+            [Statistic("2026-07-08", charactersRead: 20, modified: 2)],
+            ct);
+        var remote = RemoteImportPayload();
+        remote.Statistics = [];
+        var sut = CreateSut(sidecars, remote);
+
+        await sut.SyncBookAsync(CreateBook(temp.Path), ImportAllOptions(), ct);
+
+        (await sidecars.Statistics.LoadAsync(temp.Path, ct)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SyncBookAsync_ReplaceExport_EmptyLocalClearsRemoteStatistics()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var sidecars = await CreateSidecarsAsync(temp.Path, ct);
+        await sidecars.Book.SaveBookmarkAsync(
+            temp.Path,
+            new NovelBookmark(0, 0.5, 500, DateTimeOffset.FromUnixTimeMilliseconds(2000)),
+            ct);
+        var remote = new FakeTtuSyncRemoteStore
+        {
+            StatisticsFile = new TtuRemoteFile("statistics-id", "statistics_1_6_remote.json"),
+            Statistics = [Statistic("2026-07-08", charactersRead: 20, modified: 2)],
+        };
+        var sut = CreateSut(sidecars, remote);
+
+        await sut.SyncBookAsync(
+            CreateBook(temp.Path),
+            new TtuSyncOptions(
+                Direction: TtuSyncDirection.ExportToTtu,
+                SyncStatistics: true,
+                StatisticsSyncMode: StatisticsSyncMode.Replace),
+            ct);
+
+        remote.LastExportedStatistics.Should().NotBeNull().And.BeEmpty();
+    }
+
+    [Fact]
+    public async Task SyncBookAsync_Merge_DeduplicatesUntrustedRemoteDatesByNewestModified()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var sidecars = await CreateSidecarsAsync(temp.Path, ct);
+        await sidecars.Book.SaveBookmarkAsync(
+            temp.Path,
+            new NovelBookmark(0, 0.5, 500, DateTimeOffset.FromUnixTimeMilliseconds(2000)),
+            ct);
+        var remote = new FakeTtuSyncRemoteStore
+        {
+            StatisticsFile = new TtuRemoteFile("statistics-id", "statistics_1_6_remote.json"),
+            Statistics =
+            [
+                Statistic("2026-07-08", charactersRead: 10, modified: 1),
+                Statistic("2026-07-08", charactersRead: 30, modified: 3),
+            ],
+        };
+        var sut = CreateSut(sidecars, remote);
+
+        await sut.SyncBookAsync(
+            CreateBook(temp.Path),
+            new TtuSyncOptions(
+                Direction: TtuSyncDirection.ExportToTtu,
+                SyncStatistics: true,
+                StatisticsSyncMode: StatisticsSyncMode.Merge),
+            ct);
+
+        remote.LastExportedStatistics.Should().ContainSingle()
+            .Which.CharactersRead.Should().Be(30);
+    }
+
     private static async Task<Sidecars> CreateSidecarsAsync(
         string bookRootPath,
         CancellationToken ct)

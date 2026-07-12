@@ -324,6 +324,7 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
             Direction: direction,
             SyncBookData: current.TtuSyncSettings.UploadBooks,
             SyncStatistics: current.TtuSyncSettings.EnableSync
+                && current.StatisticsSettings.EnableStatistics
                 && current.StatisticsSettings.EnableSync,
             StatisticsSyncMode: current.StatisticsSettings.SyncMode,
             SyncAudioBook: current.SasayakiSettings.EnableSasayaki

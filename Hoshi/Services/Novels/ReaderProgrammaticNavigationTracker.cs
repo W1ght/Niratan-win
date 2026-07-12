@@ -9,6 +9,8 @@ public sealed class ReaderProgrammaticNavigationTracker
 
     public bool HasPending => _pending is not null;
 
+    public bool CanAcceptReaderInput => _pending is null;
+
     public long? PendingGeneration => _pending?.Generation;
 
     public long Begin(int chapterIndex)
@@ -18,7 +20,7 @@ public sealed class ReaderProgrammaticNavigationTracker
         return generation;
     }
 
-    public bool TryComplete(
+    public bool TryBeginCompletion(
         long generation,
         int chapterIndex,
         double resolvedProgress)
@@ -26,7 +28,21 @@ public sealed class ReaderProgrammaticNavigationTracker
         if (_pending is not { } pending
             || pending.Generation != generation
             || pending.ChapterIndex != chapterIndex
+            || pending.IsCommitting
             || !double.IsFinite(resolvedProgress))
+        {
+            return false;
+        }
+
+        _pending = pending with { IsCommitting = true };
+        return true;
+    }
+
+    public bool CompleteCommit(long generation, int chapterIndex)
+    {
+        if (_pending is not { IsCommitting: true } pending
+            || pending.Generation != generation
+            || pending.ChapterIndex != chapterIndex)
         {
             return false;
         }
@@ -41,5 +57,8 @@ public sealed class ReaderProgrammaticNavigationTracker
         _pending = null;
     }
 
-    private sealed record PendingDestination(long Generation, int ChapterIndex);
+    private sealed record PendingDestination(
+        long Generation,
+        int ChapterIndex,
+        bool IsCommitting = false);
 }
