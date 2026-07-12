@@ -2160,7 +2160,8 @@ public sealed class NovelReaderPageViewModelTests
             ReaderStatisticsPosition,
             ReaderStatisticsCheckpointReason,
             CancellationToken,
-            Task>? CheckpointAsyncHandler { get; set; }
+            Task>? CheckpointAsyncHandler
+        { get; set; }
 
         public event EventHandler<ReaderStatisticsSessionState>? StateChanged;
 
