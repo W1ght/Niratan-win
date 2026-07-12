@@ -46,7 +46,7 @@
 - Create: `Hoshi.Tests/Services/Novels/ReaderNavigationTransactionCoordinatorTests.cs`
 
 **Interfaces:**
-- Produces: `ReaderNavigationPosition`, `ReaderNavigationDestination`, `ReaderNavigationRenderRequest`, `ReaderNavigationCommitLease`, `ReaderNavigationSettlement`, and `ReaderNavigationTransactionCoordinator`.
+- Produces: `ReaderNavigationPositionSnapshot`, `ReaderNavigationDestination`, `ReaderNavigationRenderRequest`, `ReaderNavigationCommitLease`, `ReaderNavigationSettlement`, and `ReaderNavigationTransactionCoordinator`.
 - Consumes: existing `ReaderChapterRestoreTarget`.
 
 - [ ] **Step 1: Write failing state-machine tests**
@@ -54,7 +54,7 @@
 Add tests that use this public surface:
 
 ```csharp
-var source = new ReaderNavigationPosition("book-1", 1, 0, 100, 200, 7);
+var source = new ReaderNavigationPositionSnapshot("book-1", 1, 0, 100, 200, 7);
 var destination = ReaderNavigationDestination.AtChapterEnd(0);
 var sut = new ReaderNavigationTransactionCoordinator();
 
@@ -62,7 +62,7 @@ var render = sut.TryBegin(source, destination);
 render.Should().NotBeNull();
 sut.BlocksPositionMutation.Should().BeTrue();
 
-var resolved = new ReaderNavigationPosition("book-1", 0, 0.82, 82, 200, 8);
+var resolved = new ReaderNavigationPositionSnapshot("book-1", 0, 0.82, 82, 200, 8);
 var lease = sut.TryBeginCommit(render!.Generation, resolved);
 lease.Should().NotBeNull();
 sut.TryCancelRendering(render.Generation).Should().BeNull();
@@ -103,7 +103,7 @@ Expected: compile failure because the transaction models and coordinator do not 
 Create these exact public records:
 
 ```csharp
-public readonly record struct ReaderNavigationPosition(
+public readonly record struct ReaderNavigationPositionSnapshot(
     string BookId,
     int ChapterIndex,
     double Progress,
@@ -128,17 +128,17 @@ public readonly record struct ReaderNavigationDestination(
 
 public sealed record ReaderNavigationRenderRequest(
     long Generation,
-    ReaderNavigationPosition Source,
+    ReaderNavigationPositionSnapshot Source,
     ReaderNavigationDestination Destination);
 
 public sealed record ReaderNavigationCommitLease(
     long Generation,
-    ReaderNavigationPosition Source,
-    ReaderNavigationPosition ResolvedDestination);
+    ReaderNavigationPositionSnapshot Source,
+    ReaderNavigationPositionSnapshot ResolvedDestination);
 
 public sealed record ReaderNavigationSettlement(
     long Generation,
-    ReaderNavigationPosition Position,
+    ReaderNavigationPositionSnapshot Position,
     bool ShouldRevealDestination);
 ```
 
@@ -150,11 +150,11 @@ Implement these exact members:
 public bool BlocksPositionMutation { get; }
 public ReaderNavigationRenderRequest? ActiveRenderRequest { get; }
 public ReaderNavigationRenderRequest? TryBegin(
-    ReaderNavigationPosition source,
+    ReaderNavigationPositionSnapshot source,
     ReaderNavigationDestination destination);
 public ReaderNavigationCommitLease? TryBeginCommit(
     long generation,
-    ReaderNavigationPosition resolvedDestination);
+    ReaderNavigationPositionSnapshot resolvedDestination);
 public ReaderNavigationSettlement? TryCancelRendering(long generation);
 public Task<ReaderNavigationSettlement?> HandleBridgeErrorAsync();
 public ReaderNavigationSettlement? CompleteCommit(
@@ -268,7 +268,7 @@ public bool AcknowledgeNavigationRendered(long generation);
 
 `ResolveNavigationAsync` must:
 
-1. construct the exact destination `ReaderNavigationPosition` from chapter character counts and obtain a matching `ReaderNavigationCommitLease`;
+1. construct the exact destination `ReaderNavigationPositionSnapshot` from chapter character counts and obtain a matching `ReaderNavigationCommitLease`;
 2. admit one writer-tail operation with `CancellationToken.None` after the lease is granted;
 3. call `SaveProgressCoreAsync` with the lease destination;
 4. on success reset the destination baseline and atomically publish the destination tuple;
