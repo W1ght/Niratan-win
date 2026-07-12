@@ -680,8 +680,9 @@ public sealed class ReaderAutoSyncCoordinatorTests
     }
 
     [Fact]
-    public async Task FlushAsync_PublishesCompletionBeforeReleasingActiveOwnership()
+    public async Task FlushCompletion_ScheduleThenFlushDoesNotJoinStaleCompletedOwnership()
     {
+        var delay = new ControlledDelay();
         var completionPublished = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously);
         var releasePublicationWindow = new TaskCompletionSource(
@@ -717,7 +718,7 @@ public sealed class ReaderAutoSyncCoordinatorTests
             settings.Object,
             auth.Object,
             Mock.Of<ILogger<ReaderAutoSyncCoordinator>>(),
-            (duration, ct) => Task.Delay(duration, ct),
+            delay.DelayAsync,
             hooks);
 
         var ownerFlush = sut.FlushAsync(Book, TestContext.Current.CancellationToken);
@@ -725,10 +726,12 @@ public sealed class ReaderAutoSyncCoordinatorTests
             TimeSpan.FromSeconds(5),
             TestContext.Current.CancellationToken);
 
+        sut.ScheduleExport(Book);
         await sut.FlushAsync(Book, TestContext.Current.CancellationToken)
             .WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        sut.Cancel();
 
-        exportCount.Should().Be(1);
+        exportCount.Should().Be(2);
         releasePublicationWindow.TrySetResult();
         await ownerFlush.WaitAsync(
             TimeSpan.FromSeconds(5),

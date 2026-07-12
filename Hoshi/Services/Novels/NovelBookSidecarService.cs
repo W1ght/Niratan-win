@@ -36,7 +36,14 @@ public sealed class NovelBookSidecarService : INovelBookSidecarService
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(bookmark);
-        return _json.WriteAsync(Path.Combine(bookRootPath, BookmarkFileName), bookmark, ct);
+        var normalized = bookmark.LastModified is { } lastModified
+            ? bookmark with
+            {
+                LastModified = DateTimeOffset.FromUnixTimeMilliseconds(
+                    lastModified.ToUnixTimeMilliseconds()),
+            }
+            : bookmark;
+        return _json.WriteAsync(Path.Combine(bookRootPath, BookmarkFileName), normalized, ct);
     }
 
     public Task<NovelBookInfo?> LoadBookInfoAsync(

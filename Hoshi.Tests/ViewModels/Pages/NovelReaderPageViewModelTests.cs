@@ -1558,7 +1558,7 @@ public sealed class NovelReaderPageViewModelTests
         await sut.CheckpointReadingAsync(
             ReaderStatisticsCheckpointReason.AdjacentChapter,
             ct);
-        sut.ResetStatisticsBaseline();
+        await sut.ResetStatisticsBaselineAsync(ct);
         await sut.StopStatisticsTrackingAsync(ct: ct);
 
         statisticsSession.LoadRequest.Should().Be((temp.Path, "Book One", 25));
@@ -1626,11 +1626,105 @@ public sealed class NovelReaderPageViewModelTests
                 1.0),
             TestContext.Current.CancellationToken);
 
-        outcome.Should().Be(ReaderPageNavigationOutcome.AdjacentChapter(1));
+        outcome.Should().Be(ReaderPageNavigationOutcome.AdjacentChapter(
+            1,
+            ReaderPageNavigationDirection.Forward));
         sut.CurrentCharacterCount.Should().Be(100);
         sut.IsStatisticsTracking.Should().BeTrue();
         statisticsSession.Checkpoints.Should().Equal(
             (100, ReaderStatisticsCheckpointReason.AdjacentChapter));
+    }
+
+    [Fact]
+    public async Task ManualBackwardAdjacentChapter_RequestsPreviousChapterEndAndOnlyCheckpointsDeparture()
+    {
+        using var temp = new TempBookDirectory();
+        var statisticsSession = new FakeReaderStatisticsSession();
+        var sut = CreateInitializedSut(
+            temp.Path,
+            new ReaderHighlightService(),
+            statisticsSession: statisticsSession);
+        sut.SetChapterCharacterCounts([100, 200]);
+        sut.SetChapter(1, 2);
+        sut.UpdateProgress(0);
+
+        var outcome = await sut.HandleManualPageNavigationAsync(
+            new ReaderPageNavigationEvent(
+                ReaderPageNavigationResult.Limit,
+                ReaderPageNavigationDirection.Backward,
+                0),
+            TestContext.Current.CancellationToken);
+
+        outcome.Should().Be(ReaderPageNavigationOutcome.AdjacentChapter(
+            0,
+            ReaderPageNavigationDirection.Backward));
+        outcome.AdjacentChapterProgress.Should().Be(1);
+        sut.CurrentCharacterCount.Should().Be(100);
+        statisticsSession.Checkpoints.Should().Equal(
+            (100, ReaderStatisticsCheckpointReason.AdjacentChapter));
+        statisticsSession.ResetPositions.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AdjacentChapterRoundTrip_SavesResolvedDestinationsAndResetsMatchingBaselines()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var saves = new List<(int Chapter, double Progress, int Position)>();
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1",
+                It.IsAny<int>(),
+                It.IsAny<double>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .Callback((string _, int chapter, double progress, int position, int _, CancellationToken _) =>
+                saves.Add((chapter, progress, position)))
+            .ReturnsAsync(Result.Success());
+        var statistics = new FakeReaderStatisticsSession();
+        var sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            statistics,
+            CreateAutoSyncCoordinator().Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+        sut.SetChapterCharacterCounts([100, 100]);
+        sut.SetChapter(0, 2);
+        sut.UpdateProgress(0.8);
+
+        var forward = await sut.HandleManualPageNavigationAsync(
+            new ReaderPageNavigationEvent(
+                ReaderPageNavigationResult.Limit,
+                ReaderPageNavigationDirection.Forward,
+                0.8),
+            ct);
+        sut.SetChapter(forward.AdjacentChapterIndex!.Value, 2);
+        sut.UpdateProgress(0);
+        await sut.SaveProgressAndResetStatisticsBaselineAsync(ct);
+
+        var backward = await sut.HandleManualPageNavigationAsync(
+            new ReaderPageNavigationEvent(
+                ReaderPageNavigationResult.Limit,
+                ReaderPageNavigationDirection.Backward,
+                0),
+            ct);
+        sut.SetChapter(backward.AdjacentChapterIndex!.Value, 2);
+        sut.UpdateProgress(0.8);
+        await sut.SaveProgressAndResetStatisticsBaselineAsync(ct);
+
+        forward.AdjacentChapterProgress.Should().Be(0);
+        backward.AdjacentChapterProgress.Should().Be(1);
+        saves.Should().Equal(
+            (0, 0.8, 80),
+            (1, 0d, 100),
+            (1, 0d, 100),
+            (0, 0.8, 80));
+        statistics.Checkpoints.Should().Equal(
+            (80, ReaderStatisticsCheckpointReason.AdjacentChapter),
+            (100, ReaderStatisticsCheckpointReason.AdjacentChapter));
+        statistics.ResetPositions.Should().Equal(100, 80);
     }
 
     [Fact]
@@ -2029,6 +2123,156 @@ public sealed class NovelReaderPageViewModelTests
         messenger.SentMessages.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task ProgrammaticDepartureAndDestination_AreSerializedWithCapturedSnapshots()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var events = new ConcurrentQueue<string>();
+        var manualCheckpointStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseManualCheckpoint = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var savedPositions = new List<int>();
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1",
+                It.IsAny<int>(),
+                It.IsAny<double>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .Callback((string _, int _, double _, int position, int _, CancellationToken _) =>
+            {
+                savedPositions.Add(position);
+                events.Enqueue($"save-{position}");
+            })
+            .ReturnsAsync(Result.Success());
+        var statistics = new FakeReaderStatisticsSession
+        {
+            CheckpointAsyncHandler = async (position, reason, _) =>
+            {
+                events.Enqueue($"checkpoint-start-{reason}-{position.RawCharacterCount}");
+                if (reason == ReaderStatisticsCheckpointReason.ReadingMovement)
+                {
+                    manualCheckpointStarted.TrySetResult();
+                    await releaseManualCheckpoint.Task;
+                }
+
+                events.Enqueue($"checkpoint-end-{reason}-{position.RawCharacterCount}");
+            },
+            ResetBaselineRecorded = position =>
+                events.Enqueue($"baseline-{position.RawCharacterCount}"),
+        };
+        var sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            statistics,
+            CreateAutoSyncCoordinator().Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+        sut.SetChapterCharacterCounts([100]);
+        sut.SetChapter(0, 1);
+        sut.UpdateProgress(0.2);
+
+        var manual = sut.HandleManualPageNavigationAsync(
+            new ReaderPageNavigationEvent(
+                ReaderPageNavigationResult.Scrolled,
+                ReaderPageNavigationDirection.Forward,
+                0.4),
+            ct);
+        await manualCheckpointStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        var departure = sut.CheckpointProgrammaticDepartureAsync(ct);
+        sut.UpdateProgress(0.9);
+        departure.IsCompleted.Should().BeFalse();
+        releaseManualCheckpoint.TrySetResult();
+        await Task.WhenAll(manual, departure).WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        await sut.SaveProgressAndResetStatisticsBaselineAsync(ct);
+
+        savedPositions.Should().Equal(40, 90);
+        statistics.Checkpoints.Should().Equal(
+            (40, ReaderStatisticsCheckpointReason.ReadingMovement),
+            (40, ReaderStatisticsCheckpointReason.ProgrammaticDeparture));
+        statistics.ResetPositions.Should().Equal(90);
+        events.Should().ContainInOrder(
+            "save-40",
+            "checkpoint-start-ReadingMovement-40",
+            "checkpoint-end-ReadingMovement-40",
+            "checkpoint-start-ProgrammaticDeparture-40",
+            "checkpoint-end-ProgrammaticDeparture-40",
+            "save-90",
+            "baseline-90");
+    }
+
+    [Fact]
+    public async Task StatisticsOnlyMutations_SerializeBehindWritersAndBeforeClose()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var events = new ConcurrentQueue<string>();
+        var departureStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseDeparture = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var statistics = new FakeReaderStatisticsSession
+        {
+            CheckpointAsyncHandler = async (position, reason, _) =>
+            {
+                events.Enqueue($"checkpoint-start-{reason}-{position.RawCharacterCount}");
+                if (reason == ReaderStatisticsCheckpointReason.ProgrammaticDeparture)
+                {
+                    departureStarted.TrySetResult();
+                    await releaseDeparture.Task;
+                }
+
+                events.Enqueue($"checkpoint-end-{reason}-{position.RawCharacterCount}");
+            },
+            TickRecorded = position => events.Enqueue($"tick-{position.RawCharacterCount}"),
+            PauseRecorded = position => events.Enqueue($"pause-{position.RawCharacterCount}"),
+            StopRecorded = position => events.Enqueue($"stop-{position.RawCharacterCount}"),
+        };
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                It.IsAny<string>(),
+                It.IsAny<int>(),
+                It.IsAny<double>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        var sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            statistics,
+            CreateAutoSyncCoordinator().Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+        sut.SetChapterCharacterCounts([100]);
+        sut.UpdateProgress(0.4);
+
+        var departure = sut.CheckpointProgrammaticDepartureAsync(ct);
+        await departureStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        var tick = sut.TickStatisticsAsync(ct);
+        var pause = sut.PauseStatisticsAsync(ct);
+        var stop = sut.StopStatisticsTrackingAsync(ct: ct);
+        var close = sut.PrepareForReaderLifecycleCloseAsync(ct);
+
+        Task.WhenAll(tick, pause, stop, close).IsCompleted.Should().BeFalse();
+        releaseDeparture.TrySetResult();
+        await Task.WhenAll(departure, tick, pause, stop, close)
+            .WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        events.Should().ContainInOrder(
+            "checkpoint-start-ProgrammaticDeparture-40",
+            "checkpoint-end-ProgrammaticDeparture-40",
+            "tick-40",
+            "pause-40",
+            "stop-40",
+            "checkpoint-start-Close-40");
+    }
+
     private static NovelReaderPageViewModel CreateInitializedSut(
         string bookRootPath,
         IReaderHighlightService highlightService,
@@ -2156,6 +2400,9 @@ public sealed class NovelReaderPageViewModelTests
         public List<int> StopPositions { get; } = [];
         public Action<ReaderStatisticsCheckpointReason>? CheckpointRecorded { get; set; }
         public Action<ReaderStatisticsPosition>? ResetBaselineRecorded { get; set; }
+        public Action<ReaderStatisticsPosition>? TickRecorded { get; set; }
+        public Action<ReaderStatisticsPosition>? PauseRecorded { get; set; }
+        public Action<ReaderStatisticsPosition>? StopRecorded { get; set; }
         public Func<
             ReaderStatisticsPosition,
             ReaderStatisticsCheckpointReason,
@@ -2187,6 +2434,7 @@ public sealed class NovelReaderPageViewModelTests
 
         public void Tick(ReaderStatisticsPosition position)
         {
+            TickRecorded?.Invoke(position);
         }
 
         public async Task CheckpointAsync(
@@ -2202,14 +2450,18 @@ public sealed class NovelReaderPageViewModelTests
 
         public Task PauseAsync(
             ReaderStatisticsPosition position,
-            CancellationToken ct = default) =>
-            Task.CompletedTask;
+            CancellationToken ct = default)
+        {
+            PauseRecorded?.Invoke(position);
+            return Task.CompletedTask;
+        }
 
         public Task StopAsync(
             ReaderStatisticsPosition position,
             CancellationToken ct = default)
         {
             StopPositions.Add(position.RawCharacterCount);
+            StopRecorded?.Invoke(position);
             Publish(State with
             {
                 IsTracking = false,

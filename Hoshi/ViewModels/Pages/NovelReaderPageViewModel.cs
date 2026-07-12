@@ -319,17 +319,17 @@ public partial class NovelReaderPageViewModel : ObservableObject
         await SaveProgressAndCheckpointAsync(
             ReaderStatisticsCheckpointReason.AdjacentChapter,
             ct);
-        return ReaderPageNavigationOutcome.AdjacentChapter(adjacent.Value);
+        return ReaderPageNavigationOutcome.AdjacentChapter(
+            adjacent.Value,
+            readerEvent.Direction);
     }
 
-    public async Task StopStatisticsTrackingAsync(
+    public Task StopStatisticsTrackingAsync(
         DateTimeOffset? now = null,
         CancellationToken ct = default)
     {
         _ = now;
-        await _statisticsSession.StopAsync(
-            new ReaderStatisticsPosition(CurrentCharacterCount),
-            ct);
+        return EnqueueStatisticsMutationAsync(StatisticsMutation.Stop, ct);
     }
 
     public async Task FlushStatisticsAsync(
@@ -344,6 +344,31 @@ public partial class NovelReaderPageViewModel : ObservableObject
         ReaderStatisticsCheckpointReason reason,
         CancellationToken ct = default) =>
         CheckpointReadingAtPositionAsync(reason, CurrentCharacterCount, ct);
+
+    public Task CheckpointProgrammaticDepartureAsync(CancellationToken ct = default)
+    {
+        Task operation;
+        TaskCompletionSource admission;
+        lock (_saveGate)
+        {
+            if (!CanAdmitProgressWriter())
+                return Task.CompletedTask;
+
+            var position = CurrentCharacterCount;
+            _saveCts?.Cancel();
+            admission = CreateWriterAdmission();
+            operation = RunCheckpointWriterAsync(
+                admission.Task,
+                _writerTail,
+                position,
+                ReaderStatisticsCheckpointReason.ProgrammaticDeparture,
+                ct);
+            _writerTail = operation;
+        }
+
+        admission.TrySetResult();
+        return operation;
+    }
 
     private Task FlushStatisticsAtPositionAsync(
         int characterCount,
@@ -363,16 +388,67 @@ public partial class NovelReaderPageViewModel : ObservableObject
             ct);
 
     public Task PauseStatisticsAsync(CancellationToken ct = default) =>
-        _statisticsSession.PauseAsync(
-            new ReaderStatisticsPosition(CurrentCharacterCount),
-            ct);
+        EnqueueStatisticsMutationAsync(StatisticsMutation.Pause, ct);
 
-    public void TickStatistics() =>
-        _statisticsSession.Tick(new ReaderStatisticsPosition(CurrentCharacterCount));
+    public Task TickStatisticsAsync(CancellationToken ct = default) =>
+        EnqueueStatisticsMutationAsync(StatisticsMutation.Tick, ct);
 
-    public void ResetStatisticsBaseline() =>
-        _statisticsSession.ResetBaseline(
-            new ReaderStatisticsPosition(CurrentCharacterCount));
+    public Task ResetStatisticsBaselineAsync(CancellationToken ct = default) =>
+        EnqueueStatisticsMutationAsync(StatisticsMutation.ResetBaseline, ct);
+
+    private Task EnqueueStatisticsMutationAsync(
+        StatisticsMutation mutation,
+        CancellationToken ct)
+    {
+        Task operation;
+        TaskCompletionSource admission;
+        lock (_saveGate)
+        {
+            if (!CanAdmitProgressWriter())
+                return Task.CompletedTask;
+
+            var position = CurrentCharacterCount;
+            admission = CreateWriterAdmission();
+            operation = RunStatisticsMutationWriterAsync(
+                admission.Task,
+                _writerTail,
+                position,
+                mutation,
+                ct);
+            _writerTail = operation;
+        }
+
+        admission.TrySetResult();
+        return operation;
+    }
+
+    private async Task RunStatisticsMutationWriterAsync(
+        Task admission,
+        Task previousWriter,
+        int position,
+        StatisticsMutation mutation,
+        CancellationToken ct)
+    {
+        await admission;
+        await AwaitPreviousWriterCompletionAsync(previousWriter);
+        ct.ThrowIfCancellationRequested();
+        var readerPosition = new ReaderStatisticsPosition(position);
+        switch (mutation)
+        {
+            case StatisticsMutation.Tick:
+                _statisticsSession.Tick(readerPosition);
+                break;
+            case StatisticsMutation.Pause:
+                await _statisticsSession.PauseAsync(readerPosition, ct);
+                break;
+            case StatisticsMutation.Stop:
+                await _statisticsSession.StopAsync(readerPosition, ct);
+                break;
+            case StatisticsMutation.ResetBaseline:
+                _statisticsSession.ResetBaseline(readerPosition);
+                break;
+        }
+    }
 
     public Task PrepareForReaderLifecycleCloseAsync(CancellationToken ct = default)
     {
@@ -755,6 +831,19 @@ public partial class NovelReaderPageViewModel : ObservableObject
             ct);
     }
 
+    private async Task RunCheckpointWriterAsync(
+        Task admission,
+        Task previousWriter,
+        int position,
+        ReaderStatisticsCheckpointReason reason,
+        CancellationToken ct)
+    {
+        await admission;
+        await AwaitPreviousWriterCompletionAsync(previousWriter);
+        ct.ThrowIfCancellationRequested();
+        await CheckpointReadingAtPositionAsync(reason, position, ct);
+    }
+
     public Task SaveProgressAndResetStatisticsBaselineAsync(
         CancellationToken ct = default)
     {
@@ -902,6 +991,14 @@ public partial class NovelReaderPageViewModel : ObservableObject
         double Progress,
         int CurrentCharacterCount,
         int TotalCharacterCount);
+
+    private enum StatisticsMutation
+    {
+        Tick,
+        Pause,
+        Stop,
+        ResetBaseline,
+    }
 
     private int CurrentChapterRemainingCharacters
     {

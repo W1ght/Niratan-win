@@ -254,16 +254,14 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
             {
                 await RunPendingExportsAsync(ct);
 
+                bool completed;
                 lock (_stateGate)
                 {
-                    if (_cancelled || !_pending)
-                    {
-                        if (ReferenceEquals(_flushCompletion, ownedCompletion))
-                            ownedCompletion.TrySetResult();
-
-                        return;
-                    }
+                    completed = _cancelled || !_pending;
                 }
+
+                if (completed)
+                    break;
             }
         }
         catch (Exception ex)
@@ -273,36 +271,28 @@ public sealed class ReaderAutoSyncCoordinator : IReaderAutoSyncCoordinator
         }
         finally
         {
-            if (!ownedCompletion.Task.IsCompleted)
+            lock (_stateGate)
             {
-                if (failure is OperationCanceledException && ct.IsCancellationRequested)
-                    ownedCompletion.TrySetCanceled(ct);
-                else if (failure != null)
+                if (ReferenceEquals(_flushCompletion, ownedCompletion))
                 {
-                    ownedCompletion.TrySetException(failure);
-                    _ = ownedCompletion.Task.Exception;
+                    if (failure is OperationCanceledException && ct.IsCancellationRequested)
+                        ownedCompletion.TrySetCanceled(ct);
+                    else if (failure != null)
+                    {
+                        ownedCompletion.TrySetException(failure);
+                        _ = ownedCompletion.Task.Exception;
+                    }
+                    else
+                        ownedCompletion.TrySetResult();
+
+                    _flushCompletion = null;
+                    _flushInProgress = false;
+                    if (!_cancelled && _pending && _debounceTask == null)
+                        StartDebounceLocked();
                 }
-                else
-                    ownedCompletion.TrySetResult();
             }
 
-            try
-            {
-                await _afterFlushCompletionPublishedAsync();
-            }
-            finally
-            {
-                lock (_stateGate)
-                {
-                    if (ReferenceEquals(_flushCompletion, ownedCompletion))
-                    {
-                        _flushCompletion = null;
-                        _flushInProgress = false;
-                        if (!_cancelled && _pending && _debounceTask == null)
-                            StartDebounceLocked();
-                    }
-                }
-            }
+            await _afterFlushCompletionPublishedAsync();
         }
     }
 

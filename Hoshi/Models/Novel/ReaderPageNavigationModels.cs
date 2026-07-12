@@ -19,9 +19,17 @@ public readonly record struct ReaderPageNavigationEvent(
 
 public readonly record struct ReaderPageNavigationOutcome(
     bool DidMove,
-    int? AdjacentChapterIndex)
+    int? AdjacentChapterIndex,
+    double? AdjacentChapterProgress)
 {
-    public static ReaderPageNavigationOutcome NoMovement => new(false, null);
-    public static ReaderPageNavigationOutcome SameChapterMovement => new(true, null);
-    public static ReaderPageNavigationOutcome AdjacentChapter(int index) => new(true, index);
+    public static ReaderPageNavigationOutcome NoMovement => new(false, null, null);
+    public static ReaderPageNavigationOutcome SameChapterMovement => new(true, null, null);
+
+    public static ReaderPageNavigationOutcome AdjacentChapter(
+        int index,
+        ReaderPageNavigationDirection direction) =>
+        new(
+            true,
+            index,
+            direction == ReaderPageNavigationDirection.Backward ? 1 : 0);
 }

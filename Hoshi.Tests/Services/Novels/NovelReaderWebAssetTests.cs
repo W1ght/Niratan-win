@@ -1,4 +1,5 @@
 using FluentAssertions;
+using System.Text.RegularExpressions;
 
 namespace Hoshi.Tests.Services.Novels;
 
@@ -157,7 +158,9 @@ public class NovelReaderWebAssetTests
         pageCode.Should().Contain("case \"shortcut\":");
         pageCode.Should().Contain("ViewModel.HandleManualPageNavigationAsync(readerEvent)");
         pageCode.Should().Contain("outcome.AdjacentChapterIndex is int adjacentChapterIndex");
-        pageCode.Should().Contain("LoadChapter(adjacentChapterIndex)");
+        pageCode.Should().Contain("outcome.AdjacentChapterProgress is double adjacentChapterProgress");
+        pageCode.Should().Contain("BeginAdjacentChapterNavigation(adjacentChapterIndex)");
+        pageCode.Should().Contain("LoadChapter(adjacentChapterIndex, adjacentChapterProgress)");
         viewModelCode.Should().Contain("ReaderStatisticsEventClassifier.AdjacentChapterTarget");
     }
 
@@ -2956,14 +2959,26 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("ViewModel.HandleManualPageNavigationAsync(readerEvent)");
         readerCode.Should().Contain("if (outcome.DidMove)");
         readerCode.Should().Contain("outcome.AdjacentChapterIndex is int adjacentChapterIndex");
+        readerCode.Should().Contain("outcome.AdjacentChapterProgress is double adjacentChapterProgress");
+        readerCode.Should().Contain("CompleteAdjacentChapterNavigationAsync");
+        var adjacentNavigationBody = Regex.Match(
+            readerCode,
+            @"(?s)if \(outcome\.AdjacentChapterIndex.*?\n\s*\}\s*\n\s*if \(readerEvent\.Result").Value;
+        adjacentNavigationBody.Should().Contain("BeginAdjacentChapterNavigation(adjacentChapterIndex)");
+        adjacentNavigationBody.Should().Contain("LoadChapter(adjacentChapterIndex, adjacentChapterProgress)");
+        adjacentNavigationBody.Should().NotContain("SaveProgressNowAsync");
         readerCode.Should().Contain("BeginProgrammaticNavigationAsync");
         readerCode.Should().Contain("CompleteProgrammaticNavigationAsync");
-        readerCode.Should().Contain("ReaderStatisticsCheckpointReason.ProgrammaticDeparture");
+        readerCode.Should().Contain("ViewModel.CheckpointProgrammaticDepartureAsync");
         readerCode.Should().MatchRegex(
             @"(?s)private async Task CompleteProgrammaticNavigationAsync\(\)\s*\{\s*_pendingProgrammaticFragment = null;\s*await ViewModel\.SaveProgressAndResetStatisticsBaselineAsync\(\);\s*RefreshReaderDisplayChrome\(\);\s*\}");
         readerCode.Should().Contain("ResetStatisticsBaseline");
         readerCode.Should().Contain("StatisticsButton_Click");
-        readerCode.Should().NotContain("await ViewModel.FlushStatisticsAsync();");
+        var statisticsButtonBody = Regex.Match(
+            readerCode,
+            @"(?s)private async void StatisticsButton_Click\([^)]*\)\s*\{(?<body>.*?)\n\s*\}").Groups["body"].Value;
+        statisticsButtonBody.Should().NotBeEmpty();
+        statisticsButtonBody.Should().NotContain("FlushStatisticsAsync");
         readerCode.Should().NotContain("StatisticsStartStopButton_Click");
         readerCode.Should().NotContain("RefreshStatisticsPanel");
         viewModelCode.Should().Contain("StartStatisticsTracking");

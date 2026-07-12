@@ -73,6 +73,7 @@ public sealed partial class NovelReaderPage : Page
     private readonly ReaderProgrammaticNavigationTracker _programmaticNavigation = new();
     private readonly ReaderNavigationHistory _navigationHistory = new();
     private string? _pendingProgrammaticFragment;
+    private bool _pendingAdjacentChapterNavigation;
     private DictionaryPopupOverlay? _popupOverlay;
     private readonly SemaphoreSlim _lookupSemaphore = new(1, 1);
     private readonly Dictionary<KeyboardAccelerator, string> _keyboardAcceleratorActionIds = [];
@@ -340,7 +341,7 @@ public sealed partial class NovelReaderPage : Page
         _statisticsProjectionTimer = null;
     }
 
-    private void StatisticsProjectionTimer_Tick(
+    private async void StatisticsProjectionTimer_Tick(
         DispatcherQueueTimer sender,
         object args)
     {
@@ -353,7 +354,7 @@ public sealed partial class NovelReaderPage : Page
         if (_programmaticNavigation.HasPending)
             return;
 
-        ViewModel.TickStatistics();
+        await ViewModel.TickStatisticsAsync();
     }
 
     private async Task<bool> HandleAppLifecycleCheckpointAsync(
@@ -362,7 +363,7 @@ public sealed partial class NovelReaderPage : Page
         try
         {
             if (_programmaticNavigation.HasPending)
-                ViewModel.ResetStatisticsBaseline();
+                await ViewModel.ResetStatisticsBaselineAsync();
             if (message.Reason == AppLifecycleCheckpointReason.Closing)
                 await ViewModel.PrepareForReaderLifecycleCloseAsync();
             else
@@ -867,7 +868,7 @@ public sealed partial class NovelReaderPage : Page
         && _sasayakiPlayer != null
         && _sasayakiMatchData?.IsValid == true;
 
-    private void OnAppSettingChanged(object? sender, Models.DTO.SettingsChangedEventArgs e)
+    private async void OnAppSettingChanged(object? sender, Models.DTO.SettingsChangedEventArgs e)
     {
         if (e.PropertyName == nameof(AppSettings.Theme))
         {
@@ -888,7 +889,7 @@ public sealed partial class NovelReaderPage : Page
             UpdateStatisticsButtonVisibility();
             RefreshReaderStatisticsChrome();
             if (!CurrentStatisticsSettings.EnableStatistics && ViewModel.IsStatisticsTracking)
-                _ = ViewModel.StopStatisticsTrackingAsync();
+                await ViewModel.StopStatisticsTrackingAsync();
             else
                 ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.On);
         }
@@ -1289,7 +1290,10 @@ public sealed partial class NovelReaderPage : Page
                     {
                         ViewModel.UpdateProgress(restoredProgress);
                         _currentProgress = restoredProgress;
-                        await CompleteProgrammaticNavigationAsync();
+                        if (_pendingAdjacentChapterNavigation)
+                            await CompleteAdjacentChapterNavigationAsync();
+                        else
+                            await CompleteProgrammaticNavigationAsync();
                     }
                     else if (!_programmaticNavigation.HasPending)
                     {
@@ -1345,10 +1349,11 @@ public sealed partial class NovelReaderPage : Page
                         _currentProgress = readerEvent.Progress;
                     }
 
-                    if (outcome.AdjacentChapterIndex is int adjacentChapterIndex)
+                    if (outcome.AdjacentChapterIndex is int adjacentChapterIndex
+                        && outcome.AdjacentChapterProgress is double adjacentChapterProgress)
                     {
-                        LoadChapter(adjacentChapterIndex);
-                        await ViewModel.SaveProgressNowAsync(flushStatistics: false);
+                        BeginAdjacentChapterNavigation(adjacentChapterIndex);
+                        LoadChapter(adjacentChapterIndex, adjacentChapterProgress);
                     }
 
                     if (readerEvent.Result != ReaderPageNavigationResult.Limit
@@ -1384,7 +1389,8 @@ public sealed partial class NovelReaderPage : Page
                     {
                         _programmaticNavigation.Cancel();
                         _pendingProgrammaticFragment = null;
-                        ViewModel.ResetStatisticsBaseline();
+                        _pendingAdjacentChapterNavigation = false;
+                        await ViewModel.ResetStatisticsBaselineAsync();
                         RefreshReaderNavigationHistoryChrome();
                     }
                     break;
@@ -1748,14 +1754,28 @@ public sealed partial class NovelReaderPage : Page
 
     private async Task<long> BeginProgrammaticNavigationAsync(int chapterIndex)
     {
-        await ViewModel.CheckpointReadingAsync(
-            ReaderStatisticsCheckpointReason.ProgrammaticDeparture);
+        await ViewModel.CheckpointProgrammaticDepartureAsync();
+        _pendingAdjacentChapterNavigation = false;
         return _programmaticNavigation.Begin(chapterIndex);
+    }
+
+    private void BeginAdjacentChapterNavigation(int chapterIndex)
+    {
+        _pendingProgrammaticFragment = null;
+        _pendingAdjacentChapterNavigation = true;
+        _programmaticNavigation.Begin(chapterIndex);
     }
 
     private async Task CompleteProgrammaticNavigationAsync()
     {
         _pendingProgrammaticFragment = null;
+        await ViewModel.SaveProgressAndResetStatisticsBaselineAsync();
+        RefreshReaderDisplayChrome();
+    }
+
+    private async Task CompleteAdjacentChapterNavigationAsync()
+    {
+        _pendingAdjacentChapterNavigation = false;
         await ViewModel.SaveProgressAndResetStatisticsBaselineAsync();
         RefreshReaderDisplayChrome();
     }
