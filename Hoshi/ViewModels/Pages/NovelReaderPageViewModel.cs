@@ -34,6 +34,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
     private readonly IProfileRuntimeService _profileRuntime;
     private readonly ISettingsService _settingsService;
     private readonly IReaderAutoSyncCoordinator _readerAutoSyncCoordinator;
+    private readonly ReaderNavigationTransactionCoordinator _navigationTransactions;
 
     [ObservableProperty]
     public partial NovelBook? CurrentBook { get; set; }
@@ -104,6 +105,8 @@ public partial class NovelReaderPageViewModel : ObservableObject
         : $"{CurrentCharacterCount} / {TotalCharacterCount} {OverallProgressText}";
     public bool CanGoNext => CurrentChapterIndex < ChapterCount - 1;
     public bool CanGoPrevious => CurrentChapterIndex > 0;
+    public bool CanAcceptReaderPositionMutation =>
+        !_navigationTransactions.BlocksPositionMutation;
     public string StatisticsTrackingButtonText => IsStatisticsTracking ? "Pause" : "Start";
     public bool IsEnglishStatisticsContent =>
         _profileRuntime.ActiveLanguage.Id == ContentLanguageProfile.English.Id;
@@ -153,7 +156,8 @@ public partial class NovelReaderPageViewModel : ObservableObject
         IReaderStatisticsSession statisticsSession,
         IProfileRuntimeService profileRuntime,
         ISettingsService settingsService,
-        IReaderAutoSyncCoordinator readerAutoSyncCoordinator
+        IReaderAutoSyncCoordinator readerAutoSyncCoordinator,
+        ReaderNavigationTransactionCoordinator navigationTransactions
     )
     {
         _novelLibraryService = novelLibraryService;
@@ -166,6 +170,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
         _profileRuntime = profileRuntime;
         _settingsService = settingsService;
         _readerAutoSyncCoordinator = readerAutoSyncCoordinator;
+        _navigationTransactions = navigationTransactions;
     }
 
     public async Task InitializeAsync(
@@ -199,6 +204,9 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
     public void SetChapter(int index, int count)
     {
+        if (!CanAcceptReaderPositionMutation)
+            return;
+
         _currentPositionRevision = ++_positionRevision;
         CurrentChapterIndex = index;
         ChapterCount = count;
@@ -214,6 +222,9 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
     public void UpdateProgress(double progress)
     {
+        if (!CanAcceptReaderPositionMutation)
+            return;
+
         _currentPositionRevision = ++_positionRevision;
         Progress = Math.Clamp(progress, 0, 1);
         UpdateCharacterProgress();
@@ -305,6 +316,9 @@ public partial class NovelReaderPageViewModel : ObservableObject
         ReaderPageNavigationEvent readerEvent,
         CancellationToken ct = default)
     {
+        if (!CanAcceptReaderPositionMutation)
+            return ReaderPageNavigationOutcome.NoMovement;
+
         StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
 
         if (ReaderStatisticsEventClassifier.IsActualPageMovement(readerEvent, Progress))
@@ -515,6 +529,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
     private async Task PrepareForReaderLifecycleCloseCoreAsync()
     {
+        await SettleNavigationForLifecycleAsync();
         CloseProgressWriterAdmission();
         await _lifecycleCheckpointLock.WaitAsync();
         try
@@ -550,6 +565,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
     public async Task CheckpointAppBackgroundingAsync(CancellationToken ct = default)
     {
+        await SettleNavigationForLifecycleAsync().WaitAsync(ct);
         await _lifecycleCheckpointLock.WaitAsync(ct);
         try
         {
@@ -743,6 +759,42 @@ public partial class NovelReaderPageViewModel : ObservableObject
         }
     }
 
+    private async Task<ReaderNavigationSettlement?> RunNavigationCommitWriterAsync(
+        Task admission,
+        Task previousWriter,
+        ReaderNavigationCommitLease lease,
+        ProgressSaveRequest request)
+    {
+        await admission;
+        await AwaitPreviousWriterCompletionAsync(previousWriter);
+
+        try
+        {
+            var saved = await SaveProgressCoreAsync(
+                request,
+                flushStatistics: false,
+                scheduleAutoSync: false,
+                CancellationToken.None);
+            if (!saved)
+                return _navigationTransactions.CompleteCommit(lease, committed: false);
+
+            _statisticsSession.ResetBaseline(
+                new ReaderStatisticsPosition(lease.ResolvedDestination.CharacterCount));
+            ApplyResolvedChapterPosition(request);
+            _readerAutoSyncCoordinator.ScheduleExport(request.Book);
+            return _navigationTransactions.CompleteCommit(lease, committed: true);
+        }
+        catch (Exception exception)
+        {
+            Serilog.Log.Error(
+                exception,
+                "[NovelReader] Failed to commit navigation generation {Generation}",
+                lease.Generation);
+            _notificationService.ShowError(exception.Message, "Reader navigation");
+            return _navigationTransactions.CompleteCommit(lease, committed: false);
+        }
+    }
+
     public Task SaveProgressNowAsync(
         bool flushStatistics = true,
         bool scheduleAutoSync = true,
@@ -877,7 +929,9 @@ public partial class NovelReaderPageViewModel : ObservableObject
         lock (_saveGate)
         {
             var request = CaptureProgressSaveRequest();
-            if (!CanAdmitProgressWriter() || request == null)
+            if (!CanAcceptReaderPositionMutation
+                || !CanAdmitProgressWriter()
+                || request == null)
                 return Task.FromResult(false);
 
             _saveCts?.Cancel();
@@ -904,7 +958,8 @@ public partial class NovelReaderPageViewModel : ObservableObject
         TaskCompletionSource admission;
         lock (_saveGate)
         {
-            if (!CanAdmitProgressWriter()
+            if (!CanAcceptReaderPositionMutation
+                || !CanAdmitProgressWriter()
                 || CurrentBook == null
                 || chapterIndex < 0
                 || chapterIndex >= ChapterCount
@@ -1007,6 +1062,105 @@ public partial class NovelReaderPageViewModel : ObservableObject
         OnPropertyChanged(nameof(CanGoPrevious));
         OnStatisticsTextChanged();
     }
+
+    public ReaderNavigationRenderRequest? TryBeginNavigation(
+        int destinationChapterIndex,
+        ReaderChapterRestoreTarget? restoreTarget,
+        double? exactProgress)
+    {
+        lock (_saveGate)
+        {
+            if (!CanAcceptReaderPositionMutation
+                || CurrentBook == null
+                || destinationChapterIndex < 0
+                || destinationChapterIndex >= ChapterCount
+                || exactProgress is { } progress
+                    && (!double.IsFinite(progress) || progress is < 0 or > 1))
+            {
+                return null;
+            }
+
+            var source = new ReaderNavigationPositionSnapshot(
+                CurrentBook.Id,
+                CurrentChapterIndex,
+                Progress,
+                CurrentCharacterCount,
+                TotalCharacterCount,
+                _currentPositionRevision);
+            var destination = new ReaderNavigationDestination(
+                destinationChapterIndex,
+                restoreTarget,
+                exactProgress);
+            return _navigationTransactions.TryBegin(source, destination);
+        }
+    }
+
+    public Task<ReaderNavigationSettlement?> ResolveNavigationAsync(
+        long generation,
+        int destinationChapterIndex,
+        double resolvedProgress,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        Task<ReaderNavigationSettlement?> operation;
+        TaskCompletionSource admission;
+        lock (_saveGate)
+        {
+            var render = _navigationTransactions.ActiveRenderRequest;
+            if (render == null
+                || render.Generation != generation
+                || render.Destination.ChapterIndex != destinationChapterIndex
+                || CurrentBook == null
+                || CurrentBook.Id != render.Source.BookId
+                || destinationChapterIndex < 0
+                || destinationChapterIndex >= ChapterCount
+                || !double.IsFinite(resolvedProgress)
+                || resolvedProgress is < 0 or > 1)
+            {
+                return Task.FromResult<ReaderNavigationSettlement?>(null);
+            }
+
+            var destination = new ReaderNavigationPositionSnapshot(
+                render.Source.BookId,
+                destinationChapterIndex,
+                resolvedProgress,
+                CharacterCountAt(destinationChapterIndex, resolvedProgress),
+                TotalCharacterCount,
+                ++_positionRevision);
+            var lease = _navigationTransactions.TryBeginCommit(generation, destination);
+            if (lease == null)
+                return Task.FromResult<ReaderNavigationSettlement?>(null);
+
+            var request = new ProgressSaveRequest(
+                CurrentBook,
+                lease.ResolvedDestination.ChapterIndex,
+                lease.ResolvedDestination.Progress,
+                lease.ResolvedDestination.CharacterCount,
+                lease.ResolvedDestination.TotalCharacterCount,
+                lease.ResolvedDestination.Revision);
+            _saveCts?.Cancel();
+            admission = CreateWriterAdmission();
+            operation = RunNavigationCommitWriterAsync(
+                admission.Task,
+                _writerTail,
+                lease,
+                request);
+            _writerTail = operation;
+        }
+
+        admission.TrySetResult();
+        return operation;
+    }
+
+    public Task<ReaderNavigationSettlement?> HandleNavigationBridgeErrorAsync() =>
+        _navigationTransactions.HandleBridgeErrorAsync();
+
+    public Task<ReaderNavigationSettlement?> SettleNavigationForLifecycleAsync() =>
+        _navigationTransactions.HandleBridgeErrorAsync();
+
+    public bool AcknowledgeNavigationRendered(long generation) =>
+        _navigationTransactions.AcknowledgeTerminalRender(generation);
 
     protected override void OnPropertyChanging(PropertyChangingEventArgs e)
     {

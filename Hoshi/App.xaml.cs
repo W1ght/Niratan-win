@@ -145,6 +145,7 @@ public partial class App : Application
         services.AddTransient<NovelShelfManagementViewModel>();
         services.AddTransient<VideoLibraryPageViewModel>();
         services.AddTransient<NovelLookupPageViewModel>();
+        services.AddTransient<ReaderNavigationTransactionCoordinator>();
         services.AddTransient<NovelReaderPageViewModel>();
         services.AddTransient<VideoPlayerViewModel>();
         services.AddTransient<GlobalLookupWindowViewModel>();
