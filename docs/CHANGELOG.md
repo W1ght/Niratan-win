@@ -1,5 +1,17 @@
 # Changelog
 
+## Google Drive 统计已下载但 Dashboard 无数据并崩溃
+
+**原因**：
+- Dashboard 派生缓存中的 `NovelStatisticsBookContribution` 同时有主构造函数和便利构造函数，却没有明确 JSON 构造函数；包含真实书籍贡献的缓存重载会抛出 `NotSupportedException`。
+- 缓存读取没有把模型不兼容视为可重建的派生缓存失效，异常直接到达 WinUI 未处理异常边界。
+
+**解决**：
+- 明确统计贡献模型的 JSON 主构造函数，并用非空 `bookContributions` 覆盖磁盘往返。
+- Dashboard 缓存遇到不支持的模型时只删除 `statistics_dashboard_cache_v1.json`，随后从各书 `statistics.json` 重建；原始统计、书签和 EPUB 不受影响。
+
+---
+
 ## Google Drive 下载书籍未恢复进度且统计未导入
 
 **原因**：

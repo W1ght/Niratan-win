@@ -222,7 +222,7 @@ dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "Fu
 8. 验证 Book Ranking 最多 12 行，以及自定义书架/Unshelved 对比；损坏 sidecar 时必须显示可见警告。
 9. 重开 Dashboard 验证 `statistics_dashboard_cache_v1.json` 先命中再后台重读 sidecar；新 snapshot 发布后 UI 更新且缓存被替换。
    自动化测试必须创建第二个 cache 实例从磁盘读取 snapshot，不能只验证同一实例的内存命中。
-10. 人工损坏缓存只应删除缓存；任何书籍 sidecar、EPUB 和视频 SQLite 均不得改变。
+10. 使用包含非空 `bookContributions` 的 `statistics_dashboard_cache_v1.json` 重启并进入 Dashboard；缓存必须正常反序列化。再放入结构有效但模型不兼容的派生缓存，确认只删除该缓存并从各书 `statistics.json` 重建，应用不得退出，原始 sidecar、EPUB 和视频 SQLite 均不得改变。
 11. 从小说 CommandBar 进入 Statistics，确认书架 rail、排序、导入和书架管理退出布局；使用 Bookshelf 按钮返回后，原 rail 和书籍卡仍可操作。
 12. 验证全宽 Range & Trend，以及 Today、Goal、This Week、Reading Calendar、Selected Range、Speed Summary、Book Ranking、Shelf Comparison 全部存在；Bar/Line 切换不改变其他卡片数据。
 13. 分别把窗口调整到 `>=1260`、`840..1259` 和 `<840` effective pixels，确认三列、两列、单列状态生效，无裁切、重叠或第二个纵向滚动条；Calendar 保持七行横向滚动。
