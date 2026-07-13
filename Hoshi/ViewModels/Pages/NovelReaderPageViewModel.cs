@@ -145,6 +145,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
     private Task? _lifecycleCloseTask;
     private bool _didCompleteLifecycleClose;
     private bool _suppressPositionNotifications;
+    private readonly HashSet<Task> _deferredNavigationStatisticsMutations = [];
 
     public NovelReaderPageViewModel(
         INovelLibraryService novelLibraryService,
@@ -431,6 +432,22 @@ public partial class NovelReaderPageViewModel : ObservableObject
                 || !CanAdmitProgressWriter())
                 return Task.CompletedTask;
 
+            if (mutation != StatisticsMutation.Tick
+                && _navigationTransactions.BlocksPositionMutation)
+            {
+                var navigationSettlement = _navigationTransactions.WaitForSettlementAsync();
+                admission = CreateWriterAdmission();
+                operation = RunDeferredNavigationStatisticsMutationAsync(
+                    admission.Task,
+                    navigationSettlement,
+                    mutation,
+                    ct);
+                _deferredNavigationStatisticsMutations.Add(operation);
+                _ = RemoveDeferredNavigationStatisticsMutationAsync(operation);
+                admission.TrySetResult();
+                return operation;
+            }
+
             var position = CurrentCharacterCount;
             admission = CreateWriterAdmission();
             operation = RunStatisticsMutationWriterAsync(
@@ -444,6 +461,52 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
         admission.TrySetResult();
         return operation;
+    }
+
+    private async Task RunDeferredNavigationStatisticsMutationAsync(
+        Task admission,
+        Task<ReaderNavigationSettlement?> navigationSettlement,
+        StatisticsMutation mutation,
+        CancellationToken ct)
+    {
+        await admission;
+        var settlement = await navigationSettlement;
+        ct.ThrowIfCancellationRequested();
+
+        Task operation;
+        TaskCompletionSource writerAdmission;
+        lock (_saveGate)
+        {
+            var position = settlement?.Position.CharacterCount
+                ?? CurrentCharacterCount;
+            writerAdmission = CreateWriterAdmission();
+            operation = RunStatisticsMutationWriterAsync(
+                writerAdmission.Task,
+                _writerTail,
+                position,
+                mutation,
+                ct);
+            _writerTail = operation;
+        }
+
+        writerAdmission.TrySetResult();
+        await operation;
+    }
+
+    private async Task RemoveDeferredNavigationStatisticsMutationAsync(Task operation)
+    {
+        try
+        {
+            await operation.ConfigureAwait(false);
+        }
+        catch
+        {
+        }
+        finally
+        {
+            lock (_saveGate)
+                _deferredNavigationStatisticsMutations.Remove(operation);
+        }
     }
 
     private async Task RunStatisticsMutationWriterAsync(
@@ -531,12 +594,26 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
     private async Task PrepareForReaderLifecycleCloseCoreAsync()
     {
-        CloseProgressWriterAdmission();
         await _lifecycleCheckpointLock.WaitAsync();
         try
         {
             if (_didCompleteLifecycleClose)
                 return;
+
+            Task<ReaderNavigationSettlement?> navigationSettlement;
+            Task deferredStatistics;
+            lock (_saveGate)
+            {
+                navigationSettlement = _navigationTransactions.HandleBridgeErrorAsync();
+                _readerWriterClosed = true;
+                _lifecycleWriterBarrier = true;
+                _saveCts?.Cancel();
+                deferredStatistics = Task.WhenAll(
+                    _deferredNavigationStatisticsMutations.ToArray());
+            }
+
+            await navigationSettlement;
+            await deferredStatistics;
 
             Task boundary;
             TaskCompletionSource admission;
@@ -572,13 +649,25 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
             Task boundary;
             TaskCompletionSource admission;
+            Task<ReaderNavigationSettlement?> navigationSettlement;
+            Task deferredStatistics;
             lock (_saveGate)
             {
                 if (_readerWriterClosed)
                     return;
 
+                navigationSettlement = _navigationTransactions.HandleBridgeErrorAsync();
                 _lifecycleWriterBarrier = true;
                 _saveCts?.Cancel();
+                deferredStatistics = Task.WhenAll(
+                    _deferredNavigationStatisticsMutations.ToArray());
+            }
+
+            await navigationSettlement;
+            await deferredStatistics;
+
+            lock (_saveGate)
+            {
                 admission = CreateWriterAdmission();
                 boundary = RunLifecycleWriterBoundaryAsync(
                     admission.Task,
@@ -755,7 +844,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
         }
     }
 
-    private async Task<ReaderNavigationSettlement?> RunNavigationCommitWriterAsync(
+    private async Task<ReaderNavigationResolutionResult> RunNavigationCommitWriterAsync(
         Task admission,
         Task previousWriter,
         ReaderNavigationCommitLease lease,
@@ -772,11 +861,11 @@ public partial class NovelReaderPageViewModel : ObservableObject
         catch (Exception exception)
         {
             ReportNavigationFailure(exception, lease.Generation, "persist bookmark");
-            return _navigationTransactions.CompleteCommit(lease, committed: false);
+            return CompleteNavigationResolution(lease, committed: false);
         }
 
         if (!persisted)
-            return _navigationTransactions.CompleteCommit(lease, committed: false);
+            return CompleteNavigationResolution(lease, committed: false);
 
         RunNavigationPostSaveEffect(
             lease.Generation,
@@ -792,7 +881,17 @@ public partial class NovelReaderPageViewModel : ObservableObject
             lease.Generation,
             "broadcast library change",
             () => _messenger.Send(new NovelLibraryChangedMessage()));
-        return _navigationTransactions.CompleteCommit(lease, committed: true);
+        return CompleteNavigationResolution(lease, committed: true);
+    }
+
+    private ReaderNavigationResolutionResult CompleteNavigationResolution(
+        ReaderNavigationCommitLease lease,
+        bool committed)
+    {
+        var settlement = _navigationTransactions.CompleteCommit(lease, committed)
+            ?? throw new InvalidOperationException(
+                $"Navigation generation {lease.Generation} lost its issued commit lease.");
+        return ReaderNavigationResolutionResult.FromSettlement(settlement);
     }
 
     private void RunNavigationPostSaveEffect(
@@ -1201,7 +1300,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
         return _navigationTransactions.TryBegin(source, destination);
     }
 
-    public Task<ReaderNavigationSettlement?> ResolveNavigationAsync(
+    public Task<ReaderNavigationResolutionResult> ResolveNavigationAsync(
         long generation,
         int destinationChapterIndex,
         double resolvedProgress,
@@ -1209,12 +1308,13 @@ public partial class NovelReaderPageViewModel : ObservableObject
     {
         ct.ThrowIfCancellationRequested();
 
-        Task<ReaderNavigationSettlement?> operation;
+        Task<ReaderNavigationResolutionResult> operation;
         TaskCompletionSource admission;
         lock (_saveGate)
         {
             var render = _navigationTransactions.ActiveRenderRequest;
-            if (render == null
+            if (!CanAdmitProgressWriter()
+                || render == null
                 || render.Generation != generation
                 || render.Destination.ChapterIndex != destinationChapterIndex
                 || CurrentBook == null
@@ -1224,7 +1324,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
                 || !double.IsFinite(resolvedProgress)
                 || resolvedProgress is < 0 or > 1)
             {
-                return Task.FromResult<ReaderNavigationSettlement?>(null);
+                return Task.FromResult(ReaderNavigationResolutionResult.Ignored);
             }
 
             var candidateRevision = _positionRevision + 1;
@@ -1237,7 +1337,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
                 candidateRevision);
             var lease = _navigationTransactions.TryBeginCommit(generation, destination);
             if (lease == null)
-                return Task.FromResult<ReaderNavigationSettlement?>(null);
+                return Task.FromResult(ReaderNavigationResolutionResult.Ignored);
             _positionRevision = candidateRevision;
 
             var request = new ProgressSaveRequest(
@@ -1400,16 +1500,6 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
     private bool CanAdmitProgressWriter() =>
         !_lifecycleWriterBarrier && !_readerWriterClosed;
-
-    private void CloseProgressWriterAdmission()
-    {
-        lock (_saveGate)
-        {
-            _readerWriterClosed = true;
-            _lifecycleWriterBarrier = true;
-            _saveCts?.Cancel();
-        }
-    }
 
     private ProgressSaveRequest? CaptureProgressSaveRequest() =>
         CurrentBook == null

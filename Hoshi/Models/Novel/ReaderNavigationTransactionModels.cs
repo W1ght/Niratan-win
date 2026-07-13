@@ -39,3 +39,29 @@ public sealed record ReaderNavigationSettlement(
     long Generation,
     ReaderNavigationPositionSnapshot Position,
     bool ShouldRevealDestination);
+
+public enum ReaderNavigationResolutionDisposition
+{
+    Ignored,
+    Settled,
+}
+
+public sealed record ReaderNavigationResolutionResult(
+    ReaderNavigationResolutionDisposition Disposition,
+    ReaderNavigationSettlement? Settlement)
+{
+    public static ReaderNavigationResolutionResult Ignored { get; } =
+        new(ReaderNavigationResolutionDisposition.Ignored, null);
+
+    public static ReaderNavigationResolutionResult FromSettlement(
+        ReaderNavigationSettlement settlement) =>
+        new(ReaderNavigationResolutionDisposition.Settled, settlement);
+
+    public ReaderNavigationPositionSnapshot Position =>
+        Settlement?.Position
+        ?? throw new InvalidOperationException("Ignored navigation resolutions do not have a position.");
+
+    public bool ShouldRevealDestination =>
+        Settlement?.ShouldRevealDestination
+        ?? throw new InvalidOperationException("Ignored navigation resolutions do not have a settlement.");
+}

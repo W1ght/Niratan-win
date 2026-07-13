@@ -48,7 +48,7 @@ namespace Hoshi.Views.Pages;
 
 public sealed partial class NovelReaderPage : Page
 {
-    private const string NovelBookHostName = "hoshi-novel-book.local";
+    private const string NovelBookHostName = ReaderWebContentPolicy.BookHostName;
     private const string ArtifactDirectoryEnvironmentVariable =
         "HOSHI_NOVEL_READER_ARTIFACT_DIR";
     private static readonly TimeSpan ReaderKeyDownCharacterSuppressWindow =
@@ -294,6 +294,10 @@ public sealed partial class NovelReaderPage : Page
             NovelWebView.CoreWebView2.WebResourceRequested -= OnWebResourceRequested;
             NovelWebView.CoreWebView2.NavigationCompleted -= OnNavigationCompleted;
             NovelWebView.CoreWebView2.ProcessFailed -= OnWebViewProcessFailed;
+            NovelWebView.CoreWebView2.NavigationStarting -= OnReaderNavigationStarting;
+            NovelWebView.CoreWebView2.FrameNavigationStarting -= OnReaderFrameNavigationStarting;
+            NovelWebView.CoreWebView2.NewWindowRequested -= OnReaderNewWindowRequested;
+            NovelWebView.CoreWebView2.PermissionRequested -= OnReaderPermissionRequested;
         }
 
         NovelWebView.SizeChanged -= OnWebViewSizeChanged;
@@ -592,7 +596,7 @@ public sealed partial class NovelReaderPage : Page
         NovelWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
             NovelBookHostName,
             _epubBook.ContainerDirectory,
-            CoreWebView2HostResourceAccessKind.Allow
+            CoreWebView2HostResourceAccessKind.DenyCors
         );
 
         NovelWebView.CoreWebView2.AddWebResourceRequestedFilter(
@@ -609,12 +613,17 @@ public sealed partial class NovelReaderPage : Page
         // Deferred navigation when viewport becomes available
         NovelWebView.SizeChanged += OnWebViewSizeChanged;
 
-        // Navigation events for diagnostics
-        NovelWebView.CoreWebView2.NavigationStarting += (s, a) =>
-            Log.Information("[NovelReader] Navigation starting: {Uri}", a.Uri);
+        NovelWebView.CoreWebView2.Settings.AreDefaultScriptDialogsEnabled = false;
+        NovelWebView.CoreWebView2.Settings.AreHostObjectsAllowed = false;
+        NovelWebView.CoreWebView2.NavigationStarting -= OnReaderNavigationStarting;
+        NovelWebView.CoreWebView2.NavigationStarting += OnReaderNavigationStarting;
         NovelWebView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
-        NovelWebView.CoreWebView2.FrameNavigationStarting += (s, a) =>
-            Log.Information("[NovelReader] Frame navigation: {Uri}", a.Uri);
+        NovelWebView.CoreWebView2.FrameNavigationStarting -= OnReaderFrameNavigationStarting;
+        NovelWebView.CoreWebView2.FrameNavigationStarting += OnReaderFrameNavigationStarting;
+        NovelWebView.CoreWebView2.NewWindowRequested -= OnReaderNewWindowRequested;
+        NovelWebView.CoreWebView2.NewWindowRequested += OnReaderNewWindowRequested;
+        NovelWebView.CoreWebView2.PermissionRequested -= OnReaderPermissionRequested;
+        NovelWebView.CoreWebView2.PermissionRequested += OnReaderPermissionRequested;
 
         var readerSettings = App.GetService<IReaderSettingsService>();
         readerSettings.SettingChanged += OnReaderSettingChanged;
@@ -839,9 +848,10 @@ public sealed partial class NovelReaderPage : Page
             direction,
             async authorizedDirection =>
             {
-                var directionJson = JsonSerializer.Serialize(authorizedDirection);
-                await NovelWebView.CoreWebView2.ExecuteScriptAsync(
-                    $"window.hoshiReaderNavigateAuthorized?.({directionJson});");
+                NovelWebView.CoreWebView2.PostWebMessageAsJson(
+                    NovelReaderBridgeMessageFactory.CreateNavigatePageMessage(
+                        authorizedDirection));
+                await Task.CompletedTask;
             });
     }
 
@@ -1367,6 +1377,51 @@ public sealed partial class NovelReaderPage : Page
         }
     }
 
+    private void OnReaderNavigationStarting(
+        CoreWebView2 sender,
+        CoreWebView2NavigationStartingEventArgs args)
+    {
+        if (_renderState.CurrentAttempt is { } attempt
+            && ReaderWebContentPolicy.IsTrustedWebMessageSource(
+                args.Uri,
+                attempt.Uri))
+        {
+            Log.Information("[NovelReader] Navigation starting: {Uri}", args.Uri);
+            return;
+        }
+
+        args.Cancel = true;
+        Log.Warning("[NovelReader] Blocked untrusted navigation: {Uri}", args.Uri);
+    }
+
+    private void OnReaderFrameNavigationStarting(
+        CoreWebView2 sender,
+        CoreWebView2NavigationStartingEventArgs args)
+    {
+        args.Cancel = true;
+        Log.Warning("[NovelReader] Blocked frame navigation: {Uri}", args.Uri);
+    }
+
+    private void OnReaderNewWindowRequested(
+        CoreWebView2 sender,
+        CoreWebView2NewWindowRequestedEventArgs args)
+    {
+        args.Handled = true;
+        Log.Warning("[NovelReader] Blocked new-window navigation: {Uri}", args.Uri);
+    }
+
+    private void OnReaderPermissionRequested(
+        CoreWebView2 sender,
+        CoreWebView2PermissionRequestedEventArgs args)
+    {
+        args.State = CoreWebView2PermissionState.Deny;
+        args.Handled = true;
+        Log.Warning(
+            "[NovelReader] Denied web permission {PermissionKind} for {Uri}",
+            args.PermissionKind,
+            args.Uri);
+    }
+
     private async void OnNavigationCompleted(
         CoreWebView2 sender,
         CoreWebView2NavigationCompletedEventArgs args)
@@ -1402,9 +1457,24 @@ public sealed partial class NovelReaderPage : Page
     {
         try
         {
-            Log.Information("[NovelReader] WebMessage received: {Raw}", args.WebMessageAsJson);
+            if (!ReaderWebContentPolicy.IsTrustedWebMessageSource(
+                    args.Source,
+                    _renderState.CurrentAttempt?.Uri))
+            {
+                Log.Warning(
+                    "[NovelReader] Ignoring WebMessage from untrusted source {Source}",
+                    args.Source);
+                return;
+            }
 
-            using var document = JsonDocument.Parse(args.WebMessageAsJson);
+            var rawMessage = args.WebMessageAsJson;
+            if (string.IsNullOrWhiteSpace(rawMessage)
+                || rawMessage.Length > 1_048_576)
+            {
+                throw new InvalidDataException("Reader bridge message size is invalid.");
+            }
+
+            using var document = JsonDocument.Parse(rawMessage);
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object
                 || !root.TryGetProperty("version", out var versionElement)
@@ -1412,7 +1482,9 @@ public sealed partial class NovelReaderPage : Page
                 || !versionElement.TryGetInt32(out var version)
                 || !root.TryGetProperty("type", out var typeElement)
                 || typeElement.ValueKind != JsonValueKind.String
-                || string.IsNullOrWhiteSpace(typeElement.GetString()))
+                || string.IsNullOrWhiteSpace(typeElement.GetString())
+                || !root.TryGetProperty("payload", out var envelopePayload)
+                || envelopePayload.ValueKind != JsonValueKind.Object)
             {
                 throw new InvalidDataException("Invalid reader bridge message envelope.");
             }
@@ -1499,17 +1571,24 @@ public sealed partial class NovelReaderPage : Page
                         && _renderState.CurrentAttempt?.RenderAttemptId
                             == restorePayload.RenderAttemptId)
                     {
-                        var settlement = await ViewModel.ResolveNavigationAsync(
+                        var resolution = await ViewModel.ResolveNavigationAsync(
                             navigationGeneration,
                             restorePayload.ChapterIndex,
                             restorePayload.Progress,
                             CancellationToken.None);
-                        if (settlement == null)
+                        if (resolution.Disposition
+                            == ReaderNavigationResolutionDisposition.Ignored)
                         {
-                            await HandleTerminalRenderFailureAsync(
-                                "Reader navigation returned no terminal settlement.");
+                            Log.Information(
+                                "[NovelReader] Ignoring duplicate or stale restore completion for generation {Generation}",
+                                navigationGeneration);
+                            break;
                         }
-                        else if (!ApplyNavigationSettlement(settlement))
+
+                        var settlement = resolution.Settlement
+                            ?? throw new InvalidDataException(
+                                "Settled navigation resolution did not include a settlement.");
+                        if (!ApplyNavigationSettlement(settlement))
                         {
                             await HandleTerminalRenderFailureAsync(
                                 "Reader navigation settlement could not be applied.");
@@ -1640,6 +1719,9 @@ public sealed partial class NovelReaderPage : Page
                     await HandleTerminalRenderFailureAsync(
                         "Reader content reported an error.");
                     break;
+                default:
+                    throw new InvalidDataException(
+                        $"Unsupported reader bridge message type: {type}");
             }
         }
         catch (Exception ex)
@@ -2144,6 +2226,8 @@ public sealed partial class NovelReaderPage : Page
             recoveryUri,
             forceTerminalReload))
             return false;
+
+        _navigationInput.ApplyNavigationSettlement(settlement);
 
         _currentProgress = settlement.Position.Progress;
         _previousChapterIndex = settlement.Position.ChapterIndex;
@@ -2763,25 +2847,33 @@ public sealed partial class NovelReaderPage : Page
         if (string.IsNullOrEmpty(path))
             return;
 
-        var isHtml = path.EndsWith(".html", StringComparison.OrdinalIgnoreCase)
-            || path.EndsWith(".htm", StringComparison.OrdinalIgnoreCase)
-            || path.EndsWith(".xhtml", StringComparison.OrdinalIgnoreCase);
-        var isCss = path.EndsWith(".css", StringComparison.OrdinalIgnoreCase);
-        if (!isHtml && !isCss)
-            return;
-
         var decoded = Uri.UnescapeDataString(path);
-        var filePath = Path.GetFullPath(Path.Combine(_epubBook!.ContainerDirectory, decoded));
-        if (!filePath.StartsWith(_epubBook.ContainerDirectory, StringComparison.OrdinalIgnoreCase))
+        var containerRoot = Path.GetFullPath(_epubBook!.ContainerDirectory)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        var filePath = Path.GetFullPath(Path.Combine(containerRoot, decoded));
+        if (!filePath.StartsWith(containerRoot, StringComparison.OrdinalIgnoreCase))
             return;
         if (!File.Exists(filePath))
+            return;
+
+        var mediaType = ResolveMediaType(filePath);
+        var isHtml = ReaderWebContentPolicy.IsHtmlMediaType(mediaType);
+        var isCss = mediaType.StartsWith("text/css", StringComparison.OrdinalIgnoreCase);
+        if (!isHtml && !isCss)
             return;
 
         var deferral = args.GetDeferral();
         try
         {
             var fileBytes = File.ReadAllBytes(filePath);
-            var mediaType = ResolveMediaType(filePath, isHtml, isCss);
+
+            if (isHtml)
+            {
+                var html = Encoding.UTF8.GetString(fileBytes);
+                fileBytes = Encoding.UTF8.GetBytes(
+                    EpubActiveContentSanitizer.Sanitize(html));
+            }
 
             if (isCss)
                 fileBytes = SanitizeReaderCss(fileBytes);
@@ -2789,6 +2881,8 @@ public sealed partial class NovelReaderPage : Page
             var responseHeaders = isHtml || isCss
                 ? $"Content-Type: {mediaType}; charset=utf-8\r\n"
                 : $"Content-Type: {mediaType}\r\n";
+            if (isHtml)
+                responseHeaders += ReaderWebContentPolicy.ChapterResponseHeaders;
 
             var stream = new Windows.Storage.Streams.InMemoryRandomAccessStream();
             using (var writer = new Windows.Storage.Streams.DataWriter(stream.GetOutputStreamAt(0)))
@@ -2804,6 +2898,7 @@ public sealed partial class NovelReaderPage : Page
         catch (Exception ex)
         {
             Log.Error(ex, "[NovelReader] WebResourceRequested failed for {Path}", filePath);
+            args.Response = CreateBlockedWebResourceResponse(sender);
         }
         finally
         {
@@ -2811,7 +2906,7 @@ public sealed partial class NovelReaderPage : Page
         }
     }
 
-    private string ResolveMediaType(string filePath, bool isHtml, bool isCss)
+    private string ResolveMediaType(string filePath)
     {
         foreach (var item in _epubBook!.Manifest.Values)
         {
@@ -2819,11 +2914,25 @@ public sealed partial class NovelReaderPage : Page
                 return item.MediaType;
         }
 
-        if (isHtml)
+        if (filePath.EndsWith(".html", StringComparison.OrdinalIgnoreCase)
+            || filePath.EndsWith(".htm", StringComparison.OrdinalIgnoreCase)
+            || filePath.EndsWith(".xhtml", StringComparison.OrdinalIgnoreCase))
             return "text/html";
-        if (isCss)
+        if (filePath.EndsWith(".css", StringComparison.OrdinalIgnoreCase))
             return "text/css";
         return "application/octet-stream";
+    }
+
+    private static CoreWebView2WebResourceResponse CreateBlockedWebResourceResponse(
+        CoreWebView2 sender)
+    {
+        var stream = new Windows.Storage.Streams.InMemoryRandomAccessStream();
+        return sender.Environment.CreateWebResourceResponse(
+            stream,
+            500,
+            "Blocked",
+            "Content-Type: text/plain; charset=utf-8\r\n"
+                + ReaderWebContentPolicy.ChapterResponseHeaders);
     }
 
     private static byte[] SanitizeReaderCss(byte[] bytes)

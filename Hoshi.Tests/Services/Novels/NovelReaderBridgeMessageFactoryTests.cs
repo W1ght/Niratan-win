@@ -135,4 +135,26 @@ public class NovelReaderBridgeMessageFactoryTests
         payload.GetProperty("renderAttemptId").GetInt64().Should().Be(47);
         payload.GetProperty("navigationGeneration").GetInt64().Should().Be(19);
     }
+
+    [Theory]
+    [InlineData("forward")]
+    [InlineData("backward")]
+    public void CreateNavigatePageMessage_SerializesNarrowAuthorizedCommand(string direction)
+    {
+        using var document = JsonDocument.Parse(
+            NovelReaderBridgeMessageFactory.CreateNavigatePageMessage(direction));
+
+        document.RootElement.GetProperty("version").GetInt32().Should().Be(1);
+        document.RootElement.GetProperty("type").GetString().Should().Be("navigatePage");
+        document.RootElement.GetProperty("payload").GetProperty("direction")
+            .GetString().Should().Be(direction);
+    }
+
+    [Fact]
+    public void CreateNavigatePageMessage_RejectsUnknownDirection()
+    {
+        var act = () => NovelReaderBridgeMessageFactory.CreateNavigatePageMessage("sideways");
+
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
 }

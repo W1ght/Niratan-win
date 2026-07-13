@@ -2459,9 +2459,9 @@ public sealed class NovelReaderPageViewModelTests
         var render = sut.TryBeginNavigation(0, ReaderChapterRestoreTarget.End, null);
 
         (await sut.ResolveNavigationAsync(render!.Generation + 1, 0, 0.82, ct))
-            .Should().BeNull();
+            .Disposition.Should().Be(ReaderNavigationResolutionDisposition.Ignored);
         (await sut.ResolveNavigationAsync(render.Generation, 1, 0.82, ct))
-            .Should().BeNull();
+            .Disposition.Should().Be(ReaderNavigationResolutionDisposition.Ignored);
         novelService.Verify(service => service.SaveProgressAsync(
             It.IsAny<string>(), It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int>(),
             It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -2470,7 +2470,7 @@ public sealed class NovelReaderPageViewModelTests
         var repeated = await sut.ResolveNavigationAsync(render.Generation, 0, 0.25, ct);
 
         settlement!.ShouldRevealDestination.Should().BeTrue();
-        repeated.Should().BeNull();
+        repeated.Disposition.Should().Be(ReaderNavigationResolutionDisposition.Ignored);
         sut.Progress.Should().Be(0.82);
         novelService.Verify(service => service.SaveProgressAsync(
             It.IsAny<string>(), It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int>(),
@@ -2486,6 +2486,55 @@ public sealed class NovelReaderPageViewModelTests
             ct);
 
         nextSettlement!.Position.Revision.Should().Be(firstRevision + 1);
+    }
+
+    [Fact]
+    public async Task NavigationCompletion_DuplicateWhileBookmarkIsBlockedIsIgnoredWithoutSecondCommit()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var saveStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSave = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1", 0, 0.82, 82, 200, It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                saveStarted.TrySetResult();
+                await releaseSave.Task;
+                return Result.Success();
+            });
+        var statistics = new FakeReaderStatisticsSession();
+        var autoSync = CreateAutoSyncCoordinator();
+        var sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            statistics,
+            autoSync.Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+        sut.SetChapterCharacterCounts([100, 100]);
+        sut.SetChapter(1, 2);
+        sut.UpdateProgress(0);
+        var render = sut.TryBeginNavigation(0, ReaderChapterRestoreTarget.End, null);
+
+        var first = sut.ResolveNavigationAsync(render!.Generation, 0, 0.82, ct);
+        await saveStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        var duplicate = await sut.ResolveNavigationAsync(render.Generation, 0, 0.82, ct);
+
+        duplicate.Disposition.Should().Be(ReaderNavigationResolutionDisposition.Ignored);
+        duplicate.Settlement.Should().BeNull();
+        releaseSave.TrySetResult();
+        var accepted = await first.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        accepted.Disposition.Should().Be(ReaderNavigationResolutionDisposition.Settled);
+        accepted.Settlement.Should().NotBeNull();
+        accepted.Settlement!.ShouldRevealDestination.Should().BeTrue();
+        statistics.ResetPositions.Should().Equal(82);
+        novelService.Verify(service => service.SaveProgressAsync(
+            "book-1", 0, 0.82, 82, 200, It.IsAny<CancellationToken>()), Times.Once);
+        autoSync.Verify(service => service.ScheduleExport(It.IsAny<NovelBook>()), Times.Once);
     }
 
     [Fact]
@@ -2599,6 +2648,170 @@ public sealed class NovelReaderPageViewModelTests
             close
                 ? ReaderStatisticsCheckpointReason.Close
                 : ReaderStatisticsCheckpointReason.Background));
+    }
+
+    [Fact]
+    public async Task LifecycleClose_DuringRenderingAtomicallySettlesSourceAndRejectsLateDestinationWriter()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var saves = new ConcurrentQueue<(int Chapter, int Position)>();
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1", It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int>(), 200,
+                It.IsAny<CancellationToken>()))
+            .Callback((string _, int chapter, double _, int position, int _, CancellationToken _) =>
+                saves.Enqueue((chapter, position)))
+            .ReturnsAsync(Result.Success());
+        var statistics = new FakeReaderStatisticsSession();
+        var autoSync = CreateAutoSyncCoordinator();
+        autoSync.Setup(service => service.FlushAsync(
+                It.IsAny<NovelBook>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            statistics,
+            autoSync.Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+        sut.SetChapterCharacterCounts([100, 100]);
+        sut.SetChapter(1, 2);
+        sut.UpdateProgress(0.25);
+        var render = sut.TryBeginNavigation(0, ReaderChapterRestoreTarget.End, null);
+
+        var close = sut.PrepareForReaderLifecycleCloseAsync(ct);
+        var lateResolve = sut.ResolveNavigationAsync(render!.Generation, 0, 0.82, ct);
+
+        await close.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        (await lateResolve.WaitAsync(TimeSpan.FromSeconds(2), ct)).Disposition
+            .Should().Be(ReaderNavigationResolutionDisposition.Ignored);
+        var settlement = await sut.SettleNavigationForLifecycleAsync();
+        settlement.Should().NotBeNull();
+        settlement!.ShouldRevealDestination.Should().BeFalse();
+        settlement.Position.Should().Be(render.Source);
+        saves.Should().Equal((1, 125));
+        statistics.Checkpoints.Should().Equal((
+            125,
+            ReaderStatisticsCheckpointReason.Close));
+    }
+
+    [Fact]
+    public async Task LifecycleClose_DuringCommitWaitsForDestinationSettlementBeforeFinalBoundary()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var saveStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSave = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var saves = new ConcurrentQueue<(int Chapter, int Position)>();
+        var call = 0;
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1", It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int>(), 200,
+                It.IsAny<CancellationToken>()))
+            .Returns(async (string _, int chapter, double _, int position, int _, CancellationToken _) =>
+            {
+                saves.Enqueue((chapter, position));
+                if (Interlocked.Increment(ref call) == 1)
+                {
+                    saveStarted.TrySetResult();
+                    await releaseSave.Task;
+                }
+
+                return Result.Success();
+            });
+        var statistics = new FakeReaderStatisticsSession();
+        var autoSync = CreateAutoSyncCoordinator();
+        autoSync.Setup(service => service.FlushAsync(
+                It.IsAny<NovelBook>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            statistics,
+            autoSync.Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+        sut.SetChapterCharacterCounts([100, 100]);
+        sut.SetChapter(1, 2);
+        sut.UpdateProgress(0.25);
+        var render = sut.TryBeginNavigation(0, ReaderChapterRestoreTarget.End, null);
+        var resolve = sut.ResolveNavigationAsync(render!.Generation, 0, 0.82, ct);
+        await saveStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        var close = sut.PrepareForReaderLifecycleCloseAsync(ct);
+
+        close.IsCompleted.Should().BeFalse();
+        releaseSave.TrySetResult();
+        var settlement = await resolve.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        await close.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        settlement.Should().NotBeNull();
+        settlement!.ShouldRevealDestination.Should().BeTrue();
+        saves.Should().Equal((0, 82), (0, 82));
+        statistics.ResetPositions.Should().Equal(82);
+        statistics.Checkpoints.Should().Equal((
+            82,
+            ReaderStatisticsCheckpointReason.Close));
+    }
+
+    [Theory]
+    [InlineData(StatisticsMutationUnderNavigation.Pause)]
+    [InlineData(StatisticsMutationUnderNavigation.Stop)]
+    [InlineData(StatisticsMutationUnderNavigation.DisableStatistics)]
+    public async Task PositionDependentStatisticsMutation_DuringBlockedCrossChapterCommitUsesDestinationOnce(
+        StatisticsMutationUnderNavigation mutation)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var saveStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSave = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1", 0, 0.5, 50, 200, It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                saveStarted.TrySetResult();
+                await releaseSave.Task;
+                return Result.Success();
+            });
+        var positions = new ConcurrentQueue<int>();
+        var statistics = new FakeReaderStatisticsSession
+        {
+            PauseRecorded = position => positions.Enqueue(position.RawCharacterCount),
+            StopRecorded = position => positions.Enqueue(position.RawCharacterCount),
+        };
+        var sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            statistics,
+            CreateAutoSyncCoordinator().Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+        sut.SetChapterCharacterCounts([100, 100]);
+        sut.SetChapter(1, 2);
+        sut.UpdateProgress(0.5);
+        var render = sut.TryBeginNavigation(0, null, exactProgress: 0.5);
+        var resolve = sut.ResolveNavigationAsync(render!.Generation, 0, 0.5, ct);
+        await saveStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        var statisticsMutation = mutation switch
+        {
+            StatisticsMutationUnderNavigation.Pause => sut.PauseStatisticsAsync(ct),
+            StatisticsMutationUnderNavigation.Stop => sut.StopStatisticsTrackingAsync(ct: ct),
+            StatisticsMutationUnderNavigation.DisableStatistics =>
+                sut.StopStatisticsTrackingAsync(ct: ct),
+            _ => throw new ArgumentOutOfRangeException(nameof(mutation)),
+        };
+
+        statisticsMutation.IsCompleted.Should().BeFalse();
+        releaseSave.TrySetResult();
+        await Task.WhenAll(resolve, statisticsMutation)
+            .WaitAsync(TimeSpan.FromSeconds(2), ct);
+        positions.Should().Equal(50);
     }
 
     [Fact]
@@ -3317,6 +3530,13 @@ public sealed class NovelReaderPageViewModelTests
         PropertyChanged,
         AutoSyncScheduler,
         Messenger,
+    }
+
+    public enum StatisticsMutationUnderNavigation
+    {
+        Pause,
+        Stop,
+        DisableStatistics,
     }
 
     private sealed class ThrowingMessenger : IMessenger

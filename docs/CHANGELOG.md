@@ -5,11 +5,15 @@
 **原因**：
 - 相邻跨章、普通程序化跳转、Page 可见状态和 lifecycle writer 曾由多个 tracker/coordinator 与可变字段分别拥有；从 B 第一页返回 A 时，native 会先发布近似端点或旧候选位置，再等待 WebView 算出 A 的最后一页，因此出现临时 `1.0`/100%、二次进度更新和 baseline/bookmark 竞争。
 - bridge error、关闭/后台与 Sasayaki 异步回调没有共享 point-of-no-return；目的地写入开始后仍可能被源位置恢复或另一条位置写入穿插，迟到的同章 render callback 也可能误认成当前完成。
+- Reader 退出曾先关闭 writer admission 而没有原子 settlement；Pause/Stop 还会在 destination commit 前捕获 source 位置。history 在 reservation 时提前 push/pop，重复 `restoreCompleted` 则把“已由第一条接纳”误判成 terminal failure。
+- EPUB 章节通过 virtual host 直接提供，原始 script、inline handler 和 script-scheme URL 没有清理；native-only 翻页授权函数还暴露在 `window`，同源伪造 bridge 消息缺少当前 render attempt source 绑定。
 
 **解决**：
 - 使用单一 `ReaderNavigationTransactionCoordinator` 持有不可变源/目的地、generation 和独立 `renderAttemptId`；目的章节隐藏分页，WebView 返回最终 page-aligned progress 后才按“保存 bookmark → 重置 baseline → 原子发布 → reveal”完成一次提交，旧 tracker/coordinator 与候选字段全部移除。
 - `Rendering` 失败或 lifecycle 取消恢复源位置；`Committing` 进入不可取消的持久化边界，lifecycle 等待并按 durable 结果恢复目的地或源位置。bridge error、重复/过期 completion 和 recovery 都按事务身份收敛到一个终态。
 - 事务存续期间统一阻止翻页、目录/搜索/链接/history 与 Sasayaki auto-scroll/load/progress/save 等位置突变；播放 UI 和非位置高亮仍可继续，异步回调在 await 后再次校验 gate。
+- lifecycle 在同一 writer gate 内先发起 settlement 再关闭 admission；Resolve 原子拒绝 barrier 后的 destination writer。Pause/Stop 等待 settlement snapshot 后再串入 writer，history 只在 destination settlement 提交；重复/过期完成返回显式 `Ignored`，Page 不再进入 recovery。
+- 章节内容按 EPUB manifest media type 识别为 HTML，在 Service 层移除可执行元素、inline handler 和危险 URL；清洗失败时 fail-closed，host 响应注入严格 no-script CSP，并拒绝外部、frame、new-window 与权限请求。所有 WebMessage 绑定当前 render attempt source；native 翻页改为 typed host message，bridge 只在私有 closure 内执行授权翻页。
 
 ---
 

@@ -199,9 +199,9 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
         );
 
-        pageCode.Should().Contain("hoshi-novel-book.local");
+        pageCode.Should().Contain("ReaderWebContentPolicy.BookHostName");
         pageCode.Should().Contain("SetVirtualHostNameToFolderMapping");
-        pageCode.Should().Contain("CoreWebView2HostResourceAccessKind.Allow");
+        pageCode.Should().Contain("CoreWebView2HostResourceAccessKind.DenyCors");
         pageCode.Should().Contain("NovelWebView.CoreWebView2.Navigate(attempt.Uri)");
         pageCode.Should().Contain("OnDomContentLoaded");
         pageCode.Should().Contain("LoadChapter");
@@ -242,8 +242,8 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "ViewModels", "Pages", "NovelReaderPageViewModel.cs")
         );
 
-        script.Should().Contain("window.hoshiReaderNavigate");
-        script.Should().Contain("window.hoshiReaderNavigateAuthorized");
+        script.Should().NotContain("window.hoshiReaderNavigateAuthorized");
+        script.Should().Contain("case \"navigatePage\"");
         script.Should().Contain("requestPageNavigation");
         script.Should().Contain("postToHost(\"pageNavigationRequest\"");
         script.Should().Contain("window.__hoshiReaderShortcutBindings");
@@ -259,6 +259,7 @@ public class NovelReaderWebAssetTests
         pageCode.Should().Contain("case \"shortcut\":");
         pageCode.Should().Contain("case \"pageNavigationRequest\":");
         pageCode.Should().Contain("_navigationInput.TryExecutePageTurnAsync(");
+        pageCode.Should().Contain("CreateNavigatePageMessage(");
         pageCode.Should().Contain("ViewModel.HandleManualPageNavigationAsync(readerEvent)");
         pageCode.Should().Contain("outcome.AdjacentChapterIndex is int adjacentChapterIndex");
         pageCode.Should().Contain("outcome.AdjacentChapterRestoreTarget is ReaderChapterRestoreTarget restoreTarget");
@@ -3863,7 +3864,9 @@ public class NovelReaderWebAssetTests
         restoreHandler.Should().Contain(
             "NovelReaderTerminalPayloadParser.TryParseRestoreCompleted(");
         restoreHandler.Should().Contain("out var restorePayload");
-        restoreHandler.Should().Contain("if (settlement == null)");
+        restoreHandler.Should().Contain(
+            "ReaderNavigationResolutionDisposition.Ignored");
+        restoreHandler.Should().Contain("resolution.Settlement");
         restoreHandler.Should().Contain("await HandleTerminalRenderFailureAsync(");
         restoreHandler.Should().NotContain("GetProperty(");
         restoreHandler.Should().NotContain("GetDouble(");
@@ -3909,7 +3912,9 @@ public class NovelReaderWebAssetTests
         restoreHandler.Should().Contain("restorePayload.Progress");
         restoreHandler.Should().Contain("ViewModel.ResolveNavigationAsync(");
         restoreHandler.Should().Contain("ApplyNavigationSettlement(settlement)");
-        restoreHandler.Should().Contain("if (settlement == null)");
+        restoreHandler.Should().Contain(
+            "ReaderNavigationResolutionDisposition.Ignored");
+        restoreHandler.Should().Contain("resolution.Settlement");
         chapterReadyHandler.Should().Contain("_renderState.AcceptChapterReady(");
         chapterReadyHandler.Should().Contain("NovelReaderChapterReadyDisposition.Ordinary");
         chapterReadyHandler.Should().Contain("NovelReaderChapterReadyDisposition.HiddenTerminal");

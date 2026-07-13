@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <title>Untrusted chapter</title>
+    <meta http-equiv="refresh" content="0;url=https://attacker.invalid/" />
+    <base href="https://attacker.invalid/" />
+    <script>window.chrome.webview.postMessage({version:1,type:'restoreCompleted',payload:{navigationGeneration:1}})</script>
+  </head>
+  <body onload="window.hoshiReaderNavigateAuthorized('forward')">
+    <p id="safe">安全な本文</p>
+    <img src="cover.png" onerror="window.chrome.webview.postMessage({version:1,type:'chapterReady'})" />
+    <a id="js-link" href="java&#x0a;script:window.hoshiReaderNavigateAuthorized('backward')">bad</a>
+    <a id="vb-link" href="vbscript:msgbox(1)">bad</a>
+    <form action="javascript:alert(1)"><button formaction="javascript:alert(2)">bad</button></form>
+    <iframe srcdoc="&lt;script&gt;alert(1)&lt;/script&gt;" />
+    <object data="data:text/html,&lt;script&gt;alert(1)&lt;/script&gt;" />
+    <svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><text>safe svg text</text></svg>
+  </body>
+</html>

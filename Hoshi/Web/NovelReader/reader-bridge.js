@@ -930,6 +930,13 @@ async function handleMessage(event) {
         updateDiagnostics();
         notifyChapterReady(fragmentGeneration, fragmentAttemptId);
         break;
+      case "navigatePage":
+        var authorizedDirection = message.payload?.direction;
+        if (authorizedDirection !== "forward" && authorizedDirection !== "backward") {
+          throw new Error("Invalid authorized page direction");
+        }
+        await handleNavigate(authorizedDirection);
+        break;
       default:
         throw new Error("Unsupported bridge message type: " + message.type);
     }
@@ -944,8 +951,6 @@ function requestPageNavigation(direction) {
 }
 
 window.chrome?.webview?.addEventListener("message", handleMessage);
-window.hoshiReaderNavigate = requestPageNavigation;
-window.hoshiReaderNavigateAuthorized = handleNavigate;
 
 document.addEventListener("click", function (event) {
   var anchor = event.target?.closest?.("a[href]");

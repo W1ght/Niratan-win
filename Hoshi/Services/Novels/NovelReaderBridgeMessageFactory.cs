@@ -86,6 +86,18 @@ public static class NovelReaderBridgeMessageFactory
         return JsonSerializer.Serialize(message, JsonOptions);
     }
 
+    public static string CreateNavigatePageMessage(string direction)
+    {
+        if (direction is not ("forward" or "backward"))
+            throw new ArgumentOutOfRangeException(nameof(direction));
+
+        var message = new NovelReaderWebMessage<NavigatePagePayload>(
+            1,
+            "navigatePage",
+            new NavigatePagePayload(direction));
+        return JsonSerializer.Serialize(message, JsonOptions);
+    }
+
     private sealed record SetChapterPayload(
         int Index,
         int TotalChapters,
@@ -103,4 +115,6 @@ public static class NovelReaderBridgeMessageFactory
         string Fragment,
         long RenderAttemptId,
         long NavigationGeneration);
+
+    private sealed record NavigatePagePayload(string Direction);
 }

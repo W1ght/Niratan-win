@@ -38,6 +38,7 @@ public sealed class ReaderNavigationInputCoordinator
         CancellationToken,
         ReaderProgrammaticNavigationReservation?> _reserveNavigation;
     private readonly ReaderNavigationHistory _history = new();
+    private PendingHistoryMutation? _pendingHistoryMutation;
 
     public ReaderNavigationInputCoordinator(
         Func<bool> canMutatePosition,
@@ -95,7 +96,13 @@ public sealed class ReaderNavigationInputCoordinator
                 return null;
 
             if (recordHistory)
-                _history.Record(PositionOf(reservation.RenderRequest.Source));
+            {
+                _pendingHistoryMutation = new PendingHistoryMutation(
+                    reservation.RenderRequest.Generation,
+                    kind,
+                    PositionOf(reservation.RenderRequest.Source),
+                    Target: null);
+            }
             return From(kind, reservation, fragment);
         }
     }
@@ -116,14 +123,11 @@ public sealed class ReaderNavigationInputCoordinator
             if (reservation == null)
                 return null;
 
-            if (!_history.TryGoBack(
-                    PositionOf(reservation.RenderRequest.Source),
-                    out var committedTarget)
-                || committedTarget != target.Value)
-            {
-                throw new InvalidOperationException(
-                    "Reader back history changed during navigation reservation.");
-            }
+            _pendingHistoryMutation = new PendingHistoryMutation(
+                reservation.RenderRequest.Generation,
+                ReaderNavigationInputKind.HistoryBack,
+                PositionOf(reservation.RenderRequest.Source),
+                target.Value);
 
             return reservation;
         }
@@ -145,16 +149,45 @@ public sealed class ReaderNavigationInputCoordinator
             if (reservation == null)
                 return null;
 
-            if (!_history.TryGoForward(
-                    PositionOf(reservation.RenderRequest.Source),
-                    out var committedTarget)
-                || committedTarget != target.Value)
-            {
-                throw new InvalidOperationException(
-                    "Reader forward history changed during navigation reservation.");
-            }
+            _pendingHistoryMutation = new PendingHistoryMutation(
+                reservation.RenderRequest.Generation,
+                ReaderNavigationInputKind.HistoryForward,
+                PositionOf(reservation.RenderRequest.Source),
+                target.Value);
 
             return reservation;
+        }
+    }
+
+    public bool ApplyNavigationSettlement(ReaderNavigationSettlement settlement)
+    {
+        ArgumentNullException.ThrowIfNull(settlement);
+        lock (_gate)
+        {
+            if (_pendingHistoryMutation is not { } pending
+                || pending.Generation != settlement.Generation)
+            {
+                return false;
+            }
+
+            _pendingHistoryMutation = null;
+            if (!settlement.ShouldRevealDestination)
+                return true;
+
+            switch (pending.Kind)
+            {
+                case ReaderNavigationInputKind.HistoryBack:
+                    CommitBack(pending);
+                    break;
+                case ReaderNavigationInputKind.HistoryForward:
+                    CommitForward(pending);
+                    break;
+                default:
+                    _history.Record(pending.Source);
+                    break;
+            }
+
+            return true;
         }
     }
 
@@ -240,4 +273,32 @@ public sealed class ReaderNavigationInputCoordinator
     private static ReaderNavigationPosition PositionOf(
         ReaderNavigationPositionSnapshot snapshot) =>
         new(snapshot.ChapterIndex, snapshot.Progress);
+
+    private void CommitBack(PendingHistoryMutation pending)
+    {
+        if (pending.Target is not { } expected
+            || !_history.TryGoBack(pending.Source, out var target)
+            || target != expected)
+        {
+            throw new InvalidOperationException(
+                "Reader back history changed before destination settlement.");
+        }
+    }
+
+    private void CommitForward(PendingHistoryMutation pending)
+    {
+        if (pending.Target is not { } expected
+            || !_history.TryGoForward(pending.Source, out var target)
+            || target != expected)
+        {
+            throw new InvalidOperationException(
+                "Reader forward history changed before destination settlement.");
+        }
+    }
+
+    private sealed record PendingHistoryMutation(
+        long Generation,
+        ReaderNavigationInputKind Kind,
+        ReaderNavigationPosition Source,
+        ReaderNavigationPosition? Target);
 }

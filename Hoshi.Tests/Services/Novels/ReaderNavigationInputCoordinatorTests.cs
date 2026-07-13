@@ -20,6 +20,90 @@ namespace Hoshi.Tests.Services.Novels;
 public sealed class ReaderNavigationInputCoordinatorTests
 {
     [Fact]
+    public void HistoryMutation_CommitsOnlyWithOwnedDestinationSettlement()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var generation = 0L;
+        var current = Snapshot(chapter: 0, progress: 0.2, revision: 1);
+        var input = CreateInput(() => current, () => ++generation);
+
+        var navigation = input.TryNavigate(
+            ReaderNavigationInputKind.SearchResult,
+            chapterIndex: 1,
+            progress: 0.4,
+            ct: ct);
+
+        navigation.Should().NotBeNull();
+        input.BackTarget.Should().BeNull("reservation must not publish history");
+        input.ApplyNavigationSettlement(new ReaderNavigationSettlement(
+            navigation!.RenderRequest.Generation,
+            navigation.RenderRequest.Source,
+            ShouldRevealDestination: false)).Should().BeTrue();
+        input.BackTarget.Should().BeNull("source recovery rolls the pending mutation back");
+
+        navigation = input.TryNavigate(
+            ReaderNavigationInputKind.SearchResult,
+            chapterIndex: 1,
+            progress: 0.4,
+            ct: ct);
+        input.ApplyNavigationSettlement(new ReaderNavigationSettlement(
+            navigation!.RenderRequest.Generation,
+            Snapshot(chapter: 1, progress: 0.4, revision: 2),
+            ShouldRevealDestination: true)).Should().BeTrue();
+
+        input.BackTarget.Should().Be(new ReaderNavigationPosition(0, 0.2));
+        input.ForwardTarget.Should().BeNull();
+    }
+
+    [Fact]
+    public void BackAndForwardHistory_SourceRecoveryLeavesBothStacksUnchanged()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var generation = 0L;
+        var current = Snapshot(chapter: 0, progress: 0.2, revision: 1);
+        var input = CreateInput(() => current, () => ++generation);
+        var navigation = input.TryNavigate(
+            ReaderNavigationInputKind.TableOfContents,
+            chapterIndex: 1,
+            progress: 0.4,
+            ct: ct);
+        input.ApplyNavigationSettlement(new ReaderNavigationSettlement(
+            navigation!.RenderRequest.Generation,
+            Snapshot(chapter: 1, progress: 0.4, revision: 2),
+            ShouldRevealDestination: true));
+        current = Snapshot(chapter: 1, progress: 0.4, revision: 2);
+
+        var back = input.TryGoBack(ct);
+        input.BackTarget.Should().Be(new ReaderNavigationPosition(0, 0.2));
+        input.ForwardTarget.Should().BeNull();
+        input.ApplyNavigationSettlement(new ReaderNavigationSettlement(
+            back!.RenderRequest.Generation,
+            back.RenderRequest.Source,
+            ShouldRevealDestination: false)).Should().BeTrue();
+        input.BackTarget.Should().Be(new ReaderNavigationPosition(0, 0.2));
+        input.ForwardTarget.Should().BeNull();
+
+        back = input.TryGoBack(ct);
+        input.ApplyNavigationSettlement(new ReaderNavigationSettlement(
+            back!.RenderRequest.Generation,
+            Snapshot(chapter: 0, progress: 0.2, revision: 3),
+            ShouldRevealDestination: true)).Should().BeTrue();
+        current = Snapshot(chapter: 0, progress: 0.2, revision: 3);
+        input.BackTarget.Should().BeNull();
+        input.ForwardTarget.Should().Be(new ReaderNavigationPosition(1, 0.4));
+
+        var forward = input.TryGoForward(ct);
+        input.BackTarget.Should().BeNull();
+        input.ForwardTarget.Should().Be(new ReaderNavigationPosition(1, 0.4));
+        input.ApplyNavigationSettlement(new ReaderNavigationSettlement(
+            forward!.RenderRequest.Generation,
+            forward.RenderRequest.Source,
+            ShouldRevealDestination: false)).Should().BeTrue();
+        input.BackTarget.Should().BeNull();
+        input.ForwardTarget.Should().Be(new ReaderNavigationPosition(1, 0.4));
+    }
+
+    [Fact]
     public async Task HistoryReservation_WithBlockedWriterRejectsConcurrentCommandWithoutMutatingHistory()
     {
         var ct = TestContext.Current.CancellationToken;
@@ -43,8 +127,8 @@ public sealed class ReaderNavigationInputCoordinatorTests
         back.Should().NotBeNull();
         back!.DepartureCheckpoint.IsCompleted.Should().BeFalse();
         concurrentForward.Should().BeNull();
-        harness.Input.BackTarget.Should().BeNull();
-        harness.Input.ForwardTarget.Should().Be(new ReaderNavigationPosition(1, 0.5));
+        harness.Input.BackTarget.Should().Be(new ReaderNavigationPosition(0, 0.2));
+        harness.Input.ForwardTarget.Should().BeNull();
         harness.ViewModel.CurrentChapterIndex.Should().Be(1);
         harness.ViewModel.Progress.Should().Be(0.5);
 
@@ -56,7 +140,55 @@ public sealed class ReaderNavigationInputCoordinatorTests
             (150, ReaderStatisticsCheckpointReason.ProgrammaticDeparture));
         var settlement = await harness.ViewModel.HandleNavigationBridgeErrorAsync();
         settlement.Should().NotBeNull();
+        harness.Input.ApplyNavigationSettlement(settlement!).Should().BeTrue();
+        harness.Input.BackTarget.Should().Be(new ReaderNavigationPosition(0, 0.2));
+        harness.Input.ForwardTarget.Should().BeNull();
         harness.ViewModel.AcknowledgeNavigationRendered(settlement!.Generation)
+            .Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(HistoryRecoveryCause.SaveFailure)]
+    [InlineData(HistoryRecoveryCause.BridgeError)]
+    [InlineData(HistoryRecoveryCause.LifecycleCancel)]
+    public async Task HistoryBack_SourceSettlementCausePreservesBackAndForwardStacks(
+        HistoryRecoveryCause cause)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var harness = await Harness.CreateAsync(ct);
+        await harness.NavigateAndCommitAsync(
+            ReaderNavigationInputKind.SearchResult,
+            chapterIndex: 1,
+            progress: 0.4,
+            ct);
+        var back = harness.Input.TryGoBack(ct);
+        back.Should().NotBeNull();
+        await back!.DepartureCheckpoint.WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        ReaderNavigationSettlement settlement;
+        if (cause == HistoryRecoveryCause.SaveFailure)
+        {
+            harness.FailSaveCall(2);
+            var resolution = await harness.ViewModel.ResolveNavigationAsync(
+                back.RenderRequest.Generation,
+                back.RenderRequest.Destination.ChapterIndex,
+                back.RenderRequest.Destination.ExactProgress!.Value,
+                ct);
+            resolution.Disposition.Should().Be(ReaderNavigationResolutionDisposition.Settled);
+            settlement = resolution.Settlement!;
+        }
+        else
+        {
+            settlement = (await (cause == HistoryRecoveryCause.BridgeError
+                ? harness.ViewModel.HandleNavigationBridgeErrorAsync()
+                : harness.ViewModel.SettleNavigationForLifecycleAsync()))!;
+        }
+
+        settlement.ShouldRevealDestination.Should().BeFalse();
+        harness.Input.ApplyNavigationSettlement(settlement).Should().BeTrue();
+        harness.Input.BackTarget.Should().Be(new ReaderNavigationPosition(0, 0.2));
+        harness.Input.ForwardTarget.Should().BeNull();
+        harness.ViewModel.AcknowledgeNavigationRendered(settlement.Generation)
             .Should().BeTrue();
     }
 
@@ -164,6 +296,7 @@ public sealed class ReaderNavigationInputCoordinatorTests
         private readonly TempBookDirectory _temp = new();
         private int _saveCall;
         private int _blockedSaveCall = -1;
+        private int _failedSaveCall = -1;
 
         private Harness()
         {
@@ -202,6 +335,9 @@ public sealed class ReaderNavigationInputCoordinatorTests
                         SaveStarted.TrySetResult();
                         await ReleaseSave.Task;
                     }
+
+                    if (call == Volatile.Read(ref _failedSaveCall))
+                        return Result.Failure("write failed", "Bookmark");
 
                     return Result.Success();
                 });
@@ -258,6 +394,9 @@ public sealed class ReaderNavigationInputCoordinatorTests
         public void BlockSaveCall(int call) =>
             Volatile.Write(ref _blockedSaveCall, call);
 
+        public void FailSaveCall(int call) =>
+            Volatile.Write(ref _failedSaveCall, call);
+
         public async Task NavigateAndCommitAsync(
             ReaderNavigationInputKind kind,
             int chapterIndex,
@@ -271,12 +410,13 @@ public sealed class ReaderNavigationInputCoordinatorTests
                 ct: ct);
             input.Should().NotBeNull();
             await input!.DepartureCheckpoint.WaitAsync(TimeSpan.FromSeconds(2), ct);
-            var settlement = await ViewModel.ResolveNavigationAsync(
+            var resolution = await ViewModel.ResolveNavigationAsync(
                 input.RenderRequest.Generation,
                 chapterIndex,
                 progress,
                 ct);
-            settlement.Should().NotBeNull();
+            resolution.Disposition.Should().Be(ReaderNavigationResolutionDisposition.Settled);
+            Input.ApplyNavigationSettlement(resolution.Settlement!).Should().BeTrue();
             ViewModel.AcknowledgeNavigationRendered(input.RenderRequest.Generation)
                 .Should().BeTrue();
         }
@@ -286,6 +426,39 @@ public sealed class ReaderNavigationInputCoordinatorTests
             ReleaseSave.TrySetResult();
             _temp.Dispose();
         }
+    }
+
+    private static ReaderNavigationInputCoordinator CreateInput(
+        Func<ReaderNavigationPositionSnapshot> current,
+        Func<long> nextGeneration) =>
+        new(
+            () => true,
+            (chapter, restore, progress, _) =>
+            {
+                var source = current();
+                var destination = new ReaderNavigationDestination(
+                    chapter,
+                    restore,
+                    progress);
+                return new ReaderProgrammaticNavigationReservation(
+                    new ReaderNavigationRenderRequest(
+                        nextGeneration(),
+                        source,
+                        destination),
+                    Task.CompletedTask);
+            });
+
+    private static ReaderNavigationPositionSnapshot Snapshot(
+        int chapter,
+        double progress,
+        long revision) =>
+        new("book-1", chapter, progress, (chapter * 100) + (int)(progress * 100), 200, revision);
+
+    public enum HistoryRecoveryCause
+    {
+        SaveFailure,
+        BridgeError,
+        LifecycleCancel,
     }
 
     private sealed class FakeReaderStatisticsSession : IReaderStatisticsSession
