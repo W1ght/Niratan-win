@@ -111,7 +111,8 @@ public class NovelReaderWebAssetTests
     [Fact]
     public void ReaderBridge_TerminalEventsCarryGenerationChapterAndAttemptIdentity()
     {
-        var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
+        var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"))
+            .ReplaceLineEndings("\n");
 
         script.Should().Contain(
             "postToHost(\"restoreCompleted\", {\n" +
@@ -3082,7 +3083,7 @@ public class NovelReaderWebAssetTests
         );
         var readerCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
-        );
+        ).ReplaceLineEndings("\n");
         var viewModelCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "ViewModels", "Pages", "NovelReaderPageViewModel.cs")
         );
@@ -3890,7 +3891,8 @@ public class NovelReaderWebAssetTests
     public void ReaderPage_AdjacentLoadResolvesHighlightsAndSasayakiAgainstDestinationChapter()
     {
         var readerCode = File.ReadAllText(
-            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"))
+            .ReplaceLineEndings("\n");
 
         readerCode.Should().Contain("_renderState.TryGetDomAttempt(uri, out var chapterInstruction)");
         readerCode.Should().Contain("var destinationChapterIndex = chapterInstruction.ChapterIndex;");
@@ -3984,7 +3986,8 @@ public class NovelReaderWebAssetTests
     public void ReaderPage_AttachedLifecycleTreatsOwnedSettlementAsWaitOnly()
     {
         var readerCode = File.ReadAllText(
-            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"))
+            .ReplaceLineEndings("\n");
         var attached = Regex.Match(
             readerCode,
             @"(?s)private async Task<bool> HandleAppLifecycleCheckpointAsync\(.*?\n    \}").Value;

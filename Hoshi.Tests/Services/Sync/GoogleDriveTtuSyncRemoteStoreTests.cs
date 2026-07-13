@@ -60,7 +60,7 @@ public sealed class GoogleDriveTtuSyncRemoteStoreTests
         await store.DownloadBookDataAsync(
             new TtuRemoteFile("bookdata-id", "bookdata_1_6_1200_2000_1000.zip"),
             temp.Path,
-            new Progress<double>(value => progressValues.Add(value)),
+            new InlineProgress<double>(progressValues.Add),
             ct);
 
         var bytes = await File.ReadAllBytesAsync(temp.Path, ct);
@@ -208,6 +208,11 @@ public sealed class GoogleDriveTtuSyncRemoteStoreTests
         {
             Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
         };
+
+    private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
+    }
 
     private sealed class FakeGoogleDriveAuthService : IGoogleDriveAuthService
     {
