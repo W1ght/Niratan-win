@@ -103,7 +103,25 @@ public class NovelReaderWebAssetTests
         script.Should().Contain("window.__hoshiChapterInfo.restoreTarget ?? null");
         script.IndexOf("notifyRestoreComplete(navigationGeneration)", StringComparison.Ordinal)
             .Should().BeLessThan(
-                script.IndexOf("postToHost(\"chapterReady\"", StringComparison.Ordinal));
+                script.IndexOf("notifyChapterReady(navigationGeneration)", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ReaderBridge_TerminalEventsCarryGenerationAndChapterIdentity()
+    {
+        var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
+
+        script.Should().Contain(
+            "postToHost(\"restoreCompleted\", {\n" +
+            "    progress: window.hoshiReader.calculateProgress(),\n" +
+            "    chapterIndex: currentChapter.index,\n" +
+            "    navigationGeneration: navigationGeneration ?? null,");
+        script.Should().Contain(
+            "postToHost(\"chapterReady\", {\n" +
+            "    ...window.__hoshiReaderState,\n" +
+            "    chapterIndex: currentChapter.index,\n" +
+            "    navigationGeneration: navigationGeneration ?? null,");
+        script.Should().Contain("notifyChapterReady(navigationGeneration)");
     }
 
     [Fact]
@@ -187,9 +205,8 @@ public class NovelReaderWebAssetTests
         pageCode.Should().Contain("ViewModel.HandleManualPageNavigationAsync(readerEvent)");
         pageCode.Should().Contain("outcome.AdjacentChapterIndex is int adjacentChapterIndex");
         pageCode.Should().Contain("outcome.AdjacentChapterRestoreTarget is ReaderChapterRestoreTarget restoreTarget");
-        pageCode.Should().Contain("BeginAdjacentChapterNavigation(adjacentChapterIndex, restoreTarget)");
-        pageCode.Should().MatchRegex(
-            @"LoadChapter\(\s*adjacentChapterIndex,\s*adjacentChapterRestoreTarget: restoreTarget\)");
+        pageCode.Should().Contain("ViewModel.TryBeginNavigation(");
+        pageCode.Should().Contain("LoadChapter(renderRequest)");
         viewModelCode.Should().Contain("ReaderStatisticsEventClassifier.AdjacentChapterTarget");
     }
 
@@ -2928,10 +2945,10 @@ public class NovelReaderWebAssetTests
             readerCode,
             @"(?s)private async Task<bool> HandleAppLifecycleCheckpointAsync\(.*?\n    \}").Value;
         lifecycleBody.Should().Contain("ViewModel.SettleNavigationForLifecycleAsync");
-        lifecycleBody.Should().Contain("ApplyLifecycleNavigationSettlement");
-        lifecycleBody.Should().Contain("ViewModel.AcknowledgeNavigationRendered");
+        lifecycleBody.Should().Contain("ApplyNavigationSettlement");
+        lifecycleBody.Should().Contain("WaitForTerminalRenderAsync");
         lifecycleBody.Should().NotContain("ResetStatisticsBaselineAsync");
-        lifecycleBody.IndexOf("ViewModel.AcknowledgeNavigationRendered", StringComparison.Ordinal)
+        lifecycleBody.IndexOf("WaitForTerminalRenderAsync", StringComparison.Ordinal)
             .Should().BeLessThan(lifecycleBody.IndexOf(
                 "ViewModel.CheckpointAppBackgroundingAsync",
                 StringComparison.Ordinal));
@@ -3015,27 +3032,29 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("if (outcome.DidMove)");
         readerCode.Should().Contain("outcome.AdjacentChapterIndex is int adjacentChapterIndex");
         readerCode.Should().Contain("outcome.AdjacentChapterRestoreTarget is ReaderChapterRestoreTarget restoreTarget");
-        readerCode.Should().Contain("ReaderAdjacentNavigationCommitCoordinator");
+        readerCode.Should().Contain("ViewModel.TryBeginNavigation(");
         var adjacentNavigationBody = Regex.Match(
             readerCode,
             @"(?s)if \(outcome\.AdjacentChapterIndex.*?\n\s*\}\s*\n\s*if \(readerEvent\.Result").Value;
-        adjacentNavigationBody.Should().Contain("BeginAdjacentChapterNavigation(adjacentChapterIndex, restoreTarget)");
-        adjacentNavigationBody.Should().MatchRegex(
-            @"LoadChapter\(\s*adjacentChapterIndex,\s*adjacentChapterRestoreTarget: restoreTarget\)");
+        adjacentNavigationBody.Should().Contain(
+            "ViewModel.TryBeginNavigation(\n" +
+            "                            adjacentChapterIndex,\n" +
+            "                            restoreTarget,\n" +
+            "                            exactProgress: null)");
+        adjacentNavigationBody.Should().Contain("LoadChapter(renderRequest)");
         adjacentNavigationBody.Should().NotContain("SaveProgressNowAsync");
         adjacentNavigationBody.Should().NotContain("ViewModel.UpdateProgress");
-        readerCode.Should().Contain("ViewModel.CompleteAdjacentChapterNavigationAsync(");
-        readerCode.Should().Contain("_adjacentCommitCoordinator.CommitAsync(");
-        readerCode.Should().Contain("if (_pendingAdjacentChapterNavigation)");
+        readerCode.Should().Contain("ViewModel.ResolveNavigationAsync(");
+        readerCode.Should().Contain("ApplyNavigationSettlement(settlement)");
+        readerCode.Should().NotContain("_adjacentCommitCoordinator");
+        readerCode.Should().NotContain("_pendingAdjacentChapterNavigation");
+        readerCode.Should().NotContain("_pendingAdjacentChapterIndex");
+        readerCode.Should().NotContain("_pendingAdjacentChapterRestoreTarget");
         readerCode.Should().Contain("NovelWebView.Opacity = 0");
-        readerCode.Should().Contain("RevealAdjacentChapterWhenCommitted");
-        readerCode.Should().Contain("BeginProgrammaticNavigationAsync");
-        readerCode.Should().Contain("CompleteProgrammaticNavigationVisibleStateAsync");
+        readerCode.Should().Contain("ReaderNavigationRenderRequest? _hiddenRenderRequest");
+        readerCode.Should().Contain("ReaderNavigationSettlement? _pendingTerminalSettlement");
+        readerCode.Should().Contain("TaskCompletionSource? _terminalRenderReady");
         readerCode.Should().Contain("ViewModel.CheckpointProgrammaticDepartureAsync");
-        readerCode.Should().Contain("ViewModel.SaveProgressAndResetStatisticsBaselineAsync");
-        readerCode.Should().Contain("RecoverProgrammaticNavigationAsync");
-        readerCode.Should().Contain("PrepareProgrammaticNavigationVisibleStateAsync(restoredProgress)");
-        readerCode.Should().Contain("ResetStatisticsBaseline");
         readerCode.Should().Contain("StatisticsButton_Click");
         var statisticsButtonBody = Regex.Match(
             readerCode,
@@ -3652,16 +3671,23 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
-    public void ReaderPage_AdjacentCommitRejectsPageAndTickInputUntilDestinationCommitCompletes()
+    public void ReaderPage_HiddenRenderUsesTypedViewModelTransactionWithoutMutatingPosition()
     {
         var readerCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
 
-        readerCode.Should().Contain("if (!_programmaticNavigation.CanAcceptReaderInput)");
-        readerCode.Should().Contain("_adjacentCommitCoordinator.CommitAsync(");
-        readerCode.Should().Contain("if (!_programmaticNavigation.CanAcceptReaderInput)\n            return;");
-        readerCode.Should().Contain("ReaderAdjacentNavigationCommitCoordinator");
-        readerCode.Should().Contain("RecoverAdjacentChapterNavigationAsync");
+        var typedLoadBody = Regex.Match(
+            readerCode,
+            @"(?s)private void LoadChapter\(ReaderNavigationRenderRequest renderRequest\).*?\n    \}").Value;
+
+        typedLoadBody.Should().NotBeEmpty();
+        typedLoadBody.Should().Contain("BeginHiddenRender(renderRequest)");
+        typedLoadBody.Should().Contain("LoadChapter(renderRequest.Destination.ChapterIndex)");
+        typedLoadBody.Should().NotContain("ViewModel.SetChapter");
+        typedLoadBody.Should().NotContain("ViewModel.UpdateProgress");
+        readerCode.Should().Contain("if (!ViewModel.CanAcceptReaderPositionMutation)");
+        readerCode.Should().NotContain("ReaderProgrammaticNavigationTracker");
+        readerCode.Should().NotContain("ReaderAdjacentNavigationCommitCoordinator");
     }
 
     [Fact]
@@ -3670,13 +3696,71 @@ public class NovelReaderWebAssetTests
         var readerCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
 
-        readerCode.Should().Contain("var destinationChapterIndex = _pendingAdjacentChapterIndex ?? ViewModel.CurrentChapterIndex;");
+        readerCode.Should().Contain("var chapterInstruction = CurrentChapterRenderInstruction();");
+        readerCode.Should().Contain("var destinationChapterIndex = chapterInstruction.ChapterIndex;");
         readerCode.Should().Contain("ViewModel.GetChapterHighlightsJson(destinationChapterIndex)");
         readerCode.Should().Contain("match.ChapterIndex == destinationChapterIndex");
         readerCode.Should().Contain(
-            "HighlightSasayakiCueAsync(\n                    match,\n                    allowAutoScroll: !_pendingAdjacentChapterNavigation)");
+            "HighlightSasayakiCueAsync(\n                    match,\n                    allowAutoScroll: _hiddenRenderRequest == null)");
         readerCode.Should().Contain("allowAutoScroll && settings.AutoScroll");
         readerCode.Should().Contain("if (allowAutoScroll");
+    }
+
+    [Fact]
+    public void ReaderPage_AppliesGenerationScopedTerminalNavigationSettlements()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+        var restoreHandler = Regex.Match(
+            readerCode,
+            @"(?s)case ""restoreCompleted"":.*?\n\s*case ""pageChanged"":").Value;
+        var chapterReadyHandler = Regex.Match(
+            readerCode,
+            @"(?s)case ""chapterReady"":.*?\n\s*case ""restoreCompleted"":").Value;
+        var errorHandler = Regex.Match(
+            readerCode,
+            @"(?s)case ""error"":.*?\n\s*\}").Value;
+        var settlementBody = Regex.Match(
+            readerCode,
+            @"(?s)private void ApplyNavigationSettlement\(ReaderNavigationSettlement settlement\).*?\n    \}").Value;
+
+        restoreHandler.Should().Contain("navigationGeneration");
+        restoreHandler.Should().Contain("completionChapterIndex");
+        restoreHandler.Should().Contain("restoredProgress");
+        restoreHandler.Should().Contain("ViewModel.ResolveNavigationAsync(");
+        restoreHandler.Should().Contain("ApplyNavigationSettlement(settlement)");
+        chapterReadyHandler.Should().Contain("hiddenRenderRequest.Generation == readyGeneration");
+        chapterReadyHandler.Should().Contain("expectedChapterIndex == readyChapterIndex");
+        chapterReadyHandler.Should().Contain(
+            "else\n                    {\n                        NovelWebView.Opacity = 1;\n                    }");
+        chapterReadyHandler.Should().MatchRegex(
+            @"(?s)if \(_pendingProgrammaticFragment != null.*?readyChapterIndex == fragmentRenderRequest\.Destination\.ChapterIndex.*?!hasReadyGeneration\).*?SendPendingProgrammaticFragmentAsync");
+        settlementBody.Should().Contain("_pendingTerminalSettlement = settlement");
+        settlementBody.Should().Contain("settlement.ShouldRevealDestination");
+        settlementBody.Should().Contain("LoadChapter(\n            settlement.Position.ChapterIndex,");
+        settlementBody.Should().Contain("TryRevealSettledNavigation(settlement.Generation)");
+        errorHandler.Should().Contain("await ViewModel.HandleNavigationBridgeErrorAsync()");
+        errorHandler.Should().Contain("ApplyNavigationSettlement(errorSettlement)");
+        errorHandler.Should().NotContain("_programmaticNavigation.Cancel()");
+    }
+
+    [Fact]
+    public void ReaderPage_LifecycleWaitsForAttachedTerminalRenderAndAbandonsDetachedRender()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+        var attached = Regex.Match(
+            readerCode,
+            @"(?s)private async Task<bool> HandleAppLifecycleCheckpointAsync\(.*?\n    \}").Value;
+        var detached = Regex.Match(
+            readerCode,
+            @"(?s)private async Task CompleteReaderLifecycleCloseAfterDetachAsync\(\).*?\n    \}").Value;
+
+        attached.Should().Contain("ApplyNavigationSettlement(settlement)");
+        attached.Should().Contain("await WaitForTerminalRenderAsync(settlement.Generation)");
+        attached.Should().NotContain("ViewModel.AcknowledgeNavigationRendered(settlement.Generation)");
+        detached.Should().Contain("AbandonNavigationRender(settlement.Generation)");
+        detached.Should().Contain("ViewModel.AcknowledgeNavigationRendered(settlement.Generation)");
     }
 
     [Fact]

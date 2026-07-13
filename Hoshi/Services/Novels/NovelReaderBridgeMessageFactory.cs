@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Hoshi.Models.DTO;
@@ -33,6 +34,19 @@ public static class NovelReaderBridgeMessageFactory
             });
         var message = new NovelReaderWebMessage<SetChapterPayload>(1, "setChapter", payload);
         return JsonSerializer.Serialize(message, JsonOptions);
+    }
+
+    public static string CreateSetChapterMessage(
+        ReaderNavigationRenderRequest renderRequest,
+        int totalChapters)
+    {
+        ArgumentNullException.ThrowIfNull(renderRequest);
+        return CreateSetChapterMessage(
+            renderRequest.Destination.ChapterIndex,
+            totalChapters,
+            renderRequest.Destination.ExactProgress,
+            renderRequest.Generation,
+            renderRequest.Destination.RestoreTarget);
     }
 
     public static string CreateRestoreProgressMessage(

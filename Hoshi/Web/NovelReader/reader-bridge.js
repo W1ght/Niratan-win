@@ -690,7 +690,7 @@ window.hoshiReader = {
         self.restoreProgress(progress, navigationGeneration, restoreTarget).then(function () {
           self.lastProgress = self.calculateProgress();
           updateDiagnostics();
-          postToHost("chapterReady", window.__hoshiReaderState);
+          notifyChapterReady(navigationGeneration);
         });
       });
   },
@@ -699,6 +699,15 @@ window.hoshiReader = {
 function notifyRestoreComplete(navigationGeneration) {
   postToHost("restoreCompleted", {
     progress: window.hoshiReader.calculateProgress(),
+    chapterIndex: currentChapter.index,
+    navigationGeneration: navigationGeneration ?? null,
+  });
+}
+
+function notifyChapterReady(navigationGeneration) {
+  postToHost("chapterReady", {
+    ...window.__hoshiReaderState,
+    chapterIndex: currentChapter.index,
     navigationGeneration: navigationGeneration ?? null,
   });
 }
@@ -868,6 +877,7 @@ async function handleMessage(event) {
         );
         break;
       case "restoreProgress":
+        var restoreGeneration = message.payload?.navigationGeneration ?? null;
         logDebug("restoreProgress-start", {
           progress: message.payload?.progress ?? 0,
           pageHeight: window.hoshiReader.pageHeight,
@@ -877,18 +887,20 @@ async function handleMessage(event) {
         });
         await window.hoshiReader.restoreProgress(
           message.payload?.progress ?? 0,
-          message.payload?.navigationGeneration ?? null
+          restoreGeneration
         );
         updateDiagnostics();
         logDebug("restoreProgress-done", window.__hoshiReaderState);
-        postToHost("chapterReady", window.__hoshiReaderState);
+        notifyChapterReady(restoreGeneration);
         break;
       case "jumpToFragment":
+        var fragmentGeneration = message.payload?.navigationGeneration ?? null;
         await window.hoshiReader.jumpToFragment(
           message.payload?.fragment ?? "",
-          message.payload?.navigationGeneration ?? null
+          fragmentGeneration
         );
         updateDiagnostics();
+        notifyChapterReady(fragmentGeneration);
         break;
       default:
         throw new Error("Unsupported bridge message type: " + message.type);

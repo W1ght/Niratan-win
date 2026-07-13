@@ -95,6 +95,29 @@ public class NovelReaderBridgeMessageFactoryTests
     }
 
     [Fact]
+    public void CreateSetChapterMessage_UsesImmutableNavigationRenderInstruction()
+    {
+        var render = new ReaderNavigationRenderRequest(
+            22,
+            new ReaderNavigationPositionSnapshot("book-1", 1, 0.4, 40, 100, 7),
+            ReaderNavigationDestination.AtChapterEnd(2));
+
+        var factory = typeof(NovelReaderBridgeMessageFactory).GetMethod(
+            nameof(NovelReaderBridgeMessageFactory.CreateSetChapterMessage),
+            [typeof(ReaderNavigationRenderRequest), typeof(int)]);
+        factory.Should().NotBeNull();
+        var json = (string)factory!.Invoke(null, [render, 4])!;
+        using var chapter = JsonDocument.Parse(json);
+
+        var payload = chapter.RootElement.GetProperty("payload");
+        payload.GetProperty("index").GetInt32().Should().Be(2);
+        payload.GetProperty("totalChapters").GetInt32().Should().Be(4);
+        payload.GetProperty("restoreTarget").GetString().Should().Be("end");
+        payload.TryGetProperty("progress", out _).Should().BeFalse();
+        payload.GetProperty("navigationGeneration").GetInt64().Should().Be(22);
+    }
+
+    [Fact]
     public void CreateJumpToFragmentMessage_SerializesTypedDestination()
     {
         using var document = JsonDocument.Parse(

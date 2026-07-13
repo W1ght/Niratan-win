@@ -18,7 +18,7 @@ public sealed class NovelReaderStatisticsLifecycleTests
         code.Should().Contain("Interval = TimeSpan.FromSeconds(1)");
         code.Should().Contain("ViewModel.IsStatisticsTracking && !ViewModel.IsStatisticsPaused");
         code.Should().Contain("await ViewModel.TickStatisticsAsync()");
-        code.Should().Contain("if (_programmaticNavigation.HasPending)");
+        code.Should().Contain("if (!ViewModel.CanAcceptReaderPositionMutation)");
         code.Should().Contain("StopStatisticsProjectionTimer");
     }
 
@@ -39,7 +39,8 @@ public sealed class NovelReaderStatisticsLifecycleTests
         windowCode.Should().Contain("AppLifecycleCheckpointReason.Closing");
         readerCode.Should().Contain("Register<AppBackgroundingMessage>");
         readerCode.Should().Contain("SettleNavigationForLifecycleAsync");
-        readerCode.Should().Contain("ApplyLifecycleNavigationSettlement");
+        readerCode.Should().Contain("ApplyNavigationSettlement");
+        readerCode.Should().Contain("WaitForTerminalRenderAsync");
         readerCode.Should().Contain("AcknowledgeNavigationRendered");
         readerCode.Should().Contain("CheckpointAppBackgroundingAsync");
         readerCode.Should().Contain("PrepareForReaderLifecycleCloseAsync");
@@ -48,7 +49,7 @@ public sealed class NovelReaderStatisticsLifecycleTests
             @"(?s)private async Task<bool> HandleAppLifecycleCheckpointAsync\(.*?\n    \}").Value;
         lifecycleBody.Should().NotBeEmpty();
         lifecycleBody.Should().MatchRegex(new Regex(
-            @"(?s)SettleNavigationForLifecycleAsync.*?ApplyLifecycleNavigationSettlement.*?AcknowledgeNavigationRendered.*?(CheckpointAppBackgroundingAsync|PrepareForReaderLifecycleCloseAsync)"));
+            @"(?s)SettleNavigationForLifecycleAsync.*?ApplyNavigationSettlement.*?WaitForTerminalRenderAsync.*?(CheckpointAppBackgroundingAsync|PrepareForReaderLifecycleCloseAsync)"));
         lifecycleBody.Should().NotContain("ResetStatisticsBaselineAsync");
         readerCode.Should().MatchRegex(new Regex(
             @"(?s)case string id when id == ReaderShortcutActions\.Close\.Id:\s*await ViewModel\.BackToLibraryCommand\.ExecuteAsync\(null\);\s*return true;"));
@@ -62,6 +63,6 @@ public sealed class NovelReaderStatisticsLifecycleTests
                 "CompleteReaderLifecycleCloseAfterDetachAsync",
                 StringComparison.Ordinal));
         readerCode.Should().MatchRegex(new Regex(
-            @"(?s)CompleteReaderLifecycleCloseAfterDetachAsync.*?SettleNavigationForLifecycleAsync.*?AcknowledgeNavigationRendered.*?PrepareForReaderLifecycleCloseAsync"));
+            @"(?s)CompleteReaderLifecycleCloseAfterDetachAsync.*?SettleNavigationForLifecycleAsync.*?AcknowledgeNavigationRendered.*?AbandonNavigationRender.*?PrepareForReaderLifecycleCloseAsync"));
     }
 }
