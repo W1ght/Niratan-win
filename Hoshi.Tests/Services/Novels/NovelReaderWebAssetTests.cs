@@ -2618,6 +2618,12 @@ public class NovelReaderWebAssetTests
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsRangeScrollBar\"");
         dashboardXaml.Should().Contain("Value=\"{Binding SelectedRangeOffsetValue, Mode=TwoWay}\"");
         dashboardXaml.Should().Contain("AutomationProperties.HelpText=\"{Binding RangeScrollAccessibleText}\"");
+        var rangeScrollBarStart = dashboardXaml.IndexOf("<Slider x:Uid=\"NovelStatisticsRangeScrollBar\"", StringComparison.Ordinal);
+        var rangeScrollBarEnd = dashboardXaml.IndexOf("/>", rangeScrollBarStart, StringComparison.Ordinal);
+        var rangeScrollBarXaml = dashboardXaml[rangeScrollBarStart..(rangeScrollBarEnd + 2)];
+        rangeScrollBarXaml.Should().Contain("StepFrequency=\"1\"");
+        rangeScrollBarXaml.Should().Contain("SnapsTo=\"StepValues\"");
+        dashboardXaml.Should().NotContain("<ScrollBar x:Uid=\"NovelStatisticsRangeScrollBar\"");
         dashboardXaml.Should().Contain("AxisTicks=\"{Binding TrendAxisTicks}\"");
         dashboardXaml.Should().NotContain("NovelStatisticsAnchorDate");
         dashboardXaml.Should().NotContain("CalendarDatePicker");
@@ -2643,6 +2649,7 @@ public class NovelReaderWebAssetTests
         trendChartCode.Should().Contain("AxisTicksProperty");
         trendChartCode.Should().Contain("DrawXAxisLabels");
         trendChartCode.Should().Contain("DrawYAxisTicks");
+        trendChartCode.Should().Contain("private const double LeftGutter = 88;");
         dashboardModels.Should().Contain("NovelStatisticsTrendChartStyle");
 
         string[] dashboardResourceUids =

@@ -16,7 +16,7 @@ namespace Hoshi.Views.Controls;
 public sealed partial class NovelStatisticsTrendChart : UserControl
 {
     private const double MinimumPointHeight = 3;
-    private const double LeftGutter = 60;
+    private const double LeftGutter = 88;
     private const double RightGutter = 8;
     private const double TopGutter = 8;
     private const double BottomGutter = 28;

@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the Dashboard anchor-date picker with a synchronized historical range scrollbar and render readable numeric axes in a fixed-height trend chart.
+**Goal:** Replace the Dashboard anchor-date picker with a synchronized historical range slider and render readable numeric axes in a fixed-height trend chart.
 
-**Architecture:** A pure calculator builds ordered calendar-aligned date windows. `NovelStatisticsDashboardViewModel` owns the selected discrete window and display-ready Y-axis ticks, while the WinUI view binds a horizontal `ScrollBar` and the UI-only chart control renders axes around the existing points. All Dashboard calculations continue to consume one `NovelStatisticsDateRange`; statistics sidecars, cache, SQLite, and Google Drive contracts do not change.
+**Architecture:** A pure calculator builds ordered calendar-aligned date windows. `NovelStatisticsDashboardViewModel` owns the selected discrete window and display-ready Y-axis ticks, while the WinUI view binds an always-visible horizontal integer-snapping `Slider` and the UI-only chart control renders axes around the existing points. All Dashboard calculations continue to consume one `NovelStatisticsDateRange`; statistics sidecars, cache, SQLite, and Google Drive contracts do not change.
 
 **Tech Stack:** C#/.NET 10, WinUI 3, Windows App SDK, CommunityToolkit.Mvvm, xUnit v3, FluentAssertions.
 
@@ -15,7 +15,7 @@
 - Do not modify `native/hoshidicts/` or any Hoshi reference repository.
 - The trend chart height is exactly 260 effective pixels.
 - The anchor-date picker and public `AnchorDate` ViewModel property are removed.
-- The scrollbar selects discrete day, Monday-aligned week, calendar-month, or recent-year windows and synchronizes every Dashboard card.
+- The range slider selects discrete day, Monday-aligned week, calendar-month, or recent-year windows and synchronizes every Dashboard card.
 - No new package dependency and no statistics/cache/Google Drive schema change.
 
 ---
@@ -210,7 +210,7 @@ Run:
 dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardViewModelTests|FullyQualifiedName~StatisticsControls_ReprojectRangeMetricsCalendarAndCorruptWarning"
 ```
 
-Expected: compile failures for the new scrollbar and tick properties and for the removed behavior expectation.
+Expected: compile failures for the new range-slider and tick properties and for the removed behavior expectation.
 
 - [ ] **Step 3: Add display model and discrete window state**
 
@@ -253,7 +253,7 @@ public string RangeScrollAccessibleText => RangeTitle;
 public partial ObservableCollection<NovelStatisticsAxisTickDisplay> TrendAxisTicks { get; set; } = [];
 ```
 
-Implement one helper that regenerates ranges, selects the newest period on mode changes, and preserves the prior period start on snapshot refresh. Raise property changes for every scrollbar binding.
+Implement one helper that regenerates ranges, selects the newest period on mode changes, and preserves the prior period start on snapshot refresh. Raise property changes for every range-slider binding.
 
 - [ ] **Step 4: Resolve the selected range before every Dashboard projection**
 
@@ -286,7 +286,7 @@ git commit -m "feat(statistics): scroll synchronized date windows"
 
 ---
 
-### Task 3: Fixed-height chart, numeric axes, and horizontal scrollbar
+### Task 3: Fixed-height chart, numeric axes, and horizontal range slider
 
 **Files:**
 - Modify: `Hoshi/Views/Controls/NovelStatisticsTrendChart.xaml`
@@ -297,7 +297,7 @@ git commit -m "feat(statistics): scroll synchronized date windows"
 - Test: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
-- Consumes: `TrendAxisTicks` and scrollbar properties from Task 2.
+- Consumes: `TrendAxisTicks` and range-slider properties from Task 2.
 - Produces: `AxisTicks` dependency property on `NovelStatisticsTrendChart`.
 - Produces automation id: `NovelStatisticsRangeScrollBar`.
 
@@ -328,11 +328,11 @@ Run:
 dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPage_ExposesStatisticsDashboard"
 ```
 
-Expected: assertions fail because the anchor picker still exists and axes/scrollbar do not.
+Expected: assertions fail because the anchor picker still exists and axes/range slider do not.
 
-- [ ] **Step 3: Replace the anchor picker with the scrollbar**
+- [ ] **Step 3: Replace the anchor picker with the range slider**
 
-Delete the anchor label and `CalendarDatePicker`. Bind the chart and scrollbar:
+Delete the anchor label and `CalendarDatePicker`. Bind the chart and always-visible range slider:
 
 ```xml
 <controls:NovelStatisticsTrendChart x:Uid="NovelStatisticsTrendChartControl"
@@ -340,24 +340,25 @@ Delete the anchor label and `CalendarDatePicker`. Bind the chart and scrollbar:
                                     ItemsSource="{Binding TrendPoints}"
                                     AxisTicks="{Binding TrendAxisTicks}"
                                     ChartStyle="{Binding SelectedTrendStyle}" />
-<ScrollBar x:Uid="NovelStatisticsRangeScrollBar"
-           AutomationProperties.AutomationId="NovelStatisticsRangeScrollBar"
-           AutomationProperties.HelpText="{Binding RangeScrollAccessibleText}"
-           Orientation="Horizontal"
-           Minimum="0"
-           Maximum="{Binding RangeScrollMaximum}"
-           ViewportSize="1"
-           SmallChange="1"
-           LargeChange="{Binding RangeScrollLargeChange}"
-           IsEnabled="{Binding CanScrollRange}"
-           Value="{Binding SelectedRangeOffsetValue, Mode=TwoWay}" />
+<Slider x:Uid="NovelStatisticsRangeScrollBar"
+        AutomationProperties.AutomationId="NovelStatisticsRangeScrollBar"
+        AutomationProperties.HelpText="{Binding RangeScrollAccessibleText}"
+        Orientation="Horizontal"
+        Minimum="0"
+        Maximum="{Binding RangeScrollMaximum}"
+        StepFrequency="1"
+        SnapsTo="StepValues"
+        SmallChange="1"
+        LargeChange="{Binding RangeScrollLargeChange}"
+        IsEnabled="{Binding CanScrollRange}"
+        Value="{Binding SelectedRangeOffsetValue, Mode=TwoWay}" />
 ```
 
 Add localized accessible names in both resource files and remove the unused anchor-label resources.
 
 - [ ] **Step 4: Render axes around a stable plot rectangle**
 
-Change the chart root from `MinHeight="220"` to `Height="260"`. Register `AxisTicks` as an `IEnumerable` dependency property. Use constants for a 60-pixel left gutter, 8-pixel right/top gutters, and 28-pixel bottom gutter. Draw the five Y grid lines and their real `TextBlock` labels at `plot.Top + (1 - tick.NormalizedValue) * plot.Height`.
+Change the chart root from `MinHeight="220"` to `Height="260"`. Register `AxisTicks` as an `IEnumerable` dependency property. Use constants for an 88-pixel left gutter, 8-pixel right/top gutters, and 28-pixel bottom gutter. Draw the five Y grid lines and their real `TextBlock` labels at `plot.Top + (1 - tick.NormalizedValue) * plot.Height`.
 
 Draw the first, middle, and last distinct X labels at the plot bottom. Update bars and lines to use the plot rectangle rather than the full canvas:
 
@@ -403,7 +404,7 @@ git commit -m "feat(statistics): label and scroll trend chart"
 
 - [ ] **Step 1: Document behavior and verification coverage**
 
-Add a changelog entry that records the prior limitations and the new fixed-height axes/range scrollbar. Update Dashboard verification to require removal of the anchor picker, 260-pixel height, metric-aware Y labels, first/middle/last X labels, scroll synchronization, and disabled year behavior.
+Add a changelog entry that records the prior limitations and the new fixed-height axes/range slider. Update Dashboard verification to require removal of the anchor picker, 260-pixel height, metric-aware Y labels, first/middle/last X labels, range synchronization, and disabled year behavior.
 
 - [ ] **Step 2: Run focused and full automated verification**
 
