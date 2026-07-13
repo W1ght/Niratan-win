@@ -1,5 +1,41 @@
 # Changelog
 
+## Google Drive 下载书籍未恢复进度且统计未导入
+
+**原因**：
+- 新书导入完成后按 EPUB 元数据标题重新查询 Drive 文件夹；当远端目录标题与 EPUB 标题不一致时，会命中错误或空目录，丢失用户所选书籍的 progress/statistics 文件快照。
+- 普通 EPUB 导入返回时尚未生成 `bookinfo.json`，远端全书字符位置无法在首次打开前换算为正确 spine 章节。
+
+**解决**：
+- Drive 新书导入把已选择的远端文件快照直接传给同步服务；普通手动/自动同步仍保持按书名发现目录。
+- EPUB 导入阶段复用 Reader 字符过滤规则生成 `bookinfo.json`，再导入 bookmark；统计仍严格受统计同步开关及 Merge/Replace 模式控制。
+- 新增标题不一致、首次跨章定位、章节边界、统计开关、sidecar 导入失败清理等回归测试。
+
+---
+
+## Reader 翻页保存偶发提示路径访问被拒绝
+
+**原因**：
+- Reader 在同章翻页后原子覆盖 `bookmark.json`，自动同步可能同时读取同一 sidecar；JSON 读句柄只共享读取，而 Windows 的 `File.Move(..., overwrite: true)` 不能替换仍被读取的目标，因此快速翻页时偶发 `UnauthorizedAccessException`。
+
+**解决**：
+- sidecar 读取允许删除共享，使读取者继续看到打开时的旧文件；已有目标改用同卷 `File.Replace` 原子替换，并以独立临时备份保证替换成功后可清理。
+- 新增“同步读取未结束时保存 bookmark”回归测试，验证旧读取正常完成、新读取取得新内容且不遗留临时文件。
+
+---
+
+## Reader typed host command 被错误信任检查拦截，所有翻页失效
+
+**原因**：
+- bridge 安全隔离把 native 命令改为 `CoreWebView2.PostWebMessageAsJson` 后，错误地用 DOM `MessageEvent.isTrusted == true` 判断消息来源；真实 WebView2 host message 不以该标志作为来源契约，因此 `navigatePage`、滚轮开关和 Sasayaki 命令都在进入私有 bridge handler 时被丢弃。
+- Node runtime harness 人为给 host message 设置了 `isTrusted: true`，与 WebView2 事件形态不一致，导致回归未被测试捕获。
+
+**解决**：
+- 按 WebView2 契约校验 `event.source === window.chrome.webview`，继续保持 bridge IIFE 私有化和 typed payload 强校验；章节脚本无法取得 handler，也无法用错误 source 触发位置命令。
+- runtime harness 改为使用真实的 host source 身份且不依赖 `isTrusted`，同时保留 renderer 侧错误 source 被拒绝的回归断言。
+
+---
+
 ## Reader 反向跨章曾闪过错误进度并重复结算
 
 **原因**：
