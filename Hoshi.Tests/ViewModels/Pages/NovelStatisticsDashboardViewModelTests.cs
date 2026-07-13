@@ -67,6 +67,28 @@ public sealed class NovelStatisticsDashboardViewModelTests
         sut.TrendPoints.Should().Contain(point => point.ValueText.Contains(unit));
     }
 
+    [Theory]
+    [InlineData(NovelStatisticsTrendMetric.Characters, "chars")]
+    [InlineData(NovelStatisticsTrendMetric.Duration, "m")]
+    [InlineData(NovelStatisticsTrendMetric.Speed, "/ h")]
+    public async Task TrendAxis_ExposesFiveMetricSpecificTicks(
+        NovelStatisticsTrendMetric metric,
+        string expectedUnit)
+    {
+        var sut = CreateSut(out _, out _);
+        await sut.ActivateAsync(Books(), Shelves(), CancellationToken.None);
+
+        sut.SelectedTrendMetric = metric;
+
+        sut.TrendAxisTicks.Should().HaveCount(5);
+        sut.TrendAxisTicks.Select(tick => tick.NormalizedValue)
+            .Should().BeInAscendingOrder();
+        sut.TrendAxisTicks[0].NormalizedValue.Should().Be(0);
+        sut.TrendAxisTicks[^1].NormalizedValue.Should().Be(1);
+        sut.TrendAxisTicks.Should().Contain(
+            tick => tick.Label.Contains(expectedUnit));
+    }
+
     [Fact]
     public async Task SpeedCard_ExposesSixLocalizedNiratanMetrics()
     {
@@ -107,17 +129,59 @@ public sealed class NovelStatisticsDashboardViewModelTests
     }
 
     [Fact]
-    public async Task CalendarSelection_UpdatesAnchorAndSelectedDetail()
+    public async Task RangeScrollbar_DefaultsNewestAndMovesEveryProjection()
     {
         var sut = CreateSut(out _, out _);
         await sut.ActivateAsync(Books(), Shelves(), CancellationToken.None);
 
-        sut.SelectedCalendarDay = sut.CalendarDays.Single(day => day.Characters == 1_200);
+        sut.SelectedRangeMode = NovelStatisticsRangeMode.Day;
 
-        DateOnly.FromDateTime(sut.AnchorDate!.Value.LocalDateTime)
-            .Should().Be(sut.SelectedCalendarDay.Date);
-        sut.CalendarDetail.Characters.Should().Be(1_200);
+        sut.SelectedRangeOffsetValue.Should().Be(sut.RangeScrollMaximum);
+        sut.SelectedDateRange.Should().Be(
+            new NovelStatisticsDateRange(Today, Today));
+        sut.RangeText.Should().Contain("1,200");
+
+        sut.SelectedRangeOffsetValue = sut.RangeScrollMaximum - 1;
+
+        sut.SelectedDateRange.Should().Be(
+            new NovelStatisticsDateRange(Today.AddDays(-1), Today.AddDays(-1)));
+        sut.RangeText.Should().Contain("600");
+        sut.TrendPoints.Should().ContainSingle();
+        sut.BookRankingRows.Should().ContainSingle(row => row.Id == "b");
+    }
+
+    [Fact]
+    public async Task CalendarSelection_MovesScrollbarToContainingPeriodAndUpdatesDetail()
+    {
+        var sut = CreateSut(out _, out _);
+        await sut.ActivateAsync(Books(), Shelves(), CancellationToken.None);
+
+        sut.SelectedRangeMode = NovelStatisticsRangeMode.Day;
+
+        sut.SelectedCalendarDay = sut.CalendarDays.Single(day => day.Characters == 600);
+
+        sut.SelectedDateRange.Start.Should().Be(Today.AddDays(-1));
+        sut.SelectedRangeOffsetValue.Should().Be(sut.RangeScrollMaximum - 1);
+        sut.CalendarDetail.Characters.Should().Be(600);
         sut.CalendarDetail.ActiveBookCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task RangeModeChange_SelectsNewestPeriodAndKeepsCalendarSelectionInsideIt()
+    {
+        var sut = CreateSut(out _, out _);
+        await sut.ActivateAsync(Books(), Shelves(), CancellationToken.None);
+        sut.SelectedRangeMode = NovelStatisticsRangeMode.Day;
+        sut.SelectedRangeOffsetValue = sut.RangeScrollMaximum - 20;
+
+        sut.SelectedRangeMode = NovelStatisticsRangeMode.Week;
+
+        sut.SelectedRangeOffsetValue.Should().Be(sut.RangeScrollMaximum);
+        sut.SelectedCalendarDay.Should().NotBeNull();
+        sut.SelectedCalendarDay!.Date.Should().BeOnOrAfter(
+            sut.SelectedDateRange.Start);
+        sut.SelectedCalendarDay.Date.Should().BeOnOrBefore(
+            sut.SelectedDateRange.End);
     }
 
     [Fact]

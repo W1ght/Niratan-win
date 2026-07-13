@@ -190,6 +190,10 @@ public sealed record NovelStatisticsTrendDisplayPoint(
     }
 }
 
+public sealed record NovelStatisticsAxisTickDisplay(
+    double NormalizedValue,
+    string Label);
+
 public sealed record NovelStatisticsBookRankingDisplayRow(
     string Id,
     string Title,

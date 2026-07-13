@@ -21,8 +21,11 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
     private readonly ISettingsService _settingsService;
     private readonly TimeProvider _timeProvider;
     private NovelStatisticsDashboardSnapshot? _snapshot;
+    private IReadOnlyList<NovelStatisticsDateRange> _selectableRanges = [];
     private NovelShelfState _shelfState = new([], []);
     private bool _isInitializing = true;
+    private bool _isUpdatingProjection;
+    private bool _isUpdatingRangeState;
     private CancellationTokenSource? _activationCts;
     private SynchronizationContext? _uiContext;
     private int _activationGeneration;
@@ -84,11 +87,35 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
     public bool HasNoData => !IsLoading && !HasData;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RangeScrollLargeChange))]
     public partial NovelStatisticsRangeMode SelectedRangeMode { get; set; } =
         NovelStatisticsRangeMode.Year;
 
     [ObservableProperty]
-    public partial DateTimeOffset? AnchorDate { get; set; }
+    public partial int SelectedRangeOffset { get; set; }
+
+    public double SelectedRangeOffsetValue
+    {
+        get => SelectedRangeOffset;
+        set => SelectedRangeOffset = Math.Clamp(
+            (int)Math.Round(value),
+            0,
+            Math.Max(_selectableRanges.Count - 1, 0));
+    }
+
+    public double RangeScrollMaximum => Math.Max(_selectableRanges.Count - 1, 0);
+
+    public double RangeScrollLargeChange => SelectedRangeMode switch
+    {
+        NovelStatisticsRangeMode.Day => 7,
+        NovelStatisticsRangeMode.Week => 4,
+        NovelStatisticsRangeMode.Month => 3,
+        _ => 1,
+    };
+
+    public bool CanScrollRange => _selectableRanges.Count > 1;
+
+    public string RangeScrollAccessibleText => RangeTitle;
 
     [ObservableProperty]
     public partial NovelStatisticsTrendGrain SelectedTrendGrain { get; set; } =
@@ -155,6 +182,7 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
     public partial NovelStatisticsDateRange SelectedDateRange { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RangeScrollAccessibleText))]
     public partial string RangeTitle { get; set; } = "Recent year";
 
     [ObservableProperty]
@@ -189,6 +217,9 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
 
     [ObservableProperty]
     public partial ObservableCollection<NovelStatisticsTrendDisplayPoint> TrendPoints { get; set; } = [];
+
+    [ObservableProperty]
+    public partial ObservableCollection<NovelStatisticsAxisTickDisplay> TrendAxisTicks { get; set; } = [];
 
     [ObservableProperty]
     public partial ObservableCollection<NovelStatisticsCalendarDayDisplay> CalendarDays { get; set; } = [];
@@ -312,13 +343,12 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
 
     private void ApplySnapshot(NovelStatisticsDashboardSnapshot snapshot)
     {
+        var previousRange = CurrentSelectableRange();
         _snapshot = snapshot;
         HasData = snapshot.Days.Count > 0;
-        if (AnchorDate == null)
-        {
-            var initialAnchor = snapshot.Days.LastOrDefault()?.Date ?? TodayDate();
-            AnchorDate = LocalDateTimeOffset(initialAnchor);
-        }
+        RebuildSelectableRanges(
+            previousRange?.Start,
+            selectNewest: previousRange == null);
         Recalculate();
     }
 
@@ -337,13 +367,7 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
         var window = snapshot.WindowStart == DateOnly.MinValue
             ? NovelStatisticsDashboardCalculator.RecentYear(today)
             : new NovelStatisticsDateRange(snapshot.WindowStart, snapshot.WindowEnd);
-        var anchor = AnchorDate is { } selectedAnchor
-            ? DateOnly.FromDateTime(selectedAnchor.LocalDateTime)
-            : snapshot.Days.LastOrDefault()?.Date ?? today;
-        var range = NovelStatisticsDashboardCalculator.SelectedRange(
-            SelectedRangeMode,
-            anchor,
-            window);
+        var range = CurrentSelectableRange() ?? window;
 
         Today = NovelStatisticsDashboardCalculator.TodaySummary(snapshot, today, targetSettings);
         Week = NovelStatisticsDashboardCalculator.WeekSummary(snapshot, today, targetSettings);
@@ -414,6 +438,15 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
                 FormatTrendValue(point, SelectedTrendMetric),
                 Math.Clamp(trendValues[index] / trendMaximum, 0, 1),
                 BuildTrendToolTip(point))));
+        TrendAxisTicks = new(Enumerable.Range(0, 5).Select(index =>
+        {
+            var normalized = index / 4d;
+            return new NovelStatisticsAxisTickDisplay(
+                normalized,
+                FormatTrendAxisValue(
+                    trendMaximum * normalized,
+                    SelectedTrendMetric));
+        }));
 
         var calendarSnapshot = snapshot.WindowStart == DateOnly.MinValue
             ? snapshot with { WindowStart = window.Start, WindowEnd = window.End }
@@ -465,25 +498,172 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
                 Math.Clamp(row.RecordedCharacters / (double)shelfMaximum, 0, 1))));
 
         SkippedCorruptBookIds = new(snapshot.SkippedCorruptBookIds);
-        var selectedDate = SelectedCalendarDay?.Date ?? anchor;
-        SelectedCalendarDay = CalendarDays.FirstOrDefault(day => day.Date == selectedDate)
-            ?? CalendarDays.LastOrDefault();
+        var selectedDate = SelectedCalendarDay?.Date ?? range.End;
+        _isUpdatingProjection = true;
+        try
+        {
+            SelectedCalendarDay = CalendarDays.FirstOrDefault(
+                    day => day.Date == selectedDate)
+                ?? CalendarDays.FirstOrDefault(day => day.Date == range.End)
+                ?? CalendarDays.LastOrDefault();
+        }
+        finally
+        {
+            _isUpdatingProjection = false;
+        }
         UpdateCalendarDetail();
     }
 
-    partial void OnSelectedRangeModeChanged(NovelStatisticsRangeMode value) => Recalculate();
-    partial void OnAnchorDateChanged(DateTimeOffset? value) => Recalculate();
+    partial void OnSelectedRangeModeChanged(NovelStatisticsRangeMode value)
+    {
+        _isUpdatingProjection = true;
+        try
+        {
+            SelectedCalendarDay = null;
+        }
+        finally
+        {
+            _isUpdatingProjection = false;
+        }
+        RebuildSelectableRanges(preferredStart: null, selectNewest: true);
+        Recalculate();
+    }
+
+    partial void OnSelectedRangeOffsetChanged(int value)
+    {
+        OnPropertyChanged(nameof(SelectedRangeOffsetValue));
+        OnPropertyChanged(nameof(RangeScrollAccessibleText));
+        if (_isUpdatingRangeState)
+            return;
+
+        _isUpdatingProjection = true;
+        try
+        {
+            SelectedCalendarDay = null;
+        }
+        finally
+        {
+            _isUpdatingProjection = false;
+        }
+        Recalculate();
+    }
+
     partial void OnSelectedTrendGrainChanged(NovelStatisticsTrendGrain value) => Recalculate();
     partial void OnSelectedTrendMetricChanged(NovelStatisticsTrendMetric value) => Recalculate();
     partial void OnSelectedRankingMetricChanged(NovelStatisticsBookRankingMetric value) => Recalculate();
 
     partial void OnSelectedCalendarDayChanged(NovelStatisticsCalendarDayDisplay? value)
     {
-        if (value == null)
+        if (value == null || _isUpdatingProjection)
             return;
 
-        AnchorDate = LocalDateTimeOffset(value.Date);
+        var targetIndex = IndexContaining(value.Date);
+        if (targetIndex >= 0 && targetIndex != SelectedRangeOffset)
+        {
+            _isUpdatingRangeState = true;
+            try
+            {
+                SelectedRangeOffset = targetIndex;
+            }
+            finally
+            {
+                _isUpdatingRangeState = false;
+            }
+            Recalculate();
+            return;
+        }
+
         UpdateCalendarDetail();
+    }
+
+    private NovelStatisticsDateRange? CurrentSelectableRange()
+    {
+        if (_selectableRanges.Count == 0)
+            return null;
+
+        var index = Math.Clamp(
+            SelectedRangeOffset,
+            0,
+            _selectableRanges.Count - 1);
+        return _selectableRanges[index];
+    }
+
+    private int IndexContaining(DateOnly date)
+    {
+        for (var index = 0; index < _selectableRanges.Count; index++)
+        {
+            var range = _selectableRanges[index];
+            if (date >= range.Start && date <= range.End)
+                return index;
+        }
+        return -1;
+    }
+
+    private void RebuildSelectableRanges(
+        DateOnly? preferredStart,
+        bool selectNewest)
+    {
+        if (_snapshot == null)
+        {
+            _selectableRanges = [];
+            SetSelectedRangeOffset(0);
+            NotifyRangeScrollProperties();
+            return;
+        }
+
+        var today = TodayDate();
+        var window = _snapshot.WindowStart == DateOnly.MinValue
+            ? NovelStatisticsDashboardCalculator.RecentYear(today)
+            : new NovelStatisticsDateRange(
+                _snapshot.WindowStart,
+                _snapshot.WindowEnd);
+        _selectableRanges = NovelStatisticsDashboardCalculator.SelectableRanges(
+            SelectedRangeMode,
+            window);
+
+        var offset = 0;
+        if (_selectableRanges.Count > 0)
+        {
+            if (selectNewest || preferredStart == null)
+            {
+                offset = _selectableRanges.Count - 1;
+            }
+            else
+            {
+                var exact = IndexContaining(preferredStart.Value);
+                offset = exact >= 0
+                    ? exact
+                    : Enumerable.Range(0, _selectableRanges.Count)
+                        .MinBy(index => Math.Abs(
+                            _selectableRanges[index].Start.DayNumber
+                            - preferredStart.Value.DayNumber));
+            }
+        }
+
+        SetSelectedRangeOffset(offset);
+        NotifyRangeScrollProperties();
+    }
+
+    private void SetSelectedRangeOffset(int value)
+    {
+        _isUpdatingRangeState = true;
+        try
+        {
+            SelectedRangeOffset = value;
+        }
+        finally
+        {
+            _isUpdatingRangeState = false;
+        }
+    }
+
+    private void NotifyRangeScrollProperties()
+    {
+        OnPropertyChanged(nameof(SelectedRangeOffsetValue));
+        OnPropertyChanged(nameof(RangeScrollMaximum));
+        OnPropertyChanged(nameof(RangeScrollLargeChange));
+        OnPropertyChanged(nameof(CanScrollRange));
+        OnPropertyChanged(nameof(RangeScrollAccessibleText));
     }
 
     partial void OnSelectedDailyTargetTypeChanged(StatisticsDailyTargetType value) =>
@@ -546,12 +726,6 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
     private DateOnly TodayDate() =>
         DateOnly.FromDateTime(_timeProvider.GetLocalNow().DateTime);
 
-    private DateTimeOffset LocalDateTimeOffset(DateOnly date)
-    {
-        var value = date.ToDateTime(TimeOnly.MinValue);
-        return new DateTimeOffset(value, _timeProvider.LocalTimeZone.GetUtcOffset(value));
-    }
-
     private static string FormatRangeTitle(
         NovelStatisticsRangeMode mode,
         NovelStatisticsDateRange range) => mode switch
@@ -598,6 +772,39 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
             NovelStatisticsTrendMetric.Speed => FormatSpeed(point.AverageSpeedPerHour),
             _ => $"{FormatCharacters(point.Characters)} chars",
         };
+
+    private static string FormatTrendAxisValue(
+        double value,
+        NovelStatisticsTrendMetric metric) => metric switch
+        {
+            NovelStatisticsTrendMetric.Duration => FormatAxisDuration(value),
+            NovelStatisticsTrendMetric.Speed => $"{FormatCompactNumber(value)} / h",
+            _ => $"{FormatCompactNumber(value)} chars",
+        };
+
+    private static string FormatCompactNumber(double value)
+    {
+        var absolute = Math.Abs(value);
+        if (absolute < 1_000)
+        {
+            return Math.Round(value)
+                .ToString("N0", CultureInfo.CurrentCulture);
+        }
+        if (absolute < 1_000_000)
+        {
+            return (value / 1_000)
+                .ToString("0.#", CultureInfo.CurrentCulture) + "k";
+        }
+        return (value / 1_000_000)
+            .ToString("0.#", CultureInfo.CurrentCulture) + "M";
+    }
+
+    private static string FormatAxisDuration(double seconds)
+    {
+        if (seconds < 3_600)
+            return $"{Math.Max((int)Math.Round(seconds / 60), 0)}m";
+        return $"{(seconds / 3_600).ToString("0.#", CultureInfo.CurrentCulture)}h";
+    }
 
     private static string FormatRankingValue(
         NovelStatisticsBookRankingRow row,

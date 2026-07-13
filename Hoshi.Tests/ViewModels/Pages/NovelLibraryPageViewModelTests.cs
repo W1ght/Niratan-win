@@ -626,9 +626,6 @@ public class NovelLibraryPageViewModelTests
         await sut.EnterStatisticsCommand.ExecuteAsync(null);
         var statistics = sut.StatisticsDashboard;
         statistics.SelectedRangeMode = NovelStatisticsRangeMode.Day;
-        statistics.AnchorDate = new DateTimeOffset(
-            today.ToDateTime(TimeOnly.MinValue),
-            TimeZoneInfo.Local.GetUtcOffset(today.ToDateTime(TimeOnly.MinValue)));
         statistics.SelectedTrendMetric = NovelStatisticsTrendMetric.Duration;
         statistics.SelectedRankingMetric = NovelStatisticsBookRankingMetric.Duration;
         statistics.SelectedCalendarDay = statistics.CalendarDays.Single(day => day.Date == today);
