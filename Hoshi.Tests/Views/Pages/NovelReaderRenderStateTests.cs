@@ -232,6 +232,40 @@ public sealed class NovelReaderRenderStateTests
         state.CurrentAttempt.Should().BeSameAs(destinationAttempt);
     }
 
+    [Fact]
+    public async Task AlreadyOwnedSourceRecovery_LifecycleWaiterStaysGatedUntilMatchingReadyCompletes()
+    {
+        var state = new NovelReaderRenderState();
+        var request = CreateRequest();
+        state.BeginNavigation(request, DestinationUri, waitsForFragment: false);
+        var settlement = new ReaderNavigationSettlement(
+            request.Generation,
+            request.Source,
+            ShouldRevealDestination: false);
+        state.TryApplySettlement(settlement, SourceUri).Should().BeTrue();
+        var recoveryAttempt = state.CurrentAttempt!;
+        var lifecycleWait = state.WaitForTerminalAsync(request.Generation);
+
+        state.OwnsPendingSettlement(request.Generation).Should().BeTrue();
+        state.OwnsPendingSettlement(request.Generation + 1).Should().BeFalse();
+        lifecycleWait.IsCompleted.Should().BeFalse();
+
+        state.AcceptChapterReady(
+                recoveryAttempt.ChapterIndex,
+                request.Generation,
+                recoveryAttempt.RenderAttemptId)
+            .Should().Be(NovelReaderChapterReadyDisposition.HiddenTerminal);
+        state.TryPrepareCompletion(out var release).Should().BeTrue();
+        lifecycleWait.IsCompleted.Should().BeFalse(
+            "the native acknowledgement must happen before terminal release");
+
+        state.CompleteSuccess(release).Should().BeTrue();
+        await lifecycleWait.WaitAsync(
+            TimeSpan.FromSeconds(1),
+            TestContext.Current.CancellationToken);
+        state.HasActiveNavigation.Should().BeFalse();
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

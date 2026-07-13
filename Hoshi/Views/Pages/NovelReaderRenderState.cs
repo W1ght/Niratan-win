@@ -48,6 +48,10 @@ internal sealed class NovelReaderRenderState
     public ReaderNavigationSettlement? PendingSettlement => _pendingSettlement;
     public NovelReaderRenderAttempt? CurrentAttempt => _currentAttempt;
 
+    public bool OwnsPendingSettlement(long generation) =>
+        _navigationRequest?.Generation == generation
+        && _pendingSettlement?.Generation == generation;
+
     public void BeginNavigation(
         ReaderNavigationRenderRequest request,
         string destinationUri,

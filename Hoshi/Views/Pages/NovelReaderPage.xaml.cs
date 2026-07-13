@@ -366,7 +366,10 @@ public sealed partial class NovelReaderPage : Page
             var settlement = await ViewModel.SettleNavigationForLifecycleAsync();
             if (settlement != null)
             {
-                if (!ApplyNavigationSettlement(settlement))
+                var ownsPendingSettlement = _renderState.OwnsPendingSettlement(
+                    settlement.Generation);
+                if (!ownsPendingSettlement
+                    && !ApplyNavigationSettlement(settlement))
                 {
                     await HandleTerminalRenderFailureAsync(
                         "Reader navigation could not be settled for backgrounding.");

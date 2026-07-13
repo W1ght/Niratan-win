@@ -3936,6 +3936,30 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void ReaderPage_AttachedLifecycleTreatsOwnedSettlementAsWaitOnly()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+        var attached = Regex.Match(
+            readerCode,
+            @"(?s)private async Task<bool> HandleAppLifecycleCheckpointAsync\(.*?\n    \}").Value;
+
+        attached.Should().Contain(
+            "var ownsPendingSettlement = _renderState.OwnsPendingSettlement(\n" +
+            "                    settlement.Generation);");
+        attached.Should().Contain(
+            "if (!ownsPendingSettlement\n" +
+            "                    && !ApplyNavigationSettlement(settlement))");
+        attached.IndexOf("OwnsPendingSettlement", StringComparison.Ordinal)
+            .Should().BeLessThan(
+                attached.IndexOf("ApplyNavigationSettlement", StringComparison.Ordinal));
+        attached.IndexOf("ApplyNavigationSettlement", StringComparison.Ordinal)
+            .Should().BeLessThan(
+                attached.IndexOf("HandleTerminalRenderFailureAsync", StringComparison.Ordinal));
+        attached.Should().Contain("await WaitForTerminalRenderAsync(settlement.Generation)");
+    }
+
+    [Fact]
     public void ReaderPage_UsesWideSheetDialogContentForNonStatisticsReaderPanels()
     {
         var readerXaml = File.ReadAllText(
