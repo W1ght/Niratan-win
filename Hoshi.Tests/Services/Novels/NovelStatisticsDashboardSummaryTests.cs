@@ -8,6 +8,56 @@ namespace Hoshi.Tests.Services.Novels;
 public sealed class NovelStatisticsDashboardSummaryTests
 {
     [Fact]
+    public void SelectableRanges_ReturnOrderedClippedCalendarMonths()
+    {
+        var window = new NovelStatisticsDateRange(
+            new DateOnly(2026, 1, 29),
+            new DateOnly(2026, 3, 3));
+
+        NovelStatisticsDashboardCalculator.SelectableRanges(
+                NovelStatisticsRangeMode.Month,
+                window)
+            .Should().Equal(
+                new NovelStatisticsDateRange(new(2026, 1, 29), new(2026, 1, 31)),
+                new NovelStatisticsDateRange(new(2026, 2, 1), new(2026, 2, 28)),
+                new NovelStatisticsDateRange(new(2026, 3, 1), new(2026, 3, 3)));
+    }
+
+    [Fact]
+    public void SelectableRanges_ReturnMondayAlignedClippedWeeks()
+    {
+        var window = new NovelStatisticsDateRange(
+            new DateOnly(2026, 7, 1),
+            new DateOnly(2026, 7, 14));
+
+        NovelStatisticsDashboardCalculator.SelectableRanges(
+                NovelStatisticsRangeMode.Week,
+                window)
+            .Should().Equal(
+                new NovelStatisticsDateRange(new(2026, 7, 1), new(2026, 7, 5)),
+                new NovelStatisticsDateRange(new(2026, 7, 6), new(2026, 7, 12)),
+                new NovelStatisticsDateRange(new(2026, 7, 13), new(2026, 7, 14)));
+    }
+
+    [Theory]
+    [InlineData(NovelStatisticsRangeMode.Year, 1)]
+    [InlineData(NovelStatisticsRangeMode.Day, 3)]
+    public void SelectableRanges_HandleWholeWindowAndDailySteps(
+        NovelStatisticsRangeMode mode,
+        int expectedCount)
+    {
+        var window = new NovelStatisticsDateRange(
+            new DateOnly(2026, 7, 1),
+            new DateOnly(2026, 7, 3));
+
+        var ranges = NovelStatisticsDashboardCalculator.SelectableRanges(mode, window);
+
+        ranges.Should().HaveCount(expectedCount);
+        ranges[0].Start.Should().Be(window.Start);
+        ranges[^1].End.Should().Be(window.End);
+    }
+
+    [Fact]
     public void TargetsAndRanges_MatchNiratanSnappingAndClipping()
     {
         NovelStatisticsDashboardTargets.SnapCharacterTarget(749).Should().Be(500);

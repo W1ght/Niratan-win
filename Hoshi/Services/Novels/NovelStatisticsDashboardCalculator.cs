@@ -34,6 +34,40 @@ public static partial class NovelStatisticsDashboardCalculator
             range.End > window.End ? window.End : range.End);
     }
 
+    public static IReadOnlyList<NovelStatisticsDateRange> SelectableRanges(
+        NovelStatisticsRangeMode mode,
+        NovelStatisticsDateRange window)
+    {
+        if (window.Start == DateOnly.MinValue || window.End < window.Start)
+            return [];
+        if (mode == NovelStatisticsRangeMode.Year)
+            return [window];
+
+        var cursor = mode switch
+        {
+            NovelStatisticsRangeMode.Month => new DateOnly(
+                window.Start.Year,
+                window.Start.Month,
+                1),
+            NovelStatisticsRangeMode.Week => MondayStartOfWeek(window.Start),
+            _ => window.Start,
+        };
+        var ranges = new List<NovelStatisticsDateRange>();
+        while (cursor <= window.End)
+        {
+            var range = SelectedRange(mode, cursor, window);
+            if (ranges.Count == 0 || ranges[^1] != range)
+                ranges.Add(range);
+            cursor = mode switch
+            {
+                NovelStatisticsRangeMode.Month => cursor.AddMonths(1),
+                NovelStatisticsRangeMode.Week => cursor.AddDays(7),
+                _ => cursor.AddDays(1),
+            };
+        }
+        return ranges;
+    }
+
     public static NovelStatisticsSpeedSummary SpeedSummary(
         IEnumerable<NovelStatisticsDayAggregate> days,
         NovelStatisticsDateRange range)
