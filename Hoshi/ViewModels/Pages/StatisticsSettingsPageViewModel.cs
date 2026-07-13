@@ -30,6 +30,13 @@ public partial class StatisticsSettingsPageViewModel : ObservableObject
     public partial bool EnableStatistics { get; set; }
 
     [ObservableProperty]
+    public partial bool IsGlobalSyncEnabled { get; private set; }
+
+    public bool ShowStatisticsOptions => EnableStatistics;
+
+    public bool ShowStatisticsSyncOptions => EnableStatistics && IsGlobalSyncEnabled;
+
+    [ObservableProperty]
     public partial StatisticsAutostartMode SelectedAutostartMode { get; set; }
 
     [ObservableProperty]
@@ -81,7 +88,14 @@ public partial class StatisticsSettingsPageViewModel : ObservableObject
     {
         _settingsService = settingsService;
         LoadSettings();
+        RefreshGlobalSyncState();
         _isInitializing = false;
+    }
+
+    public void RefreshGlobalSyncState()
+    {
+        IsGlobalSyncEnabled = _settingsService.Current.TtuSyncSettings.EnableSync;
+        OnPropertyChanged(nameof(ShowStatisticsSyncOptions));
     }
 
     private void LoadSettings()
@@ -136,7 +150,12 @@ public partial class StatisticsSettingsPageViewModel : ObservableObject
         _ = _settingsService.SaveAsync();
     }
 
-    partial void OnEnableStatisticsChanged(bool value) => SaveSettings();
+    partial void OnEnableStatisticsChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowStatisticsOptions));
+        OnPropertyChanged(nameof(ShowStatisticsSyncOptions));
+        SaveSettings();
+    }
     partial void OnSelectedAutostartModeChanged(StatisticsAutostartMode value) => SaveSettings();
     partial void OnSelectedDailyTargetTypeChanged(StatisticsDailyTargetType value) => SaveSettings();
     partial void OnDailyCharacterTargetChanged(int value)

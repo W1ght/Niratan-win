@@ -20,17 +20,7 @@ public sealed class TtuBookImportServiceTests
         var library = new FakeNovelLibraryService();
         var sync = new FakeTtuSyncService();
         var service = new TtuBookImportService(remote, converter, library, sync);
-        var remoteBook = new TtuRemoteBook(
-            Id: "folder-id",
-            Title: "星を読む",
-            SanitizedTitle: "星を読む",
-            Files: new TtuRemoteBookFiles(
-                Progress: new TtuRemoteFile("progress-id", "progress_1_6_2000_0.5.json"),
-                Statistics: new TtuRemoteFile("stats-id", "statistics_1_6_1_1_1_0_0_0_0_1_1_1_1_3600_3600_na.json"),
-                AudioBook: new TtuRemoteFile("audio-id", "audioBook_1_6_2000_42.json"),
-                BookData: new TtuRemoteFile("bookdata-id", "bookdata_1_6_1200_2000_1000.zip"),
-                Cover: null),
-            Progress: 0.5);
+        var remoteBook = CreateRemoteBook();
 
         var result = await service.ImportRemoteBookAsync(
             remoteBook,
@@ -49,8 +39,45 @@ public sealed class TtuBookImportServiceTests
             SyncStatistics: true,
             StatisticsSyncMode: StatisticsSyncMode.Merge,
             SyncAudioBook: true,
-            ImportOnly: true));
+            ImportOnly: true,
+            KnownRemoteFiles: remoteBook.Files));
+        sync.Options!.KnownRemoteFiles.Should().BeSameAs(remoteBook.Files);
     }
+
+    [Fact]
+    public async Task ImportRemoteBookAsync_RemovesNewBookWhenSidecarSyncFails()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var remote = new FakeRemoteStore();
+        var converter = new FakeConverter();
+        var library = new FakeNovelLibraryService();
+        var sync = new FakeTtuSyncService { Failure = new IOException("progress fetch failed") };
+        var service = new TtuBookImportService(remote, converter, library, sync);
+
+        var result = await service.ImportRemoteBookAsync(
+            CreateRemoteBook(),
+            new TtuBookImportOptions(SyncStatistics: true),
+            progress: null,
+            ct);
+
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorTitle.Should().Be("Google Drive import failed");
+        library.DeletedBookId.Should().Be("book-1");
+    }
+
+    private static TtuRemoteBook CreateRemoteBook() => new(
+        Id: "folder-id",
+        Title: "星を読む",
+        SanitizedTitle: "星を読む",
+        Files: new TtuRemoteBookFiles(
+            Progress: new TtuRemoteFile("progress-id", "progress_1_6_2000_0.5.json"),
+            Statistics: new TtuRemoteFile(
+                "stats-id",
+                "statistics_1_6_1_1_1_0_0_0_0_1_1_1_1_3600_3600_na.json"),
+            AudioBook: new TtuRemoteFile("audio-id", "audioBook_1_6_2000_42.json"),
+            BookData: new TtuRemoteFile("bookdata-id", "bookdata_1_6_1200_2000_1000.zip"),
+            Cover: null),
+        Progress: 0.5);
 
     private sealed class FakeRemoteStore : ITtuSyncRemoteStore
     {
@@ -116,6 +143,7 @@ public sealed class TtuBookImportServiceTests
     private sealed class FakeNovelLibraryService : INovelLibraryService
     {
         public string? ImportedEpubPath { get; private set; }
+        public string? DeletedBookId { get; private set; }
 
         public Task<Result<NovelBook>> ImportEpubAsync(string filePath, CancellationToken ct = default)
         {
@@ -139,8 +167,11 @@ public sealed class TtuBookImportServiceTests
         public Task<Result> MarkOpenedAsync(string bookId, CancellationToken ct = default) =>
             Task.FromResult(Result.Success());
 
-        public Task<Result> DeleteNovelAsync(string bookId, CancellationToken ct = default) =>
-            Task.FromResult(Result.Success());
+        public Task<Result> DeleteNovelAsync(string bookId, CancellationToken ct = default)
+        {
+            DeletedBookId = bookId;
+            return Task.FromResult(Result.Success());
+        }
 
         public Task<Result> SaveProgressAsync(string bookId, int chapterIndex, double progress, int currentCharacterCount, int totalCharacterCount, CancellationToken ct = default) =>
             Task.FromResult(Result.Success());
@@ -156,6 +187,7 @@ public sealed class TtuBookImportServiceTests
     {
         public NovelBook? Book { get; private set; }
         public TtuSyncOptions? Options { get; private set; }
+        public Exception? Failure { get; set; }
 
         public Task<TtuSyncResult> SyncBookAsync(
             NovelBook book,
@@ -164,7 +196,9 @@ public sealed class TtuBookImportServiceTests
         {
             Book = book;
             Options = options;
-            return Task.FromResult(new TtuSyncResult(TtuSyncResultKind.Imported, book.Title));
+            return Failure == null
+                ? Task.FromResult(new TtuSyncResult(TtuSyncResultKind.Imported, book.Title))
+                : Task.FromException<TtuSyncResult>(Failure);
         }
     }
 }

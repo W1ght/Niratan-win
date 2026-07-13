@@ -1,4 +1,5 @@
 using FluentAssertions;
+using System.Text.RegularExpressions;
 
 namespace Hoshi.Tests.Services.Novels;
 
@@ -32,11 +33,13 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
-    public void ReaderBridge_ExposesHoshiReaderApi()
+    public void ReaderBridge_KeepsHoshiReaderApiInsideClosure()
     {
         var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
 
-        script.Should().Contain("window.hoshiReader");
+        script.Should().Contain("(function () {");
+        script.Should().Contain("var reader = {");
+        script.Should().NotContain("window.hoshiReader");
         script.Should().Contain("paginate");
         script.Should().Contain("calculateProgress");
         script.Should().Contain("restoreProgress");
@@ -58,7 +61,7 @@ public class NovelReaderWebAssetTests
         script.Should().Contain("case \"jumpToFragment\"");
         script.Should().Contain("navigationGeneration");
         readerCode.Should().Contain("ReaderInternalLinkResolver.Resolve(");
-        readerCode.Should().Contain("ReaderNavigationHistory");
+        readerCode.Should().Contain("ReaderNavigationInputCoordinator");
         readerCode.Should().Contain("SendJumpToFragmentMessageAsync");
         readerXaml.Should().Contain("NovelReaderHistoryBackButton");
         readerXaml.Should().Contain("NovelReaderHistoryForwardButton");
@@ -75,6 +78,104 @@ public class NovelReaderWebAssetTests
         script.Should().Contain("postToHost(\"restoreCompleted\"");
         script.Should().Contain("\"setChapter\"");
         script.Should().Contain("\"restoreProgress\"");
+    }
+
+    [Fact]
+    public void ReaderBridge_ResolvesTypedChapterEndpointsOnceBeforeChapterReady()
+    {
+        var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
+        var restoreBody = Regex.Match(
+            script,
+            @"(?s)restoreProgress: async function \(.*?\n\s*\},\s*\n\s*jumpToFragment:").Value;
+
+        restoreBody.Should().NotBeEmpty();
+        restoreBody.Should().Contain("restoreTarget === \"start\"");
+        restoreBody.Should().Contain("restoreTarget === \"end\"");
+        restoreBody.Should().Contain("contentLastPageScroll(context)");
+        restoreBody.Should().NotContain("this.lastProgress = 1");
+        Regex.Matches(restoreBody, "notifyRestoreComplete\\(navigationGeneration, renderAttemptId\\)")
+            .Count.Should().Be(1);
+        restoreBody.IndexOf("restoreTarget === \"start\"", StringComparison.Ordinal)
+            .Should().BeLessThan(
+                restoreBody.IndexOf("progress <= 0", StringComparison.Ordinal));
+        restoreBody.IndexOf("restoreTarget === \"end\"", StringComparison.Ordinal)
+            .Should().BeLessThan(
+                restoreBody.IndexOf("progress <= 0", StringComparison.Ordinal));
+        script.Should().Contain("var restoreTarget = payload.restoreTarget ?? null");
+        script.Should().Contain("window.__hoshiChapterInfo.restoreTarget ?? null");
+        script.IndexOf("notifyRestoreComplete(navigationGeneration, renderAttemptId)", StringComparison.Ordinal)
+            .Should().BeLessThan(
+                script.IndexOf("notifyChapterReady(navigationGeneration, renderAttemptId)", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ReaderBridge_TerminalEventsCarryGenerationChapterAndAttemptIdentity()
+    {
+        var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
+
+        script.Should().Contain(
+            "postToHost(\"restoreCompleted\", {\n" +
+            "    progress: reader.calculateProgress(),\n" +
+            "    chapterIndex: currentChapter.index,\n" +
+            "    renderAttemptId: renderAttemptId,\n" +
+            "    navigationGeneration: navigationGeneration ?? null,");
+        script.Should().Contain(
+            "postToHost(\"chapterReady\", {\n" +
+            "    ...window.__hoshiReaderState,\n" +
+            "    chapterIndex: currentChapter.index,\n" +
+            "    renderAttemptId: renderAttemptId,\n" +
+            "    navigationGeneration: navigationGeneration ?? null,");
+        script.Should().Contain("notifyChapterReady(navigationGeneration, renderAttemptId)");
+        script.Should().Contain("renderAttemptId: chapterAttemptId");
+        script.Should().Contain("renderAttemptId: window.__hoshiChapterInfo.renderAttemptId");
+        script.Should().Contain("notifyRestoreComplete(navigationGeneration, renderAttemptId)");
+        script.Should().Contain("notifyChapterReady(navigationGeneration, renderAttemptId)");
+        script.Should().Contain("var restoreAttemptId = requireInteger(");
+        script.Should().Contain("var fragmentAttemptId = requireInteger(");
+    }
+
+    [Fact]
+    public void ReaderBridge_SequentialOperationsEachGetOneShotFailureReporter()
+    {
+        var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
+        var initializeBody = Regex.Match(
+            script,
+            @"(?s)initialize: async function \(.*?\n\s*\},\s*\n\};").Value;
+        var setChapterBody = Regex.Match(
+            script,
+            @"(?s)case ""setChapter"":.*?\n\s*break;").Value;
+        var handleMessageBody = Regex.Match(
+            script,
+            @"(?s)async function handleMessage\(event\).*?\n\}").Value;
+        var errorReporterFactoryBody = Regex.Match(
+            script,
+            @"(?s)function createBridgeErrorReporter\(\).*?\n\}").Value;
+        var resizeBody = Regex.Match(
+            script,
+            @"(?s)window\.addEventListener\(""resize"".*?\n\}\);").Value;
+        var autoInitializeBody = Regex.Match(
+            script,
+            @"(?s)if \(window\.__hoshiChapterInfo\).*?\n\} else \{").Value;
+
+        initializeBody.Should().NotBeEmpty();
+        initializeBody.Should().Contain("await Promise.all(imagePromises)");
+        initializeBody.Should().Contain("await self.restoreProgress(");
+        initializeBody.Should().Contain("notifyChapterReady(navigationGeneration, renderAttemptId)");
+        setChapterBody.Should().Contain("await reader.initialize(");
+        errorReporterFactoryBody.Should().Contain("var reported = false");
+        errorReporterFactoryBody.Should().Contain("if (reported) return");
+        errorReporterFactoryBody.Should().Contain("reported = true");
+        errorReporterFactoryBody.Should().Contain("postToHost(\"error\", { message: msg })");
+        script.Should().NotContain("window.hoshiBridgeErrorReported");
+        handleMessageBody.Should().Contain("var reportOperationError = createBridgeErrorReporter()");
+        handleMessageBody.Should().Contain("reportOperationError(error)");
+        resizeBody.Should().Contain("var reportResizeError = createBridgeErrorReporter()");
+        resizeBody.Should().Contain(".catch(reportResizeError)");
+        autoInitializeBody.Should().Contain("var reportAutoInitializeError = createBridgeErrorReporter()");
+        autoInitializeBody.Should().Contain(".catch(reportAutoInitializeError)");
+        Regex.Matches(script, @"postToHost\(""error""").Count.Should().Be(1);
+        Regex.Matches(script, @"createBridgeErrorReporter\(\)").Count
+            .Should().BeGreaterThanOrEqualTo(5);
     }
 
     [Fact]
@@ -100,10 +201,10 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
         );
 
-        pageCode.Should().Contain("hoshi-novel-book.local");
+        pageCode.Should().Contain("ReaderWebContentPolicy.BookHostName");
         pageCode.Should().Contain("SetVirtualHostNameToFolderMapping");
-        pageCode.Should().Contain("CoreWebView2HostResourceAccessKind.Allow");
-        pageCode.Should().Contain("NovelWebView.CoreWebView2.Navigate(url)");
+        pageCode.Should().Contain("CoreWebView2HostResourceAccessKind.DenyCors");
+        pageCode.Should().Contain("NovelWebView.CoreWebView2.Navigate(attempt.Uri)");
         pageCode.Should().Contain("OnDomContentLoaded");
         pageCode.Should().Contain("LoadChapter");
     }
@@ -139,8 +240,14 @@ public class NovelReaderWebAssetTests
         var pageCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
         );
+        var viewModelCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "ViewModels", "Pages", "NovelReaderPageViewModel.cs")
+        );
 
-        script.Should().Contain("window.hoshiReaderNavigate");
+        script.Should().NotContain("window.hoshiReaderNavigateAuthorized");
+        script.Should().Contain("case \"navigatePage\"");
+        script.Should().Contain("requestPageNavigation");
+        script.Should().Contain("postToHost(\"pageNavigationRequest\"");
         script.Should().Contain("window.__hoshiReaderShortcutBindings");
         script.Should().Contain("shortcutActionForKeyboardEvent");
         script.Should().Contain("BracketLeft");
@@ -152,8 +259,53 @@ public class NovelReaderWebAssetTests
         pageCode.Should().Contain("BuildReaderWebShortcutBindingsJson");
         pageCode.Should().Contain("window.__hoshiReaderShortcutBindings");
         pageCode.Should().Contain("case \"shortcut\":");
-        pageCode.Should().Contain("ReaderStatisticsEventClassifier.AdjacentChapterTarget");
-        pageCode.Should().Contain("LoadChapter(adjacentTarget.Value)");
+        pageCode.Should().Contain("case \"pageNavigationRequest\":");
+        pageCode.Should().Contain("_navigationInput.TryExecutePageTurnAsync(");
+        pageCode.Should().Contain("CreateNavigatePageMessage(");
+        pageCode.Should().Contain("ViewModel.HandleManualPageNavigationAsync(readerEvent)");
+        pageCode.Should().Contain("outcome.AdjacentChapterIndex is int adjacentChapterIndex");
+        pageCode.Should().Contain("outcome.AdjacentChapterRestoreTarget is ReaderChapterRestoreTarget restoreTarget");
+        pageCode.Should().Contain("ViewModel.TryBeginNavigation(");
+        pageCode.Should().Contain("LoadChapter(renderRequest)");
+        viewModelCode.Should().Contain("ReaderStatisticsEventClassifier.AdjacentChapterTarget");
+    }
+
+    [Fact]
+    public void ReaderBridge_AndStatisticsClassifier_SharePageNavigationVocabulary()
+    {
+        var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
+        var classifier = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Services", "Novels", "ReaderStatisticsEventClassifier.cs"));
+
+        script.Should().Contain("return \"scrolled\";");
+        classifier.Should().Contain("ReaderPageNavigationResult.Scrolled");
+        classifier.Should().NotContain("\"moved\"");
+    }
+
+    [Fact]
+    public void ReaderPage_ValidatesPageChangedPayloadBeforeReadingIt()
+    {
+        var pageCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
+        );
+
+        var pageChangedIndex = pageCode.IndexOf(
+            "case \"pageChanged\":",
+            StringComparison.Ordinal);
+        var payloadValidationIndex = pageCode.IndexOf(
+            "root.TryGetProperty(\"payload\", out var payload)",
+            pageChangedIndex,
+            StringComparison.Ordinal);
+        var resultReadIndex = pageCode.IndexOf(
+            "payload.TryGetProperty(\"result\"",
+            pageChangedIndex,
+            StringComparison.Ordinal);
+
+        pageChangedIndex.Should().BeGreaterThanOrEqualTo(0);
+        payloadValidationIndex.Should().BeGreaterThan(pageChangedIndex);
+        payloadValidationIndex.Should().BeLessThan(resultReadIndex);
+        pageCode.Should().Contain("payload.ValueKind != JsonValueKind.Object");
+        pageCode.Should().Contain("[NovelReader] Ignoring invalid pageChanged payload");
     }
 
     [Fact]
@@ -164,14 +316,15 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
         );
 
-        script.Should().Contain("var beforeProgress = window.hoshiReader.calculateProgress()");
-        script.Should().Contain("var afterProgress = window.hoshiReader.calculateProgress()");
+        script.Should().Contain("var beforeProgress = reader.calculateProgress()");
+        script.Should().Contain("var afterProgress = reader.calculateProgress()");
         script.Should().Contain("return Math.abs(afterProgress - beforeProgress) > 0.0001 ? afterProgress : null");
 
         pageCode.Should().Contain("TryApplySasayakiAutoScrollProgress");
-        pageCode.Should().Contain("StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn)");
+        pageCode.Should().Contain("ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn)");
         pageCode.Should().Contain("LoadChapterForSasayakiAutoScroll");
-        pageCode.Should().Contain("if (CurrentSasayakiSettings.AutoScroll)");
+        pageCode.Should().Contain("_navigationInput.DispatchLiveSasayakiCue(");
+        pageCode.Should().Contain("CurrentSasayakiSettings.AutoScroll");
     }
 
     [Fact]
@@ -679,7 +832,7 @@ public class NovelReaderWebAssetTests
         readerSettingsCode.Should().Contain("bool MouseWheelPageTurn { get; set; } = true");
         settingsViewModelCode.Should().Contain("MouseWheelPageTurn");
         settingsViewModelCode.Should().Contain("ApplyReaderSetting(s => s.MouseWheelPageTurn, value)");
-        readerPageCode.Should().Contain("registerWheelNavigation");
+        readerPageCode.Should().Contain("CreateSetWheelNavigationMessage");
         readerPageCode.Should().Contain("!readerSettings.Current.ContinuousMode && readerSettings.Current.MouseWheelPageTurn");
         bridgeScript.Should().Contain("registerWheelNavigation: function");
         bridgeScript.Should().Contain("hoshiWheelNavigationEnabled");
@@ -1136,8 +1289,8 @@ public class NovelReaderWebAssetTests
         appSettingsCode.Should().Contain("NovelStatisticsSettings StatisticsSettings");
         readerXaml.Should().Contain("x:Name=\"NovelReaderStatisticsButton\"");
         readerCode.Should().Contain("UpdateStatisticsButtonVisibility");
-        readerCode.Should().Contain("StartStatisticsForAutostart(StatisticsAutostartMode.On)");
-        readerCode.Should().Contain("StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn)");
+        readerCode.Should().Contain("ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.On)");
+        readerCode.Should().Contain("ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn)");
 
         foreach (var key in new[]
         {
@@ -2600,13 +2753,25 @@ public class NovelReaderWebAssetTests
 
         script.Should().Contain("lastProgress");
         script.Should().Contain("window.addEventListener(\"resize\"");
-        script.Should().Contain("window.hoshiReader.reflow(progress)");
+        script.Should().Contain("reader.reflow(progress)");
         script.Should().Contain("currentColumnGap");
         script.Should().Contain("currentSafeInline");
         script.Should().Contain("currentSafeBlock");
         script.Should().Contain("getComputedStyle(document.body).paddingLeft");
         script.Should().Contain("getComputedStyle(document.body).paddingTop");
         script.Should().Contain("pageStep");
+    }
+
+    [Fact]
+    public void ReaderContentHelpers_DoNotDependOnPrivatePaginationEngine()
+    {
+        var bridge = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
+        var selection = File.ReadAllText(Path.Combine(ReaderRoot, "selection.js"));
+        var highlights = File.ReadAllText(Path.Combine(ReaderRoot, "highlights.js"));
+
+        bridge.Should().NotContain("window.hoshiReader");
+        selection.Should().NotContain("window.hoshiReader");
+        highlights.Should().NotContain("window.hoshiReader");
     }
 
     [Fact]
@@ -2812,7 +2977,7 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("_highlightsJs");
         readerCode.Should().Contain("highlights.js");
         readerCode.Should().Contain("ViewModel.LoadHighlightsAsync");
-        readerCode.Should().Contain("ViewModel.GetCurrentChapterHighlightsJson()");
+        readerCode.Should().Contain("ViewModel.GetChapterHighlightsJson(destinationChapterIndex)");
         readerCode.Should().Contain("window.__hoshiChapterHighlights");
         bridgeScript.Should().Contain("window.hoshiHighlights.applyHighlights(window.__hoshiChapterHighlights || [])");
         appCode.Should().Contain("IReaderHighlightService, ReaderHighlightService");
@@ -2837,6 +3002,32 @@ public class NovelReaderWebAssetTests
         viewModelCode.Should().NotContain("SaveBookmarkSidecarAsync");
         viewModelCode.Should().Contain("_novelLibraryService.SaveProgressAsync");
         appCode.Should().Contain("INovelBookSidecarService, NovelBookSidecarService");
+    }
+
+    [Fact]
+    public void ReaderPage_LifecycleSettlementOwnsTerminalInstructionBeforeWriterBoundary()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
+        );
+        var viewModelCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "ViewModels", "Pages", "NovelReaderPageViewModel.cs")
+        );
+
+        var lifecycleBody = Regex.Match(
+            readerCode,
+            @"(?s)private async Task<bool> HandleAppLifecycleCheckpointAsync\(.*?\n    \}").Value;
+        lifecycleBody.Should().Contain("ViewModel.SettleNavigationForLifecycleAsync");
+        lifecycleBody.Should().Contain("ApplyNavigationSettlement");
+        lifecycleBody.Should().Contain("WaitForTerminalRenderAsync");
+        lifecycleBody.Should().NotContain("ResetStatisticsBaselineAsync");
+        lifecycleBody.IndexOf("WaitForTerminalRenderAsync", StringComparison.Ordinal)
+            .Should().BeLessThan(lifecycleBody.IndexOf(
+                "ViewModel.CheckpointAppBackgroundingAsync",
+                StringComparison.Ordinal));
+        readerCode.Should().Contain("CompleteReaderLifecycleCloseAfterDetachAsync");
+        viewModelCode.Should().NotContain("LifecycleBoundarySnapshot");
+        viewModelCode.Should().NotContain("_latestAdmittedProgressRequest");
     }
 
     [Fact]
@@ -2906,37 +3097,109 @@ public class NovelReaderWebAssetTests
         readerXaml.Should().Contain("x:Uid=\"NovelReaderStatisticsButton\"");
         readerXaml.Should().Contain("x:Name=\"ReaderStatisticsPanelDialog\"");
         readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderStatisticsPanelDialog\"");
-        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderStatisticsStartStopButton\"");
+        readerXaml.Should().Contain("<controls:ReaderStatisticsPanelContent");
         readerXaml.Should().Contain("StatisticsButton_Click");
-        readerXaml.Should().Contain("StatisticsStartStopButton_Click");
         readerCode.Should().Contain("ViewModel.LoadStatisticsAsync");
         readerCode.Should().Contain("case \"restoreCompleted\":");
-        readerCode.Should().Contain("ReaderStatisticsEventClassifier.IsActualPageMovement");
-        readerCode.Should().Contain("ReaderStatisticsEventClassifier.AdjacentChapterTarget");
-        readerCode.Should().Contain("ReaderStatisticsCheckpointReason.AdjacentChapter");
-        readerCode.Should().Contain("BeginProgrammaticNavigationAsync");
-        readerCode.Should().Contain("CompleteProgrammaticNavigationAsync");
-        readerCode.Should().Contain("ReaderStatisticsCheckpointReason.ProgrammaticDeparture");
-        readerCode.Should().Contain("SaveProgressNowAsync(flushStatistics: false)");
-        readerCode.Should().Contain("ResetStatisticsBaseline");
+        readerCode.Should().Contain("ViewModel.HandleManualPageNavigationAsync(readerEvent)");
+        readerCode.Should().Contain("if (outcome.DidMove)");
+        readerCode.Should().Contain("outcome.AdjacentChapterIndex is int adjacentChapterIndex");
+        readerCode.Should().Contain("outcome.AdjacentChapterRestoreTarget is ReaderChapterRestoreTarget restoreTarget");
+        readerCode.Should().Contain("ViewModel.TryBeginNavigation(");
+        var adjacentNavigationBody = Regex.Match(
+            readerCode,
+            @"(?s)if \(outcome\.AdjacentChapterIndex.*?\n\s*\}\s*\n\s*if \(readerEvent\.Result").Value;
+        adjacentNavigationBody.Should().Contain(
+            "ViewModel.TryBeginNavigation(\n" +
+            "                            adjacentChapterIndex,\n" +
+            "                            restoreTarget,\n" +
+            "                            exactProgress: null)");
+        adjacentNavigationBody.Should().Contain("LoadChapter(renderRequest)");
+        adjacentNavigationBody.Should().NotContain("SaveProgressNowAsync");
+        adjacentNavigationBody.Should().NotContain("ViewModel.UpdateProgress");
+        readerCode.Should().Contain("ViewModel.ResolveNavigationAsync(");
+        readerCode.Should().Contain("ApplyNavigationSettlement(settlement)");
+        readerCode.Should().NotContain("_adjacentCommitCoordinator");
+        readerCode.Should().NotContain("_pendingAdjacentChapterNavigation");
+        readerCode.Should().NotContain("_pendingAdjacentChapterIndex");
+        readerCode.Should().NotContain("_pendingAdjacentChapterRestoreTarget");
+        readerCode.Should().Contain("NovelWebView.Opacity = 0");
+        readerCode.Should().Contain("NovelReaderRenderState _renderState = new()");
+        readerCode.Should().Contain("ViewModel.TryReserveProgrammaticNavigation");
         readerCode.Should().Contain("StatisticsButton_Click");
-        readerCode.Should().Contain("StatisticsStartStopButton_Click");
-        readerCode.Should().Contain("RefreshStatisticsPanel");
+        var statisticsButtonBody = Regex.Match(
+            readerCode,
+            @"(?s)private async void StatisticsButton_Click\([^)]*\)\s*\{(?<body>.*?)\n\s*\}").Groups["body"].Value;
+        statisticsButtonBody.Should().NotBeEmpty();
+        statisticsButtonBody.Should().NotContain("FlushStatisticsAsync");
+        readerCode.Should().NotContain("StatisticsStartStopButton_Click");
+        readerCode.Should().NotContain("RefreshStatisticsPanel");
         viewModelCode.Should().Contain("StartStatisticsTracking");
         viewModelCode.Should().Contain("StopStatisticsTrackingAsync");
         viewModelCode.Should().Contain("FlushStatisticsAsync");
         viewModelCode.Should().Contain("IReaderStatisticsSession");
         viewModelCode.Should().Contain("CheckpointReadingAsync");
+        viewModelCode.Should().Contain("ReaderStatisticsEventClassifier.IsActualPageMovement");
+        viewModelCode.Should().Contain("ReaderStatisticsEventClassifier.AdjacentChapterTarget");
+        viewModelCode.Should().Contain("ReaderStatisticsCheckpointReason.AdjacentChapter");
+        viewModelCode.Should().Contain("HandleManualPageNavigationAsync");
+        viewModelCode.Should().Contain("ToggleStatisticsTrackingAsync");
         enResources.Should().Contain("NovelReaderStatisticsButton.AutomationProperties.Name");
         enResources.Should().Contain("ReaderStatisticsPanelDialog.Title");
         enResources.Should().Contain("ReaderStatisticsPanelDialog.CloseButtonText");
         enResources.Should().Contain("ReaderStatisticsPanelTitle.Text");
         enResources.Should().Contain("ReaderStatisticsSessionHeader.Text");
+        enResources.Should().Contain("ReaderStatisticsTodayHeader.Text");
+        enResources.Should().Contain("ReaderStatisticsAllTimeHeader.Text");
+        enResources.Should().Contain("ReaderStatisticsCharactersLabel.Text");
+        enResources.Should().Contain("ReaderStatisticsApproximateWordsLabel.Text");
+        enResources.Should().Contain("ReaderStatisticsSpeedLabel.Text");
+        enResources.Should().Contain("ReaderStatisticsTimeLabel.Text");
+        enResources.Should().Contain("ReaderStatisticsBookRemainingLabel.Text");
+        enResources.Should().Contain("ReaderStatisticsChapterRemainingLabel.Text");
+        enResources.Should().Contain("ReaderStatisticsStartButton.AutomationProperties.Name");
+        enResources.Should().Contain("ReaderStatisticsStopButton.AutomationProperties.Name");
         zhResources.Should().Contain("NovelReaderStatisticsButton.AutomationProperties.Name");
         zhResources.Should().Contain("ReaderStatisticsPanelDialog.Title");
         zhResources.Should().Contain("ReaderStatisticsPanelDialog.CloseButtonText");
         zhResources.Should().Contain("ReaderStatisticsPanelTitle.Text");
         zhResources.Should().Contain("ReaderStatisticsSessionHeader.Text");
+        zhResources.Should().Contain("ReaderStatisticsTodayHeader.Text");
+        zhResources.Should().Contain("ReaderStatisticsAllTimeHeader.Text");
+        zhResources.Should().Contain("ReaderStatisticsCharactersLabel.Text");
+        zhResources.Should().Contain("ReaderStatisticsApproximateWordsLabel.Text");
+        zhResources.Should().Contain("ReaderStatisticsSpeedLabel.Text");
+        zhResources.Should().Contain("ReaderStatisticsTimeLabel.Text");
+        zhResources.Should().Contain("ReaderStatisticsBookRemainingLabel.Text");
+        zhResources.Should().Contain("ReaderStatisticsChapterRemainingLabel.Text");
+        zhResources.Should().Contain("ReaderStatisticsStartButton.AutomationProperties.Name");
+        zhResources.Should().Contain("ReaderStatisticsStopButton.AutomationProperties.Name");
+    }
+
+    [Fact]
+    public void ReaderPage_UsesCompactStatisticsPanelControl()
+    {
+        var panelXaml = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Views", "Controls", "ReaderStatisticsPanelContent.xaml"));
+        var readerXaml = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml"));
+        var statisticsDialogStart = readerXaml.IndexOf(
+            "<ContentDialog x:Name=\"ReaderStatisticsPanelDialog\"",
+            StringComparison.Ordinal);
+        var statisticsDialogEnd = readerXaml.IndexOf(
+            "<ContentDialog x:Name=\"ReaderAppearancePanelDialog\"",
+            statisticsDialogStart,
+            StringComparison.Ordinal);
+        var statisticsDialogXaml = readerXaml[statisticsDialogStart..statisticsDialogEnd];
+
+        panelXaml.Should().Contain("ReaderStatisticsSessionSection");
+        panelXaml.Should().Contain("ReaderStatisticsTodaySection");
+        panelXaml.Should().Contain("ReaderStatisticsAllTimeSection");
+        panelXaml.Should().Contain("ToggleStatisticsTrackingCommand");
+        statisticsDialogXaml.Should().Contain("<controls:ReaderStatisticsPanelContent");
+        statisticsDialogXaml.Should().Contain("MaxWidth=\"520\"");
+        statisticsDialogXaml.Should().NotContain("ContentDialogMinWidth");
+        statisticsDialogXaml.Should().NotContain("<Grid Width=\"1120\"");
     }
 
     [Fact]
@@ -3096,7 +3359,7 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("ReaderTopChrome.Visibility");
         readerCode.Should().Contain("ReaderBottomChrome.Visibility");
         readerCode.Should().Contain("CloseReaderPanels();");
-        readerCode.Should().Contain("ToggleStatisticsTrackingAsync");
+        readerCode.Should().Contain("ViewModel.ToggleStatisticsTrackingCommand.ExecuteAsync(null)");
         readerCode.Should().Contain("ReaderShortcutActions.ToggleLyricsMode.Id");
         readerCode.Should().Contain("ToggleReaderLyricsModeShortcutAsync");
         readerCode.Should().Contain("CurrentStatisticsSettings.EnableStatistics");
@@ -3163,10 +3426,9 @@ public class NovelReaderWebAssetTests
         readerXaml.Should().Contain("HistoryBackButton_Click");
         readerXaml.Should().Contain("HistoryForwardButton_Click");
 
-        readerCode.Should().Contain("ReaderNavigationHistory");
-        readerCode.Should().Contain("_navigationHistory.Record(");
-        readerCode.Should().Contain("_navigationHistory.TryGoBack(");
-        readerCode.Should().Contain("_navigationHistory.TryGoForward(");
+        readerCode.Should().Contain("ReaderNavigationInputCoordinator");
+        readerCode.Should().Contain("_navigationInput.TryGoBack(");
+        readerCode.Should().Contain("_navigationInput.TryGoForward(");
         readerCode.Should().Contain("RefreshReaderNavigationHistoryChrome");
     }
 
@@ -3464,7 +3726,286 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
-    public void ReaderPage_UsesWideSheetDialogContentForReaderPanels()
+    public void ReaderPage_StatisticsDialogClampsWithoutHardMinimumWidth()
+    {
+        var readerXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml"));
+        var dialogStart = readerXaml.IndexOf("x:Name=\"ReaderStatisticsPanelDialog\"", StringComparison.Ordinal);
+        var dialogEnd = readerXaml.IndexOf("</ContentDialog>", dialogStart, StringComparison.Ordinal);
+        var dialog = readerXaml[dialogStart..dialogEnd];
+
+        dialog.Should().NotContain("MinWidth=\"520\"");
+        dialog.Should().NotContain("ContentDialogMinWidth");
+        dialog.Should().Contain("MaxWidth=\"560\"");
+        dialog.Should().Contain("HorizontalAlignment=\"Stretch\"");
+    }
+
+    [Fact]
+    public void ReaderPage_HiddenRenderUsesTypedViewModelTransactionWithoutMutatingPosition()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+
+        var typedLoadBody = Regex.Match(
+            readerCode,
+            @"(?s)private void LoadChapter\(ReaderNavigationRenderRequest renderRequest\).*?\n    \}").Value;
+
+        typedLoadBody.Should().NotBeEmpty();
+        typedLoadBody.Should().Contain("BeginHiddenRender(renderRequest)");
+        typedLoadBody.Should().Contain("NavigateCurrentRenderAttempt()");
+        typedLoadBody.Should().NotContain("ViewModel.SetChapter");
+        typedLoadBody.Should().NotContain("ViewModel.UpdateProgress");
+        readerCode.Should().Contain("if (!CanMutateReaderPosition())");
+        readerCode.Should().NotContain("ReaderProgrammaticNavigationTracker");
+        readerCode.Should().NotContain("ReaderAdjacentNavigationCommitCoordinator");
+    }
+
+    [Fact]
+    public void ReaderNavigation_HasOneTransactionOwnerAndNoLegacyState()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+        var productionCode = Directory
+            .EnumerateFiles(ProjectRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Select(File.ReadAllText)
+            .ToArray();
+
+        readerCode.Should().NotContain("ReaderNavigationTransactionCoordinator");
+        readerCode.Should().Contain("ViewModel.TryBeginNavigation(");
+        readerCode.Should().Contain("ViewModel.ResolveNavigationAsync(");
+
+        productionCode.Should().NotContain(code => code.Contains("ReaderProgrammaticNavigationTracker", StringComparison.Ordinal));
+        productionCode.Should().NotContain(code => code.Contains("ReaderAdjacentNavigationCommitCoordinator", StringComparison.Ordinal));
+        productionCode.Should().NotContain(code => code.Contains("_pendingAdjacentChapterNavigation", StringComparison.Ordinal));
+        productionCode.Should().NotContain(code => code.Contains("_latestAdmittedProgressRequest", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ReaderPage_BindsInjectedMetadataToExactRenderAttemptAndDefersOrdinaryReload()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+        var domHandler = Regex.Match(
+            readerCode,
+            @"(?s)private async void OnDomContentLoaded\(.*?\n    \}").Value;
+        var settingHandler = Regex.Match(
+            readerCode,
+            @"(?s)private async void OnReaderSettingChanged\(.*?\n    \}").Value;
+
+        readerCode.Should().Contain("NovelReaderRenderState _renderState = new()");
+        readerCode.Should().Contain("_renderState.BeginNavigation(");
+        readerCode.Should().Contain("_renderState.TryBeginOrdinary(");
+        readerCode.Should().Contain("_renderState.TryTakeDeferredOrdinaryReload()");
+        domHandler.Should().Contain("_renderState.TryGetDomAttempt(uri, out var chapterInstruction)");
+        domHandler.Should().Contain("chapterInstruction.ChapterIndex");
+        domHandler.Should().Contain("renderAttemptId = chapterInstruction.RenderAttemptId");
+        domHandler.Should().NotContain("CurrentChapterRenderInstruction()");
+        settingHandler.Should().Contain("LoadChapter(ViewModel.CurrentChapterIndex)");
+        readerCode.Should().NotContain("private ChapterRenderInstruction CurrentChapterRenderInstruction()");
+    }
+
+    [Fact]
+    public void ReaderPage_FirstFailureRendersSettlementAndUsesNativeFallbackOnlyAfterRecoveryFailure()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+        var settlementBody = Regex.Match(
+            readerCode,
+            @"(?s)private bool ApplyNavigationSettlement\(.*?ReaderNavigationSettlement settlement.*?\n    \}").Value;
+        var failureBody = Regex.Match(
+            readerCode,
+            @"(?s)private async Task HandleTerminalRenderFailureAsync\(.*?\n    \}").Value;
+        var fallbackBody = Regex.Match(
+            readerCode,
+            @"(?s)private Task ApplyNativeTerminalFallbackAsync\(.*?\n    \}").Value;
+        var domHandler = Regex.Match(
+            readerCode,
+            @"(?s)private async void OnDomContentLoaded\(.*?\n    \}").Value;
+        var navigateBody = Regex.Match(
+            readerCode,
+            @"(?s)private bool NavigateCurrentRenderAttempt\(\).*?\n    \}").Value;
+
+        settlementBody.Should().Contain("_renderState.TryApplySettlement(");
+        settlementBody.Should().Contain("NavigateCurrentRenderAttempt()");
+        settlementBody.Should().NotContain("LoadChapter(");
+        failureBody.Should().Contain("await ViewModel.HandleNavigationBridgeErrorAsync()");
+        failureBody.Should().Contain("Kind: NovelReaderRenderAttemptKind.Recovery");
+        failureBody.Should().Contain("_renderState.PendingSettlement");
+        failureBody.Should().Contain("_renderState.TryBeginPendingSettlementRecovery(");
+        failureBody.Should().Contain("forceTerminalReload: true");
+        failureBody.Should().Contain("ApplyNativeTerminalFallbackAsync(");
+        failureBody.Should().Contain("catch (Exception recoveryException)");
+        failureBody.Should().Contain("Failed to recover terminal render failure");
+        failureBody.Should().NotContain("_renderState.TryPrepareFailure()");
+        failureBody.Should().NotContain("NovelWebView.Opacity = 1");
+        fallbackBody.Should().Contain("_renderState.TryPrepareFailure()");
+        fallbackBody.Should().Contain("_renderState.CompleteFailure(release.Value)");
+        fallbackBody.Should().Contain("ViewModel.AcknowledgeNavigationRendered(release.Value.Generation)");
+        fallbackBody.Should().Contain("NovelWebView.Opacity = 1");
+        fallbackBody.Should().Contain("ShowError(");
+        domHandler.Should().Contain("await HandleTerminalRenderFailureAsync(");
+        navigateBody.Should().Contain("catch (Exception ex)");
+        navigateBody.Should().Contain("HandleTerminalRenderFailureAsync(");
+        readerCode.Should().Contain("OnNavigationCompleted");
+        readerCode.Should().Contain("await HandleTerminalRenderFailureAsync(");
+    }
+
+    [Fact]
+    public void ReaderPage_StrictlyValidatesTerminalPayloadsBeforeReadingValues()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+        var chapterReadyHandler = Regex.Match(
+            readerCode,
+            @"(?s)case ""chapterReady"":.*?\n\s*case ""restoreCompleted"":").Value;
+        var restoreHandler = Regex.Match(
+            readerCode,
+            @"(?s)case ""restoreCompleted"":.*?\n\s*case ""pageNavigationRequest"":").Value;
+
+        readerCode.Should().Contain("root.ValueKind != JsonValueKind.Object");
+        readerCode.Should().Contain("root.TryGetProperty(\"version\"");
+        readerCode.Should().Contain("root.TryGetProperty(\"type\"");
+        chapterReadyHandler.Should().Contain(
+            "NovelReaderTerminalPayloadParser.TryParseChapterReady(");
+        chapterReadyHandler.Should().Contain("out var readyPayload");
+        chapterReadyHandler.Should().Contain("NovelReaderChapterReadyDisposition.Ordinary");
+        chapterReadyHandler.Should().NotContain("GetProperty(");
+        chapterReadyHandler.Should().NotContain("GetDouble(");
+        chapterReadyHandler.Should().NotContain(
+            "else\n                    {\n                        NovelWebView.Opacity = 1;");
+        restoreHandler.Should().Contain(
+            "NovelReaderTerminalPayloadParser.TryParseRestoreCompleted(");
+        restoreHandler.Should().Contain("out var restorePayload");
+        restoreHandler.Should().Contain(
+            "ReaderNavigationResolutionDisposition.Ignored");
+        restoreHandler.Should().Contain("resolution.Settlement");
+        restoreHandler.Should().Contain("await HandleTerminalRenderFailureAsync(");
+        restoreHandler.Should().NotContain("GetProperty(");
+        restoreHandler.Should().NotContain("GetDouble(");
+    }
+
+    [Fact]
+    public void ReaderPage_AdjacentLoadResolvesHighlightsAndSasayakiAgainstDestinationChapter()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+
+        readerCode.Should().Contain("_renderState.TryGetDomAttempt(uri, out var chapterInstruction)");
+        readerCode.Should().Contain("var destinationChapterIndex = chapterInstruction.ChapterIndex;");
+        readerCode.Should().Contain("ViewModel.GetChapterHighlightsJson(destinationChapterIndex)");
+        readerCode.Should().Contain("match.ChapterIndex == destinationChapterIndex");
+        readerCode.Should().Contain(
+            "HighlightSasayakiCueAsync(\n                    match,\n                    allowAutoScroll: CanMutateReaderPosition())");
+        readerCode.Should().Contain("allowAutoScroll && settings.AutoScroll");
+    }
+
+    [Fact]
+    public void ReaderPage_AppliesGenerationScopedTerminalNavigationSettlements()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+        var restoreHandler = Regex.Match(
+            readerCode,
+            @"(?s)case ""restoreCompleted"":.*?\n\s*case ""pageChanged"":").Value;
+        var chapterReadyHandler = Regex.Match(
+            readerCode,
+            @"(?s)case ""chapterReady"":.*?\n\s*case ""restoreCompleted"":").Value;
+        var errorHandler = Regex.Match(
+            readerCode,
+            @"(?s)case ""error"":.*?\n\s*\}").Value;
+        var settlementBody = Regex.Match(
+            readerCode,
+            @"(?s)private bool ApplyNavigationSettlement\(.*?ReaderNavigationSettlement settlement.*?\n    \}").Value;
+
+        restoreHandler.Should().Contain("restorePayload.NavigationGeneration");
+        restoreHandler.Should().Contain("restorePayload.ChapterIndex");
+        restoreHandler.Should().Contain("restorePayload.RenderAttemptId");
+        restoreHandler.Should().Contain("restorePayload.Progress");
+        restoreHandler.Should().Contain("ViewModel.ResolveNavigationAsync(");
+        restoreHandler.Should().Contain("ApplyNavigationSettlement(settlement)");
+        restoreHandler.Should().Contain(
+            "ReaderNavigationResolutionDisposition.Ignored");
+        restoreHandler.Should().Contain("resolution.Settlement");
+        chapterReadyHandler.Should().Contain("_renderState.AcceptChapterReady(");
+        chapterReadyHandler.Should().Contain("NovelReaderChapterReadyDisposition.Ordinary");
+        chapterReadyHandler.Should().Contain("NovelReaderChapterReadyDisposition.HiddenTerminal");
+        chapterReadyHandler.Should().Contain("NovelReaderChapterReadyDisposition.HiddenInitial");
+        chapterReadyHandler.Should().Contain("SendPendingProgrammaticFragmentAsync");
+        settlementBody.Should().Contain("_renderState.TryApplySettlement(");
+        settlementBody.Should().Contain("settlement.ShouldRevealDestination");
+        settlementBody.Should().Contain("NavigateCurrentRenderAttempt()");
+        settlementBody.Should().Contain("TryRevealSettledNavigation(settlement.Generation)");
+        errorHandler.Should().Contain("await HandleTerminalRenderFailureAsync(");
+        errorHandler.Should().NotContain("_programmaticNavigation.Cancel()");
+    }
+
+    [Fact]
+    public void ReaderPage_ProcessFailureUsesNamedDetachableTerminalFailureHandler()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+        var navigatedFromBody = Regex.Match(
+            readerCode,
+            @"(?s)protected override void OnNavigatedFrom\(.*?\n    \}").Value;
+        var processFailedBody = Regex.Match(
+            readerCode,
+            @"(?s)private async void OnWebViewProcessFailed\(.*?\n    \}").Value;
+
+        readerCode.Should().Contain("ProcessFailed -= OnWebViewProcessFailed");
+        readerCode.Should().Contain("ProcessFailed += OnWebViewProcessFailed");
+        navigatedFromBody.Should().Contain("ProcessFailed -= OnWebViewProcessFailed");
+        processFailedBody.Should().Contain("await HandleTerminalRenderFailureAsync(");
+        processFailedBody.Should().Contain("args.ProcessFailedKind");
+    }
+
+    [Fact]
+    public void ReaderPage_LifecycleWaitsForAttachedTerminalRenderAndAbandonsDetachedRender()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+        var attached = Regex.Match(
+            readerCode,
+            @"(?s)private async Task<bool> HandleAppLifecycleCheckpointAsync\(.*?\n    \}").Value;
+        var detached = Regex.Match(
+            readerCode,
+            @"(?s)private async Task CompleteReaderLifecycleCloseAfterDetachAsync\(\).*?\n    \}").Value;
+
+        attached.Should().Contain("ApplyNavigationSettlement(settlement)");
+        attached.Should().Contain("await WaitForTerminalRenderAsync(settlement.Generation)");
+        attached.Should().NotContain("ViewModel.AcknowledgeNavigationRendered(settlement.Generation)");
+        detached.Should().Contain("_renderState.TryPrepareFailure()");
+        detached.Should().Contain("ViewModel.AcknowledgeNavigationRendered(release.Value.Generation)");
+        detached.Should().Contain("_renderState.CompleteFailure(release.Value)");
+    }
+
+    [Fact]
+    public void ReaderPage_AttachedLifecycleTreatsOwnedSettlementAsWaitOnly()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+        var attached = Regex.Match(
+            readerCode,
+            @"(?s)private async Task<bool> HandleAppLifecycleCheckpointAsync\(.*?\n    \}").Value;
+
+        attached.Should().Contain(
+            "var ownsPendingSettlement = _renderState.OwnsPendingSettlement(\n" +
+            "                    settlement.Generation);");
+        attached.Should().Contain(
+            "if (!ownsPendingSettlement\n" +
+            "                    && !ApplyNavigationSettlement(settlement))");
+        attached.IndexOf("OwnsPendingSettlement", StringComparison.Ordinal)
+            .Should().BeLessThan(
+                attached.IndexOf("ApplyNavigationSettlement", StringComparison.Ordinal));
+        attached.IndexOf("ApplyNavigationSettlement", StringComparison.Ordinal)
+            .Should().BeLessThan(
+                attached.IndexOf("HandleTerminalRenderFailureAsync", StringComparison.Ordinal));
+        attached.Should().Contain("await WaitForTerminalRenderAsync(settlement.Generation)");
+    }
+
+    [Fact]
+    public void ReaderPage_UsesWideSheetDialogContentForNonStatisticsReaderPanels()
     {
         var readerXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml")
@@ -3478,14 +4019,14 @@ public class NovelReaderWebAssetTests
         readerXaml.Should().Contain("<StackPanel Width=\"1120\"");
         readerXaml.Should().Contain("MaxWidth=\"1120\"");
         (readerXaml.Split("<x:Double x:Key=\"ContentDialogMaxWidth\">1600</x:Double>").Length - 1)
-            .Should().Be(6);
-        (readerXaml.Split("<x:Double x:Key=\"ContentDialogMinWidth\">1120</x:Double>").Length - 1)
             .Should().Be(5);
+        (readerXaml.Split("<x:Double x:Key=\"ContentDialogMinWidth\">1120</x:Double>").Length - 1)
+            .Should().Be(4);
         readerXaml.Should().Contain("<x:Double x:Key=\"ContentDialogMinWidth\">1280</x:Double>");
         appearanceContentXaml.Should().Contain("MaxWidth=\"1280\"");
 
-        readerXaml.Should().NotContain("Width=\"560\"");
-        readerXaml.Should().NotContain("MaxWidth=\"560\"");
+        readerXaml.Should().NotContain("<Grid Width=\"560\"");
+        readerXaml.Should().Contain("MaxWidth=\"560\"");
         readerXaml.Should().NotContain("Width=\"640\"");
         appearanceContentXaml.Should().NotContain("MaxWidth=\"1000\"");
     }
@@ -3514,7 +4055,8 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("SkipSasayakiAsync(-15)");
         readerCode.Should().Contain("SkipSasayakiAsync(15)");
         readerCode.Should().Contain("settings.AutoScroll");
-        readerCode.Should().Contain("window.hoshiSasayaki.setColors");
+        readerCode.Should().Contain("CreateSasayakiHighlightMessage");
+        readerCode.Should().NotContain("window.hoshiSasayaki");
         readerCode.Should().Contain("settings.DarkBackgroundColor");
         bridgeScript.Should().Contain("setColors: function");
         bridgeScript.Should().Contain("--hoshi-sasayaki-background-color");
@@ -3547,11 +4089,12 @@ public class NovelReaderWebAssetTests
         var readerCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
         );
+        var bridgeScript = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
 
         readerCode.Should().Contain("_sasayakiHighlightGeneration");
         readerCode.Should().Contain("Interlocked.Increment(ref _sasayakiHighlightGeneration)");
-        readerCode.Should().Contain("window.__hoshiSasayakiHighlightGeneration");
-        readerCode.Should().Contain("currentGeneration > generation");
+        readerCode.Should().Contain("case \"sasayakiHighlightCompleted\"");
+        bridgeScript.Should().Contain("currentGeneration > sasayakiGeneration");
     }
 
     [Fact]

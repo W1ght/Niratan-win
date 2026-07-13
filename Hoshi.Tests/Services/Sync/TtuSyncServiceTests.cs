@@ -13,6 +13,127 @@ namespace Hoshi.Tests.Services.Sync;
 public sealed class TtuSyncServiceTests
 {
     [Fact]
+    public async Task SyncBookAsync_ExportDoesNotOverwriteBookmarkSavedWhileUploadIsInFlight()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var sidecars = await CreateSidecarsAsync(temp.Path, ct);
+        var initial = new NovelBookmark(
+            ChapterIndex: 0,
+            Progress: 0.25,
+            CharacterCount: 250,
+            LastModified: DateTimeOffset.FromUnixTimeMilliseconds(1000));
+        var advanced = new NovelBookmark(
+            ChapterIndex: 1,
+            Progress: 0.75,
+            CharacterCount: 1750,
+            LastModified: DateTimeOffset.FromUnixTimeMilliseconds(2000));
+        await sidecars.Book.SaveBookmarkAsync(temp.Path, initial, ct);
+        var uploadStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseUpload = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var remote = new FakeTtuSyncRemoteStore
+        {
+            OnUpsertProgressAsync = async (_, _) =>
+            {
+                uploadStarted.TrySetResult();
+                await releaseUpload.Task;
+            },
+        };
+        var sut = CreateSut(sidecars, remote);
+
+        var firstExport = sut.SyncBookAsync(
+            CreateBook(temp.Path),
+            new TtuSyncOptions(Direction: TtuSyncDirection.ExportToTtu),
+            ct);
+        await uploadStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
+        await sidecars.Book.SaveBookmarkAsync(temp.Path, advanced, ct);
+        releaseUpload.TrySetResult();
+        await firstExport;
+
+        (await sidecars.Book.LoadBookmarkAsync(temp.Path, ct)).Should().Be(advanced);
+
+        remote.OnUpsertProgressAsync = null;
+        await sut.SyncBookAsync(
+            CreateBook(temp.Path),
+            new TtuSyncOptions(Direction: TtuSyncDirection.ExportToTtu),
+            ct);
+
+        remote.ExportedProgresses.Select(progress => progress.ExploredCharCount)
+            .Should().Equal(250, 1750);
+    }
+
+    [Fact]
+    public async Task SyncBookAsync_ImportFetchFailureLeavesAllLocalSidecarsUnchanged()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var sidecars = await CreateSidecarsAsync(temp.Path, ct);
+        var localBookmark = new NovelBookmark(
+            ChapterIndex: 0,
+            Progress: 0.1,
+            CharacterCount: 100,
+            LastModified: DateTimeOffset.FromUnixTimeMilliseconds(1000));
+        var localStatistics = new[] { Statistic("2026-07-08", charactersRead: 10, modified: 1) };
+        var localPlayback = new SasayakiPlaybackData { LastPosition = 12.5, Rate = 1.25 };
+        await sidecars.Book.SaveBookmarkAsync(temp.Path, localBookmark, ct);
+        await sidecars.Statistics.SaveAsync(temp.Path, localStatistics, ct);
+        await sidecars.Sasayaki.SavePlaybackAsync(temp.Path, localPlayback, ct);
+        var remote = RemoteImportPayload();
+        remote.StatisticsFailure = new IOException("statistics fetch failed");
+        var sut = CreateSut(sidecars, remote);
+
+        var act = () => sut.SyncBookAsync(
+            CreateBook(temp.Path),
+            ImportAllOptions(),
+            ct);
+
+        await act.Should().ThrowAsync<IOException>();
+        (await sidecars.Book.LoadBookmarkAsync(temp.Path, ct)).Should().Be(localBookmark);
+        (await sidecars.Statistics.LoadAsync(temp.Path, ct)).Should().Equal(localStatistics);
+        var playback = await sidecars.Sasayaki.LoadPlaybackAsync(temp.Path, ct);
+        playback.LastPosition.Should().Be(localPlayback.LastPosition);
+        playback.Rate.Should().Be(localPlayback.Rate);
+    }
+
+    [Fact]
+    public async Task SyncBookAsync_ImportCommitFailureRollsBackEveryExistingSidecar()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var realSidecars = await CreateSidecarsAsync(temp.Path, ct);
+        var localBookmark = new NovelBookmark(
+            ChapterIndex: 0,
+            Progress: 0.1,
+            CharacterCount: 100,
+            LastModified: DateTimeOffset.FromUnixTimeMilliseconds(1000));
+        var localStatistics = new[] { Statistic("2026-07-08", charactersRead: 10, modified: 1) };
+        var localPlayback = new SasayakiPlaybackData { LastPosition = 12.5, Rate = 1.25 };
+        await realSidecars.Book.SaveBookmarkAsync(temp.Path, localBookmark, ct);
+        await realSidecars.Statistics.SaveAsync(temp.Path, localStatistics, ct);
+        await realSidecars.Sasayaki.SavePlaybackAsync(temp.Path, localPlayback, ct);
+        var failingStatistics = new FailFirstStatisticsSave(realSidecars.Statistics);
+        var sidecars = new Sidecars(
+            realSidecars.Book,
+            failingStatistics,
+            realSidecars.Sasayaki);
+        var sut = CreateSut(sidecars, RemoteImportPayload());
+
+        var act = () => sut.SyncBookAsync(
+            CreateBook(temp.Path),
+            ImportAllOptions(),
+            ct);
+
+        await act.Should().ThrowAsync<IOException>();
+        (await realSidecars.Book.LoadBookmarkAsync(temp.Path, ct)).Should().Be(localBookmark);
+        (await realSidecars.Statistics.LoadAsync(temp.Path, ct)).Should().Equal(localStatistics);
+        var playback = await realSidecars.Sasayaki.LoadPlaybackAsync(temp.Path, ct);
+        playback.LastPosition.Should().Be(localPlayback.LastPosition);
+        playback.Rate.Should().Be(localPlayback.Rate);
+    }
+
+    [Fact]
     public async Task SyncBookAsync_AutoExportsLocalProgressWhenLocalBookmarkIsNewer()
     {
         var ct = TestContext.Current.CancellationToken;
@@ -72,6 +193,104 @@ public sealed class TtuSyncServiceTests
             Progress: 0.25,
             CharacterCount: 1250,
             LastModified: DateTimeOffset.FromUnixTimeMilliseconds(2000)));
+    }
+
+    [Fact]
+    public async Task SyncBookAsync_ImportUsesKnownFilesWithoutRelistingConvertedTitle()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var sidecars = await CreateSidecarsAsync(temp.Path, ct);
+        var remote = RemoteImportPayload();
+        var sut = CreateSut(sidecars, remote);
+        var book = CreateBook(temp.Path);
+        book.Title = "EPUB metadata title differs";
+
+        var result = await sut.SyncBookAsync(
+            book,
+            ImportAllOptions() with { KnownRemoteFiles = KnownFiles(remote) },
+            ct);
+
+        result.Kind.Should().Be(TtuSyncResultKind.Imported);
+        remote.ListBookFilesCallCount.Should().Be(0);
+        (await sidecars.Book.LoadBookmarkAsync(temp.Path, ct)).Should().Be(
+            new NovelBookmark(1, 0.25, 1250, DateTimeOffset.FromUnixTimeMilliseconds(2000)));
+        (await sidecars.Statistics.LoadAsync(temp.Path, ct)).Should().ContainSingle()
+            .Which.CharactersRead.Should().Be(30);
+    }
+
+    [Fact]
+    public async Task SyncBookAsync_KnownFilesDoNotFetchStatisticsWhenStatisticsSyncIsDisabled()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var sidecars = await CreateSidecarsAsync(temp.Path, ct);
+        var remote = RemoteImportPayload();
+        var sut = CreateSut(sidecars, remote);
+
+        var result = await sut.SyncBookAsync(
+            CreateBook(temp.Path),
+            new TtuSyncOptions(
+                Direction: TtuSyncDirection.ImportFromTtu,
+                SyncStatistics: false,
+                KnownRemoteFiles: KnownFiles(remote)),
+            ct);
+
+        result.Kind.Should().Be(TtuSyncResultKind.Imported);
+        remote.GetStatisticsCallCount.Should().Be(0);
+        File.Exists(Path.Combine(temp.Path, NovelStatisticsSidecarService.StatisticsFileName))
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task SyncBookAsync_KnownFilesWithoutStatisticsStillImportProgress()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var sidecars = await CreateSidecarsAsync(temp.Path, ct);
+        var remote = RemoteImportPayload();
+        remote.StatisticsFile = null;
+        var sut = CreateSut(sidecars, remote);
+
+        var result = await sut.SyncBookAsync(
+            CreateBook(temp.Path),
+            ImportAllOptions() with { KnownRemoteFiles = KnownFiles(remote) },
+            ct);
+
+        result.Kind.Should().Be(TtuSyncResultKind.Imported);
+        (await sidecars.Book.LoadBookmarkAsync(temp.Path, ct))!.CharacterCount.Should().Be(1250);
+        remote.GetStatisticsCallCount.Should().Be(0);
+        File.Exists(Path.Combine(temp.Path, NovelStatisticsSidecarService.StatisticsFileName))
+            .Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(1000, 1, 0.0)]
+    [InlineData(2000, 1, 1.0)]
+    public async Task SyncBookAsync_ImportMapsChapterBoundaryAndBookEnd(
+        int exploredCharacters,
+        int expectedChapter,
+        double expectedProgress)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var sidecars = await CreateSidecarsAsync(temp.Path, ct);
+        var remote = RemoteImportPayload();
+        remote.Progress = remote.Progress! with
+        {
+            ExploredCharCount = exploredCharacters,
+            Progress = exploredCharacters / 2000d,
+        };
+        var sut = CreateSut(sidecars, remote);
+
+        await sut.SyncBookAsync(
+            CreateBook(temp.Path),
+            ImportAllOptions() with { KnownRemoteFiles = KnownFiles(remote) },
+            ct);
+
+        var bookmark = await sidecars.Book.LoadBookmarkAsync(temp.Path, ct);
+        bookmark!.ChapterIndex.Should().Be(expectedChapter);
+        bookmark.Progress.Should().Be(expectedProgress);
     }
 
     [Fact]
@@ -153,6 +372,86 @@ public sealed class TtuSyncServiceTests
             .Be(20);
     }
 
+    [Fact]
+    public async Task SyncBookAsync_ReplaceImport_ValidEmptyRemoteClearsLocalStatistics()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var sidecars = await CreateSidecarsAsync(temp.Path, ct);
+        await sidecars.Statistics.SaveAsync(
+            temp.Path,
+            [Statistic("2026-07-08", charactersRead: 20, modified: 2)],
+            ct);
+        var remote = RemoteImportPayload();
+        remote.Statistics = [];
+        var sut = CreateSut(sidecars, remote);
+
+        await sut.SyncBookAsync(CreateBook(temp.Path), ImportAllOptions(), ct);
+
+        (await sidecars.Statistics.LoadAsync(temp.Path, ct)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SyncBookAsync_ReplaceExport_EmptyLocalClearsRemoteStatistics()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var sidecars = await CreateSidecarsAsync(temp.Path, ct);
+        await sidecars.Book.SaveBookmarkAsync(
+            temp.Path,
+            new NovelBookmark(0, 0.5, 500, DateTimeOffset.FromUnixTimeMilliseconds(2000)),
+            ct);
+        var remote = new FakeTtuSyncRemoteStore
+        {
+            StatisticsFile = new TtuRemoteFile("statistics-id", "statistics_1_6_remote.json"),
+            Statistics = [Statistic("2026-07-08", charactersRead: 20, modified: 2)],
+        };
+        var sut = CreateSut(sidecars, remote);
+
+        await sut.SyncBookAsync(
+            CreateBook(temp.Path),
+            new TtuSyncOptions(
+                Direction: TtuSyncDirection.ExportToTtu,
+                SyncStatistics: true,
+                StatisticsSyncMode: StatisticsSyncMode.Replace),
+            ct);
+
+        remote.LastExportedStatistics.Should().NotBeNull().And.BeEmpty();
+    }
+
+    [Fact]
+    public async Task SyncBookAsync_Merge_DeduplicatesUntrustedRemoteDatesByNewestModified()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var sidecars = await CreateSidecarsAsync(temp.Path, ct);
+        await sidecars.Book.SaveBookmarkAsync(
+            temp.Path,
+            new NovelBookmark(0, 0.5, 500, DateTimeOffset.FromUnixTimeMilliseconds(2000)),
+            ct);
+        var remote = new FakeTtuSyncRemoteStore
+        {
+            StatisticsFile = new TtuRemoteFile("statistics-id", "statistics_1_6_remote.json"),
+            Statistics =
+            [
+                Statistic("2026-07-08", charactersRead: 10, modified: 1),
+                Statistic("2026-07-08", charactersRead: 30, modified: 3),
+            ],
+        };
+        var sut = CreateSut(sidecars, remote);
+
+        await sut.SyncBookAsync(
+            CreateBook(temp.Path),
+            new TtuSyncOptions(
+                Direction: TtuSyncDirection.ExportToTtu,
+                SyncStatistics: true,
+                StatisticsSyncMode: StatisticsSyncMode.Merge),
+            ct);
+
+        remote.LastExportedStatistics.Should().ContainSingle()
+            .Which.CharactersRead.Should().Be(30);
+    }
+
     private static async Task<Sidecars> CreateSidecarsAsync(
         string bookRootPath,
         CancellationToken ct)
@@ -190,6 +489,36 @@ public sealed class TtuSyncServiceTests
         TotalCharacterCount = 2000,
     };
 
+    private static TtuSyncOptions ImportAllOptions() => new(
+        Direction: TtuSyncDirection.ImportFromTtu,
+        SyncStatistics: true,
+        StatisticsSyncMode: StatisticsSyncMode.Replace,
+        SyncAudioBook: true);
+
+    private static TtuRemoteBookFiles KnownFiles(FakeTtuSyncRemoteStore remote) => new(
+        remote.ProgressFile,
+        remote.StatisticsFile,
+        remote.AudioBookFile,
+        BookData: null,
+        Cover: null);
+
+    private static FakeTtuSyncRemoteStore RemoteImportPayload() => new()
+    {
+        ProgressFile = new TtuRemoteFile("progress-id", "progress_1_6_2000_0.625.json"),
+        StatisticsFile = new TtuRemoteFile("statistics-id", "statistics_1_6_remote.json"),
+        AudioBookFile = new TtuRemoteFile("audio-id", "audioBook_1_6_3000_42.5.json"),
+        Progress = new TtuProgress(
+            DataId: 1,
+            ExploredCharCount: 1250,
+            Progress: 0.625,
+            LastBookmarkModified: DateTimeOffset.FromUnixTimeMilliseconds(2000)),
+        Statistics = [Statistic("2026-07-09", charactersRead: 30, modified: 3)],
+        AudioBook = new TtuAudioBook(
+            "星を読む",
+            PlaybackPosition: 42.5,
+            LastAudioBookModified: 3000),
+    };
+
     private static NovelReadingStatistic Statistic(
         string dateKey,
         int charactersRead,
@@ -218,9 +547,14 @@ public sealed class TtuSyncServiceTests
         public TtuProgress? Progress { get; set; }
         public IReadOnlyList<NovelReadingStatistic>? Statistics { get; set; }
         public TtuAudioBook? AudioBook { get; set; }
+        public Exception? StatisticsFailure { get; set; }
+        public Func<TtuProgress, CancellationToken, Task>? OnUpsertProgressAsync { get; set; }
         public TtuProgress? LastExportedProgress { get; private set; }
+        public List<TtuProgress> ExportedProgresses { get; } = [];
         public IReadOnlyList<NovelReadingStatistic>? LastExportedStatistics { get; private set; }
         public TtuAudioBook? LastExportedAudioBook { get; private set; }
+        public int ListBookFilesCallCount { get; private set; }
+        public int GetStatisticsCallCount { get; private set; }
 
         public Task<IReadOnlyList<TtuRemoteBook>> ListRemoteBooksAsync(
             CancellationToken ct = default) =>
@@ -233,13 +567,16 @@ public sealed class TtuSyncServiceTests
 
         public Task<TtuRemoteBookFiles> ListBookFilesAsync(
             string bookTitle,
-            CancellationToken ct = default) =>
-            Task.FromResult(new TtuRemoteBookFiles(
+            CancellationToken ct = default)
+        {
+            ListBookFilesCallCount++;
+            return Task.FromResult(new TtuRemoteBookFiles(
                 ProgressFile,
                 StatisticsFile,
                 AudioBookFile,
                 BookData: null,
                 Cover: null));
+        }
 
         public Task<TtuProgress?> GetProgressAsync(
             TtuRemoteFile file,
@@ -248,8 +585,13 @@ public sealed class TtuSyncServiceTests
 
         public Task<IReadOnlyList<NovelReadingStatistic>?> GetStatisticsAsync(
             TtuRemoteFile file,
-            CancellationToken ct = default) =>
-            Task.FromResult(Statistics);
+            CancellationToken ct = default)
+        {
+            GetStatisticsCallCount++;
+            return StatisticsFailure == null
+                ? Task.FromResult(Statistics)
+                : Task.FromException<IReadOnlyList<NovelReadingStatistic>?>(StatisticsFailure);
+        }
 
         public Task<TtuAudioBook?> GetAudioBookAsync(
             TtuRemoteFile file,
@@ -263,14 +605,16 @@ public sealed class TtuSyncServiceTests
             CancellationToken ct = default) =>
             Task.CompletedTask;
 
-        public Task UpsertProgressAsync(
+        public async Task UpsertProgressAsync(
             string bookTitle,
             TtuProgress progress,
             TtuRemoteFile? existingFile,
             CancellationToken ct = default)
         {
             LastExportedProgress = progress;
-            return Task.CompletedTask;
+            ExportedProgresses.Add(progress);
+            if (OnUpsertProgressAsync != null)
+                await OnUpsertProgressAsync(progress, ct);
         }
 
         public Task UpsertStatisticsAsync(
@@ -292,6 +636,30 @@ public sealed class TtuSyncServiceTests
             LastExportedAudioBook = audioBook;
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class FailFirstStatisticsSave(INovelStatisticsSidecarService inner)
+        : INovelStatisticsSidecarService
+    {
+        private int _saveCount;
+
+        public Task<NovelStatisticsSidecarLoadResult> LoadWithStatusAsync(
+            string bookRootPath,
+            CancellationToken ct = default) =>
+            inner.LoadWithStatusAsync(bookRootPath, ct);
+
+        public Task<IReadOnlyList<NovelReadingStatistic>> LoadAsync(
+            string bookRootPath,
+            CancellationToken ct = default) =>
+            inner.LoadAsync(bookRootPath, ct);
+
+        public Task SaveAsync(
+            string bookRootPath,
+            IReadOnlyList<NovelReadingStatistic> statistics,
+            CancellationToken ct = default) =>
+            Interlocked.Increment(ref _saveCount) == 1
+                ? Task.FromException(new IOException("statistics commit failed"))
+                : inner.SaveAsync(bookRootPath, statistics, ct);
     }
 
     private sealed class TempBookDirectory : IDisposable

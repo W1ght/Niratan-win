@@ -1,5 +1,70 @@
 # Changelog
 
+## Google Drive 下载书籍未恢复进度且统计未导入
+
+**原因**：
+- 新书导入完成后按 EPUB 元数据标题重新查询 Drive 文件夹；当远端目录标题与 EPUB 标题不一致时，会命中错误或空目录，丢失用户所选书籍的 progress/statistics 文件快照。
+- 普通 EPUB 导入返回时尚未生成 `bookinfo.json`，远端全书字符位置无法在首次打开前换算为正确 spine 章节。
+
+**解决**：
+- Drive 新书导入把已选择的远端文件快照直接传给同步服务；普通手动/自动同步仍保持按书名发现目录。
+- EPUB 导入阶段复用 Reader 字符过滤规则生成 `bookinfo.json`，再导入 bookmark；统计仍严格受统计同步开关及 Merge/Replace 模式控制。
+- 新增标题不一致、首次跨章定位、章节边界、统计开关、sidecar 导入失败清理等回归测试。
+
+---
+
+## Reader 翻页保存偶发提示路径访问被拒绝
+
+**原因**：
+- Reader 在同章翻页后原子覆盖 `bookmark.json`，自动同步可能同时读取同一 sidecar；JSON 读句柄只共享读取，而 Windows 的 `File.Move(..., overwrite: true)` 不能替换仍被读取的目标，因此快速翻页时偶发 `UnauthorizedAccessException`。
+
+**解决**：
+- sidecar 读取允许删除共享，使读取者继续看到打开时的旧文件；已有目标改用同卷 `File.Replace` 原子替换，并以独立临时备份保证替换成功后可清理。
+- 新增“同步读取未结束时保存 bookmark”回归测试，验证旧读取正常完成、新读取取得新内容且不遗留临时文件。
+
+---
+
+## Reader typed host command 被错误信任检查拦截，所有翻页失效
+
+**原因**：
+- bridge 安全隔离把 native 命令改为 `CoreWebView2.PostWebMessageAsJson` 后，错误地用 DOM `MessageEvent.isTrusted == true` 判断消息来源；真实 WebView2 host message 不以该标志作为来源契约，因此 `navigatePage`、滚轮开关和 Sasayaki 命令都在进入私有 bridge handler 时被丢弃。
+- Node runtime harness 人为给 host message 设置了 `isTrusted: true`，与 WebView2 事件形态不一致，导致回归未被测试捕获。
+
+**解决**：
+- 按 WebView2 契约校验 `event.source === window.chrome.webview`，继续保持 bridge IIFE 私有化和 typed payload 强校验；章节脚本无法取得 handler，也无法用错误 source 触发位置命令。
+- runtime harness 改为使用真实的 host source 身份且不依赖 `isTrusted`，同时保留 renderer 侧错误 source 被拒绝的回归断言。
+
+---
+
+## Reader 反向跨章曾闪过错误进度并重复结算
+
+**原因**：
+- 相邻跨章、普通程序化跳转、Page 可见状态和 lifecycle writer 曾由多个 tracker/coordinator 与可变字段分别拥有；从 B 第一页返回 A 时，native 会先发布近似端点或旧候选位置，再等待 WebView 算出 A 的最后一页，因此出现临时 `1.0`/100%、二次进度更新和 baseline/bookmark 竞争。
+- bridge error、关闭/后台与 Sasayaki 异步回调没有共享 point-of-no-return；目的地写入开始后仍可能被源位置恢复或另一条位置写入穿插，迟到的同章 render callback 也可能误认成当前完成。
+- Reader 退出曾先关闭 writer admission 而没有原子 settlement；Pause/Stop 还会在 destination commit 前捕获 source 位置。history 在 reservation 时提前 push/pop，重复 `restoreCompleted` 则把“已由第一条接纳”误判成 terminal failure。
+- EPUB 章节通过 virtual host 直接提供，原始 script、inline handler 和 script-scheme URL 没有清理；native-only 翻页授权函数还暴露在 `window`，同源伪造 bridge 消息缺少当前 render attempt source 绑定。
+
+**解决**：
+- 使用单一 `ReaderNavigationTransactionCoordinator` 持有不可变源/目的地、generation 和独立 `renderAttemptId`；目的章节隐藏分页，WebView 返回最终 page-aligned progress 后才按“保存 bookmark → 重置 baseline → 原子发布 → reveal”完成一次提交，旧 tracker/coordinator 与候选字段全部移除。
+- `Rendering` 失败或 lifecycle 取消恢复源位置；`Committing` 进入不可取消的持久化边界，lifecycle 等待并按 durable 结果恢复目的地或源位置。bridge error、重复/过期 completion 和 recovery 都按事务身份收敛到一个终态。
+- 事务存续期间统一阻止翻页、目录/搜索/链接/history 与 Sasayaki auto-scroll/load/progress/save 等位置突变；播放 UI 和非位置高亮仍可继续，异步回调在 await 后再次校验 gate。
+- lifecycle 在同一 writer gate 内先发起 settlement 再关闭 admission；Resolve 原子拒绝 barrier 后的 destination writer。Pause/Stop 等待 settlement snapshot 后再串入 writer，history 只在 destination settlement 提交；重复/过期完成返回显式 `Ignored`，Page 不再进入 recovery。
+- 章节内容按 EPUB manifest media type 识别为 HTML，在 Service 层按 local name 和 namespace URI 移除可执行元素、inline handler、`xml:base` 与危险 URL（包括别名前缀的 XLink/SVG/MathML）；清洗失败时 fail-closed，host 响应注入严格 no-script CSP，并拒绝外部、frame、new-window 与权限请求。所有 WebMessage 绑定当前 render attempt source；完整 bridge、分页引擎与 Sasayaki auto-scroll 收进 IIFE，native 翻页、滚轮开关和 Sasayaki 位置命令只通过严格校验的 typed host message 进入 closure，synthetic message event 不能调用位置 API。
+
+---
+
+## Reader 同章翻页未结算统计且最终同步可能混用位置
+
+**原因**：
+- Web bridge 的 `scrolled` 只表示同章滚动成功，native 曾把它当成命令已处理而不是位置已 `moved`；只有章节边界进入统计 checkpoint，导致同章翻页未及时更新字符、Session/Today 和 sidecar。
+- bookmark、statistics 与延迟同步曾读取可变的当前进度；writer 排队或 Close/Background final flush 期间位置从 X 变为 Y 时，可能把不同时间点的数据写入同一次提交，或在最后 export 完成前取消 coordinator。
+
+**解决**：
+- 用 `ReaderPageNavigationEvent` 明确传递 `Scrolled`/`Limit`、方向与最终进度，再由 `ReaderPageNavigationOutcome` 统一表达 `DidMove`、同章移动或相邻章节；真实同章移动立即保存 bookmark 并写一次 typed reading checkpoint，程序化跳转仍保持独立事务。
+- Reader writer 按 admission 顺序串行，并为 bookmark、statistics 和 sync 捕获同一份进度 snapshot；自动同步 coordinator 负责 open import、30 秒 debounce、single-flight follow-up，以及 Close/Background 的可等待 final flush，Close 只在最终 export 后取消。
+
+---
+
 ## 小说书架分区、云端导入与统计入口回归
 
 **原因**：

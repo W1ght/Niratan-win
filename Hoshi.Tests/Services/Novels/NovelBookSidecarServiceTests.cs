@@ -35,6 +35,26 @@ public sealed class NovelBookSidecarServiceTests
     }
 
     [Fact]
+    public async Task SaveBookmarkAsync_NormalizesLastModifiedToRemoteMillisecondPrecision()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var service = new NovelBookSidecarService();
+        var millisecond = DateTimeOffset.FromUnixTimeMilliseconds(1000);
+        var bookmark = new NovelBookmark(
+            ChapterIndex: 0,
+            Progress: 0.25,
+            CharacterCount: 25,
+            LastModified: millisecond.AddTicks(TimeSpan.TicksPerMillisecond - 1));
+
+        await service.SaveBookmarkAsync(temp.Path, bookmark, ct);
+
+        var loaded = await service.LoadBookmarkAsync(temp.Path, ct);
+        loaded!.LastModified!.Value.ToUnixTimeMilliseconds()
+            .Should().Be(millisecond.ToUnixTimeMilliseconds());
+    }
+
+    [Fact]
     public async Task SaveBookInfoAsync_WritesMacCompatibleChapterInfoFromSpineOrder()
     {
         var ct = TestContext.Current.CancellationToken;

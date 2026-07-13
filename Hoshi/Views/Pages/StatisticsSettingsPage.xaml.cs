@@ -26,6 +26,7 @@ public sealed partial class StatisticsSettingsPage : Page
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        ViewModel.RefreshGlobalSyncState();
         StatisticsSettingsBackButton.Visibility = e.Parameter is SettingsNavigationMode.Embedded
             ? Visibility.Collapsed
             : Visibility.Visible;

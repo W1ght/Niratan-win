@@ -3,12 +3,14 @@
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:helpers="using:Hoshi.Helpers.UI.Converters"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
       xmlns:ui="using:CommunityToolkit.WinUI"
       mc:Ignorable="d">
 
     <Page.Resources>
+        <helpers:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
         <Style x:Key="StatisticsSectionHeaderStyle" BasedOn="{StaticResource BodyStrongTextBlockStyle}" TargetType="TextBlock">
             <Style.Setters>
                 <Setter Property="Margin" Value="1,30,0,6" />
@@ -52,6 +54,8 @@
                                       IsOn="{x:Bind ViewModel.EnableStatistics, Mode=TwoWay}" />
                     </toolkit:SettingsCard>
 
+                    <StackPanel Spacing="4"
+                                Visibility="{x:Bind ViewModel.ShowStatisticsOptions, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <toolkit:SettingsCard x:Uid="StatisticsAutostartModeComboBox"
                                           HorizontalAlignment="Stretch"
                                           HorizontalContentAlignment="Stretch"
@@ -122,6 +126,10 @@
                                    Value="{x:Bind ViewModel.WeeklyTargetDaysValue, Mode=TwoWay}" />
                     </toolkit:SettingsCard>
 
+                    </StackPanel>
+
+                    <StackPanel Spacing="4"
+                                Visibility="{x:Bind ViewModel.ShowStatisticsSyncOptions, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <TextBlock x:Uid="StatisticsSyncSectionHeader"
                                Style="{StaticResource StatisticsSectionHeaderStyle}"
                                Text="Sync" />
@@ -143,6 +151,7 @@
                                   ItemsSource="{x:Bind ViewModel.AvailableSyncModes}"
                                   SelectedItem="{x:Bind ViewModel.SelectedSyncMode, Mode=TwoWay}" />
                     </toolkit:SettingsCard>
+                    </StackPanel>
                 </StackPanel>
             </Grid>
         </ScrollViewer>

@@ -44,7 +44,8 @@ public sealed class TtuSyncService : ITtuSyncService
             return new TtuSyncResult(TtuSyncResultKind.Skipped, book.Title);
 
         var bookRootPath = book.ExtractedPath;
-        var remoteFiles = await _remoteStore.ListBookFilesAsync(book.Title, ct);
+        var remoteFiles = options.KnownRemoteFiles
+            ?? await _remoteStore.ListBookFilesAsync(book.Title, ct);
         var localBookmark = await _bookSidecars.LoadBookmarkAsync(bookRootPath, ct);
         var direction = ResolveDirection(options.Direction, localBookmark, remoteFiles.Progress);
 
@@ -89,27 +90,56 @@ public sealed class TtuSyncService : ITtuSyncService
         if (progress == null)
             return new TtuSyncResult(TtuSyncResultKind.Skipped, book.Title);
 
-        await ImportProgressAsync(book, progress, ct);
-
+        IReadOnlyList<NovelReadingStatistic>? importedStatistics = null;
         if (options.SyncStatistics && remoteFiles.Statistics != null)
         {
             var remoteStatistics = await _remoteStore.GetStatisticsAsync(remoteFiles.Statistics, ct);
-            if (remoteStatistics is { Count: > 0 })
+            if (remoteStatistics != null)
             {
                 var localStatistics = await _statisticsSidecars.LoadAsync(book.ExtractedPath, ct);
-                var merged = MergeStatistics(
+                importedStatistics = MergeStatistics(
                     localStatistics,
                     remoteStatistics,
                     options.StatisticsSyncMode);
-                await _statisticsSidecars.SaveAsync(book.ExtractedPath, merged, ct);
             }
         }
 
+        TtuAudioBook? importedAudioBook = null;
         if (options.SyncAudioBook && remoteFiles.AudioBook != null)
+            importedAudioBook = await _remoteStore.GetAudioBookAsync(remoteFiles.AudioBook, ct);
+
+        var importedBookmark = await CreateImportedBookmarkAsync(book, progress, ct);
+        SasayakiPlaybackData? importedPlayback = null;
+        if (importedAudioBook != null)
         {
-            var audioBook = await _remoteStore.GetAudioBookAsync(remoteFiles.AudioBook, ct);
-            if (audioBook != null)
-                await ImportAudioBookAsync(book.ExtractedPath, audioBook, ct);
+            importedPlayback = await _sasayakiSidecars.LoadPlaybackAsync(book.ExtractedPath, ct);
+            importedPlayback.LastPosition = importedAudioBook.PlaybackPosition;
+        }
+
+        var snapshot = await SidecarSnapshot.CaptureAsync(book.ExtractedPath, ct);
+        try
+        {
+            await _bookSidecars.SaveBookmarkAsync(book.ExtractedPath, importedBookmark, ct);
+            if (importedStatistics != null)
+                await _statisticsSidecars.SaveAsync(book.ExtractedPath, importedStatistics, ct);
+            if (importedPlayback != null)
+                await _sasayakiSidecars.SavePlaybackAsync(book.ExtractedPath, importedPlayback, ct);
+        }
+        catch (Exception commitFailure)
+        {
+            try
+            {
+                await snapshot.RestoreAsync();
+            }
+            catch (Exception rollbackFailure)
+            {
+                throw new AggregateException(
+                    "TTU import failed and local sidecar rollback also failed.",
+                    commitFailure,
+                    rollbackFailure);
+            }
+
+            throw;
         }
 
         return new TtuSyncResult(TtuSyncResultKind.Imported, book.Title, progress.ExploredCharCount);
@@ -143,10 +173,6 @@ public sealed class TtuSyncService : ITtuSyncService
             LastBookmarkModified: roundedModified);
 
         await _remoteStore.UpsertProgressAsync(book.Title, progress, remoteFiles.Progress, ct);
-        await _bookSidecars.SaveBookmarkAsync(
-            book.ExtractedPath,
-            localBookmark with { LastModified = roundedModified },
-            ct);
 
         if (options.SyncStatistics)
         {
@@ -158,7 +184,7 @@ public sealed class TtuSyncService : ITtuSyncService
                 remoteStatistics,
                 localStatistics,
                 options.StatisticsSyncMode);
-            if (merged.Count > 0)
+            if (merged.Count > 0 || options.StatisticsSyncMode == StatisticsSyncMode.Replace)
                 await _remoteStore.UpsertStatisticsAsync(book.Title, merged, remoteFiles.Statistics, ct);
         }
 
@@ -197,7 +223,7 @@ public sealed class TtuSyncService : ITtuSyncService
         };
     }
 
-    private async Task ImportProgressAsync(
+    private async Task<NovelBookmark> CreateImportedBookmarkAsync(
         NovelBook book,
         TtuProgress progress,
         CancellationToken ct)
@@ -205,13 +231,11 @@ public sealed class TtuSyncService : ITtuSyncService
         var bookRootPath = book.ExtractedPath!;
         var bookInfo = await _bookSidecars.LoadBookInfoAsync(bookRootPath, ct);
         var resolved = ResolveCharacterPosition(bookInfo, progress);
-        var bookmark = new NovelBookmark(
+        return new NovelBookmark(
             resolved.ChapterIndex,
             resolved.ChapterProgress,
             progress.ExploredCharCount,
             progress.LastBookmarkModified);
-
-        await _bookSidecars.SaveBookmarkAsync(bookRootPath, bookmark, ct);
     }
 
     private static ReaderPosition ResolveCharacterPosition(
@@ -289,9 +313,9 @@ public sealed class TtuSyncService : ITtuSyncService
         StatisticsSyncMode syncMode)
     {
         if (syncMode == StatisticsSyncMode.Replace)
-            return externalStatistics;
+            return DeduplicateStatistics(externalStatistics);
 
-        var grouped = localStatistics.ToDictionary(
+        var grouped = DeduplicateStatistics(localStatistics).ToDictionary(
             statistic => statistic.DateKey,
             StringComparer.Ordinal);
         foreach (var statistic in externalStatistics)
@@ -309,5 +333,71 @@ public sealed class TtuSyncService : ITtuSyncService
             .ToList();
     }
 
+    private static IReadOnlyList<NovelReadingStatistic> DeduplicateStatistics(
+        IReadOnlyList<NovelReadingStatistic> statistics) =>
+        statistics
+            .GroupBy(statistic => statistic.DateKey, StringComparer.Ordinal)
+            .Select(group => group.MaxBy(statistic => statistic.LastStatisticModified)!)
+            .OrderBy(statistic => statistic.DateKey, StringComparer.Ordinal)
+            .ToList();
+
     private sealed record ReaderPosition(int ChapterIndex, double ChapterProgress);
+
+    private sealed class SidecarSnapshot
+    {
+        private readonly IReadOnlyList<FileSnapshot> _files;
+
+        private SidecarSnapshot(IReadOnlyList<FileSnapshot> files)
+        {
+            _files = files;
+        }
+
+        public static async Task<SidecarSnapshot> CaptureAsync(
+            string bookRootPath,
+            CancellationToken ct)
+        {
+            var paths = new[]
+            {
+                Path.Combine(bookRootPath, NovelBookSidecarService.BookmarkFileName),
+                Path.Combine(bookRootPath, NovelStatisticsSidecarService.StatisticsFileName),
+                Path.Combine(bookRootPath, ISasayakiSidecarService.PlaybackFileName),
+            };
+            var files = new List<FileSnapshot>(paths.Length);
+            foreach (var path in paths)
+            {
+                files.Add(new FileSnapshot(
+                    path,
+                    File.Exists(path) ? await File.ReadAllBytesAsync(path, ct) : null));
+            }
+
+            return new SidecarSnapshot(files);
+        }
+
+        public async Task RestoreAsync()
+        {
+            foreach (var file in _files)
+            {
+                if (file.Content == null)
+                {
+                    if (File.Exists(file.Path))
+                        File.Delete(file.Path);
+                    continue;
+                }
+
+                var tempPath = file.Path + "." + Guid.NewGuid().ToString("N") + ".rollback.tmp";
+                try
+                {
+                    await File.WriteAllBytesAsync(tempPath, file.Content, CancellationToken.None);
+                    File.Move(tempPath, file.Path, overwrite: true);
+                }
+                finally
+                {
+                    if (File.Exists(tempPath))
+                        File.Delete(tempPath);
+                }
+            }
+        }
+
+        private sealed record FileSnapshot(string Path, byte[]? Content);
+    }
 }

@@ -1,3 +1,6 @@
+(function () {
+"use strict";
+
 const VERSION = 1;
 
 window.__hoshiReaderState = {
@@ -14,8 +17,9 @@ window.__hoshiReaderState = {
 };
 
 let currentChapter = null;
+let sasayakiHighlightGeneration = 0;
 
-window.hoshiReader = {
+var reader = {
   pageHeight: 0,
   pageWidth: 0,
   columnGap: 0,
@@ -23,6 +27,8 @@ window.hoshiReader = {
   ttuRegexNegated: /[^0-9A-Za-z○◯々-〇〻ぁ-ゖゝ-ゞァ-ヺー０-９Ａ-Ｚａ-ｚｦ-ﾝ\p{Radical}\p{Unified_Ideograph}]+/gimu,
   ttuRegex: /[0-9A-Za-z○◯々-〇〻ぁ-ゖゝ-ゞァ-ヺー０-９Ａ-Ｚａ-ｚｦ-ﾝ\p{Radical}\p{Unified_Ideograph}]/iu,
   nodeStartOffsets: new WeakMap(),
+  nodeOffsetsGeneration: 0,
+  nodeOffsetsReadyGeneration: -1,
   paginationMetrics: null,
 
   isVertical: function () {
@@ -65,7 +71,7 @@ window.hoshiReader = {
     var root = rootNode || document.body;
     return document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode: function (n) {
-        return window.hoshiReader.isFurigana(n)
+        return reader.isFurigana(n)
           ? NodeFilter.FILTER_REJECT
           : NodeFilter.FILTER_ACCEPT;
       },
@@ -87,7 +93,21 @@ window.hoshiReader = {
       count += this.countChars(node.textContent);
     }
     this.nodeStartOffsets = offsets;
+    this.nodeOffsetsReadyGeneration = this.nodeOffsetsGeneration;
     this.paginationMetrics = null;
+  },
+
+  invalidateNodeOffsets: function () {
+    this.nodeOffsetsGeneration += 1;
+    this.nodeOffsetsReadyGeneration = -1;
+    this.paginationMetrics = null;
+  },
+
+  ensureNodeOffsets: function () {
+    if (this.nodeOffsetsReadyGeneration !== this.nodeOffsetsGeneration) {
+      this.buildNodeOffsets();
+    }
+    return this.nodeStartOffsets;
   },
 
   isIgnoredWheelTarget: function (target) {
@@ -119,7 +139,7 @@ window.hoshiReader = {
       if (!window.hoshiWheelNavigationEnabled) return;
       if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
       if (Math.abs(event.deltaX) > Math.abs(event.deltaY) || event.deltaY === 0) return;
-      if (window.hoshiReader.isIgnoredWheelTarget(event.target)) return;
+      if (reader.isIgnoredWheelTarget(event.target)) return;
       if (window.getSelection && window.getSelection()?.isCollapsed === false) return;
 
       var now = Date.now();
@@ -131,7 +151,7 @@ window.hoshiReader = {
       var direction = event.deltaY > 0 ? "forward" : "backward";
       window.hoshiLastWheelNavigationTime = now;
       event.preventDefault();
-      handleNavigate(direction);
+      requestPageNavigation(direction);
     }, { passive: false });
   },
 
@@ -220,6 +240,7 @@ window.hoshiReader = {
   },
 
   buildPaginationMetrics: function () {
+    this.ensureNodeOffsets();
     var context = this.getScrollContext();
     var currentScroll = this.getPagePosition(context);
     var step = this.pageStep(context);
@@ -454,85 +475,79 @@ window.hoshiReader = {
     }
   },
 
-  restoreProgress: async function (progress, navigationGeneration) {
+  restoreProgress: async function (progress, navigationGeneration, restoreTarget, renderAttemptId) {
+    renderAttemptId = renderAttemptId ?? currentChapter?.renderAttemptId ?? 0;
     await document.fonts.ready;
     var context = this.getScrollContext();
-    if (context.pageSize <= 0 || progress <= 0) {
-      var firstPage = this.contentFirstPageScroll(context);
-      this.setPagePosition(context, firstPage);
-      this.registerSnapScroll(firstPage);
-      this.lastProgress = 0;
-      notifyRestoreComplete(navigationGeneration);
-      return;
-    }
-    if (progress >= 0.99) {
-      var lastPage = this.contentLastPageScroll(context);
-      this.setPagePosition(context, Math.max(0, lastPage));
-      requestAnimationFrame(function () {
-        var ctx = window.hoshiReader.getScrollContext();
-        var lp = window.hoshiReader.contentLastPageScroll(ctx);
-        window.hoshiReader.setPagePosition(ctx, Math.max(0, lp));
-        window.hoshiReader.registerSnapScroll(lp);
-        window.hoshiReader.lastProgress = 1;
-        requestAnimationFrame(function () { notifyRestoreComplete(navigationGeneration); });
-      });
-      return;
-    }
-    var walker = this.createWalker();
-    var totalChars = 0;
-    var node;
-    while ((node = walker.nextNode())) {
-      totalChars += this.countChars(node.textContent);
-    }
-    var targetCharCount = Math.ceil(totalChars * progress);
-    var runningSum = 0;
-    var targetNode = null;
-    var targetOffset = 0;
-    walker = this.createWalker();
-    while ((node = walker.nextNode())) {
-      var nodeLen = this.countChars(node.textContent);
-      if (runningSum + nodeLen > targetCharCount) {
-        targetNode = node;
-        targetOffset = this.textOffsetForCharCount(
-          node,
-          Math.max(0, targetCharCount - runningSum)
-        );
-        break;
-      }
-      runningSum += nodeLen;
-    }
-    if (targetNode) {
-      var range = document.createRange();
-      var targetText = targetNode.textContent || "";
-      var targetChar = String.fromCodePoint(targetText.codePointAt(targetOffset));
-      range.setStart(targetNode, targetOffset);
-      range.setEnd(
-        targetNode,
-        Math.min(targetText.length, targetOffset + Math.max(1, targetChar.length))
-      );
-      var rect = this.getRect(range);
-      var currentScroll = this.getPagePosition(context);
-      var anchor =
-        (context.vertical ? rect.top : rect.left) + currentScroll;
-      var targetScroll = this.alignToPage(context, anchor);
-      this.setPagePosition(context, targetScroll);
-      requestAnimationFrame(function () {
-        var ctx = window.hoshiReader.getScrollContext();
-        window.hoshiReader.setPagePosition(ctx, targetScroll);
-        window.hoshiReader.registerSnapScroll(targetScroll);
-        window.hoshiReader.lastProgress = window.hoshiReader.calculateProgress();
-      });
+    var targetScroll;
+    if (restoreTarget === "start") {
+      targetScroll = this.contentFirstPageScroll(context);
+    } else if (restoreTarget === "end") {
+      targetScroll = this.contentLastPageScroll(context);
+    } else if (context.pageSize <= 0 || progress <= 0) {
+      targetScroll = this.contentFirstPageScroll(context);
+    } else if (progress >= 0.99) {
+      targetScroll = this.contentLastPageScroll(context);
     } else {
-      this.setPagePosition(context, 0);
-      this.registerSnapScroll(0);
-      this.lastProgress = 0;
+      var walker = this.createWalker();
+      var totalChars = 0;
+      var node;
+      while ((node = walker.nextNode())) {
+        totalChars += this.countChars(node.textContent);
+      }
+      var targetCharCount = Math.ceil(totalChars * progress);
+      var runningSum = 0;
+      var targetNode = null;
+      var targetOffset = 0;
+      walker = this.createWalker();
+      while ((node = walker.nextNode())) {
+        var nodeLen = this.countChars(node.textContent);
+        if (runningSum + nodeLen > targetCharCount) {
+          targetNode = node;
+          targetOffset = this.textOffsetForCharCount(
+            node,
+            Math.max(0, targetCharCount - runningSum)
+          );
+          break;
+        }
+        runningSum += nodeLen;
+      }
+      if (targetNode) {
+        var range = document.createRange();
+        var targetText = targetNode.textContent || "";
+        var targetChar = String.fromCodePoint(targetText.codePointAt(targetOffset));
+        range.setStart(targetNode, targetOffset);
+        range.setEnd(
+          targetNode,
+          Math.min(targetText.length, targetOffset + Math.max(1, targetChar.length))
+        );
+        var rect = this.getRect(range);
+        var currentScroll = this.getPagePosition(context);
+        var anchor =
+          (context.vertical ? rect.top : rect.left) + currentScroll;
+        targetScroll = this.alignToPage(context, anchor);
+      } else {
+        targetScroll = this.contentFirstPageScroll(context);
+      }
     }
-    requestAnimationFrame(function () {
-      requestAnimationFrame(function () { notifyRestoreComplete(navigationGeneration); });
+
+    this.setPagePosition(context, Math.max(0, targetScroll));
+    await new Promise(function (resolve) {
+      requestAnimationFrame(function () { requestAnimationFrame(resolve); });
     });
+    context = this.getScrollContext();
+    if (restoreTarget === "start")
+      targetScroll = this.contentFirstPageScroll(context);
+    else if (restoreTarget === "end")
+      targetScroll = this.contentLastPageScroll(context);
+    this.setPagePosition(context, Math.max(0, targetScroll));
+    this.registerSnapScroll(targetScroll);
+    this.lastProgress = this.calculateProgress();
+    notifyRestoreComplete(navigationGeneration, renderAttemptId);
   },
 
-  jumpToFragment: async function (fragment, navigationGeneration) {
+  jumpToFragment: async function (fragment, navigationGeneration, renderAttemptId) {
+    renderAttemptId = renderAttemptId ?? currentChapter?.renderAttemptId ?? 0;
     await document.fonts.ready;
     var context = this.getScrollContext();
     var rawFragment = (fragment || "").trim();
@@ -542,7 +557,7 @@ window.hoshiReader = {
         document.getElementsByName(rawFragment)[0]);
     if (context.pageSize <= 0 || !target) {
       this.registerSnapScroll(this.getPagePosition(context));
-      notifyRestoreComplete(navigationGeneration);
+      notifyRestoreComplete(navigationGeneration, renderAttemptId);
       return false;
     }
     var rect = this.getRect(target);
@@ -551,10 +566,12 @@ window.hoshiReader = {
     var targetScroll = this.alignToPage(context, anchor);
     this.setPagePosition(context, targetScroll);
     requestAnimationFrame(function () {
-      var ctx = window.hoshiReader.getScrollContext();
-      window.hoshiReader.setPagePosition(ctx, targetScroll);
-      window.hoshiReader.registerSnapScroll(targetScroll);
-      requestAnimationFrame(function () { notifyRestoreComplete(navigationGeneration); });
+      var ctx = reader.getScrollContext();
+      reader.setPagePosition(ctx, targetScroll);
+      reader.registerSnapScroll(targetScroll);
+      requestAnimationFrame(function () {
+        notifyRestoreComplete(navigationGeneration, renderAttemptId);
+      });
     });
     return true;
   },
@@ -576,8 +593,8 @@ window.hoshiReader = {
 
     this.setPagePosition(context, targetScroll);
     requestAnimationFrame(function () {
-      var ctx = window.hoshiReader.getScrollContext();
-      window.hoshiReader.setPagePosition(ctx, targetScroll);
+      var ctx = reader.getScrollContext();
+      reader.setPagePosition(ctx, targetScroll);
     });
     return true;
   },
@@ -616,9 +633,9 @@ window.hoshiReader = {
     });
   },
 
-  initialize: function (initialProgress, navigationGeneration) {
-    if (window.hoshiReader.didInitialize) return;
-    window.hoshiReader.didInitialize = true;
+  initialize: async function (initialProgress, navigationGeneration, restoreTarget, renderAttemptId) {
+    if (reader.didInitialize) return;
+    reader.didInitialize = true;
 
     var viewport = document.querySelector('meta[name="viewport"]');
     if (viewport) viewport.remove();
@@ -641,15 +658,15 @@ window.hoshiReader = {
     );
     document.documentElement.style.setProperty(
       "--hoshi-image-max-width",
-      Math.max(1, Math.floor(pageWidth - (window.hoshiReader.currentSafeInline() * 2))) + "px"
+      Math.max(1, Math.floor(pageWidth - (reader.currentSafeInline() * 2))) + "px"
     );
     document.documentElement.style.setProperty(
       "--hoshi-image-max-height",
-      Math.max(1, Math.floor(pageHeight - (window.hoshiReader.currentSafeBlock() * 2) - overlap)) + "px"
+      Math.max(1, Math.floor(pageHeight - (reader.currentSafeBlock() * 2) - overlap)) + "px"
     );
-    window.hoshiReader.pageHeight = pageHeight;
-    window.hoshiReader.pageWidth = pageWidth;
-    window.hoshiReader.columnGap = window.hoshiReader.currentColumnGap();
+    reader.pageHeight = pageHeight;
+    reader.pageWidth = pageWidth;
+    reader.columnGap = reader.currentColumnGap();
 
     Array.from(document.querySelectorAll("svg")).forEach(function (svg) {
       if (
@@ -686,27 +703,38 @@ window.hoshiReader = {
 
     var progress = initialProgress != null ? initialProgress : 0;
     var self = this;
-    Promise.all(imagePromises)
-      .then(function () {
-        return new Promise(function (resolve) { setTimeout(resolve, 50); });
-      })
-      .then(function () {
-        self.buildNodeOffsets();
-        if (window.hoshiHighlights) {
-          window.hoshiHighlights.applyHighlights(window.__hoshiChapterHighlights || []);
-        }
-        self.restoreProgress(progress, navigationGeneration).then(function () {
-          self.lastProgress = self.calculateProgress();
-          updateDiagnostics();
-          postToHost("chapterReady", window.__hoshiReaderState);
-        });
-      });
+    await Promise.all(imagePromises);
+    await new Promise(function (resolve) { setTimeout(resolve, 50); });
+    self.buildNodeOffsets();
+    if (window.hoshiHighlights) {
+      window.hoshiHighlights.applyHighlights(window.__hoshiChapterHighlights || []);
+    }
+    await self.restoreProgress(
+      progress,
+      navigationGeneration,
+      restoreTarget,
+      renderAttemptId
+    );
+    self.lastProgress = self.calculateProgress();
+    updateDiagnostics();
+    notifyChapterReady(navigationGeneration, renderAttemptId);
   },
 };
 
-function notifyRestoreComplete(navigationGeneration) {
+function notifyRestoreComplete(navigationGeneration, renderAttemptId) {
   postToHost("restoreCompleted", {
-    progress: window.hoshiReader.calculateProgress(),
+    progress: reader.calculateProgress(),
+    chapterIndex: currentChapter.index,
+    renderAttemptId: renderAttemptId,
+    navigationGeneration: navigationGeneration ?? null,
+  });
+}
+
+function notifyChapterReady(navigationGeneration, renderAttemptId) {
+  postToHost("chapterReady", {
+    ...window.__hoshiReaderState,
+    chapterIndex: currentChapter.index,
+    renderAttemptId: renderAttemptId,
     navigationGeneration: navigationGeneration ?? null,
   });
 }
@@ -717,6 +745,18 @@ function postToHost(type, payload) {
     type: type,
     payload: payload || {},
   });
+}
+
+function createBridgeErrorReporter() {
+  var reported = false;
+  return function reportBridgeError(error) {
+    if (reported) return;
+    reported = true;
+    var msg = error instanceof Error ? error.message : String(error);
+    window.__hoshiReaderState.error = msg;
+    logDebug("bridge-error", { error: msg });
+    postToHost("error", { message: msg });
+  };
 }
 
 var defaultShortcutBindings = {
@@ -779,19 +819,19 @@ function shortcutActionForKeyboardEvent(event) {
 }
 
 function updateDiagnostics() {
-  var context = window.hoshiReader.getScrollContext();
+  var context = reader.getScrollContext();
   var metrics =
-    window.hoshiReader.paginationMetrics ||
-    window.hoshiReader.buildPaginationMetrics();
-  var step = window.hoshiReader.pageStep(context);
+    reader.paginationMetrics ||
+    reader.buildPaginationMetrics();
+  var step = reader.pageStep(context);
   var pageCount = context.pageSize > 0
     ? Math.max(1, Math.floor(context.maxScroll / step) + 1)
     : 0;
   var currentPage = context.pageSize > 0
-    ? Math.floor(window.hoshiReader.getPagePosition(context) / step)
+    ? Math.floor(reader.getPagePosition(context) / step)
     : 0;
-  var progress = window.hoshiReader.calculateProgress();
-  window.hoshiReader.lastProgress = progress;
+  var progress = reader.calculateProgress();
+  reader.lastProgress = progress;
   var renderedText = document.body?.innerText?.trim()?.length ?? 0;
 
   window.__hoshiReaderState = {
@@ -814,8 +854,8 @@ function updateDiagnostics() {
       devicePixelRatio: window.devicePixelRatio || 1,
       visualViewportWidth: window.visualViewport?.width || window.innerWidth,
       visualViewportHeight: window.visualViewport?.height || window.innerHeight,
-      pageWidth: window.hoshiReader.pageWidth,
-      pageHeight: window.hoshiReader.pageHeight,
+      pageWidth: reader.pageWidth,
+      pageHeight: reader.pageHeight,
       currentPage: currentPage,
       pageIndex: currentPage,
       pageCount: pageCount,
@@ -823,10 +863,10 @@ function updateDiagnostics() {
       progress: progress,
       minScroll: metrics.minScroll,
       maxScroll: metrics.maxScroll,
-      scrollPosition: window.hoshiReader.getPagePosition(context),
-      columnGap: window.hoshiReader.currentColumnGap(),
-      safeInline: window.hoshiReader.currentSafeInline(),
-      safeBlock: window.hoshiReader.currentSafeBlock(),
+      scrollPosition: reader.getPagePosition(context),
+      columnGap: reader.currentColumnGap(),
+      safeInline: reader.currentSafeInline(),
+      safeBlock: reader.currentSafeBlock(),
       pageStep: step,
       bodyTextLength: renderedText,
     },
@@ -840,20 +880,54 @@ window.hoshiGetDiagnostics = function () {
 };
 
 async function handleNavigate(direction) {
-  var result = window.hoshiReader.paginate(direction);
+  var result = reader.paginate(direction);
   updateDiagnostics();
   postToHost("pageChanged", {
     direction: direction,
     result: result,
-    progress: window.hoshiReader.calculateProgress(),
+    progress: reader.calculateProgress(),
     state: window.__hoshiReaderState,
   });
 }
 
+function requireObject(value, name) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(name + " must be an object");
+  }
+  return value;
+}
+
+function requireInteger(value, name, minimum) {
+  if (!Number.isSafeInteger(value) || value < minimum) {
+    throw new Error(name + " must be an integer >= " + minimum);
+  }
+  return value;
+}
+
+function requireProgress(value, name) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error(name + " must be a finite number between 0 and 1");
+  }
+  return value;
+}
+
+function optionalGeneration(value, name) {
+  if (value === undefined || value === null) return null;
+  return requireInteger(value, name, 0);
+}
+
 async function handleMessage(event) {
+  if (!event || event.source !== window.chrome?.webview) return;
+
+  var reportOperationError = createBridgeErrorReporter();
   try {
     var message =
       typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+    requireObject(message, "message");
+    if (typeof message.type !== "string" || !message.type) {
+      throw new Error("message.type must be a non-empty string");
+    }
+    var payload = requireObject(message.payload, "message.payload");
     logDebug("rx-message", { type: message?.type });
     if (message?.version !== VERSION) {
       throw new Error(
@@ -863,53 +937,162 @@ async function handleMessage(event) {
 
     switch (message.type) {
       case "setChapter":
+        var chapterIndex = requireInteger(payload.index, "payload.index", 0);
+        var totalChapters = requireInteger(
+          payload.totalChapters,
+          "payload.totalChapters",
+          1
+        );
+        var chapterAttemptId = requireInteger(
+          payload.renderAttemptId,
+          "payload.renderAttemptId",
+          0
+        );
+        var chapterGeneration = optionalGeneration(
+          payload.navigationGeneration,
+          "payload.navigationGeneration"
+        );
+        var restoreTarget = payload.restoreTarget ?? null;
+        if (restoreTarget !== null && restoreTarget !== "start" && restoreTarget !== "end") {
+          throw new Error("payload.restoreTarget must be start, end, or null");
+        }
+        var progress = payload.progress === undefined
+          ? 0
+          : requireProgress(payload.progress, "payload.progress");
         currentChapter = {
-          index: message.payload?.index ?? 0,
-          totalChapters: message.payload?.totalChapters ?? 0,
+          index: chapterIndex,
+          totalChapters: totalChapters,
+          renderAttemptId: chapterAttemptId,
         };
-        var progress = message.payload?.progress ?? 0;
         logDebug("setChapter-received", { chapter: currentChapter, progress: progress });
-        window.hoshiReader.initialize(
+        await reader.initialize(
           progress,
-          message.payload?.navigationGeneration ?? null
+          chapterGeneration,
+          restoreTarget,
+          currentChapter.renderAttemptId
         );
         break;
       case "restoreProgress":
+        if (!currentChapter) throw new Error("restoreProgress requires an active chapter");
+        var restoreProgress = requireProgress(payload.progress, "payload.progress");
+        var restoreGeneration = optionalGeneration(
+          payload.navigationGeneration,
+          "payload.navigationGeneration"
+        );
+        var restoreAttemptId = requireInteger(
+          payload.renderAttemptId,
+          "payload.renderAttemptId",
+          0
+        );
+        currentChapter.renderAttemptId = restoreAttemptId;
         logDebug("restoreProgress-start", {
-          progress: message.payload?.progress ?? 0,
-          pageHeight: window.hoshiReader.pageHeight,
-          pageWidth: window.hoshiReader.pageWidth,
+          progress: restoreProgress,
+          pageHeight: reader.pageHeight,
+          pageWidth: reader.pageWidth,
           bodyScrollWidth: document.body.scrollWidth,
           bodyClientWidth: document.body.clientWidth,
         });
-        await window.hoshiReader.restoreProgress(
-          message.payload?.progress ?? 0,
-          message.payload?.navigationGeneration ?? null
+        await reader.restoreProgress(
+          restoreProgress,
+          restoreGeneration,
+          null,
+          restoreAttemptId
         );
         updateDiagnostics();
         logDebug("restoreProgress-done", window.__hoshiReaderState);
-        postToHost("chapterReady", window.__hoshiReaderState);
+        notifyChapterReady(restoreGeneration, restoreAttemptId);
         break;
       case "jumpToFragment":
-        await window.hoshiReader.jumpToFragment(
-          message.payload?.fragment ?? "",
-          message.payload?.navigationGeneration ?? null
+        if (!currentChapter) throw new Error("jumpToFragment requires an active chapter");
+        if (typeof payload.fragment !== "string") {
+          throw new Error("payload.fragment must be a string");
+        }
+        var fragmentGeneration = requireInteger(
+          payload.navigationGeneration,
+          "payload.navigationGeneration",
+          0
+        );
+        var fragmentAttemptId = requireInteger(
+          payload.renderAttemptId,
+          "payload.renderAttemptId",
+          0
+        );
+        currentChapter.renderAttemptId = fragmentAttemptId;
+        await reader.jumpToFragment(
+          payload.fragment,
+          fragmentGeneration,
+          fragmentAttemptId
         );
         updateDiagnostics();
+        notifyChapterReady(fragmentGeneration, fragmentAttemptId);
+        break;
+      case "navigatePage":
+        var authorizedDirection = payload.direction;
+        if (authorizedDirection !== "forward" && authorizedDirection !== "backward") {
+          throw new Error("Invalid authorized page direction");
+        }
+        await handleNavigate(authorizedDirection);
+        break;
+      case "setWheelNavigation":
+        if (typeof payload.enabled !== "boolean") {
+          throw new Error("payload.enabled must be a boolean");
+        }
+        reader.registerWheelNavigation(payload.enabled);
+        break;
+      case "highlightSasayakiCue":
+        var sasayakiGeneration = requireInteger(
+          payload.generation,
+          "payload.generation",
+          0
+        );
+        var startCodePoint = requireInteger(
+          payload.startCodePoint,
+          "payload.startCodePoint",
+          0
+        );
+        var cueLength = requireInteger(payload.length, "payload.length", 0);
+        if (typeof payload.autoScroll !== "boolean"
+          || typeof payload.textColor !== "string"
+          || typeof payload.backgroundColor !== "string") {
+          throw new Error("Invalid highlightSasayakiCue payload");
+        }
+        var currentGeneration = sasayakiHighlightGeneration;
+        if (currentGeneration > sasayakiGeneration) break;
+        sasayakiHighlightGeneration = sasayakiGeneration;
+        sasayaki.setColors(payload.textColor, payload.backgroundColor);
+        var sasayakiProgress = sasayaki.highlightCue(
+          startCodePoint,
+          cueLength,
+          payload.autoScroll
+        );
+        postToHost("sasayakiHighlightCompleted", {
+          generation: sasayakiGeneration,
+          progress: typeof sasayakiProgress === "number" && Number.isFinite(sasayakiProgress)
+            ? sasayakiProgress
+            : null,
+        });
+        break;
+      case "clearSasayakiHighlight":
+        sasayaki.clearHighlight();
         break;
       default:
         throw new Error("Unsupported bridge message type: " + message.type);
     }
   } catch (error) {
-    var msg = error instanceof Error ? error.message : String(error);
-    window.__hoshiReaderState.error = msg;
-    logDebug("handleMessage-error", { error: msg });
-    postToHost("error", { message: msg });
+    reportOperationError(error);
   }
 }
 
+function requestPageNavigation(direction) {
+  if (direction !== "forward" && direction !== "backward") return;
+  postToHost("pageNavigationRequest", { direction: direction });
+}
+
 window.chrome?.webview?.addEventListener("message", handleMessage);
-window.hoshiReaderNavigate = handleNavigate;
+
+document.addEventListener("hoshi-reader-content-changed", function () {
+  reader.invalidateNodeOffsets();
+});
 
 document.addEventListener("click", function (event) {
   var anchor = event.target?.closest?.("a[href]");
@@ -935,13 +1118,13 @@ document.addEventListener("keydown", function (event) {
 
   if (actionId === "reader.previousPage") {
     event.preventDefault();
-    handleNavigate("backward");
+    requestPageNavigation("backward");
     return;
   }
 
   if (actionId === "reader.nextPage") {
     event.preventDefault();
-    handleNavigate("forward");
+    requestPageNavigation("forward");
     return;
   }
 
@@ -955,9 +1138,10 @@ var resizeDebounce = null;
 window.addEventListener("resize", function () {
   clearTimeout(resizeDebounce);
   resizeDebounce = setTimeout(function () {
-    var progress = window.hoshiReader.lastProgress || window.hoshiReader.calculateProgress();
+    var reportResizeError = createBridgeErrorReporter();
+    var progress = reader.lastProgress || reader.calculateProgress();
     logDebug("resize", { progress: progress, innerWidth: window.innerWidth, innerHeight: window.innerHeight });
-    window.hoshiReader.reflow(progress);
+    reader.reflow(progress).catch(reportResizeError);
   }, 250);
 });
 
@@ -967,20 +1151,22 @@ function logDebug(msg, data) {
 
 window.onerror = function (message, source, lineno, colno, error) {
   var msg = error instanceof Error ? error.message : String(message);
-  var stack = error instanceof Error ? error.stack : undefined;
-  postToHost("error", {
-    message: "Uncaught: " + msg + " at " + source + ":" + lineno + ":" + colno,
-    stack: stack,
-  });
+  createBridgeErrorReporter()(
+    new Error("Uncaught: " + msg + " at " + source + ":" + lineno + ":" + colno)
+  );
 };
 
 window.addEventListener("unhandledrejection", function (event) {
   var msg = event.reason instanceof Error ? event.reason.message : String(event.reason);
-  postToHost("error", { message: "Unhandled rejection: " + msg });
+  createBridgeErrorReporter()(new Error("Unhandled rejection: " + msg));
 });
 
 // ── Sasayaki highlighting ──────────────────────────────────────────
-window.hoshiSasayaki = {
+function notifyReaderContentChanged() {
+  document.dispatchEvent(new Event("hoshi-reader-content-changed"));
+}
+
+var sasayaki = {
   _currentHighlightNodes: [],
   _highlightStyle: null,
   _textColor: null,
@@ -1013,17 +1199,18 @@ window.hoshiSasayaki = {
     if (typeof CSS !== "undefined" && CSS.highlights) {
       CSS.highlights.delete(this._highlightName);
     }
-    var hadWrappedNodes = this._currentHighlightNodes.length > 0;
+    var didMutateDom = false;
     this._currentHighlightNodes.forEach(function (span) {
       var parent = span.parentNode;
       if (parent) {
         while (span.firstChild) parent.insertBefore(span.firstChild, span);
         parent.removeChild(span);
         parent.normalize();
+        didMutateDom = true;
       }
     });
     this._currentHighlightNodes = [];
-    if (hadWrappedNodes) window.hoshiReader.buildNodeOffsets?.();
+    if (didMutateDom) notifyReaderContentChanged();
   },
 
   _clearReaderSelection: function () {
@@ -1046,7 +1233,7 @@ window.hoshiSasayaki = {
     this._clearReaderSelection();
     this._ensureStyle();
     if (length <= 0) return null;
-    var beforeProgress = window.hoshiReader.calculateProgress();
+    var beforeProgress = reader.calculateProgress();
 
     var endOffset = startCodePoint + length;
     var startBoundary = this._findBoundary(startCodePoint, false);
@@ -1062,20 +1249,20 @@ window.hoshiSasayaki = {
       autoScroll !== false
     );
     if (didScroll) {
-      var afterProgress = window.hoshiReader.calculateProgress();
-      window.hoshiReader.lastProgress = afterProgress;
+      var afterProgress = reader.calculateProgress();
+      reader.lastProgress = afterProgress;
       return Math.abs(afterProgress - beforeProgress) > 0.0001 ? afterProgress : null;
     }
     return null;
   },
 
   _findBoundary: function (targetCodePoint, isEndBoundary) {
-    var walker = window.hoshiReader.createWalker();
+    var walker = reader.createWalker();
     var runningCount = 0;
     var node;
 
     while ((node = walker.nextNode())) {
-      var nodeLen = window.hoshiReader.countChars(node.textContent);
+      var nodeLen = reader.countChars(node.textContent);
       var containsBoundary = isEndBoundary
         ? runningCount + nodeLen >= targetCodePoint
         : runningCount + nodeLen > targetCodePoint;
@@ -1083,7 +1270,7 @@ window.hoshiSasayaki = {
       if (containsBoundary) {
         return {
           node: node,
-          offset: window.hoshiReader.textOffsetForCharCount(
+          offset: reader.textOffsetForCharCount(
             node,
             Math.max(0, targetCodePoint - runningCount)
           ),
@@ -1098,7 +1285,7 @@ window.hoshiSasayaki = {
 
   _collectHighlightNodes: function (startNode, endNode) {
     var nodes = [];
-    var walker = window.hoshiReader.createWalker();
+    var walker = reader.createWalker();
     var started = false;
     var node;
 
@@ -1117,7 +1304,7 @@ window.hoshiSasayaki = {
     if (ranges.length <= 0) return false;
 
     if (autoScroll) {
-      didScroll = window.hoshiReader.scrollToRange(ranges[0]);
+      didScroll = reader.scrollToRange(ranges[0]);
     }
 
     if (typeof CSS !== "undefined" && CSS.highlights && typeof Highlight !== "undefined") {
@@ -1126,7 +1313,9 @@ window.hoshiSasayaki = {
     }
 
     this._currentHighlightNodes = this._wrapHighlightRanges(ranges);
-    window.hoshiReader.buildNodeOffsets?.();
+    if (this._currentHighlightNodes.length > 0) {
+      notifyReaderContentChanged();
+    }
     return didScroll;
   },
 
@@ -1136,7 +1325,7 @@ window.hoshiSasayaki = {
     for (var i = 0; i < nodesToHighlight.length; i++) {
       var node = nodesToHighlight[i];
       if (!node.textContent || node.textContent.trim() === "") continue;
-      if (window.hoshiReader.isFurigana(node)) continue;
+      if (reader.isFurigana(node)) continue;
 
       var nodeStart = Math.max(0, Math.min(node === startNode ? startOffset : 0, node.textContent.length));
       var nodeEnd = Math.max(nodeStart, Math.min(node === endNode ? endOffset : node.textContent.length, node.textContent.length));
@@ -1182,13 +1371,18 @@ if (window.__hoshiChapterInfo) {
   currentChapter = {
     index: window.__hoshiChapterInfo.index ?? 0,
     totalChapters: window.__hoshiChapterInfo.totalChapters ?? 0,
+    renderAttemptId: window.__hoshiChapterInfo.renderAttemptId ?? 0,
   };
   var initProgress = window.__hoshiChapterInfo.progress ?? 0;
+  var reportAutoInitializeError = createBridgeErrorReporter();
   logDebug("auto-initialize", { chapter: currentChapter, progress: initProgress });
-  window.hoshiReader.initialize(
+  reader.initialize(
     initProgress,
-    window.__hoshiChapterInfo.navigationGeneration ?? null
-  );
+    window.__hoshiChapterInfo.navigationGeneration ?? null,
+    window.__hoshiChapterInfo.restoreTarget ?? null,
+    currentChapter.renderAttemptId
+  ).catch(reportAutoInitializeError);
 } else {
   postToHost("readerReady", {});
 }
+})();

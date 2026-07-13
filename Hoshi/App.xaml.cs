@@ -145,6 +145,7 @@ public partial class App : Application
         services.AddTransient<NovelShelfManagementViewModel>();
         services.AddTransient<VideoLibraryPageViewModel>();
         services.AddTransient<NovelLookupPageViewModel>();
+        services.AddTransient<ReaderNavigationTransactionCoordinator>();
         services.AddTransient<NovelReaderPageViewModel>();
         services.AddTransient<VideoPlayerViewModel>();
         services.AddTransient<GlobalLookupWindowViewModel>();
@@ -212,6 +213,7 @@ public partial class App : Application
         services.AddSingleton<ITtuBookDataConverter, TtuBookDataConverter>();
         services.AddSingleton<ITtuBookImportService, TtuBookImportService>();
         services.AddSingleton<ITtuSyncService, TtuSyncService>();
+        RegisterReaderAutoSyncCoordinator(services);
         services.AddSingleton<ITtuSyncRemoteStore, GoogleDriveTtuSyncRemoteStore>();
         services.AddSingleton<IDictionaryLookupService, DictionaryLookupService>();
         services.AddSingleton<IDictionaryPopupRequestService, DictionaryPopupRequestService>();
@@ -305,6 +307,9 @@ public partial class App : Application
 
     public static T GetService<T>()
         where T : class => ((App)Current)._services.GetRequiredService<T>();
+
+    internal static void RegisterReaderAutoSyncCoordinator(IServiceCollection services) =>
+        services.AddTransient<IReaderAutoSyncCoordinator, ReaderAutoSyncCoordinator>();
 
     private async Task OpenVideoFromLaunchArgumentsAsync(string? arguments)
     {

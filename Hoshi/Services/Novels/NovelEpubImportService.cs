@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -13,22 +14,26 @@ namespace Hoshi.Services.Novels;
 public sealed class NovelEpubImportService : INovelEpubImportService
 {
     private readonly IEpubParserService _epubParser;
+    private readonly INovelBookSidecarService _sidecars;
     private readonly ILogger<NovelEpubImportService> _logger;
     private readonly Func<string, string> _bookRootResolver;
 
     public NovelEpubImportService(
         IEpubParserService epubParser,
+        INovelBookSidecarService sidecars,
         ILogger<NovelEpubImportService> logger
-    ) : this(epubParser, logger, AppDataHelper.GetNovelBookPath)
+    ) : this(epubParser, sidecars, logger, AppDataHelper.GetNovelBookPath)
     {
     }
 
     internal NovelEpubImportService(
         IEpubParserService epubParser,
+        INovelBookSidecarService sidecars,
         ILogger<NovelEpubImportService> logger,
         Func<string, string> bookRootResolver)
     {
         _epubParser = epubParser;
+        _sidecars = sidecars;
         _logger = logger;
         _bookRootResolver = bookRootResolver;
     }
@@ -63,6 +68,18 @@ public sealed class NovelEpubImportService : INovelEpubImportService
                 () => _epubParser.Parse(privateEpubPath, bookRoot),
                 ct
             );
+            var chapterCharacterCounts = await Task.Run(
+                () => epubBook.Chapters
+                    .Select(chapter => CountReadableCharacters(chapter.Href))
+                    .ToArray(),
+                ct
+            );
+            var bookInfo = _sidecars.CreateBookInfo(
+                epubBook.Chapters,
+                chapterCharacterCounts,
+                epubBook.ContainerDirectory
+            );
+            await _sidecars.SaveBookInfoAsync(bookRoot, bookInfo, ct);
 
             var book = new NovelBook
             {
@@ -95,6 +112,14 @@ public sealed class NovelEpubImportService : INovelEpubImportService
             _logger.LogWarning(ex, "Failed to import EPUB {FilePath}", filePath);
             return Result<NovelImportResult>.Failure(ex.Message, "EPUB import failed");
         }
+    }
+
+    private static int CountReadableCharacters(string chapterPath)
+    {
+        if (!File.Exists(chapterPath))
+            return 0;
+
+        return ReaderTextFilter.CountReadableCharacters(File.ReadAllText(chapterPath));
     }
 
     private static void DeleteIncompleteRoot(string? bookRoot)
