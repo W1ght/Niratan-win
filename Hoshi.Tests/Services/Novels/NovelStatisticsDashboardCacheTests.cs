@@ -91,6 +91,28 @@ public sealed class NovelStatisticsDashboardCacheTests
     }
 
     [Fact]
+    public async Task UnsupportedCacheModel_DeletesOnlyDerivedCache()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var bookRoot = Path.Combine(temp.Path, "book");
+        Directory.CreateDirectory(bookRoot);
+        var statisticsPath = Path.Combine(bookRoot, "statistics.json");
+        await File.WriteAllTextAsync(statisticsPath, "[]", ct);
+        var cachePath = Path.Combine(temp.Path, NovelStatisticsDashboardCache.FileName);
+        await File.WriteAllTextAsync(cachePath, "{}", ct);
+        var cache = new NovelStatisticsDashboardCache(
+            new UnsupportedReadStore(),
+            new WeakReferenceMessenger(),
+            cachePath);
+
+        (await cache.TryLoadAsync("key", ct)).Should().BeNull();
+
+        File.Exists(cachePath).Should().BeFalse();
+        File.Exists(statisticsPath).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task CacheHit_ReturnsImmediatelyThenPublishesFreshSidecars()
     {
         var ct = TestContext.Current.CancellationToken;
@@ -135,6 +157,20 @@ public sealed class NovelStatisticsDashboardCacheTests
             new(2026, 7, 11, 12, 0, 0, TimeSpan.Zero);
 
         public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
+    }
+
+    private sealed class UnsupportedReadStore : INiratanJsonFileStore
+    {
+        public Task<NovelJsonReadResult<T>> ReadAsync<T>(
+            string path,
+            CancellationToken ct = default) =>
+            throw new NotSupportedException("Unsupported cached model.");
+
+        public Task WriteAsync<T>(
+            string path,
+            T value,
+            CancellationToken ct = default) =>
+            Task.CompletedTask;
     }
 
     private sealed class TempDirectory : IDisposable

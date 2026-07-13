@@ -52,7 +52,16 @@ internal sealed class NovelStatisticsDashboardCache
     {
         if (_memoryKey == key)
             return _memorySnapshot;
-        var result = await _store.ReadAsync<NovelStatisticsDashboardCachePayload>(_path, ct);
+        NovelJsonReadResult<NovelStatisticsDashboardCachePayload> result;
+        try
+        {
+            result = await _store.ReadAsync<NovelStatisticsDashboardCachePayload>(_path, ct);
+        }
+        catch (NotSupportedException)
+        {
+            Invalidate();
+            return null;
+        }
         if (result.Status == NovelJsonReadStatus.Missing)
             return null;
         if (result.Status != NovelJsonReadStatus.Success
@@ -60,7 +69,7 @@ internal sealed class NovelStatisticsDashboardCache
             || payload.SchemaVersion != SchemaVersion
             || payload.CacheKey != key)
         {
-            if (File.Exists(_path)) File.Delete(_path);
+            Invalidate();
             return null;
         }
         _memoryKey = key;
@@ -81,11 +90,14 @@ internal sealed class NovelStatisticsDashboardCache
             ct);
     }
 
-    public void Receive(NovelLibraryChangedMessage message)
+    public void Receive(NovelLibraryChangedMessage message) => Invalidate();
+
+    private void Invalidate()
     {
         _memoryKey = null;
         _memorySnapshot = null;
-        if (File.Exists(_path)) File.Delete(_path);
+        if (File.Exists(_path))
+            File.Delete(_path);
     }
 
     public static string CreateKey(IReadOnlyList<NovelBook> books, DateOnly today)
