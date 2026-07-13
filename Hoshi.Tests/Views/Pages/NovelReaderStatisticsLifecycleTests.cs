@@ -18,7 +18,7 @@ public sealed class NovelReaderStatisticsLifecycleTests
         code.Should().Contain("Interval = TimeSpan.FromSeconds(1)");
         code.Should().Contain("ViewModel.IsStatisticsTracking && !ViewModel.IsStatisticsPaused");
         code.Should().Contain("await ViewModel.TickStatisticsAsync()");
-        code.Should().Contain("if (!ViewModel.CanAcceptReaderPositionMutation)");
+        code.Should().Contain("if (!CanMutateReaderPosition())");
         code.Should().Contain("StopStatisticsProjectionTimer");
     }
 

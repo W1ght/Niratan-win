@@ -2065,6 +2065,66 @@ public sealed class NovelReaderPageViewModelTests
     }
 
     [Fact]
+    public async Task ActiveNavigation_RejectsReaderOriginatedPositionWritersAndStatisticsTick()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                It.IsAny<string>(),
+                It.IsAny<int>(),
+                It.IsAny<double>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        var tickPositions = new List<int>();
+        var statistics = new FakeReaderStatisticsSession
+        {
+            TickRecorded = position => tickPositions.Add(position.RawCharacterCount),
+        };
+        var sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            statistics,
+            CreateAutoSyncCoordinator().Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+        sut.SetChapterCharacterCounts([100, 100]);
+        sut.SetChapter(0, 2);
+        sut.UpdateProgress(0.4);
+        var render = sut.TryBeginNavigation(1, null, exactProgress: 0.5);
+
+        var manualOutcome = await sut.HandleManualPageNavigationAsync(
+            new ReaderPageNavigationEvent(
+                ReaderPageNavigationResult.Scrolled,
+                ReaderPageNavigationDirection.Forward,
+                0.6),
+            ct);
+        await sut.CheckpointProgrammaticDepartureAsync(ct);
+        await sut.TickStatisticsAsync(ct);
+        await sut.SaveProgressNowAsync(ct: ct);
+        sut.SaveProgressDebounced();
+        await Task.Delay(650, ct);
+
+        render.Should().NotBeNull();
+        manualOutcome.Should().Be(ReaderPageNavigationOutcome.NoMovement);
+        sut.CurrentChapterIndex.Should().Be(0);
+        sut.Progress.Should().Be(0.4);
+        sut.CurrentCharacterCount.Should().Be(40);
+        sut.TryBeginNavigation(1, null, exactProgress: 0.75).Should().BeNull();
+        novelService.Verify(service => service.SaveProgressAsync(
+            It.IsAny<string>(),
+            It.IsAny<int>(),
+            It.IsAny<double>(),
+            It.IsAny<int>(),
+            It.IsAny<int>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        statistics.Checkpoints.Should().BeEmpty();
+        tickPositions.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task NavigationCommit_PersistsBeforeBaselinePublicationAndSettlement()
     {
         var ct = TestContext.Current.CancellationToken;

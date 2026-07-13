@@ -372,7 +372,8 @@ public partial class NovelReaderPageViewModel : ObservableObject
         TaskCompletionSource admission;
         lock (_saveGate)
         {
-            if (!CanAdmitProgressWriter())
+            if (!CanAcceptReaderPositionMutation
+                || !CanAdmitProgressWriter())
                 return Task.CompletedTask;
 
             var position = CurrentCharacterCount;
@@ -425,7 +426,9 @@ public partial class NovelReaderPageViewModel : ObservableObject
         TaskCompletionSource admission;
         lock (_saveGate)
         {
-            if (!CanAdmitProgressWriter())
+            if ((mutation == StatisticsMutation.Tick
+                    && !CanAcceptReaderPositionMutation)
+                || !CanAdmitProgressWriter())
                 return Task.CompletedTask;
 
             var position = CurrentCharacterCount;
@@ -701,7 +704,9 @@ public partial class NovelReaderPageViewModel : ObservableObject
         lock (_saveGate)
         {
             var request = CaptureProgressSaveRequest();
-            if (!CanAdmitProgressWriter() || request == null)
+            if (!CanAcceptReaderPositionMutation
+                || !CanAdmitProgressWriter()
+                || request == null)
                 return;
 
             _saveCts?.Cancel();
@@ -838,7 +843,9 @@ public partial class NovelReaderPageViewModel : ObservableObject
         lock (_saveGate)
         {
             var request = CaptureProgressSaveRequest();
-            if (!CanAdmitProgressWriter() || request == null)
+            if (!CanAcceptReaderPositionMutation
+                || !CanAdmitProgressWriter()
+                || request == null)
                 return Task.CompletedTask;
 
             _saveCts?.Cancel();

@@ -315,7 +315,7 @@ public class NovelReaderWebAssetTests
         pageCode.Should().Contain("TryApplySasayakiAutoScrollProgress");
         pageCode.Should().Contain("ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn)");
         pageCode.Should().Contain("LoadChapterForSasayakiAutoScroll");
-        pageCode.Should().Contain("if (CurrentSasayakiSettings.AutoScroll)");
+        pageCode.Should().Contain("&& CurrentSasayakiSettings.AutoScroll)");
     }
 
     [Fact]
@@ -3735,9 +3735,144 @@ public class NovelReaderWebAssetTests
         typedLoadBody.Should().Contain("NavigateCurrentRenderAttempt()");
         typedLoadBody.Should().NotContain("ViewModel.SetChapter");
         typedLoadBody.Should().NotContain("ViewModel.UpdateProgress");
-        readerCode.Should().Contain("if (!ViewModel.CanAcceptReaderPositionMutation)");
+        readerCode.Should().Contain("if (!CanMutateReaderPosition())");
         readerCode.Should().NotContain("ReaderProgrammaticNavigationTracker");
         readerCode.Should().NotContain("ReaderAdjacentNavigationCommitCoordinator");
+    }
+
+    [Fact]
+    public void ReaderPage_GatesEveryLiveProgrammaticNavigationEntryBeforeSideEffects()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+
+        static string Between(string source, string start, string end)
+        {
+            var startIndex = source.IndexOf(start, StringComparison.Ordinal);
+            var endIndex = source.IndexOf(end, startIndex, StringComparison.Ordinal);
+            startIndex.Should().BeGreaterThanOrEqualTo(0);
+            endIndex.Should().BeGreaterThan(startIndex);
+            return source[startIndex..endIndex];
+        }
+
+        var pageChanged = Between(readerCode, "case \"pageChanged\":", "case \"shortcut\":");
+        var pageNavigation = Between(
+            readerCode,
+            "private async Task<bool> NavigateReaderPageAsync",
+            "private async Task RefreshReaderWebShortcutBindingsAsync");
+        var programmatic = Between(
+            readerCode,
+            "private async Task<bool> NavigateProgrammaticallyAsync",
+            "private async Task NavigateToInternalLinkAsync");
+        var internalLink = Between(
+            readerCode,
+            "private async Task NavigateToInternalLinkAsync",
+            "private ReaderNavigationPosition CurrentReaderNavigationPosition");
+        var historyBack = Between(
+            readerCode,
+            "private async void HistoryBackButton_Click",
+            "private async void HistoryForwardButton_Click");
+        var historyForward = Between(
+            readerCode,
+            "private async void HistoryForwardButton_Click",
+            "private async void ChapterListButton_Click");
+        var search = Between(
+            readerCode,
+            "private async void SearchResult_ItemClick",
+            "private async void Highlight_ItemClick");
+        var toc = Between(
+            readerCode,
+            "private async void OnChapterSelected",
+            "private async void OnCharacterJumpRequested");
+        var statisticsTick = Between(
+            readerCode,
+            "private async void StatisticsProjectionTimer_Tick",
+            "private async Task<bool> HandleAppLifecycleCheckpointAsync");
+
+        readerCode.Should().Contain(
+            "private bool CanMutateReaderPosition() =>\n" +
+            "        ViewModel.CanAcceptReaderPositionMutation;");
+        foreach (var guardedBody in new[]
+        {
+            pageChanged,
+            pageNavigation,
+            programmatic,
+            internalLink,
+            historyBack,
+            historyForward,
+            search,
+            toc,
+            statisticsTick,
+        })
+        {
+            guardedBody.Should().Contain("if (!CanMutateReaderPosition())");
+        }
+
+        programmatic.IndexOf("if (!CanMutateReaderPosition())", StringComparison.Ordinal)
+            .Should().BeLessThan(programmatic.IndexOf(
+                "ViewModel.CheckpointProgrammaticDepartureAsync()",
+                StringComparison.Ordinal));
+        historyBack.IndexOf("if (!CanMutateReaderPosition())", StringComparison.Ordinal)
+            .Should().BeLessThan(historyBack.IndexOf("_navigationHistory.TryGoBack(", StringComparison.Ordinal));
+        historyForward.IndexOf("if (!CanMutateReaderPosition())", StringComparison.Ordinal)
+            .Should().BeLessThan(historyForward.IndexOf("_navigationHistory.TryGoForward(", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ReaderPage_GatesSasayakiPositionMutationWithoutBlockingPlaybackUiOrCueHighlight()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+
+        static string Between(string source, string start, string end)
+        {
+            var startIndex = source.IndexOf(start, StringComparison.Ordinal);
+            var endIndex = source.IndexOf(end, startIndex, StringComparison.Ordinal);
+            startIndex.Should().BeGreaterThanOrEqualTo(0);
+            endIndex.Should().BeGreaterThan(startIndex);
+            return source[startIndex..endIndex];
+        }
+
+        var positionChanged = Between(
+            readerCode,
+            "private void OnSasayakiPositionChanged",
+            "private void OnSasayakiMediaEnded");
+        var highlight = Between(
+            readerCode,
+            "private async Task HighlightSasayakiCueAsync",
+            "private bool TryApplySasayakiAutoScrollProgress");
+        var applyProgress = Between(
+            readerCode,
+            "private bool TryApplySasayakiAutoScrollProgress",
+            "private bool LoadChapterForSasayakiAutoScroll");
+        var loadChapter = Between(
+            readerCode,
+            "private bool LoadChapterForSasayakiAutoScroll",
+            "private async Task ClearSasayakiHighlightAsync");
+
+        positionChanged.Should().Contain("_sasayakiVM.UpdatePlaybackState(");
+        positionChanged.Should().Contain("_sasayakiVM.UpdateCurrentCue(currentCue)");
+        positionChanged.Should().Contain("HighlightSasayakiCueAsync(");
+        positionChanged.Should().Contain("allowAutoScroll: CanMutateReaderPosition()");
+        positionChanged.Should().Contain(
+            "else if (CanMutateReaderPosition()\n" +
+            "                        && CurrentSasayakiSettings.AutoScroll)");
+        positionChanged.IndexOf("_sasayakiVM.UpdatePlaybackState(", StringComparison.Ordinal)
+            .Should().BeLessThan(positionChanged.IndexOf(
+                "allowAutoScroll: CanMutateReaderPosition()",
+                StringComparison.Ordinal));
+
+        highlight.Should().Contain(
+            "allowAutoScroll = allowAutoScroll && CanMutateReaderPosition();");
+        highlight.Should().Contain(
+            "&& CanMutateReaderPosition()\n" +
+            "                && generation == Volatile.Read(ref _sasayakiHighlightGeneration)");
+        applyProgress.Should().Contain("if (!CanMutateReaderPosition())");
+        applyProgress.IndexOf("if (!CanMutateReaderPosition())", StringComparison.Ordinal)
+            .Should().BeLessThan(applyProgress.IndexOf("ViewModel.UpdateProgress(progress)", StringComparison.Ordinal));
+        loadChapter.Should().Contain("if (!CanMutateReaderPosition())");
+        loadChapter.IndexOf("if (!CanMutateReaderPosition())", StringComparison.Ordinal)
+            .Should().BeLessThan(loadChapter.IndexOf("LoadChapter(target.ChapterIndex", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -3853,7 +3988,7 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("ViewModel.GetChapterHighlightsJson(destinationChapterIndex)");
         readerCode.Should().Contain("match.ChapterIndex == destinationChapterIndex");
         readerCode.Should().Contain(
-            "HighlightSasayakiCueAsync(\n                    match,\n                    allowAutoScroll: !_renderState.HasActiveNavigation)");
+            "HighlightSasayakiCueAsync(\n                    match,\n                    allowAutoScroll: CanMutateReaderPosition())");
         readerCode.Should().Contain("allowAutoScroll && settings.AutoScroll");
         readerCode.Should().Contain("if (allowAutoScroll");
     }

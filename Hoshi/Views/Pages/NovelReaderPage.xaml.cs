@@ -120,6 +120,9 @@ public sealed partial class NovelReaderPage : Page
     private static NovelStatisticsSettings CurrentStatisticsSettings =>
         App.GetService<ISettingsService>().Current.StatisticsSettings;
 
+    private bool CanMutateReaderPosition() =>
+        ViewModel.CanAcceptReaderPositionMutation;
+
     public NovelReaderPage()
     {
         InitializeComponent();
@@ -352,7 +355,7 @@ public sealed partial class NovelReaderPage : Page
             return;
         }
 
-        if (!ViewModel.CanAcceptReaderPositionMutation)
+        if (!CanMutateReaderPosition())
             return;
 
         await ViewModel.TickStatisticsAsync();
@@ -826,6 +829,9 @@ public sealed partial class NovelReaderPage : Page
 
     private async Task<bool> NavigateReaderPageAsync(string direction)
     {
+        if (!CanMutateReaderPosition())
+            return false;
+
         if (NovelWebView.CoreWebView2 == null)
             return false;
 
@@ -1322,7 +1328,7 @@ public sealed partial class NovelReaderPage : Page
             {
                 await HighlightSasayakiCueAsync(
                     match,
-                    allowAutoScroll: !_renderState.HasActiveNavigation);
+                    allowAutoScroll: CanMutateReaderPosition());
             }
             else
             {
@@ -1512,7 +1518,7 @@ public sealed partial class NovelReaderPage : Page
                     }
                     break;
                 case "pageChanged":
-                    if (!ViewModel.CanAcceptReaderPositionMutation)
+                    if (!CanMutateReaderPosition())
                     {
                         Log.Information("[NovelReader] Ignoring pageChanged while destination commit is pending");
                         break;
@@ -2154,6 +2160,9 @@ public sealed partial class NovelReaderPage : Page
         string? fragment = null,
         bool recordHistory = true)
     {
+        if (!CanMutateReaderPosition())
+            return false;
+
         if (_epubBook == null
             || chapterIndex < 0
             || chapterIndex >= _epubBook.Chapters.Count)
@@ -2215,6 +2224,9 @@ public sealed partial class NovelReaderPage : Page
 
     private async Task NavigateToInternalLinkAsync(string href)
     {
+        if (!CanMutateReaderPosition())
+            return;
+
         if (_epubBook == null)
             return;
 
@@ -2239,6 +2251,9 @@ public sealed partial class NovelReaderPage : Page
 
     private async void HistoryBackButton_Click(object sender, RoutedEventArgs e)
     {
+        if (!CanMutateReaderPosition())
+            return;
+
         if (!_navigationHistory.TryGoBack(
                 CurrentReaderNavigationPosition(),
                 out var target))
@@ -2255,6 +2270,9 @@ public sealed partial class NovelReaderPage : Page
 
     private async void HistoryForwardButton_Click(object sender, RoutedEventArgs e)
     {
+        if (!CanMutateReaderPosition())
+            return;
+
         if (!_navigationHistory.TryGoForward(
                 CurrentReaderNavigationPosition(),
                 out var target))
@@ -2417,6 +2435,9 @@ public sealed partial class NovelReaderPage : Page
 
     private async void SearchResult_ItemClick(object sender, ItemClickEventArgs e)
     {
+        if (!CanMutateReaderPosition())
+            return;
+
         if (e.ClickedItem is not ReaderSearchResult result)
             return;
 
@@ -2476,6 +2497,9 @@ public sealed partial class NovelReaderPage : Page
 
     private async Task JumpToHighlightAsync(ReaderHighlightListItem item)
     {
+        if (!CanMutateReaderPosition())
+            return;
+
         var target = item.JumpTarget;
         await NavigateProgrammaticallyAsync(
             target.ChapterIndex,
@@ -2511,6 +2535,9 @@ public sealed partial class NovelReaderPage : Page
 
     private async void OnChapterSelected(object? sender, int chapterIndex)
     {
+        if (!CanMutateReaderPosition())
+            return;
+
         CloseReaderPanels();
 
         if (chapterIndex >= 0 && chapterIndex != ViewModel.CurrentChapterIndex)
@@ -2521,12 +2548,18 @@ public sealed partial class NovelReaderPage : Page
 
     private async void OnCharacterJumpRequested(object? sender, int characterCount)
     {
+        if (!CanMutateReaderPosition())
+            return;
+
         CloseReaderPanels();
         await JumpToCharacterAsync(characterCount);
     }
 
     private async Task JumpToCharacterAsync(int characterCount)
     {
+        if (!CanMutateReaderPosition())
+            return;
+
         var target = ResolveCharacterJumpTarget(characterCount);
         if (target == null)
             return;
@@ -3001,7 +3034,11 @@ public sealed partial class NovelReaderPage : Page
     {
         var match = _sasayakiNav.CurrentMatch;
         if (match != null && match.ChapterIndex == ViewModel.CurrentChapterIndex)
-            await HighlightSasayakiCueAsync(match);
+        {
+            await HighlightSasayakiCueAsync(
+                match,
+                allowAutoScroll: CanMutateReaderPosition());
+        }
     }
 
     private static Color ParseSasayakiColor(string? value, string fallback)
@@ -3583,7 +3620,9 @@ public sealed partial class NovelReaderPage : Page
             recordHistory: false)
             && sameChapter)
         {
-            await HighlightSasayakiCueAsync(match);
+            await HighlightSasayakiCueAsync(
+                match,
+                allowAutoScroll: CanMutateReaderPosition());
         }
     }
 
@@ -3622,7 +3661,11 @@ public sealed partial class NovelReaderPage : Page
 
         var match = _sasayakiNav.GetMatchForCue(cueIndex);
         if (match != null && match.ChapterIndex == ViewModel.CurrentChapterIndex)
-            _ = HighlightSasayakiCueAsync(match);
+        {
+            _ = HighlightSasayakiCueAsync(
+                match,
+                allowAutoScroll: CanMutateReaderPosition());
+        }
     }
 
     private int? ResolveCurrentSasayakiCueIndex()
@@ -3742,9 +3785,12 @@ public sealed partial class NovelReaderPage : Page
                     _lastHighlightedCue = match.CueIndex;
                     if (match.ChapterIndex == ViewModel.CurrentChapterIndex)
                     {
-                        _ = HighlightSasayakiCueAsync(match);
+                        _ = HighlightSasayakiCueAsync(
+                            match,
+                            allowAutoScroll: CanMutateReaderPosition());
                     }
-                    else if (CurrentSasayakiSettings.AutoScroll)
+                    else if (CanMutateReaderPosition()
+                        && CurrentSasayakiSettings.AutoScroll)
                     {
                         LoadChapterForSasayakiAutoScroll(match);
                     }
@@ -3787,6 +3833,7 @@ public sealed partial class NovelReaderPage : Page
             return;
 
         var generation = Interlocked.Increment(ref _sasayakiHighlightGeneration);
+        allowAutoScroll = allowAutoScroll && CanMutateReaderPosition();
 
         try
         {
@@ -3813,6 +3860,7 @@ public sealed partial class NovelReaderPage : Page
                 })();
                 """);
             if (allowAutoScroll
+                && CanMutateReaderPosition()
                 && generation == Volatile.Read(ref _sasayakiHighlightGeneration))
                 TryApplySasayakiAutoScrollProgress(progressJson);
         }
@@ -3824,6 +3872,9 @@ public sealed partial class NovelReaderPage : Page
 
     private bool TryApplySasayakiAutoScrollProgress(string? progressJson)
     {
+        if (!CanMutateReaderPosition())
+            return false;
+
         if (string.IsNullOrWhiteSpace(progressJson)
             || progressJson == "null"
             || progressJson == "undefined")
@@ -3864,6 +3915,9 @@ public sealed partial class NovelReaderPage : Page
 
     private bool LoadChapterForSasayakiAutoScroll(SasayakiMatch match)
     {
+        if (!CanMutateReaderPosition())
+            return false;
+
         var target = ResolveSasayakiJumpTarget(match);
         if (target == null)
             return false;
