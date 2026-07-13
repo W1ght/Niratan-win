@@ -38,11 +38,30 @@ public sealed class NovelReaderStatisticsLifecycleTests
         windowCode.Should().Contain("await SendAppLifecycleCheckpointAsync(");
         windowCode.Should().Contain("AppLifecycleCheckpointReason.Closing");
         readerCode.Should().Contain("Register<AppBackgroundingMessage>");
+        readerCode.Should().Contain("SettleNavigationForLifecycleAsync");
+        readerCode.Should().Contain("ApplyLifecycleNavigationSettlement");
+        readerCode.Should().Contain("AcknowledgeNavigationRendered");
         readerCode.Should().Contain("CheckpointAppBackgroundingAsync");
         readerCode.Should().Contain("PrepareForReaderLifecycleCloseAsync");
+        var lifecycleBody = Regex.Match(
+            readerCode,
+            @"(?s)private async Task<bool> HandleAppLifecycleCheckpointAsync\(.*?\n    \}").Value;
+        lifecycleBody.Should().NotBeEmpty();
+        lifecycleBody.Should().MatchRegex(new Regex(
+            @"(?s)SettleNavigationForLifecycleAsync.*?ApplyLifecycleNavigationSettlement.*?AcknowledgeNavigationRendered.*?(CheckpointAppBackgroundingAsync|PrepareForReaderLifecycleCloseAsync)"));
+        lifecycleBody.Should().NotContain("ResetStatisticsBaselineAsync");
         readerCode.Should().MatchRegex(new Regex(
             @"(?s)case string id when id == ReaderShortcutActions\.Close\.Id:\s*await ViewModel\.BackToLibraryCommand\.ExecuteAsync\(null\);\s*return true;"));
         readerCode.Should().MatchRegex(new Regex(
-            @"(?ms)^    protected override void OnNavigatedFrom\(NavigationEventArgs e\)\s*\{.*?_ = ViewModel\.PrepareForReaderLifecycleCloseAsync\(\);.*?^    \}"));
+            @"(?ms)^    protected override void OnNavigatedFrom\(NavigationEventArgs e\)\s*\{.*?_ = CompleteReaderLifecycleCloseAfterDetachAsync\(\);.*?^    \}"));
+        var navigatedFromBody = Regex.Match(
+            readerCode,
+            @"(?ms)^    protected override void OnNavigatedFrom\(NavigationEventArgs e\)\s*\{.*?^    \}").Value;
+        navigatedFromBody.IndexOf("WebMessageReceived -=", StringComparison.Ordinal)
+            .Should().BeLessThan(navigatedFromBody.IndexOf(
+                "CompleteReaderLifecycleCloseAfterDetachAsync",
+                StringComparison.Ordinal));
+        readerCode.Should().MatchRegex(new Regex(
+            @"(?s)CompleteReaderLifecycleCloseAfterDetachAsync.*?SettleNavigationForLifecycleAsync.*?AcknowledgeNavigationRendered.*?PrepareForReaderLifecycleCloseAsync"));
     }
 }

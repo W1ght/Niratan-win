@@ -273,7 +273,6 @@ public sealed partial class NovelReaderPage : Page
         base.OnNavigatedFrom(e);
         StopStatisticsProjectionTimer();
         _messenger.Unregister<AppBackgroundingMessage>(this);
-        _ = ViewModel.PrepareForReaderLifecycleCloseAsync();
         _programmaticNavigation.Cancel();
         _pendingProgrammaticFragment = null;
         _reloadCts?.Cancel();
@@ -315,6 +314,7 @@ public sealed partial class NovelReaderPage : Page
         _sasayakiPlayer = null;
 
         CloseReaderPanels();
+        _ = CompleteReaderLifecycleCloseAfterDetachAsync();
     }
 
     private void EnsureStatisticsProjectionTimer()
@@ -368,8 +368,17 @@ public sealed partial class NovelReaderPage : Page
     {
         try
         {
-            if (_programmaticNavigation.HasPending)
-                await ViewModel.ResetStatisticsBaselineAsync();
+            var settlement = await ViewModel.SettleNavigationForLifecycleAsync();
+            if (settlement != null)
+            {
+                ApplyLifecycleNavigationSettlement(settlement);
+                if (!ViewModel.AcknowledgeNavigationRendered(settlement.Generation))
+                {
+                    throw new InvalidOperationException(
+                        "Reader navigation lifecycle settlement could not be acknowledged.");
+                }
+            }
+
             if (message.Reason == AppLifecycleCheckpointReason.Closing)
                 await ViewModel.PrepareForReaderLifecycleCloseAsync();
             else
@@ -380,6 +389,52 @@ public sealed partial class NovelReaderPage : Page
         {
             Log.Error(ex, "[Reader] Failed lifecycle checkpoint: {Reason}", message.Reason);
             return false;
+        }
+    }
+
+    private void ApplyLifecycleNavigationSettlement(ReaderNavigationSettlement settlement)
+    {
+        _programmaticNavigation.Cancel();
+        _pendingProgrammaticFragment = null;
+        _currentProgress = settlement.Position.Progress;
+
+        if (settlement.ShouldRevealDestination)
+        {
+            _pendingAdjacentChapterNavigation = false;
+            _pendingAdjacentChapterIndex = null;
+            _pendingAdjacentChapterRestoreTarget = null;
+            RefreshReaderDisplayChrome();
+            RevealAdjacentChapterWhenCommitted();
+            return;
+        }
+
+        _pendingAdjacentChapterNavigation = false;
+        _pendingAdjacentChapterIndex = null;
+        _pendingAdjacentChapterRestoreTarget = null;
+        _pendingAdjacentChapterReady = false;
+        LoadChapter(
+            settlement.Position.ChapterIndex,
+            progressOverride: settlement.Position.Progress);
+    }
+
+    private async Task CompleteReaderLifecycleCloseAfterDetachAsync()
+    {
+        try
+        {
+            var settlement = await ViewModel.SettleNavigationForLifecycleAsync();
+            if (settlement != null
+                && !ViewModel.AcknowledgeNavigationRendered(settlement.Generation))
+            {
+                Log.Warning(
+                    "[Reader] Detached lifecycle settlement {Generation} was already acknowledged",
+                    settlement.Generation);
+            }
+
+            await ViewModel.PrepareForReaderLifecycleCloseAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[Reader] Failed detached lifecycle close checkpoint");
         }
     }
 

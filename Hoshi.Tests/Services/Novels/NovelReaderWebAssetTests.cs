@@ -2915,6 +2915,32 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void ReaderPage_LifecycleSettlementOwnsTerminalInstructionBeforeWriterBoundary()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
+        );
+        var viewModelCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "ViewModels", "Pages", "NovelReaderPageViewModel.cs")
+        );
+
+        var lifecycleBody = Regex.Match(
+            readerCode,
+            @"(?s)private async Task<bool> HandleAppLifecycleCheckpointAsync\(.*?\n    \}").Value;
+        lifecycleBody.Should().Contain("ViewModel.SettleNavigationForLifecycleAsync");
+        lifecycleBody.Should().Contain("ApplyLifecycleNavigationSettlement");
+        lifecycleBody.Should().Contain("ViewModel.AcknowledgeNavigationRendered");
+        lifecycleBody.Should().NotContain("ResetStatisticsBaselineAsync");
+        lifecycleBody.IndexOf("ViewModel.AcknowledgeNavigationRendered", StringComparison.Ordinal)
+            .Should().BeLessThan(lifecycleBody.IndexOf(
+                "ViewModel.CheckpointAppBackgroundingAsync",
+                StringComparison.Ordinal));
+        readerCode.Should().Contain("CompleteReaderLifecycleCloseAfterDetachAsync");
+        viewModelCode.Should().NotContain("LifecycleBoundarySnapshot");
+        viewModelCode.Should().NotContain("_latestAdmittedProgressRequest");
+    }
+
+    [Fact]
     public void ReaderPage_ExposesHighlightListPanelAndActions()
     {
         var readerXaml = File.ReadAllText(
