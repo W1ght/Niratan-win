@@ -58,6 +58,27 @@ public sealed class NovelReaderRenderStateTests
     }
 
     [Fact]
+    public void ReservedDestination_CannotStartAfterLifecycleSettlesToSource()
+    {
+        var state = new NovelReaderRenderState();
+        var request = CreateRequest();
+        state.BeginNavigation(request, DestinationUri, waitsForFragment: false);
+
+        state.CanStartDestinationRender(request.Generation).Should().BeTrue();
+
+        state.TryApplySettlement(
+            new ReaderNavigationSettlement(
+                request.Generation,
+                request.Source,
+                ShouldRevealDestination: false),
+            SourceUri).Should().BeTrue();
+
+        state.CanStartDestinationRender(request.Generation).Should().BeFalse();
+        state.CanStartDestinationRender(request.Generation + 1).Should().BeFalse();
+        state.CurrentAttempt!.Kind.Should().Be(NovelReaderRenderAttemptKind.Recovery);
+    }
+
+    [Fact]
     public void SameChapterRecovery_RejectsDelayedDestinationReadyByRenderAttemptId()
     {
         var state = new NovelReaderRenderState();

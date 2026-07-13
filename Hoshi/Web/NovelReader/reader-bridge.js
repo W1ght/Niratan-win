@@ -131,7 +131,7 @@ window.hoshiReader = {
       var direction = event.deltaY > 0 ? "forward" : "backward";
       window.hoshiLastWheelNavigationTime = now;
       event.preventDefault();
-      handleNavigate(direction);
+      requestPageNavigation(direction);
     }, { passive: false });
   },
 
@@ -938,8 +938,14 @@ async function handleMessage(event) {
   }
 }
 
+function requestPageNavigation(direction) {
+  if (direction !== "forward" && direction !== "backward") return;
+  postToHost("pageNavigationRequest", { direction: direction });
+}
+
 window.chrome?.webview?.addEventListener("message", handleMessage);
-window.hoshiReaderNavigate = handleNavigate;
+window.hoshiReaderNavigate = requestPageNavigation;
+window.hoshiReaderNavigateAuthorized = handleNavigate;
 
 document.addEventListener("click", function (event) {
   var anchor = event.target?.closest?.("a[href]");
@@ -965,13 +971,13 @@ document.addEventListener("keydown", function (event) {
 
   if (actionId === "reader.previousPage") {
     event.preventDefault();
-    handleNavigate("backward");
+    requestPageNavigation("backward");
     return;
   }
 
   if (actionId === "reader.nextPage") {
     event.preventDefault();
-    handleNavigate("forward");
+    requestPageNavigation("forward");
     return;
   }
 

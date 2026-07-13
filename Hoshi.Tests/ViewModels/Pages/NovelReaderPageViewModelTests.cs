@@ -2125,6 +2125,66 @@ public sealed class NovelReaderPageViewModelTests
     }
 
     [Fact]
+    public async Task ProgrammaticNavigationReservation_BlocksConcurrentCommandBeforeQueuedDepartureCheckpoint()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var saveStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSave = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1", 0, 0.4, 40, 200, It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                saveStarted.TrySetResult();
+                await releaseSave.Task;
+                return Result.Success();
+            });
+        var statistics = new FakeReaderStatisticsSession();
+        var sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            statistics,
+            CreateAutoSyncCoordinator().Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+        sut.SetChapterCharacterCounts([100, 100]);
+        sut.SetChapter(0, 2);
+        sut.UpdateProgress(0.4);
+        var priorWriter = sut.SaveProgressNowAsync(
+            flushStatistics: false,
+            scheduleAutoSync: false,
+            ct: ct);
+        await saveStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        var first = sut.TryReserveProgrammaticNavigation(
+            1,
+            restoreTarget: null,
+            exactProgress: 0.5,
+            ct);
+        var concurrent = sut.TryReserveProgrammaticNavigation(
+            1,
+            restoreTarget: null,
+            exactProgress: 0.75,
+            ct);
+
+        first.Should().NotBeNull();
+        first!.RenderRequest.Source.CharacterCount.Should().Be(40);
+        first.DepartureCheckpoint.IsCompleted.Should().BeFalse();
+        concurrent.Should().BeNull();
+        sut.CanAcceptReaderPositionMutation.Should().BeFalse();
+
+        releaseSave.TrySetResult();
+        await Task.WhenAll(priorWriter, first.DepartureCheckpoint)
+            .WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        statistics.Checkpoints.Should().Equal(
+            (40, ReaderStatisticsCheckpointReason.ProgrammaticDeparture));
+    }
+
+    [Fact]
     public async Task NavigationCommit_PersistsBeforeBaselinePublicationAndSettlement()
     {
         var ct = TestContext.Current.CancellationToken;

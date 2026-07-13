@@ -1126,30 +1126,79 @@ public partial class NovelReaderPageViewModel : ObservableObject
         double? exactProgress)
     {
         lock (_saveGate)
-        {
-            if (!CanAcceptReaderPositionMutation
-                || CurrentBook == null
-                || destinationChapterIndex < 0
-                || destinationChapterIndex >= ChapterCount
-                || exactProgress is { } progress
-                    && (!double.IsFinite(progress) || progress is < 0 or > 1))
-            {
-                return null;
-            }
-
-            var source = new ReaderNavigationPositionSnapshot(
-                CurrentBook.Id,
-                CurrentChapterIndex,
-                Progress,
-                CurrentCharacterCount,
-                TotalCharacterCount,
-                _currentPositionRevision);
-            var destination = new ReaderNavigationDestination(
+            return TryBeginNavigationLocked(
                 destinationChapterIndex,
                 restoreTarget,
                 exactProgress);
-            return _navigationTransactions.TryBegin(source, destination);
+    }
+
+    public ReaderProgrammaticNavigationReservation? TryReserveProgrammaticNavigation(
+        int destinationChapterIndex,
+        ReaderChapterRestoreTarget? restoreTarget,
+        double? exactProgress,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+
+        ReaderNavigationRenderRequest? renderRequest;
+        Task departureCheckpoint;
+        TaskCompletionSource admission;
+        lock (_saveGate)
+        {
+            if (!CanAdmitProgressWriter())
+                return null;
+
+            renderRequest = TryBeginNavigationLocked(
+                destinationChapterIndex,
+                restoreTarget,
+                exactProgress);
+            if (renderRequest == null)
+                return null;
+
+            _saveCts?.Cancel();
+            admission = CreateWriterAdmission();
+            departureCheckpoint = RunCheckpointWriterAsync(
+                admission.Task,
+                _writerTail,
+                renderRequest.Source.CharacterCount,
+                ReaderStatisticsCheckpointReason.ProgrammaticDeparture,
+                CancellationToken.None);
+            _writerTail = departureCheckpoint;
         }
+
+        admission.TrySetResult();
+        return new ReaderProgrammaticNavigationReservation(
+            renderRequest,
+            departureCheckpoint);
+    }
+
+    private ReaderNavigationRenderRequest? TryBeginNavigationLocked(
+        int destinationChapterIndex,
+        ReaderChapterRestoreTarget? restoreTarget,
+        double? exactProgress)
+    {
+        if (!CanAcceptReaderPositionMutation
+            || CurrentBook == null
+            || destinationChapterIndex < 0
+            || destinationChapterIndex >= ChapterCount
+            || exactProgress is { } progress
+                && (!double.IsFinite(progress) || progress is < 0 or > 1))
+        {
+            return null;
+        }
+
+        var source = new ReaderNavigationPositionSnapshot(
+            CurrentBook.Id,
+            CurrentChapterIndex,
+            Progress,
+            CurrentCharacterCount,
+            TotalCharacterCount,
+            _currentPositionRevision);
+        var destination = new ReaderNavigationDestination(
+            destinationChapterIndex,
+            restoreTarget,
+            exactProgress);
+        return _navigationTransactions.TryBegin(source, destination);
     }
 
     public Task<ReaderNavigationSettlement?> ResolveNavigationAsync(

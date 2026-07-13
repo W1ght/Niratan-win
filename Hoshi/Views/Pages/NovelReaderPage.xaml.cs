@@ -71,7 +71,7 @@ public sealed partial class NovelReaderPage : Page
     private CancellationTokenSource? _reloadCts;
     private CancellationTokenSource? _searchCts;
     private long _searchRequestVersion;
-    private readonly ReaderNavigationHistory _navigationHistory = new();
+    private readonly ReaderNavigationInputCoordinator _navigationInput;
     private string? _pendingProgrammaticFragment;
     private readonly NovelReaderRenderState _renderState = new();
     private DictionaryPopupOverlay? _popupOverlay;
@@ -121,13 +121,16 @@ public sealed partial class NovelReaderPage : Page
         App.GetService<ISettingsService>().Current.StatisticsSettings;
 
     private bool CanMutateReaderPosition() =>
-        ViewModel.CanAcceptReaderPositionMutation;
+        _navigationInput.CanAcceptPositionMutation;
 
     public NovelReaderPage()
     {
         InitializeComponent();
         _isRefreshingSasayakiPanel = false;
         ViewModel = App.GetService<NovelReaderPageViewModel>();
+        _navigationInput = new ReaderNavigationInputCoordinator(
+            () => ViewModel.CanAcceptReaderPositionMutation,
+            ViewModel.TryReserveProgrammaticNavigation);
         ViewModel.PropertyChanged += OnReaderViewModelPropertyChanged;
         DataContext = ViewModel;
         _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
@@ -829,16 +832,17 @@ public sealed partial class NovelReaderPage : Page
 
     private async Task<bool> NavigateReaderPageAsync(string direction)
     {
-        if (!CanMutateReaderPosition())
-            return false;
-
         if (NovelWebView.CoreWebView2 == null)
             return false;
 
-        var directionJson = JsonSerializer.Serialize(direction);
-        await NovelWebView.CoreWebView2.ExecuteScriptAsync(
-            $"window.hoshiReaderNavigate?.({directionJson});");
-        return true;
+        return await _navigationInput.TryExecutePageTurnAsync(
+            direction,
+            async authorizedDirection =>
+            {
+                var directionJson = JsonSerializer.Serialize(authorizedDirection);
+                await NovelWebView.CoreWebView2.ExecuteScriptAsync(
+                    $"window.hoshiReaderNavigateAuthorized?.({directionJson});");
+            });
     }
 
     private async Task RefreshReaderWebShortcutBindingsAsync()
@@ -1037,12 +1041,12 @@ public sealed partial class NovelReaderPage : Page
         UpdateNavigationHistoryButton(
             NovelReaderHistoryBackButton,
             NovelReaderHistoryBackText,
-            _navigationHistory.BackTarget,
+            _navigationInput.BackTarget,
             "Back");
         UpdateNavigationHistoryButton(
             NovelReaderHistoryForwardButton,
             NovelReaderHistoryForwardText,
-            _navigationHistory.ForwardTarget,
+            _navigationInput.ForwardTarget,
             "Forward");
     }
 
@@ -1119,12 +1123,18 @@ public sealed partial class NovelReaderPage : Page
 
     private void BeginHiddenRender(ReaderNavigationRenderRequest renderRequest)
     {
+        BeginNavigationRenderReservation(renderRequest);
+        NovelWebView.Opacity = 0;
+    }
+
+    private void BeginNavigationRenderReservation(
+        ReaderNavigationRenderRequest renderRequest)
+    {
         var destinationUri = BuildChapterUri(renderRequest.Destination.ChapterIndex);
         _renderState.BeginNavigation(
             renderRequest,
             destinationUri,
             waitsForFragment: _pendingProgrammaticFragment != null);
-        NovelWebView.Opacity = 0;
     }
 
     private bool LoadChapter(
@@ -1517,6 +1527,22 @@ public sealed partial class NovelReaderPage : Page
                         ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.On);
                     }
                     break;
+                case "pageNavigationRequest":
+                    if (!root.TryGetProperty("payload", out var pageNavigationPayload)
+                        || pageNavigationPayload.ValueKind != JsonValueKind.Object
+                        || !pageNavigationPayload.TryGetProperty(
+                            "direction",
+                            out var requestedDirectionElement)
+                        || requestedDirectionElement.ValueKind != JsonValueKind.String)
+                    {
+                        Log.Warning("[NovelReader] Ignoring invalid pageNavigationRequest payload");
+                        break;
+                    }
+
+                    var requestedDirection = requestedDirectionElement.GetString();
+                    if (!string.IsNullOrWhiteSpace(requestedDirection))
+                        await NavigateReaderPageAsync(requestedDirection);
+                    break;
                 case "pageChanged":
                     if (!CanMutateReaderPosition())
                     {
@@ -1566,7 +1592,7 @@ public sealed partial class NovelReaderPage : Page
                     var outcome = await ViewModel.HandleManualPageNavigationAsync(readerEvent);
                     if (outcome.DidMove)
                     {
-                        _navigationHistory.ClearForward();
+                        _navigationInput.ClearForwardHistory();
                         RefreshReaderNavigationHistoryChrome();
                         _currentProgress = readerEvent.Progress;
                     }
@@ -2155,14 +2181,12 @@ public sealed partial class NovelReaderPage : Page
     }
 
     private async Task<bool> NavigateProgrammaticallyAsync(
+        ReaderNavigationInputKind inputKind,
         int chapterIndex,
         double progress,
         string? fragment = null,
         bool recordHistory = true)
     {
-        if (!CanMutateReaderPosition())
-            return false;
-
         if (_epubBook == null
             || chapterIndex < 0
             || chapterIndex >= _epubBook.Chapters.Count)
@@ -2181,22 +2205,47 @@ public sealed partial class NovelReaderPage : Page
             return false;
         }
 
-        await ViewModel.CheckpointProgrammaticDepartureAsync();
-        var renderRequest = ViewModel.TryBeginNavigation(
+        var reservation = _navigationInput.TryNavigate(
+            inputKind,
             chapterIndex,
-            restoreTarget: null,
-            exactProgress: fragment == null ? progress : null);
-        if (renderRequest == null)
+            progress,
+            fragment,
+            recordHistory);
+        if (reservation == null)
             return false;
 
-        if (recordHistory)
-            _navigationHistory.Record(CurrentReaderNavigationPosition());
+        _pendingProgrammaticFragment = reservation.Fragment;
+        BeginNavigationRenderReservation(reservation.RenderRequest);
         RefreshReaderNavigationHistoryChrome();
+        return await ExecuteProgrammaticNavigationAsync(reservation);
+    }
 
-        _pendingProgrammaticFragment = fragment;
+    private async Task<bool> ExecuteProgrammaticNavigationAsync(
+        ReaderNavigationInputReservation reservation)
+    {
+        try
+        {
+            await reservation.DepartureCheckpoint;
+        }
+        catch (Exception ex)
+        {
+            await HandleTerminalRenderFailureAsync(
+                "Reader departure checkpoint failed.",
+                ex);
+            return false;
+        }
+
+        var renderRequest = reservation.RenderRequest;
+        if (!_renderState.CanStartDestinationRender(renderRequest.Generation))
+            return false;
+
+        var chapterIndex = renderRequest.Destination.ChapterIndex;
+        var progress = renderRequest.Destination.ExactProgress ?? 0;
+        var fragment = reservation.Fragment;
+
+        NovelWebView.Opacity = 0;
         if (chapterIndex == ViewModel.CurrentChapterIndex)
         {
-            BeginHiddenRender(renderRequest);
             var renderAttemptId = _renderState.CurrentAttempt!.RenderAttemptId;
             if (fragment != null)
             {
@@ -2216,7 +2265,12 @@ public sealed partial class NovelReaderPage : Page
         }
         else
         {
-            LoadChapter(renderRequest);
+            if (!NavigateCurrentRenderAttempt())
+            {
+                await HandleTerminalRenderFailureAsync(
+                    "Reader destination navigation could not start.");
+                return false;
+            }
         }
 
         return true;
@@ -2241,50 +2295,34 @@ public sealed partial class NovelReaderPage : Page
         _popupOverlay?.Dismiss();
         await SetLookupPopupActiveAsync(false);
         await NavigateProgrammaticallyAsync(
+            ReaderNavigationInputKind.InternalLink,
             target.ChapterIndex,
             0,
             target.Fragment);
     }
 
-    private ReaderNavigationPosition CurrentReaderNavigationPosition() =>
-        new(ViewModel.CurrentChapterIndex, ViewModel.Progress);
-
     private async void HistoryBackButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!CanMutateReaderPosition())
+        var reservation = _navigationInput.TryGoBack();
+        if (reservation == null)
             return;
-
-        if (!_navigationHistory.TryGoBack(
-                CurrentReaderNavigationPosition(),
-                out var target))
-        {
-            return;
-        }
 
         RefreshReaderNavigationHistoryChrome();
-        await NavigateProgrammaticallyAsync(
-            target.ChapterIndex,
-            target.Progress,
-            recordHistory: false);
+        _pendingProgrammaticFragment = reservation.Fragment;
+        BeginNavigationRenderReservation(reservation.RenderRequest);
+        await ExecuteProgrammaticNavigationAsync(reservation);
     }
 
     private async void HistoryForwardButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!CanMutateReaderPosition())
+        var reservation = _navigationInput.TryGoForward();
+        if (reservation == null)
             return;
-
-        if (!_navigationHistory.TryGoForward(
-                CurrentReaderNavigationPosition(),
-                out var target))
-        {
-            return;
-        }
 
         RefreshReaderNavigationHistoryChrome();
-        await NavigateProgrammaticallyAsync(
-            target.ChapterIndex,
-            target.Progress,
-            recordHistory: false);
+        _pendingProgrammaticFragment = reservation.Fragment;
+        BeginNavigationRenderReservation(reservation.RenderRequest);
+        await ExecuteProgrammaticNavigationAsync(reservation);
     }
 
     private async void ChapterListButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
@@ -2443,6 +2481,7 @@ public sealed partial class NovelReaderPage : Page
 
         CloseReaderPanels();
         await NavigateProgrammaticallyAsync(
+            ReaderNavigationInputKind.SearchResult,
             result.ChapterIndex,
             result.ChapterProgress);
     }
@@ -2502,6 +2541,7 @@ public sealed partial class NovelReaderPage : Page
 
         var target = item.JumpTarget;
         await NavigateProgrammaticallyAsync(
+            ReaderNavigationInputKind.Highlight,
             target.ChapterIndex,
             target.ChapterProgress);
     }
@@ -2542,7 +2582,10 @@ public sealed partial class NovelReaderPage : Page
 
         if (chapterIndex >= 0 && chapterIndex != ViewModel.CurrentChapterIndex)
         {
-            await NavigateProgrammaticallyAsync(chapterIndex, 0);
+            await NavigateProgrammaticallyAsync(
+                ReaderNavigationInputKind.TableOfContents,
+                chapterIndex,
+                0);
         }
     }
 
@@ -2565,6 +2608,7 @@ public sealed partial class NovelReaderPage : Page
             return;
 
         await NavigateProgrammaticallyAsync(
+            ReaderNavigationInputKind.CharacterJump,
             target.ChapterIndex,
             target.ChapterProgress);
     }
@@ -3615,6 +3659,7 @@ public sealed partial class NovelReaderPage : Page
 
         var sameChapter = target.ChapterIndex == ViewModel.CurrentChapterIndex;
         if (await NavigateProgrammaticallyAsync(
+            ReaderNavigationInputKind.Sasayaki,
             target.ChapterIndex,
             target.ChapterProgress,
             recordHistory: false)
@@ -3783,21 +3828,14 @@ public sealed partial class NovelReaderPage : Page
                 if (match != null && match.CueIndex != _lastHighlightedCue)
                 {
                     _lastHighlightedCue = match.CueIndex;
-                    if (match.ChapterIndex == ViewModel.CurrentChapterIndex)
-                    {
-                        _ = HighlightSasayakiCueAsync(
+                    _navigationInput.DispatchLiveSasayakiCue(
+                        match.ChapterIndex == ViewModel.CurrentChapterIndex,
+                        CurrentSasayakiSettings.AutoScroll,
+                        allowAutoScroll => _ = HighlightSasayakiCueAsync(
                             match,
-                            allowAutoScroll: CanMutateReaderPosition());
-                    }
-                    else if (CanMutateReaderPosition()
-                        && CurrentSasayakiSettings.AutoScroll)
-                    {
-                        LoadChapterForSasayakiAutoScroll(match);
-                    }
-                    else
-                    {
-                        _ = ClearSasayakiHighlightAsync();
-                    }
+                            allowAutoScroll),
+                        () => LoadChapterForSasayakiAutoScroll(match),
+                        () => _ = ClearSasayakiHighlightAsync());
                 }
             }
         });
@@ -3900,12 +3938,14 @@ public sealed partial class NovelReaderPage : Page
                 return false;
             }
 
-            ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
-            _currentProgress = progress;
-            ViewModel.UpdateProgress(progress);
-            RefreshReaderDisplayChrome();
-            ViewModel.SaveProgressDebounced();
-            return true;
+            return _navigationInput.TryApplyPositionMutation(() =>
+            {
+                ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
+                _currentProgress = progress;
+                ViewModel.UpdateProgress(progress);
+                RefreshReaderDisplayChrome();
+                ViewModel.SaveProgressDebounced();
+            });
         }
         catch (JsonException)
         {
@@ -3930,10 +3970,12 @@ public sealed partial class NovelReaderPage : Page
             return false;
         }
 
-        ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
-        LoadChapter(target.ChapterIndex, target.ChapterProgress);
-        ViewModel.SaveProgressDebounced();
-        return true;
+        return _navigationInput.TryApplyPositionMutation(() =>
+        {
+            ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
+            LoadChapter(target.ChapterIndex, target.ChapterProgress);
+            ViewModel.SaveProgressDebounced();
+        });
     }
 
     private async Task ClearSasayakiHighlightAsync()
