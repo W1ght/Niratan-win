@@ -1,5 +1,18 @@
 # Changelog
 
+## Reader 反向跨章曾闪过错误进度并重复结算
+
+**原因**：
+- 相邻跨章、普通程序化跳转、Page 可见状态和 lifecycle writer 曾由多个 tracker/coordinator 与可变字段分别拥有；从 B 第一页返回 A 时，native 会先发布近似端点或旧候选位置，再等待 WebView 算出 A 的最后一页，因此出现临时 `1.0`/100%、二次进度更新和 baseline/bookmark 竞争。
+- bridge error、关闭/后台与 Sasayaki 异步回调没有共享 point-of-no-return；目的地写入开始后仍可能被源位置恢复或另一条位置写入穿插，迟到的同章 render callback 也可能误认成当前完成。
+
+**解决**：
+- 使用单一 `ReaderNavigationTransactionCoordinator` 持有不可变源/目的地、generation 和独立 `renderAttemptId`；目的章节隐藏分页，WebView 返回最终 page-aligned progress 后才按“保存 bookmark → 重置 baseline → 原子发布 → reveal”完成一次提交，旧 tracker/coordinator 与候选字段全部移除。
+- `Rendering` 失败或 lifecycle 取消恢复源位置；`Committing` 进入不可取消的持久化边界，lifecycle 等待并按 durable 结果恢复目的地或源位置。bridge error、重复/过期 completion 和 recovery 都按事务身份收敛到一个终态。
+- 事务存续期间统一阻止翻页、目录/搜索/链接/history 与 Sasayaki auto-scroll/load/progress/save 等位置突变；播放 UI 和非位置高亮仍可继续，异步回调在 await 后再次校验 gate。
+
+---
+
 ## Reader 同章翻页未结算统计且最终同步可能混用位置
 
 **原因**：

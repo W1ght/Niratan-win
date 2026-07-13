@@ -3746,6 +3746,28 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void ReaderNavigation_HasOneTransactionOwnerAndNoLegacyState()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+        var productionCode = Directory
+            .EnumerateFiles(ProjectRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Select(File.ReadAllText)
+            .ToArray();
+
+        readerCode.Should().NotContain("ReaderNavigationTransactionCoordinator");
+        readerCode.Should().Contain("ViewModel.TryBeginNavigation(");
+        readerCode.Should().Contain("ViewModel.ResolveNavigationAsync(");
+
+        productionCode.Should().NotContain(code => code.Contains("ReaderProgrammaticNavigationTracker", StringComparison.Ordinal));
+        productionCode.Should().NotContain(code => code.Contains("ReaderAdjacentNavigationCommitCoordinator", StringComparison.Ordinal));
+        productionCode.Should().NotContain(code => code.Contains("_pendingAdjacentChapterNavigation", StringComparison.Ordinal));
+        productionCode.Should().NotContain(code => code.Contains("_latestAdmittedProgressRequest", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void ReaderPage_BindsInjectedMetadataToExactRenderAttemptAndDefersOrdinaryReload()
     {
         var readerCode = File.ReadAllText(
