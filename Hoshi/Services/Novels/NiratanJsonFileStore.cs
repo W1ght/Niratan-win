@@ -54,7 +54,7 @@ internal sealed class NiratanJsonFileStore : INiratanJsonFileStore
                 path,
                 FileMode.Open,
                 FileAccess.Read,
-                FileShare.Read,
+                FileShare.Read | FileShare.Delete,
                 bufferSize: 4096,
                 useAsync: true);
             var value = await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions, ct);
@@ -86,7 +86,9 @@ internal sealed class NiratanJsonFileStore : INiratanJsonFileStore
         if (!string.IsNullOrWhiteSpace(directory))
             Directory.CreateDirectory(directory);
 
-        var tempPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        var operationId = Guid.NewGuid().ToString("N");
+        var tempPath = path + "." + operationId + ".tmp";
+        var backupPath = path + "." + operationId + ".backup.tmp";
         try
         {
             await using (var stream = new FileStream(
@@ -100,12 +102,26 @@ internal sealed class NiratanJsonFileStore : INiratanJsonFileStore
                 await JsonSerializer.SerializeAsync(stream, value, JsonOptions, ct);
             }
 
-            File.Move(tempPath, path, overwrite: true);
+            if (File.Exists(path))
+            {
+                File.Replace(
+                    tempPath,
+                    path,
+                    backupPath,
+                    ignoreMetadataErrors: true);
+                File.Delete(backupPath);
+            }
+            else
+            {
+                File.Move(tempPath, path);
+            }
         }
         finally
         {
             if (File.Exists(tempPath))
                 File.Delete(tempPath);
+            if (File.Exists(backupPath))
+                File.Delete(backupPath);
         }
     }
 
