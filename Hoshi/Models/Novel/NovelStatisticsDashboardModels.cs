@@ -20,6 +20,7 @@ public enum NovelStatisticsTrendGrain { Day, Week, Month }
 public enum NovelStatisticsTrendChartStyle { Bar, Line }
 public enum NovelStatisticsBookRankingMetric { Characters, Duration, Speed }
 
+[method: JsonConstructor]
 public sealed record NovelStatisticsBookContribution(
     string BookId,
     string Title,

@@ -44,11 +44,18 @@ public sealed class NovelStatisticsDashboardCacheTests
         using var temp = new TempDirectory();
         var cachePath = Path.Combine(temp.Path, NovelStatisticsDashboardCache.FileName);
         var today = new DateOnly(2026, 7, 11);
+        var contribution = new NovelStatisticsBookContribution(
+            "book-1",
+            "かがみの孤城",
+            "cover.jpg",
+            153371,
+            44387.1125397682,
+            true);
         var snapshot = new NovelStatisticsDashboardSnapshot(
             today,
             today,
-            [new NovelStatisticsDayAggregate(today, 1200, 600, [])],
-            [],
+            [new NovelStatisticsDayAggregate(today, 153371, 44387.1125397682, [contribution])],
+            [new NovelStatisticsBookRecord("book-1", "かがみの孤城", "cover.jpg", 248250)],
             []);
         var first = new NovelStatisticsDashboardCache(
             new NiratanJsonFileStore(),
@@ -61,7 +68,12 @@ public sealed class NovelStatisticsDashboardCacheTests
             new WeakReferenceMessenger(),
             cachePath);
 
-        (await reloaded.TryLoadAsync("key", ct)).Should().BeEquivalentTo(snapshot);
+        var loaded = await reloaded.TryLoadAsync("key", ct);
+
+        loaded.Should().BeEquivalentTo(snapshot);
+        loaded!.Days.Should().ContainSingle()
+            .Which.BookContributions.Should().ContainSingle()
+            .Which.Should().BeEquivalentTo(contribution);
     }
 
     [Fact]
