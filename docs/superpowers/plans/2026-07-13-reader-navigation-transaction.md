@@ -370,11 +370,13 @@ Modify `notifyRestoreComplete` and `chapterReady` as required by Step 1. Keep ex
 
 - [ ] **Step 4: Replace Page pending business flags with one UI render token**
 
-Remove `_pendingAdjacentChapterNavigation`, `_pendingAdjacentChapterIndex`, `_pendingAdjacentChapterRestoreTarget`, and the Page-owned commit coordinator. Retain only UI facts:
+Remove `_pendingAdjacentChapterNavigation`, `_pendingAdjacentChapterIndex`, `_pendingAdjacentChapterRestoreTarget`, and the Page-owned commit coordinator. Retain only immutable render instructions and UI readiness facts:
 
 ```csharp
-private long? _hiddenRenderGeneration;
+private ReaderNavigationRenderRequest? _hiddenRenderRequest;
 private bool _hiddenRenderChapterReady;
+private ReaderNavigationSettlement? _pendingTerminalSettlement;
+private TaskCompletionSource? _terminalRenderReady;
 ```
 
 Use `ReaderNavigationRenderRequest` to build chapter metadata, typed restore target, exact progress, and navigation generation. Do not call ViewModel `SetChapter`/`UpdateProgress` during hidden render.
@@ -403,7 +405,7 @@ private void ApplyNavigationSettlement(ReaderNavigationSettlement settlement)
 }
 ```
 
-Clear the UI render token only after terminal reveal/recovery navigation is established. Make recovery `chapterReady` reveal the source, call `AcknowledgeNavigationRendered`, and release the token. Until acknowledgement, ViewModel continues rejecting all position mutation.
+Clear the UI render request only after terminal reveal/recovery navigation is established. Make recovery `chapterReady` reveal the source, call `AcknowledgeNavigationRendered`, complete `_terminalRenderReady`, and release the token. Until acknowledgement, ViewModel continues rejecting all position mutation. Attached background lifecycle awaits `_terminalRenderReady` before entering its writer boundary; detached close acknowledges the settlement as abandoned because no further WebView callback can arrive.
 
 - [ ] **Step 6: Route bridge errors through ViewModel settlement**
 
