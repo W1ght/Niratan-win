@@ -25,6 +25,26 @@
 
   const TTU_MATCHABLE_CHARACTER = /[0-9A-Za-z○◯々-〇〻ぁ-ゖゝ-ゞァ-ヺー０-９Ａ-Ｚａ-ｚｦ-ﾝ\p{Radical}\p{Unified_Ideograph}]/iu;
 
+  let normalizedOffsetGeneration = 0;
+  let normalizedOffsetReadyGeneration = -1;
+  let normalizedNodeStartOffsets = new WeakMap();
+
+  function countNormalizedCharacters(text, limit) {
+    let count = 0;
+    const end = Math.min(Math.max(0, limit), text.length);
+    for (let i = 0; i < end; ) {
+      const char = String.fromCodePoint(text.codePointAt(i));
+      if (TTU_MATCHABLE_CHARACTER.test(char)) count++;
+      i += char.length;
+    }
+    return count;
+  }
+
+  function invalidateNormalizedOffsetIndex() {
+    normalizedOffsetGeneration += 1;
+    normalizedOffsetReadyGeneration = -1;
+  }
+
   function isCodePointJapanese(codePoint) {
     return JAPANESE_RANGES.some(([start, end]) => codePoint >= start && codePoint <= end);
   }
@@ -401,20 +421,23 @@
     },
 
     getNormalizedOffset(targetNode, offset) {
-      let count = 0;
-      const walker = this.createWalker();
-      let node;
-      while ((node = walker.nextNode())) {
-        const text = node.textContent || '';
-        const limit = node === targetNode ? Math.min(offset, text.length) : text.length;
-        for (let i = 0; i < limit; ) {
-          const char = String.fromCodePoint(text.codePointAt(i));
-          if (TTU_MATCHABLE_CHARACTER.test(char)) count++;
-          i += char.length;
+      if (normalizedOffsetReadyGeneration !== normalizedOffsetGeneration) {
+        const offsets = new WeakMap();
+        const walker = this.createWalker();
+        let count = 0;
+        let node;
+        while ((node = walker.nextNode())) {
+          offsets.set(node, count);
+          const text = node.textContent || '';
+          count += countNormalizedCharacters(text, text.length);
         }
-        if (node === targetNode) break;
+        normalizedNodeStartOffsets = offsets;
+        normalizedOffsetReadyGeneration = normalizedOffsetGeneration;
       }
-      return count;
+
+      const text = targetNode.textContent || '';
+      const startOffset = normalizedNodeStartOffsets.get(targetNode) || 0;
+      return startOffset + countNormalizedCharacters(text, offset);
     },
 
     clearSelection() {
@@ -425,6 +448,11 @@
   };
 
   window.hoshiSelection = hoshiSelection;
+
+  document.addEventListener(
+    'hoshi-reader-content-changed',
+    invalidateNormalizedOffsetIndex,
+  );
 
   // Click handler for instant lookup
   document.addEventListener('click', (e) => {
