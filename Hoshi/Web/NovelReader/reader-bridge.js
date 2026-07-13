@@ -27,6 +27,8 @@ var reader = {
   ttuRegexNegated: /[^0-9A-Za-z○◯々-〇〻ぁ-ゖゝ-ゞァ-ヺー０-９Ａ-Ｚａ-ｚｦ-ﾝ\p{Radical}\p{Unified_Ideograph}]+/gimu,
   ttuRegex: /[0-9A-Za-z○◯々-〇〻ぁ-ゖゝ-ゞァ-ヺー０-９Ａ-Ｚａ-ｚｦ-ﾝ\p{Radical}\p{Unified_Ideograph}]/iu,
   nodeStartOffsets: new WeakMap(),
+  nodeOffsetsGeneration: 0,
+  nodeOffsetsReadyGeneration: -1,
   paginationMetrics: null,
 
   isVertical: function () {
@@ -91,7 +93,21 @@ var reader = {
       count += this.countChars(node.textContent);
     }
     this.nodeStartOffsets = offsets;
+    this.nodeOffsetsReadyGeneration = this.nodeOffsetsGeneration;
     this.paginationMetrics = null;
+  },
+
+  invalidateNodeOffsets: function () {
+    this.nodeOffsetsGeneration += 1;
+    this.nodeOffsetsReadyGeneration = -1;
+    this.paginationMetrics = null;
+  },
+
+  ensureNodeOffsets: function () {
+    if (this.nodeOffsetsReadyGeneration !== this.nodeOffsetsGeneration) {
+      this.buildNodeOffsets();
+    }
+    return this.nodeStartOffsets;
   },
 
   isIgnoredWheelTarget: function (target) {
@@ -224,6 +240,7 @@ var reader = {
   },
 
   buildPaginationMetrics: function () {
+    this.ensureNodeOffsets();
     var context = this.getScrollContext();
     var currentScroll = this.getPagePosition(context);
     var step = this.pageStep(context);
@@ -1074,7 +1091,7 @@ function requestPageNavigation(direction) {
 window.chrome?.webview?.addEventListener("message", handleMessage);
 
 document.addEventListener("hoshi-reader-content-changed", function () {
-  reader.buildNodeOffsets();
+  reader.invalidateNodeOffsets();
 });
 
 document.addEventListener("click", function (event) {
@@ -1145,6 +1162,10 @@ window.addEventListener("unhandledrejection", function (event) {
 });
 
 // ── Sasayaki highlighting ──────────────────────────────────────────
+function notifyReaderContentChanged() {
+  document.dispatchEvent(new Event("hoshi-reader-content-changed"));
+}
+
 var sasayaki = {
   _currentHighlightNodes: [],
   _highlightStyle: null,
@@ -1178,17 +1199,18 @@ var sasayaki = {
     if (typeof CSS !== "undefined" && CSS.highlights) {
       CSS.highlights.delete(this._highlightName);
     }
-    var hadWrappedNodes = this._currentHighlightNodes.length > 0;
+    var didMutateDom = false;
     this._currentHighlightNodes.forEach(function (span) {
       var parent = span.parentNode;
       if (parent) {
         while (span.firstChild) parent.insertBefore(span.firstChild, span);
         parent.removeChild(span);
         parent.normalize();
+        didMutateDom = true;
       }
     });
     this._currentHighlightNodes = [];
-    if (hadWrappedNodes) reader.buildNodeOffsets?.();
+    if (didMutateDom) notifyReaderContentChanged();
   },
 
   _clearReaderSelection: function () {
@@ -1291,7 +1313,9 @@ var sasayaki = {
     }
 
     this._currentHighlightNodes = this._wrapHighlightRanges(ranges);
-    reader.buildNodeOffsets?.();
+    if (this._currentHighlightNodes.length > 0) {
+      notifyReaderContentChanged();
+    }
     return didScroll;
   },
 

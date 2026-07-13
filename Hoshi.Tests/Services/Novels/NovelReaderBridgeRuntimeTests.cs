@@ -57,6 +57,9 @@ public sealed class NovelReaderBridgeRuntimeTests
         var selection = Path.Combine(
             projectRoot,
             "Hoshi", "Web", "NovelReader", "selection.js");
+        var bridge = Path.Combine(
+            projectRoot,
+            "Hoshi", "Web", "NovelReader", "reader-bridge.js");
         var node = FindNodeExecutable();
 
         node.Should().NotBeNull(
@@ -71,6 +74,7 @@ public sealed class NovelReaderBridgeRuntimeTests
         };
         startInfo.ArgumentList.Add(runtimeTest);
         startInfo.ArgumentList.Add(selection);
+        startInfo.ArgumentList.Add(bridge);
 
         using var process = Process.Start(startInfo);
         process.Should().NotBeNull();
