@@ -151,6 +151,21 @@ public sealed class NovelStatisticsDashboardViewModelTests
     }
 
     [Fact]
+    public async Task RangeScrollbar_FractionalInputNotifiesRoundedValue()
+    {
+        var sut = CreateSut(out _, out _);
+        await sut.ActivateAsync(Books(), Shelves(), CancellationToken.None);
+        sut.SelectedRangeMode = NovelStatisticsRangeMode.Day;
+        var notifications = new List<string?>();
+        sut.PropertyChanged += (_, args) => notifications.Add(args.PropertyName);
+
+        sut.SelectedRangeOffsetValue = sut.RangeScrollMaximum - 0.2;
+
+        sut.SelectedRangeOffsetValue.Should().Be(sut.RangeScrollMaximum);
+        notifications.Should().Contain(nameof(sut.SelectedRangeOffsetValue));
+    }
+
+    [Fact]
     public async Task CalendarSelection_MovesScrollbarToContainingPeriodAndUpdatesDetail()
     {
         var sut = CreateSut(out _, out _);

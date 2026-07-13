@@ -2615,6 +2615,12 @@ public class NovelReaderWebAssetTests
         dashboardXaml.Should().Contain("ItemsSource=\"{Binding WeekDays}\"");
         dashboardXaml.Should().Contain("ItemsSource=\"{Binding TrendStyles}\"");
         dashboardXaml.Should().Contain("controls:NovelStatisticsTrendChart");
+        dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsRangeScrollBar\"");
+        dashboardXaml.Should().Contain("Value=\"{Binding SelectedRangeOffsetValue, Mode=TwoWay}\"");
+        dashboardXaml.Should().Contain("AutomationProperties.HelpText=\"{Binding RangeScrollAccessibleText}\"");
+        dashboardXaml.Should().Contain("AxisTicks=\"{Binding TrendAxisTicks}\"");
+        dashboardXaml.Should().NotContain("NovelStatisticsAnchorDate");
+        dashboardXaml.Should().NotContain("CalendarDatePicker");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsCalendarCard\"");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsBookRankingCard\"");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsShelfComparisonCard\"");
@@ -2632,7 +2638,11 @@ public class NovelReaderWebAssetTests
         dashboardCode.Should().NotContain("DispatcherQueue.TryEnqueue");
         dashboardCode.Should().Contain("Grid.SetColumn");
         trendChartXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsTrendChart\"");
+        trendChartXaml.Should().Contain("Height=\"260\"");
         trendChartCode.Should().Contain("Polyline");
+        trendChartCode.Should().Contain("AxisTicksProperty");
+        trendChartCode.Should().Contain("DrawXAxisLabels");
+        trendChartCode.Should().Contain("DrawYAxisTicks");
         dashboardModels.Should().Contain("NovelStatisticsTrendChartStyle");
 
         string[] dashboardResourceUids =
@@ -2641,7 +2651,6 @@ public class NovelReaderWebAssetTests
             "NovelStatisticsDashboardSubtitle",
             "NovelStatisticsTrendCardTitle",
             "NovelStatisticsRangeLabel",
-            "NovelStatisticsAnchorLabel",
             "NovelStatisticsTrendGrainLabel",
             "NovelStatisticsTrendMetricLabel",
             "NovelStatisticsTrendStyleLabel",
@@ -2691,6 +2700,9 @@ public class NovelReaderWebAssetTests
         libraryXaml.Should().Contain("x:Uid=\"NovelStatisticsBackToBookshelfButton\"");
         enResources.Should().Contain("name=\"NovelStatisticsBackToBookshelfButton.Label\"");
         zhResources.Should().Contain("name=\"NovelStatisticsBackToBookshelfButton.Label\"");
+        dashboardXaml.Should().Contain("x:Uid=\"NovelStatisticsRangeScrollBar\"");
+        enResources.Should().Contain("name=\"NovelStatisticsRangeScrollBar.AutomationProperties.Name\"");
+        zhResources.Should().Contain("name=\"NovelStatisticsRangeScrollBar.AutomationProperties.Name\"");
 
         libraryViewModel.Should().Contain("NovelStatisticsDashboardViewModel StatisticsDashboard");
         libraryViewModel.Should().NotContain("INovelStatisticsDashboardService");
@@ -2704,6 +2716,7 @@ public class NovelReaderWebAssetTests
         dashboardViewModel.Should().Contain("NovelStatisticsDashboardCalculator");
         dashboardViewModel.Should().Contain("ActivateAsync");
         dashboardViewModel.Should().Contain("Deactivate");
+        dashboardViewModel.Should().NotContain("AnchorDate");
 
         dashboardService.Should().Contain("NovelStatisticsDashboardCalculator");
         dashboardService.Should().Contain("LoadSnapshotAsync");

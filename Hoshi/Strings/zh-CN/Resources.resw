@@ -780,7 +780,6 @@
   <data name="NovelStatisticsDashboardSubtitle.Text" xml:space="preserve"><value>查看阅读活动、目标、趋势与书库对比。</value></data>
   <data name="NovelStatisticsTrendCardTitle.Text" xml:space="preserve"><value>区间与趋势</value></data>
   <data name="NovelStatisticsRangeLabel.Text" xml:space="preserve"><value>区间</value></data>
-  <data name="NovelStatisticsAnchorLabel.Text" xml:space="preserve"><value>锚点日期</value></data>
   <data name="NovelStatisticsTrendGrainLabel.Text" xml:space="preserve"><value>时间粒度</value></data>
   <data name="NovelStatisticsTrendMetricLabel.Text" xml:space="preserve"><value>指标</value></data>
   <data name="NovelStatisticsTrendStyleLabel.Text" xml:space="preserve"><value>样式</value></data>
@@ -819,7 +818,7 @@
   <data name="NovelStatisticsCorruptWarning.Text" xml:space="preserve"><value>部分统计暂时不可用，受影响的 sidecar 文件保持未修改。</value></data>
   <data name="NovelStatisticsNoReadingRecords.Text" xml:space="preserve"><value>无阅读记录</value></data>
   <data name="NovelStatisticsRangeModeControl.AutomationProperties.Name" xml:space="preserve"><value>统计区间</value></data>
-  <data name="NovelStatisticsAnchorDateControl.AutomationProperties.Name" xml:space="preserve"><value>统计锚点日期</value></data>
+  <data name="NovelStatisticsRangeScrollBar.AutomationProperties.Name" xml:space="preserve"><value>统计日期范围</value></data>
   <data name="NovelStatisticsTrendGrainControl.AutomationProperties.Name" xml:space="preserve"><value>趋势时间粒度</value></data>
   <data name="NovelStatisticsTrendMetricControl.AutomationProperties.Name" xml:space="preserve"><value>趋势指标</value></data>
   <data name="NovelStatisticsTrendStyleControl.AutomationProperties.Name" xml:space="preserve"><value>趋势样式</value></data>

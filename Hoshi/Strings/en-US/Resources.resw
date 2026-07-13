@@ -780,7 +780,6 @@
   <data name="NovelStatisticsDashboardSubtitle.Text" xml:space="preserve"><value>Your reading activity, goals, trends, and library comparisons.</value></data>
   <data name="NovelStatisticsTrendCardTitle.Text" xml:space="preserve"><value>Range &amp; Trend</value></data>
   <data name="NovelStatisticsRangeLabel.Text" xml:space="preserve"><value>Range</value></data>
-  <data name="NovelStatisticsAnchorLabel.Text" xml:space="preserve"><value>Anchor</value></data>
   <data name="NovelStatisticsTrendGrainLabel.Text" xml:space="preserve"><value>Time Grain</value></data>
   <data name="NovelStatisticsTrendMetricLabel.Text" xml:space="preserve"><value>Metric</value></data>
   <data name="NovelStatisticsTrendStyleLabel.Text" xml:space="preserve"><value>Style</value></data>
@@ -819,7 +818,7 @@
   <data name="NovelStatisticsCorruptWarning.Text" xml:space="preserve"><value>Some statistics are temporarily unavailable. The affected sidecar files were left unchanged.</value></data>
   <data name="NovelStatisticsNoReadingRecords.Text" xml:space="preserve"><value>No reading records</value></data>
   <data name="NovelStatisticsRangeModeControl.AutomationProperties.Name" xml:space="preserve"><value>Statistics range</value></data>
-  <data name="NovelStatisticsAnchorDateControl.AutomationProperties.Name" xml:space="preserve"><value>Statistics anchor date</value></data>
+  <data name="NovelStatisticsRangeScrollBar.AutomationProperties.Name" xml:space="preserve"><value>Statistics date range</value></data>
   <data name="NovelStatisticsTrendGrainControl.AutomationProperties.Name" xml:space="preserve"><value>Trend time grain</value></data>
   <data name="NovelStatisticsTrendMetricControl.AutomationProperties.Name" xml:space="preserve"><value>Trend metric</value></data>
   <data name="NovelStatisticsTrendStyleControl.AutomationProperties.Name" xml:space="preserve"><value>Trend style</value></data>

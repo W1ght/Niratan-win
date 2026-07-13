@@ -189,13 +189,6 @@
                                               SelectedItem="{Binding SelectedRangeMode, Mode=TwoWay}" />
                                 </StackPanel>
                                 <StackPanel Spacing="4">
-                                    <TextBlock x:Uid="NovelStatisticsAnchorLabel" />
-                                    <CalendarDatePicker Width="158"
-                                                        x:Uid="NovelStatisticsAnchorDateControl"
-                                                        AutomationProperties.AutomationId="NovelStatisticsAnchorDate"
-                                                        Date="{Binding AnchorDate, Mode=TwoWay}" />
-                                </StackPanel>
-                                <StackPanel Spacing="4">
                                     <TextBlock x:Uid="NovelStatisticsTrendGrainLabel" />
                                     <ComboBox MinWidth="105"
                                               x:Uid="NovelStatisticsTrendGrainControl"
@@ -225,8 +218,21 @@
                         <TextBlock x:Uid="NovelStatisticsTrendHelp"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <controls:NovelStatisticsTrendChart x:Uid="NovelStatisticsTrendChartControl"
+                                                            Height="260"
                                                             ItemsSource="{Binding TrendPoints}"
+                                                            AxisTicks="{Binding TrendAxisTicks}"
                                                             ChartStyle="{Binding SelectedTrendStyle}" />
+                        <ScrollBar x:Uid="NovelStatisticsRangeScrollBar"
+                                   AutomationProperties.AutomationId="NovelStatisticsRangeScrollBar"
+                                   AutomationProperties.HelpText="{Binding RangeScrollAccessibleText}"
+                                   Orientation="Horizontal"
+                                   Minimum="0"
+                                   Maximum="{Binding RangeScrollMaximum}"
+                                   ViewportSize="1"
+                                   SmallChange="1"
+                                   LargeChange="{Binding RangeScrollLargeChange}"
+                                   IsEnabled="{Binding CanScrollRange}"
+                                   Value="{Binding SelectedRangeOffsetValue, Mode=TwoWay}" />
                     </StackPanel>
                 </Border>
 

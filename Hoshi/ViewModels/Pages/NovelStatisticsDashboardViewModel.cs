@@ -97,10 +97,19 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
     public double SelectedRangeOffsetValue
     {
         get => SelectedRangeOffset;
-        set => SelectedRangeOffset = Math.Clamp(
-            (int)Math.Round(value),
-            0,
-            Math.Max(_selectableRanges.Count - 1, 0));
+        set
+        {
+            var rounded = Math.Clamp(
+                (int)Math.Round(value),
+                0,
+                Math.Max(_selectableRanges.Count - 1, 0));
+            if (rounded == SelectedRangeOffset)
+            {
+                OnPropertyChanged(nameof(SelectedRangeOffsetValue));
+                return;
+            }
+            SelectedRangeOffset = rounded;
+        }
     }
 
     public double RangeScrollMaximum => Math.Max(_selectableRanges.Count - 1, 0);
