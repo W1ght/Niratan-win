@@ -183,8 +183,11 @@ git commit -m "refactor(reader): add navigation transaction state machine"
 
 **Files:**
 - Modify: `Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs`
+- Modify: `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
 - Modify: `Hoshi/App.xaml.cs`
 - Modify: `Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`
+- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Hoshi.Tests/Views/Pages/NovelReaderStatisticsLifecycleTests.cs`
 
 **Interfaces:**
 - Consumes: Task 1 coordinator and models.
@@ -270,17 +273,20 @@ public bool AcknowledgeNavigationRendered(long generation);
 
 1. construct the exact destination `ReaderNavigationPositionSnapshot` from chapter character counts and obtain a matching `ReaderNavigationCommitLease`;
 2. admit one writer-tail operation with `CancellationToken.None` after the lease is granted;
-3. call `SaveProgressCoreAsync` with the lease destination;
-4. on success reset the destination baseline and atomically publish the destination tuple;
-5. call `CompleteCommit(lease, true)`;
-6. on returned failure or exception call `CompleteCommit(lease, false)` exactly once;
-7. return the resulting settlement.
+3. call a persistence-only helper around `INovelLibraryService.SaveProgressAsync` with the lease destination;
+4. on returned persistence failure or persistence exception call `CompleteCommit(lease, false)` exactly once;
+5. once persistence succeeds, treat the destination as irrevocably durable: reset the destination baseline, atomically publish the destination tuple, schedule export, and broadcast in that order;
+6. contain and report any post-persistence baseline, property-notification, export-scheduling, or broadcast exception without settling to source;
+7. call `CompleteCommit(lease, true)` exactly once after the durable destination path;
+8. return the resulting settlement.
 
-Do not pass Page navigation cancellation into the admitted destination write. Preserve exception logging/notification, but return source settlement so UI recovery is deterministic.
+Do not pass Page navigation cancellation into the admitted destination write. A persistence failure returns a source settlement. After persistence succeeds, every later fault returns a destination settlement because source recovery would contradict the durable bookmark.
+
+Add explicit tests whose fake statistics baseline, property subscriber, auto-sync scheduler, and messenger each throw after a successful bookmark save. Every case must settle to destination, keep the destination tuple authoritative, and never instruct source recovery.
 
 - [ ] **Step 5: Settle navigation before lifecycle boundaries**
 
-Before Page invokes either `CheckpointAppBackgroundingAsync` or `PrepareForReaderLifecycleCloseAsync`, it calls `SettleNavigationForLifecycleAsync` and applies the returned terminal render instruction:
+Modify `NovelReaderPage.HandleAppLifecycleCheckpointAsync` so Page invokes `SettleNavigationForLifecycleAsync`, applies the returned source/destination terminal instruction, and acknowledges it before calling either `CheckpointAppBackgroundingAsync` or `PrepareForReaderLifecycleCloseAsync`:
 
 - if phase is `Rendering`, cancel to source;
 - if phase is `Committing`, await its settlement;
@@ -304,7 +310,7 @@ Expected: all selected tests pass.
 - [ ] **Step 8: Commit Task 2**
 
 ```powershell
-git add -- Hoshi/App.xaml.cs Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs Hoshi.Tests/Views/Pages/NovelReaderStatisticsLifecycleTests.cs
+git add -- Hoshi/App.xaml.cs Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs Hoshi/Views/Pages/NovelReaderPage.xaml.cs Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs Hoshi.Tests/Views/Pages/NovelReaderStatisticsLifecycleTests.cs
 git commit -m "refactor(reader): commit navigation through viewmodel transaction"
 ```
 
