@@ -13,7 +13,7 @@
 - `Rendering` 失败或 lifecycle 取消恢复源位置；`Committing` 进入不可取消的持久化边界，lifecycle 等待并按 durable 结果恢复目的地或源位置。bridge error、重复/过期 completion 和 recovery 都按事务身份收敛到一个终态。
 - 事务存续期间统一阻止翻页、目录/搜索/链接/history 与 Sasayaki auto-scroll/load/progress/save 等位置突变；播放 UI 和非位置高亮仍可继续，异步回调在 await 后再次校验 gate。
 - lifecycle 在同一 writer gate 内先发起 settlement 再关闭 admission；Resolve 原子拒绝 barrier 后的 destination writer。Pause/Stop 等待 settlement snapshot 后再串入 writer，history 只在 destination settlement 提交；重复/过期完成返回显式 `Ignored`，Page 不再进入 recovery。
-- 章节内容按 EPUB manifest media type 识别为 HTML，在 Service 层移除可执行元素、inline handler 和危险 URL；清洗失败时 fail-closed，host 响应注入严格 no-script CSP，并拒绝外部、frame、new-window 与权限请求。所有 WebMessage 绑定当前 render attempt source；native 翻页改为 typed host message，bridge 只在私有 closure 内执行授权翻页。
+- 章节内容按 EPUB manifest media type 识别为 HTML，在 Service 层按 local name 和 namespace URI 移除可执行元素、inline handler、`xml:base` 与危险 URL（包括别名前缀的 XLink/SVG/MathML）；清洗失败时 fail-closed，host 响应注入严格 no-script CSP，并拒绝外部、frame、new-window 与权限请求。所有 WebMessage 绑定当前 render attempt source；完整 bridge、分页引擎与 Sasayaki auto-scroll 收进 IIFE，native 翻页、滚轮开关和 Sasayaki 位置命令只通过严格校验的 typed host message 进入 closure，synthetic message event 不能调用位置 API。
 
 ---
 

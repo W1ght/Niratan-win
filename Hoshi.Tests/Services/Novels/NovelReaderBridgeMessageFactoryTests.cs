@@ -157,4 +157,54 @@ public class NovelReaderBridgeMessageFactoryTests
 
         act.Should().Throw<ArgumentOutOfRangeException>();
     }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CreateSetWheelNavigationMessage_SerializesTypedBooleanCommand(bool enabled)
+    {
+        using var document = JsonDocument.Parse(
+            NovelReaderBridgeMessageFactory.CreateSetWheelNavigationMessage(enabled));
+
+        document.RootElement.GetProperty("version").GetInt32().Should().Be(1);
+        document.RootElement.GetProperty("type").GetString()
+            .Should().Be("setWheelNavigation");
+        document.RootElement.GetProperty("payload").GetProperty("enabled")
+            .GetBoolean().Should().Be(enabled);
+    }
+
+    [Fact]
+    public void CreateSasayakiHighlightMessage_SerializesTypedPositionCommand()
+    {
+        using var document = JsonDocument.Parse(
+            NovelReaderBridgeMessageFactory.CreateSasayakiHighlightMessage(
+                generation: 7,
+                startCodePoint: 12,
+                length: 4,
+                autoScroll: true,
+                textColor: "#fff",
+                backgroundColor: "#000"));
+
+        document.RootElement.GetProperty("type").GetString()
+            .Should().Be("highlightSasayakiCue");
+        var payload = document.RootElement.GetProperty("payload");
+        payload.GetProperty("generation").GetInt64().Should().Be(7);
+        payload.GetProperty("startCodePoint").GetInt32().Should().Be(12);
+        payload.GetProperty("length").GetInt32().Should().Be(4);
+        payload.GetProperty("autoScroll").GetBoolean().Should().BeTrue();
+        payload.GetProperty("textColor").GetString().Should().Be("#fff");
+        payload.GetProperty("backgroundColor").GetString().Should().Be("#000");
+    }
+
+    [Fact]
+    public void CreateClearSasayakiHighlightMessage_SerializesTypedCommand()
+    {
+        using var document = JsonDocument.Parse(
+            NovelReaderBridgeMessageFactory.CreateClearSasayakiHighlightMessage());
+
+        document.RootElement.GetProperty("type").GetString()
+            .Should().Be("clearSasayakiHighlight");
+        document.RootElement.GetProperty("payload").ValueKind
+            .Should().Be(JsonValueKind.Object);
+    }
 }

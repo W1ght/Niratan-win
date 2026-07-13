@@ -1336,8 +1336,9 @@ public sealed partial class NovelReaderPage : Page
                 await sender.ExecuteScriptAsync(_readerJs);
 
             var wheelNavigationEnabled = !readerSettings.Current.ContinuousMode && readerSettings.Current.MouseWheelPageTurn;
-            await sender.ExecuteScriptAsync(
-                $"window.hoshiReader.registerWheelNavigation?.({JsonSerializer.Serialize(wheelNavigationEnabled)});");
+            sender.PostWebMessageAsJson(
+                NovelReaderBridgeMessageFactory.CreateSetWheelNavigationMessage(
+                    wheelNavigationEnabled));
 
             if (!string.IsNullOrEmpty(_selectionJs))
                 await sender.ExecuteScriptAsync(_selectionJs);
@@ -1707,6 +1708,40 @@ public sealed partial class NovelReaderPage : Page
                     var href = internalLinkPayload.GetProperty("href").GetString();
                     if (!string.IsNullOrWhiteSpace(href))
                         await NavigateToInternalLinkAsync(href);
+                    break;
+                case "sasayakiHighlightCompleted":
+                    var sasayakiPayload = root.GetProperty("payload");
+                    if (!sasayakiPayload.TryGetProperty("generation", out var generationElement)
+                        || generationElement.ValueKind != JsonValueKind.Number
+                        || !generationElement.TryGetInt64(out var sasayakiGeneration)
+                        || sasayakiGeneration < 0
+                        || !sasayakiPayload.TryGetProperty("progress", out var sasayakiProgressElement)
+                        || sasayakiProgressElement.ValueKind is not (
+                            JsonValueKind.Number or JsonValueKind.Null))
+                    {
+                        throw new InvalidDataException(
+                            "Invalid sasayakiHighlightCompleted payload.");
+                    }
+
+                    double? parsedSasayakiProgress = null;
+                    if (sasayakiProgressElement.ValueKind == JsonValueKind.Number)
+                    {
+                        if (!sasayakiProgressElement.TryGetDouble(out var sasayakiProgress)
+                            || !double.IsFinite(sasayakiProgress)
+                            || sasayakiProgress is < 0 or > 1)
+                        {
+                            throw new InvalidDataException(
+                                "Invalid sasayakiHighlightCompleted progress.");
+                        }
+                        parsedSasayakiProgress = sasayakiProgress;
+                    }
+
+                    if (sasayakiGeneration == Volatile.Read(
+                            ref _sasayakiHighlightGeneration)
+                        && parsedSasayakiProgress is double acceptedSasayakiProgress)
+                    {
+                        TryApplySasayakiAutoScrollProgress(acceptedSasayakiProgress);
+                    }
                     break;
                 case "error":
                     var message = root.TryGetProperty("payload", out var errorPayload)
@@ -3972,12 +4007,12 @@ public sealed partial class NovelReaderPage : Page
         });
     }
 
-    private async Task HighlightSasayakiCueAsync(
+    private Task HighlightSasayakiCueAsync(
         SasayakiMatch match,
         bool allowAutoScroll = true)
     {
         if (NovelWebView.CoreWebView2 == null)
-            return;
+            return Task.CompletedTask;
 
         var generation = Interlocked.Increment(ref _sasayakiHighlightGeneration);
         allowAutoScroll = allowAutoScroll && CanMutateReaderPosition();
@@ -3990,76 +4025,47 @@ public sealed partial class NovelReaderPage : Page
             var backgroundColor = useDarkColors
                 ? settings.DarkBackgroundColor
                 : settings.LightBackgroundColor;
-            var textColorJson = JsonSerializer.Serialize(textColor);
-            var backgroundColorJson = JsonSerializer.Serialize(backgroundColor);
-            var autoScrollJson = JsonSerializer.Serialize(
-                allowAutoScroll && settings.AutoScroll);
-            var progressJson = await NovelWebView.CoreWebView2.ExecuteScriptAsync(
-                $$"""
-                (() => {
-                  const generation = {{generation}};
-                  const currentGeneration = Number(window.__hoshiSasayakiHighlightGeneration || 0);
-                  if (currentGeneration > generation) return null;
-                  window.__hoshiSasayakiHighlightGeneration = generation;
-                  if (!window.hoshiSasayaki?.setColors || !window.hoshiSasayaki?.highlightCue) return null;
-                  window.hoshiSasayaki.setColors({{textColorJson}}, {{backgroundColorJson}});
-                  return window.hoshiSasayaki.highlightCue({{match.StartCodePoint}}, {{match.Length}}, {{autoScrollJson}});
-                })();
-                """);
-            if (allowAutoScroll
-                && CanMutateReaderPosition()
-                && generation == Volatile.Read(ref _sasayakiHighlightGeneration))
-                TryApplySasayakiAutoScrollProgress(progressJson);
+            NovelWebView.CoreWebView2.PostWebMessageAsJson(
+                NovelReaderBridgeMessageFactory.CreateSasayakiHighlightMessage(
+                    generation,
+                    match.StartCodePoint,
+                    match.Length,
+                    allowAutoScroll && settings.AutoScroll,
+                    textColor,
+                    backgroundColor));
         }
         catch (Exception ex)
         {
             Log.Debug(ex, "[Sasayaki] Failed to highlight cue");
         }
+
+        return Task.CompletedTask;
     }
 
-    private bool TryApplySasayakiAutoScrollProgress(string? progressJson)
+    private bool TryApplySasayakiAutoScrollProgress(double progress)
     {
         if (!CanMutateReaderPosition())
             return false;
 
-        if (string.IsNullOrWhiteSpace(progressJson)
-            || progressJson == "null"
-            || progressJson == "undefined")
+        if (!double.IsFinite(progress))
+            return false;
+
+        progress = Math.Clamp(progress, 0, 1);
+        if (!ReaderStatisticsEventClassifier.HasProgressMovement(
+            ViewModel.Progress,
+            progress))
         {
             return false;
         }
 
-        try
+        return _navigationInput.TryApplyPositionMutation(() =>
         {
-            using var document = JsonDocument.Parse(progressJson);
-            if (document.RootElement.ValueKind != JsonValueKind.Number
-                || !document.RootElement.TryGetDouble(out var progress)
-                || !double.IsFinite(progress))
-            {
-                return false;
-            }
-
-            progress = Math.Clamp(progress, 0, 1);
-            if (!ReaderStatisticsEventClassifier.HasProgressMovement(
-                ViewModel.Progress,
-                progress))
-            {
-                return false;
-            }
-
-            return _navigationInput.TryApplyPositionMutation(() =>
-            {
-                ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
-                _currentProgress = progress;
-                ViewModel.UpdateProgress(progress);
-                RefreshReaderDisplayChrome();
-                ViewModel.SaveProgressDebounced();
-            });
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
+            ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
+            _currentProgress = progress;
+            ViewModel.UpdateProgress(progress);
+            RefreshReaderDisplayChrome();
+            ViewModel.SaveProgressDebounced();
+        });
     }
 
     private bool LoadChapterForSasayakiAutoScroll(SasayakiMatch match)
@@ -4087,19 +4093,21 @@ public sealed partial class NovelReaderPage : Page
         });
     }
 
-    private async Task ClearSasayakiHighlightAsync()
+    private Task ClearSasayakiHighlightAsync()
     {
         if (NovelWebView.CoreWebView2 == null)
-            return;
+            return Task.CompletedTask;
 
         try
         {
-            await NovelWebView.CoreWebView2.ExecuteScriptAsync(
-                "window.hoshiSasayaki.clearHighlight();");
+            NovelWebView.CoreWebView2.PostWebMessageAsJson(
+                NovelReaderBridgeMessageFactory.CreateClearSasayakiHighlightMessage());
         }
         catch (Exception ex)
         {
             Log.Debug(ex, "[Sasayaki] Failed to clear highlight");
         }
+
+        return Task.CompletedTask;
     }
 }

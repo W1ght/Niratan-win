@@ -26,7 +26,7 @@ public static class EpubActiveContentSanitizer
         "discard",
     };
 
-    private static readonly HashSet<string> UrlAttributes = new(
+    private static readonly HashSet<string> UrlAttributeLocalNames = new(
         StringComparer.OrdinalIgnoreCase)
     {
         "href",
@@ -62,7 +62,7 @@ public static class EpubActiveContentSanitizer
             if (node.ParentNode == null && node != document.DocumentNode)
                 continue;
 
-            if (RemovedElements.Contains(node.Name)
+            if (RemovedElements.Contains(LocalName(node.Name))
                 || IsRefreshMeta(node)
                 || IsExecutableLink(node))
             {
@@ -73,12 +73,11 @@ public static class EpubActiveContentSanitizer
             foreach (var attribute in node.Attributes.ToArray())
             {
                 var qualifiedName = attribute.Name;
-                var localName = qualifiedName.Contains(':', StringComparison.Ordinal)
-                    ? qualifiedName[(qualifiedName.LastIndexOf(':') + 1)..]
-                    : qualifiedName;
+                var localName = LocalName(qualifiedName);
                 if (localName.StartsWith("on", StringComparison.OrdinalIgnoreCase)
                     || localName.Equals("srcdoc", StringComparison.OrdinalIgnoreCase)
-                    || UrlAttributes.Contains(qualifiedName)
+                    || localName.Equals("base", StringComparison.OrdinalIgnoreCase)
+                    || IsUrlAttribute(node, attribute, localName)
                         && IsDangerousUrl(attribute.Value))
                 {
                     node.Attributes.Remove(attribute);
@@ -136,13 +135,13 @@ public static class EpubActiveContentSanitizer
     }
 
     private static bool IsRefreshMeta(HtmlNode node) =>
-        node.Name.Equals("meta", StringComparison.OrdinalIgnoreCase)
+        LocalName(node.Name).Equals("meta", StringComparison.OrdinalIgnoreCase)
         && node.GetAttributeValue("http-equiv", "")
             .Equals("refresh", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsExecutableLink(HtmlNode node)
     {
-        if (!node.Name.Equals("link", StringComparison.OrdinalIgnoreCase))
+        if (!LocalName(node.Name).Equals("link", StringComparison.OrdinalIgnoreCase))
             return false;
 
         var relations = node.GetAttributeValue("rel", "")
@@ -150,5 +149,52 @@ public static class EpubActiveContentSanitizer
         return relations.Any(relation =>
             relation.Equals("import", StringComparison.OrdinalIgnoreCase)
             || relation.Equals("modulepreload", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string LocalName(string qualifiedName)
+    {
+        var separator = qualifiedName.LastIndexOf(':');
+        return separator >= 0 ? qualifiedName[(separator + 1)..] : qualifiedName;
+    }
+
+    private static bool IsUrlAttribute(
+        HtmlNode node,
+        HtmlAttribute attribute,
+        string localName)
+    {
+        if (!UrlAttributeLocalNames.Contains(localName))
+            return false;
+
+        var namespaceUri = ResolveAttributeNamespaceUri(node, attribute.Name);
+        return string.IsNullOrEmpty(namespaceUri)
+            || namespaceUri.Equals("http://www.w3.org/1999/xhtml", StringComparison.Ordinal)
+            || namespaceUri.Equals("http://www.w3.org/1999/xlink", StringComparison.Ordinal)
+            || namespaceUri.Equals("http://www.w3.org/2000/svg", StringComparison.Ordinal)
+            || namespaceUri.Equals("http://www.w3.org/1998/Math/MathML", StringComparison.Ordinal)
+            || IsDangerousUrl(attribute.Value);
+    }
+
+    private static string? ResolveAttributeNamespaceUri(
+        HtmlNode node,
+        string qualifiedName)
+    {
+        var separator = qualifiedName.IndexOf(':');
+        if (separator < 0)
+            return string.Empty;
+
+        var prefix = qualifiedName[..separator];
+        if (prefix.Equals("xml", StringComparison.OrdinalIgnoreCase))
+            return "http://www.w3.org/XML/1998/namespace";
+
+        var declarationName = $"xmlns:{prefix}";
+        for (var current = node; current != null; current = current.ParentNode)
+        {
+            var declaration = current.Attributes.FirstOrDefault(candidate =>
+                candidate.Name.Equals(declarationName, StringComparison.OrdinalIgnoreCase));
+            if (declaration != null)
+                return HtmlEntity.DeEntitize(declaration.Value).Trim();
+        }
+
+        return null;
     }
 }

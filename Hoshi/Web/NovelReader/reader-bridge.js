@@ -1,3 +1,6 @@
+(function () {
+"use strict";
+
 const VERSION = 1;
 
 window.__hoshiReaderState = {
@@ -14,8 +17,9 @@ window.__hoshiReaderState = {
 };
 
 let currentChapter = null;
+let sasayakiHighlightGeneration = 0;
 
-window.hoshiReader = {
+var reader = {
   pageHeight: 0,
   pageWidth: 0,
   columnGap: 0,
@@ -65,7 +69,7 @@ window.hoshiReader = {
     var root = rootNode || document.body;
     return document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode: function (n) {
-        return window.hoshiReader.isFurigana(n)
+        return reader.isFurigana(n)
           ? NodeFilter.FILTER_REJECT
           : NodeFilter.FILTER_ACCEPT;
       },
@@ -119,7 +123,7 @@ window.hoshiReader = {
       if (!window.hoshiWheelNavigationEnabled) return;
       if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
       if (Math.abs(event.deltaX) > Math.abs(event.deltaY) || event.deltaY === 0) return;
-      if (window.hoshiReader.isIgnoredWheelTarget(event.target)) return;
+      if (reader.isIgnoredWheelTarget(event.target)) return;
       if (window.getSelection && window.getSelection()?.isCollapsed === false) return;
 
       var now = Date.now();
@@ -545,9 +549,9 @@ window.hoshiReader = {
     var targetScroll = this.alignToPage(context, anchor);
     this.setPagePosition(context, targetScroll);
     requestAnimationFrame(function () {
-      var ctx = window.hoshiReader.getScrollContext();
-      window.hoshiReader.setPagePosition(ctx, targetScroll);
-      window.hoshiReader.registerSnapScroll(targetScroll);
+      var ctx = reader.getScrollContext();
+      reader.setPagePosition(ctx, targetScroll);
+      reader.registerSnapScroll(targetScroll);
       requestAnimationFrame(function () {
         notifyRestoreComplete(navigationGeneration, renderAttemptId);
       });
@@ -572,8 +576,8 @@ window.hoshiReader = {
 
     this.setPagePosition(context, targetScroll);
     requestAnimationFrame(function () {
-      var ctx = window.hoshiReader.getScrollContext();
-      window.hoshiReader.setPagePosition(ctx, targetScroll);
+      var ctx = reader.getScrollContext();
+      reader.setPagePosition(ctx, targetScroll);
     });
     return true;
   },
@@ -613,8 +617,8 @@ window.hoshiReader = {
   },
 
   initialize: async function (initialProgress, navigationGeneration, restoreTarget, renderAttemptId) {
-    if (window.hoshiReader.didInitialize) return;
-    window.hoshiReader.didInitialize = true;
+    if (reader.didInitialize) return;
+    reader.didInitialize = true;
 
     var viewport = document.querySelector('meta[name="viewport"]');
     if (viewport) viewport.remove();
@@ -637,15 +641,15 @@ window.hoshiReader = {
     );
     document.documentElement.style.setProperty(
       "--hoshi-image-max-width",
-      Math.max(1, Math.floor(pageWidth - (window.hoshiReader.currentSafeInline() * 2))) + "px"
+      Math.max(1, Math.floor(pageWidth - (reader.currentSafeInline() * 2))) + "px"
     );
     document.documentElement.style.setProperty(
       "--hoshi-image-max-height",
-      Math.max(1, Math.floor(pageHeight - (window.hoshiReader.currentSafeBlock() * 2) - overlap)) + "px"
+      Math.max(1, Math.floor(pageHeight - (reader.currentSafeBlock() * 2) - overlap)) + "px"
     );
-    window.hoshiReader.pageHeight = pageHeight;
-    window.hoshiReader.pageWidth = pageWidth;
-    window.hoshiReader.columnGap = window.hoshiReader.currentColumnGap();
+    reader.pageHeight = pageHeight;
+    reader.pageWidth = pageWidth;
+    reader.columnGap = reader.currentColumnGap();
 
     Array.from(document.querySelectorAll("svg")).forEach(function (svg) {
       if (
@@ -702,7 +706,7 @@ window.hoshiReader = {
 
 function notifyRestoreComplete(navigationGeneration, renderAttemptId) {
   postToHost("restoreCompleted", {
-    progress: window.hoshiReader.calculateProgress(),
+    progress: reader.calculateProgress(),
     chapterIndex: currentChapter.index,
     renderAttemptId: renderAttemptId,
     navigationGeneration: navigationGeneration ?? null,
@@ -798,19 +802,19 @@ function shortcutActionForKeyboardEvent(event) {
 }
 
 function updateDiagnostics() {
-  var context = window.hoshiReader.getScrollContext();
+  var context = reader.getScrollContext();
   var metrics =
-    window.hoshiReader.paginationMetrics ||
-    window.hoshiReader.buildPaginationMetrics();
-  var step = window.hoshiReader.pageStep(context);
+    reader.paginationMetrics ||
+    reader.buildPaginationMetrics();
+  var step = reader.pageStep(context);
   var pageCount = context.pageSize > 0
     ? Math.max(1, Math.floor(context.maxScroll / step) + 1)
     : 0;
   var currentPage = context.pageSize > 0
-    ? Math.floor(window.hoshiReader.getPagePosition(context) / step)
+    ? Math.floor(reader.getPagePosition(context) / step)
     : 0;
-  var progress = window.hoshiReader.calculateProgress();
-  window.hoshiReader.lastProgress = progress;
+  var progress = reader.calculateProgress();
+  reader.lastProgress = progress;
   var renderedText = document.body?.innerText?.trim()?.length ?? 0;
 
   window.__hoshiReaderState = {
@@ -833,8 +837,8 @@ function updateDiagnostics() {
       devicePixelRatio: window.devicePixelRatio || 1,
       visualViewportWidth: window.visualViewport?.width || window.innerWidth,
       visualViewportHeight: window.visualViewport?.height || window.innerHeight,
-      pageWidth: window.hoshiReader.pageWidth,
-      pageHeight: window.hoshiReader.pageHeight,
+      pageWidth: reader.pageWidth,
+      pageHeight: reader.pageHeight,
       currentPage: currentPage,
       pageIndex: currentPage,
       pageCount: pageCount,
@@ -842,10 +846,10 @@ function updateDiagnostics() {
       progress: progress,
       minScroll: metrics.minScroll,
       maxScroll: metrics.maxScroll,
-      scrollPosition: window.hoshiReader.getPagePosition(context),
-      columnGap: window.hoshiReader.currentColumnGap(),
-      safeInline: window.hoshiReader.currentSafeInline(),
-      safeBlock: window.hoshiReader.currentSafeBlock(),
+      scrollPosition: reader.getPagePosition(context),
+      columnGap: reader.currentColumnGap(),
+      safeInline: reader.currentSafeInline(),
+      safeBlock: reader.currentSafeBlock(),
       pageStep: step,
       bodyTextLength: renderedText,
     },
@@ -859,21 +863,54 @@ window.hoshiGetDiagnostics = function () {
 };
 
 async function handleNavigate(direction) {
-  var result = window.hoshiReader.paginate(direction);
+  var result = reader.paginate(direction);
   updateDiagnostics();
   postToHost("pageChanged", {
     direction: direction,
     result: result,
-    progress: window.hoshiReader.calculateProgress(),
+    progress: reader.calculateProgress(),
     state: window.__hoshiReaderState,
   });
 }
 
+function requireObject(value, name) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(name + " must be an object");
+  }
+  return value;
+}
+
+function requireInteger(value, name, minimum) {
+  if (!Number.isSafeInteger(value) || value < minimum) {
+    throw new Error(name + " must be an integer >= " + minimum);
+  }
+  return value;
+}
+
+function requireProgress(value, name) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error(name + " must be a finite number between 0 and 1");
+  }
+  return value;
+}
+
+function optionalGeneration(value, name) {
+  if (value === undefined || value === null) return null;
+  return requireInteger(value, name, 0);
+}
+
 async function handleMessage(event) {
+  if (!event || event.isTrusted !== true) return;
+
   var reportOperationError = createBridgeErrorReporter();
   try {
     var message =
       typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+    requireObject(message, "message");
+    if (typeof message.type !== "string" || !message.type) {
+      throw new Error("message.type must be a non-empty string");
+    }
+    var payload = requireObject(message.payload, "message.payload");
     logDebug("rx-message", { type: message?.type });
     if (message?.version !== VERSION) {
       throw new Error(
@@ -883,33 +920,63 @@ async function handleMessage(event) {
 
     switch (message.type) {
       case "setChapter":
+        var chapterIndex = requireInteger(payload.index, "payload.index", 0);
+        var totalChapters = requireInteger(
+          payload.totalChapters,
+          "payload.totalChapters",
+          1
+        );
+        var chapterAttemptId = requireInteger(
+          payload.renderAttemptId,
+          "payload.renderAttemptId",
+          0
+        );
+        var chapterGeneration = optionalGeneration(
+          payload.navigationGeneration,
+          "payload.navigationGeneration"
+        );
+        var restoreTarget = payload.restoreTarget ?? null;
+        if (restoreTarget !== null && restoreTarget !== "start" && restoreTarget !== "end") {
+          throw new Error("payload.restoreTarget must be start, end, or null");
+        }
+        var progress = payload.progress === undefined
+          ? 0
+          : requireProgress(payload.progress, "payload.progress");
         currentChapter = {
-          index: message.payload?.index ?? 0,
-          totalChapters: message.payload?.totalChapters ?? 0,
-          renderAttemptId: message.payload?.renderAttemptId ?? 0,
+          index: chapterIndex,
+          totalChapters: totalChapters,
+          renderAttemptId: chapterAttemptId,
         };
-        var progress = message.payload?.progress ?? 0;
         logDebug("setChapter-received", { chapter: currentChapter, progress: progress });
-        await window.hoshiReader.initialize(
+        await reader.initialize(
           progress,
-          message.payload?.navigationGeneration ?? null,
-          message.payload?.restoreTarget ?? null,
+          chapterGeneration,
+          restoreTarget,
           currentChapter.renderAttemptId
         );
         break;
       case "restoreProgress":
-        var restoreGeneration = message.payload?.navigationGeneration ?? null;
-        var restoreAttemptId = message.payload?.renderAttemptId ?? 0;
+        if (!currentChapter) throw new Error("restoreProgress requires an active chapter");
+        var restoreProgress = requireProgress(payload.progress, "payload.progress");
+        var restoreGeneration = optionalGeneration(
+          payload.navigationGeneration,
+          "payload.navigationGeneration"
+        );
+        var restoreAttemptId = requireInteger(
+          payload.renderAttemptId,
+          "payload.renderAttemptId",
+          0
+        );
         currentChapter.renderAttemptId = restoreAttemptId;
         logDebug("restoreProgress-start", {
-          progress: message.payload?.progress ?? 0,
-          pageHeight: window.hoshiReader.pageHeight,
-          pageWidth: window.hoshiReader.pageWidth,
+          progress: restoreProgress,
+          pageHeight: reader.pageHeight,
+          pageWidth: reader.pageWidth,
           bodyScrollWidth: document.body.scrollWidth,
           bodyClientWidth: document.body.clientWidth,
         });
-        await window.hoshiReader.restoreProgress(
-          message.payload?.progress ?? 0,
+        await reader.restoreProgress(
+          restoreProgress,
           restoreGeneration,
           null,
           restoreAttemptId
@@ -919,11 +986,23 @@ async function handleMessage(event) {
         notifyChapterReady(restoreGeneration, restoreAttemptId);
         break;
       case "jumpToFragment":
-        var fragmentGeneration = message.payload?.navigationGeneration ?? null;
-        var fragmentAttemptId = message.payload?.renderAttemptId ?? 0;
+        if (!currentChapter) throw new Error("jumpToFragment requires an active chapter");
+        if (typeof payload.fragment !== "string") {
+          throw new Error("payload.fragment must be a string");
+        }
+        var fragmentGeneration = requireInteger(
+          payload.navigationGeneration,
+          "payload.navigationGeneration",
+          0
+        );
+        var fragmentAttemptId = requireInteger(
+          payload.renderAttemptId,
+          "payload.renderAttemptId",
+          0
+        );
         currentChapter.renderAttemptId = fragmentAttemptId;
-        await window.hoshiReader.jumpToFragment(
-          message.payload?.fragment ?? "",
+        await reader.jumpToFragment(
+          payload.fragment,
           fragmentGeneration,
           fragmentAttemptId
         );
@@ -931,11 +1010,53 @@ async function handleMessage(event) {
         notifyChapterReady(fragmentGeneration, fragmentAttemptId);
         break;
       case "navigatePage":
-        var authorizedDirection = message.payload?.direction;
+        var authorizedDirection = payload.direction;
         if (authorizedDirection !== "forward" && authorizedDirection !== "backward") {
           throw new Error("Invalid authorized page direction");
         }
         await handleNavigate(authorizedDirection);
+        break;
+      case "setWheelNavigation":
+        if (typeof payload.enabled !== "boolean") {
+          throw new Error("payload.enabled must be a boolean");
+        }
+        reader.registerWheelNavigation(payload.enabled);
+        break;
+      case "highlightSasayakiCue":
+        var sasayakiGeneration = requireInteger(
+          payload.generation,
+          "payload.generation",
+          0
+        );
+        var startCodePoint = requireInteger(
+          payload.startCodePoint,
+          "payload.startCodePoint",
+          0
+        );
+        var cueLength = requireInteger(payload.length, "payload.length", 0);
+        if (typeof payload.autoScroll !== "boolean"
+          || typeof payload.textColor !== "string"
+          || typeof payload.backgroundColor !== "string") {
+          throw new Error("Invalid highlightSasayakiCue payload");
+        }
+        var currentGeneration = sasayakiHighlightGeneration;
+        if (currentGeneration > sasayakiGeneration) break;
+        sasayakiHighlightGeneration = sasayakiGeneration;
+        sasayaki.setColors(payload.textColor, payload.backgroundColor);
+        var sasayakiProgress = sasayaki.highlightCue(
+          startCodePoint,
+          cueLength,
+          payload.autoScroll
+        );
+        postToHost("sasayakiHighlightCompleted", {
+          generation: sasayakiGeneration,
+          progress: typeof sasayakiProgress === "number" && Number.isFinite(sasayakiProgress)
+            ? sasayakiProgress
+            : null,
+        });
+        break;
+      case "clearSasayakiHighlight":
+        sasayaki.clearHighlight();
         break;
       default:
         throw new Error("Unsupported bridge message type: " + message.type);
@@ -951,6 +1072,10 @@ function requestPageNavigation(direction) {
 }
 
 window.chrome?.webview?.addEventListener("message", handleMessage);
+
+document.addEventListener("hoshi-reader-content-changed", function () {
+  reader.buildNodeOffsets();
+});
 
 document.addEventListener("click", function (event) {
   var anchor = event.target?.closest?.("a[href]");
@@ -997,9 +1122,9 @@ window.addEventListener("resize", function () {
   clearTimeout(resizeDebounce);
   resizeDebounce = setTimeout(function () {
     var reportResizeError = createBridgeErrorReporter();
-    var progress = window.hoshiReader.lastProgress || window.hoshiReader.calculateProgress();
+    var progress = reader.lastProgress || reader.calculateProgress();
     logDebug("resize", { progress: progress, innerWidth: window.innerWidth, innerHeight: window.innerHeight });
-    window.hoshiReader.reflow(progress).catch(reportResizeError);
+    reader.reflow(progress).catch(reportResizeError);
   }, 250);
 });
 
@@ -1020,7 +1145,7 @@ window.addEventListener("unhandledrejection", function (event) {
 });
 
 // ── Sasayaki highlighting ──────────────────────────────────────────
-window.hoshiSasayaki = {
+var sasayaki = {
   _currentHighlightNodes: [],
   _highlightStyle: null,
   _textColor: null,
@@ -1063,7 +1188,7 @@ window.hoshiSasayaki = {
       }
     });
     this._currentHighlightNodes = [];
-    if (hadWrappedNodes) window.hoshiReader.buildNodeOffsets?.();
+    if (hadWrappedNodes) reader.buildNodeOffsets?.();
   },
 
   _clearReaderSelection: function () {
@@ -1086,7 +1211,7 @@ window.hoshiSasayaki = {
     this._clearReaderSelection();
     this._ensureStyle();
     if (length <= 0) return null;
-    var beforeProgress = window.hoshiReader.calculateProgress();
+    var beforeProgress = reader.calculateProgress();
 
     var endOffset = startCodePoint + length;
     var startBoundary = this._findBoundary(startCodePoint, false);
@@ -1102,20 +1227,20 @@ window.hoshiSasayaki = {
       autoScroll !== false
     );
     if (didScroll) {
-      var afterProgress = window.hoshiReader.calculateProgress();
-      window.hoshiReader.lastProgress = afterProgress;
+      var afterProgress = reader.calculateProgress();
+      reader.lastProgress = afterProgress;
       return Math.abs(afterProgress - beforeProgress) > 0.0001 ? afterProgress : null;
     }
     return null;
   },
 
   _findBoundary: function (targetCodePoint, isEndBoundary) {
-    var walker = window.hoshiReader.createWalker();
+    var walker = reader.createWalker();
     var runningCount = 0;
     var node;
 
     while ((node = walker.nextNode())) {
-      var nodeLen = window.hoshiReader.countChars(node.textContent);
+      var nodeLen = reader.countChars(node.textContent);
       var containsBoundary = isEndBoundary
         ? runningCount + nodeLen >= targetCodePoint
         : runningCount + nodeLen > targetCodePoint;
@@ -1123,7 +1248,7 @@ window.hoshiSasayaki = {
       if (containsBoundary) {
         return {
           node: node,
-          offset: window.hoshiReader.textOffsetForCharCount(
+          offset: reader.textOffsetForCharCount(
             node,
             Math.max(0, targetCodePoint - runningCount)
           ),
@@ -1138,7 +1263,7 @@ window.hoshiSasayaki = {
 
   _collectHighlightNodes: function (startNode, endNode) {
     var nodes = [];
-    var walker = window.hoshiReader.createWalker();
+    var walker = reader.createWalker();
     var started = false;
     var node;
 
@@ -1157,7 +1282,7 @@ window.hoshiSasayaki = {
     if (ranges.length <= 0) return false;
 
     if (autoScroll) {
-      didScroll = window.hoshiReader.scrollToRange(ranges[0]);
+      didScroll = reader.scrollToRange(ranges[0]);
     }
 
     if (typeof CSS !== "undefined" && CSS.highlights && typeof Highlight !== "undefined") {
@@ -1166,7 +1291,7 @@ window.hoshiSasayaki = {
     }
 
     this._currentHighlightNodes = this._wrapHighlightRanges(ranges);
-    window.hoshiReader.buildNodeOffsets?.();
+    reader.buildNodeOffsets?.();
     return didScroll;
   },
 
@@ -1176,7 +1301,7 @@ window.hoshiSasayaki = {
     for (var i = 0; i < nodesToHighlight.length; i++) {
       var node = nodesToHighlight[i];
       if (!node.textContent || node.textContent.trim() === "") continue;
-      if (window.hoshiReader.isFurigana(node)) continue;
+      if (reader.isFurigana(node)) continue;
 
       var nodeStart = Math.max(0, Math.min(node === startNode ? startOffset : 0, node.textContent.length));
       var nodeEnd = Math.max(nodeStart, Math.min(node === endNode ? endOffset : node.textContent.length, node.textContent.length));
@@ -1227,7 +1352,7 @@ if (window.__hoshiChapterInfo) {
   var initProgress = window.__hoshiChapterInfo.progress ?? 0;
   var reportAutoInitializeError = createBridgeErrorReporter();
   logDebug("auto-initialize", { chapter: currentChapter, progress: initProgress });
-  window.hoshiReader.initialize(
+  reader.initialize(
     initProgress,
     window.__hoshiChapterInfo.navigationGeneration ?? null,
     window.__hoshiChapterInfo.restoreTarget ?? null,
@@ -1236,3 +1361,4 @@ if (window.__hoshiChapterInfo) {
 } else {
   postToHost("readerReady", {});
 }
+})();

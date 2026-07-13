@@ -33,11 +33,13 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
-    public void ReaderBridge_ExposesHoshiReaderApi()
+    public void ReaderBridge_KeepsHoshiReaderApiInsideClosure()
     {
         var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
 
-        script.Should().Contain("window.hoshiReader");
+        script.Should().Contain("(function () {");
+        script.Should().Contain("var reader = {");
+        script.Should().NotContain("window.hoshiReader");
         script.Should().Contain("paginate");
         script.Should().Contain("calculateProgress");
         script.Should().Contain("restoreProgress");
@@ -99,7 +101,7 @@ public class NovelReaderWebAssetTests
         restoreBody.IndexOf("restoreTarget === \"end\"", StringComparison.Ordinal)
             .Should().BeLessThan(
                 restoreBody.IndexOf("progress <= 0", StringComparison.Ordinal));
-        script.Should().Contain("message.payload?.restoreTarget ?? null");
+        script.Should().Contain("var restoreTarget = payload.restoreTarget ?? null");
         script.Should().Contain("window.__hoshiChapterInfo.restoreTarget ?? null");
         script.IndexOf("notifyRestoreComplete(navigationGeneration, renderAttemptId)", StringComparison.Ordinal)
             .Should().BeLessThan(
@@ -113,7 +115,7 @@ public class NovelReaderWebAssetTests
 
         script.Should().Contain(
             "postToHost(\"restoreCompleted\", {\n" +
-            "    progress: window.hoshiReader.calculateProgress(),\n" +
+            "    progress: reader.calculateProgress(),\n" +
             "    chapterIndex: currentChapter.index,\n" +
             "    renderAttemptId: renderAttemptId,\n" +
             "    navigationGeneration: navigationGeneration ?? null,");
@@ -124,12 +126,12 @@ public class NovelReaderWebAssetTests
             "    renderAttemptId: renderAttemptId,\n" +
             "    navigationGeneration: navigationGeneration ?? null,");
         script.Should().Contain("notifyChapterReady(navigationGeneration, renderAttemptId)");
-        script.Should().Contain("renderAttemptId: message.payload?.renderAttemptId");
+        script.Should().Contain("renderAttemptId: chapterAttemptId");
         script.Should().Contain("renderAttemptId: window.__hoshiChapterInfo.renderAttemptId");
         script.Should().Contain("notifyRestoreComplete(navigationGeneration, renderAttemptId)");
         script.Should().Contain("notifyChapterReady(navigationGeneration, renderAttemptId)");
-        script.Should().Contain("var restoreAttemptId = message.payload?.renderAttemptId ?? 0");
-        script.Should().Contain("var fragmentAttemptId = message.payload?.renderAttemptId ?? 0");
+        script.Should().Contain("var restoreAttemptId = requireInteger(");
+        script.Should().Contain("var fragmentAttemptId = requireInteger(");
     }
 
     [Fact]
@@ -159,7 +161,7 @@ public class NovelReaderWebAssetTests
         initializeBody.Should().Contain("await Promise.all(imagePromises)");
         initializeBody.Should().Contain("await self.restoreProgress(");
         initializeBody.Should().Contain("notifyChapterReady(navigationGeneration, renderAttemptId)");
-        setChapterBody.Should().Contain("await window.hoshiReader.initialize(");
+        setChapterBody.Should().Contain("await reader.initialize(");
         errorReporterFactoryBody.Should().Contain("var reported = false");
         errorReporterFactoryBody.Should().Contain("if (reported) return");
         errorReporterFactoryBody.Should().Contain("reported = true");
@@ -314,8 +316,8 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
         );
 
-        script.Should().Contain("var beforeProgress = window.hoshiReader.calculateProgress()");
-        script.Should().Contain("var afterProgress = window.hoshiReader.calculateProgress()");
+        script.Should().Contain("var beforeProgress = reader.calculateProgress()");
+        script.Should().Contain("var afterProgress = reader.calculateProgress()");
         script.Should().Contain("return Math.abs(afterProgress - beforeProgress) > 0.0001 ? afterProgress : null");
 
         pageCode.Should().Contain("TryApplySasayakiAutoScrollProgress");
@@ -830,7 +832,7 @@ public class NovelReaderWebAssetTests
         readerSettingsCode.Should().Contain("bool MouseWheelPageTurn { get; set; } = true");
         settingsViewModelCode.Should().Contain("MouseWheelPageTurn");
         settingsViewModelCode.Should().Contain("ApplyReaderSetting(s => s.MouseWheelPageTurn, value)");
-        readerPageCode.Should().Contain("registerWheelNavigation");
+        readerPageCode.Should().Contain("CreateSetWheelNavigationMessage");
         readerPageCode.Should().Contain("!readerSettings.Current.ContinuousMode && readerSettings.Current.MouseWheelPageTurn");
         bridgeScript.Should().Contain("registerWheelNavigation: function");
         bridgeScript.Should().Contain("hoshiWheelNavigationEnabled");
@@ -2751,13 +2753,25 @@ public class NovelReaderWebAssetTests
 
         script.Should().Contain("lastProgress");
         script.Should().Contain("window.addEventListener(\"resize\"");
-        script.Should().Contain("window.hoshiReader.reflow(progress)");
+        script.Should().Contain("reader.reflow(progress)");
         script.Should().Contain("currentColumnGap");
         script.Should().Contain("currentSafeInline");
         script.Should().Contain("currentSafeBlock");
         script.Should().Contain("getComputedStyle(document.body).paddingLeft");
         script.Should().Contain("getComputedStyle(document.body).paddingTop");
         script.Should().Contain("pageStep");
+    }
+
+    [Fact]
+    public void ReaderContentHelpers_DoNotDependOnPrivatePaginationEngine()
+    {
+        var bridge = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
+        var selection = File.ReadAllText(Path.Combine(ReaderRoot, "selection.js"));
+        var highlights = File.ReadAllText(Path.Combine(ReaderRoot, "highlights.js"));
+
+        bridge.Should().NotContain("window.hoshiReader");
+        selection.Should().NotContain("window.hoshiReader");
+        highlights.Should().NotContain("window.hoshiReader");
     }
 
     [Fact]
@@ -3885,7 +3899,6 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain(
             "HighlightSasayakiCueAsync(\n                    match,\n                    allowAutoScroll: CanMutateReaderPosition())");
         readerCode.Should().Contain("allowAutoScroll && settings.AutoScroll");
-        readerCode.Should().Contain("if (allowAutoScroll");
     }
 
     [Fact]
@@ -4042,7 +4055,8 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("SkipSasayakiAsync(-15)");
         readerCode.Should().Contain("SkipSasayakiAsync(15)");
         readerCode.Should().Contain("settings.AutoScroll");
-        readerCode.Should().Contain("window.hoshiSasayaki.setColors");
+        readerCode.Should().Contain("CreateSasayakiHighlightMessage");
+        readerCode.Should().NotContain("window.hoshiSasayaki");
         readerCode.Should().Contain("settings.DarkBackgroundColor");
         bridgeScript.Should().Contain("setColors: function");
         bridgeScript.Should().Contain("--hoshi-sasayaki-background-color");
@@ -4075,11 +4089,12 @@ public class NovelReaderWebAssetTests
         var readerCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
         );
+        var bridgeScript = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
 
         readerCode.Should().Contain("_sasayakiHighlightGeneration");
         readerCode.Should().Contain("Interlocked.Increment(ref _sasayakiHighlightGeneration)");
-        readerCode.Should().Contain("window.__hoshiSasayakiHighlightGeneration");
-        readerCode.Should().Contain("currentGeneration > generation");
+        readerCode.Should().Contain("case \"sasayakiHighlightCompleted\"");
+        bridgeScript.Should().Contain("currentGeneration > sasayakiGeneration");
     }
 
     [Fact]

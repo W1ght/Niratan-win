@@ -21,9 +21,18 @@
   }
 
   function visibleTextWalker() {
-    return window.hoshiReader?.createWalker
-      ? window.hoshiReader.createWalker()
-      : document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    return document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) => {
+        const element = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+        return element?.closest("rt, rp")
+          ? NodeFilter.FILTER_REJECT
+          : NodeFilter.FILTER_ACCEPT;
+      },
+    });
+  }
+
+  function notifyContentChanged() {
+    document.dispatchEvent(new Event("hoshi-reader-content-changed"));
   }
 
   function unwrap(nodes) {
@@ -119,7 +128,7 @@
         for (const highlight of highlights) this.wrapHighlight(highlight);
       }
 
-      window.hoshiReader?.buildNodeOffsets?.();
+      notifyContentChanged();
     },
 
     removeHighlight(id) {
@@ -129,7 +138,7 @@
 
       unwrap(wrappers);
       this.wrappers.delete(key);
-      window.hoshiReader?.buildNodeOffsets?.();
+      notifyContentChanged();
     },
   };
 })();

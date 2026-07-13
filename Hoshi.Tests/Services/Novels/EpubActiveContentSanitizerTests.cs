@@ -32,9 +32,29 @@ public sealed class EpubActiveContentSanitizerTests
         elements.SelectMany(element => element.Attributes())
             .Should().NotContain(attribute =>
                 attribute.Name.LocalName.StartsWith("on", StringComparison.OrdinalIgnoreCase)
+                || attribute.Name.LocalName.Equals("base", StringComparison.OrdinalIgnoreCase)
                 || EpubActiveContentSanitizer.IsDangerousUrl(attribute.Value));
         sanitized.Should().Contain("安全な本文");
         sanitized.Should().Contain("safe svg text");
+    }
+
+    [Fact]
+    public void Sanitize_RemovesDangerousNamespacedUrlsAcrossSvgMathMlAndXmlBase()
+    {
+        var malicious = File.ReadAllText(FixturePath);
+
+        var sanitized = EpubActiveContentSanitizer.Sanitize(malicious);
+        var document = XDocument.Parse(sanitized);
+        var attributes = document.Descendants().Attributes().ToArray();
+
+        attributes.Should().NotContain(attribute =>
+            attribute.Name.LocalName.Equals("base", StringComparison.OrdinalIgnoreCase));
+        attributes.Where(attribute =>
+                attribute.Name.LocalName is "href" or "src")
+            .Should().NotContain(attribute =>
+                EpubActiveContentSanitizer.IsDangerousUrl(attribute.Value));
+        sanitized.Should().Contain("SVG alias");
+        sanitized.Should().Contain("Math alias");
     }
 
     [Theory]

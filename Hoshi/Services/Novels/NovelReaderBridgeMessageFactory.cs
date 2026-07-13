@@ -98,6 +98,54 @@ public static class NovelReaderBridgeMessageFactory
         return JsonSerializer.Serialize(message, JsonOptions);
     }
 
+    public static string CreateSetWheelNavigationMessage(bool enabled)
+    {
+        var message = new NovelReaderWebMessage<SetWheelNavigationPayload>(
+            1,
+            "setWheelNavigation",
+            new SetWheelNavigationPayload(enabled));
+        return JsonSerializer.Serialize(message, JsonOptions);
+    }
+
+    public static string CreateSasayakiHighlightMessage(
+        long generation,
+        int startCodePoint,
+        int length,
+        bool autoScroll,
+        string textColor,
+        string backgroundColor)
+    {
+        if (generation < 0)
+            throw new ArgumentOutOfRangeException(nameof(generation));
+        if (startCodePoint < 0)
+            throw new ArgumentOutOfRangeException(nameof(startCodePoint));
+        if (length < 0)
+            throw new ArgumentOutOfRangeException(nameof(length));
+        ArgumentNullException.ThrowIfNull(textColor);
+        ArgumentNullException.ThrowIfNull(backgroundColor);
+
+        var message = new NovelReaderWebMessage<SasayakiHighlightPayload>(
+            1,
+            "highlightSasayakiCue",
+            new SasayakiHighlightPayload(
+                generation,
+                startCodePoint,
+                length,
+                autoScroll,
+                textColor,
+                backgroundColor));
+        return JsonSerializer.Serialize(message, JsonOptions);
+    }
+
+    public static string CreateClearSasayakiHighlightMessage()
+    {
+        var message = new NovelReaderWebMessage<EmptyPayload>(
+            1,
+            "clearSasayakiHighlight",
+            new EmptyPayload());
+        return JsonSerializer.Serialize(message, JsonOptions);
+    }
+
     private sealed record SetChapterPayload(
         int Index,
         int TotalChapters,
@@ -117,4 +165,16 @@ public static class NovelReaderBridgeMessageFactory
         long NavigationGeneration);
 
     private sealed record NavigatePagePayload(string Direction);
+
+    private sealed record SetWheelNavigationPayload(bool Enabled);
+
+    private sealed record SasayakiHighlightPayload(
+        long Generation,
+        int StartCodePoint,
+        int Length,
+        bool AutoScroll,
+        string TextColor,
+        string BackgroundColor);
+
+    private sealed record EmptyPayload;
 }

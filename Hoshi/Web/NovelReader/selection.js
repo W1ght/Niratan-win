@@ -23,6 +23,8 @@
     ...FULLWIDTH_RANGES,
   ];
 
+  const TTU_MATCHABLE_CHARACTER = /[0-9A-Za-z○◯々-〇〻ぁ-ゖゝ-ゞァ-ヺー０-９Ａ-Ｚａ-ｚｦ-ﾝ\p{Radical}\p{Unified_Ideograph}]/iu;
+
   function isCodePointJapanese(codePoint) {
     return JAPANESE_RANGES.some(([start, end]) => codePoint >= start && codePoint <= end);
   }
@@ -377,9 +379,7 @@
 
       const sentenceContext = this.getSentenceContext(hit.node, hit.offset);
       const rect = this.getSelectionRect(x, y);
-      const normalizedOffset = window.hoshiReader
-        ? this.getNormalizedOffset(hit.node, hit.offset)
-        : null;
+      const normalizedOffset = this.getNormalizedOffset(hit.node, hit.offset);
       const traceId = nextLookupTraceId();
 
       postToHost('lookupRequest', {
@@ -401,12 +401,18 @@
     },
 
     getNormalizedOffset(targetNode, offset) {
-      let count = window.hoshiReader?.nodeStartOffsets?.get(targetNode) ?? 0;
-      const text = targetNode.textContent;
-      for (let i = 0; i < offset; ) {
-        const char = String.fromCodePoint(text.codePointAt(i));
-        if (window.hoshiReader?.isMatchableChar?.(char)) count++;
-        i += char.length;
+      let count = 0;
+      const walker = this.createWalker();
+      let node;
+      while ((node = walker.nextNode())) {
+        const text = node.textContent || '';
+        const limit = node === targetNode ? Math.min(offset, text.length) : text.length;
+        for (let i = 0; i < limit; ) {
+          const char = String.fromCodePoint(text.codePointAt(i));
+          if (TTU_MATCHABLE_CHARACTER.test(char)) count++;
+          i += char.length;
+        }
+        if (node === targetNode) break;
       }
       return count;
     },
