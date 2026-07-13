@@ -33,7 +33,8 @@ public sealed record TtuSyncOptions(
     bool SyncStatistics = false,
     StatisticsSyncMode StatisticsSyncMode = StatisticsSyncMode.Merge,
     bool SyncAudioBook = false,
-    bool ImportOnly = false);
+    bool ImportOnly = false,
+    TtuRemoteBookFiles? KnownRemoteFiles = null);
 
 public sealed record TtuSyncResult(
     TtuSyncResultKind Kind,

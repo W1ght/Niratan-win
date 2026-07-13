@@ -44,7 +44,8 @@ public sealed class TtuSyncService : ITtuSyncService
             return new TtuSyncResult(TtuSyncResultKind.Skipped, book.Title);
 
         var bookRootPath = book.ExtractedPath;
-        var remoteFiles = await _remoteStore.ListBookFilesAsync(book.Title, ct);
+        var remoteFiles = options.KnownRemoteFiles
+            ?? await _remoteStore.ListBookFilesAsync(book.Title, ct);
         var localBookmark = await _bookSidecars.LoadBookmarkAsync(bookRootPath, ct);
         var direction = ResolveDirection(options.Direction, localBookmark, remoteFiles.Progress);
 
