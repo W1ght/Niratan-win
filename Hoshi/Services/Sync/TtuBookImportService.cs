@@ -35,6 +35,7 @@ public sealed class TtuBookImportService : ITtuBookImportService
         IProgress<double>? progress = null,
         CancellationToken ct = default)
     {
+        NovelBook? importedBook = null;
         try
         {
             if (remoteBook.Files.BookData == null)
@@ -56,26 +57,44 @@ public sealed class TtuBookImportService : ITtuBookImportService
             if (!importResult.IsSuccess || importResult.Value == null)
                 return importResult;
 
+            importedBook = importResult.Value;
             await _syncService.SyncBookAsync(
-                importResult.Value,
+                importedBook,
                 new TtuSyncOptions(
                     Direction: TtuSyncDirection.ImportFromTtu,
                     SyncBookData: false,
                     SyncStatistics: options.SyncStatistics,
                     StatisticsSyncMode: options.StatisticsSyncMode,
                     SyncAudioBook: options.SyncAudioBook,
-                    ImportOnly: true),
+                    ImportOnly: true,
+                    KnownRemoteFiles: remoteBook.Files),
                 ct);
 
             return importResult;
         }
         catch (OperationCanceledException)
         {
+            await TryDeleteImportedBookAsync(importedBook);
             return Result<NovelBook>.Cancelled();
         }
         catch (Exception ex)
         {
+            await TryDeleteImportedBookAsync(importedBook);
             return Result<NovelBook>.Failure(ex.Message, "Google Drive import failed");
+        }
+    }
+
+    private async Task TryDeleteImportedBookAsync(NovelBook? book)
+    {
+        if (book == null)
+            return;
+
+        try
+        {
+            await _libraryService.DeleteNovelAsync(book.Id, CancellationToken.None);
+        }
+        catch
+        {
         }
     }
 
