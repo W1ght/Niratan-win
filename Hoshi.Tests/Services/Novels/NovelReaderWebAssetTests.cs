@@ -91,7 +91,7 @@ public class NovelReaderWebAssetTests
         restoreBody.Should().Contain("restoreTarget === \"end\"");
         restoreBody.Should().Contain("contentLastPageScroll(context)");
         restoreBody.Should().NotContain("this.lastProgress = 1");
-        Regex.Matches(restoreBody, "notifyRestoreComplete\\(navigationGeneration\\)")
+        Regex.Matches(restoreBody, "notifyRestoreComplete\\(navigationGeneration, renderAttemptId\\)")
             .Count.Should().Be(1);
         restoreBody.IndexOf("restoreTarget === \"start\"", StringComparison.Ordinal)
             .Should().BeLessThan(
@@ -101,13 +101,13 @@ public class NovelReaderWebAssetTests
                 restoreBody.IndexOf("progress <= 0", StringComparison.Ordinal));
         script.Should().Contain("message.payload?.restoreTarget ?? null");
         script.Should().Contain("window.__hoshiChapterInfo.restoreTarget ?? null");
-        script.IndexOf("notifyRestoreComplete(navigationGeneration)", StringComparison.Ordinal)
+        script.IndexOf("notifyRestoreComplete(navigationGeneration, renderAttemptId)", StringComparison.Ordinal)
             .Should().BeLessThan(
-                script.IndexOf("notifyChapterReady(navigationGeneration)", StringComparison.Ordinal));
+                script.IndexOf("notifyChapterReady(navigationGeneration, renderAttemptId)", StringComparison.Ordinal));
     }
 
     [Fact]
-    public void ReaderBridge_TerminalEventsCarryGenerationAndChapterIdentity()
+    public void ReaderBridge_TerminalEventsCarryGenerationChapterAndAttemptIdentity()
     {
         var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
 
@@ -115,17 +115,25 @@ public class NovelReaderWebAssetTests
             "postToHost(\"restoreCompleted\", {\n" +
             "    progress: window.hoshiReader.calculateProgress(),\n" +
             "    chapterIndex: currentChapter.index,\n" +
+            "    renderAttemptId: renderAttemptId,\n" +
             "    navigationGeneration: navigationGeneration ?? null,");
         script.Should().Contain(
             "postToHost(\"chapterReady\", {\n" +
             "    ...window.__hoshiReaderState,\n" +
             "    chapterIndex: currentChapter.index,\n" +
+            "    renderAttemptId: renderAttemptId,\n" +
             "    navigationGeneration: navigationGeneration ?? null,");
-        script.Should().Contain("notifyChapterReady(navigationGeneration)");
+        script.Should().Contain("notifyChapterReady(navigationGeneration, renderAttemptId)");
+        script.Should().Contain("renderAttemptId: message.payload?.renderAttemptId");
+        script.Should().Contain("renderAttemptId: window.__hoshiChapterInfo.renderAttemptId");
+        script.Should().Contain("notifyRestoreComplete(navigationGeneration, renderAttemptId)");
+        script.Should().Contain("notifyChapterReady(navigationGeneration, renderAttemptId)");
+        script.Should().Contain("var restoreAttemptId = message.payload?.renderAttemptId ?? 0");
+        script.Should().Contain("var fragmentAttemptId = message.payload?.renderAttemptId ?? 0");
     }
 
     [Fact]
-    public void ReaderBridge_InitializationPromiseIsAwaitedAndReportsFailureOnce()
+    public void ReaderBridge_SequentialOperationsEachGetOneShotFailureReporter()
     {
         var script = File.ReadAllText(Path.Combine(ReaderRoot, "reader-bridge.js"));
         var initializeBody = Regex.Match(
@@ -134,20 +142,38 @@ public class NovelReaderWebAssetTests
         var setChapterBody = Regex.Match(
             script,
             @"(?s)case ""setChapter"":.*?\n\s*break;").Value;
-        var errorReporterBody = Regex.Match(
+        var handleMessageBody = Regex.Match(
             script,
-            @"(?s)function reportBridgeError\(error\).*?\n\}").Value;
+            @"(?s)async function handleMessage\(event\).*?\n\}").Value;
+        var errorReporterFactoryBody = Regex.Match(
+            script,
+            @"(?s)function createBridgeErrorReporter\(\).*?\n\}").Value;
+        var resizeBody = Regex.Match(
+            script,
+            @"(?s)window\.addEventListener\(""resize"".*?\n\}\);").Value;
+        var autoInitializeBody = Regex.Match(
+            script,
+            @"(?s)if \(window\.__hoshiChapterInfo\).*?\n\} else \{").Value;
 
         initializeBody.Should().NotBeEmpty();
         initializeBody.Should().Contain("await Promise.all(imagePromises)");
         initializeBody.Should().Contain("await self.restoreProgress(");
-        initializeBody.Should().Contain("notifyChapterReady(navigationGeneration)");
+        initializeBody.Should().Contain("notifyChapterReady(navigationGeneration, renderAttemptId)");
         setChapterBody.Should().Contain("await window.hoshiReader.initialize(");
-        script.Should().Contain(").catch(reportBridgeError);");
-        errorReporterBody.Should().Contain("window.hoshiBridgeErrorReported");
-        errorReporterBody.Should().Contain("postToHost(\"error\", { message: msg })");
+        errorReporterFactoryBody.Should().Contain("var reported = false");
+        errorReporterFactoryBody.Should().Contain("if (reported) return");
+        errorReporterFactoryBody.Should().Contain("reported = true");
+        errorReporterFactoryBody.Should().Contain("postToHost(\"error\", { message: msg })");
+        script.Should().NotContain("window.hoshiBridgeErrorReported");
+        handleMessageBody.Should().Contain("var reportOperationError = createBridgeErrorReporter()");
+        handleMessageBody.Should().Contain("reportOperationError(error)");
+        resizeBody.Should().Contain("var reportResizeError = createBridgeErrorReporter()");
+        resizeBody.Should().Contain(".catch(reportResizeError)");
+        autoInitializeBody.Should().Contain("var reportAutoInitializeError = createBridgeErrorReporter()");
+        autoInitializeBody.Should().Contain(".catch(reportAutoInitializeError)");
         Regex.Matches(script, @"postToHost\(""error""").Count.Should().Be(1);
-        Regex.Matches(script, @"reportBridgeError\(error\)").Count.Should().BeGreaterThanOrEqualTo(1);
+        Regex.Matches(script, @"createBridgeErrorReporter\(\)").Count
+            .Should().BeGreaterThanOrEqualTo(5);
     }
 
     [Fact]
@@ -3732,22 +3758,26 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("_renderState.TryTakeDeferredOrdinaryReload()");
         domHandler.Should().Contain("_renderState.TryGetDomAttempt(uri, out var chapterInstruction)");
         domHandler.Should().Contain("chapterInstruction.ChapterIndex");
+        domHandler.Should().Contain("renderAttemptId = chapterInstruction.RenderAttemptId");
         domHandler.Should().NotContain("CurrentChapterRenderInstruction()");
         settingHandler.Should().Contain("LoadChapter(ViewModel.CurrentChapterIndex)");
         readerCode.Should().NotContain("private ChapterRenderInstruction CurrentChapterRenderInstruction()");
     }
 
     [Fact]
-    public void ReaderPage_ModelsSourceRecoveryAsTypedAttemptAndUsesOneTotalFailureHelper()
+    public void ReaderPage_FirstFailureRendersSettlementAndUsesNativeFallbackOnlyAfterRecoveryFailure()
     {
         var readerCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
         var settlementBody = Regex.Match(
             readerCode,
-            @"(?s)private bool ApplyNavigationSettlement\(ReaderNavigationSettlement settlement\).*?\n    \}").Value;
+            @"(?s)private bool ApplyNavigationSettlement\(.*?ReaderNavigationSettlement settlement.*?\n    \}").Value;
         var failureBody = Regex.Match(
             readerCode,
             @"(?s)private async Task HandleTerminalRenderFailureAsync\(.*?\n    \}").Value;
+        var fallbackBody = Regex.Match(
+            readerCode,
+            @"(?s)private Task ApplyNativeTerminalFallbackAsync\(.*?\n    \}").Value;
         var domHandler = Regex.Match(
             readerCode,
             @"(?s)private async void OnDomContentLoaded\(.*?\n    \}").Value;
@@ -3759,11 +3789,20 @@ public class NovelReaderWebAssetTests
         settlementBody.Should().Contain("NavigateCurrentRenderAttempt()");
         settlementBody.Should().NotContain("LoadChapter(");
         failureBody.Should().Contain("await ViewModel.HandleNavigationBridgeErrorAsync()");
-        failureBody.Should().Contain("_renderState.TryPrepareFailure()");
-        failureBody.Should().Contain("_renderState.CompleteFailure(release.Value)");
-        failureBody.Should().Contain("ViewModel.AcknowledgeNavigationRendered(release.Value.Generation)");
-        failureBody.Should().Contain("NovelWebView.Opacity = 1");
-        failureBody.Should().Contain("ShowError(");
+        failureBody.Should().Contain("Kind: NovelReaderRenderAttemptKind.Recovery");
+        failureBody.Should().Contain("_renderState.PendingSettlement");
+        failureBody.Should().Contain("_renderState.TryBeginPendingSettlementRecovery(");
+        failureBody.Should().Contain("forceTerminalReload: true");
+        failureBody.Should().Contain("ApplyNativeTerminalFallbackAsync(");
+        failureBody.Should().Contain("catch (Exception recoveryException)");
+        failureBody.Should().Contain("Failed to recover terminal render failure");
+        failureBody.Should().NotContain("_renderState.TryPrepareFailure()");
+        failureBody.Should().NotContain("NovelWebView.Opacity = 1");
+        fallbackBody.Should().Contain("_renderState.TryPrepareFailure()");
+        fallbackBody.Should().Contain("_renderState.CompleteFailure(release.Value)");
+        fallbackBody.Should().Contain("ViewModel.AcknowledgeNavigationRendered(release.Value.Generation)");
+        fallbackBody.Should().Contain("NovelWebView.Opacity = 1");
+        fallbackBody.Should().Contain("ShowError(");
         domHandler.Should().Contain("await HandleTerminalRenderFailureAsync(");
         navigateBody.Should().Contain("catch (Exception ex)");
         navigateBody.Should().Contain("HandleTerminalRenderFailureAsync(");
@@ -3835,10 +3874,11 @@ public class NovelReaderWebAssetTests
             @"(?s)case ""error"":.*?\n\s*\}").Value;
         var settlementBody = Regex.Match(
             readerCode,
-            @"(?s)private bool ApplyNavigationSettlement\(ReaderNavigationSettlement settlement\).*?\n    \}").Value;
+            @"(?s)private bool ApplyNavigationSettlement\(.*?ReaderNavigationSettlement settlement.*?\n    \}").Value;
 
         restoreHandler.Should().Contain("restorePayload.NavigationGeneration");
         restoreHandler.Should().Contain("restorePayload.ChapterIndex");
+        restoreHandler.Should().Contain("restorePayload.RenderAttemptId");
         restoreHandler.Should().Contain("restorePayload.Progress");
         restoreHandler.Should().Contain("ViewModel.ResolveNavigationAsync(");
         restoreHandler.Should().Contain("ApplyNavigationSettlement(settlement)");
@@ -3848,12 +3888,31 @@ public class NovelReaderWebAssetTests
         chapterReadyHandler.Should().Contain("NovelReaderChapterReadyDisposition.HiddenTerminal");
         chapterReadyHandler.Should().Contain("NovelReaderChapterReadyDisposition.HiddenInitial");
         chapterReadyHandler.Should().Contain("SendPendingProgrammaticFragmentAsync");
-        settlementBody.Should().Contain("_renderState.TryApplySettlement(settlement, recoveryUri)");
+        settlementBody.Should().Contain("_renderState.TryApplySettlement(");
         settlementBody.Should().Contain("settlement.ShouldRevealDestination");
         settlementBody.Should().Contain("NavigateCurrentRenderAttempt()");
         settlementBody.Should().Contain("TryRevealSettledNavigation(settlement.Generation)");
         errorHandler.Should().Contain("await HandleTerminalRenderFailureAsync(");
         errorHandler.Should().NotContain("_programmaticNavigation.Cancel()");
+    }
+
+    [Fact]
+    public void ReaderPage_ProcessFailureUsesNamedDetachableTerminalFailureHandler()
+    {
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+        var navigatedFromBody = Regex.Match(
+            readerCode,
+            @"(?s)protected override void OnNavigatedFrom\(.*?\n    \}").Value;
+        var processFailedBody = Regex.Match(
+            readerCode,
+            @"(?s)private async void OnWebViewProcessFailed\(.*?\n    \}").Value;
+
+        readerCode.Should().Contain("ProcessFailed -= OnWebViewProcessFailed");
+        readerCode.Should().Contain("ProcessFailed += OnWebViewProcessFailed");
+        navigatedFromBody.Should().Contain("ProcessFailed -= OnWebViewProcessFailed");
+        processFailedBody.Should().Contain("await HandleTerminalRenderFailureAsync(");
+        processFailedBody.Should().Contain("args.ProcessFailedKind");
     }
 
     [Fact]

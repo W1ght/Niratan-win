@@ -67,6 +67,7 @@ public sealed partial class NovelReaderPage : Page
     private double _currentProgress;
     private int _previousChapterIndex = -1;
     private bool _renderAttemptPendingViewport;
+    private bool _terminalFailureRecoveryInProgress;
     private CancellationTokenSource? _reloadCts;
     private CancellationTokenSource? _searchCts;
     private long _searchRequestVersion;
@@ -286,6 +287,7 @@ public sealed partial class NovelReaderPage : Page
             NovelWebView.CoreWebView2.DOMContentLoaded -= OnDomContentLoaded;
             NovelWebView.CoreWebView2.WebResourceRequested -= OnWebResourceRequested;
             NovelWebView.CoreWebView2.NavigationCompleted -= OnNavigationCompleted;
+            NovelWebView.CoreWebView2.ProcessFailed -= OnWebViewProcessFailed;
         }
 
         NovelWebView.SizeChanged -= OnWebViewSizeChanged;
@@ -575,9 +577,8 @@ public sealed partial class NovelReaderPage : Page
             Log.Warning(ex, "[NovelReader] Failed to enable DevTools protocol");
         }
 
-        NovelWebView.CoreWebView2.ProcessFailed += (_, args) =>
-            Log.Error("[NovelReader] WebView2 ProcessFailed: Kind={Kind}, ExitCode={ExitCode}, Reason={Reason}",
-                args.ProcessFailedKind, args.ExitCode, args.Reason);
+        NovelWebView.CoreWebView2.ProcessFailed -= OnWebViewProcessFailed;
+        NovelWebView.CoreWebView2.ProcessFailed += OnWebViewProcessFailed;
 
         NovelWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
             NovelBookHostName,
@@ -1271,6 +1272,7 @@ public sealed partial class NovelReaderPage : Page
                     _ => null,
                 },
                 navigationGeneration = chapterInstruction.NavigationGeneration,
+                renderAttemptId = chapterInstruction.RenderAttemptId,
             });
             await sender.ExecuteScriptAsync(
                 $"window.__hoshiChapterInfo = {chapterInfo};");
@@ -1361,6 +1363,19 @@ public sealed partial class NovelReaderPage : Page
         }
     }
 
+    private async void OnWebViewProcessFailed(
+        object? sender,
+        CoreWebView2ProcessFailedEventArgs args)
+    {
+        Log.Error(
+            "[NovelReader] WebView2 ProcessFailed: Kind={Kind}, ExitCode={ExitCode}, Reason={Reason}",
+            args.ProcessFailedKind,
+            args.ExitCode,
+            args.Reason);
+        await HandleTerminalRenderFailureAsync(
+            "Reader content process failed.");
+    }
+
     private async void OnWebMessageReceived(
         CoreWebView2 sender,
         CoreWebView2WebMessageReceivedEventArgs args
@@ -1424,7 +1439,8 @@ public sealed partial class NovelReaderPage : Page
 
                     var readyDisposition = _renderState.AcceptChapterReady(
                         readyPayload.ChapterIndex,
-                        readyPayload.NavigationGeneration);
+                        readyPayload.NavigationGeneration,
+                        readyPayload.RenderAttemptId);
                     if (readyDisposition == NovelReaderChapterReadyDisposition.Ordinary)
                     {
                         NovelWebView.Opacity = 1;
@@ -1460,7 +1476,9 @@ public sealed partial class NovelReaderPage : Page
                         && _renderState.NavigationRequest is { } restoreRequest
                         && _renderState.PendingSettlement == null
                         && restoreRequest.Generation == navigationGeneration
-                        && restoreRequest.Destination.ChapterIndex == restorePayload.ChapterIndex)
+                        && restoreRequest.Destination.ChapterIndex == restorePayload.ChapterIndex
+                        && _renderState.CurrentAttempt?.RenderAttemptId
+                            == restorePayload.RenderAttemptId)
                     {
                         var settlement = await ViewModel.ResolveNavigationAsync(
                             navigationGeneration,
@@ -1484,7 +1502,8 @@ public sealed partial class NovelReaderPage : Page
                         {
                             Kind: NovelReaderRenderAttemptKind.Ordinary
                         } ordinaryAttempt
-                        && ordinaryAttempt.ChapterIndex == restorePayload.ChapterIndex)
+                        && ordinaryAttempt.ChapterIndex == restorePayload.ChapterIndex
+                        && ordinaryAttempt.RenderAttemptId == restorePayload.RenderAttemptId)
                     {
                         ViewModel.StartStatisticsForAutostart(StatisticsAutostartMode.On);
                     }
@@ -1624,27 +1643,81 @@ public sealed partial class NovelReaderPage : Page
         if (exception != null)
             Log.Error(exception, "[NovelReader] Terminal render failure");
 
+        if (_terminalFailureRecoveryInProgress)
+            return;
+
+        _terminalFailureRecoveryInProgress = true;
+        try
+        {
+            if (!_renderState.HasActiveNavigation
+                || _renderState.CurrentAttempt is
+                {
+                    Kind: NovelReaderRenderAttemptKind.Recovery
+                })
+            {
+                await ApplyNativeTerminalFallbackAsync(notificationMessage);
+                return;
+            }
+
+            if (_renderState.PendingSettlement is { } pendingSettlement)
+            {
+                var recoveryUri = BuildChapterUri(
+                    pendingSettlement.Position.ChapterIndex);
+                if (_renderState.TryBeginPendingSettlementRecovery(recoveryUri)
+                    && NavigateCurrentRenderAttempt())
+                {
+                    _pendingProgrammaticFragment = null;
+                    return;
+                }
+
+                await ApplyNativeTerminalFallbackAsync(notificationMessage);
+                return;
+            }
+
+            ReaderNavigationSettlement? settlement;
+            try
+            {
+                settlement = await ViewModel.HandleNavigationBridgeErrorAsync();
+            }
+            catch (Exception settlementException)
+            {
+                Log.Error(
+                    settlementException,
+                    "[NovelReader] Failed to settle terminal render failure");
+                await ApplyNativeTerminalFallbackAsync(notificationMessage);
+                return;
+            }
+
+            if (settlement != null
+                && ApplyNavigationSettlement(
+                    settlement,
+                    forceTerminalReload: true))
+            {
+                return;
+            }
+
+            Log.Warning("[NovelReader] Navigation failure returned no applicable settlement");
+            await ApplyNativeTerminalFallbackAsync(notificationMessage);
+        }
+        catch (Exception recoveryException)
+        {
+            Log.Error(
+                recoveryException,
+                "[NovelReader] Failed to recover terminal render failure");
+            await ApplyNativeTerminalFallbackAsync(notificationMessage);
+        }
+        finally
+        {
+            _terminalFailureRecoveryInProgress = false;
+        }
+    }
+
+    private Task ApplyNativeTerminalFallbackAsync(string notificationMessage)
+    {
         var hadActiveNavigation = _renderState.HasActiveNavigation;
         var release = _renderState.TryPrepareFailure();
         if (hadActiveNavigation && release == null)
-            return;
-
-        ReaderNavigationSettlement? settlement = null;
-        try
-        {
-            settlement = await ViewModel.HandleNavigationBridgeErrorAsync();
-        }
-        catch (Exception settlementException)
-        {
-            Log.Error(
-                settlementException,
-                "[NovelReader] Failed to settle terminal render failure");
-        }
-
-        if (hadActiveNavigation && settlement == null)
-        {
-            Log.Warning("[NovelReader] Navigation failure returned no settlement");
-        }
+            return Task.CompletedTask;
 
         if (release != null
             && !ViewModel.AcknowledgeNavigationRendered(release.Value.Generation))
@@ -1663,6 +1736,7 @@ public sealed partial class NovelReaderPage : Page
         NovelWebView.Opacity = 1;
         App.GetService<INotificationService>()
             .ShowError(notificationMessage, "Novel reader");
+        return Task.CompletedTask;
     }
 
     private async System.Threading.Tasks.Task HandleLookupRequestAsync(
@@ -1967,6 +2041,7 @@ public sealed partial class NovelReaderPage : Page
         var message = NovelReaderBridgeMessageFactory.CreateSetChapterMessage(
             chapterInstruction.ChapterIndex,
             _epubBook.Chapters.Count,
+            chapterInstruction.RenderAttemptId,
             chapterInstruction.Progress,
             chapterInstruction.NavigationGeneration,
             chapterInstruction.RestoreTarget);
@@ -1976,6 +2051,7 @@ public sealed partial class NovelReaderPage : Page
 
     private async System.Threading.Tasks.Task SendRestoreProgressMessageAsync(
         double progress,
+        long renderAttemptId,
         long? navigationGeneration = null)
     {
         if (NovelWebView.CoreWebView2 == null)
@@ -1983,6 +2059,7 @@ public sealed partial class NovelReaderPage : Page
 
         var message = NovelReaderBridgeMessageFactory.CreateRestoreProgressMessage(
             progress,
+            renderAttemptId,
             navigationGeneration);
         Log.Information("[NovelReader] Sending restoreProgress: {Msg}", message);
         NovelWebView.CoreWebView2.PostWebMessageAsJson(message);
@@ -1990,6 +2067,7 @@ public sealed partial class NovelReaderPage : Page
 
     private async Task SendJumpToFragmentMessageAsync(
         string fragment,
+        long renderAttemptId,
         long navigationGeneration)
     {
         if (NovelWebView.CoreWebView2 == null)
@@ -1997,6 +2075,7 @@ public sealed partial class NovelReaderPage : Page
 
         var message = NovelReaderBridgeMessageFactory.CreateJumpToFragmentMessage(
             fragment,
+            renderAttemptId,
             navigationGeneration);
         Log.Information("[NovelReader] Sending jumpToFragment: {Msg}", message);
         NovelWebView.CoreWebView2.PostWebMessageAsJson(message);
@@ -2005,21 +2084,30 @@ public sealed partial class NovelReaderPage : Page
     private async Task SendPendingProgrammaticFragmentAsync()
     {
         if (_pendingProgrammaticFragment is not { } fragment
-            || _renderState.NavigationRequest is not { } renderRequest)
+            || _renderState.NavigationRequest is not { } renderRequest
+            || _renderState.CurrentAttempt is not { } renderAttempt)
         {
             return;
         }
 
         _pendingProgrammaticFragment = null;
-        await SendJumpToFragmentMessageAsync(fragment, renderRequest.Generation);
+        await SendJumpToFragmentMessageAsync(
+            fragment,
+            renderAttempt.RenderAttemptId,
+            renderRequest.Generation);
     }
 
-    private bool ApplyNavigationSettlement(ReaderNavigationSettlement settlement)
+    private bool ApplyNavigationSettlement(
+        ReaderNavigationSettlement settlement,
+        bool forceTerminalReload = false)
     {
-        var recoveryUri = settlement.ShouldRevealDestination
+        var recoveryUri = settlement.ShouldRevealDestination && !forceTerminalReload
             ? string.Empty
             : BuildChapterUri(settlement.Position.ChapterIndex);
-        if (!_renderState.TryApplySettlement(settlement, recoveryUri))
+        if (!_renderState.TryApplySettlement(
+            settlement,
+            recoveryUri,
+            forceTerminalReload))
             return false;
 
         _currentProgress = settlement.Position.Progress;
@@ -2027,7 +2115,7 @@ public sealed partial class NovelReaderPage : Page
         RefreshReaderDisplayChrome();
         RefreshReaderNavigationHistoryChrome();
 
-        if (settlement.ShouldRevealDestination)
+        if (settlement.ShouldRevealDestination && !forceTerminalReload)
         {
             TryRevealSettledNavigation(settlement.Generation);
             return true;
@@ -2097,14 +2185,21 @@ public sealed partial class NovelReaderPage : Page
         if (chapterIndex == ViewModel.CurrentChapterIndex)
         {
             BeginHiddenRender(renderRequest);
+            var renderAttemptId = _renderState.CurrentAttempt!.RenderAttemptId;
             if (fragment != null)
             {
                 _pendingProgrammaticFragment = null;
-                await SendJumpToFragmentMessageAsync(fragment, renderRequest.Generation);
+                await SendJumpToFragmentMessageAsync(
+                    fragment,
+                    renderAttemptId,
+                    renderRequest.Generation);
             }
             else
             {
-                await SendRestoreProgressMessageAsync(progress, renderRequest.Generation);
+                await SendRestoreProgressMessageAsync(
+                    progress,
+                    renderAttemptId,
+                    renderRequest.Generation);
             }
         }
         else

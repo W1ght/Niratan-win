@@ -25,7 +25,8 @@ internal sealed record NovelReaderRenderAttempt(
     double? Progress,
     ReaderChapterRestoreTarget? RestoreTarget,
     long? NavigationGeneration,
-    NovelReaderRenderAttemptKind Kind);
+    NovelReaderRenderAttemptKind Kind,
+    long RenderAttemptId);
 
 internal readonly record struct NovelReaderRenderRelease(long Generation);
 
@@ -38,6 +39,7 @@ internal sealed class NovelReaderRenderState
     private bool _hiddenChapterReady;
     private bool _deferredOrdinaryReload;
     private bool _terminalReleaseReserved;
+    private long _nextRenderAttemptId;
 
     public bool HasActiveNavigation => _navigationRequest != null;
     public bool HasDeferredOrdinaryReload => _deferredOrdinaryReload;
@@ -62,7 +64,7 @@ internal sealed class NovelReaderRenderState
         _terminalReleaseReserved = false;
         _terminalReady = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously);
-        _currentAttempt = new NovelReaderRenderAttempt(
+        _currentAttempt = CreateAttempt(
             destinationUri,
             request.Destination.ChapterIndex,
             request.Destination.ExactProgress,
@@ -80,7 +82,7 @@ internal sealed class NovelReaderRenderState
             return false;
         }
 
-        _currentAttempt = new NovelReaderRenderAttempt(
+        _currentAttempt = CreateAttempt(
             uri,
             chapterIndex,
             progress,
@@ -105,7 +107,8 @@ internal sealed class NovelReaderRenderState
 
     public bool TryApplySettlement(
         ReaderNavigationSettlement settlement,
-        string recoveryUri)
+        string recoveryUri,
+        bool forceTerminalReload = false)
     {
         ArgumentNullException.ThrowIfNull(settlement);
         if (_navigationRequest?.Generation != settlement.Generation
@@ -115,28 +118,42 @@ internal sealed class NovelReaderRenderState
             return false;
         }
 
+        var requiresRecovery = !settlement.ShouldRevealDestination
+            || forceTerminalReload;
+        if (requiresRecovery)
+            ArgumentException.ThrowIfNullOrWhiteSpace(recoveryUri);
+
         _pendingSettlement = settlement;
-        if (settlement.ShouldRevealDestination)
+        if (!requiresRecovery)
             return true;
 
-        ArgumentException.ThrowIfNullOrWhiteSpace(recoveryUri);
-        _hiddenChapterReady = false;
-        _currentAttempt = new NovelReaderRenderAttempt(
-            recoveryUri,
-            settlement.Position.ChapterIndex,
-            settlement.Position.Progress,
-            null,
-            settlement.Generation,
-            NovelReaderRenderAttemptKind.Recovery);
+        BeginRecoveryAttempt(settlement, recoveryUri);
+        return true;
+    }
+
+    public bool TryBeginPendingSettlementRecovery(string recoveryUri)
+    {
+        if (_navigationRequest is not { } request
+            || _pendingSettlement is not { } settlement
+            || settlement.Generation != request.Generation
+            || _currentAttempt?.Kind == NovelReaderRenderAttemptKind.Recovery
+            || _terminalReleaseReserved)
+        {
+            return false;
+        }
+
+        BeginRecoveryAttempt(settlement, recoveryUri);
         return true;
     }
 
     public NovelReaderChapterReadyDisposition AcceptChapterReady(
         int chapterIndex,
-        long? navigationGeneration)
+        long? navigationGeneration,
+        long renderAttemptId)
     {
         if (_currentAttempt is not { } attempt
-            || attempt.ChapterIndex != chapterIndex)
+            || attempt.ChapterIndex != chapterIndex
+            || attempt.RenderAttemptId != renderAttemptId)
         {
             return NovelReaderChapterReadyDisposition.Rejected;
         }
@@ -260,4 +277,35 @@ internal sealed class NovelReaderRenderState
     private bool CanCompletePreparedRelease(NovelReaderRenderRelease release) =>
         _terminalReleaseReserved
         && _navigationRequest?.Generation == release.Generation;
+
+    private NovelReaderRenderAttempt CreateAttempt(
+        string uri,
+        int chapterIndex,
+        double? progress,
+        ReaderChapterRestoreTarget? restoreTarget,
+        long? navigationGeneration,
+        NovelReaderRenderAttemptKind kind) =>
+        new(
+            uri,
+            chapterIndex,
+            progress,
+            restoreTarget,
+            navigationGeneration,
+            kind,
+            checked(++_nextRenderAttemptId));
+
+    private void BeginRecoveryAttempt(
+        ReaderNavigationSettlement settlement,
+        string recoveryUri)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(recoveryUri);
+        _hiddenChapterReady = false;
+        _currentAttempt = CreateAttempt(
+            recoveryUri,
+            settlement.Position.ChapterIndex,
+            settlement.Position.Progress,
+            null,
+            settlement.Generation,
+            NovelReaderRenderAttemptKind.Recovery);
+    }
 }

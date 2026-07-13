@@ -25,7 +25,8 @@ public sealed class NovelReaderRenderStateTests
             0.75,
             null,
             7,
-            NovelReaderRenderAttemptKind.Destination));
+            NovelReaderRenderAttemptKind.Destination,
+            1));
         state.TryGetDomAttempt(DestinationUri, out _).Should().BeTrue();
         state.TryGetDomAttempt(SourceUri, out _).Should().BeFalse();
     }
@@ -49,10 +50,42 @@ public sealed class NovelReaderRenderStateTests
             request.Source.Progress,
             null,
             request.Generation,
-            NovelReaderRenderAttemptKind.Recovery));
+            NovelReaderRenderAttemptKind.Recovery,
+            2));
         state.TryGetDomAttempt(SourceUri, out var recovery).Should().BeTrue();
         recovery.ChapterIndex.Should().Be(request.Source.ChapterIndex);
         state.TryGetDomAttempt(DestinationUri, out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void SameChapterRecovery_RejectsDelayedDestinationReadyByRenderAttemptId()
+    {
+        var state = new NovelReaderRenderState();
+        var request = CreateRequest() with
+        {
+            Destination = ReaderNavigationDestination.AtProgress(1, 0.75),
+        };
+        state.BeginNavigation(request, DestinationUri, waitsForFragment: false);
+        var destinationAttemptId = state.CurrentAttempt!.RenderAttemptId;
+        var settlement = new ReaderNavigationSettlement(
+            request.Generation,
+            request.Source,
+            ShouldRevealDestination: false);
+
+        state.TryApplySettlement(settlement, SourceUri).Should().BeTrue();
+        var recoveryAttemptId = state.CurrentAttempt!.RenderAttemptId;
+
+        recoveryAttemptId.Should().BeGreaterThan(destinationAttemptId);
+        state.AcceptChapterReady(
+                request.Source.ChapterIndex,
+                request.Generation,
+                destinationAttemptId)
+            .Should().Be(NovelReaderChapterReadyDisposition.Rejected);
+        state.AcceptChapterReady(
+                request.Source.ChapterIndex,
+                request.Generation,
+                recoveryAttemptId)
+            .Should().Be(NovelReaderChapterReadyDisposition.HiddenTerminal);
     }
 
     [Fact]
@@ -60,12 +93,13 @@ public sealed class NovelReaderRenderStateTests
     {
         var state = new NovelReaderRenderState();
         state.TryBeginOrdinary(SourceUri, chapterIndex: 1, progress: 0.25).Should().BeTrue();
+        var renderAttemptId = state.CurrentAttempt!.RenderAttemptId;
 
-        state.AcceptChapterReady(chapterIndex: 1, navigationGeneration: 7)
+        state.AcceptChapterReady(chapterIndex: 1, navigationGeneration: 7, renderAttemptId)
             .Should().Be(NovelReaderChapterReadyDisposition.Rejected);
-        state.AcceptChapterReady(chapterIndex: 2, navigationGeneration: null)
+        state.AcceptChapterReady(chapterIndex: 2, navigationGeneration: null, renderAttemptId)
             .Should().Be(NovelReaderChapterReadyDisposition.Rejected);
-        state.AcceptChapterReady(chapterIndex: 1, navigationGeneration: null)
+        state.AcceptChapterReady(chapterIndex: 1, navigationGeneration: null, renderAttemptId)
             .Should().Be(NovelReaderChapterReadyDisposition.Ordinary);
     }
 
@@ -74,11 +108,12 @@ public sealed class NovelReaderRenderStateTests
     {
         var state = new NovelReaderRenderState();
         state.BeginNavigation(CreateRequest(), DestinationUri, waitsForFragment: true);
+        var renderAttemptId = state.CurrentAttempt!.RenderAttemptId;
 
-        state.AcceptChapterReady(chapterIndex: 2, navigationGeneration: null)
+        state.AcceptChapterReady(chapterIndex: 2, navigationGeneration: null, renderAttemptId)
             .Should().Be(NovelReaderChapterReadyDisposition.HiddenInitial);
         state.HiddenChapterReady.Should().BeFalse();
-        state.AcceptChapterReady(chapterIndex: 2, navigationGeneration: 7)
+        state.AcceptChapterReady(chapterIndex: 2, navigationGeneration: 7, renderAttemptId)
             .Should().Be(NovelReaderChapterReadyDisposition.HiddenTerminal);
         state.HiddenChapterReady.Should().BeTrue();
     }
@@ -126,6 +161,77 @@ public sealed class NovelReaderRenderStateTests
         state.PendingSettlement.Should().BeNull();
     }
 
+    [Fact]
+    public void ForcedCommittedSettlement_CreatesFreshDestinationRecoveryAttempt()
+    {
+        var state = new NovelReaderRenderState();
+        var request = CreateRequest();
+        state.BeginNavigation(request, DestinationUri, waitsForFragment: false);
+        var failedAttemptId = state.CurrentAttempt!.RenderAttemptId;
+        var settlement = new ReaderNavigationSettlement(
+            request.Generation,
+            request.Source with
+            {
+                ChapterIndex = request.Destination.ChapterIndex,
+                Progress = request.Destination.ExactProgress!.Value,
+            },
+            ShouldRevealDestination: true);
+
+        state.TryApplySettlement(
+            settlement,
+            DestinationUri,
+            forceTerminalReload: true).Should().BeTrue();
+
+        state.CurrentAttempt.Should().Match<NovelReaderRenderAttempt>(attempt =>
+            attempt.Kind == NovelReaderRenderAttemptKind.Recovery
+            && attempt.ChapterIndex == settlement.Position.ChapterIndex
+            && attempt.NavigationGeneration == request.Generation
+            && attempt.RenderAttemptId > failedAttemptId);
+    }
+
+    [Fact]
+    public void PendingCommittedSettlement_CanStartExactlyOneFreshRecoveryAttempt()
+    {
+        var state = new NovelReaderRenderState();
+        var request = CreateRequest();
+        state.BeginNavigation(request, DestinationUri, waitsForFragment: false);
+        var failedAttemptId = state.CurrentAttempt!.RenderAttemptId;
+        var settlement = new ReaderNavigationSettlement(
+            request.Generation,
+            request.Source with
+            {
+                ChapterIndex = request.Destination.ChapterIndex,
+                Progress = request.Destination.ExactProgress!.Value,
+            },
+            ShouldRevealDestination: true);
+        state.TryApplySettlement(settlement, string.Empty).Should().BeTrue();
+
+        state.TryBeginPendingSettlementRecovery(DestinationUri).Should().BeTrue();
+
+        state.CurrentAttempt!.Kind.Should().Be(NovelReaderRenderAttemptKind.Recovery);
+        state.CurrentAttempt.RenderAttemptId.Should().BeGreaterThan(failedAttemptId);
+        state.TryBeginPendingSettlementRecovery(DestinationUri).Should().BeFalse();
+    }
+
+    [Fact]
+    public void InvalidRecoveryUri_DoesNotConsumeSettlementOrReplaceAttempt()
+    {
+        var state = new NovelReaderRenderState();
+        var request = CreateRequest();
+        state.BeginNavigation(request, DestinationUri, waitsForFragment: false);
+        var destinationAttempt = state.CurrentAttempt;
+        var settlement = new ReaderNavigationSettlement(
+            request.Generation,
+            request.Source,
+            ShouldRevealDestination: false);
+
+        var action = () => state.TryApplySettlement(settlement, string.Empty);
+
+        action.Should().Throw<ArgumentException>();
+        state.PendingSettlement.Should().BeNull();
+        state.CurrentAttempt.Should().BeSameAs(destinationAttempt);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -135,13 +241,14 @@ public sealed class NovelReaderRenderStateTests
         var request = CreateRequest();
         state.BeginNavigation(request, DestinationUri, waitsForFragment: false);
         var terminal = state.WaitForTerminalAsync(7);
+        var renderAttemptId = state.CurrentAttempt!.RenderAttemptId;
         var settlement = new ReaderNavigationSettlement(
             7,
             request.Source with { ChapterIndex = 2, Progress = 0.8, Revision = 11 },
             ShouldRevealDestination: true);
 
         if (readyFirst)
-            state.AcceptChapterReady(2, 7).Should().Be(NovelReaderChapterReadyDisposition.HiddenTerminal);
+            state.AcceptChapterReady(2, 7, renderAttemptId).Should().Be(NovelReaderChapterReadyDisposition.HiddenTerminal);
         else
             state.TryApplySettlement(settlement, SourceUri).Should().BeTrue();
 
@@ -150,7 +257,7 @@ public sealed class NovelReaderRenderStateTests
         if (readyFirst)
             state.TryApplySettlement(settlement, SourceUri).Should().BeTrue();
         else
-            state.AcceptChapterReady(2, 7).Should().Be(NovelReaderChapterReadyDisposition.HiddenTerminal);
+            state.AcceptChapterReady(2, 7, renderAttemptId).Should().Be(NovelReaderChapterReadyDisposition.HiddenTerminal);
 
         state.TryPrepareCompletion(out var release).Should().BeTrue();
         release.Should().Be(new NovelReaderRenderRelease(7));
@@ -159,9 +266,9 @@ public sealed class NovelReaderRenderStateTests
         await terminal.WaitAsync(
             TimeSpan.FromSeconds(1),
             TestContext.Current.CancellationToken);
-        state.AcceptChapterReady(2, 7)
+        state.AcceptChapterReady(2, 7, renderAttemptId)
             .Should().Be(NovelReaderChapterReadyDisposition.Rejected);
-        state.AcceptChapterReady(2, null)
+        state.AcceptChapterReady(2, null, renderAttemptId)
             .Should().Be(NovelReaderChapterReadyDisposition.Ordinary);
     }
 

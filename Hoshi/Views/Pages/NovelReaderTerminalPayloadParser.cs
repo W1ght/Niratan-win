@@ -5,11 +5,13 @@ namespace Hoshi.Views.Pages;
 
 internal readonly record struct NovelReaderChapterReadyPayload(
     int ChapterIndex,
-    long? NavigationGeneration);
+    long? NavigationGeneration,
+    long RenderAttemptId);
 
 internal readonly record struct NovelReaderRestoreCompletedPayload(
     int ChapterIndex,
     long? NavigationGeneration,
+    long RenderAttemptId,
     double Progress);
 
 internal static class NovelReaderTerminalPayloadParser
@@ -28,7 +30,8 @@ internal static class NovelReaderTerminalPayloadParser
         rawPayload = default;
         if (!TryGetPayload(message, out var body)
             || !TryGetChapterIndex(body, out var chapterIndex)
-            || !body.TryGetProperty("navigationGeneration", out var generationElement))
+            || !body.TryGetProperty("navigationGeneration", out var generationElement)
+            || !TryGetPositiveInt64(body, "renderAttemptId", out var renderAttemptId))
         {
             return false;
         }
@@ -49,7 +52,10 @@ internal static class NovelReaderTerminalPayloadParser
             return false;
         }
 
-        payload = new NovelReaderChapterReadyPayload(chapterIndex, generation);
+        payload = new NovelReaderChapterReadyPayload(
+            chapterIndex,
+            generation,
+            renderAttemptId);
         rawPayload = body;
         return true;
     }
@@ -62,6 +68,7 @@ internal static class NovelReaderTerminalPayloadParser
         if (!TryGetPayload(message, out var body)
             || !TryGetChapterIndex(body, out var chapterIndex)
             || !body.TryGetProperty("navigationGeneration", out var generationElement)
+            || !TryGetPositiveInt64(body, "renderAttemptId", out var renderAttemptId)
             || !body.TryGetProperty("progress", out var progressElement)
             || progressElement.ValueKind != JsonValueKind.Number
             || !progressElement.TryGetDouble(out var progress)
@@ -90,6 +97,7 @@ internal static class NovelReaderTerminalPayloadParser
         payload = new NovelReaderRestoreCompletedPayload(
             chapterIndex,
             generation,
+            renderAttemptId,
             progress);
         return true;
     }
@@ -114,5 +122,17 @@ internal static class NovelReaderTerminalPayloadParser
             && chapterElement.ValueKind == JsonValueKind.Number
             && chapterElement.TryGetInt32(out chapterIndex)
             && chapterIndex >= 0;
+    }
+
+    private static bool TryGetPositiveInt64(
+        JsonElement payload,
+        string propertyName,
+        out long value)
+    {
+        value = 0;
+        return payload.TryGetProperty(propertyName, out var element)
+            && element.ValueKind == JsonValueKind.Number
+            && element.TryGetInt64(out value)
+            && value > 0;
     }
 }

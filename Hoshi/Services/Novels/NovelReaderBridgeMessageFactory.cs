@@ -17,6 +17,7 @@ public static class NovelReaderBridgeMessageFactory
     public static string CreateSetChapterMessage(
         int index,
         int totalChapters,
+        long renderAttemptId,
         double? progress = 0,
         long? navigationGeneration = null,
         ReaderChapterRestoreTarget? restoreTarget = null)
@@ -24,6 +25,7 @@ public static class NovelReaderBridgeMessageFactory
         var payload = new SetChapterPayload(
             index,
             totalChapters,
+            renderAttemptId,
             progress,
             navigationGeneration,
             restoreTarget switch
@@ -38,12 +40,14 @@ public static class NovelReaderBridgeMessageFactory
 
     public static string CreateSetChapterMessage(
         ReaderNavigationRenderRequest renderRequest,
-        int totalChapters)
+        int totalChapters,
+        long renderAttemptId)
     {
         ArgumentNullException.ThrowIfNull(renderRequest);
         return CreateSetChapterMessage(
             renderRequest.Destination.ChapterIndex,
             totalChapters,
+            renderAttemptId,
             renderRequest.Destination.ExactProgress,
             renderRequest.Generation,
             renderRequest.Destination.RestoreTarget);
@@ -51,9 +55,13 @@ public static class NovelReaderBridgeMessageFactory
 
     public static string CreateRestoreProgressMessage(
         double progress,
+        long renderAttemptId,
         long? navigationGeneration = null)
     {
-        var payload = new RestoreProgressPayload(progress, navigationGeneration);
+        var payload = new RestoreProgressPayload(
+            progress,
+            renderAttemptId,
+            navigationGeneration);
         var message = new NovelReaderWebMessage<RestoreProgressPayload>(
             1,
             "restoreProgress",
@@ -64,9 +72,13 @@ public static class NovelReaderBridgeMessageFactory
 
     public static string CreateJumpToFragmentMessage(
         string fragment,
+        long renderAttemptId,
         long navigationGeneration)
     {
-        var payload = new JumpToFragmentPayload(fragment, navigationGeneration);
+        var payload = new JumpToFragmentPayload(
+            fragment,
+            renderAttemptId,
+            navigationGeneration);
         var message = new NovelReaderWebMessage<JumpToFragmentPayload>(
             1,
             "jumpToFragment",
@@ -77,15 +89,18 @@ public static class NovelReaderBridgeMessageFactory
     private sealed record SetChapterPayload(
         int Index,
         int TotalChapters,
+        long RenderAttemptId,
         double? Progress,
         long? NavigationGeneration,
         string? RestoreTarget);
 
     private sealed record RestoreProgressPayload(
         double Progress,
+        long RenderAttemptId,
         long? NavigationGeneration);
 
     private sealed record JumpToFragmentPayload(
         string Fragment,
+        long RenderAttemptId,
         long NavigationGeneration);
 }
