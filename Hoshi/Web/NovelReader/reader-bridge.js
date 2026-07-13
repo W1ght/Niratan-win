@@ -917,7 +917,7 @@ function optionalGeneration(value, name) {
 }
 
 async function handleMessage(event) {
-  if (!event || event.isTrusted !== true) return;
+  if (!event || event.source !== window.chrome?.webview) return;
 
   var reportOperationError = createBridgeErrorReporter();
   try {

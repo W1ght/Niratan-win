@@ -294,7 +294,11 @@ const window = {
       postMessage(message) { outbound.push(message); },
       dispatchHostMessage(data) {
         const listener = webViewListeners.get("message");
-        return listener?.(Object.freeze({ isTrusted: true, data }));
+        return listener?.(Object.freeze({
+          isTrusted: false,
+          source: this,
+          data,
+        }));
       },
     },
   },
