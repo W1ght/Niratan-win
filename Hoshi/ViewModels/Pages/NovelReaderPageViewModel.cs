@@ -539,12 +539,10 @@ public partial class NovelReaderPageViewModel : ObservableObject
             TaskCompletionSource admission;
             lock (_saveGate)
             {
-                var request = CaptureProgressSaveRequest();
                 admission = CreateWriterAdmission();
                 boundary = RunLifecycleWriterBoundaryAsync(
                     admission.Task,
                     _writerTail,
-                    request,
                     ReaderStatisticsCheckpointReason.Close,
                     cancelAfterFlush: true,
                     CancellationToken.None);
@@ -578,12 +576,10 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
                 _lifecycleWriterBarrier = true;
                 _saveCts?.Cancel();
-                var request = CaptureProgressSaveRequest();
                 admission = CreateWriterAdmission();
                 boundary = RunLifecycleWriterBoundaryAsync(
                     admission.Task,
                     _writerTail,
-                    request,
                     ReaderStatisticsCheckpointReason.Background,
                     cancelAfterFlush: false,
                     ct);
@@ -1254,7 +1250,6 @@ public partial class NovelReaderPageViewModel : ObservableObject
     private async Task RunLifecycleWriterBoundaryAsync(
         Task admission,
         Task previousWriter,
-        ProgressSaveRequest? request,
         ReaderStatisticsCheckpointReason reason,
         bool cancelAfterFlush,
         CancellationToken ct)
@@ -1262,8 +1257,14 @@ public partial class NovelReaderPageViewModel : ObservableObject
         await admission;
         await AwaitPreviousWriterCompletionAsync(previousWriter);
         ct.ThrowIfCancellationRequested();
-        var statisticsCharacterCount = request?.CurrentCharacterCount
-            ?? CurrentCharacterCount;
+        ProgressSaveRequest? request;
+        int statisticsCharacterCount;
+        lock (_saveGate)
+        {
+            request = CaptureProgressSaveRequest();
+            statisticsCharacterCount = request?.CurrentCharacterCount
+                ?? CurrentCharacterCount;
+        }
         var saved = request == null;
         if (request != null)
         {

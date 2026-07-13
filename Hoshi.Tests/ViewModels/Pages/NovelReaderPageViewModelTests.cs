@@ -627,6 +627,78 @@ public sealed class NovelReaderPageViewModelTests
             .Which.Should().Be((150, ReaderStatisticsCheckpointReason.Close));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LifecycleBoundary_WaitsForAdmittedLegacyDestinationBeforeCapturingCurrentPosition(
+        bool close)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var saveStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSave = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var saves = new ConcurrentQueue<(int Chapter, double Progress, int Characters)>();
+        var call = 0;
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1", It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int>(), 200,
+                It.IsAny<CancellationToken>()))
+            .Returns(async (
+                string _,
+                int chapter,
+                double progress,
+                int characters,
+                int _,
+                CancellationToken _) =>
+            {
+                saves.Enqueue((chapter, progress, characters));
+                if (Interlocked.Increment(ref call) == 1)
+                {
+                    saveStarted.TrySetResult();
+                    await releaseSave.Task;
+                }
+
+                return Result.Success();
+            });
+        var statistics = new FakeReaderStatisticsSession();
+        var autoSync = CreateAutoSyncCoordinator();
+        autoSync.Setup(service => service.FlushAsync(
+                It.IsAny<NovelBook>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            statistics,
+            autoSync.Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+        sut.SetChapterCharacterCounts([100, 100]);
+        sut.SetChapter(0, 2);
+        sut.UpdateProgress(0.4);
+
+        var legacyDestination = sut.CompleteAdjacentChapterNavigationAsync(1, 0.5, ct);
+        await saveStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        var lifecycle = close
+            ? sut.PrepareForReaderLifecycleCloseAsync(ct)
+            : sut.CheckpointAppBackgroundingAsync(ct);
+
+        lifecycle.IsCompleted.Should().BeFalse();
+        saves.Should().Equal((1, 0.5, 150));
+        releaseSave.TrySetResult();
+        (await legacyDestination.WaitAsync(TimeSpan.FromSeconds(2), ct)).Should().BeTrue();
+        await lifecycle.WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        saves.Should().Equal((1, 0.5, 150), (1, 0.5, 150));
+        statistics.ResetPositions.Should().Equal(150);
+        statistics.Checkpoints.Should().Equal((
+            150,
+            close
+                ? ReaderStatisticsCheckpointReason.Close
+                : ReaderStatisticsCheckpointReason.Background));
+    }
+
     [Fact]
     public async Task LifecycleClose_WhenBookmarkWriteFails_DoesNotCheckpointOrSyncAndCanRetry()
     {
@@ -1333,7 +1405,7 @@ public sealed class NovelReaderPageViewModelTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task LifecycleFinalFlush_UsesAdmittedProgressSnapshot(bool close)
+    public async Task LifecycleFinalFlush_AfterAdmittedWritersSettleUsesCurrentProgress(bool close)
     {
         var ct = TestContext.Current.CancellationToken;
         using var temp = new TempBookDirectory();
@@ -1403,13 +1475,13 @@ public sealed class NovelReaderPageViewModelTests
         releaseFirst.TrySetResult();
         await Task.WhenAll(first, lifecycle).WaitAsync(TimeSpan.FromSeconds(2), ct);
 
-        Volatile.Read(ref finalBookmarkPosition).Should().Be(40);
+        Volatile.Read(ref finalBookmarkPosition).Should().Be(90);
         statistics.Checkpoints.Should().Equal((
-            40,
+            90,
             close
                 ? ReaderStatisticsCheckpointReason.Close
                 : ReaderStatisticsCheckpointReason.Background));
-        flushSnapshot.Should().Be((40, 40));
+        flushSnapshot.Should().Be((90, 90));
     }
 
     [Fact]
