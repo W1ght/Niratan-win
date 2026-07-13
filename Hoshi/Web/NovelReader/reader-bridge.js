@@ -608,7 +608,7 @@ window.hoshiReader = {
     });
   },
 
-  initialize: function (initialProgress, navigationGeneration, restoreTarget) {
+  initialize: async function (initialProgress, navigationGeneration, restoreTarget) {
     if (window.hoshiReader.didInitialize) return;
     window.hoshiReader.didInitialize = true;
 
@@ -678,21 +678,16 @@ window.hoshiReader = {
 
     var progress = initialProgress != null ? initialProgress : 0;
     var self = this;
-    Promise.all(imagePromises)
-      .then(function () {
-        return new Promise(function (resolve) { setTimeout(resolve, 50); });
-      })
-      .then(function () {
-        self.buildNodeOffsets();
-        if (window.hoshiHighlights) {
-          window.hoshiHighlights.applyHighlights(window.__hoshiChapterHighlights || []);
-        }
-        self.restoreProgress(progress, navigationGeneration, restoreTarget).then(function () {
-          self.lastProgress = self.calculateProgress();
-          updateDiagnostics();
-          notifyChapterReady(navigationGeneration);
-        });
-      });
+    await Promise.all(imagePromises);
+    await new Promise(function (resolve) { setTimeout(resolve, 50); });
+    self.buildNodeOffsets();
+    if (window.hoshiHighlights) {
+      window.hoshiHighlights.applyHighlights(window.__hoshiChapterHighlights || []);
+    }
+    await self.restoreProgress(progress, navigationGeneration, restoreTarget);
+    self.lastProgress = self.calculateProgress();
+    updateDiagnostics();
+    notifyChapterReady(navigationGeneration);
   },
 };
 
@@ -718,6 +713,15 @@ function postToHost(type, payload) {
     type: type,
     payload: payload || {},
   });
+}
+
+function reportBridgeError(error) {
+  if (window.hoshiBridgeErrorReported) return;
+  window.hoshiBridgeErrorReported = true;
+  var msg = error instanceof Error ? error.message : String(error);
+  window.__hoshiReaderState.error = msg;
+  logDebug("bridge-error", { error: msg });
+  postToHost("error", { message: msg });
 }
 
 var defaultShortcutBindings = {
@@ -870,7 +874,7 @@ async function handleMessage(event) {
         };
         var progress = message.payload?.progress ?? 0;
         logDebug("setChapter-received", { chapter: currentChapter, progress: progress });
-        window.hoshiReader.initialize(
+        await window.hoshiReader.initialize(
           progress,
           message.payload?.navigationGeneration ?? null,
           message.payload?.restoreTarget ?? null
@@ -906,10 +910,7 @@ async function handleMessage(event) {
         throw new Error("Unsupported bridge message type: " + message.type);
     }
   } catch (error) {
-    var msg = error instanceof Error ? error.message : String(error);
-    window.__hoshiReaderState.error = msg;
-    logDebug("handleMessage-error", { error: msg });
-    postToHost("error", { message: msg });
+    reportBridgeError(error);
   }
 }
 
@@ -962,7 +963,7 @@ window.addEventListener("resize", function () {
   resizeDebounce = setTimeout(function () {
     var progress = window.hoshiReader.lastProgress || window.hoshiReader.calculateProgress();
     logDebug("resize", { progress: progress, innerWidth: window.innerWidth, innerHeight: window.innerHeight });
-    window.hoshiReader.reflow(progress);
+    window.hoshiReader.reflow(progress).catch(reportBridgeError);
   }, 250);
 });
 
@@ -972,16 +973,14 @@ function logDebug(msg, data) {
 
 window.onerror = function (message, source, lineno, colno, error) {
   var msg = error instanceof Error ? error.message : String(message);
-  var stack = error instanceof Error ? error.stack : undefined;
-  postToHost("error", {
-    message: "Uncaught: " + msg + " at " + source + ":" + lineno + ":" + colno,
-    stack: stack,
-  });
+  reportBridgeError(
+    new Error("Uncaught: " + msg + " at " + source + ":" + lineno + ":" + colno)
+  );
 };
 
 window.addEventListener("unhandledrejection", function (event) {
   var msg = event.reason instanceof Error ? event.reason.message : String(event.reason);
-  postToHost("error", { message: "Unhandled rejection: " + msg });
+  reportBridgeError(new Error("Unhandled rejection: " + msg));
 });
 
 // ── Sasayaki highlighting ──────────────────────────────────────────
@@ -1194,7 +1193,7 @@ if (window.__hoshiChapterInfo) {
     initProgress,
     window.__hoshiChapterInfo.navigationGeneration ?? null,
     window.__hoshiChapterInfo.restoreTarget ?? null
-  );
+  ).catch(reportBridgeError);
 } else {
   postToHost("readerReady", {});
 }

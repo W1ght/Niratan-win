@@ -63,6 +63,6 @@ public sealed class NovelReaderStatisticsLifecycleTests
                 "CompleteReaderLifecycleCloseAfterDetachAsync",
                 StringComparison.Ordinal));
         readerCode.Should().MatchRegex(new Regex(
-            @"(?s)CompleteReaderLifecycleCloseAfterDetachAsync.*?SettleNavigationForLifecycleAsync.*?AcknowledgeNavigationRendered.*?AbandonNavigationRender.*?PrepareForReaderLifecycleCloseAsync"));
+            @"(?s)CompleteReaderLifecycleCloseAfterDetachAsync.*?SettleNavigationForLifecycleAsync.*?TryPrepareFailure.*?AcknowledgeNavigationRendered.*?CompleteFailure.*?PrepareForReaderLifecycleCloseAsync"));
     }
 }
