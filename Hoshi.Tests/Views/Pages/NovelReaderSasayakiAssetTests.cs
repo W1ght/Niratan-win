@@ -34,8 +34,9 @@ public sealed class NovelReaderSasayakiAssetTests
         var code = File.ReadAllText(
             Path.Combine(ProjectRoot, "Services", "Sasayaki", "SasayakiPlayer.cs"));
 
-        code.Should().Contain("_pendingSeekSeconds");
+        code.Should().Contain("SasayakiSeekLandingState _seekLanding");
         code.Should().Contain("player.MediaOpened += OnMediaOpened");
         code.Should().Contain("ApplyPendingSeek(sender)");
+        code.Should().Contain("_seekLanding.TryAcceptPosition(position)");
     }
 }

@@ -25,4 +25,41 @@ public sealed class SasayakiPlayerTests
         SasayakiPlayer.NormalizeSeekSeconds(double.PositiveInfinity, 120).Should().Be(0);
         SasayakiPlayer.NormalizeSeekSeconds(double.NegativeInfinity, 120).Should().Be(0);
     }
+
+    [Fact]
+    public void SeekLandingState_KeepsTargetAndRejectsStalePlayerSamplesUntilSeekLands()
+    {
+        var state = new SasayakiSeekLandingState();
+
+        state.Request(25373.1);
+
+        state.ResolvePosition(0).Should().Be(25373.1);
+        state.TryAcceptPosition(24060.1).Should().BeFalse();
+        state.PendingSeconds.Should().Be(25373.1);
+        state.ResolvePosition(24060.1).Should().Be(25373.1);
+    }
+
+    [Fact]
+    public void SeekLandingState_AcceptsTargetSampleAndClearsPendingSeek()
+    {
+        var state = new SasayakiSeekLandingState();
+        state.Request(25373.1);
+
+        state.TryAcceptPosition(25373.7).Should().BeTrue();
+
+        state.PendingSeconds.Should().BeNull();
+        state.ResolvePosition(25373.7).Should().Be(25373.7);
+    }
+
+    [Fact]
+    public void SeekLandingState_NewerRequestSupersedesEarlierSeek()
+    {
+        var state = new SasayakiSeekLandingState();
+        state.Request(25373.1);
+        state.Request(21531.8);
+
+        state.TryAcceptPosition(25373.1).Should().BeFalse();
+        state.PendingSeconds.Should().Be(21531.8);
+        state.ResolvePosition(25373.1).Should().Be(21531.8);
+    }
 }

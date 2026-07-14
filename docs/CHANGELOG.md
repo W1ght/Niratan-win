@@ -1,5 +1,17 @@
 # Changelog
 
+## 书籍同步缺少过程提示且 Sasayaki 位置被导入流程重置
+
+**原因**：
+- 书籍同步只在结束后显示通知，执行期间没有绑定到活动同步状态的持续 UI。
+- Reader 导入音频/字幕后显式保存零位置，书架匹配服务也创建空播放 sidecar，覆盖了 Google Drive 导入的 `lastPosition`；即使位置成功传给 `MediaPlayer`，旧实现也会立即清除 pending seek，使异步跳转落稳前的旧位置采样再次回写 sidecar。
+
+**解决**：
+- 按 Niratan 在任意书籍同步期间显示阻塞式“正在同步…”遮罩，并以活动同步集合保证并发完成时不会提前隐藏。
+- Sasayaki 匹配只保存匹配数据；Reader 加载媒体后读取并应用现有播放 sidecar，保留同步进来的位置、延迟、速率和 cue；对齐 Niratan 保留 pending seek，并在播放器实际落到目标 ±0.75 秒前屏蔽旧位置回调和持久化。
+
+---
+
 ## 同步设置与书架右键未对齐 Niratan
 
 **原因**：

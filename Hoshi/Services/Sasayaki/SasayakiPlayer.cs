@@ -15,14 +15,15 @@ public sealed class SasayakiPlayer : IDisposable
     private bool _isDisposed;
     private bool _isPaused;
     private bool _isMediaOpened;
-    private double? _pendingSeekSeconds;
+    private readonly SasayakiSeekLandingState _seekLanding = new();
 
     public event EventHandler<double>? PositionChanged;
     public event EventHandler? MediaEnded;
     public event EventHandler<string>? MediaFailed;
 
     public double DurationSeconds => _player?.NaturalDuration.TotalSeconds ?? 0;
-    public double PositionSeconds => _player?.Position.TotalSeconds ?? 0;
+    public double PositionSeconds => _seekLanding.ResolvePosition(
+        _player?.Position.TotalSeconds ?? 0);
     public bool IsPlaying => _player?.CurrentState == MediaPlayerState.Playing;
     public bool IsPaused => _isPaused;
     public double PlaybackRate
@@ -119,12 +120,13 @@ public sealed class SasayakiPlayer : IDisposable
         if (_player == null)
             return;
 
-        _pendingSeekSeconds = NormalizeSeekSeconds(seconds, DurationSeconds);
+        var pendingSeconds = NormalizeSeekSeconds(seconds, DurationSeconds);
+        _seekLanding.Request(pendingSeconds);
         if (!_isMediaOpened)
         {
             Log.Information(
                 "[Sasayaki] Queued seek to {Seconds:F1}s until media opens",
-                _pendingSeekSeconds);
+                pendingSeconds);
             return;
         }
 
@@ -148,9 +150,14 @@ public sealed class SasayakiPlayer : IDisposable
         _positionTimer?.Dispose();
         _positionTimer = new Timer(_ =>
         {
-            if (_player != null && IsPlaying)
+            var player = _player;
+            if (player != null && player.CurrentState == MediaPlayerState.Playing)
             {
-                PositionChanged?.Invoke(this, _player.Position.TotalSeconds);
+                var position = player.Position.TotalSeconds;
+                if (!_seekLanding.TryAcceptPosition(position))
+                    return;
+
+                PositionChanged?.Invoke(this, position);
             }
         }, null, TimeSpan.Zero, TimeSpan.FromMilliseconds(100));
     }
@@ -165,7 +172,7 @@ public sealed class SasayakiPlayer : IDisposable
     {
         StopPositionTimer();
         _isMediaOpened = false;
-        _pendingSeekSeconds = null;
+        _seekLanding.Reset();
 
         if (_player == null)
             return;
@@ -200,17 +207,22 @@ public sealed class SasayakiPlayer : IDisposable
 
     private void ApplyPendingSeek(MediaPlayer sender)
     {
-        if (!_pendingSeekSeconds.HasValue)
+        var pendingSeconds = _seekLanding.PendingSeconds;
+        if (!pendingSeconds.HasValue)
             return;
 
         var seconds = NormalizeSeekSeconds(
-            _pendingSeekSeconds.Value,
+            pendingSeconds.Value,
             sender.NaturalDuration.TotalSeconds);
+        if (seconds != pendingSeconds.Value)
+            _seekLanding.Request(seconds);
+
         try
         {
             sender.Position = TimeSpan.FromSeconds(seconds);
-            _pendingSeekSeconds = null;
-            Log.Information("[Sasayaki] Seeked to {Seconds:F1}s", seconds);
+            Log.Information(
+                "[Sasayaki] Applied seek target {Seconds:F1}s; waiting for player position to land",
+                seconds);
         }
         catch (Exception ex)
         {
