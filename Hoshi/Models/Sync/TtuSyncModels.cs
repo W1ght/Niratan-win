@@ -110,7 +110,7 @@ public sealed class TtuSyncSettings
     public TtuSettingsSyncMode SyncMode { get; set; } = TtuSettingsSyncMode.Auto;
     public bool EnableAutoSync { get; set; }
     public string GoogleClientId { get; set; } = "";
-    public bool UploadBooks { get; set; }
+    public bool UploadBooks { get; set; } = true;
 }
 
 public enum TtuSettingsSyncMode

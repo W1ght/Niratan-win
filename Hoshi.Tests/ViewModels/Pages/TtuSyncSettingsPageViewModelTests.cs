@@ -22,7 +22,17 @@ public sealed class TtuSyncSettingsPageViewModelTests
         settings.SyncMode.Should().Be(TtuSettingsSyncMode.Auto);
         settings.EnableAutoSync.Should().BeFalse();
         settings.GoogleClientId.Should().BeEmpty();
-        settings.UploadBooks.Should().BeFalse();
+        settings.UploadBooks.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Deserialization_RespectsExplicitUploadBooksFalse()
+    {
+        var settings = JsonSerializer.Deserialize<TtuSyncSettings>(
+            """{"UploadBooks":false}""");
+
+        settings.Should().NotBeNull();
+        settings!.UploadBooks.Should().BeFalse();
     }
 
     [Fact]

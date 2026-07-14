@@ -949,6 +949,9 @@ public class NovelLibraryPageViewModelTests
                 cover != null && paths.TryGetValue(cover.Id, out var path)
                     ? path
                     : null);
+
+        public Task ClearAsync(CancellationToken ct = default) =>
+            Task.CompletedTask;
     }
 
     private sealed class FakeGoogleDriveAuthService : IGoogleDriveAuthService
