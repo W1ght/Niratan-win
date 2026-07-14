@@ -97,7 +97,8 @@ public sealed class TtuSyncSettingsPageViewModelTests
         auth.AuthenticatedClientSecret.Should().Be("desktop-client-secret");
         auth.HasCredentials.Should().BeTrue();
         viewModel.GoogleClientSecret.Should().Be("desktop-client-secret");
-        viewModel.GoogleDriveConnectionStatus.Should().Be("Connected");
+        viewModel.IsGoogleDriveConnected.Should().BeTrue();
+        viewModel.GoogleDriveConnectionStatus.Should().NotBeNullOrWhiteSpace();
     }
 
     [Fact]
@@ -170,7 +171,7 @@ public sealed class TtuSyncSettingsPageViewModelTests
         await viewModel.ConnectGoogleDriveCommand.ExecuteAsync(null);
 
         auth.AuthenticatedClientId.Should().BeNull();
-        viewModel.GoogleDriveConnectionStatus.Should().Contain("client ID");
+        viewModel.GoogleDriveConnectionStatus.Should().NotBeNullOrWhiteSpace();
     }
 
     [Fact]
@@ -184,7 +185,7 @@ public sealed class TtuSyncSettingsPageViewModelTests
         await viewModel.ConnectGoogleDriveCommand.ExecuteAsync(null);
 
         auth.AuthenticatedClientId.Should().BeNull();
-        viewModel.GoogleDriveConnectionStatus.Should().Contain("client secret");
+        viewModel.GoogleDriveConnectionStatus.Should().NotBeNullOrWhiteSpace();
     }
 
     [Fact]
@@ -217,7 +218,8 @@ public sealed class TtuSyncSettingsPageViewModelTests
         auth.HasCredentials.Should().BeFalse();
         viewModel.GoogleClientSecret.Should().BeEmpty();
         covers.ClearCount.Should().Be(1);
-        viewModel.GoogleDriveConnectionStatus.Should().Be("Not connected");
+        viewModel.IsGoogleDriveConnected.Should().BeFalse();
+        viewModel.GoogleDriveConnectionStatus.Should().NotBeNullOrWhiteSpace();
     }
 
     [Fact]
@@ -242,7 +244,7 @@ public sealed class TtuSyncSettingsPageViewModelTests
         cache.TryGetBookFolder("星を読む", out _).Should().BeFalse();
         covers.ClearCount.Should().Be(1);
         viewModel.GoogleClientSecret.Should().Be("keep-me");
-        viewModel.GoogleDriveConnectionStatus.Should().Be("Cache cleared");
+        viewModel.GoogleDriveConnectionStatus.Should().NotBeNullOrWhiteSpace();
     }
 
     private static TtuSyncSettingsPageViewModel CreateViewModel(

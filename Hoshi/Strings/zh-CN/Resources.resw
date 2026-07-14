@@ -720,18 +720,20 @@
   <data name="ShortcutActionVideoCloseOverlayOrFullscreen" xml:space="preserve"><value>关闭面板或退出全屏</value></data>
   <data name="TtuSyncSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>返回</value></data>
   <data name="TtuSyncSettingsPageTitle.Text" xml:space="preserve"><value>ッツ Sync</value></data>
-  <data name="TtuSyncGeneralSectionHeader.Text" xml:space="preserve"><value>常规</value></data>
-  <data name="TtuSyncEnableToggle.Header" xml:space="preserve"><value>启用同步</value></data>
-  <data name="TtuSyncEnableToggle.Description" xml:space="preserve"><value>与 ッツ 兼容存储同步阅读进度</value></data>
-  <data name="TtuSyncGoogleDriveSectionHeader.Text" xml:space="preserve"><value>Google Drive</value></data>
+  <data name="TtuSyncGeneralSectionHeader.Text" xml:space="preserve"><value>同步</value></data>
+  <data name="TtuSyncEnableToggle.Header" xml:space="preserve"><value>启用</value></data>
+  <data name="TtuSyncEnableToggle.Description" xml:space="preserve"><value>通过兼容 ッツ 的 Google Drive 存储同步书签和可选书籍数据</value></data>
+  <data name="TtuSyncExplanationText.Text" xml:space="preserve"><value>通过 Google Drive 与 ッツ Reader 或其他 Hoshi 设备同步书签和统计。配置桌面 OAuth 客户端后，右键单本书籍并选择“同步”。</value></data>
+  <data name="TtuSyncClientCredentialsSectionHeader.Text" xml:space="preserve"><value>客户端凭据</value></data>
+  <data name="TtuSyncGoogleDriveSectionHeader.Text" xml:space="preserve"><value>连接</value></data>
   <data name="TtuSyncGoogleClientIdTextBox.Header" xml:space="preserve"><value>客户端 ID</value></data>
   <data name="TtuSyncGoogleClientIdTextBox.Description" xml:space="preserve"><value>用于 Drive 同步的 Google Cloud 桌面 OAuth 客户端 ID</value></data>
   <data name="TtuSyncGoogleClientSecretPasswordBox.Header" xml:space="preserve"><value>客户端密钥</value></data>
-  <data name="TtuSyncGoogleClientSecretPasswordBox.Description" xml:space="preserve"><value>同一个 Google Cloud 桌面 OAuth 客户端的客户端密钥</value></data>
+  <data name="TtuSyncGoogleClientSecretPasswordBox.Description" xml:space="preserve"><value>连接成功后安全保存在 Windows 凭据管理器中</value></data>
   <data name="TtuSyncConnectionStatusCard.Header" xml:space="preserve"><value>连接</value></data>
   <data name="TtuSyncConnectionStatusCard.Description" xml:space="preserve"><value>打开系统浏览器连接 Google Drive</value></data>
   <data name="TtuSyncConnectionStatusText.Text" xml:space="preserve"><value>未连接</value></data>
-  <data name="TtuSyncConnectGoogleDriveButton.Content" xml:space="preserve"><value>连接</value></data>
+  <data name="TtuSyncConnectGoogleDriveButton.Content" xml:space="preserve"><value>连接 Google Drive</value></data>
   <data name="TtuSyncSignOutGoogleDriveButton.Content" xml:space="preserve"><value>退出登录</value></data>
   <data name="TtuSyncClearGoogleDriveCacheButton.Content" xml:space="preserve"><value>清除缓存</value></data>
   <data name="TtuSyncBehaviorSectionHeader.Text" xml:space="preserve"><value>行为</value></data>
@@ -742,6 +744,26 @@
   <data name="TtuSyncDataSectionHeader.Text" xml:space="preserve"><value>数据</value></data>
   <data name="TtuSyncUploadBooksToggle.Header" xml:space="preserve"><value>上传书籍</value></data>
   <data name="TtuSyncUploadBooksToggle.Description" xml:space="preserve"><value>远端没有 ッツ 书籍数据时，首次同步上传书籍数据</value></data>
+  <data name="TtuSyncStatisticsToggle.Header" xml:space="preserve"><value>同步统计</value></data>
+  <data name="TtuSyncStatisticsToggle.Description" xml:space="preserve"><value>包含 Niratan 兼容的阅读统计</value></data>
+  <data name="TtuSyncSasayakiToggle.Header" xml:space="preserve"><value>同步有声书进度</value></data>
+  <data name="TtuSyncSasayakiToggle.Description" xml:space="preserve"><value>包含 Sasayaki 有声书播放位置</value></data>
+  <data name="TtuSyncModeAuto" xml:space="preserve"><value>自动</value></data>
+  <data name="TtuSyncModeManual" xml:space="preserve"><value>手动</value></data>
+  <data name="TtuSyncStatusConnected" xml:space="preserve"><value>已连接</value></data>
+  <data name="TtuSyncStatusNotConnected" xml:space="preserve"><value>未连接</value></data>
+  <data name="TtuSyncStatusConnecting" xml:space="preserve"><value>连接中...</value></data>
+  <data name="TtuSyncClientIdRequiredStatus" xml:space="preserve"><value>请先输入客户端 ID。</value></data>
+  <data name="TtuSyncClientSecretRequiredStatus" xml:space="preserve"><value>请先输入客户端密钥。</value></data>
+  <data name="TtuSyncConnectionFailedFormat" xml:space="preserve"><value>连接失败：{0}</value></data>
+  <data name="TtuSyncCredentialLoadFailedFormat" xml:space="preserve"><value>读取已保存凭据失败：{0}</value></data>
+  <data name="TtuSyncClearCacheTitle" xml:space="preserve"><value>清除缓存？</value></data>
+  <data name="TtuSyncClearCacheMessage" xml:space="preserve"><value>这将清除已缓存的文件夹 ID 和书籍封面。</value></data>
+  <data name="TtuSyncCacheClearedStatus" xml:space="preserve"><value>缓存已清除</value></data>
+  <data name="TtuSyncClearCacheFailedFormat" xml:space="preserve"><value>清除缓存失败：{0}</value></data>
+  <data name="TtuSyncSignOutTitle" xml:space="preserve"><value>退出登录？</value></data>
+  <data name="TtuSyncSignOutMessage" xml:space="preserve"><value>退出登录将清除授权令牌、已缓存的文件夹 ID 和书籍封面。</value></data>
+  <data name="TtuSyncSignOutFailedFormat" xml:space="preserve"><value>退出登录失败：{0}</value></data>
   <data name="AboutSettingsPageTitle.Text" xml:space="preserve"><value>关于</value></data>
   <data name="NovelShelfReadingLabel.Text" xml:space="preserve"><value>阅读中</value></data>
   <data name="NovelShelfUnshelvedLabel.Text" xml:space="preserve"><value>未归档</value></data>

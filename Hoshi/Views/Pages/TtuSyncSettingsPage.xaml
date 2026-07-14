@@ -40,103 +40,135 @@
         </StackPanel>
 
         <ScrollViewer Grid.Row="1">
-            <Grid Padding="0,0,16,16">
-                <StackPanel MaxWidth="1000" HorizontalAlignment="Stretch" Spacing="4">
-                    <TextBlock x:Uid="TtuSyncGeneralSectionHeader"
-                               Style="{StaticResource TtuSyncSectionHeaderStyle}"
-                               Text="General" />
+            <StackPanel MaxWidth="1000"
+                        Padding="0,0,16,16"
+                        HorizontalAlignment="Stretch"
+                        Spacing="4">
+                <TextBlock x:Uid="TtuSyncGeneralSectionHeader"
+                           Style="{StaticResource TtuSyncSectionHeaderStyle}" />
 
-                    <toolkit:SettingsCard x:Uid="TtuSyncEnableToggle"
+                <toolkit:SettingsCard x:Uid="TtuSyncEnableToggle"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE73E;}">
+                    <ToggleSwitch AutomationProperties.AutomationId="TtuSyncEnableToggle"
+                                  IsOn="{x:Bind ViewModel.EnableSync, Mode=TwoWay}" />
+                </toolkit:SettingsCard>
+
+                <TextBlock x:Uid="TtuSyncExplanationText"
+                           Margin="12,8,12,0"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           TextWrapping="Wrap" />
+
+                <StackPanel Spacing="4"
+                            Visibility="{x:Bind ViewModel.EnableSync, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <TextBlock x:Uid="TtuSyncClientCredentialsSectionHeader"
+                               Style="{StaticResource TtuSyncSectionHeaderStyle}" />
+
+                    <toolkit:SettingsCard x:Uid="TtuSyncGoogleClientIdTextBox"
                                           HorizontalAlignment="Stretch"
                                           HorizontalContentAlignment="Stretch"
-                                          HeaderIcon="{ui:FontIcon Glyph=&#xE73E;}">
-                        <ToggleSwitch AutomationProperties.AutomationId="TtuSyncEnableToggle"
-                                      IsOn="{x:Bind ViewModel.EnableSync, Mode=TwoWay}" />
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE774;}">
+                        <TextBox MinWidth="360"
+                                 AutomationProperties.AutomationId="TtuSyncGoogleClientIdTextBox"
+                                 IsEnabled="{x:Bind ViewModel.CanEditGoogleDriveCredentials, Mode=OneWay}"
+                                 Text="{x:Bind ViewModel.GoogleClientId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     </toolkit:SettingsCard>
 
-                    <StackPanel Spacing="4"
-                                Visibility="{x:Bind ViewModel.EnableSync, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <TextBlock x:Uid="TtuSyncGoogleDriveSectionHeader"
-                                   Style="{StaticResource TtuSyncSectionHeaderStyle}"
-                                   Text="Google Drive" />
+                    <toolkit:SettingsCard x:Uid="TtuSyncGoogleClientSecretPasswordBox"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE72E;}">
+                        <PasswordBox MinWidth="360"
+                                     AutomationProperties.AutomationId="TtuSyncGoogleClientSecretPasswordBox"
+                                     IsEnabled="{x:Bind ViewModel.CanEditGoogleDriveCredentials, Mode=OneWay}"
+                                     Password="{x:Bind ViewModel.GoogleClientSecret, Mode=TwoWay}"
+                                     PasswordRevealMode="Peek" />
+                    </toolkit:SettingsCard>
 
-                        <toolkit:SettingsCard x:Uid="TtuSyncGoogleClientIdTextBox"
-                                              HorizontalAlignment="Stretch"
-                                              HorizontalContentAlignment="Stretch"
-                                              HeaderIcon="{ui:FontIcon Glyph=&#xE774;}">
-                            <TextBox MinWidth="360"
-                                     AutomationProperties.AutomationId="TtuSyncGoogleClientIdTextBox"
-                                     Text="{x:Bind ViewModel.GoogleClientId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                        </toolkit:SettingsCard>
+                    <TextBlock x:Uid="TtuSyncGoogleDriveSectionHeader"
+                               Style="{StaticResource TtuSyncSectionHeaderStyle}" />
 
-                        <toolkit:SettingsCard x:Uid="TtuSyncGoogleClientSecretPasswordBox"
-                                              HorizontalAlignment="Stretch"
-                                              HorizontalContentAlignment="Stretch"
-                                              HeaderIcon="{ui:FontIcon Glyph=&#xE72E;}">
-                            <PasswordBox MinWidth="360"
-                                         AutomationProperties.AutomationId="TtuSyncGoogleClientSecretPasswordBox"
-                                         Password="{x:Bind ViewModel.GoogleClientSecret, Mode=TwoWay}"
-                                         PasswordRevealMode="Peek" />
-                        </toolkit:SettingsCard>
-
-                        <toolkit:SettingsCard x:Uid="TtuSyncConnectionStatusCard"
-                                              HorizontalAlignment="Stretch"
-                                              HorizontalContentAlignment="Stretch"
-                                              HeaderIcon="{ui:FontIcon Glyph=&#xE895;}">
-                            <StackPanel Spacing="8">
-                                <TextBlock x:Uid="TtuSyncConnectionStatusText"
-                                           Text="{x:Bind ViewModel.GoogleDriveConnectionStatus, Mode=OneWay}"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <Button x:Uid="TtuSyncConnectGoogleDriveButton"
-                                            AutomationProperties.AutomationId="TtuSyncConnectGoogleDriveButton"
-                                            Command="{x:Bind ViewModel.ConnectGoogleDriveCommand}" />
-                                    <Button x:Uid="TtuSyncSignOutGoogleDriveButton"
-                                            AutomationProperties.AutomationId="TtuSyncSignOutGoogleDriveButton"
-                                            Command="{x:Bind ViewModel.SignOutGoogleDriveCommand}" />
-                                    <Button x:Uid="TtuSyncClearGoogleDriveCacheButton"
-                                            AutomationProperties.AutomationId="TtuSyncClearGoogleDriveCacheButton"
-                                            Command="{x:Bind ViewModel.ClearGoogleDriveCacheCommand}" />
-                                </StackPanel>
+                    <toolkit:SettingsCard x:Uid="TtuSyncConnectionStatusCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE895;}">
+                        <StackPanel Spacing="8">
+                            <TextBlock x:Uid="TtuSyncConnectionStatusText"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="{x:Bind ViewModel.GoogleDriveConnectionStatus, Mode=OneWay}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button x:Uid="TtuSyncConnectGoogleDriveButton"
+                                        AutomationProperties.AutomationId="TtuSyncConnectGoogleDriveButton"
+                                        Command="{x:Bind ViewModel.ConnectGoogleDriveCommand}"
+                                        IsEnabled="{x:Bind ViewModel.CanRunGoogleDriveActions, Mode=OneWay}"
+                                        Visibility="{x:Bind ViewModel.IsGoogleDriveDisconnected, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                <Button x:Uid="TtuSyncClearGoogleDriveCacheButton"
+                                        AutomationProperties.AutomationId="TtuSyncClearGoogleDriveCacheButton"
+                                        Command="{x:Bind ViewModel.ClearGoogleDriveCacheCommand}"
+                                        IsEnabled="{x:Bind ViewModel.CanRunGoogleDriveActions, Mode=OneWay}"
+                                        Visibility="{x:Bind ViewModel.IsGoogleDriveConnected, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                <Button x:Uid="TtuSyncSignOutGoogleDriveButton"
+                                        AutomationProperties.AutomationId="TtuSyncSignOutGoogleDriveButton"
+                                        Command="{x:Bind ViewModel.SignOutGoogleDriveCommand}"
+                                        IsEnabled="{x:Bind ViewModel.CanRunGoogleDriveActions, Mode=OneWay}"
+                                        Visibility="{x:Bind ViewModel.IsGoogleDriveConnected, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
                             </StackPanel>
-                        </toolkit:SettingsCard>
+                        </StackPanel>
+                    </toolkit:SettingsCard>
 
-                        <TextBlock x:Uid="TtuSyncBehaviorSectionHeader"
-                                   Style="{StaticResource TtuSyncSectionHeaderStyle}"
-                                   Text="Behavior" />
+                    <TextBlock x:Uid="TtuSyncBehaviorSectionHeader"
+                               Style="{StaticResource TtuSyncSectionHeaderStyle}" />
 
-                        <toolkit:SettingsCard x:Uid="TtuSyncModeComboBox"
-                                              HorizontalAlignment="Stretch"
-                                              HorizontalContentAlignment="Stretch"
-                                              HeaderIcon="{ui:FontIcon Glyph=&#xE8AB;}">
-                            <ComboBox MinWidth="140"
-                                      AutomationProperties.AutomationId="TtuSyncModeComboBox"
-                                      ItemsSource="{x:Bind ViewModel.AvailableSyncModes}"
-                                      SelectedItem="{x:Bind ViewModel.SelectedSyncMode, Mode=TwoWay}" />
-                        </toolkit:SettingsCard>
+                    <toolkit:SettingsCard x:Uid="TtuSyncModeComboBox"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8AB;}">
+                        <ComboBox MinWidth="140"
+                                  AutomationProperties.AutomationId="TtuSyncModeComboBox"
+                                  DisplayMemberPath="DisplayName"
+                                  ItemsSource="{x:Bind ViewModel.AvailableSyncModes}"
+                                  SelectedItem="{x:Bind ViewModel.SelectedSyncModeItem, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
 
-                        <toolkit:SettingsCard x:Uid="TtuSyncAutoSyncToggle"
-                                              HorizontalAlignment="Stretch"
-                                              HorizontalContentAlignment="Stretch"
-                                              HeaderIcon="{ui:FontIcon Glyph=&#xE895;}">
-                            <ToggleSwitch AutomationProperties.AutomationId="TtuSyncAutoSyncToggle"
-                                          IsOn="{x:Bind ViewModel.EnableAutoSync, Mode=TwoWay}" />
-                        </toolkit:SettingsCard>
+                    <toolkit:SettingsCard x:Uid="TtuSyncAutoSyncToggle"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE895;}">
+                        <ToggleSwitch AutomationProperties.AutomationId="TtuSyncAutoSyncToggle"
+                                      IsOn="{x:Bind ViewModel.EnableAutoSync, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
 
-                        <TextBlock x:Uid="TtuSyncDataSectionHeader"
-                                   Style="{StaticResource TtuSyncSectionHeaderStyle}"
-                                   Text="Data" />
+                    <TextBlock x:Uid="TtuSyncDataSectionHeader"
+                               Style="{StaticResource TtuSyncSectionHeaderStyle}" />
 
-                        <toolkit:SettingsCard x:Uid="TtuSyncUploadBooksToggle"
-                                              HorizontalAlignment="Stretch"
-                                              HorizontalContentAlignment="Stretch"
-                                              HeaderIcon="{ui:FontIcon Glyph=&#xE898;}">
-                            <ToggleSwitch AutomationProperties.AutomationId="TtuSyncUploadBooksToggle"
-                                          IsOn="{x:Bind ViewModel.UploadBooks, Mode=TwoWay}" />
-                        </toolkit:SettingsCard>
-                    </StackPanel>
+                    <toolkit:SettingsCard x:Uid="TtuSyncUploadBooksToggle"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE898;}">
+                        <ToggleSwitch AutomationProperties.AutomationId="TtuSyncUploadBooksToggle"
+                                      IsOn="{x:Bind ViewModel.UploadBooks, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="TtuSyncStatisticsToggle"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE9D9;}"
+                                          Visibility="{x:Bind ViewModel.ShowStatisticsSync, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <ToggleSwitch AutomationProperties.AutomationId="TtuSyncStatisticsToggle"
+                                      IsOn="{x:Bind ViewModel.EnableStatisticsSync, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="TtuSyncSasayakiToggle"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8D6;}"
+                                          Visibility="{x:Bind ViewModel.ShowSasayakiSync, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <ToggleSwitch AutomationProperties.AutomationId="TtuSyncSasayakiToggle"
+                                      IsOn="{x:Bind ViewModel.EnableSasayakiSync, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
                 </StackPanel>
-            </Grid>
+            </StackPanel>
         </ScrollViewer>
     </Grid>
 </Page>

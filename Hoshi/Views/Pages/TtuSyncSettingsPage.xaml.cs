@@ -17,12 +17,13 @@ public sealed partial class TtuSyncSettingsPage : Page
         DataContext = ViewModel;
     }
 
-    protected override void OnNavigatedTo(NavigationEventArgs e)
+    protected override async void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
         TtuSyncSettingsBackButton.Visibility = e.Parameter is SettingsNavigationMode.Embedded
             ? Visibility.Collapsed
             : Visibility.Visible;
+        await ViewModel.InitializeAsync();
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)

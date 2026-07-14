@@ -60,7 +60,16 @@ public sealed class TtuSyncSettingsAssetTests
         pageXaml.Should().Contain("AutomationProperties.AutomationId=\"TtuSyncModeComboBox\"");
         pageXaml.Should().Contain("AutomationProperties.AutomationId=\"TtuSyncAutoSyncToggle\"");
         pageXaml.Should().Contain("AutomationProperties.AutomationId=\"TtuSyncUploadBooksToggle\"");
+        pageXaml.Should().Contain("x:Uid=\"TtuSyncExplanationText\"");
+        pageXaml.Should().Contain("ViewModel.CanEditGoogleDriveCredentials");
+        pageXaml.Should().Contain("ViewModel.IsGoogleDriveDisconnected");
+        pageXaml.Should().Contain("ViewModel.IsGoogleDriveConnected");
+        pageXaml.Should().Contain("AutomationProperties.AutomationId=\"TtuSyncStatisticsToggle\"");
+        pageXaml.Should().Contain("AutomationProperties.AutomationId=\"TtuSyncSasayakiToggle\"");
+        pageXaml.Should().Contain("ViewModel.ShowStatisticsSync");
+        pageXaml.Should().Contain("ViewModel.ShowSasayakiSync");
         pageCode.Should().Contain("App.GetService<TtuSyncSettingsPageViewModel>()");
+        pageCode.Should().Contain("await ViewModel.InitializeAsync()");
         viewModel.Should().Contain("TtuSyncSettings");
         appCode.Should().Contain("AddTransient<TtuSyncSettingsPageViewModel>");
         appCode.Should().Contain("AddSingleton<ITtuSyncService, TtuSyncService>");
@@ -73,6 +82,8 @@ public sealed class TtuSyncSettingsAssetTests
             "TtuSyncGeneralSectionHeader.Text",
             "TtuSyncEnableToggle.Header",
             "TtuSyncEnableToggle.Description",
+            "TtuSyncExplanationText.Text",
+            "TtuSyncClientCredentialsSectionHeader.Text",
             "TtuSyncGoogleDriveSectionHeader.Text",
             "TtuSyncGoogleClientIdTextBox.Header",
             "TtuSyncGoogleClientIdTextBox.Description",
@@ -88,6 +99,26 @@ public sealed class TtuSyncSettingsAssetTests
             "TtuSyncAutoSyncToggle.Header",
             "TtuSyncDataSectionHeader.Text",
             "TtuSyncUploadBooksToggle.Header",
+            "TtuSyncStatisticsToggle.Header",
+            "TtuSyncStatisticsToggle.Description",
+            "TtuSyncSasayakiToggle.Header",
+            "TtuSyncSasayakiToggle.Description",
+            "TtuSyncModeAuto",
+            "TtuSyncModeManual",
+            "TtuSyncStatusConnected",
+            "TtuSyncStatusNotConnected",
+            "TtuSyncStatusConnecting",
+            "TtuSyncClientIdRequiredStatus",
+            "TtuSyncClientSecretRequiredStatus",
+            "TtuSyncConnectionFailedFormat",
+            "TtuSyncCredentialLoadFailedFormat",
+            "TtuSyncClearCacheTitle",
+            "TtuSyncClearCacheMessage",
+            "TtuSyncCacheClearedStatus",
+            "TtuSyncClearCacheFailedFormat",
+            "TtuSyncSignOutTitle",
+            "TtuSyncSignOutMessage",
+            "TtuSyncSignOutFailedFormat",
         })
         {
             enResources.Should().Contain(key);
