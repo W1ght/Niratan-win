@@ -763,6 +763,8 @@
   <data name="NovelShelfRenameButton.Content" xml:space="preserve"><value>Rename</value></data>
   <data name="NovelShelfDeleteButton.Content" xml:space="preserve"><value>Delete</value></data>
   <data name="NovelBookMoveToShelfMenuItem.Text" xml:space="preserve"><value>Move to shelf…</value></data>
+  <data name="NovelBookExportMenuItem.Text" xml:space="preserve"><value>Export EPUB…</value></data>
+  <data name="NovelBookExportMenuItem.AutomationProperties.Name" xml:space="preserve"><value>Export EPUB</value></data>
   <data name="NovelStorageWarningInfoBar.Title" xml:space="preserve"><value>Book metadata needs attention</value></data>
   <data name="NovelStorageWarningInfoBar.Message" xml:space="preserve"><value>Some book metadata could not be read. Original files were preserved.</value></data>
   <data name="NovelShelfDeleteConfirmation.Title" xml:space="preserve"><value>Delete shelf</value></data>

@@ -40,6 +40,29 @@ public sealed class NovelLibraryPageAssetTests
     }
 
     [Fact]
+    public void LocalNovelContextMenu_ExposesLocalizedExportCommand()
+    {
+        var xaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelLibraryPage.xaml"));
+        var english = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "en-US", "Resources.resw"));
+        var chinese = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw"));
+
+        xaml.Should().Contain("x:Uid=\"NovelBookExportMenuItem\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelBookExportMenuItem\"");
+        xaml.Should().Contain(
+            "Command=\"{Binding ViewModel.ExportNovelCommand, ElementName=ThisPage}\"");
+        xaml.Should().Contain("CommandParameter=\"{x:Bind}\"");
+        english.Should().Contain("name=\"NovelBookExportMenuItem.Text\"");
+        english.Should().Contain(
+            "name=\"NovelBookExportMenuItem.AutomationProperties.Name\"");
+        chinese.Should().Contain("name=\"NovelBookExportMenuItem.Text\"");
+        chinese.Should().Contain(
+            "name=\"NovelBookExportMenuItem.AutomationProperties.Name\"");
+    }
+
+    [Fact]
     public void CommandBar_UsesVisiblePrimaryActionsAndStatisticsIcon()
     {
         var xaml = File.ReadAllText(

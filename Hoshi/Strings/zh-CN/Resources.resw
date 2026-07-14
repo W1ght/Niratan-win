@@ -763,6 +763,8 @@
   <data name="NovelShelfRenameButton.Content" xml:space="preserve"><value>重命名</value></data>
   <data name="NovelShelfDeleteButton.Content" xml:space="preserve"><value>删除</value></data>
   <data name="NovelBookMoveToShelfMenuItem.Text" xml:space="preserve"><value>移动到书架…</value></data>
+  <data name="NovelBookExportMenuItem.Text" xml:space="preserve"><value>导出 EPUB…</value></data>
+  <data name="NovelBookExportMenuItem.AutomationProperties.Name" xml:space="preserve"><value>导出 EPUB</value></data>
   <data name="NovelStorageWarningInfoBar.Title" xml:space="preserve"><value>书籍元数据需要处理</value></data>
   <data name="NovelStorageWarningInfoBar.Message" xml:space="preserve"><value>部分书籍元数据无法读取，原始文件已保留。</value></data>
   <data name="NovelShelfDeleteConfirmation.Title" xml:space="preserve"><value>删除书架</value></data>
