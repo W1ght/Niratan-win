@@ -597,6 +597,224 @@ public class NovelLibraryPageViewModelTests
         shelves.VerifyAll();
     }
 
+    [Theory]
+    [InlineData("SyncNovelCommand", TtuSyncDirection.Auto)]
+    [InlineData("ImportNovelFromTtuCommand", TtuSyncDirection.ImportFromTtu)]
+    [InlineData("ExportNovelCommand", TtuSyncDirection.ExportToTtu)]
+    public async Task BookSyncCommands_MapDirectionAndPayloadPreferences(
+        string commandName,
+        TtuSyncDirection expectedDirection)
+    {
+        var sync = new RecordingTtuSyncService();
+        var settings = Mock.Of<ISettingsService>(service => service.Current == new AppSettings
+        {
+            TtuSyncSettings = new TtuSyncSettings
+            {
+                EnableSync = true,
+                UploadBooks = true,
+            },
+            StatisticsSettings = new NovelStatisticsSettings
+            {
+                EnableSync = true,
+                SyncMode = StatisticsSyncMode.Replace,
+            },
+            SasayakiSettings = new SasayakiSettings
+            {
+                EnableSasayaki = true,
+                EnableSync = true,
+            },
+        });
+        var sut = CreateSut(settingsService: settings, ttuSyncService: sync);
+        var item = new NovelBookItemViewModel(new NovelBook
+        {
+            Id = "book-1",
+            Title = "星を読む",
+            ExtractedPath = "D:\\Books\\book-1",
+        });
+
+        await GetAsyncCommand(sut, commandName).ExecuteAsync(item);
+
+        sync.Calls.Should().ContainSingle();
+        var call = sync.Calls.Single();
+        call.Options.Direction.Should().Be(expectedDirection);
+        call.Options.SyncBookData.Should().BeTrue();
+        call.Options.SyncStatistics.Should().BeTrue();
+        call.Options.StatisticsSyncMode.Should().Be(StatisticsSyncMode.Replace);
+        call.Options.SyncAudioBook.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(true, TtuSettingsSyncMode.Auto, true, false)]
+    [InlineData(true, TtuSettingsSyncMode.Manual, false, true)]
+    [InlineData(false, TtuSettingsSyncMode.Auto, false, false)]
+    public void BookSyncActionVisibility_FollowsGlobalSyncMode(
+        bool enabled,
+        TtuSettingsSyncMode mode,
+        bool showAutomatic,
+        bool showManual)
+    {
+        var settings = Mock.Of<ISettingsService>(service => service.Current == new AppSettings
+        {
+            TtuSyncSettings = new TtuSyncSettings
+            {
+                EnableSync = enabled,
+                SyncMode = mode,
+            },
+        });
+        var sut = CreateSut(settingsService: settings);
+
+        sut.ShowAutomaticBookSyncAction.Should().Be(showAutomatic);
+        sut.ShowManualBookSyncAction.Should().Be(showManual);
+    }
+
+    [Fact]
+    public async Task SyncNovelCommand_WhenSyncUnavailable_DoesNotCallServiceAndShowsError()
+    {
+        var sync = new RecordingTtuSyncService();
+        var notification = new Mock<INotificationService>();
+        var settings = Mock.Of<ISettingsService>(service => service.Current == new AppSettings
+        {
+            TtuSyncSettings = new TtuSyncSettings { EnableSync = false },
+        });
+        var sut = CreateSut(
+            settingsService: settings,
+            googleDriveAuthService: new FakeGoogleDriveAuthService { HasCredentials = false },
+            notificationService: notification.Object,
+            ttuSyncService: sync);
+
+        await sut.SyncNovelCommand.ExecuteAsync(BookItem("book-1"));
+
+        sync.Calls.Should().BeEmpty();
+        notification.Verify(service => service.ShowError(
+            It.IsAny<string>(),
+            It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SyncNovelCommand_WhenImported_ReloadsCatalogAndShowsSuccess()
+    {
+        var library = new RecordingNovelLibraryService();
+        var notification = new Mock<INotificationService>();
+        var sync = new RecordingTtuSyncService
+        {
+            Handler = (book, _, _) => Task.FromResult(new TtuSyncResult(
+                TtuSyncResultKind.Imported,
+                book.Title,
+                321)),
+        };
+        var sut = CreateSut(
+            novelService: library,
+            notificationService: notification.Object,
+            settingsService: EnabledSyncSettings(),
+            ttuSyncService: sync);
+
+        await sut.SyncNovelCommand.ExecuteAsync(BookItem("book-1"));
+
+        library.LoadCount.Should().Be(1);
+        notification.Verify(service => service.ShowSuccess(
+            It.Is<string>(message => message.Contains("321", StringComparison.Ordinal)),
+            It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SyncNovelCommand_WhenSkipped_DoesNotShowSuccess()
+    {
+        var notification = new Mock<INotificationService>();
+        var sync = new RecordingTtuSyncService
+        {
+            Handler = (book, _, _) => Task.FromResult(new TtuSyncResult(
+                TtuSyncResultKind.Skipped,
+                book.Title)),
+        };
+        var sut = CreateSut(
+            notificationService: notification.Object,
+            settingsService: EnabledSyncSettings(),
+            ttuSyncService: sync);
+
+        await sut.SyncNovelCommand.ExecuteAsync(BookItem("book-1"));
+
+        notification.Verify(service => service.ShowSuccess(
+            It.IsAny<string>(),
+            It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SyncNovelCommand_WhenServiceFails_ShowsLocalizedError()
+    {
+        var notification = new Mock<INotificationService>();
+        var sync = new RecordingTtuSyncService
+        {
+            Handler = (_, _, _) => Task.FromException<TtuSyncResult>(
+                new InvalidOperationException("network down")),
+        };
+        var sut = CreateSut(
+            notificationService: notification.Object,
+            settingsService: EnabledSyncSettings(),
+            ttuSyncService: sync);
+
+        await sut.SyncNovelCommand.ExecuteAsync(BookItem("book-1"));
+
+        notification.Verify(service => service.ShowError(
+            It.Is<string>(message => message.Contains("network down", StringComparison.Ordinal)),
+            It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SyncNovelCommand_WhenCancelled_ShowsNoError()
+    {
+        var notification = new Mock<INotificationService>();
+        var sync = new RecordingTtuSyncService
+        {
+            Handler = (_, _, _) => Task.FromCanceled<TtuSyncResult>(
+                new CancellationToken(canceled: true)),
+        };
+        var sut = CreateSut(
+            notificationService: notification.Object,
+            settingsService: EnabledSyncSettings(),
+            ttuSyncService: sync);
+
+        await sut.SyncNovelCommand.ExecuteAsync(BookItem("book-1"));
+
+        notification.Verify(service => service.ShowError(
+            It.IsAny<string>(),
+            It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SyncNovelCommand_DeduplicatesSameBookButAllowsDifferentBooks()
+    {
+        var gates = new ConcurrentDictionary<string, TaskCompletionSource<TtuSyncResult>>();
+        var started = new SemaphoreSlim(0);
+        var sync = new RecordingTtuSyncService
+        {
+            Handler = (book, _, _) =>
+            {
+                var gate = gates.GetOrAdd(
+                    book.Id,
+                    _ => new TaskCompletionSource<TtuSyncResult>(
+                        TaskCreationOptions.RunContinuationsAsynchronously));
+                started.Release();
+                return gate.Task;
+            },
+        };
+        var sut = CreateSut(
+            settingsService: EnabledSyncSettings(),
+            ttuSyncService: sync);
+        var ct = TestContext.Current.CancellationToken;
+
+        var first = sut.SyncNovelCommand.ExecuteAsync(BookItem("book-1"));
+        (await started.WaitAsync(TimeSpan.FromSeconds(2), ct)).Should().BeTrue();
+        var duplicate = sut.SyncNovelCommand.ExecuteAsync(BookItem("book-1"));
+        await duplicate;
+        var secondBook = sut.SyncNovelCommand.ExecuteAsync(BookItem("book-2"));
+        (await started.WaitAsync(TimeSpan.FromSeconds(2), ct)).Should().BeTrue();
+
+        sync.Calls.Select(call => call.Book.Id).Should().Equal("book-1", "book-2");
+        gates["book-1"].SetResult(new TtuSyncResult(TtuSyncResultKind.Synced, "book-1"));
+        gates["book-2"].SetResult(new TtuSyncResult(TtuSyncResultKind.Synced, "book-2"));
+        await Task.WhenAll(first, secondBook);
+    }
+
     [Fact]
     public async Task StatisticsControls_ReprojectRangeMetricsCalendarAndCorruptWarning()
     {
@@ -647,6 +865,7 @@ public class NovelLibraryPageViewModelTests
         ISettingsService? settingsService = null,
         INovelStatisticsDashboardService? statisticsDashboardService = null,
         INovelShelfService? shelfService = null,
+        ITtuSyncService? ttuSyncService = null,
         ITtuSyncRemoteStore? syncRemoteStore = null,
         ITtuBookImportService? ttuBookImportService = null,
         IGoogleDriveAuthService? googleDriveAuthService = null,
@@ -681,6 +900,7 @@ public class NovelLibraryPageViewModelTests
                 effectiveDashboardService,
                 effectiveSettings),
             shelfService ?? CreateDefaultShelfService(),
+            ttuSyncService ?? new RecordingTtuSyncService(),
             syncRemoteStore ?? new FakeTtuSyncRemoteStore(),
             ttuBookImportService ?? new FakeTtuBookImportService(),
             googleDriveAuthService ?? new FakeGoogleDriveAuthService { HasCredentials = true },
@@ -696,6 +916,19 @@ public class NovelLibraryPageViewModelTests
             .ReturnsAsync(Result<NovelShelfState>.Success(new NovelShelfState([], [])));
         return service.Object;
     }
+
+    private static NovelBookItemViewModel BookItem(string id) => new(new NovelBook
+    {
+        Id = id,
+        Title = id,
+        ExtractedPath = $"D:\\Books\\{id}",
+    });
+
+    private static ISettingsService EnabledSyncSettings() =>
+        Mock.Of<ISettingsService>(service => service.Current == new AppSettings
+        {
+            TtuSyncSettings = new TtuSyncSettings { EnableSync = true },
+        });
 
     private static TtuRemoteBook RemoteBook(
         string id,
@@ -769,12 +1002,16 @@ public class NovelLibraryPageViewModelTests
         public IReadOnlyList<NovelBook> Books { get; init; } = [];
         public List<string> ImportedPaths { get; } = [];
         public List<IReadOnlyList<string>> SavedOrders { get; } = [];
+        public int LoadCount { get; private set; }
 
         public Task<Result<NovelBookCatalogSnapshot>> GetNovelBooksAsync(
             string? queryText = null,
-            CancellationToken ct = default) =>
-            Task.FromResult(Result<NovelBookCatalogSnapshot>.Success(
+            CancellationToken ct = default)
+        {
+            LoadCount++;
+            return Task.FromResult(Result<NovelBookCatalogSnapshot>.Success(
                 new NovelBookCatalogSnapshot(Books, [])));
+        }
 
         public Task<Result<NovelBook>> ImportEpubAsync(string filePath, CancellationToken ct = default)
         {
@@ -952,6 +1189,31 @@ public class NovelLibraryPageViewModelTests
 
         public Task ClearAsync(CancellationToken ct = default) =>
             Task.CompletedTask;
+    }
+
+    private sealed record TtuSyncCall(
+        NovelBook Book,
+        TtuSyncOptions Options,
+        CancellationToken CancellationToken);
+
+    private sealed class RecordingTtuSyncService : ITtuSyncService
+    {
+        public ConcurrentQueue<TtuSyncCall> Calls { get; } = new();
+
+        public Func<NovelBook, TtuSyncOptions, CancellationToken, Task<TtuSyncResult>>?
+            Handler { get; init; }
+
+        public Task<TtuSyncResult> SyncBookAsync(
+            NovelBook book,
+            TtuSyncOptions options,
+            CancellationToken ct = default)
+        {
+            Calls.Enqueue(new TtuSyncCall(book, options, ct));
+            return Handler?.Invoke(book, options, ct)
+                ?? Task.FromResult(new TtuSyncResult(
+                    TtuSyncResultKind.Synced,
+                    book.Title));
+        }
     }
 
     private sealed class FakeGoogleDriveAuthService : IGoogleDriveAuthService
