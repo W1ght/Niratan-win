@@ -25,7 +25,7 @@
                     Command="{Binding ViewModel.OpenNovelCommand, ElementName=ThisPage}"
                     CommandParameter="{x:Bind}">
                 <Button.ContextFlyout>
-                    <MenuFlyout>
+                    <MenuFlyout Opening="NovelBookContextFlyout_Opening">
                         <MenuFlyoutItem x:Uid="NovelBookMatchSasayakiMenuItem"
                                         Text="Match Sasayaki"
                                         AutomationProperties.AutomationId="NovelBookMatchSasayakiMenuItem"
@@ -40,6 +40,24 @@
                         <MenuFlyoutItem x:Uid="NovelBookMoveToShelfMenuItem"
                                         Tag="{x:Bind}"
                                         Click="MoveNovelToShelfMenuItem_Click" />
+                        <MenuFlyoutItem x:Uid="NovelBookSyncMenuItem"
+                                        AutomationProperties.AutomationId="NovelBookSyncMenuItem"
+                                        Tag="{x:Bind}"
+                                        Visibility="Collapsed"
+                                        Click="SyncNovelMenuItem_Click" />
+                        <MenuFlyoutSubItem x:Uid="NovelBookSyncSubmenu"
+                                           AutomationProperties.AutomationId="NovelBookSyncSubmenu"
+                                           Visibility="Collapsed">
+                            <MenuFlyoutItem x:Uid="NovelBookSyncImportMenuItem"
+                                            AutomationProperties.AutomationId="NovelBookSyncImportMenuItem"
+                                            Tag="{x:Bind}"
+                                            Click="ImportNovelFromTtuMenuItem_Click" />
+                            <MenuFlyoutItem x:Uid="NovelBookSyncExportMenuItem"
+                                            AutomationProperties.AutomationId="NovelBookSyncExportMenuItem"
+                                            Tag="{x:Bind}"
+                                            Click="ExportNovelToTtuMenuItem_Click" />
+                        </MenuFlyoutSubItem>
+                        <MenuFlyoutSeparator />
                         <MenuFlyoutItem Text="Delete"
                                         AutomationProperties.AutomationId="NovelBookDeleteMenuItem"
                                         Tag="{x:Bind}"
@@ -78,7 +96,10 @@
                                        Text="{x:Bind OverallProgressText, Mode=OneWay}" />
                         </Grid>
                         <TextBlock Text="{x:Bind Book.Title, Mode=OneTime}"
-                                   TextWrapping="Wrap"
+                                   Width="180"
+                                   MaxLines="2"
+                                   TextTrimming="Clip"
+                                   TextWrapping="WrapWholeWords"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                     </StackPanel>
                 </StackPanel>
@@ -144,7 +165,10 @@
                                    Text="{x:Bind DownloadStatusText, Mode=OneWay}"
                                    Visibility="{x:Bind HasDownloadStatus, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
                         <TextBlock Text="{x:Bind Book.Title, Mode=OneTime}"
-                                   TextWrapping="Wrap"
+                                   Width="180"
+                                   MaxLines="2"
+                                   TextTrimming="Clip"
+                                   TextWrapping="WrapWholeWords"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                     </StackPanel>
                 </StackPanel>
@@ -299,5 +323,26 @@
                                                AutomationProperties.AutomationId="NovelStatisticsDashboardView"
                                                DataContext="{x:Bind ViewModel.StatisticsDashboard, Mode=OneWay}"
                                                Visibility="{x:Bind ViewModel.ShowStatisticsDashboard, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+
+        <Grid x:Uid="NovelBookSyncProgressOverlay"
+              Grid.RowSpan="3"
+              Canvas.ZIndex="100"
+              Background="Transparent"
+              AutomationProperties.AutomationId="NovelBookSyncProgressOverlay"
+              Visibility="{x:Bind ViewModel.IsBookSyncing, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    Opacity="0.82" />
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="16">
+                <ProgressRing Width="48"
+                              Height="48"
+                              HorizontalAlignment="Center"
+                              IsActive="{x:Bind ViewModel.IsBookSyncing, Mode=OneWay}" />
+                <TextBlock x:Uid="NovelBookSyncProgressText"
+                           HorizontalAlignment="Center"
+                           Style="{StaticResource BodyStrongTextBlockStyle}" />
+            </StackPanel>
+        </Grid>
     </Grid>
 </Page>

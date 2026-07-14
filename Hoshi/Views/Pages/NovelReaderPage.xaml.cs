@@ -3295,6 +3295,11 @@ public sealed partial class NovelReaderPage : Page
             UpdateSasayakiChromeVisibility();
             _sasayakiVM.SasayakiStatusText = "Loading...";
 
+            var bookRootPath = GetSasayakiBookRootPath();
+            var playback = string.IsNullOrWhiteSpace(bookRootPath)
+                ? new SasayakiPlaybackData()
+                : await SasayakiSidecarService.LoadPlaybackAsync(bookRootPath);
+
             // Parse SRT
             var cues = await _sasayakiParser.ParseAsync(srtPath);
             if (cues.Count == 0)
@@ -3313,7 +3318,6 @@ public sealed partial class NovelReaderPage : Page
             _sasayakiNav.Load(matchData);
             _sasayakiVM.UpdateMatchStats(matchData);
             _sasayakiVM.IsLoaded = true;
-            _sasayakiDelay = 0;
 
             // Save sidecar
             await SaveSasayakiSidecarAsync(matchData);
@@ -3325,12 +3329,9 @@ public sealed partial class NovelReaderPage : Page
             _sasayakiPlayer.MediaEnded += OnSasayakiMediaEnded;
             _sasayakiPlayer.MediaFailed += OnSasayakiMediaFailed;
             await _sasayakiPlayer.LoadAsync(audiobookPath);
-            _sasayakiPlayer.PlaybackRate = CurrentSasayakiSettings.PlaybackRate;
-            _sasayakiVM.SetPlaybackRate(_sasayakiPlayer.PlaybackRate);
 
-            _sasayakiVM.UpdatePlaybackState(false, false, 0, _sasayakiPlayer.DurationSeconds);
+            ApplySasayakiPlayback(playback);
             UpdateSasayakiChromeVisibility();
-            await SaveSasayakiPlaybackAsync(0);
 
             Log.Information(
                 "[Sasayaki] Loaded: {CueCount} cues, {MatchCount} matched, {Unmatched} unmatched",
@@ -3359,6 +3360,17 @@ public sealed partial class NovelReaderPage : Page
             var matchData = await SasayakiSidecarService.LoadMatchAsync(bookRootPath);
             if (matchData == null || !matchData.IsValid)
                 return;
+
+            if (matchData.RequiresMatcherRefresh
+                && File.Exists(matchData.AudiobookPath)
+                && File.Exists(matchData.SrtPath))
+            {
+                Log.Information(
+                    "[Sasayaki] Refreshing legacy match data for {BookId}",
+                    matchData.BookId);
+                await LoadSasayakiAsync(matchData.AudiobookPath, matchData.SrtPath);
+                return;
+            }
 
             _sasayakiMatchData = matchData;
             _sasayakiNav.Load(matchData);

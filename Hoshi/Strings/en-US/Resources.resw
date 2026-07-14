@@ -480,7 +480,7 @@
   <data name="ReaderStatisticsBookRemainingLabel.Text" xml:space="preserve"><value>Time to finish Book</value></data>
   <data name="ReaderStatisticsChapterRemainingLabel.Text" xml:space="preserve"><value>Time to finish Chapter</value></data>
   <data name="SettingsStatisticsCard.Header" xml:space="preserve"><value>Statistics</value></data>
-  <data name="SettingsStatisticsCard.Description" xml:space="preserve"><value>Reading goals, autostart, and statistics sync</value></data>
+  <data name="SettingsStatisticsCard.Description" xml:space="preserve"><value>Autostart and statistics sync</value></data>
   <data name="StatisticsSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>Open Statistics Settings</value></data>
   <data name="SettingsOpenStatisticsText.Text" xml:space="preserve"><value>Open</value></data>
   <data name="StatisticsSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>Back</value></data>
@@ -490,16 +490,6 @@
   <data name="StatisticsEnableToggle.Description" xml:space="preserve"><value>Show statistics controls and save reading history sidecars</value></data>
   <data name="StatisticsAutostartModeComboBox.Header" xml:space="preserve"><value>Autostart</value></data>
   <data name="StatisticsAutostartModeComboBox.Description" xml:space="preserve"><value>Start tracking manually, on page turn, or when the reader opens</value></data>
-  <data name="StatisticsDailyGoalSectionHeader.Text" xml:space="preserve"><value>Daily Goal</value></data>
-  <data name="StatisticsDailyTargetTypeComboBox.Header" xml:space="preserve"><value>Goal Type</value></data>
-  <data name="StatisticsDailyTargetTypeComboBox.Description" xml:space="preserve"><value>Use characters or reading time for the daily goal</value></data>
-  <data name="StatisticsDailyCharacterTargetNumberBox.Header" xml:space="preserve"><value>Character Target</value></data>
-  <data name="StatisticsDailyCharacterTargetNumberBox.Description" xml:space="preserve"><value>Daily character target</value></data>
-  <data name="StatisticsDailyDurationTargetNumberBox.Header" xml:space="preserve"><value>Duration Target</value></data>
-  <data name="StatisticsDailyDurationTargetNumberBox.Description" xml:space="preserve"><value>Daily reading time target in minutes</value></data>
-  <data name="StatisticsWeeklyGoalSectionHeader.Text" xml:space="preserve"><value>Weekly Goal</value></data>
-  <data name="StatisticsWeeklyTargetDaysNumberBox.Header" xml:space="preserve"><value>Target Days</value></data>
-  <data name="StatisticsWeeklyTargetDaysNumberBox.Description" xml:space="preserve"><value>Days per week that should meet the daily goal</value></data>
   <data name="StatisticsSyncSectionHeader.Text" xml:space="preserve"><value>Sync</value></data>
   <data name="StatisticsEnableSyncToggle.Header" xml:space="preserve"><value>ッツ Sync</value></data>
   <data name="StatisticsEnableSyncToggle.Description" xml:space="preserve"><value>Enable statistics sync metadata</value></data>
@@ -720,21 +710,23 @@
   <data name="ShortcutActionVideoCloseOverlayOrFullscreen" xml:space="preserve"><value>Close Overlay or Full Screen</value></data>
   <data name="TtuSyncSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>Back</value></data>
   <data name="TtuSyncSettingsPageTitle.Text" xml:space="preserve"><value>ッツ Sync</value></data>
-  <data name="TtuSyncGeneralSectionHeader.Text" xml:space="preserve"><value>General</value></data>
-  <data name="TtuSyncEnableToggle.Header" xml:space="preserve"><value>Enable Sync</value></data>
-  <data name="TtuSyncEnableToggle.Description" xml:space="preserve"><value>Sync reading progress with ッツ-compatible storage</value></data>
-  <data name="TtuSyncGoogleDriveSectionHeader.Text" xml:space="preserve"><value>Google Drive</value></data>
+  <data name="TtuSyncGeneralSectionHeader.Text" xml:space="preserve"><value>Syncing</value></data>
+  <data name="TtuSyncEnableToggle.Header" xml:space="preserve"><value>Enable</value></data>
+  <data name="TtuSyncEnableToggle.Description" xml:space="preserve"><value>Sync bookmarks and optional book data with ッツ-compatible Google Drive storage</value></data>
+  <data name="TtuSyncExplanationText.Text" xml:space="preserve"><value>Sync bookmarks and statistics with ッツ Reader or between Hoshi devices through Google Drive. Configure a desktop OAuth client, then right-click a book and choose Sync.</value></data>
+  <data name="TtuSyncClientCredentialsSectionHeader.Text" xml:space="preserve"><value>Client credentials</value></data>
+  <data name="TtuSyncGoogleDriveSectionHeader.Text" xml:space="preserve"><value>Connection</value></data>
   <data name="TtuSyncGoogleClientIdTextBox.Header" xml:space="preserve"><value>Client ID</value></data>
   <data name="TtuSyncGoogleClientIdTextBox.Description" xml:space="preserve"><value>Desktop OAuth client ID from the Google Cloud project used for Drive sync</value></data>
   <data name="TtuSyncGoogleClientSecretPasswordBox.Header" xml:space="preserve"><value>Client secret</value></data>
-  <data name="TtuSyncGoogleClientSecretPasswordBox.Description" xml:space="preserve"><value>Client secret from the same Google Cloud desktop OAuth client</value></data>
+  <data name="TtuSyncGoogleClientSecretPasswordBox.Description" xml:space="preserve"><value>Stored securely in Windows Credential Manager after a successful connection</value></data>
   <data name="TtuSyncConnectionStatusCard.Header" xml:space="preserve"><value>Connection</value></data>
   <data name="TtuSyncConnectionStatusCard.Description" xml:space="preserve"><value>Open the system browser to connect Google Drive</value></data>
   <data name="TtuSyncConnectionStatusText.Text" xml:space="preserve"><value>Not connected</value></data>
-  <data name="TtuSyncConnectGoogleDriveButton.Content" xml:space="preserve"><value>Connect</value></data>
+  <data name="TtuSyncConnectGoogleDriveButton.Content" xml:space="preserve"><value>Connect Google Drive</value></data>
   <data name="TtuSyncSignOutGoogleDriveButton.Content" xml:space="preserve"><value>Sign out</value></data>
   <data name="TtuSyncClearGoogleDriveCacheButton.Content" xml:space="preserve"><value>Clear cache</value></data>
-  <data name="TtuSyncBehaviorSectionHeader.Text" xml:space="preserve"><value>Behavior</value></data>
+  <data name="TtuSyncBehaviorSectionHeader.Text" xml:space="preserve"><value>Behaviour</value></data>
   <data name="TtuSyncModeComboBox.Header" xml:space="preserve"><value>Direction</value></data>
   <data name="TtuSyncModeComboBox.Description" xml:space="preserve"><value>Automatically choose the newer bookmark or require manual direction selection</value></data>
   <data name="TtuSyncAutoSyncToggle.Header" xml:space="preserve"><value>Auto Sync</value></data>
@@ -742,6 +734,26 @@
   <data name="TtuSyncDataSectionHeader.Text" xml:space="preserve"><value>Data</value></data>
   <data name="TtuSyncUploadBooksToggle.Header" xml:space="preserve"><value>Upload Books</value></data>
   <data name="TtuSyncUploadBooksToggle.Description" xml:space="preserve"><value>Upload book data on first sync when no ッツ book data exists remotely</value></data>
+  <data name="TtuSyncStatisticsToggle.Header" xml:space="preserve"><value>Sync Stats</value></data>
+  <data name="TtuSyncStatisticsToggle.Description" xml:space="preserve"><value>Include Niratan-compatible reading statistics</value></data>
+  <data name="TtuSyncSasayakiToggle.Header" xml:space="preserve"><value>Sync Audiobook Progress</value></data>
+  <data name="TtuSyncSasayakiToggle.Description" xml:space="preserve"><value>Include Sasayaki audiobook playback position</value></data>
+  <data name="TtuSyncModeAuto" xml:space="preserve"><value>Auto</value></data>
+  <data name="TtuSyncModeManual" xml:space="preserve"><value>Manual</value></data>
+  <data name="TtuSyncStatusConnected" xml:space="preserve"><value>Connected</value></data>
+  <data name="TtuSyncStatusNotConnected" xml:space="preserve"><value>Not connected</value></data>
+  <data name="TtuSyncStatusConnecting" xml:space="preserve"><value>Connecting...</value></data>
+  <data name="TtuSyncClientIdRequiredStatus" xml:space="preserve"><value>Enter a client ID first.</value></data>
+  <data name="TtuSyncClientSecretRequiredStatus" xml:space="preserve"><value>Enter a client secret first.</value></data>
+  <data name="TtuSyncConnectionFailedFormat" xml:space="preserve"><value>Connection failed: {0}</value></data>
+  <data name="TtuSyncCredentialLoadFailedFormat" xml:space="preserve"><value>Failed to load saved credentials: {0}</value></data>
+  <data name="TtuSyncClearCacheTitle" xml:space="preserve"><value>Clear Cache?</value></data>
+  <data name="TtuSyncClearCacheMessage" xml:space="preserve"><value>This will clear cached folder IDs and book covers.</value></data>
+  <data name="TtuSyncCacheClearedStatus" xml:space="preserve"><value>Cache cleared</value></data>
+  <data name="TtuSyncClearCacheFailedFormat" xml:space="preserve"><value>Clear cache failed: {0}</value></data>
+  <data name="TtuSyncSignOutTitle" xml:space="preserve"><value>Sign out?</value></data>
+  <data name="TtuSyncSignOutMessage" xml:space="preserve"><value>Signing out clears authorization tokens, cached folder IDs, and book covers.</value></data>
+  <data name="TtuSyncSignOutFailedFormat" xml:space="preserve"><value>Sign out failed: {0}</value></data>
   <data name="AboutSettingsPageTitle.Text" xml:space="preserve"><value>About</value></data>
   <data name="NovelShelfReadingLabel.Text" xml:space="preserve"><value>Reading</value></data>
   <data name="NovelShelfUnshelvedLabel.Text" xml:space="preserve"><value>Unshelved</value></data>
@@ -765,6 +777,19 @@
   <data name="NovelBookMoveToShelfMenuItem.Text" xml:space="preserve"><value>Move to shelf…</value></data>
   <data name="NovelBookExportMenuItem.Text" xml:space="preserve"><value>Export EPUB…</value></data>
   <data name="NovelBookExportMenuItem.AutomationProperties.Name" xml:space="preserve"><value>Export EPUB</value></data>
+  <data name="NovelBookSyncMenuItem.Text" xml:space="preserve"><value>Sync</value></data>
+  <data name="NovelBookSyncSubmenu.Text" xml:space="preserve"><value>Sync</value></data>
+  <data name="NovelBookSyncImportMenuItem.Text" xml:space="preserve"><value>Import</value></data>
+  <data name="NovelBookSyncExportMenuItem.Text" xml:space="preserve"><value>Export</value></data>
+  <data name="NovelBookSyncUnavailableTitle" xml:space="preserve"><value>Sync unavailable</value></data>
+  <data name="NovelBookSyncUnavailableMessage" xml:space="preserve"><value>Enable ッツ Sync and connect Google Drive before syncing a book.</value></data>
+  <data name="NovelBookAlreadySyncedFormat" xml:space="preserve"><value>{0} is already synced.</value></data>
+  <data name="NovelBookSyncedFromTtuFormat" xml:space="preserve"><value>Synced {0} from ッツ ({1} characters).</value></data>
+  <data name="NovelBookSyncedToTtuFormat" xml:space="preserve"><value>Synced {0} to ッツ ({1} characters).</value></data>
+  <data name="NovelBookSyncFailedTitle" xml:space="preserve"><value>Sync failed</value></data>
+  <data name="NovelBookSyncFailedFormat" xml:space="preserve"><value>Sync failed: {0}</value></data>
+  <data name="NovelBookSyncProgressOverlay.AutomationProperties.Name" xml:space="preserve"><value>Book synchronization in progress</value></data>
+  <data name="NovelBookSyncProgressText.Text" xml:space="preserve"><value>Syncing...</value></data>
   <data name="NovelStorageWarningInfoBar.Title" xml:space="preserve"><value>Book metadata needs attention</value></data>
   <data name="NovelStorageWarningInfoBar.Message" xml:space="preserve"><value>Some book metadata could not be read. Original files were preserved.</value></data>
   <data name="NovelShelfDeleteConfirmation.Title" xml:space="preserve"><value>Delete shelf</value></data>

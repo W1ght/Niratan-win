@@ -52,7 +52,6 @@ public sealed class SasayakiMatchService : ISasayakiMatchService
         cancellationToken.ThrowIfCancellationRequested();
 
         await _sidecarService.SaveMatchAsync(bookRootPath, matchData, cancellationToken);
-        await _sidecarService.SavePlaybackAsync(bookRootPath, new SasayakiPlaybackData(), cancellationToken);
         return matchData;
     }
 }

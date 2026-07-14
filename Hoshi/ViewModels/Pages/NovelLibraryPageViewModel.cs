@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -36,6 +37,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     private readonly ISasayakiMatchService _sasayakiMatchService;
     private readonly ISettingsService _settingsService;
     private readonly INovelShelfService _shelfService;
+    private readonly ITtuSyncService _ttuSyncService;
     private NovelShelfState _currentShelfState = new([], []);
     private readonly ITtuSyncRemoteStore _ttuSyncRemoteStore;
     private readonly ITtuBookImportService _ttuBookImportService;
@@ -45,10 +47,13 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     private readonly SemaphoreSlim _remoteImportGate = new(3, 3);
     private readonly SemaphoreSlim _catalogRefreshGate = new(1, 1);
     private readonly CancellationTokenSource _pageCts = new();
+    private readonly ConcurrentDictionary<string, byte> _activeNovelSyncs = new();
     private CancellationTokenSource? _catalogLoadCts;
     private CancellationTokenSource? _remoteListCts;
     private bool _suppressSortApplication;
     private bool _hasExplicitSortSelection;
+
+    public bool IsBookSyncing => !_activeNovelSyncs.IsEmpty;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NoNovels))]
@@ -93,6 +98,12 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
     public bool NoNovels => !IsContentLoading && NovelBooks.Count == 0;
     public bool HasNovelStorageWarnings => NovelStorageWarnings.Count > 0;
+    public bool ShowAutomaticBookSyncAction =>
+        _settingsService.Current.TtuSyncSettings.EnableSync
+        && _settingsService.Current.TtuSyncSettings.SyncMode == TtuSettingsSyncMode.Auto;
+    public bool ShowManualBookSyncAction =>
+        _settingsService.Current.TtuSyncSettings.EnableSync
+        && _settingsService.Current.TtuSyncSettings.SyncMode == TtuSettingsSyncMode.Manual;
 
     public NovelLibraryPageViewModel(
         INovelLibraryService novelLibraryService,
@@ -103,6 +114,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         ISettingsService settingsService,
         NovelStatisticsDashboardViewModel statisticsDashboard,
         INovelShelfService shelfService,
+        ITtuSyncService ttuSyncService,
         ITtuSyncRemoteStore ttuSyncRemoteStore,
         ITtuBookImportService ttuBookImportService,
         IGoogleDriveAuthService googleDriveAuthService,
@@ -117,6 +129,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         _settingsService = settingsService;
         StatisticsDashboard = statisticsDashboard;
         _shelfService = shelfService;
+        _ttuSyncService = ttuSyncService;
         _ttuSyncRemoteStore = ttuSyncRemoteStore;
         _ttuBookImportService = ttuBookImportService;
         _googleDriveAuthService = googleDriveAuthService;
@@ -403,6 +416,109 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         finally
         {
             _catalogRefreshGate.Release();
+        }
+    }
+
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private Task SyncNovelAsync(NovelBookItemViewModel item) =>
+        SyncNovelCoreAsync(item, TtuSyncDirection.Auto);
+
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private Task ImportNovelFromTtuAsync(NovelBookItemViewModel item) =>
+        SyncNovelCoreAsync(item, TtuSyncDirection.ImportFromTtu);
+
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private Task ExportNovelToTtuAsync(NovelBookItemViewModel item) =>
+        SyncNovelCoreAsync(item, TtuSyncDirection.ExportToTtu);
+
+    private async Task SyncNovelCoreAsync(
+        NovelBookItemViewModel item,
+        TtuSyncDirection direction)
+    {
+        if (item == null)
+            return;
+
+        var current = _settingsService.Current;
+        var global = current.TtuSyncSettings;
+        if (!global.EnableSync || !_googleDriveAuthService.HasCredentials)
+        {
+            _notificationService.ShowError(
+                ResourceStringHelper.GetString(
+                    "NovelBookSyncUnavailableMessage",
+                    "Enable ッツ Sync and connect Google Drive before syncing a book."),
+                ResourceStringHelper.GetString(
+                    "NovelBookSyncUnavailableTitle",
+                    "Sync unavailable"));
+            return;
+        }
+
+        if (!_activeNovelSyncs.TryAdd(item.Book.Id, 0))
+            return;
+
+        OnPropertyChanged(nameof(IsBookSyncing));
+
+        var options = new TtuSyncOptions(
+            Direction: direction,
+            SyncBookData: global.UploadBooks,
+            SyncStatistics: current.StatisticsSettings.EnableSync,
+            StatisticsSyncMode: current.StatisticsSettings.SyncMode,
+            SyncAudioBook: current.SasayakiSettings.EnableSasayaki
+                && current.SasayakiSettings.EnableSync);
+
+        try
+        {
+            var result = await _ttuSyncService.SyncBookAsync(
+                item.Book,
+                options,
+                _pageCts.Token);
+            switch (result.Kind)
+            {
+                case TtuSyncResultKind.Synced:
+                    _notificationService.ShowSuccess(
+                        ResourceStringHelper.FormatString(
+                            "NovelBookAlreadySyncedFormat",
+                            "{0} is already synced.",
+                            result.Title));
+                    break;
+                case TtuSyncResultKind.Imported:
+                    await LoadNovelsAsync();
+                    _notificationService.ShowSuccess(
+                        ResourceStringHelper.FormatString(
+                            "NovelBookSyncedFromTtuFormat",
+                            "Synced {0} from ッツ ({1} characters).",
+                            result.Title,
+                            result.CharacterCount));
+                    break;
+                case TtuSyncResultKind.Exported:
+                    _notificationService.ShowSuccess(
+                        ResourceStringHelper.FormatString(
+                            "NovelBookSyncedToTtuFormat",
+                            "Synced {0} to ッツ ({1} characters).",
+                            result.Title,
+                            result.CharacterCount));
+                    break;
+                case TtuSyncResultKind.Skipped:
+                    break;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError(
+                ResourceStringHelper.FormatString(
+                    "NovelBookSyncFailedFormat",
+                    "Sync failed: {0}",
+                    ex.Message),
+                ResourceStringHelper.GetString(
+                    "NovelBookSyncFailedTitle",
+                    "Sync failed"));
+        }
+        finally
+        {
+            if (_activeNovelSyncs.TryRemove(item.Book.Id, out _))
+                OnPropertyChanged(nameof(IsBookSyncing));
         }
     }
 

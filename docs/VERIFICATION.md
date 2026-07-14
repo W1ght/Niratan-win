@@ -188,6 +188,8 @@ YYYY-MM-DD-uia-tree.txt
 4. Final boundary：Background 和 Close 都先阻止/排空旧 writer，保存最终 bookmark 与 statistics checkpoint，再 `FlushAsync`；Close 最后才 `Cancel()` 且幂等，Background 完成后恢复 writer admission。mock 调用序列必须证明最后一次 export 看见最终 checkpoint。
 5. Writer lifecycle：让 writer A 以位置 X 入队并阻塞，随后把 UI 位置改为 Y，再放行 A；断言 bookmark、statistics checkpoint 和 sync schedule 对每个 admitted request 使用同一份 snapshot，A 不得混入 Y。后续 writer/final Close/Background 必须明确使用它们各自 admission 时的 Y（或更新后）snapshot。
 6. 设置页：关闭全局 Google Drive/ッツ Sync 时，statistics Sync 控件隐藏或禁用，但 `EnableStatisticsSync`、同步模式等已存值保持不变；重新开启全局 Sync 后恢复显示和值。断开凭据也不得静默重置统计偏好。
+7. 同步设置页：关闭全局同步时只保留 Syncing 区；重新开启后恢复 Client、Connection、Behaviour、Data 及原偏好。连接后 Client Secret 继续以 PasswordBox 掩码显示，离开/返回页面和重启应用后从 Windows Credential Manager 恢复；清缓存不清凭据，退出登录清凭据。
+8. 书籍右键同步：全局同步关闭时不显示 Sync；Auto 模式显示单个 Sync；Manual 模式显示 Import/Export 子菜单。使用鼠标、Shift+F10 和菜单键逐项验证，mock 断言方向和 book/statistics/audio payload 与设置快照一致。
 
 必跑自动化命令：
 

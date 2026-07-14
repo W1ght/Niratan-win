@@ -100,6 +100,16 @@ public sealed partial class GoogleDriveCoverCacheService : IGoogleDriveCoverCach
         }
     }
 
+    public Task ClearAsync(CancellationToken ct = default) =>
+        Task.Run(
+            () =>
+            {
+                ct.ThrowIfCancellationRequested();
+                if (Directory.Exists(_cacheRoot))
+                    Directory.Delete(_cacheRoot, recursive: true);
+            },
+            ct);
+
     private static string NormalizeThumbnailLink(string link) =>
         ThumbnailSizeRegex().Replace(link, "=s768");
 

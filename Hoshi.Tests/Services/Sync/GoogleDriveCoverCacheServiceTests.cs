@@ -103,6 +103,30 @@ public sealed class GoogleDriveCoverCacheServiceTests
         await action.Should().ThrowAsync<OperationCanceledException>();
     }
 
+    [Fact]
+    public async Task ClearAsync_RemovesTheEntireCoverCache()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "nested"));
+        await File.WriteAllBytesAsync(
+            Path.Combine(temp.Path, "cached.img"),
+            PngBytes,
+            ct);
+        await File.WriteAllBytesAsync(
+            Path.Combine(temp.Path, "nested", "stale.tmp"),
+            [1, 2, 3],
+            ct);
+        var service = new GoogleDriveCoverCacheService(
+            new HttpClient(new ThrowingHandler()),
+            new FakeGoogleDriveAuthService(),
+            temp.Path);
+
+        await service.ClearAsync(ct);
+
+        Directory.Exists(temp.Path).Should().BeFalse();
+    }
+
     private static HttpResponseMessage ImageResponse(byte[] bytes) =>
         new(HttpStatusCode.OK)
         {

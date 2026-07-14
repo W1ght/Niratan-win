@@ -41,7 +41,7 @@ public sealed partial class SasayakiMatcher
         }
 
         // Find initial offset using first N cues
-        var cursor = FindInitialOffset(globalCodePoints, cues, searchWindow);
+        var cursor = FindInitialOffset(globalCodePoints, cues);
 
         // Match each cue sequentially
         var matches = new List<SasayakiMatch>();
@@ -53,6 +53,15 @@ public sealed partial class SasayakiMatcher
             var cueCodePoints = ToCodePoints(cue.Text);
 
             if (cueCodePoints.Length == 0)
+            {
+                unmatched++;
+                continue;
+            }
+
+            // Niratan treats short asterisk-prefixed cues as narration/audio markers.
+            // Matching their one or two common characters can advance the monotonic
+            // cursor beyond the next real sentence and derail every later match.
+            if (cue.Text.StartsWith('＊') && cueCodePoints.Length < 5)
             {
                 unmatched++;
                 continue;
@@ -91,24 +100,28 @@ public sealed partial class SasayakiMatcher
         };
     }
 
-    private static int FindInitialOffset(int[] globalCodePoints, List<SasayakiCue> cues, int searchWindow)
+    private static int FindInitialOffset(int[] globalCodePoints, List<SasayakiCue> cues)
     {
         var initialCues = cues.Take(InitialCuesForOffset).ToList();
         if (initialCues.Count == 0)
             return 0;
 
-        var firstCueCodePoints = ToCodePoints(initialCues[0].Text);
-        if (firstCueCodePoints.Length == 0)
-            return 0;
+        int? earliestMatch = null;
+        foreach (var cue in initialCues)
+        {
+            if (cue.Text.StartsWith('＊'))
+                continue;
 
-        // Search for the first cue in the first portion of the book
-        var searchLimit = Math.Min(globalCodePoints.Length, globalCodePoints.Length / 3);
-        var firstMatch = FindExactMatch(globalCodePoints, firstCueCodePoints, 0, searchLimit);
+            var cueCodePoints = ToCodePoints(cue.Text);
+            if (cueCodePoints.Length < 6)
+                continue;
 
-        if (firstMatch >= 0)
-            return firstMatch;
+            var match = FindExactMatch(globalCodePoints, cueCodePoints, 0, globalCodePoints.Length);
+            if (match >= 0)
+                earliestMatch = Math.Min(earliestMatch ?? match, match);
+        }
 
-        return 0;
+        return earliestMatch ?? 0;
     }
 
     private static int FindExactMatch(int[] text, int[] pattern, int start, int end)

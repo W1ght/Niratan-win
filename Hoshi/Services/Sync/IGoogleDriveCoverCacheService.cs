@@ -9,4 +9,6 @@ public interface IGoogleDriveCoverCacheService
     Task<string?> GetCoverPathAsync(
         TtuRemoteFile? cover,
         CancellationToken ct = default);
+
+    Task ClearAsync(CancellationToken ct = default);
 }
