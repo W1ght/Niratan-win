@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json.Serialization;
 
 namespace Hoshi.Models.Sasayaki;
@@ -37,6 +38,13 @@ public sealed class SasayakiMatchData
 
     [JsonIgnore]
     public bool IsValid => IsCurrentSchemaVersion && Cues.Count > 0 && Matches.Count > 0;
+
+    [JsonIgnore]
+    public bool RequiresMatcherRefresh => Matches.Any(match =>
+        match.CueIndex >= 0
+        && match.CueIndex < Cues.Count
+        && Cues[match.CueIndex].Text.StartsWith('＊')
+        && match.Length < 5);
 }
 
 public sealed class SasayakiPlaybackData

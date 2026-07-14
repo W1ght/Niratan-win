@@ -3361,6 +3361,17 @@ public sealed partial class NovelReaderPage : Page
             if (matchData == null || !matchData.IsValid)
                 return;
 
+            if (matchData.RequiresMatcherRefresh
+                && File.Exists(matchData.AudiobookPath)
+                && File.Exists(matchData.SrtPath))
+            {
+                Log.Information(
+                    "[Sasayaki] Refreshing legacy match data for {BookId}",
+                    matchData.BookId);
+                await LoadSasayakiAsync(matchData.AudiobookPath, matchData.SrtPath);
+                return;
+            }
+
             _sasayakiMatchData = matchData;
             _sasayakiNav.Load(matchData);
             _sasayakiVM.UpdateMatchStats(matchData);
