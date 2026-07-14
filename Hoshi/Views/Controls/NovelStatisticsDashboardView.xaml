@@ -273,6 +273,8 @@
                                       Width="118"
                                       Height="118">
                                     <ProgressRing IsActive="True"
+                                                  Width="118"
+                                                  Height="118"
                                                   IsIndeterminate="False"
                                                   Maximum="100"
                                                   Value="{Binding Today.TargetPercent}" />

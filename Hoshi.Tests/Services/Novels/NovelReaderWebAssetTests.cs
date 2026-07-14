@@ -2621,8 +2621,20 @@ public class NovelReaderWebAssetTests
         todayCardEnd.Should().BeGreaterThan(todayCardStart);
 
         var todayCardXaml = dashboardXaml[todayCardStart..todayCardEnd];
-        todayCardXaml.Should().Contain("Width=\"118\"");
-        todayCardXaml.Should().Contain("Height=\"118\"");
+        var todayProgressRingStart = todayCardXaml.IndexOf(
+            "<ProgressRing IsActive=\"True\"",
+            StringComparison.Ordinal);
+        var todayProgressRingEnd = todayCardXaml.IndexOf(
+            "/>",
+            todayProgressRingStart,
+            StringComparison.Ordinal);
+        todayProgressRingStart.Should().BeGreaterThanOrEqualTo(0);
+        todayProgressRingEnd.Should().BeGreaterThan(todayProgressRingStart);
+
+        var todayProgressRingXaml = todayCardXaml[
+            todayProgressRingStart..(todayProgressRingEnd + 2)];
+        todayProgressRingXaml.Should().Contain("Width=\"118\"");
+        todayProgressRingXaml.Should().Contain("Height=\"118\"");
 
         var weekCardStart = dashboardXaml.IndexOf(
             "<Border x:Name=\"WeekCard\"",
