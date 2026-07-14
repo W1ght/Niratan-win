@@ -14,6 +14,8 @@ public sealed class SasayakiPlayer : IDisposable
     private Timer? _positionTimer;
     private bool _isDisposed;
     private bool _isPaused;
+    private bool _isMediaOpened;
+    private double? _pendingSeekSeconds;
 
     public event EventHandler<double>? PositionChanged;
     public event EventHandler? MediaEnded;
@@ -43,13 +45,14 @@ public sealed class SasayakiPlayer : IDisposable
             var player = new MediaPlayer
             {
                 AudioCategory = MediaPlayerAudioCategory.Media,
-                Source = MediaSource.CreateFromStorageFile(file),
             };
 
+            player.MediaOpened += OnMediaOpened;
             player.MediaEnded += OnMediaEnded;
             player.MediaFailed += OnMediaFailed;
 
             _player = player;
+            player.Source = MediaSource.CreateFromStorageFile(file);
             Log.Information("[Sasayaki] Loaded '{Path}'", filePath);
         }
         catch (Exception ex)
@@ -66,6 +69,9 @@ public sealed class SasayakiPlayer : IDisposable
 
         try
         {
+            if (_isMediaOpened)
+                ApplyPendingSeek(_player);
+
             _player.Play();
             _isPaused = false;
             StartPositionTimer();
@@ -113,15 +119,28 @@ public sealed class SasayakiPlayer : IDisposable
         if (_player == null)
             return;
 
-        try
+        _pendingSeekSeconds = NormalizeSeekSeconds(seconds, DurationSeconds);
+        if (!_isMediaOpened)
         {
-            _player.Position = TimeSpan.FromSeconds(Math.Max(0, seconds));
-            Log.Information("[Sasayaki] Seeked to {Seconds:F1}s", seconds);
+            Log.Information(
+                "[Sasayaki] Queued seek to {Seconds:F1}s until media opens",
+                _pendingSeekSeconds);
+            return;
         }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "[Sasayaki] Failed to seek");
-        }
+
+        ApplyPendingSeek(_player);
+    }
+
+    internal static double NormalizeSeekSeconds(double requestedSeconds, double durationSeconds)
+    {
+        if (!double.IsFinite(requestedSeconds))
+            return 0;
+
+        var normalized = Math.Max(0, requestedSeconds);
+        if (double.IsFinite(durationSeconds) && durationSeconds > 0)
+            normalized = Math.Min(normalized, durationSeconds);
+
+        return normalized;
     }
 
     private void StartPositionTimer()
@@ -145,12 +164,15 @@ public sealed class SasayakiPlayer : IDisposable
     private void StopInternal()
     {
         StopPositionTimer();
+        _isMediaOpened = false;
+        _pendingSeekSeconds = null;
 
         if (_player == null)
             return;
 
         try
         {
+            _player.MediaOpened -= OnMediaOpened;
             _player.MediaEnded -= OnMediaEnded;
             _player.MediaFailed -= OnMediaFailed;
             _player.Source = null;
@@ -164,6 +186,35 @@ public sealed class SasayakiPlayer : IDisposable
         {
             _player = null;
             _isPaused = false;
+        }
+    }
+
+    private void OnMediaOpened(MediaPlayer sender, object args)
+    {
+        if (!ReferenceEquals(sender, _player))
+            return;
+
+        _isMediaOpened = true;
+        ApplyPendingSeek(sender);
+    }
+
+    private void ApplyPendingSeek(MediaPlayer sender)
+    {
+        if (!_pendingSeekSeconds.HasValue)
+            return;
+
+        var seconds = NormalizeSeekSeconds(
+            _pendingSeekSeconds.Value,
+            sender.NaturalDuration.TotalSeconds);
+        try
+        {
+            sender.Position = TimeSpan.FromSeconds(seconds);
+            _pendingSeekSeconds = null;
+            Log.Information("[Sasayaki] Seeked to {Seconds:F1}s", seconds);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "[Sasayaki] Failed to seek");
         }
     }
 
