@@ -116,6 +116,14 @@ public sealed partial class NovelLibraryPage : Page
         await ViewModel.DeleteNovelCommand.ExecuteAsync(novelItem);
     }
 
+    private async void ExportNovelMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as MenuFlyoutItem)?.Tag is not NovelBookItemViewModel novelItem)
+            return;
+
+        await ViewModel.ExportNovelCommand.ExecuteAsync(novelItem);
+    }
+
     private async void DeleteRemoteNovelMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as MenuFlyoutItem)?.Tag is not RemoteNovelBookItemViewModel remoteItem)

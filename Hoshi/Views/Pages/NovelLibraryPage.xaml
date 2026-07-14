@@ -35,8 +35,8 @@
                         <MenuFlyoutItem x:Uid="NovelBookExportMenuItem"
                                         Text="Export EPUB…"
                                         AutomationProperties.AutomationId="NovelBookExportMenuItem"
-                                        Command="{Binding ViewModel.ExportNovelCommand, ElementName=ThisPage}"
-                                        CommandParameter="{x:Bind}" />
+                                        Tag="{x:Bind}"
+                                        Click="ExportNovelMenuItem_Click" />
                         <MenuFlyoutItem x:Uid="NovelBookMoveToShelfMenuItem"
                                         Tag="{x:Bind}"
                                         Click="MoveNovelToShelfMenuItem_Click" />

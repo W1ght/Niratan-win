@@ -44,6 +44,8 @@ public sealed class NovelLibraryPageAssetTests
     {
         var xaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelLibraryPage.xaml"));
+        var code = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelLibraryPage.xaml.cs"));
         var english = File.ReadAllText(
             Path.Combine(ProjectRoot, "Strings", "en-US", "Resources.resw"));
         var chinese = File.ReadAllText(
@@ -51,9 +53,11 @@ public sealed class NovelLibraryPageAssetTests
 
         xaml.Should().Contain("x:Uid=\"NovelBookExportMenuItem\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelBookExportMenuItem\"");
-        xaml.Should().Contain(
+        xaml.Should().Contain("Click=\"ExportNovelMenuItem_Click\"");
+        xaml.Should().Contain("Tag=\"{x:Bind}\"");
+        xaml.Should().NotContain(
             "Command=\"{Binding ViewModel.ExportNovelCommand, ElementName=ThisPage}\"");
-        xaml.Should().Contain("CommandParameter=\"{x:Bind}\"");
+        code.Should().Contain("ViewModel.ExportNovelCommand.ExecuteAsync(novelItem)");
         english.Should().Contain("name=\"NovelBookExportMenuItem.Text\"");
         english.Should().Contain(
             "name=\"NovelBookExportMenuItem.AutomationProperties.Name\"");
