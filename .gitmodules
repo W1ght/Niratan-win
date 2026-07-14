@@ -1,9 +1,6 @@
 [submodule "native/hoshidicts"]
 	path = native/hoshidicts
 	url = https://github.com/HuangAntimony/hoshidicts.git
-[submodule "docs/reference/hoshi/Hoshi-Reader-Mac"]
-	path = docs/reference/hoshi/Hoshi-Reader-Mac
-	url = https://github.com/W1ght/Hoshi-Reader-Mac.git
-[submodule "docs/reference/hoshi/Niratan"]
-	path = docs/reference/hoshi/Niratan
+[submodule "docs/reference/Niratan"]
+	path = docs/reference/Niratan
 	url = https://github.com/W1ght/Niratan.git

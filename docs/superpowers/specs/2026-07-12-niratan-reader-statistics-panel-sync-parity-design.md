@@ -2,9 +2,9 @@
 
 ## Goal
 
-Align the Hoshi Windows Reader statistics behavior, its in-Reader `Session / Today / All Time` panel, and statistics-related Google Drive interactions with the current local Niratan reference.
+Align the Niratan Windows Reader statistics behavior, its in-Reader `Session / Today / All Time` panel, and statistics-related Google Drive interactions with the current local Niratan reference.
 
-The behavior source of truth is `docs/reference/hoshi/Niratan` at Niratan `v1.3.0`, commit `e40ca3a`. This specification supersedes conflicting Reader-event and Reader-auto-sync details in the 2026-07-11 statistics specifications. It does not redesign the Bookshelf statistics dashboard.
+The behavior source of truth is `docs/reference/Niratan` at Niratan `v1.3.0`, commit `e40ca3a`. This specification supersedes conflicting Reader-event and Reader-auto-sync details in the 2026-07-11 statistics specifications. It does not redesign the Bookshelf statistics dashboard.
 
 ## Confirmed Scope
 
@@ -185,7 +185,7 @@ The existing lifecycle single-execution gate prevents duplicate close checkpoint
 
 ## Runtime Verification
 
-1. Build and run Hoshi on x64.
+1. Build and run Niratan on x64.
 2. Open `C:\Users\Wight\Downloads\哈利波特1魔法石.epub` with statistics enabled.
 3. In `Page Turn` mode, turn one same-chapter page and verify progress, current character, Session, Today, and `statistics.json` advance without crossing a chapter.
 4. Verify backward movement, natural chapter transitions, first/last-book limits, continuous mode, resize/reflow, and reopen persistence.

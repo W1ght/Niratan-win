@@ -20,11 +20,11 @@
 ### Task 1: Define and test canonical mark-read service behavior
 
 **Files:**
-- Modify: `Hoshi.Tests/Services/Novels/NovelLibraryServiceTests.cs`
-- Modify: `Hoshi/Services/Novels/INovelLibraryService.cs`
-- Modify: `Hoshi/Services/Novels/NovelLibraryService.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
-- Modify: `Hoshi.Tests/Services/Sync/TtuBookImportServiceTests.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelLibraryServiceTests.cs`
+- Modify: `Niratan/Services/Novels/INovelLibraryService.cs`
+- Modify: `Niratan/Services/Novels/NovelLibraryService.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
+- Modify: `Niratan.Tests/Services/Sync/TtuBookImportServiceTests.cs`
 
 **Interfaces:**
 - Consumes: `INovelBookStorageService.ResolveRootPath`, `INovelBookSidecarService.LoadBookInfoAsync`, `SaveBookmarkAsync`.
@@ -76,7 +76,7 @@ public async Task MarkReadAsync_MissingBookInfoReturnsSuccessWithoutWriting()
 
 - [ ] **Step 2: Run service tests and verify RED**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~NovelLibraryServiceTests.MarkReadAsync`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~NovelLibraryServiceTests.MarkReadAsync`
 
 Expected: compile failure because `MarkReadAsync` does not exist.
 
@@ -113,19 +113,19 @@ Add success stubs to the two concrete test fakes implementing `INovelLibraryServ
 
 - [ ] **Step 4: Run service tests and verify GREEN**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~NovelLibraryServiceTests.MarkReadAsync`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~NovelLibraryServiceTests.MarkReadAsync`
 
 Expected: 2 passing tests.
 
 ### Task 2: Add customizable localized confirmation and ViewModel workflow
 
 **Files:**
-- Modify: `Hoshi/Services/UI/IDialogService.cs`
-- Modify: `Hoshi/Services/UI/DialogService.cs`
-- Modify: `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
-- Modify: `Hoshi/Strings/en-US/Resources.resw`
-- Modify: `Hoshi/Strings/zh-CN/Resources.resw`
+- Modify: `Niratan/Services/UI/IDialogService.cs`
+- Modify: `Niratan/Services/UI/DialogService.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
+- Modify: `Niratan/Strings/en-US/Resources.resw`
+- Modify: `Niratan/Strings/zh-CN/Resources.resw`
 
 **Interfaces:**
 - Consumes: `INovelLibraryService.MarkReadAsync`, `LoadNovelsAsync`, `ResourceStringHelper`.
@@ -192,7 +192,7 @@ public async Task MarkReadNovelCommand_FailureShowsErrorWithoutReloading()
 
 - [ ] **Step 2: Run ViewModel tests and verify RED**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~NovelLibraryPageViewModelTests.MarkReadNovelCommand`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~NovelLibraryPageViewModelTests.MarkReadNovelCommand`
 
 Expected: compile failure because the generated command and dialog overload do not exist.
 
@@ -242,16 +242,16 @@ private async Task MarkReadNovelAsync(NovelBookItemViewModel item)
 
 - [ ] **Step 5: Run ViewModel tests and verify GREEN**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~NovelLibraryPageViewModelTests.MarkReadNovelCommand`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~NovelLibraryPageViewModelTests.MarkReadNovelCommand`
 
 Expected: 3 passing tests.
 
 ### Task 3: Expose the icon-free localized context-menu action
 
 **Files:**
-- Modify: `Hoshi/Views/Pages/NovelLibraryPage.xaml`
-- Modify: `Hoshi/Views/Pages/NovelLibraryPage.xaml.cs`
-- Modify: `Hoshi.Tests/Views/Pages/NovelLibraryPageAssetTests.cs`
+- Modify: `Niratan/Views/Pages/NovelLibraryPage.xaml`
+- Modify: `Niratan/Views/Pages/NovelLibraryPage.xaml.cs`
+- Modify: `Niratan.Tests/Views/Pages/NovelLibraryPageAssetTests.cs`
 
 **Interfaces:**
 - Consumes: generated `MarkReadNovelCommand`.
@@ -274,7 +274,7 @@ public void LocalNovelContextMenu_ExposesLocalizedIconFreeMarkReadCommand()
 
 - [ ] **Step 2: Run the asset test and verify RED**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~LocalNovelContextMenu_ExposesLocalizedIconFreeMarkReadCommand`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~LocalNovelContextMenu_ExposesLocalizedIconFreeMarkReadCommand`
 
 Expected: FAIL because the menu item and handler are absent.
 
@@ -297,7 +297,7 @@ private async void MarkReadNovelMenuItem_Click(object sender, RoutedEventArgs e)
 
 - [ ] **Step 4: Run asset, service, and ViewModel tests**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryServiceTests|FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~NovelLibraryPageAssetTests"`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryServiceTests|FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~NovelLibraryPageAssetTests"`
 
 Expected: all selected tests pass.
 
@@ -312,15 +312,15 @@ Expected: all selected tests pass.
 
 - [ ] **Step 1: Run the full suite**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`
 
 Expected: 0 failures.
 
 - [ ] **Step 2: Build the application**
 
-Run: `dotnet build Hoshi/Hoshi.csproj -c Debug -p:Platform=x64`
+Run: `dotnet build Niratan/Niratan.csproj -c Debug -p:Platform=x64`
 
-Expected: successful x64 build with `hoshidicts_c_api.dll` beside `Hoshi.exe`.
+Expected: successful x64 build with `hoshidicts_c_api.dll` beside `Niratan.exe`.
 
 - [ ] **Step 3: Launch and verify the application**
 
@@ -329,6 +329,6 @@ Run the worktree's absolute `build-and-run.ps1`; verify the absolute process pat
 - [ ] **Step 4: Commit the feature**
 
 ```powershell
-git add -- Hoshi Hoshi.Tests
+git add -- Niratan Niratan.Tests
 git commit -m "feat(library): add mark-read action"
 ```

@@ -3,7 +3,7 @@
 > **给 agentic workers：** 执行本计划时使用 `superpowers:executing-plans`，按任务逐项推进，并保持小说模块与漫画模块隔离。
 
 **目标：** 把 `NovelReaderPage` 从占位页面升级为 WebView2 本地 reader host，并建立 C# <-> JavaScript bridge。短期只支持 EPUB。  
-**架构：** WinUI 页面承载 WebView2，本地加载 `Hoshi/Web/NovelReader/reader-host.html`；C# 使用强类型工厂生成带 `version` 和 `type` 的 JSON；Web 层用 `reader-bridge.js` 接收 `loadBook`，并通过本地 vendored `foliate-js@1.0.1` 渲染 EPUB。  
+**架构：** WinUI 页面承载 WebView2，本地加载 `Niratan/Web/NovelReader/reader-host.html`；C# 使用强类型工厂生成带 `version` 和 `type` 的 JSON；Web 层用 `reader-bridge.js` 接收 `loadBook`，并通过本地 vendored `foliate-js@1.0.1` 渲染 EPUB。
 **技术栈：** WinUI 3、WebView2、C#/.NET 10、System.Text.Json、foliate-js、xUnit、FluentAssertions。
 
 ---
@@ -12,9 +12,9 @@
 
 **Files:**
 
-- `Hoshi/Models/DTO/NovelReaderWebMessage.cs`
-- `Hoshi/Services/Novels/NovelReaderBridgeMessageFactory.cs`
-- `Hoshi.Tests/Services/Novels/NovelReaderBridgeMessageFactoryTests.cs`
+- `Niratan/Models/DTO/NovelReaderWebMessage.cs`
+- `Niratan/Services/Novels/NovelReaderBridgeMessageFactory.cs`
+- `Niratan.Tests/Services/Novels/NovelReaderBridgeMessageFactoryTests.cs`
 
 - [x] 写失败测试：`CreateLoadBookMessage_SerializesVersionTypeAndPayload`
 - [x] 实现 `NovelReaderWebMessage`
@@ -29,12 +29,12 @@
 
 **Files:**
 
-- `Hoshi/Web/NovelReader/reader-host.html`
-- `Hoshi/Web/NovelReader/reader-bridge.js`
-- `Hoshi/Web/NovelReader/reader-styles.css`
-- `Hoshi/Web/NovelReader/Vendor/foliate-js/**`
-- `Hoshi/Web/NovelReader/Vendor/construct-style-sheets-polyfill/**`
-- `Hoshi/Hoshi.csproj`
+- `Niratan/Web/NovelReader/reader-host.html`
+- `Niratan/Web/NovelReader/reader-bridge.js`
+- `Niratan/Web/NovelReader/reader-styles.css`
+- `Niratan/Web/NovelReader/Vendor/foliate-js/**`
+- `Niratan/Web/NovelReader/Vendor/construct-style-sheets-polyfill/**`
+- `Niratan/Niratan.csproj`
 
 - [x] 新增本地 HTML/CSS/JS
 - [x] `.csproj` 把 `Web\**` 作为 Content 复制到输出目录
@@ -52,8 +52,8 @@
 
 **Files:**
 
-- `Hoshi/Views/Pages/NovelReaderPage.xaml`
-- `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
+- `Niratan/Views/Pages/NovelReaderPage.xaml`
+- `Niratan/Views/Pages/NovelReaderPage.xaml.cs`
 
 - [x] XAML 使用 WebView2 替换占位正文区域
 - [x] `NovelReaderPage.xaml.cs` 在导航后初始化 WebView2

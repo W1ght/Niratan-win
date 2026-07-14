@@ -10,18 +10,18 @@ Run dictionary-specific tests covering deinflection, lookup, and import logic.
 ## Affected Files
 
 When modifying any of these, this skill is mandatory:
-- `Hoshi/Services/Dictionary/JapaneseDeinflector.cs`
-- `Hoshi/Services/Dictionary/DictionaryLookupService.cs`
-- `Hoshi/Services/Dictionary/PopupHtmlGenerator.cs`
-- `Hoshi/Views/Dictionary/DictionaryLookupPopup.cs`
-- `Hoshi/Views/Dictionary/DictionaryPopupOverlay.cs`
-- `Hoshi/Web/DictionaryPopup/popup.js`
-- `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
+- `Niratan/Services/Dictionary/JapaneseDeinflector.cs`
+- `Niratan/Services/Dictionary/DictionaryLookupService.cs`
+- `Niratan/Services/Dictionary/PopupHtmlGenerator.cs`
+- `Niratan/Views/Dictionary/DictionaryLookupPopup.cs`
+- `Niratan/Views/Dictionary/DictionaryPopupOverlay.cs`
+- `Niratan/Web/DictionaryPopup/popup.js`
+- `Niratan/Views/Pages/NovelReaderPage.xaml.cs`
 
 ## Required Verification ([docs/VERIFICATION.md §3.2](../../docs/VERIFICATION.md))
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 dotnet build -p:Platform=x64
 ```
 
@@ -50,16 +50,16 @@ When changing deinflector rules, also check:
 
 Reference:
 ```
-docs/reference/hoshi/Hoshi-Reader-Android/third_party/hoshidicts-kotlin-bridge/app/src/main/cpp/hoshidicts/src/deinflector.cpp
-docs/reference/hoshi/Hoshi-Reader-Android/third_party/hoshidicts-kotlin-bridge/app/src/main/cpp/hoshidicts/src/lookup.cpp
+docs/reference/hoshi/Niratan-Reader-Android/third_party/hoshidicts-kotlin-bridge/app/src/main/cpp/hoshidicts/src/deinflector.cpp
+docs/reference/hoshi/Niratan-Reader-Android/third_party/hoshidicts-kotlin-bridge/app/src/main/cpp/hoshidicts/src/lookup.cpp
 ```
 
 ## Commands
 
 ```powershell
 # Dictionary-specific tests
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"
 
 # Deinflector-specific tests
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Deinflector"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Deinflector"
 ```

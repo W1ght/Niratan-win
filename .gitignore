@@ -63,11 +63,6 @@ project.lock.json
 project.fragment.lock.json
 artifacts/
 
-# Local reference repositories used during reader research. Keep the clones on
-# disk for inspection, but do not vendor nested Git repositories into Hoshi.
-docs/reference/hoshi/Hoshi-Reader/
-docs/reference/hoshi/Hoshi-Reader-Android/
-
 # Local git worktrees for isolated Codex tasks.
 .worktrees/
 

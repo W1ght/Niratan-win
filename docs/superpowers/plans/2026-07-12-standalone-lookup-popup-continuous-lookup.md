@@ -11,33 +11,33 @@
 ## Global Constraints
 
 - Target Windows 10+ x64; build with `dotnet build -p:Platform=x64`.
-- Run tests with `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`.
+- Run tests with `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`.
 - Do not modify `native/hoshidicts/`.
 - Do not move dictionary lookup logic into JavaScript or broaden the WebView2 native API.
 - Preserve the existing `DictionaryPopupOverlay` nested stack and `tapOutside ≠ dismiss` behavior.
-- Preserve the current uncommitted embedded-root popup sizing changes in `Hoshi/Views/Dictionary/DictionaryPopupOverlay.cs` and `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`.
+- Preserve the current uncommitted embedded-root popup sizing changes in `Niratan/Views/Dictionary/DictionaryPopupOverlay.cs` and `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`.
 - Do not add dependencies or settings.
 
 ---
 
 ## File Structure
 
-- Modify `Hoshi.Tests/Views/Pages/LookupPageShellContractTests.cs`: add the regression contract proving the standalone page does not register a page-wide pointer dismissal path.
-- Modify `Hoshi/Views/Pages/NovelLookupPage.xaml.cs`: remove only the page-wide `PointerPressed` registration, handler, and now-unused visual-tree import.
-- Verify without modifying `Hoshi/Web/DictionaryPopup/popup.js`: its existing click and Shift handlers must continue to send `lookupRedirect`.
-- Verify without modifying `Hoshi/Views/Dictionary/DictionaryPopupRedirectRouter.cs`: requests with selection coordinates/source must continue to resolve as `Nested`.
-- Verify without modifying `Hoshi/Views/Dictionary/DictionaryPopupOverlay.cs`: native lookup and child popup stacking remain the implementation boundary.
+- Modify `Niratan.Tests/Views/Pages/LookupPageShellContractTests.cs`: add the regression contract proving the standalone page does not register a page-wide pointer dismissal path.
+- Modify `Niratan/Views/Pages/NovelLookupPage.xaml.cs`: remove only the page-wide `PointerPressed` registration, handler, and now-unused visual-tree import.
+- Verify without modifying `Niratan/Web/DictionaryPopup/popup.js`: its existing click and Shift handlers must continue to send `lookupRedirect`.
+- Verify without modifying `Niratan/Views/Dictionary/DictionaryPopupRedirectRouter.cs`: requests with selection coordinates/source must continue to resolve as `Nested`.
+- Verify without modifying `Niratan/Views/Dictionary/DictionaryPopupOverlay.cs`: native lookup and child popup stacking remain the implementation boundary.
 
 ### Task 1: Stop the standalone page from dismissing embedded results before WebView2 lookup
 
 **Files:**
-- Modify: `Hoshi.Tests/Views/Pages/LookupPageShellContractTests.cs:60`
-- Modify: `Hoshi/Views/Pages/NovelLookupPage.xaml.cs:10`
-- Modify: `Hoshi/Views/Pages/NovelLookupPage.xaml.cs:46`
-- Delete: `Hoshi/Views/Pages/NovelLookupPage.xaml.cs:72`
-- Modify: `Hoshi/Views/Pages/NovelLookupPage.xaml.cs:176`
-- Verify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
-- Verify: `Hoshi.Tests/Views/Dictionary/DictionaryPopupRedirectRouterTests.cs`
+- Modify: `Niratan.Tests/Views/Pages/LookupPageShellContractTests.cs:60`
+- Modify: `Niratan/Views/Pages/NovelLookupPage.xaml.cs:10`
+- Modify: `Niratan/Views/Pages/NovelLookupPage.xaml.cs:46`
+- Delete: `Niratan/Views/Pages/NovelLookupPage.xaml.cs:72`
+- Modify: `Niratan/Views/Pages/NovelLookupPage.xaml.cs:176`
+- Verify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Verify: `Niratan.Tests/Views/Dictionary/DictionaryPopupRedirectRouterTests.cs`
 
 **Interfaces:**
 - Consumes: existing `DictionaryPopupOverlay.ShowLookupAsync(...)`, `DictionaryPopupRedirectRequest`, and WebView2 `lookupRedirect` messages.
@@ -64,7 +64,7 @@ public void NovelLookupPage_PreservesEmbeddedResultsAcrossPagePointerPresses()
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~LookupPageShellContractTests.NovelLookupPage_PreservesEmbeddedResultsAcrossPagePointerPresses"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~LookupPageShellContractTests.NovelLookupPage_PreservesEmbeddedResultsAcrossPagePointerPresses"
 ```
 
 Expected: FAIL because `NovelLookupPage.xaml.cs` currently contains `AddHandler(PointerPressedEvent`, `RemoveHandler(PointerPressedEvent`, and `OnPagePointerPressed`.
@@ -132,7 +132,7 @@ Do not change `LookupAsync`: a main search with zero results must retain its exp
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~LookupPageShellContractTests.NovelLookupPage_PreservesEmbeddedResultsAcrossPagePointerPresses"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~LookupPageShellContractTests.NovelLookupPage_PreservesEmbeddedResultsAcrossPagePointerPresses"
 ```
 
 Expected: PASS.
@@ -142,7 +142,7 @@ Expected: PASS.
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests.PopupScript_SupportsClickAndShiftNestedLookupInsideLookupWindow|FullyQualifiedName~DictionaryPopupRedirectRouterTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests.PopupScript_SupportsClickAndShiftNestedLookupInsideLookupWindow|FullyQualifiedName~DictionaryPopupRedirectRouterTests"
 ```
 
 Expected: PASS. This proves the retained WebView2 path sends click/Shift redirects and native routing still selects `Nested`.
@@ -152,7 +152,7 @@ Expected: PASS. This proves the retained WebView2 path sends click/Shift redirec
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"
 ```
 
 Expected: PASS with no new failures.
@@ -162,7 +162,7 @@ Expected: PASS with no new failures.
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: PASS. If an unrelated failure comes from the pre-existing dirty files, record the exact test and keep this task's files unchanged while diagnosing ownership.
@@ -185,7 +185,7 @@ Run:
 .\build-and-run.ps1
 ```
 
-Verify objective launch first: the Hoshi main window is visible and responsive. Then open `查词`, search a term with definition text, and check:
+Verify objective launch first: the Niratan main window is visible and responsive. Then open `查词`, search a term with definition text, and check:
 
 1. Clicking definition text leaves the root result visible and opens a child popup.
 2. Clicking definition text inside the child opens the next child without hiding its parents.
@@ -200,9 +200,9 @@ Expected: all five behaviors pass. Leave the final verified app instance running
 Run:
 
 ```powershell
-git diff --check -- Hoshi.Tests/Views/Pages/LookupPageShellContractTests.cs Hoshi/Views/Pages/NovelLookupPage.xaml.cs
-git diff -- Hoshi.Tests/Views/Pages/LookupPageShellContractTests.cs Hoshi/Views/Pages/NovelLookupPage.xaml.cs
-git add -- Hoshi.Tests/Views/Pages/LookupPageShellContractTests.cs Hoshi/Views/Pages/NovelLookupPage.xaml.cs
+git diff --check -- Niratan.Tests/Views/Pages/LookupPageShellContractTests.cs Niratan/Views/Pages/NovelLookupPage.xaml.cs
+git diff -- Niratan.Tests/Views/Pages/LookupPageShellContractTests.cs Niratan/Views/Pages/NovelLookupPage.xaml.cs
+git add -- Niratan.Tests/Views/Pages/LookupPageShellContractTests.cs Niratan/Views/Pages/NovelLookupPage.xaml.cs
 git diff --cached --name-only
 git commit -m "fix(dictionary): keep standalone lookup results interactive"
 ```

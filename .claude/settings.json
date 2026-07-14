@@ -1,6 +1,6 @@
 {
   "env": {
-    "HOSHI_NOVEL_READER_ARTIFACT_DIR": "${projectDir}/docs/superpowers/artifacts/novel-reader"
+    "NIRATAN_NOVEL_READER_ARTIFACT_DIR": "${projectDir}/docs/superpowers/artifacts/novel-reader"
   },
   "permissions": {
     "allow": [
@@ -58,7 +58,7 @@
     },
     "sqlite": {
       "command": "${env:APPDATA}\\fnm\\node-versions\\v24.16.0\\installation\\npx.cmd",
-      "args": ["-y", "@modelcontextprotocol/server-sqlite", "--db-path", "${env:APPDATA}\\Hoshi\\Data\\hoshi.db"]
+      "args": ["-y", "@modelcontextprotocol/server-sqlite", "--db-path", "${env:APPDATA}\\Niratan\\Data\\niratan.db"]
     },
     "dotnet": {
       "command": "${env:APPDATA}\\fnm\\node-versions\\v24.16.0\\installation\\npx.cmd",

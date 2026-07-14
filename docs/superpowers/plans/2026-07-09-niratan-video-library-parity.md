@@ -19,56 +19,56 @@
 - All new visible text needs English and Simplified Chinese resources.
 - Thumbnail generation must be asynchronous, single-worker, deduplicated, and suspended while a player window is open.
 - Build with `dotnet build -p:Platform=x64`.
-- Test with `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`.
+- Test with `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`.
 
 ---
 
 ## File Structure
 
-- `Hoshi/Models/Video/VideoLibraryLayoutMode.cs`: layout mode enum for List/Posters.
-- `Hoshi/Models/Video/VideoCollection.cs`: collection, smart rule, and smart rule enum models.
-- `Hoshi/Models/Video/VideoLibraryView.cs`: expanded Niratan-style library modes.
-- `Hoshi/Models/VideoItem.cs`: library metadata columns surfaced to the UI.
-- `Hoshi/Services/Storage/Migrations/Migration_012.cs`: thumbnail, favorite, file metadata, and collection tables.
-- `Hoshi/Services/Storage/DatabaseMigrator.cs`: register migration 12.
-- `Hoshi/Services/Storage/IDataService.cs`: storage contract for video metadata and collections.
-- `Hoshi/Services/Storage/DataService.cs`: Dapper implementation for new schema.
-- `Hoshi/Services/Video/VideoSmartCollectionMatcher.cs`: pure smart-rule evaluator.
-- `Hoshi/Services/Video/IVideoThumbnailService.cs`: thumbnail service contract.
-- `Hoshi/Services/Video/VideoThumbnailService.cs`: cache, scheduler, and persistence coordinator.
-- `Hoshi/Services/Video/IVideoLibraryService.cs`: library contract for collections and favorite state.
-- `Hoshi/Services/Video/VideoLibraryService.cs`: collection and metadata commands.
-- `Hoshi/Services/Video/LibMpvVideoMiningMediaExtractor.cs`: implement screenshot capture for thumbnail generation.
-- `Hoshi/Services/Video/IVideoPlayerWindowService.cs`: expose player-window open state events.
-- `Hoshi/Services/Video/VideoPlayerWindowService.cs`: suspend/resume thumbnail work by window state.
-- `Hoshi/App.xaml.cs`: register `IVideoThumbnailService`.
-- `Hoshi/ViewModels/Components/VideoItemViewModel.cs`: list/poster display metadata and artwork path.
-- `Hoshi/ViewModels/Pages/VideoLibraryPageViewModel.cs`: layout state, expanded filters, smart collections, thumbnail queue.
-- `Hoshi/Views/Pages/VideoLibraryPage.xaml`: list/poster templates, segmented control, smart collection dialog trigger.
-- `Hoshi/Views/Pages/VideoLibraryPage.xaml.cs`: UI-only click handlers for `ListView` and existing grid buttons.
-- `Hoshi/Strings/en-US/Resources.resw`: English strings.
-- `Hoshi/Strings/zh-CN/Resources.resw`: Simplified Chinese strings.
-- `Hoshi.Tests/Services/Storage/VideoDataServiceTests.cs`: migration and CRUD coverage.
-- `Hoshi.Tests/Services/Video/VideoLibraryServiceTests.cs`: service delegation and smart collection creation.
-- `Hoshi.Tests/Services/Video/VideoSmartCollectionMatcherTests.cs`: pure smart rule tests.
-- `Hoshi.Tests/Services/Video/VideoThumbnailServiceTests.cs`: cache/scheduler behavior.
-- `Hoshi.Tests/ViewModels/Pages/VideoLibraryPageViewModelTests.cs`: UI state and filtering.
-- `Hoshi.Tests/Views/Pages/VideoLibraryPageAssetTests.cs`: XAML/localization contract.
+- `Niratan/Models/Video/VideoLibraryLayoutMode.cs`: layout mode enum for List/Posters.
+- `Niratan/Models/Video/VideoCollection.cs`: collection, smart rule, and smart rule enum models.
+- `Niratan/Models/Video/VideoLibraryView.cs`: expanded Niratan-style library modes.
+- `Niratan/Models/VideoItem.cs`: library metadata columns surfaced to the UI.
+- `Niratan/Services/Storage/Migrations/Migration_012.cs`: thumbnail, favorite, file metadata, and collection tables.
+- `Niratan/Services/Storage/DatabaseMigrator.cs`: register migration 12.
+- `Niratan/Services/Storage/IDataService.cs`: storage contract for video metadata and collections.
+- `Niratan/Services/Storage/DataService.cs`: Dapper implementation for new schema.
+- `Niratan/Services/Video/VideoSmartCollectionMatcher.cs`: pure smart-rule evaluator.
+- `Niratan/Services/Video/IVideoThumbnailService.cs`: thumbnail service contract.
+- `Niratan/Services/Video/VideoThumbnailService.cs`: cache, scheduler, and persistence coordinator.
+- `Niratan/Services/Video/IVideoLibraryService.cs`: library contract for collections and favorite state.
+- `Niratan/Services/Video/VideoLibraryService.cs`: collection and metadata commands.
+- `Niratan/Services/Video/LibMpvVideoMiningMediaExtractor.cs`: implement screenshot capture for thumbnail generation.
+- `Niratan/Services/Video/IVideoPlayerWindowService.cs`: expose player-window open state events.
+- `Niratan/Services/Video/VideoPlayerWindowService.cs`: suspend/resume thumbnail work by window state.
+- `Niratan/App.xaml.cs`: register `IVideoThumbnailService`.
+- `Niratan/ViewModels/Components/VideoItemViewModel.cs`: list/poster display metadata and artwork path.
+- `Niratan/ViewModels/Pages/VideoLibraryPageViewModel.cs`: layout state, expanded filters, smart collections, thumbnail queue.
+- `Niratan/Views/Pages/VideoLibraryPage.xaml`: list/poster templates, segmented control, smart collection dialog trigger.
+- `Niratan/Views/Pages/VideoLibraryPage.xaml.cs`: UI-only click handlers for `ListView` and existing grid buttons.
+- `Niratan/Strings/en-US/Resources.resw`: English strings.
+- `Niratan/Strings/zh-CN/Resources.resw`: Simplified Chinese strings.
+- `Niratan.Tests/Services/Storage/VideoDataServiceTests.cs`: migration and CRUD coverage.
+- `Niratan.Tests/Services/Video/VideoLibraryServiceTests.cs`: service delegation and smart collection creation.
+- `Niratan.Tests/Services/Video/VideoSmartCollectionMatcherTests.cs`: pure smart rule tests.
+- `Niratan.Tests/Services/Video/VideoThumbnailServiceTests.cs`: cache/scheduler behavior.
+- `Niratan.Tests/ViewModels/Pages/VideoLibraryPageViewModelTests.cs`: UI state and filtering.
+- `Niratan.Tests/Views/Pages/VideoLibraryPageAssetTests.cs`: XAML/localization contract.
 
 ---
 
 ### Task 1: Domain Models And Storage
 
 **Files:**
-- Create: `Hoshi/Models/Video/VideoLibraryLayoutMode.cs`
-- Create: `Hoshi/Models/Video/VideoCollection.cs`
-- Create: `Hoshi/Services/Storage/Migrations/Migration_012.cs`
-- Modify: `Hoshi/Models/VideoItem.cs`
-- Modify: `Hoshi/Models/Video/VideoLibraryView.cs`
-- Modify: `Hoshi/Services/Storage/DatabaseMigrator.cs`
-- Modify: `Hoshi/Services/Storage/IDataService.cs`
-- Modify: `Hoshi/Services/Storage/DataService.cs`
-- Test: `Hoshi.Tests/Services/Storage/VideoDataServiceTests.cs`
+- Create: `Niratan/Models/Video/VideoLibraryLayoutMode.cs`
+- Create: `Niratan/Models/Video/VideoCollection.cs`
+- Create: `Niratan/Services/Storage/Migrations/Migration_012.cs`
+- Modify: `Niratan/Models/VideoItem.cs`
+- Modify: `Niratan/Models/Video/VideoLibraryView.cs`
+- Modify: `Niratan/Services/Storage/DatabaseMigrator.cs`
+- Modify: `Niratan/Services/Storage/IDataService.cs`
+- Modify: `Niratan/Services/Storage/DataService.cs`
+- Test: `Niratan.Tests/Services/Storage/VideoDataServiceTests.cs`
 
 **Interfaces:**
 - Produces: `VideoLibraryLayoutMode`, `VideoCollection`, `VideoCollectionKind`, `VideoSmartRule`, `VideoSmartRuleField`, `VideoSmartRuleMatch`.
@@ -77,7 +77,7 @@
 
 - [ ] **Step 1: Write failing storage migration and CRUD tests**
 
-Add these tests to `Hoshi.Tests/Services/Storage/VideoDataServiceTests.cs`:
+Add these tests to `Niratan.Tests/Services/Storage/VideoDataServiceTests.cs`:
 
 ```csharp
 [Fact]
@@ -138,7 +138,7 @@ Add this CRUD test after migration tests:
 public async Task DataService_PersistsVideoCollectionsAndMembership()
 {
     var ct = TestContext.Current.CancellationToken;
-    var dbPath = Path.Combine(Path.GetTempPath(), $"hoshi-video-{Guid.NewGuid():N}.db");
+    var dbPath = Path.Combine(Path.GetTempPath(), $"niratan-video-{Guid.NewGuid():N}.db");
     try
     {
         var connectionString = $"Data Source={dbPath}";
@@ -183,17 +183,17 @@ public async Task DataService_PersistsVideoCollectionsAndMembership()
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoDataServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoDataServiceTests"
 ```
 
 Expected: fails because `Migration_012`, `VideoCollection`, collection data-service methods, and metadata columns do not exist.
 
 - [ ] **Step 3: Add models and migration**
 
-Create `Hoshi/Models/Video/VideoLibraryLayoutMode.cs`:
+Create `Niratan/Models/Video/VideoLibraryLayoutMode.cs`:
 
 ```csharp
-namespace Hoshi.Models.Video;
+namespace Niratan.Models.Video;
 
 public enum VideoLibraryLayoutMode
 {
@@ -202,10 +202,10 @@ public enum VideoLibraryLayoutMode
 }
 ```
 
-Replace `Hoshi/Models/Video/VideoLibraryView.cs` with:
+Replace `Niratan/Models/Video/VideoLibraryView.cs` with:
 
 ```csharp
-namespace Hoshi.Models.Video;
+namespace Niratan.Models.Video;
 
 public enum VideoLibraryView
 {
@@ -223,13 +223,13 @@ public enum VideoLibraryView
 }
 ```
 
-Create `Hoshi/Models/Video/VideoCollection.cs`:
+Create `Niratan/Models/Video/VideoCollection.cs`:
 
 ```csharp
 using System;
 using System.Collections.Generic;
 
-namespace Hoshi.Models.Video;
+namespace Niratan.Models.Video;
 
 public enum VideoCollectionKind
 {
@@ -276,7 +276,7 @@ public sealed class VideoCollection
 }
 ```
 
-Add these properties to `Hoshi/Models/VideoItem.cs` after `ManualSortOrder`:
+Add these properties to `Niratan/Models/VideoItem.cs` after `ManualSortOrder`:
 
 ```csharp
 public long FileSizeBytes { get; set; }
@@ -285,7 +285,7 @@ public string? ThumbnailPath { get; set; }
 public bool IsFavorite { get; set; }
 ```
 
-Create `Hoshi/Services/Storage/Migrations/Migration_012.cs` with version 12:
+Create `Niratan/Services/Storage/Migrations/Migration_012.cs` with version 12:
 
 ```csharp
 using System.Data.Common;
@@ -293,7 +293,7 @@ using System.Threading.Tasks;
 using Dapper;
 using Microsoft.Data.Sqlite;
 
-namespace Hoshi.Services.Storage.Migrations;
+namespace Niratan.Services.Storage.Migrations;
 
 internal sealed class Migration_012 : IMigration
 {
@@ -366,7 +366,7 @@ Register `new Migration_012()` after `new Migration_011()` in `DatabaseMigrator.
 
 - [ ] **Step 4: Add data-service contract and implementation**
 
-Add to `Hoshi/Services/Storage/IDataService.cs`:
+Add to `Niratan/Services/Storage/IDataService.cs`:
 
 ```csharp
 Task<IReadOnlyList<VideoCollection>> GetVideoCollectionsAsync(CancellationToken ct = default);
@@ -386,7 +386,7 @@ Change the top of `DataService` so tests can use an isolated SQLite file:
 private readonly string _connectionString;
 
 public DataService()
-    : this($"Data Source={Path.Combine(AppDataHelper.GetDataPath(), "hoshi.db")}")
+    : this($"Data Source={Path.Combine(AppDataHelper.GetDataPath(), "niratan.db")}")
 {
 }
 
@@ -413,7 +413,7 @@ Use a transaction in `SetVideoCollectionItemsAsync`: delete existing rows for th
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoDataServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoDataServiceTests"
 ```
 
 Expected: PASS.
@@ -421,7 +421,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit Task 1**
 
 ```powershell
-git add Hoshi/Models/Video/VideoLibraryLayoutMode.cs Hoshi/Models/Video/VideoCollection.cs Hoshi/Models/Video/VideoLibraryView.cs Hoshi/Models/VideoItem.cs Hoshi/Services/Storage/Migrations/Migration_012.cs Hoshi/Services/Storage/DatabaseMigrator.cs Hoshi/Services/Storage/IDataService.cs Hoshi/Services/Storage/DataService.cs Hoshi.Tests/Services/Storage/VideoDataServiceTests.cs
+git add Niratan/Models/Video/VideoLibraryLayoutMode.cs Niratan/Models/Video/VideoCollection.cs Niratan/Models/Video/VideoLibraryView.cs Niratan/Models/VideoItem.cs Niratan/Services/Storage/Migrations/Migration_012.cs Niratan/Services/Storage/DatabaseMigrator.cs Niratan/Services/Storage/IDataService.cs Niratan/Services/Storage/DataService.cs Niratan.Tests/Services/Storage/VideoDataServiceTests.cs
 git commit -m "feat: add video collection storage"
 ```
 
@@ -430,11 +430,11 @@ git commit -m "feat: add video collection storage"
 ### Task 2: Smart Collection Matching And Library Service
 
 **Files:**
-- Create: `Hoshi/Services/Video/VideoSmartCollectionMatcher.cs`
-- Modify: `Hoshi/Services/Video/IVideoLibraryService.cs`
-- Modify: `Hoshi/Services/Video/VideoLibraryService.cs`
-- Test: `Hoshi.Tests/Services/Video/VideoSmartCollectionMatcherTests.cs`
-- Test: `Hoshi.Tests/Services/Video/VideoLibraryServiceTests.cs`
+- Create: `Niratan/Services/Video/VideoSmartCollectionMatcher.cs`
+- Modify: `Niratan/Services/Video/IVideoLibraryService.cs`
+- Modify: `Niratan/Services/Video/VideoLibraryService.cs`
+- Test: `Niratan.Tests/Services/Video/VideoSmartCollectionMatcherTests.cs`
+- Test: `Niratan.Tests/Services/Video/VideoLibraryServiceTests.cs`
 
 **Interfaces:**
 - Consumes: `VideoCollection`, `VideoSmartRule`, `IDataService` collection methods from Task 1.
@@ -442,15 +442,15 @@ git commit -m "feat: add video collection storage"
 
 - [ ] **Step 1: Write failing matcher tests**
 
-Create `Hoshi.Tests/Services/Video/VideoSmartCollectionMatcherTests.cs`:
+Create `Niratan.Tests/Services/Video/VideoSmartCollectionMatcherTests.cs`:
 
 ```csharp
 using FluentAssertions;
-using Hoshi.Models;
-using Hoshi.Models.Video;
-using Hoshi.Services.Video;
+using Niratan.Models;
+using Niratan.Models.Video;
+using Niratan.Services.Video;
 
-namespace Hoshi.Tests.Services.Video;
+namespace Niratan.Tests.Services.Video;
 
 public class VideoSmartCollectionMatcherTests
 {
@@ -488,7 +488,7 @@ public class VideoSmartCollectionMatcherTests
 
 - [ ] **Step 2: Write failing service tests**
 
-Add to `Hoshi.Tests/Services/Video/VideoLibraryServiceTests.cs`:
+Add to `Niratan.Tests/Services/Video/VideoLibraryServiceTests.cs`:
 
 ```csharp
 [Fact]
@@ -536,24 +536,24 @@ public async Task SetFavoriteAsync_DelegatesToDataService()
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSmartCollectionMatcherTests|FullyQualifiedName~VideoLibraryServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSmartCollectionMatcherTests|FullyQualifiedName~VideoLibraryServiceTests"
 ```
 
 Expected: fails because matcher and service methods do not exist.
 
 - [ ] **Step 4: Implement matcher**
 
-Create `Hoshi/Services/Video/VideoSmartCollectionMatcher.cs`:
+Create `Niratan/Services/Video/VideoSmartCollectionMatcher.cs`:
 
 ```csharp
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Hoshi.Models;
-using Hoshi.Models.Video;
+using Niratan.Models;
+using Niratan.Models.Video;
 
-namespace Hoshi.Services.Video;
+namespace Niratan.Services.Video;
 
 public static class VideoSmartCollectionMatcher
 {
@@ -649,7 +649,7 @@ Implement these methods in `VideoLibraryService.cs`. Normalize empty collection 
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSmartCollectionMatcherTests|FullyQualifiedName~VideoLibraryServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSmartCollectionMatcherTests|FullyQualifiedName~VideoLibraryServiceTests"
 ```
 
 Expected: PASS.
@@ -657,7 +657,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit Task 2**
 
 ```powershell
-git add Hoshi/Services/Video/VideoSmartCollectionMatcher.cs Hoshi/Services/Video/IVideoLibraryService.cs Hoshi/Services/Video/VideoLibraryService.cs Hoshi.Tests/Services/Video/VideoSmartCollectionMatcherTests.cs Hoshi.Tests/Services/Video/VideoLibraryServiceTests.cs
+git add Niratan/Services/Video/VideoSmartCollectionMatcher.cs Niratan/Services/Video/IVideoLibraryService.cs Niratan/Services/Video/VideoLibraryService.cs Niratan.Tests/Services/Video/VideoSmartCollectionMatcherTests.cs Niratan.Tests/Services/Video/VideoLibraryServiceTests.cs
 git commit -m "feat: add video smart collections"
 ```
 
@@ -666,13 +666,13 @@ git commit -m "feat: add video smart collections"
 ### Task 3: Thumbnail Service And Playback Suspension
 
 **Files:**
-- Create: `Hoshi/Services/Video/IVideoThumbnailService.cs`
-- Create: `Hoshi/Services/Video/VideoThumbnailService.cs`
-- Modify: `Hoshi/Services/Video/LibMpvVideoMiningMediaExtractor.cs`
-- Modify: `Hoshi/Services/Video/IVideoPlayerWindowService.cs`
-- Modify: `Hoshi/Services/Video/VideoPlayerWindowService.cs`
-- Modify: `Hoshi/App.xaml.cs`
-- Test: `Hoshi.Tests/Services/Video/VideoThumbnailServiceTests.cs`
+- Create: `Niratan/Services/Video/IVideoThumbnailService.cs`
+- Create: `Niratan/Services/Video/VideoThumbnailService.cs`
+- Modify: `Niratan/Services/Video/LibMpvVideoMiningMediaExtractor.cs`
+- Modify: `Niratan/Services/Video/IVideoPlayerWindowService.cs`
+- Modify: `Niratan/Services/Video/VideoPlayerWindowService.cs`
+- Modify: `Niratan/App.xaml.cs`
+- Test: `Niratan.Tests/Services/Video/VideoThumbnailServiceTests.cs`
 
 **Interfaces:**
 - Consumes: `IVideoMiningMediaExtractor.CaptureScreenshotAsync` and `IDataService.UpdateVideoThumbnailPathAsync`.
@@ -680,20 +680,20 @@ git commit -m "feat: add video smart collections"
 
 - [ ] **Step 1: Write failing thumbnail service tests**
 
-Create `Hoshi.Tests/Services/Video/VideoThumbnailServiceTests.cs`:
+Create `Niratan.Tests/Services/Video/VideoThumbnailServiceTests.cs`:
 
 ```csharp
 using FluentAssertions;
-using Hoshi.Models;
-using Hoshi.Services.Storage;
-using Hoshi.Services.Video;
+using Niratan.Models;
+using Niratan.Services.Storage;
+using Niratan.Services.Video;
 using Moq;
 
-namespace Hoshi.Tests.Services.Video;
+namespace Niratan.Tests.Services.Video;
 
 public class VideoThumbnailServiceTests : IDisposable
 {
-    private readonly string _directory = Path.Combine(Path.GetTempPath(), $"hoshi-thumbs-{Guid.NewGuid():N}");
+    private readonly string _directory = Path.Combine(Path.GetTempPath(), $"niratan-thumbs-{Guid.NewGuid():N}");
 
     public VideoThumbnailServiceTests()
     {
@@ -768,21 +768,21 @@ public class VideoThumbnailServiceTests : IDisposable
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoThumbnailServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoThumbnailServiceTests"
 ```
 
 Expected: fails because the thumbnail service does not exist.
 
 - [ ] **Step 3: Implement `IVideoThumbnailService`**
 
-Create `Hoshi/Services/Video/IVideoThumbnailService.cs`:
+Create `Niratan/Services/Video/IVideoThumbnailService.cs`:
 
 ```csharp
 using System.Threading;
 using System.Threading.Tasks;
-using Hoshi.Models;
+using Niratan.Models;
 
-namespace Hoshi.Services.Video;
+namespace Niratan.Services.Video;
 
 public interface IVideoThumbnailService
 {
@@ -798,7 +798,7 @@ public interface IVideoThumbnailService
 
 - [ ] **Step 4: Implement cache and single-worker generation**
 
-Create `Hoshi/Services/Video/VideoThumbnailService.cs`. The service should:
+Create `Niratan/Services/Video/VideoThumbnailService.cs`. The service should:
 
 ```csharp
 private const int MaximumConcurrentJobs = 1;
@@ -845,7 +845,7 @@ Update `VideoPlayerWindowService` to raise `PlaybackWindowOpened` when a window 
 
 - [ ] **Step 7: Register thumbnail service**
 
-Add to `Hoshi/App.xaml.cs` service registration near other video services:
+Add to `Niratan/App.xaml.cs` service registration near other video services:
 
 ```csharp
 services.AddSingleton<IVideoThumbnailService, VideoThumbnailService>();
@@ -856,7 +856,7 @@ services.AddSingleton<IVideoThumbnailService, VideoThumbnailService>();
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoThumbnailServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoThumbnailServiceTests"
 ```
 
 Expected: PASS.
@@ -864,7 +864,7 @@ Expected: PASS.
 - [ ] **Step 9: Commit Task 3**
 
 ```powershell
-git add Hoshi/Services/Video/IVideoThumbnailService.cs Hoshi/Services/Video/VideoThumbnailService.cs Hoshi/Services/Video/LibMpvVideoMiningMediaExtractor.cs Hoshi/Services/Video/IVideoPlayerWindowService.cs Hoshi/Services/Video/VideoPlayerWindowService.cs Hoshi/App.xaml.cs Hoshi.Tests/Services/Video/VideoThumbnailServiceTests.cs
+git add Niratan/Services/Video/IVideoThumbnailService.cs Niratan/Services/Video/VideoThumbnailService.cs Niratan/Services/Video/LibMpvVideoMiningMediaExtractor.cs Niratan/Services/Video/IVideoPlayerWindowService.cs Niratan/Services/Video/VideoPlayerWindowService.cs Niratan/App.xaml.cs Niratan.Tests/Services/Video/VideoThumbnailServiceTests.cs
 git commit -m "feat: generate video library thumbnails"
 ```
 
@@ -873,10 +873,10 @@ git commit -m "feat: generate video library thumbnails"
 ### Task 4: ViewModel Layout, Navigation, And Smart Collection Commands
 
 **Files:**
-- Modify: `Hoshi/ViewModels/Pages/VideoLibraryPageViewModel.cs`
-- Modify: `Hoshi/ViewModels/Components/VideoItemViewModel.cs`
-- Test: `Hoshi.Tests/ViewModels/Pages/VideoLibraryPageViewModelTests.cs`
-- Test: `Hoshi.Tests/ViewModels/Components/VideoItemViewModelTests.cs`
+- Modify: `Niratan/ViewModels/Pages/VideoLibraryPageViewModel.cs`
+- Modify: `Niratan/ViewModels/Components/VideoItemViewModel.cs`
+- Test: `Niratan.Tests/ViewModels/Pages/VideoLibraryPageViewModelTests.cs`
+- Test: `Niratan.Tests/ViewModels/Components/VideoItemViewModelTests.cs`
 
 **Interfaces:**
 - Consumes: `IVideoLibraryService` collection methods and `IVideoThumbnailService`.
@@ -937,7 +937,7 @@ public async Task CreateSmartCollectionCommand_CreatesCollectionAndReloadsFilter
 }
 ```
 
-Add a component test in `Hoshi.Tests/ViewModels/Components/VideoItemViewModelTests.cs`:
+Add a component test in `Niratan.Tests/ViewModels/Components/VideoItemViewModelTests.cs`:
 
 ```csharp
 [Fact]
@@ -990,7 +990,7 @@ Add no-op implementations for manual collection, delete collection, and favorite
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoLibraryPageViewModelTests|FullyQualifiedName~VideoItemViewModelTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoLibraryPageViewModelTests|FullyQualifiedName~VideoItemViewModelTests"
 ```
 
 Expected: fails because layout mode, smart collection draft state, and artwork path are missing.
@@ -1101,7 +1101,7 @@ public bool HasPoster => HasArtwork;
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoLibraryPageViewModelTests|FullyQualifiedName~VideoItemViewModelTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoLibraryPageViewModelTests|FullyQualifiedName~VideoItemViewModelTests"
 ```
 
 Expected: PASS.
@@ -1109,7 +1109,7 @@ Expected: PASS.
 - [ ] **Step 11: Commit Task 4**
 
 ```powershell
-git add Hoshi/ViewModels/Pages/VideoLibraryPageViewModel.cs Hoshi/ViewModels/Components/VideoItemViewModel.cs Hoshi.Tests/ViewModels/Pages/VideoLibraryPageViewModelTests.cs Hoshi.Tests/ViewModels/Components/VideoItemViewModelTests.cs
+git add Niratan/ViewModels/Pages/VideoLibraryPageViewModel.cs Niratan/ViewModels/Components/VideoItemViewModel.cs Niratan.Tests/ViewModels/Pages/VideoLibraryPageViewModelTests.cs Niratan.Tests/ViewModels/Components/VideoItemViewModelTests.cs
 git commit -m "feat: add video library layout and smart collection state"
 ```
 
@@ -1118,11 +1118,11 @@ git commit -m "feat: add video library layout and smart collection state"
 ### Task 5: WinUI Library UI And Localization
 
 **Files:**
-- Modify: `Hoshi/Views/Pages/VideoLibraryPage.xaml`
-- Modify: `Hoshi/Views/Pages/VideoLibraryPage.xaml.cs`
-- Modify: `Hoshi/Strings/en-US/Resources.resw`
-- Modify: `Hoshi/Strings/zh-CN/Resources.resw`
-- Test: `Hoshi.Tests/Views/Pages/VideoLibraryPageAssetTests.cs`
+- Modify: `Niratan/Views/Pages/VideoLibraryPage.xaml`
+- Modify: `Niratan/Views/Pages/VideoLibraryPage.xaml.cs`
+- Modify: `Niratan/Strings/en-US/Resources.resw`
+- Modify: `Niratan/Strings/zh-CN/Resources.resw`
+- Test: `Niratan.Tests/Views/Pages/VideoLibraryPageAssetTests.cs`
 
 **Interfaces:**
 - Consumes: ViewModel layout flags, collections, smart collection draft fields, and `VideoItemViewModel` artwork metadata.
@@ -1172,7 +1172,7 @@ Extend the localization key loop with:
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoLibraryPageAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoLibraryPageAssetTests"
 ```
 
 Expected: fails because XAML controls and localization keys are missing.
@@ -1325,7 +1325,7 @@ Update `Resources.resw` in both `en-US` and `zh-CN`. Use these Simplified Chines
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoLibraryPageAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoLibraryPageAssetTests"
 ```
 
 Expected: PASS.
@@ -1333,7 +1333,7 @@ Expected: PASS.
 - [ ] **Step 9: Commit Task 5**
 
 ```powershell
-git add Hoshi/Views/Pages/VideoLibraryPage.xaml Hoshi/Views/Pages/VideoLibraryPage.xaml.cs Hoshi/Strings/en-US/Resources.resw Hoshi/Strings/zh-CN/Resources.resw Hoshi.Tests/Views/Pages/VideoLibraryPageAssetTests.cs
+git add Niratan/Views/Pages/VideoLibraryPage.xaml Niratan/Views/Pages/VideoLibraryPage.xaml.cs Niratan/Strings/en-US/Resources.resw Niratan/Strings/zh-CN/Resources.resw Niratan.Tests/Views/Pages/VideoLibraryPageAssetTests.cs
 git commit -m "feat: add niratan style video library views"
 ```
 
@@ -1349,13 +1349,13 @@ git commit -m "feat: add niratan style video library views"
 - Consumes all previous tasks.
 - Produces verified working video library parity increment.
 
-- [ ] **Step 1: Stop the worktree Hoshi process if it is running**
+- [ ] **Step 1: Stop the worktree Niratan process if it is running**
 
 Run:
 
 ```powershell
-Get-Process Hoshi -ErrorAction SilentlyContinue |
-    Where-Object { $_.Path -like '*\.worktrees\niratan-video-library-min\Hoshi\bin*' } |
+Get-Process Niratan -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -like '*\.worktrees\niratan-video-library-min\Niratan\bin*' } |
     ForEach-Object { Stop-Process -Id $_.Id -Force }
 ```
 
@@ -1376,7 +1376,7 @@ Expected: build succeeds. Existing NU1903 warnings can remain if they are alread
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: all tests pass.
@@ -1389,7 +1389,7 @@ Run:
 .\build-and-run.ps1
 ```
 
-Expected: Hoshi opens from this worktree.
+Expected: Niratan opens from this worktree.
 
 - [ ] **Step 5: Manual smoke checklist**
 
@@ -1411,7 +1411,7 @@ If verification required fixes:
 
 ```powershell
 git status --short
-git add Hoshi/Models Hoshi/Services Hoshi/ViewModels Hoshi/Views Hoshi/Strings Hoshi.Tests
+git add Niratan/Models Niratan/Services Niratan/ViewModels Niratan/Views Niratan/Strings Niratan.Tests
 git commit -m "fix: stabilize niratan video library parity"
 ```
 

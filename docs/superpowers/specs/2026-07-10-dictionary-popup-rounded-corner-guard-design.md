@@ -79,7 +79,7 @@ These changes remain UI-only code in the View layer. Lookup, database, dictionar
 
 - Build with `dotnet build -p:Platform=x64`.
 - Run dictionary-focused tests.
-- Launch Hoshi and open a dictionary popup over a bright video frame.
+- Launch Niratan and open a dictionary popup over a bright video frame.
 - Verify all four corners at 100% and high-DPI scaling.
 - Verify normal 12 DIP, naked 8 DIP, and square standalone presentations.
 - Verify light and dark themes, popup warm-up, nested lookup, scrolling, resize, and Shift-hover responsiveness.

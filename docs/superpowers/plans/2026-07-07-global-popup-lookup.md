@@ -13,10 +13,10 @@
 ### Task 1: Route Hotkey To Popup Service
 
 **Files:**
-- Create: `Hoshi/Services/Dictionary/IGlobalLookupPopupService.cs`
-- Modify: `Hoshi/Services/Dictionary/GlobalSelectionLookupService.cs`
-- Modify: `Hoshi/App.xaml.cs`
-- Test: `Hoshi.Tests/Services/Dictionary/GlobalSelectionLookupServiceTests.cs`
+- Create: `Niratan/Services/Dictionary/IGlobalLookupPopupService.cs`
+- Modify: `Niratan/Services/Dictionary/GlobalSelectionLookupService.cs`
+- Modify: `Niratan/App.xaml.cs`
+- Test: `Niratan.Tests/Services/Dictionary/GlobalSelectionLookupServiceTests.cs`
 
 - [ ] **Step 1: Write failing tests**
 
@@ -32,7 +32,7 @@ Expected assertions:
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GlobalSelectionLookupServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GlobalSelectionLookupServiceTests"
 ```
 
 Expected: tests fail because `GlobalSelectionLookupService` still depends on `IGlobalLookupWindowService`.
@@ -42,7 +42,7 @@ Expected: tests fail because `GlobalSelectionLookupService` still depends on `IG
 Create `IGlobalLookupPopupService`:
 
 ```csharp
-namespace Hoshi.Services.Dictionary;
+namespace Niratan.Services.Dictionary;
 
 public interface IGlobalLookupPopupService
 {
@@ -61,11 +61,11 @@ Register the implementation once Task 2 creates it. During Task 1, tests can use
 ### Task 2: Build Floating Popup Window
 
 **Files:**
-- Create: `Hoshi/Views/Dictionary/GlobalLookupPopupWindow.xaml`
-- Create: `Hoshi/Views/Dictionary/GlobalLookupPopupWindow.xaml.cs`
-- Create: `Hoshi/Services/Dictionary/GlobalLookupPopupService.cs`
-- Modify: `Hoshi/App.xaml.cs`
-- Test: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Create: `Niratan/Views/Dictionary/GlobalLookupPopupWindow.xaml`
+- Create: `Niratan/Views/Dictionary/GlobalLookupPopupWindow.xaml.cs`
+- Create: `Niratan/Services/Dictionary/GlobalLookupPopupService.cs`
+- Modify: `Niratan/App.xaml.cs`
+- Test: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 - [ ] **Step 1: Write asset tests**
 
@@ -80,7 +80,7 @@ Add tests that assert:
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GlobalLookupPopup"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GlobalLookupPopup"
 ```
 
 Expected: fail because popup window/service do not exist.
@@ -88,7 +88,7 @@ Expected: fail because popup window/service do not exist.
 - [ ] **Step 3: Implement popup window**
 
 Create a small borderless/topmost-ish WinUI window whose content is a full-size `Canvas` named `DictionaryOverlayCanvas`. Code-behind should:
-- set title to `"Hoshi Lookup Popup"`;
+- set title to `"Niratan Lookup Popup"`;
 - initialize `DictionaryPopupOverlay`;
 - call `UseCanvas(DictionaryOverlayCanvas)`;
 - call `ShowLookupAsync` with the `DictionaryPopupRequest` contents;
@@ -111,15 +111,15 @@ Create a small borderless/topmost-ish WinUI window whose content is a full-size 
 ### Task 3: Verify Interaction And Regression Safety
 
 **Files:**
-- Test: `Hoshi.Tests/Services/Dictionary/GlobalSelectionLookupServiceTests.cs`
-- Test: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Test: `Niratan.Tests/Services/Dictionary/GlobalSelectionLookupServiceTests.cs`
+- Test: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 - [ ] **Step 1: Run targeted tests**
 
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GlobalSelectionLookupServiceTests|FullyQualifiedName~GlobalLookupPopup|FullyQualifiedName~GlobalLookupWindow"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GlobalSelectionLookupServiceTests|FullyQualifiedName~GlobalLookupPopup|FullyQualifiedName~GlobalLookupWindow"
 ```
 
 Expected: all targeted tests pass.
@@ -147,7 +147,7 @@ Then perform the real hotkey test from Notepad:
 - focus the document;
 - select all text;
 - press `Ctrl+Alt+D`;
-- verify a visible Hoshi popup window appears without opening `Global Lookup`;
+- verify a visible Niratan popup window appears without opening `Global Lookup`;
 - verify logs show a `global-popup-` lookup trace and rendered popup content.
 
 - [ ] **Step 4: Full test suite**
@@ -155,7 +155,7 @@ Then perform the real hotkey test from Notepad:
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --no-build
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --no-build
 ```
 
 Expected: all tests pass.

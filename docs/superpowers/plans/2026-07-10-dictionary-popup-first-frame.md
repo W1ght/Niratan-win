@@ -22,10 +22,10 @@
 ### Task 1: Make first-entry commit the only readiness authority
 
 **Files:**
-- Modify: `Hoshi.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
-- Modify: `Hoshi/Services/Dictionary/PopupHtmlGenerator.cs`
-- Modify: `Hoshi/Web/DictionaryPopup/popup.js`
+- Modify: `Niratan.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Niratan/Services/Dictionary/PopupHtmlGenerator.cs`
+- Modify: `Niratan/Web/DictionaryPopup/popup.js`
 
 **Interfaces:**
 - Consumes: existing `window.popupRenderGeneration`, `postPopupMessage`, entry creation helpers, and native generation validation.
@@ -33,7 +33,7 @@
 
 - [ ] **Step 1: Add failing readiness contract tests**
 
-Add assertions that generated shell HTML no longer contains `hoshiPopupObserveContentReady`, that `popup.js` contains exactly one populated-result `postPopupMessage('contentReady', { generation: generation })`, and that the first-frame function performs these operations in order:
+Add assertions that generated shell HTML no longer contains `niratanPopupObserveContentReady`, that `popup.js` contains exactly one populated-result `postPopupMessage('contentReady', { generation: generation })`, and that the first-frame function performs these operations in order:
 
 ```csharp
 var script = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Web", "DictionaryPopup", "popup.js"));
@@ -59,7 +59,7 @@ Require the main render path to call `renderEntry(0, generation, ...)`, then `co
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryLookupServiceTests|FullyQualifiedName~NovelReaderWebAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryLookupServiceTests|FullyQualifiedName~NovelReaderWebAssetTests"
 ```
 
 Expected: FAIL because the MutationObserver readiness bridge still exists and the first-frame functions do not exist.
@@ -81,7 +81,7 @@ try {
 }
 ```
 
-Remove calls to `window.hoshiPopupObserveContentReady` from result injection and replacement paths.
+Remove calls to `window.niratanPopupObserveContentReady` from result injection and replacement paths.
 
 - [ ] **Step 4: Refactor `renderPopup` around a first-entry boundary**
 
@@ -124,7 +124,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit Task 1**
 
 ```powershell
-git add Hoshi.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs Hoshi/Services/Dictionary/PopupHtmlGenerator.cs Hoshi/Web/DictionaryPopup/popup.js
+git add Niratan.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs Niratan/Services/Dictionary/PopupHtmlGenerator.cs Niratan/Web/DictionaryPopup/popup.js
 git commit -m "fix: commit dictionary popup first frame atomically"
 ```
 
@@ -133,10 +133,10 @@ git commit -m "fix: commit dictionary popup first frame atomically"
 ### Task 2: Serialize native lookup on a worker and cache styles
 
 **Files:**
-- Create: `Hoshi/Services/Dictionary/DictionaryNativeExecutor.cs`
-- Create: `Hoshi.Tests/Services/Dictionary/DictionaryNativeExecutorTests.cs`
-- Modify: `Hoshi/Services/Dictionary/DictionaryLookupService.cs`
-- Modify: `Hoshi.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs`
+- Create: `Niratan/Services/Dictionary/DictionaryNativeExecutor.cs`
+- Create: `Niratan.Tests/Services/Dictionary/DictionaryNativeExecutorTests.cs`
+- Modify: `Niratan/Services/Dictionary/DictionaryLookupService.cs`
+- Modify: `Niratan.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs`
 
 **Interfaces:**
 - Produces: `DictionaryNativeExecutor.RunAsync<T>(SemaphoreSlim gate, Func<T> operation)`.
@@ -187,7 +187,7 @@ Use a recording `ILogger<DictionaryLookupService>` with the existing temporary n
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryNativeExecutorTests|FullyQualifiedName~DictionaryLookupServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryNativeExecutorTests|FullyQualifiedName~DictionaryLookupServiceTests"
 ```
 
 Expected: FAIL because `DictionaryNativeExecutor` and style caching do not exist.
@@ -233,7 +233,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit Task 2**
 
 ```powershell
-git add Hoshi/Services/Dictionary/DictionaryNativeExecutor.cs Hoshi/Services/Dictionary/DictionaryLookupService.cs Hoshi.Tests/Services/Dictionary/DictionaryNativeExecutorTests.cs Hoshi.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs
+git add Niratan/Services/Dictionary/DictionaryNativeExecutor.cs Niratan/Services/Dictionary/DictionaryLookupService.cs Niratan.Tests/Services/Dictionary/DictionaryNativeExecutorTests.cs Niratan.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs
 git commit -m "perf: move dictionary lookup off ui thread"
 ```
 
@@ -266,7 +266,7 @@ Expected: no whitespace errors; only intended files are modified.
 - [ ] **Step 3: Run dictionary-focused tests**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"
 ```
 
 Expected: PASS.
@@ -275,14 +275,14 @@ Expected: PASS.
 
 ```powershell
 dotnet build -p:Platform=x64
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: PASS with zero build errors and zero failed tests.
 
 - [ ] **Step 5: Launch and verify the rendered flow**
 
-Run `./build-and-run.ps1`, confirm the Hoshi top-level window is responsive,
+Run `./build-and-run.ps1`, confirm the Niratan top-level window is responsive,
 open the supplied test video, and look up `せっかく`. Confirm the first visible
 popup frame includes the expression, tags, actions, and complete first-entry
 dictionary cards. Repeat with Shift-hover and nested lookup.

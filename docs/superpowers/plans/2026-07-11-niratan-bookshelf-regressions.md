@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Target Windows 10+ x64; build with `dotnet build -p:Platform=x64` and test with `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`.
+- Target Windows 10+ x64; build with `dotnet build -p:Platform=x64` and test with `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`.
 - Do not modify `native/hoshidicts/` or reintroduce foliate-js.
 - Keep View code-behind UI-only; ViewModels expose state and commands; services own IO.
 - ViewModels must not access SQLite, files, or `HttpClient` directly.
@@ -22,33 +22,33 @@
 
 ## File Structure
 
-- Modify `Hoshi/ViewModels/Components/NovelShelfSectionViewModel.cs`: typed local/remote section projection.
-- Modify `Hoshi/ViewModels/Components/RemoteNovelBookItemViewModel.cs`: observable cover and per-import state.
-- Modify `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs`: ordered section projection, independent cancellation, cover hydration, bounded parallel imports.
-- Modify `Hoshi/Views/Pages/NovelLibraryPage.xaml`: one adaptive multi-row section surface and explicit card commands.
-- Modify `Hoshi/Views/Pages/NovelLibraryPage.xaml.cs`: remove the unreliable local-card `DataContext` activation handler.
-- Create `Hoshi/Services/Sync/IGoogleDriveCoverCacheService.cs`: narrow cover cache contract.
-- Create `Hoshi/Services/Sync/GoogleDriveCoverCacheService.cs`: authenticated, atomic, validated cover cache.
-- Create `Hoshi.Tests/TestUtils/TempDirectory.cs`: reusable disposable directory for new service/ViewModel tests.
-- Modify `Hoshi/App.xaml.cs`: register the cover service.
-- Modify `Hoshi/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs`: yield the loading surface and retain generation safety.
-- Modify `Hoshi/Services/Novels/NovelStatisticsDashboardService.cs`: leave the caller context before cache and sidecar work.
-- Create `Hoshi/Views/Controls/NovelStatisticsDashboardLayout.cs`: pure breakpoint selection.
-- Modify `Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml(.cs)`: one guarded adaptive owner.
-- Create focused tests under `Hoshi.Tests/Services/Sync`, `Hoshi.Tests/ViewModels/Pages`, and `Hoshi.Tests/Views/Pages`; update obsolete bookshelf/dashboard asset assertions in `NovelReaderWebAssetTests.cs`.
+- Modify `Niratan/ViewModels/Components/NovelShelfSectionViewModel.cs`: typed local/remote section projection.
+- Modify `Niratan/ViewModels/Components/RemoteNovelBookItemViewModel.cs`: observable cover and per-import state.
+- Modify `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs`: ordered section projection, independent cancellation, cover hydration, bounded parallel imports.
+- Modify `Niratan/Views/Pages/NovelLibraryPage.xaml`: one adaptive multi-row section surface and explicit card commands.
+- Modify `Niratan/Views/Pages/NovelLibraryPage.xaml.cs`: remove the unreliable local-card `DataContext` activation handler.
+- Create `Niratan/Services/Sync/IGoogleDriveCoverCacheService.cs`: narrow cover cache contract.
+- Create `Niratan/Services/Sync/GoogleDriveCoverCacheService.cs`: authenticated, atomic, validated cover cache.
+- Create `Niratan.Tests/TestUtils/TempDirectory.cs`: reusable disposable directory for new service/ViewModel tests.
+- Modify `Niratan/App.xaml.cs`: register the cover service.
+- Modify `Niratan/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs`: yield the loading surface and retain generation safety.
+- Modify `Niratan/Services/Novels/NovelStatisticsDashboardService.cs`: leave the caller context before cache and sidecar work.
+- Create `Niratan/Views/Controls/NovelStatisticsDashboardLayout.cs`: pure breakpoint selection.
+- Modify `Niratan/Views/Controls/NovelStatisticsDashboardView.xaml(.cs)`: one guarded adaptive owner.
+- Create focused tests under `Niratan.Tests/Services/Sync`, `Niratan.Tests/ViewModels/Pages`, and `Niratan.Tests/Views/Pages`; update obsolete bookshelf/dashboard asset assertions in `NovelReaderWebAssetTests.cs`.
 
 ---
 
 ### Task 1: Unified Reading-to-Unshelved Multi-Row Sections and Reliable Card Activation
 
 **Files:**
-- Modify: `Hoshi/ViewModels/Components/NovelShelfSectionViewModel.cs`
-- Modify: `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs`
-- Modify: `Hoshi/Views/Pages/NovelLibraryPage.xaml`
-- Modify: `Hoshi/Views/Pages/NovelLibraryPage.xaml.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
-- Create: `Hoshi.Tests/Views/Pages/NovelLibraryPageAssetTests.cs`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Niratan/ViewModels/Components/NovelShelfSectionViewModel.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs`
+- Modify: `Niratan/Views/Pages/NovelLibraryPage.xaml`
+- Modify: `Niratan/Views/Pages/NovelLibraryPage.xaml.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
+- Create: `Niratan.Tests/Views/Pages/NovelLibraryPageAssetTests.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
 - Produces: `NovelLibraryPageViewModel.ShelfSections` in Reading/custom/Google Drive/Unshelved order.
@@ -130,7 +130,7 @@ Create `NovelLibraryPageAssetTests.cs`:
 
 ```csharp
 private static readonly string ProjectRoot = Path.GetFullPath(
-    Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "Hoshi"));
+    Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "Niratan"));
 
 [Fact]
 public void ShelfSections_UseExplicitCommandsAndWrappingGrid()
@@ -162,7 +162,7 @@ libraryViewModel.Should().NotContain("ObservableCollection<NovelBookItemViewMode
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~NovelLibraryPageAssetTests|FullyQualifiedName~NovelReaderWebAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~NovelLibraryPageAssetTests|FullyQualifiedName~NovelReaderWebAssetTests"
 ```
 
 Expected: FAIL because `ShelfSections` does not exist, Reading still depends on `BookshelfShowReading`, and XAML still uses separate horizontal rails and a click handler.
@@ -230,22 +230,22 @@ Expected: PASS; build has no new errors.
 - [ ] **Step 7: Commit the unified shelf surface**
 
 ```powershell
-git add Hoshi/ViewModels/Components/NovelShelfSectionViewModel.cs Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs Hoshi/Views/Pages/NovelLibraryPage.xaml Hoshi/Views/Pages/NovelLibraryPage.xaml.cs Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs Hoshi.Tests/Views/Pages/NovelLibraryPageAssetTests.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add Niratan/ViewModels/Components/NovelShelfSectionViewModel.cs Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs Niratan/Views/Pages/NovelLibraryPage.xaml Niratan/Views/Pages/NovelLibraryPage.xaml.cs Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs Niratan.Tests/Views/Pages/NovelLibraryPageAssetTests.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "fix(bookshelf): restore niratan section activation and layout"
 ```
 
 ### Task 2: Authenticated Google Drive Cover Cache
 
 **Files:**
-- Create: `Hoshi/Services/Sync/IGoogleDriveCoverCacheService.cs`
-- Create: `Hoshi/Services/Sync/GoogleDriveCoverCacheService.cs`
-- Modify: `Hoshi/Helpers/AppDataHelper.cs`
-- Modify: `Hoshi/ViewModels/Components/RemoteNovelBookItemViewModel.cs`
-- Modify: `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs`
-- Modify: `Hoshi/App.xaml.cs`
-- Create: `Hoshi.Tests/Services/Sync/GoogleDriveCoverCacheServiceTests.cs`
-- Create: `Hoshi.Tests/TestUtils/TempDirectory.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
+- Create: `Niratan/Services/Sync/IGoogleDriveCoverCacheService.cs`
+- Create: `Niratan/Services/Sync/GoogleDriveCoverCacheService.cs`
+- Modify: `Niratan/Helpers/AppDataHelper.cs`
+- Modify: `Niratan/ViewModels/Components/RemoteNovelBookItemViewModel.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs`
+- Modify: `Niratan/App.xaml.cs`
+- Create: `Niratan.Tests/Services/Sync/GoogleDriveCoverCacheServiceTests.cs`
+- Create: `Niratan.Tests/TestUtils/TempDirectory.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
 
 **Interfaces:**
 - Produces: `IGoogleDriveCoverCacheService.GetCoverPathAsync(TtuRemoteFile?, CancellationToken)`.
@@ -259,14 +259,14 @@ Use a temporary cache root and queued `HttpMessageHandler`:
 Create the shared helper first:
 
 ```csharp
-namespace Hoshi.Tests.TestUtils;
+namespace Niratan.Tests.TestUtils;
 
 public sealed class TempDirectory : IDisposable
 {
     public TempDirectory()
     {
         Path = System.IO.Path.Combine(
-            System.IO.Path.GetTempPath(), $"hoshi-tests-{Guid.NewGuid():N}");
+            System.IO.Path.GetTempPath(), $"niratan-tests-{Guid.NewGuid():N}");
         Directory.CreateDirectory(Path);
     }
 
@@ -405,7 +405,7 @@ public async Task GetCoverPathAsync_CancellationPropagates()
 - [ ] **Step 2: Run the cache tests and verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GoogleDriveCoverCacheServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GoogleDriveCoverCacheServiceTests"
 ```
 
 Expected: FAIL because the interface and service do not exist.
@@ -423,7 +423,7 @@ public interface IGoogleDriveCoverCacheService
 }
 ```
 
-Add `AppDataHelper.GetGoogleDriveCoverCachePath()` under `%APPDATA%/Hoshi/Cache/GoogleDriveCovers`.
+Add `AppDataHelper.GetGoogleDriveCoverCachePath()` under `%APPDATA%/Niratan/Cache/GoogleDriveCovers`.
 
 The service constructor accepts `HttpClient`, `IGoogleDriveAuthService`, and an internal test cache-root overload. Hash `cover.Id` with SHA-256 for the filename. Return an existing non-empty recognized PNG/JPEG/GIF/BMP/WebP file. Otherwise delete the invalid entry, normalize a terminal `=s<number>` to `=s768`, send a bearer-authenticated GET, validate the leading magic bytes, write a unique `.tmp`, and `File.Move(temp, target, overwrite: true)` in `try/finally`. Rethrow `OperationCanceledException`; return `null` for `HttpRequestException`, `IOException`, and `UnauthorizedAccessException`.
 
@@ -511,7 +511,7 @@ private sealed class FakeGoogleDriveCoverCacheService(
 - [ ] **Step 6: Run cover and ViewModel tests GREEN**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GoogleDriveCoverCacheServiceTests|FullyQualifiedName~NovelLibraryPageViewModelTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GoogleDriveCoverCacheServiceTests|FullyQualifiedName~NovelLibraryPageViewModelTests"
 dotnet build -p:Platform=x64
 ```
 
@@ -520,17 +520,17 @@ Expected: PASS.
 - [ ] **Step 7: Commit cover support**
 
 ```powershell
-git add Hoshi/Services/Sync/IGoogleDriveCoverCacheService.cs Hoshi/Services/Sync/GoogleDriveCoverCacheService.cs Hoshi/Helpers/AppDataHelper.cs Hoshi/ViewModels/Components/RemoteNovelBookItemViewModel.cs Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs Hoshi/Views/Pages/NovelLibraryPage.xaml Hoshi/App.xaml.cs Hoshi.Tests/TestUtils/TempDirectory.cs Hoshi.Tests/Services/Sync/GoogleDriveCoverCacheServiceTests.cs Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs
+git add Niratan/Services/Sync/IGoogleDriveCoverCacheService.cs Niratan/Services/Sync/GoogleDriveCoverCacheService.cs Niratan/Helpers/AppDataHelper.cs Niratan/ViewModels/Components/RemoteNovelBookItemViewModel.cs Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs Niratan/Views/Pages/NovelLibraryPage.xaml Niratan/App.xaml.cs Niratan.Tests/TestUtils/TempDirectory.cs Niratan.Tests/Services/Sync/GoogleDriveCoverCacheServiceTests.cs Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs
 git commit -m "feat(sync): show cached google drive covers"
 ```
 
 ### Task 3: Three-Way Parallel Google Drive Imports with Independent Lifetimes
 
 **Files:**
-- Modify: `Hoshi/ViewModels/Components/RemoteNovelBookItemViewModel.cs`
-- Modify: `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs`
-- Modify: `Hoshi/Views/Pages/NovelLibraryPage.xaml`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
+- Modify: `Niratan/ViewModels/Components/RemoteNovelBookItemViewModel.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs`
+- Modify: `Niratan/Views/Pages/NovelLibraryPage.xaml`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
 
 **Interfaces:**
 - Produces: concurrent `DownloadRemoteBookCommand` with a three-slot import gate.
@@ -671,7 +671,7 @@ private sealed class ControlledTtuBookImportService : ITtuBookImportService
 - [ ] **Step 2: Run the concurrency tests and verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageViewModelTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageViewModelTests"
 ```
 
 Expected: FAIL because the generated command rejects concurrent calls and all work shares `_cts`.
@@ -755,7 +755,7 @@ Show a progress bar for Queued/Downloading, use localized status text (`Queued`,
 - [ ] **Step 6: Run concurrency tests and build GREEN**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~NovelLibraryPageAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~NovelLibraryPageAssetTests"
 dotnet build -p:Platform=x64
 ```
 
@@ -764,22 +764,22 @@ Expected: PASS.
 - [ ] **Step 7: Commit independent parallel imports**
 
 ```powershell
-git add Hoshi/ViewModels/Components/RemoteNovelBookItemViewModel.cs Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs Hoshi/Views/Pages/NovelLibraryPage.xaml Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs Hoshi.Tests/Views/Pages/NovelLibraryPageAssetTests.cs Hoshi/Strings/en-US/Resources.resw Hoshi/Strings/zh-CN/Resources.resw
+git add Niratan/ViewModels/Components/RemoteNovelBookItemViewModel.cs Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs Niratan/Views/Pages/NovelLibraryPage.xaml Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs Niratan.Tests/Views/Pages/NovelLibraryPageAssetTests.cs Niratan/Strings/en-US/Resources.resw Niratan/Strings/zh-CN/Resources.resw
 git commit -m "fix(sync): allow independent parallel book imports"
 ```
 
 ### Task 4: Responsive Statistics Activation and Single Adaptive Layout Owner
 
 **Files:**
-- Modify: `Hoshi/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs`
-- Modify: `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs`
-- Modify: `Hoshi/Services/Novels/NovelStatisticsDashboardService.cs`
-- Create: `Hoshi/Views/Controls/NovelStatisticsDashboardLayout.cs`
-- Modify: `Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml`
-- Modify: `Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs`
-- Create: `Hoshi.Tests/Views/Controls/NovelStatisticsDashboardLayoutTests.cs`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs`
+- Modify: `Niratan/Services/Novels/NovelStatisticsDashboardService.cs`
+- Create: `Niratan/Views/Controls/NovelStatisticsDashboardLayout.cs`
+- Modify: `Niratan/Views/Controls/NovelStatisticsDashboardView.xaml`
+- Modify: `Niratan/Views/Controls/NovelStatisticsDashboardView.xaml.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs`
+- Create: `Niratan.Tests/Views/Controls/NovelStatisticsDashboardLayoutTests.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
 - Produces: `NovelStatisticsDashboardLayoutMode Select(double width)`.
@@ -827,7 +827,7 @@ Update asset expectations to assert there is no `AdaptiveTrigger`, one `SizeChan
 - [ ] **Step 2: Run focused statistics tests and verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboard|FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~NovelReaderWebAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboard|FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~NovelReaderWebAssetTests"
 ```
 
 Expected: FAIL because the pure layout selector does not exist and XAML/code-behind both own the adaptive layout.
@@ -922,7 +922,7 @@ Expected: PASS and no new warnings beyond the repository's existing package advi
 - [ ] **Step 6: Commit the statistics responsiveness fix**
 
 ```powershell
-git add Hoshi/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs Hoshi/Services/Novels/NovelStatisticsDashboardService.cs Hoshi/Views/Controls/NovelStatisticsDashboardLayout.cs Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml.cs Hoshi.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs Hoshi.Tests/Views/Controls/NovelStatisticsDashboardLayoutTests.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add Niratan/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs Niratan/Services/Novels/NovelStatisticsDashboardService.cs Niratan/Views/Controls/NovelStatisticsDashboardLayout.cs Niratan/Views/Controls/NovelStatisticsDashboardView.xaml Niratan/Views/Controls/NovelStatisticsDashboardView.xaml.cs Niratan.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs Niratan.Tests/Views/Controls/NovelStatisticsDashboardLayoutTests.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "fix(statistics): keep dashboard activation responsive"
 ```
 
@@ -938,7 +938,7 @@ git commit -m "fix(statistics): keep dashboard activation responsive"
 - [ ] **Step 1: Run all automated tests**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: PASS with zero failed tests.
@@ -957,7 +957,7 @@ Expected: build succeeds. Record the existing `SQLitePCLRaw.lib.e_sqlite3` advis
 .\build-and-run.ps1
 ```
 
-Confirm a responsive `Hoshi` top-level window with a non-zero main window handle. Leave the final verified instance running.
+Confirm a responsive `Niratan` top-level window with a non-zero main window handle. Leave the final verified instance running.
 
 - [ ] **Step 4: Verify local shelves through UI Automation**
 
@@ -984,7 +984,7 @@ Add the new section AutomationId/command checks, multi-row grid checks, three-wa
 - [ ] **Step 8: Re-run documentation-sensitive tests and commit**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests|FullyQualifiedName~NovelLibraryPageAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests|FullyQualifiedName~NovelLibraryPageAssetTests"
 git add docs/VERIFICATION.md docs/CHANGELOG.md
 git commit -m "docs: verify niratan bookshelf regressions"
 ```

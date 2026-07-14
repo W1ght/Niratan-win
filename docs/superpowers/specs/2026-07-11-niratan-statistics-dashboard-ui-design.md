@@ -6,7 +6,7 @@ Replace the current compact statistics panel embedded above the novel rails with
 
 ## Reference and Scope
 
-The behavioral and layout reference is `docs/reference/hoshi/Niratan/Features/Bookshelf/StatisticsDashboardView.swift` together with the dashboard switching behavior in `docs/reference/hoshi/Niratan/NativeMac/NativeReuseViews.swift`.
+The behavioral and layout reference is `docs/reference/Niratan/Features/Bookshelf/StatisticsDashboardView.swift` together with the dashboard switching behavior in `docs/reference/Niratan/NativeMac/NativeReuseViews.swift`.
 
 This design covers:
 

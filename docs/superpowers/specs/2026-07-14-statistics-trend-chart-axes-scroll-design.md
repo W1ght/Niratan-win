@@ -10,7 +10,7 @@ Make the statistics trend chart readable and stable at a glance:
 - let the user move the selected date window with an always-visible horizontal range slider;
 - keep every Dashboard card synchronized with the visible date window.
 
-This is a Windows extension to the current Hoshi macOS Dashboard reference. The Mac implementation provides range modes and a fixed minimum chart height, but does not expose numeric axes or a draggable historical window. The extension preserves Hoshi's date-range and aggregation semantics.
+This is a Windows extension to the current Niratan macOS Dashboard reference. The Mac implementation provides range modes and a fixed minimum chart height, but does not expose numeric axes or a draggable historical window. The extension preserves Niratan's date-range and aggregation semantics.
 
 ## Interaction Model
 

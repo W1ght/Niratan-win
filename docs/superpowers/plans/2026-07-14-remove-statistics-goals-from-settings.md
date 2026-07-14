@@ -19,12 +19,12 @@
 ### Task 1: Remove settings-only goal editors
 
 **Files:**
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/StatisticsSettingsPageViewModelTests.cs`
-- Modify: `Hoshi/Views/Pages/StatisticsSettingsPage.xaml`
-- Modify: `Hoshi/ViewModels/Pages/StatisticsSettingsPageViewModel.cs`
-- Modify: `Hoshi/Strings/en-US/Resources.resw`
-- Modify: `Hoshi/Strings/zh-CN/Resources.resw`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/StatisticsSettingsPageViewModelTests.cs`
+- Modify: `Niratan/Views/Pages/StatisticsSettingsPage.xaml`
+- Modify: `Niratan/ViewModels/Pages/StatisticsSettingsPageViewModel.cs`
+- Modify: `Niratan/Strings/en-US/Resources.resw`
+- Modify: `Niratan/Strings/zh-CN/Resources.resw`
 - Modify: `docs/CHANGELOG.md`
 
 **Interfaces:**
@@ -40,7 +40,7 @@ Assert that `StatisticsSettingsPage.xaml` excludes all `StatisticsDaily*` and `S
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~StatisticsSettingsPageViewModelTests|FullyQualifiedName~AdvancedSettings_ExposesDedicatedStatisticsPage" --no-restore
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~StatisticsSettingsPageViewModelTests|FullyQualifiedName~AdvancedSettings_ExposesDedicatedStatisticsPage" --no-restore
 ```
 
 Expected: failures show the goal controls and settings editor properties still exist.
@@ -54,20 +54,20 @@ Delete the daily/weekly goal XAML cards and settings-only resource entries. Remo
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~StatisticsSettingsPageViewModelTests|FullyQualifiedName~AdvancedSettings_ExposesDedicatedStatisticsPage"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~StatisticsSettingsPageViewModelTests|FullyQualifiedName~AdvancedSettings_ExposesDedicatedStatisticsPage"
 dotnet build -p:Platform=x64
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --no-build
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --no-build
 ```
 
 Expected: focused tests pass, build reports 0 errors, and the full suite reports 0 failures.
 
 - [ ] **Step 5: Launch and verify**
 
-Start the exact x64 worktree executable, open Statistics settings, confirm Daily Goal and Weekly Goal are absent, then leave the responsive Hoshi instance running.
+Start the exact x64 worktree executable, open Statistics settings, confirm Daily Goal and Weekly Goal are absent, then leave the responsive Niratan instance running.
 
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add Hoshi Hoshi.Tests docs
+git add Niratan Niratan.Tests docs
 git commit -m "fix(settings): align statistics page with Niratan"
 ```

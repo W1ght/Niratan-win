@@ -22,17 +22,17 @@
 
 ## File Structure
 
-- Create `Hoshi/Models/Novel/ReaderNavigationTransactionModels.cs`: immutable positions, destinations, render requests, commit leases, and settlements.
-- Create `Hoshi/Services/Novels/ReaderNavigationTransactionCoordinator.cs`: pure generation/state owner with no WebView or persistence dependency.
-- Create `Hoshi.Tests/Services/Novels/ReaderNavigationTransactionCoordinatorTests.cs`: executable state-machine and race coverage.
-- Modify `Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs`: transaction-facing APIs, writer-tail destination commit, lifecycle settlement, atomic position publication.
-- Modify `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`: apply typed render/settlement instructions and remove business-state flags.
-- Modify `Hoshi/Web/NovelReader/reader-bridge.js`: include navigation generation and chapter identity in terminal messages.
-- Modify `Hoshi/Services/Novels/NovelReaderBridgeMessageFactory.cs`: keep typed destination serialization centralized.
-- Modify `Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`: persistence, lifecycle, mutation gate, and exact-position integration tests.
-- Modify `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`: bridge and UI-only Page contracts.
-- Modify `Hoshi.Tests/Views/Pages/NovelReaderStatisticsLifecycleTests.cs`: lifecycle settles navigation before final checkpoint.
-- Delete `Hoshi/Services/Novels/ReaderProgrammaticNavigationTracker.cs` and `Hoshi/Services/Novels/ReaderAdjacentNavigationCommitCoordinator.cs` after all callers migrate.
+- Create `Niratan/Models/Novel/ReaderNavigationTransactionModels.cs`: immutable positions, destinations, render requests, commit leases, and settlements.
+- Create `Niratan/Services/Novels/ReaderNavigationTransactionCoordinator.cs`: pure generation/state owner with no WebView or persistence dependency.
+- Create `Niratan.Tests/Services/Novels/ReaderNavigationTransactionCoordinatorTests.cs`: executable state-machine and race coverage.
+- Modify `Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs`: transaction-facing APIs, writer-tail destination commit, lifecycle settlement, atomic position publication.
+- Modify `Niratan/Views/Pages/NovelReaderPage.xaml.cs`: apply typed render/settlement instructions and remove business-state flags.
+- Modify `Niratan/Web/NovelReader/reader-bridge.js`: include navigation generation and chapter identity in terminal messages.
+- Modify `Niratan/Services/Novels/NovelReaderBridgeMessageFactory.cs`: keep typed destination serialization centralized.
+- Modify `Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`: persistence, lifecycle, mutation gate, and exact-position integration tests.
+- Modify `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`: bridge and UI-only Page contracts.
+- Modify `Niratan.Tests/Views/Pages/NovelReaderStatisticsLifecycleTests.cs`: lifecycle settles navigation before final checkpoint.
+- Delete `Niratan/Services/Novels/ReaderProgrammaticNavigationTracker.cs` and `Niratan/Services/Novels/ReaderAdjacentNavigationCommitCoordinator.cs` after all callers migrate.
 - Delete their superseded test files after equivalent behavior exists in the new coordinator suite.
 - Update `docs/VERIFICATION.md`, `docs/CHANGELOG.md`, and `.superpowers/sdd/progress.md` with the final transaction behavior and evidence.
 
@@ -41,9 +41,9 @@
 ### Task 1: Build the pure navigation transaction state machine
 
 **Files:**
-- Create: `Hoshi/Models/Novel/ReaderNavigationTransactionModels.cs`
-- Create: `Hoshi/Services/Novels/ReaderNavigationTransactionCoordinator.cs`
-- Create: `Hoshi.Tests/Services/Novels/ReaderNavigationTransactionCoordinatorTests.cs`
+- Create: `Niratan/Models/Novel/ReaderNavigationTransactionModels.cs`
+- Create: `Niratan/Services/Novels/ReaderNavigationTransactionCoordinator.cs`
+- Create: `Niratan.Tests/Services/Novels/ReaderNavigationTransactionCoordinatorTests.cs`
 
 **Interfaces:**
 - Produces: `ReaderNavigationPositionSnapshot`, `ReaderNavigationDestination`, `ReaderNavigationRenderRequest`, `ReaderNavigationCommitLease`, `ReaderNavigationSettlement`, and `ReaderNavigationTransactionCoordinator`.
@@ -93,7 +93,7 @@ Cover separately:
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderNavigationTransactionCoordinatorTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderNavigationTransactionCoordinatorTests"
 ```
 
 Expected: compile failure because the transaction models and coordinator do not exist.
@@ -173,7 +173,7 @@ Run the Task 1 test command. Expected: all coordinator tests pass.
 - [ ] **Step 6: Commit Task 1**
 
 ```powershell
-git add -- Hoshi/Models/Novel/ReaderNavigationTransactionModels.cs Hoshi/Services/Novels/ReaderNavigationTransactionCoordinator.cs Hoshi.Tests/Services/Novels/ReaderNavigationTransactionCoordinatorTests.cs
+git add -- Niratan/Models/Novel/ReaderNavigationTransactionModels.cs Niratan/Services/Novels/ReaderNavigationTransactionCoordinator.cs Niratan.Tests/Services/Novels/ReaderNavigationTransactionCoordinatorTests.cs
 git commit -m "refactor(reader): add navigation transaction state machine"
 ```
 
@@ -182,12 +182,12 @@ git commit -m "refactor(reader): add navigation transaction state machine"
 ### Task 2: Move persistence and lifecycle settlement into the ViewModel transaction
 
 **Files:**
-- Modify: `Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs`
-- Modify: `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
-- Modify: `Hoshi/App.xaml.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
-- Modify: `Hoshi.Tests/Views/Pages/NovelReaderStatisticsLifecycleTests.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs`
+- Modify: `Niratan/Views/Pages/NovelReaderPage.xaml.cs`
+- Modify: `Niratan/App.xaml.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Niratan.Tests/Views/Pages/NovelReaderStatisticsLifecycleTests.cs`
 
 **Interfaces:**
 - Consumes: Task 1 coordinator and models.
@@ -234,7 +234,7 @@ Add separate tests proving:
 - [ ] **Step 2: Run ViewModel tests and verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests"
 ```
 
 Expected: compile failures for the new ViewModel transaction API.
@@ -302,7 +302,7 @@ Before changing progress in manual Reader events, programmatic commands, or Sasa
 - [ ] **Step 7: Run focused and lifecycle tests**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~NovelReaderStatisticsLifecycleTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~NovelReaderStatisticsLifecycleTests"
 ```
 
 Expected: all selected tests pass.
@@ -310,7 +310,7 @@ Expected: all selected tests pass.
 - [ ] **Step 8: Commit Task 2**
 
 ```powershell
-git add -- Hoshi/App.xaml.cs Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs Hoshi/Views/Pages/NovelReaderPage.xaml.cs Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs Hoshi.Tests/Views/Pages/NovelReaderStatisticsLifecycleTests.cs
+git add -- Niratan/App.xaml.cs Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs Niratan/Views/Pages/NovelReaderPage.xaml.cs Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs Niratan.Tests/Views/Pages/NovelReaderStatisticsLifecycleTests.cs
 git commit -m "refactor(reader): commit navigation through viewmodel transaction"
 ```
 
@@ -319,11 +319,11 @@ git commit -m "refactor(reader): commit navigation through viewmodel transaction
 ### Task 3: Make Page and bridge consume typed render and settlement instructions
 
 **Files:**
-- Modify: `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
-- Modify: `Hoshi/Web/NovelReader/reader-bridge.js`
-- Modify: `Hoshi/Services/Novels/NovelReaderBridgeMessageFactory.cs`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderBridgeMessageFactoryTests.cs`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Niratan/Views/Pages/NovelReaderPage.xaml.cs`
+- Modify: `Niratan/Web/NovelReader/reader-bridge.js`
+- Modify: `Niratan/Services/Novels/NovelReaderBridgeMessageFactory.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderBridgeMessageFactoryTests.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
 - Consumes: Task 2 ViewModel transaction APIs.
@@ -335,13 +335,13 @@ Require the bridge to emit:
 
 ```javascript
 postToHost("restoreCompleted", {
-  progress: window.hoshiReader.calculateProgress(),
+  progress: window.niratanReader.calculateProgress(),
   chapterIndex: currentChapter.index,
   navigationGeneration: navigationGeneration ?? null,
 });
 
 postToHost("chapterReady", {
-  ...window.__hoshiReaderState,
+  ...window.__niratanReaderState,
   chapterIndex: currentChapter.index,
   navigationGeneration: navigationGeneration ?? null,
 });
@@ -359,7 +359,7 @@ Add Page contract assertions that:
 - [ ] **Step 2: Run bridge/Page tests and verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderBridgeMessageFactoryTests|FullyQualifiedName~NovelReaderWebAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderBridgeMessageFactoryTests|FullyQualifiedName~NovelReaderWebAssetTests"
 ```
 
 Expected: failures because terminal bridge payloads and Page transaction calls are absent.
@@ -418,7 +418,7 @@ Run the Task 3 test command. Expected: all selected tests pass.
 - [ ] **Step 8: Commit Task 3**
 
 ```powershell
-git add -- Hoshi/Views/Pages/NovelReaderPage.xaml.cs Hoshi/Web/NovelReader/reader-bridge.js Hoshi/Services/Novels/NovelReaderBridgeMessageFactory.cs Hoshi.Tests/Services/Novels/NovelReaderBridgeMessageFactoryTests.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add -- Niratan/Views/Pages/NovelReaderPage.xaml.cs Niratan/Web/NovelReader/reader-bridge.js Niratan/Services/Novels/NovelReaderBridgeMessageFactory.cs Niratan.Tests/Services/Novels/NovelReaderBridgeMessageFactoryTests.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "refactor(reader): render navigation settlements atomically"
 ```
 
@@ -427,10 +427,10 @@ git commit -m "refactor(reader): render navigation settlements atomically"
 ### Task 4: Gate every live position mutation, including Sasayaki
 
 **Files:**
-- Modify: `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
-- Modify: `Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`
+- Modify: `Niratan/Views/Pages/NovelReaderPage.xaml.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`
 
 **Interfaces:**
 - Consumes: `CanAcceptReaderPositionMutation` and terminal settlement from Tasks 2-3.
@@ -453,7 +453,7 @@ Also prove playback UI state and non-positional cue highlighting may still updat
 - [ ] **Step 2: Run Reader tests and verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~NovelReaderWebAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~NovelReaderWebAssetTests"
 ```
 
 Expected: at least the live Sasayaki callback and programmatic-entry contracts fail.
@@ -487,7 +487,7 @@ Run the Task 4 test command. Expected: all selected tests pass.
 - [ ] **Step 7: Commit Task 4**
 
 ```powershell
-git add -- Hoshi/Views/Pages/NovelReaderPage.xaml.cs Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs
+git add -- Niratan/Views/Pages/NovelReaderPage.xaml.cs Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs
 git commit -m "fix(reader): gate position mutation during navigation"
 ```
 
@@ -496,10 +496,10 @@ git commit -m "fix(reader): gate position mutation during navigation"
 ### Task 5: Remove legacy navigation state and perform final verification
 
 **Files:**
-- Delete: `Hoshi/Services/Novels/ReaderProgrammaticNavigationTracker.cs`
-- Delete: `Hoshi/Services/Novels/ReaderAdjacentNavigationCommitCoordinator.cs`
-- Delete: `Hoshi.Tests/Services/Novels/ReaderProgrammaticNavigationTrackerTests.cs`
-- Delete: `Hoshi.Tests/Services/Novels/ReaderAdjacentNavigationCommitCoordinatorTests.cs`
+- Delete: `Niratan/Services/Novels/ReaderProgrammaticNavigationTracker.cs`
+- Delete: `Niratan/Services/Novels/ReaderAdjacentNavigationCommitCoordinator.cs`
+- Delete: `Niratan.Tests/Services/Novels/ReaderProgrammaticNavigationTrackerTests.cs`
+- Delete: `Niratan.Tests/Services/Novels/ReaderAdjacentNavigationCommitCoordinatorTests.cs`
 - Modify: `docs/VERIFICATION.md`
 - Modify: `docs/CHANGELOG.md`
 - Modify: `.superpowers/sdd/progress.md`
@@ -522,7 +522,7 @@ _latestAdmittedProgressRequest
 - [ ] **Step 2: Run the contract test and verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests"
 ```
 
 Expected: failure while legacy types or fields remain.
@@ -544,7 +544,7 @@ Document:
 - [ ] **Step 5: Run focused transaction suites**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderNavigationTransactionCoordinatorTests|FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~NovelReaderWebAssetTests|FullyQualifiedName~NovelReaderStatisticsLifecycleTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderNavigationTransactionCoordinatorTests|FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~NovelReaderWebAssetTests|FullyQualifiedName~NovelReaderStatisticsLifecycleTests"
 ```
 
 Expected: all selected tests pass.
@@ -552,7 +552,7 @@ Expected: all selected tests pass.
 - [ ] **Step 6: Run statistics/sync targeted suites**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Statistics|FullyQualifiedName~TtuSync|FullyQualifiedName~GoogleDrive|FullyQualifiedName~ReaderAutoSyncCoordinator"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Statistics|FullyQualifiedName~TtuSync|FullyQualifiedName~GoogleDrive|FullyQualifiedName~ReaderAutoSyncCoordinator"
 ```
 
 Expected: all selected tests pass without a real Google Drive request.
@@ -560,7 +560,7 @@ Expected: all selected tests pass without a real Google Drive request.
 - [ ] **Step 7: Run full x64 tests and build**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 dotnet build -p:Platform=x64
 ```
 
@@ -571,7 +571,7 @@ Expected: zero failed tests and zero build errors. Existing `NU1903` for `SQLite
 ```powershell
 $base = git merge-base HEAD main
 $files = @(git diff --name-only "$base..HEAD" -- '*.cs')
-dotnet format Hoshi.slnx --verify-no-changes --include $files
+dotnet format Niratan.slnx --verify-no-changes --include $files
 git diff --check "$base..HEAD"
 ```
 
@@ -582,16 +582,16 @@ Expected: changed-file format passes and `git diff --check` exits zero. Do not a
 Build and start only:
 
 ```text
-D:\CODE\Yukari\.worktrees\niratan-reader-statistics-parity\Hoshi\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64\Hoshi.exe
+D:\CODE\Yukari\.worktrees\niratan-reader-statistics-parity\Niratan\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64\Niratan.exe
 ```
 
-Verify its process path and non-zero main-window handle. If safe UI automation can identify that exact process, check a backward adjacent boundary and confirm progress chrome has no temporary 100%/`1.0` update. Do not stop or interact with another Hoshi instance.
+Verify its process path and non-zero main-window handle. If safe UI automation can identify that exact process, check a backward adjacent boundary and confirm progress chrome has no temporary 100%/`1.0` update. Do not stop or interact with another Niratan instance.
 
 - [ ] **Step 10: Commit Task 5**
 
 ```powershell
-git add -- Hoshi Hoshi.Tests docs/VERIFICATION.md docs/CHANGELOG.md .superpowers/sdd/progress.md
-git reset -- docs/reference/hoshi/Hoshi-Reader-Mac docs/reference/hoshi/Niratan
+git add -- Niratan Niratan.Tests docs/VERIFICATION.md docs/CHANGELOG.md .superpowers/sdd/progress.md
+git reset -- docs/reference/Niratan
 git commit -m "test(reader): verify atomic navigation transactions"
 ```
 

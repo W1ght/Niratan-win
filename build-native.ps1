@@ -179,12 +179,12 @@ if ($dll) {
     Write-Host "Native DLL: $($dll.FullName)"
     Write-Host "Copied to: $outDir\hoshidicts_c_api.dll"
 
-    # Also copy to Hoshi output directories
-    $hoshiOutDirs = @(
-        "$PSScriptRoot\Hoshi\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64",
-        "$PSScriptRoot\Hoshi\bin\x64\Release\net10.0-windows10.0.22621.0\win-x64"
+    # Also copy to Niratan output directories
+    $niratanOutDirs = @(
+        "$PSScriptRoot\Niratan\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64",
+        "$PSScriptRoot\Niratan\bin\x64\Release\net10.0-windows10.0.22621.0\win-x64"
     )
-    foreach ($dir in $hoshiOutDirs) {
+    foreach ($dir in $niratanOutDirs) {
         if (Test-Path $dir) {
             Copy-Item "$outDir\hoshidicts_c_api.dll" "$dir\hoshidicts_c_api.dll" -Force
             Write-Host "Copied to: $dir"

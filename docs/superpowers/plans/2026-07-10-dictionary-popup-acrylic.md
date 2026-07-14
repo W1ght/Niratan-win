@@ -26,20 +26,20 @@
 
 ## File Structure
 
-- `Hoshi/Views/Dictionary/DictionaryPopupMaterial.cs`: canonical Acrylic tint, luminosity, and opaque fallback values.
-- `Hoshi/Views/Dictionary/DictionaryLookupPopup.cs`: Acrylic native shell, transparent WebView2 initialization, outline synchronization, and existing guard geometry.
-- `Hoshi/Services/Dictionary/PopupHtmlGenerator.cs`: generated shell remains semantically themed while its rendered document background is transparent.
-- `Hoshi/Web/DictionaryPopup/popup.css`: dedicated transparent popup-surface variable; cards and scrollbars remain unchanged.
-- `Hoshi/Web/DictionaryPopup/popup-host.html`: static host mirrors the transparent generated shell.
-- `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`: native shell, transparent host, corner-guard, scrollbar, and asset regressions.
-- `Hoshi.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs`: generated HTML keeps semantic theme colors while painting a transparent shell.
+- `Niratan/Views/Dictionary/DictionaryPopupMaterial.cs`: canonical Acrylic tint, luminosity, and opaque fallback values.
+- `Niratan/Views/Dictionary/DictionaryLookupPopup.cs`: Acrylic native shell, transparent WebView2 initialization, outline synchronization, and existing guard geometry.
+- `Niratan/Services/Dictionary/PopupHtmlGenerator.cs`: generated shell remains semantically themed while its rendered document background is transparent.
+- `Niratan/Web/DictionaryPopup/popup.css`: dedicated transparent popup-surface variable; cards and scrollbars remain unchanged.
+- `Niratan/Web/DictionaryPopup/popup-host.html`: static host mirrors the transparent generated shell.
+- `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`: native shell, transparent host, corner-guard, scrollbar, and asset regressions.
+- `Niratan.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs`: generated HTML keeps semantic theme colors while painting a transparent shell.
 
 ### Task 1: Native Acrylic Shell and Transparent WebView2
 
 **Files:**
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs:1060-1130`
-- Modify: `Hoshi/Views/Dictionary/DictionaryPopupMaterial.cs:15-75`
-- Modify: `Hoshi/Views/Dictionary/DictionaryLookupPopup.cs:45-110, 330-340, 425-435`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs:1060-1130`
+- Modify: `Niratan/Views/Dictionary/DictionaryPopupMaterial.cs:15-75`
+- Modify: `Niratan/Views/Dictionary/DictionaryLookupPopup.cs:45-110, 330-340, 425-435`
 
 **Interfaces:**
 - Consumes: `DictionaryPopupMaterial.CreateInAppAcrylicThinBrush(ThemeMode)` and `DictionaryPopupMaterial.ApplyTheme(AcrylicBrush, ThemeMode)`.
@@ -84,7 +84,7 @@ transparent WebView2.
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryLookupPopup_UsesFluentFloatingCardShell"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryLookupPopup_UsesFluentFloatingCardShell"
 ```
 
 Expected: FAIL because the popup still declares `SolidColorBrush`, uses the
@@ -153,7 +153,7 @@ modes, `WarmAsync`, or `contentReady` handling.
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryLookupPopup_UsesFluentFloatingCardShell|FullyQualifiedName~DictionaryPopupCornerGuardTests|FullyQualifiedName~DictionaryPopup_WebDocumentUsesOpaqueHostSurface|FullyQualifiedName~PopupHtmlGenerator_AutoRendersLookupEntriesAfterShellLoads"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryLookupPopup_UsesFluentFloatingCardShell|FullyQualifiedName~DictionaryPopupCornerGuardTests|FullyQualifiedName~DictionaryPopup_WebDocumentUsesOpaqueHostSurface|FullyQualifiedName~PopupHtmlGenerator_AutoRendersLookupEntriesAfterShellLoads"
 ```
 
 Expected at this checkpoint: native shell/guard tests PASS; the old opaque web
@@ -165,7 +165,7 @@ an intentional cross-task ⚠️, not as completion of the Acrylic surface.
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: all tests pass, with only the repository's pre-existing NU1903
@@ -174,18 +174,18 @@ advisory warning.
 Commit:
 
 ```powershell
-git add -- Hoshi/Views/Dictionary/DictionaryPopupMaterial.cs Hoshi/Views/Dictionary/DictionaryLookupPopup.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add -- Niratan/Views/Dictionary/DictionaryPopupMaterial.cs Niratan/Views/Dictionary/DictionaryLookupPopup.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "style: use acrylic dictionary popup shell"
 ```
 
 ### Task 2: Transparent Generated Popup Surface
 
 **Files:**
-- Modify: `Hoshi.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs:100-120`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs:250-270`
-- Modify: `Hoshi/Services/Dictionary/PopupHtmlGenerator.cs:45-70`
-- Modify: `Hoshi/Web/DictionaryPopup/popup.css:10-60, 475-495`
-- Modify: `Hoshi/Web/DictionaryPopup/popup-host.html:7-23`
+- Modify: `Niratan.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs:100-120`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs:250-270`
+- Modify: `Niratan/Services/Dictionary/PopupHtmlGenerator.cs:45-70`
+- Modify: `Niratan/Web/DictionaryPopup/popup.css:10-60, 475-495`
+- Modify: `Niratan/Web/DictionaryPopup/popup-host.html:7-23`
 
 **Interfaces:**
 - Consumes: semantic `--background-color` and `--text-color` values from `PopupHtmlGenerator`.
@@ -231,7 +231,7 @@ declare and use `--popup-surface-color: transparent`.
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~PopupHtmlGenerator_PreservesSemanticThemeColorsWithTransparentSurface|FullyQualifiedName~DictionaryPopup_WebDocumentUsesTransparentAcrylicSurface"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~PopupHtmlGenerator_PreservesSemanticThemeColorsWithTransparentSurface|FullyQualifiedName~DictionaryPopup_WebDocumentUsesTransparentAcrylicSurface"
 ```
 
 Expected: FAIL because generated HTML, CSS, viewport, overlay, and the static
@@ -293,7 +293,7 @@ Mirror the same variable and `background-color` declaration in
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~PopupHtmlGenerator_PreservesSemanticThemeColorsWithTransparentSurface|FullyQualifiedName~DictionaryPopup_WebDocumentUsesTransparentAcrylicSurface|FullyQualifiedName~DictionaryPopup_UsesDesktopReferenceDictionaryCards|FullyQualifiedName~DictionaryPopup_UsesPanningIndicatorScrollbarChrome|FullyQualifiedName~PopupHtmlGenerator_AutoRendersLookupEntriesAfterShellLoads"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~PopupHtmlGenerator_PreservesSemanticThemeColorsWithTransparentSurface|FullyQualifiedName~DictionaryPopup_WebDocumentUsesTransparentAcrylicSurface|FullyQualifiedName~DictionaryPopup_UsesDesktopReferenceDictionaryCards|FullyQualifiedName~DictionaryPopup_UsesPanningIndicatorScrollbarChrome|FullyQualifiedName~PopupHtmlGenerator_AutoRendersLookupEntriesAfterShellLoads"
 ```
 
 Expected: all selected tests pass.
@@ -303,7 +303,7 @@ Expected: all selected tests pass.
 Compare Task 2's diff against its base and require no changed line matching:
 
 ```powershell
-git diff --unified=0 HEAD -- Hoshi/Web/DictionaryPopup/popup.css | Select-String -Pattern 'popup-scrollbar|webkit-scrollbar|popup-card|glossary-group'
+git diff --unified=0 HEAD -- Niratan/Web/DictionaryPopup/popup.css | Select-String -Pattern 'popup-scrollbar|webkit-scrollbar|popup-card|glossary-group'
 ```
 
 Expected: no output for scrollbar/card selectors or variables. Inspect the
@@ -315,7 +315,7 @@ changed.
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: all tests pass.
@@ -323,7 +323,7 @@ Expected: all tests pass.
 Commit:
 
 ```powershell
-git add -- Hoshi/Services/Dictionary/PopupHtmlGenerator.cs Hoshi/Web/DictionaryPopup/popup.css Hoshi/Web/DictionaryPopup/popup-host.html Hoshi.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add -- Niratan/Services/Dictionary/PopupHtmlGenerator.cs Niratan/Web/DictionaryPopup/popup.css Niratan/Web/DictionaryPopup/popup-host.html Niratan.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "style: make dictionary popup surface transparent"
 ```
 
@@ -341,10 +341,10 @@ git commit -m "style: make dictionary popup surface transparent"
 Run:
 
 ```powershell
-node --check Hoshi/Web/DictionaryPopup/popup.js
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"
+node --check Niratan/Web/DictionaryPopup/popup.js
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"
 dotnet build -p:Platform=x64
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: JavaScript exit 0, dictionary tests pass, build has 0 errors, and
@@ -358,7 +358,7 @@ Run:
 .\build-and-run.ps1
 ```
 
-Use objective process/window evidence to confirm the running `Hoshi.exe` path
+Use objective process/window evidence to confirm the running `Niratan.exe` path
 belongs to the isolated worktree, has a nonzero top-level window, and is
 responsive.
 
@@ -403,10 +403,10 @@ Run:
 ```powershell
 git diff --check
 git diff --stat $(git merge-base main HEAD)..HEAD
-git diff $(git merge-base main HEAD)..HEAD -- Hoshi/Views/Dictionary/DictionaryPopupMaterial.cs Hoshi/Views/Dictionary/DictionaryLookupPopup.cs Hoshi/Services/Dictionary/PopupHtmlGenerator.cs Hoshi/Web/DictionaryPopup/popup.css Hoshi/Web/DictionaryPopup/popup-host.html Hoshi.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git diff $(git merge-base main HEAD)..HEAD -- Niratan/Views/Dictionary/DictionaryPopupMaterial.cs Niratan/Views/Dictionary/DictionaryLookupPopup.cs Niratan/Services/Dictionary/PopupHtmlGenerator.cs Niratan/Web/DictionaryPopup/popup.css Niratan/Web/DictionaryPopup/popup-host.html Niratan.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git status --short
 ```
 
 Expected: no whitespace errors, only the planned files changed, and no
-tracked/untracked implementation residue. Leave the final verified Hoshi
+tracked/untracked implementation residue. Leave the final verified Niratan
 instance running only when the capability gate passes.

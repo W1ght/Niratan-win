@@ -53,7 +53,7 @@ Add focused tests to `NovelStatisticsDashboardCacheTests`:
 2. Simulate a cache store that throws `NotSupportedException`, assert `TryLoadAsync` returns `null`, and assert only the derived cache file is deleted.
 3. Retain the existing corrupt-cache and source-sidecar preservation tests.
 
-Run the focused statistics cache tests, the full x64 test suite, and the x64 build. Launch Hoshi and open the statistics dashboard with the already imported `かがみの孤城` data to confirm the panel rebuilds without an unhandled exception.
+Run the focused statistics cache tests, the full x64 test suite, and the x64 build. Launch Niratan and open the statistics dashboard with the already imported `かがみの孤城` data to confirm the panel rebuilds without an unhandled exception.
 
 ## Success criteria
 

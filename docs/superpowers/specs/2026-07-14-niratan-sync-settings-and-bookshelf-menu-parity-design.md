@@ -2,7 +2,7 @@
 
 ## Goal
 
-Align Hoshi Windows with Niratan's user-visible sync settings and per-book bookshelf sync commands while retaining the Windows desktop OAuth client secret securely on the local machine.
+Align Niratan Windows with Niratan's user-visible sync settings and per-book bookshelf sync commands while retaining the Windows desktop OAuth client secret securely on the local machine.
 
 ## Reference Behavior
 

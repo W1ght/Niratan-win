@@ -193,7 +193,7 @@ design and explicit approval.
 - Verify platform fallback with transparency effects unavailable when this can
   be tested without changing user system settings; otherwise validate the
   explicit fallback values through automated tests.
-- Leave the final verified Hoshi instance running.
+- Leave the final verified Niratan instance running.
 
 ## Alternatives Considered
 

@@ -12,7 +12,7 @@
 
 - Target Windows 10+ x64; do not build ARM64.
 - Preserve the View → ViewModel → Service layering and keep chart drawing UI-only.
-- Do not modify `native/hoshidicts/` or any Hoshi reference repository.
+- Do not modify `native/hoshidicts/` or any Niratan reference repository.
 - The trend chart height is exactly 260 effective pixels.
 - The anchor-date picker and public `AnchorDate` ViewModel property are removed.
 - The range slider selects discrete day, Monday-aligned week, calendar-month, or recent-year windows and synchronizes every Dashboard card.
@@ -23,8 +23,8 @@
 ### Task 1: Calendar-aligned selectable date windows
 
 **Files:**
-- Modify: `Hoshi/Services/Novels/NovelStatisticsDashboardCalculator.cs`
-- Test: `Hoshi.Tests/Services/Novels/NovelStatisticsDashboardSummaryTests.cs`
+- Modify: `Niratan/Services/Novels/NovelStatisticsDashboardCalculator.cs`
+- Test: `Niratan.Tests/Services/Novels/NovelStatisticsDashboardSummaryTests.cs`
 
 **Interfaces:**
 - Produces: `NovelStatisticsDashboardCalculator.SelectableRanges(NovelStatisticsRangeMode mode, NovelStatisticsDateRange window) : IReadOnlyList<NovelStatisticsDateRange>`
@@ -74,7 +74,7 @@ public void SelectableRanges_HandleWholeWindowAndDailySteps(
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardSummaryTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardSummaryTests"
 ```
 
 Expected: compile failure because `SelectableRanges` does not exist.
@@ -123,7 +123,7 @@ Run the command from Step 2. Expected: all summary tests pass.
 - [ ] **Step 5: Commit Task 1**
 
 ```powershell
-git add -- Hoshi/Services/Novels/NovelStatisticsDashboardCalculator.cs Hoshi.Tests/Services/Novels/NovelStatisticsDashboardSummaryTests.cs
+git add -- Niratan/Services/Novels/NovelStatisticsDashboardCalculator.cs Niratan.Tests/Services/Novels/NovelStatisticsDashboardSummaryTests.cs
 git commit -m "feat(statistics): add scrollable calendar ranges"
 ```
 
@@ -132,10 +132,10 @@ git commit -m "feat(statistics): add scrollable calendar ranges"
 ### Task 2: ViewModel range scrolling and axis projections
 
 **Files:**
-- Modify: `Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs`
-- Modify: `Hoshi/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs`
-- Test: `Hoshi.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs`
-- Test: `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
+- Modify: `Niratan/Models/Novel/NovelStatisticsDashboardModels.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs`
+- Test: `Niratan.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs`
+- Test: `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
 
 **Interfaces:**
 - Consumes: `SelectableRanges(...)` from Task 1.
@@ -207,7 +207,7 @@ Update `NovelLibraryPageViewModelTests.StatisticsControls_ReprojectRangeMetricsC
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardViewModelTests|FullyQualifiedName~StatisticsControls_ReprojectRangeMetricsCalendarAndCorruptWarning"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardViewModelTests|FullyQualifiedName~StatisticsControls_ReprojectRangeMetricsCalendarAndCorruptWarning"
 ```
 
 Expected: compile failures for the new range-slider and tick properties and for the removed behavior expectation.
@@ -280,7 +280,7 @@ Run the command from Step 2. Expected: all selected tests pass.
 - [ ] **Step 6: Commit Task 2**
 
 ```powershell
-git add -- Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs Hoshi/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs Hoshi.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs
+git add -- Niratan/Models/Novel/NovelStatisticsDashboardModels.cs Niratan/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs Niratan.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs
 git commit -m "feat(statistics): scroll synchronized date windows"
 ```
 
@@ -289,12 +289,12 @@ git commit -m "feat(statistics): scroll synchronized date windows"
 ### Task 3: Fixed-height chart, numeric axes, and horizontal range slider
 
 **Files:**
-- Modify: `Hoshi/Views/Controls/NovelStatisticsTrendChart.xaml`
-- Modify: `Hoshi/Views/Controls/NovelStatisticsTrendChart.xaml.cs`
-- Modify: `Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml`
-- Modify: `Hoshi/Strings/en-US/Resources.resw`
-- Modify: `Hoshi/Strings/zh-CN/Resources.resw`
-- Test: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Niratan/Views/Controls/NovelStatisticsTrendChart.xaml`
+- Modify: `Niratan/Views/Controls/NovelStatisticsTrendChart.xaml.cs`
+- Modify: `Niratan/Views/Controls/NovelStatisticsDashboardView.xaml`
+- Modify: `Niratan/Strings/en-US/Resources.resw`
+- Modify: `Niratan/Strings/zh-CN/Resources.resw`
+- Test: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
 - Consumes: `TrendAxisTicks` and range-slider properties from Task 2.
@@ -325,7 +325,7 @@ Remove `NovelStatisticsAnchorLabel` from the required resource UID list and add 
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPage_ExposesStatisticsDashboard"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPage_ExposesStatisticsDashboard"
 ```
 
 Expected: assertions fail because the anchor picker still exists and axes/range slider do not.
@@ -379,7 +379,7 @@ Keep tooltip and automation metadata on bars/markers and keep the hidden point a
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPage_ExposesStatisticsDashboard|FullyQualifiedName~NovelStatisticsDashboard"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPage_ExposesStatisticsDashboard|FullyQualifiedName~NovelStatisticsDashboard"
 ```
 
 Expected: all matching tests pass.
@@ -387,7 +387,7 @@ Expected: all matching tests pass.
 - [ ] **Step 6: Commit Task 3**
 
 ```powershell
-git add -- Hoshi/Views/Controls/NovelStatisticsTrendChart.xaml Hoshi/Views/Controls/NovelStatisticsTrendChart.xaml.cs Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml Hoshi/Strings/en-US/Resources.resw Hoshi/Strings/zh-CN/Resources.resw Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add -- Niratan/Views/Controls/NovelStatisticsTrendChart.xaml Niratan/Views/Controls/NovelStatisticsTrendChart.xaml.cs Niratan/Views/Controls/NovelStatisticsDashboardView.xaml Niratan/Strings/en-US/Resources.resw Niratan/Strings/zh-CN/Resources.resw Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "feat(statistics): label and scroll trend chart"
 ```
 
@@ -411,15 +411,15 @@ Add a changelog entry that records the prior limitations and the new fixed-heigh
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboard|FullyQualifiedName~NovelLibraryPage_ExposesStatisticsDashboard"
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboard|FullyQualifiedName~NovelLibraryPage_ExposesStatisticsDashboard"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 dotnet build -p:Platform=x64
 git diff --check
 ```
 
 Expected: zero failed tests, zero build errors, and no whitespace errors. The known `SQLitePCLRaw.lib.e_sqlite3` NU1903 warning may remain.
 
-- [ ] **Step 3: Run Hoshi and verify the real Dashboard**
+- [ ] **Step 3: Run Niratan and verify the real Dashboard**
 
 Run `./build-and-run.ps1`, open Statistics, and verify the scenarios in the design specification. Confirm `かがみの孤城` remains present in the rebuilt Dashboard cache and its 153,371 imported characters are not changed by scrolling.
 

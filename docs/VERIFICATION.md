@@ -1,4 +1,4 @@
-# Hoshi 验证流程
+# Niratan 验证流程
 
 本文档包含 Reader 渲染验证、字典查词验证、音频验证的完整流程。修改相关代码后必须按对应节验证。
 
@@ -42,7 +42,7 @@ NovelDictionaryCloseButton
 `reader-bridge.js` 应暴露诊断对象：
 
 ```javascript
-window.__hoshiReaderState = {
+window.__niratanReaderState = {
   bridgeReady: true,
   bookTitle: "",
   statusText: "",
@@ -65,16 +65,16 @@ window.__hoshiReaderState = {
 
 ### 1.4 推荐端到端测试流程
 
-1. 启动 Hoshi
+1. 启动 Niratan
 2. UI Automation 打开 `NovelNavItem`
 3. 导入测试 EPUB（或使用预置测试数据库）
 4. UI Automation 定位目标书卡 `NovelBookCard_<bookId>`
 5. 触发打开动作（不允许固定坐标点击）
 6. 等待 `NovelReaderPage` 出现
-7. 等待 `window.__hoshiReaderState.bridgeReady == true`
+7. 等待 `window.__niratanReaderState.bridgeReady == true`
 8. 等待 `statusText` 进入 `EPUB loaded` 或等价成功状态
 9. 等待 `hasRenderedText == true`
-10. 保存 WebView2 截图、`__hoshiReaderState` JSON、UIA tree 摘要
+10. 保存 WebView2 截图、`__niratanReaderState` JSON、UIA tree 摘要
 11. 断言阅读区域不是空白
 
 ### 1.5 截图与日志产物
@@ -93,7 +93,7 @@ YYYY-MM-DD-uia-tree.txt
 失败时必须保留：
 - 当前窗口截图
 - WebView2 内容截图
-- `window.__hoshiReaderState` JSON
+- `window.__niratanReaderState` JSON
 - UIA tree 摘要
 - WebView2 JS 错误信息
 
@@ -120,7 +120,7 @@ YYYY-MM-DD-uia-tree.txt
 
 - 新导入 EPUB 写入私有 `<book-id>` 目录，并生成合法 `metadata.json`；重新扫描后书名、封面、Profile、字符进度不变。
 - `bookmark.json` 的章节/字符位置在关闭 Reader、重启应用后可恢复，单次保存不产生第二条 SQLite 写入。
-- 旧 SQLite fixture 首次迁移前生成 `hoshi.db.pre-novel-files-v1.bak`，导出校验成功后旧小说表被退役，视频表仍存在。
+- 旧 SQLite fixture 首次迁移前生成 `niratan.db.pre-novel-files-v1.bak`，导出校验成功后旧小说表被退役，视频表仍存在。
 - 强制导出失败时，备份和旧小说表仍存在，小说库进入只读状态；修复 fixture 后重试可完成。
 - 缺失 JSON 可按定义初始化；损坏 `metadata.json`/`shelves.json` 必须保留原字节并显示可恢复警告，不能被自动覆盖。
 - fresh database 只创建视频业务表，不创建 `NovelBooks`、`NovelReadingProgress` 或 `NovelReaderSettings`。
@@ -194,10 +194,10 @@ YYYY-MM-DD-uia-tree.txt
 必跑自动化命令：
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Statistics|FullyQualifiedName~TtuSync|FullyQualifiedName~GoogleDrive|FullyQualifiedName~NovelReaderWebAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Statistics|FullyQualifiedName~TtuSync|FullyQualifiedName~GoogleDrive|FullyQualifiedName~NovelReaderWebAssetTests"
 ```
 
-真实 UI/runtime 还要确认 Hoshi 顶层窗口响应、Reader 可打开、同章翻页与 compact panel 状态同步，并在返回书架、最小化/恢复和关闭路径检查最终 sidecar。真实 Google Drive import/export 会修改远端账户或书籍，**只有用户显式确认可修改的测试账户与测试书后才允许执行**；否则以 coordinator/mock 测试为远端调用证据，并在报告中明确写“真实 Drive 未执行”。
+真实 UI/runtime 还要确认 Niratan 顶层窗口响应、Reader 可打开、同章翻页与 compact panel 状态同步，并在返回书架、最小化/恢复和关闭路径检查最终 sidecar。真实 Google Drive import/export 会修改远端账户或书籍，**只有用户显式确认可修改的测试账户与测试书后才允许执行**；否则以 coordinator/mock 测试为远端调用证据，并在报告中明确写“真实 Drive 未执行”。
 
 #### 1.10.4 Reader 原子跳转事务
 
@@ -205,12 +205,12 @@ dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "Fu
 2. 在事务 `Rendering` 阶段触发 Background/Close：事务必须恢复并确认源位置后再写 lifecycle checkpoint；在 `Committing` 阶段触发时必须等待已接纳的目的地 bookmark 写入和终态渲染确认，再保存目的地终态，不能取消后复活旧位置。
 3. 分别在 `Rendering` 和 `Committing` 注入 bridge error。前者恢复不可变源位置；后者等待持久化结果，并按 durable bookmark 选择目的地或源位置。每个 generation 只允许一个 recovery，Reader 最终必须恢复可见和可输入。
 4. 事务未完成时，目录、搜索、内部链接、历史、字符、高亮、翻页和 Sasayaki 的 auto-scroll/load/progress/save 都不得改变位置；Sasayaki 播放 UI 与非位置 cue 高亮可以继续。异步 Sasayaki callback 必须在 await 后再次检查 mutation gate。
-5. 自动化只使用 mock/fake remote store 验证 sync 调度、TTU rollback/empty Replace 与 statistics exact-once；禁止真实 Google Drive import/export。只有精确确认启动的是本工作树 `Hoshi.exe` 且没有 single-instance 重定向时才执行 UI 边界测试，否则报告“运行态边界未验证”，不得借用或操作其他 Hoshi 进程。
+5. 自动化只使用 mock/fake remote store 验证 sync 调度、TTU rollback/empty Replace 与 statistics exact-once；禁止真实 Google Drive import/export。只有精确确认启动的是本工作树 `Niratan.exe` 且没有 single-instance 重定向时才执行 UI 边界测试，否则报告“运行态边界未验证”，不得借用或操作其他 Niratan 进程。
 6. 在 destination bookmark writer 阻塞时并发发送两次同 generation `restoreCompleted`：第一条只提交一次 bookmark/baseline/export，第二条必须返回 `Ignored`，不得触发 recovery、章节 reload、可见闪烁或 revision 消耗。
 7. 在程序化跨章事务中分别触发 Pause、Stop 和关闭统计：操作必须等待事务 settlement，并使用 settlement 的 source/destination 字符位置；字符差不得为负，Stop 不得因 lifecycle barrier 丢失。Back/Forward 只在 destination settlement 后修改栈，保存失败、bridge error 或 lifecycle source recovery 必须保持原栈。
-8. 使用包含 `<script>`、`on*`、`javascript:`/`vbscript:`、refresh、iframe/object、`xml:base`、别名前缀 XLink、SVG/MathML 与伪造 terminal message 的恶意章节 fixture；资源响应必须按 manifest media type 识别 HTML（包括非常规扩展名），先经 `EpubActiveContentSanitizer`，并携带 `script-src 'none'` CSP，清洗异常不得回退原始 virtual-host 内容。外部/子框架/new-window 导航必须被 host 拒绝，WebMessage source 必须精确匹配当前 render attempt。完整 bridge 和分页引擎必须位于 IIFE；native 翻页、滚轮和 Sasayaki 位置操作只通过 typed host message 进入 closure，`window.handleNavigate` / `window.handleMessage` / `window.hoshiReader` 及直接 paginate API 必须为 `undefined`，synthetic message 不得绕过 gate。
+8. 使用包含 `<script>`、`on*`、`javascript:`/`vbscript:`、refresh、iframe/object、`xml:base`、别名前缀 XLink、SVG/MathML 与伪造 terminal message 的恶意章节 fixture；资源响应必须按 manifest media type 识别 HTML（包括非常规扩展名），先经 `EpubActiveContentSanitizer`，并携带 `script-src 'none'` CSP，清洗异常不得回退原始 virtual-host 内容。外部/子框架/new-window 导航必须被 host 拒绝，WebMessage source 必须精确匹配当前 render attempt。完整 bridge 和分页引擎必须位于 IIFE；native 翻页、滚轮和 Sasayaki 位置操作只通过 typed host message 进入 closure，`window.handleNavigate` / `window.handleMessage` / `window.niratanReader` 及直接 paginate API 必须为 `undefined`，synthetic message 不得绕过 gate。
 
-`NovelReaderBridgeRuntimeTests` 使用 Node.js 内置 `node:vm` 执行真实 `reader-bridge.js`，不依赖 npm 包。测试按 `HOSHI_NODE_PATH`、`PATH`、`Program Files\\nodejs`、Codex bundled runtime 的顺序定位 `node.exe`；本地未安装 Node 时设置 `HOSHI_NODE_PATH`，不得静默跳过该安全回归。
+`NovelReaderBridgeRuntimeTests` 使用 Node.js 内置 `node:vm` 执行真实 `reader-bridge.js`，不依赖 npm 包。测试按 `NIRATAN_NODE_PATH`、兼容的 `HOSHI_NODE_PATH`、`PATH`、`Program Files\\nodejs`、Codex bundled runtime 的顺序定位 `node.exe`；本地未安装 Node 时设置 `NIRATAN_NODE_PATH`，不得静默跳过该安全回归。
 
 ### 1.11 Niratan Dashboard 验证
 
@@ -250,14 +250,14 @@ reader paginator/view 相关代码
 ### 2.1 验证流程
 
 1. `dotnet build -p:Platform=x64`
-2. 启动 Hoshi，确认真实 WinUI 顶层窗口出现
+2. 启动 Niratan，确认真实 WinUI 顶层窗口出现
 3. UI Automation 打开测试 EPUB（不允许固定像素或控制用户鼠标）
 4. 连续翻页多次，检查内容漂移、裁切、空白页或页码/章节状态错乱
 5. 调整窗口大小后验证 reflow：至少覆盖常规窗口和缩小窗口；resize 后正文必须重新布局
 6. 捕获 reader 日志和诊断状态，确认 `scrollPosition`、`pageCount`、`pageIndex`、`sectionIndex` 一致且无越界
-7. 如果设置了 `HOSHI_NOVEL_READER_ARTIFACT_DIR`，必须保存 WebView2 截图和 `__hoshiReaderState` JSON
+7. 如果设置了 `NIRATAN_NOVEL_READER_ARTIFACT_DIR`，必须保存 WebView2 截图和 `__niratanReaderState` JSON
 
-### 2.2 Hoshi 对齐要求
+### 2.2 Niratan 对齐要求
 
 - 分页尺寸必须来自当前 viewport，窗口大小变化后重新计算
 - 高 DPI 下横排分页宽度按 CSS `window.innerWidth` 计算；`devicePixelRatio` 禁止乘进 `--page-width`
@@ -266,7 +266,7 @@ reader paginator/view 相关代码
 - 诊断中的安全区像素从 `getComputedStyle(document.body).paddingLeft/paddingTop` 读取
 - reflow 后优先按逻辑进度恢复位置
 - 翻页边界由 native/WinUI 侧决定章节切换，reader JS 只报告状态
-- 任何漂移修复都要对照本地 Hoshi `ReaderPaginationScripts.kt`、iOS `ReaderWebView.swift`
+- 任何漂移修复都要对照 `docs/reference/Niratan/Features/Reader/ReaderWebView/reader.js` 及其 Swift 宿主
 
 ---
 
@@ -277,13 +277,13 @@ reader paginator/view 相关代码
 修改以下文件时，必须按本节验证：
 
 ```
-Hoshi/Services/Dictionary/JapaneseDeinflector.cs
-Hoshi/Services/Dictionary/DictionaryLookupService.cs
-Hoshi/Services/Dictionary/PopupHtmlGenerator.cs
-Hoshi/Views/Dictionary/DictionaryLookupPopup.cs
-Hoshi/Views/Dictionary/DictionaryPopupOverlay.cs
-Hoshi/Web/DictionaryPopup/popup.js
-Hoshi/Views/Pages/NovelReaderPage.xaml.cs
+Niratan/Services/Dictionary/JapaneseDeinflector.cs
+Niratan/Services/Dictionary/DictionaryLookupService.cs
+Niratan/Services/Dictionary/PopupHtmlGenerator.cs
+Niratan/Views/Dictionary/DictionaryLookupPopup.cs
+Niratan/Views/Dictionary/DictionaryPopupOverlay.cs
+Niratan/Web/DictionaryPopup/popup.js
+Niratan/Views/Pages/NovelReaderPage.xaml.cs
 ```
 
 `native/hoshidicts/` 子模块绝对不能修改。
@@ -291,7 +291,7 @@ Hoshi/Views/Pages/NovelReaderPage.xaml.cs
 ### 3.2 必跑验证
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 dotnet build -p:Platform=x64
 .\build-and-run.ps1  # 弹窗或 WebView2 生命周期相关时
 ```
@@ -305,9 +305,9 @@ dotnet build -p:Platform=x64
 
 ### 3.3 变形还原对齐
 
-`JapaneseDeinflector` 的目标是对齐 Android `hoshidicts/deinflector.cpp`：
+`JapaneseDeinflector` 的目标是对齐上游 hoshidicts 日语变形还原实现：
 
-- 条件位与 Android `Conditions` 语义一致
+- 条件位与上游 `Conditions` 语义一致
 - `AddRule(...)` 的输入/输出条件、规则组名称和说明与参考实现一致
 - 特殊动词与例外规则不能被通用后缀规则吞掉
 - `PosToConditions()` 必须正确解析 Yomitan term `rules`
@@ -315,13 +315,13 @@ dotnet build -p:Platform=x64
 
 参考路径：
 ```
-docs/reference/hoshi/Hoshi-Reader-Android/third_party/hoshidicts-kotlin-bridge/app/src/main/cpp/hoshidicts/src/deinflector.cpp
-docs/reference/hoshi/Hoshi-Reader-Android/third_party/hoshidicts-kotlin-bridge/app/src/main/cpp/hoshidicts/src/lookup.cpp
+native/hoshidicts/src/language/ja/deinflector.cpp
+native/hoshidicts/src/lookup.cpp
 ```
 
 ### 3.4 词典设置与 i18n 规则
 
-- 词典设置页对齐 Hoshi Android：查词区包含 `scanNonJapaneseText`、`maxResults`、`scanLength`；
+- 词典设置页对齐 Niratan：查词区包含 `scanNonJapaneseText`、`maxResults`、`scanLength`；
   折叠词典区包含 `collapseMode`、`expandFirstDictionary`；
   行为区包含 `compactGlossaries`、`showExpressionTags`、`harmonicFrequency`、`deduplicatePitchAccents`、`compactPitchAccents`
 - `maxResults` 与 `scanLength` 默认值为 16，阅读页 JS、弹窗 JS、C# `LookupAsync` 必须使用同一份 `DictionaryDisplaySettings`
@@ -355,20 +355,20 @@ docs/reference/hoshi/Hoshi-Reader-Android/third_party/hoshidicts-kotlin-bridge/a
 ### 4.1 受影响文件
 
 ```
-Hoshi/Services/Audio/AudioService.cs
-Hoshi/Services/Audio/IAudioService.cs
-Hoshi/Models/Settings/AudioSettings.cs
-Hoshi/Views/Dictionary/DictionaryLookupPopup.cs (playWordAudio handler)
-Hoshi/Services/Dictionary/PopupHtmlGenerator.cs (SerializeAudioSources, audio injection)
-Hoshi/Web/DictionaryPopup/popup.js (fetchAudioUrl, expandAudioTemplate, playWordAudio)
-Hoshi/ViewModels/Pages/AudioSettingsPageViewModel.cs
+Niratan/Services/Audio/AudioService.cs
+Niratan/Services/Audio/IAudioService.cs
+Niratan/Models/Settings/AudioSettings.cs
+Niratan/Views/Dictionary/DictionaryLookupPopup.cs (playWordAudio handler)
+Niratan/Services/Dictionary/PopupHtmlGenerator.cs (SerializeAudioSources, audio injection)
+Niratan/Web/DictionaryPopup/popup.js (fetchAudioUrl, expandAudioTemplate, playWordAudio)
+Niratan/ViewModels/Pages/AudioSettingsPageViewModel.cs
 ```
 
 ### 4.2 验证流程
 
 ```powershell
 dotnet build -p:Platform=x64
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Audio"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Audio"
 .\build-and-run.ps1  # 弹窗音频播放需要启动应用
 ```
 

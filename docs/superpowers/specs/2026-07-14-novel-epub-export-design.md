@@ -2,7 +2,7 @@
 
 ## Goal
 
-Add an **Export EPUB…** action to each local novel's bookshelf context menu. The action exports the original EPUB retained in Hoshi's private book storage without adding reading progress, bookmarks, statistics, highlights, or other sidecar data.
+Add an **Export EPUB…** action to each local novel's bookshelf context menu. The action exports the original EPUB retained in Niratan's private book storage without adding reading progress, bookmarks, statistics, highlights, or other sidecar data.
 
 ## User Experience
 
@@ -43,7 +43,7 @@ The picker is responsible only for selecting the destination. It does not copy t
 
 `INovelLibraryService` gains an async export operation accepting a book ID and destination path. `NovelLibraryService` loads the book from storage, verifies that its private EPUB exists, validates the destination, and asynchronously copies the original file bytes to the selected destination.
 
-Export is a read-only library operation and remains available even if novel metadata storage is in recovery/read-only mode. It must not alter metadata, sidecars, timestamps stored in Hoshi, shelf membership, or the private source EPUB.
+Export is a read-only library operation and remains available even if novel metadata storage is in recovery/read-only mode. It must not alter metadata, sidecars, timestamps stored in Niratan, shelf membership, or the private source EPUB.
 
 ## File Naming
 
@@ -82,7 +82,7 @@ Use test-first development and cover:
 
 ## Out of Scope
 
-- Embedding Hoshi sidecars inside the EPUB.
+- Embedding Niratan sidecars inside the EPUB.
 - Exporting a bundle containing progress, bookmarks, statistics, or highlights.
 - Repacking extracted chapter content into a new EPUB.
 - Exporting books that exist only in Google Drive.

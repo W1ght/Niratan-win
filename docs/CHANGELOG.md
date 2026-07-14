@@ -63,7 +63,7 @@
 - 宽屏三列布局中，本周卡片与更高的排行卡共用同一 Grid 行；Border 默认纵向拉伸，使本周卡片内部出现大块空白。
 
 **解决**：
-- 将宿主与 `ProgressRing` 控件本身都固定为 118×118 effective pixels，对齐 Hoshi 的视觉层级。
+- 将宿主与 `ProgressRing` 控件本身都固定为 118×118 effective pixels，对齐 Niratan 的视觉层级。
 - 让本周卡片顶部对齐并按自身内容高度呈现，保留指标、七日状态和自适应列布局。
 
 ---
@@ -74,7 +74,7 @@
 - 阅读日历没有约束 `ListViewItem` 的默认最小尺寸，也没有固定 `ItemsWrapGrid` 的单元槽位；WinUI 的触控项占位把小方块扩展到了稀疏的行列间距。
 
 **解决**：
-- 对齐 Hoshi，将日期方块固定为 12×12 effective pixels、可见间距固定为 4 pixels，并使用 16×16 的七行网格槽位。
+- 对齐 Niratan，将日期方块固定为 12×12 effective pixels、可见间距固定为 4 pixels，并使用 16×16 的七行网格槽位。
 - 清除列表项的默认最小宽高、边距和内边距；保留最近一年横向滚动、选中范围、可访问文本和日期详情联动。
 
 ---
@@ -385,7 +385,7 @@
 - 子弹窗关闭时只移除当前 popup，可能留下子孙 WebView2。
 
 **解决**：
-- `DictionaryLookupPopup` 为 `https://hoshi-dictionary-media.local/image` 增加 `WebResourceRequested` 拦截。
+- `DictionaryLookupPopup` 为 `https://niratan-dictionary-media.local/image` 增加 `WebResourceRequested` 拦截。
 - `DictionaryImportService` 检测 metadata bank 内容，导入后分别写入 Frequency/Pitch 配置。
 - `DictionaryLookupService` rebuild 时分别加载 Term、Frequency、Pitch 已启用字典。
 - 弹窗内查词统一走 `DictionaryPopupOverlay.HandleRedirectAsync`。
@@ -431,10 +431,10 @@
 
 **原因**：
 - `MK3Fix0213.zip` 的原始 `index.json` 标题是非 ASCII；Windows 上 hoshidicts 直导会在创建/读取导入目录时触发代码页或 SEH 异常。
-- 参考 Hoshi Reader Windows `codex/anki-sasayaki-sidecar` 分支后确认，该分支也不是直接导入成功，而是先失败再走 lookup-safe 兼容 zip retry。
+- 参考 Niratan Reader Windows `codex/anki-sasayaki-sidecar` 分支后确认，该分支也不是直接导入成功，而是先失败再走 lookup-safe 兼容 zip retry。
 
 **解决**：
 - `DictionaryImportService` 保留正常直导路径；仅在 Windows code-page/SEH 类失败时创建临时兼容 zip。
-- 兼容 zip 只保留查词核心文件：`index.json`、`styles.css`、`term_bank_*`、`term_meta_bank_*`、`tag_bank_*`，并把临时标题改为 ASCII `hoshi-import-*`。
+- 兼容 zip 只保留查词核心文件：`index.json`、`styles.css`、`term_bank_*`、`term_meta_bank_*`、`tag_bank_*`，并把临时标题改为 ASCII `niratan-import-*`。
 - native 导入成功后把 `index.json` 显示标题恢复为原始标题，字典是否进入 Term/Frequency/Pitch 目录只以 native import count 为准。
 - `MK3Fix0213.zip` 验证结果为 `term=140821`、`freq=0`、`pitch=0`、`media=0`；这本 zip 是词条字典，不包含可导入词频/音调数据。

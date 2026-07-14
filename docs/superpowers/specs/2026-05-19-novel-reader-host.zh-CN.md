@@ -12,7 +12,7 @@
 当前阶段做：
 
 - `NovelReaderPage` 使用 WebView2 承载本地 reader host。
-- `Hoshi/Web/NovelReader/reader-host.html` 提供本地 HTML 宿主。
+- `Niratan/Web/NovelReader/reader-host.html` 提供本地 HTML 宿主。
 - `reader-host.html` 声明 Content Security Policy，限制脚本来源，降低 EPUB 脚本内容风险。
 - `reader-bridge.js` 与 C# 使用 `version/type/payload` 消息协议通信。
 - C# 收到 `readerReady` 后把 EPUB 所在目录映射到 WebView2 虚拟 host。
@@ -71,13 +71,13 @@ C# -> Web：
   "fileName": "book.epub",
   "mediaType": "application/epub+zip",
   "byteLength": 123,
-  "fileUrl": "https://hoshi-novel-book.local/book.epub"
+  "fileUrl": "https://niratan-novel-book.local/book.epub"
 }
 ```
 
 ## 安全策略
 
-foliate-js 官方 README 提醒 EPUB 可以包含脚本内容，因此 host 使用 CSP 限制脚本只能来自 `'self'`，同时允许 `blob:` 作为 EPUB 渲染 iframe 和资源载体。EPUB 文件通过 `https://hoshi-novel-book.local` 虚拟 host 暴露给 WebView2，CSP 只允许这个 host 作为图片、字体和 fetch 来源。
+foliate-js 官方 README 提醒 EPUB 可以包含脚本内容，因此 host 使用 CSP 限制脚本只能来自 `'self'`，同时允许 `blob:` 作为 EPUB 渲染 iframe 和资源载体。EPUB 文件通过 `https://niratan-novel-book.local` 虚拟 host 暴露给 WebView2，CSP 只允许这个 host 作为图片、字体和 fetch 来源。
 
 ## 测试
 

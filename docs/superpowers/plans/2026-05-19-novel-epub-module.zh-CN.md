@@ -43,42 +43,42 @@ docs/superpowers/plans/2026-05-19-novel-epub-module.md
 
 模型：
 
-- `Hoshi/Models/NovelBook.cs`
-- `Hoshi/Models/Data/NovelReadingProgress.cs`
-- `Hoshi/Models/DTO/NovelImportResult.cs`
-- `Hoshi/Models/DTO/NovelReaderNavigationArgs.cs`
+- `Niratan/Models/NovelBook.cs`
+- `Niratan/Models/Data/NovelReadingProgress.cs`
+- `Niratan/Models/DTO/NovelImportResult.cs`
+- `Niratan/Models/DTO/NovelReaderNavigationArgs.cs`
 
 服务：
 
-- `Hoshi/Services/Novels/INovelEpubImportService.cs`
-- `Hoshi/Services/Novels/NovelEpubImportService.cs`
-- `Hoshi/Services/Novels/INovelLibraryService.cs`
-- `Hoshi/Services/Novels/NovelLibraryService.cs`
+- `Niratan/Services/Novels/INovelEpubImportService.cs`
+- `Niratan/Services/Novels/NovelEpubImportService.cs`
+- `Niratan/Services/Novels/INovelLibraryService.cs`
+- `Niratan/Services/Novels/NovelLibraryService.cs`
 
 存储：
 
-- `Hoshi/Services/Storage/Migrations/Migration_003.cs`
+- `Niratan/Services/Storage/Migrations/Migration_003.cs`
 - `IDataService` 中新增小说存储方法
 - `DataService` 中实现小说查询、写入、最近打开时间更新
 
 ViewModel：
 
-- `Hoshi/ViewModels/Components/NovelBookItemViewModel.cs`
-- `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs`
-- `Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs`
+- `Niratan/ViewModels/Components/NovelBookItemViewModel.cs`
+- `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs`
+- `Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs`
 
 页面：
 
-- `Hoshi/Views/Pages/NovelLibraryPage.xaml`
-- `Hoshi/Views/Pages/NovelLibraryPage.xaml.cs`
-- `Hoshi/Views/Pages/NovelReaderPage.xaml`
-- `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
+- `Niratan/Views/Pages/NovelLibraryPage.xaml`
+- `Niratan/Views/Pages/NovelLibraryPage.xaml.cs`
+- `Niratan/Views/Pages/NovelReaderPage.xaml`
+- `Niratan/Views/Pages/NovelReaderPage.xaml.cs`
 
 测试：
 
-- `Hoshi.Tests/Services/Novels/NovelEpubImportServiceTests.cs`
-- `Hoshi.Tests/Services/Storage/NovelDataServiceTests.cs`
-- `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
+- `Niratan.Tests/Services/Novels/NovelEpubImportServiceTests.cs`
+- `Niratan.Tests/Services/Storage/NovelDataServiceTests.cs`
+- `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
 
 ## 实现顺序
 
@@ -100,9 +100,9 @@ ViewModel：
 ```powershell
 $env:HTTP_PROXY='http://127.0.0.1:7890'
 $env:HTTPS_PROXY='http://127.0.0.1:7890'
-& 'C:\Program Files\dotnet\dotnet.exe' restore .\Hoshi.slnx -r win-x64
-& 'C:\Program Files\dotnet\dotnet.exe' build .\Hoshi.slnx -c Debug -p:Platform=x64 --no-restore
-& 'C:\Program Files\dotnet\dotnet.exe' test .\Hoshi.slnx -c Debug -p:Platform=x64 --no-build --logger "console;verbosity=minimal"
+& 'C:\Program Files\dotnet\dotnet.exe' restore .\Niratan.slnx -r win-x64
+& 'C:\Program Files\dotnet\dotnet.exe' build .\Niratan.slnx -c Debug -p:Platform=x64 --no-restore
+& 'C:\Program Files\dotnet\dotnet.exe' test .\Niratan.slnx -c Debug -p:Platform=x64 --no-build --logger "console;verbosity=minimal"
 ```
 
 结果：
@@ -111,7 +111,7 @@ $env:HTTPS_PROXY='http://127.0.0.1:7890'
 - build 成功，0 error
 - 保留 6 个项目既有 nullable warning
 - test 成功，95 passed / 0 failed
-- `Hoshi.exe` 可启动并响应
+- `Niratan.exe` 可启动并响应
 
 ## 下一阶段建议
 

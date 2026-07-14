@@ -24,4 +24,4 @@ Theme 分区提供 Light Theme 与 Dark Theme 的 Text Color、Background Color 
 
 ## 验证
 
-新增或更新 XAML 资产测试，覆盖面板存在、Audio/Playback/Settings/Theme 分区、关键 AutomationId、Delay/Speed 范围、四个颜色选择器，以及 Lyrics Mode 不出现。实现后运行 `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests"` 和 `dotnet build -p:Platform=x64`，最后用 `.\build-and-run.ps1` 启动验证窗口可打开。
+新增或更新 XAML 资产测试，覆盖面板存在、Audio/Playback/Settings/Theme 分区、关键 AutomationId、Delay/Speed 范围、四个颜色选择器，以及 Lyrics Mode 不出现。实现后运行 `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests"` 和 `dotnet build -p:Platform=x64`，最后用 `.\build-and-run.ps1` 启动验证窗口可打开。

@@ -6,7 +6,7 @@
 
 运行日志显示 EPUB 解析、WebView2 导航和章节恢复在开始后约一秒内完成；可见空档位于 Reader 初始化日志之前。用户设置同时满足 `EnableSync=true`、`EnableAutoSync=true` 且已有 Google Drive 凭据，和上述阻塞路径一致。
 
-Hoshi macOS 的对应行为是先从本地 sidecar 构造并显示 Reader，再用视图任务执行打开时导入；退出时立即结束视图，进度刷新和远端导出在 `onDisappear` 的后台任务中完成。
+Niratan macOS 的对应行为是先从本地 sidecar 构造并显示 Reader，再用视图任务执行打开时导入；退出时立即结束视图，进度刷新和远端导出在 `onDisappear` 的后台任务中完成。
 
 ## 目标
 

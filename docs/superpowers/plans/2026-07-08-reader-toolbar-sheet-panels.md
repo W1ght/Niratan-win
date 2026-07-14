@@ -22,7 +22,7 @@
 ### Task 1: Add Failing Asset Coverage
 
 **Files:**
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
 - Consumes: reader XAML and code-behind text loaded by existing tests.
@@ -62,7 +62,7 @@ Assert code-behind contains `ShowReaderPanelDialogAsync` and does not contain `O
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderPage_UsesSheetDialogsForReaderToolbarPanels"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderPage_UsesSheetDialogsForReaderToolbarPanels"
 ```
 
 Expected: FAIL because the old Popup panels still exist.
@@ -70,9 +70,9 @@ Expected: FAIL because the old Popup panels still exist.
 ### Task 2: Convert XAML Panels
 
 **Files:**
-- Modify: `Hoshi/Views/Pages/NovelReaderPage.xaml`
-- Modify: `Hoshi/Strings/en-US/Resources.resw`
-- Modify: `Hoshi/Strings/zh-CN/Resources.resw`
+- Modify: `Niratan/Views/Pages/NovelReaderPage.xaml`
+- Modify: `Niratan/Strings/en-US/Resources.resw`
+- Modify: `Niratan/Strings/zh-CN/Resources.resw`
 
 **Interfaces:**
 - Consumes: current panel inner content.
@@ -95,7 +95,7 @@ Add English and Chinese `.Title` and `.CloseButtonText` entries for each new dia
 ### Task 3: Replace Popup Open/Close Code
 
 **Files:**
-- Modify: `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
+- Modify: `Niratan/Views/Pages/NovelReaderPage.xaml.cs`
 
 **Interfaces:**
 - Consumes: existing click handlers and panel refresh methods.
@@ -145,14 +145,14 @@ Replace all `Reader*PanelPopup.IsOpen = false` references with `CloseReaderPanel
 ### Task 4: Verify
 
 **Files:**
-- Test: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Test: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 - [ ] **Step 1: Run focused test**
 
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderPage_UsesSheetDialogsForReaderToolbarPanels"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderPage_UsesSheetDialogsForReaderToolbarPanels"
 ```
 
 Expected: PASS.
@@ -162,7 +162,7 @@ Expected: PASS.
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests"
 ```
 
 Expected: PASS.
@@ -176,4 +176,4 @@ dotnet build -p:Platform=x64
 .\build-and-run.ps1
 ```
 
-Expected: build succeeds and Hoshi launches with a responsive main window.
+Expected: build succeeds and Niratan launches with a responsive main window.

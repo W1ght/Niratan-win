@@ -5,9 +5,9 @@ Status: Approved direction, ready for implementation planning
 
 ## Goal
 
-Add a separate Novel module to Hoshi while keeping the existing manga/comic module intact. The first implementation phase supports local EPUB files only. The public product domain should be named `Novel`; EPUB should appear only in lower-level import, parsing, and rendering services.
+Add a separate Novel module to Niratan while keeping the existing manga/comic module intact. The first implementation phase supports local EPUB files only. The public product domain should be named `Novel`; EPUB should appear only in lower-level import, parsing, and rendering services.
 
-The module should use Hoshi as the Windows shell: WinUI 3, MVVM, dependency injection, Dapper, SQLite, and the existing navigation style. It should not reuse comic services or comic database tables for novel behavior.
+The module should use Niratan as the Windows shell: WinUI 3, MVVM, dependency injection, Dapper, SQLite, and the existing navigation style. It should not reuse comic services or comic database tables for novel behavior.
 
 ## Non-Goals
 

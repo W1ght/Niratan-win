@@ -22,20 +22,20 @@
 
 ## File Map
 
-- `Hoshi/Models/Sync/GoogleDriveSyncModels.cs`：在安全凭据模型中持久化客户端密钥，并兼容旧凭据。
-- `Hoshi/Services/Sync/GoogleDriveTokenClient.cs`：在授权码交换和刷新表单中发送客户端密钥。
-- `Hoshi/Services/Sync/GoogleDriveAuthAbstractions.cs`：把客户端密钥加入授权服务窄接口。
-- `Hoshi/Services/Sync/GoogleDriveAuthService.cs`：校验、裁剪并传递客户端 ID/密钥。
-- `Hoshi/ViewModels/Pages/TtuSyncSettingsPageViewModel.cs`：维护仅驻内存的密钥输入、验证连接参数并在成功后清空。
-- `Hoshi/Views/Pages/TtuSyncSettingsPage.xaml`：增加密码输入卡片。
-- `Hoshi/Strings/en-US/Resources.resw`、`Hoshi/Strings/zh-CN/Resources.resw`：增加客户端密钥本地化文案。
-- `Hoshi/Services/Sync/GoogleOAuthLoopbackReceiver.cs`：把提前显示的 connected 文案改成 authorization received。
-- `Hoshi.Tests/Services/Sync/GoogleDriveTokenClientTests.cs`：覆盖首次交换、刷新和旧凭据兼容。
-- `Hoshi.Tests/Services/Sync/GoogleDriveAuthServiceTests.cs`：覆盖密钥从授权服务到 token 请求及 Credential Manager 抽象的传递。
-- `Hoshi.Tests/ViewModels/Pages/TtuSyncSettingsPageViewModelTests.cs`：覆盖输入验证、裁剪、成功清空和失败保留。
-- `Hoshi.Tests/Services/Sync/TtuSyncSettingsAssetTests.cs`：覆盖 PasswordBox、AutomationId 和资源键。
-- `Hoshi.Tests/Services/Sync/GoogleOAuthLoopbackReceiverTests.cs`：通过真实 loopback HTTP 回调验证浏览器文案。
-- `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`、`Hoshi.Tests/Services/Sync/GoogleDriveTtuSyncRemoteStoreTests.cs`：同步更新授权服务测试替身签名。
+- `Niratan/Models/Sync/GoogleDriveSyncModels.cs`：在安全凭据模型中持久化客户端密钥，并兼容旧凭据。
+- `Niratan/Services/Sync/GoogleDriveTokenClient.cs`：在授权码交换和刷新表单中发送客户端密钥。
+- `Niratan/Services/Sync/GoogleDriveAuthAbstractions.cs`：把客户端密钥加入授权服务窄接口。
+- `Niratan/Services/Sync/GoogleDriveAuthService.cs`：校验、裁剪并传递客户端 ID/密钥。
+- `Niratan/ViewModels/Pages/TtuSyncSettingsPageViewModel.cs`：维护仅驻内存的密钥输入、验证连接参数并在成功后清空。
+- `Niratan/Views/Pages/TtuSyncSettingsPage.xaml`：增加密码输入卡片。
+- `Niratan/Strings/en-US/Resources.resw`、`Niratan/Strings/zh-CN/Resources.resw`：增加客户端密钥本地化文案。
+- `Niratan/Services/Sync/GoogleOAuthLoopbackReceiver.cs`：把提前显示的 connected 文案改成 authorization received。
+- `Niratan.Tests/Services/Sync/GoogleDriveTokenClientTests.cs`：覆盖首次交换、刷新和旧凭据兼容。
+- `Niratan.Tests/Services/Sync/GoogleDriveAuthServiceTests.cs`：覆盖密钥从授权服务到 token 请求及 Credential Manager 抽象的传递。
+- `Niratan.Tests/ViewModels/Pages/TtuSyncSettingsPageViewModelTests.cs`：覆盖输入验证、裁剪、成功清空和失败保留。
+- `Niratan.Tests/Services/Sync/TtuSyncSettingsAssetTests.cs`：覆盖 PasswordBox、AutomationId 和资源键。
+- `Niratan.Tests/Services/Sync/GoogleOAuthLoopbackReceiverTests.cs`：通过真实 loopback HTTP 回调验证浏览器文案。
+- `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`、`Niratan.Tests/Services/Sync/GoogleDriveTtuSyncRemoteStoreTests.cs`：同步更新授权服务测试替身签名。
 - `docs/CHANGELOG.md`：记录根因和解决方案。
 
 ---
@@ -43,9 +43,9 @@
 ### Task 1: Token 请求和安全凭据模型
 
 **Files:**
-- Modify: `Hoshi.Tests/Services/Sync/GoogleDriveTokenClientTests.cs`
-- Modify: `Hoshi/Models/Sync/GoogleDriveSyncModels.cs`
-- Modify: `Hoshi/Services/Sync/GoogleDriveTokenClient.cs`
+- Modify: `Niratan.Tests/Services/Sync/GoogleDriveTokenClientTests.cs`
+- Modify: `Niratan/Models/Sync/GoogleDriveSyncModels.cs`
+- Modify: `Niratan/Services/Sync/GoogleDriveTokenClient.cs`
 
 **Interfaces:**
 - Produces: `GoogleDriveCredentials(..., string Scope, string ClientSecret = "")`
@@ -121,7 +121,7 @@ public async Task RefreshAsync_OmitsClientSecretForLegacyCredentialsWithoutOne()
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GoogleDriveTokenClientTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GoogleDriveTokenClientTests"
 ```
 
 Expected: FAIL to compile because `ExchangeCodeAsync` has no client-secret parameter and `GoogleDriveCredentials` has no `ClientSecret` member.
@@ -227,7 +227,7 @@ return ToCredentials(response, clientId, clientSecret, response.RefreshToken);
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GoogleDriveTokenClientTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GoogleDriveTokenClientTests"
 ```
 
 Expected: all `GoogleDriveTokenClientTests` pass.
@@ -235,7 +235,7 @@ Expected: all `GoogleDriveTokenClientTests` pass.
 - [ ] **Step 7: 提交 Task 1**
 
 ```powershell
-git add -- Hoshi/Models/Sync/GoogleDriveSyncModels.cs Hoshi/Services/Sync/GoogleDriveTokenClient.cs Hoshi.Tests/Services/Sync/GoogleDriveTokenClientTests.cs
+git add -- Niratan/Models/Sync/GoogleDriveSyncModels.cs Niratan/Services/Sync/GoogleDriveTokenClient.cs Niratan.Tests/Services/Sync/GoogleDriveTokenClientTests.cs
 git commit -m "fix(sync): send google oauth client secret"
 ```
 
@@ -244,13 +244,13 @@ git commit -m "fix(sync): send google oauth client secret"
 ### Task 2: 授权服务和 ViewModel 数据流
 
 **Files:**
-- Create: `Hoshi.Tests/Services/Sync/GoogleDriveAuthServiceTests.cs`
-- Modify: `Hoshi/Services/Sync/GoogleDriveAuthAbstractions.cs`
-- Modify: `Hoshi/Services/Sync/GoogleDriveAuthService.cs`
-- Modify: `Hoshi/ViewModels/Pages/TtuSyncSettingsPageViewModel.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/TtuSyncSettingsPageViewModelTests.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
-- Modify: `Hoshi.Tests/Services/Sync/GoogleDriveTtuSyncRemoteStoreTests.cs`
+- Create: `Niratan.Tests/Services/Sync/GoogleDriveAuthServiceTests.cs`
+- Modify: `Niratan/Services/Sync/GoogleDriveAuthAbstractions.cs`
+- Modify: `Niratan/Services/Sync/GoogleDriveAuthService.cs`
+- Modify: `Niratan/ViewModels/Pages/TtuSyncSettingsPageViewModel.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/TtuSyncSettingsPageViewModelTests.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
+- Modify: `Niratan.Tests/Services/Sync/GoogleDriveTtuSyncRemoteStoreTests.cs`
 
 **Interfaces:**
 - Consumes: Task 1 `ExchangeCodeAsync(clientId, clientSecret, code, redirectUri, codeVerifier, ct)`
@@ -264,10 +264,10 @@ git commit -m "fix(sync): send google oauth client secret"
 ```csharp
 using System.Net;
 using FluentAssertions;
-using Hoshi.Models.Sync;
-using Hoshi.Services.Sync;
+using Niratan.Models.Sync;
+using Niratan.Services.Sync;
 
-namespace Hoshi.Tests.Services.Sync;
+namespace Niratan.Tests.Services.Sync;
 
 public sealed class GoogleDriveAuthServiceTests
 {
@@ -474,7 +474,7 @@ JsonSerializer.Serialize(saved).Should().NotContain("must-not-enter-app-settings
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GoogleDriveAuthServiceTests|FullyQualifiedName~TtuSyncSettingsPageViewModelTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GoogleDriveAuthServiceTests|FullyQualifiedName~TtuSyncSettingsPageViewModelTests"
 ```
 
 Expected: FAIL to compile because the auth interface/service and ViewModel do not accept or expose a client secret.
@@ -559,8 +559,8 @@ public Task AuthenticateAsync(
 Files:
 
 ```text
-Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs
-Hoshi.Tests/Services/Sync/GoogleDriveTtuSyncRemoteStoreTests.cs
+Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs
+Niratan.Tests/Services/Sync/GoogleDriveTtuSyncRemoteStoreTests.cs
 ```
 
 - [ ] **Step 7: 运行授权相关测试并确认 GREEN**
@@ -568,7 +568,7 @@ Hoshi.Tests/Services/Sync/GoogleDriveTtuSyncRemoteStoreTests.cs
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GoogleDriveAuthServiceTests|FullyQualifiedName~TtuSyncSettingsPageViewModelTests|FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~GoogleDriveTtuSyncRemoteStoreTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GoogleDriveAuthServiceTests|FullyQualifiedName~TtuSyncSettingsPageViewModelTests|FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~GoogleDriveTtuSyncRemoteStoreTests"
 ```
 
 Expected: all selected tests pass.
@@ -576,7 +576,7 @@ Expected: all selected tests pass.
 - [ ] **Step 8: 提交 Task 2**
 
 ```powershell
-git add -- Hoshi/Services/Sync/GoogleDriveAuthAbstractions.cs Hoshi/Services/Sync/GoogleDriveAuthService.cs Hoshi/ViewModels/Pages/TtuSyncSettingsPageViewModel.cs Hoshi.Tests/Services/Sync/GoogleDriveAuthServiceTests.cs Hoshi.Tests/ViewModels/Pages/TtuSyncSettingsPageViewModelTests.cs Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs Hoshi.Tests/Services/Sync/GoogleDriveTtuSyncRemoteStoreTests.cs
+git add -- Niratan/Services/Sync/GoogleDriveAuthAbstractions.cs Niratan/Services/Sync/GoogleDriveAuthService.cs Niratan/ViewModels/Pages/TtuSyncSettingsPageViewModel.cs Niratan.Tests/Services/Sync/GoogleDriveAuthServiceTests.cs Niratan.Tests/ViewModels/Pages/TtuSyncSettingsPageViewModelTests.cs Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs Niratan.Tests/Services/Sync/GoogleDriveTtuSyncRemoteStoreTests.cs
 git commit -m "fix(sync): carry oauth secret through authentication"
 ```
 
@@ -585,10 +585,10 @@ git commit -m "fix(sync): carry oauth secret through authentication"
 ### Task 3: WinUI 密钥输入和本地化契约
 
 **Files:**
-- Modify: `Hoshi.Tests/Services/Sync/TtuSyncSettingsAssetTests.cs`
-- Modify: `Hoshi/Views/Pages/TtuSyncSettingsPage.xaml`
-- Modify: `Hoshi/Strings/en-US/Resources.resw`
-- Modify: `Hoshi/Strings/zh-CN/Resources.resw`
+- Modify: `Niratan.Tests/Services/Sync/TtuSyncSettingsAssetTests.cs`
+- Modify: `Niratan/Views/Pages/TtuSyncSettingsPage.xaml`
+- Modify: `Niratan/Strings/en-US/Resources.resw`
+- Modify: `Niratan/Strings/zh-CN/Resources.resw`
 
 **Interfaces:**
 - Consumes: Task 2 `TtuSyncSettingsPageViewModel.GoogleClientSecret`
@@ -616,7 +616,7 @@ pageXaml.Should().Contain("Password=\"{x:Bind ViewModel.GoogleClientSecret, Mode
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuSyncSettingsAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuSyncSettingsAssetTests"
 ```
 
 Expected: FAIL because the PasswordBox and localization keys do not exist.
@@ -658,7 +658,7 @@ Expected: FAIL because the PasswordBox and localization keys do not exist.
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuSyncSettingsAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuSyncSettingsAssetTests"
 dotnet build -p:Platform=x64
 ```
 
@@ -667,7 +667,7 @@ Expected: asset tests pass and build succeeds with no XAML compiler errors.
 - [ ] **Step 6: 提交 Task 3**
 
 ```powershell
-git add -- Hoshi/Views/Pages/TtuSyncSettingsPage.xaml Hoshi/Strings/en-US/Resources.resw Hoshi/Strings/zh-CN/Resources.resw Hoshi.Tests/Services/Sync/TtuSyncSettingsAssetTests.cs
+git add -- Niratan/Views/Pages/TtuSyncSettingsPage.xaml Niratan/Strings/en-US/Resources.resw Niratan/Strings/zh-CN/Resources.resw Niratan.Tests/Services/Sync/TtuSyncSettingsAssetTests.cs
 git commit -m "feat(sync): add oauth client secret input"
 ```
 
@@ -676,8 +676,8 @@ git commit -m "feat(sync): add oauth client secret input"
 ### Task 4: 准确的 loopback 回调文案
 
 **Files:**
-- Create: `Hoshi.Tests/Services/Sync/GoogleOAuthLoopbackReceiverTests.cs`
-- Modify: `Hoshi/Services/Sync/GoogleOAuthLoopbackReceiver.cs`
+- Create: `Niratan.Tests/Services/Sync/GoogleOAuthLoopbackReceiverTests.cs`
+- Modify: `Niratan/Services/Sync/GoogleOAuthLoopbackReceiver.cs`
 - Modify: `docs/CHANGELOG.md`
 
 **Interfaces:**
@@ -690,9 +690,9 @@ git commit -m "feat(sync): add oauth client secret input"
 
 ```csharp
 using FluentAssertions;
-using Hoshi.Services.Sync;
+using Niratan.Services.Sync;
 
-namespace Hoshi.Tests.Services.Sync;
+namespace Niratan.Tests.Services.Sync;
 
 public sealed class GoogleOAuthLoopbackReceiverTests
 {
@@ -716,7 +716,7 @@ public sealed class GoogleOAuthLoopbackReceiverTests
             "expected-state",
             null));
         html.Should().Contain("Google Drive authorization received");
-        html.Should().Contain("Return to Hoshi to finish connecting");
+        html.Should().Contain("Return to Niratan to finish connecting");
         html.Should().NotContain("Google Drive connected");
     }
 }
@@ -727,7 +727,7 @@ public sealed class GoogleOAuthLoopbackReceiverTests
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GoogleOAuthLoopbackReceiverTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GoogleOAuthLoopbackReceiverTests"
 ```
 
 Expected: FAIL because the current HTML contains `Google Drive connected`.
@@ -742,8 +742,8 @@ var title = succeeded
     ? "Google Drive authorization received"
     : "Google Drive authorization failed";
 var message = succeeded
-    ? "Google Drive authorization received. Return to Hoshi to finish connecting."
-    : "Google Drive authorization failed. Return to Hoshi for details.";
+    ? "Google Drive authorization received. Return to Niratan to finish connecting."
+    : "Google Drive authorization failed. Return to Niratan for details.";
 var body = $"""
     <!doctype html>
     <html lang="en">
@@ -758,7 +758,7 @@ var body = $"""
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GoogleOAuth"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GoogleOAuth"
 ```
 
 Expected: all selected tests pass.
@@ -785,7 +785,7 @@ Expected: all selected tests pass.
 - [ ] **Step 6: 提交 Task 4**
 
 ```powershell
-git add -- Hoshi/Services/Sync/GoogleOAuthLoopbackReceiver.cs Hoshi.Tests/Services/Sync/GoogleOAuthLoopbackReceiverTests.cs docs/CHANGELOG.md
+git add -- Niratan/Services/Sync/GoogleOAuthLoopbackReceiver.cs Niratan.Tests/Services/Sync/GoogleOAuthLoopbackReceiverTests.cs docs/CHANGELOG.md
 git commit -m "fix(sync): report oauth callback state accurately"
 ```
 
@@ -816,7 +816,7 @@ Expected: only the files listed in this plan are committed; unrelated `.codex/` 
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GoogleDrive|FullyQualifiedName~GoogleOAuth|FullyQualifiedName~TtuSyncSettings"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GoogleDrive|FullyQualifiedName~GoogleOAuth|FullyQualifiedName~TtuSyncSettings"
 ```
 
 Expected: all selected tests pass with zero failures.
@@ -826,7 +826,7 @@ Expected: all selected tests pass with zero failures.
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: all tests pass with zero failures.
@@ -849,18 +849,18 @@ Run:
 .\build-and-run.ps1
 ```
 
-Expected: Hoshi opens a responsive top-level window and does not exit immediately.
+Expected: Niratan opens a responsive top-level window and does not exit immediately.
 
 - [ ] **Step 6: 客观确认窗口已启动并保留运行实例**
 
 Run in a second PowerShell session:
 
 ```powershell
-Get-Process Hoshi | Where-Object { $_.MainWindowHandle -ne 0 } |
+Get-Process Niratan | Where-Object { $_.MainWindowHandle -ne 0 } |
     Select-Object Id, MainWindowTitle, MainWindowHandle, Responding
 ```
 
-Expected: one Hoshi process has non-zero `MainWindowHandle`, expected title, and `Responding=True`. Leave that verified instance running.
+Expected: one Niratan process has non-zero `MainWindowHandle`, expected title, and `Responding=True`. Leave that verified instance running.
 
 - [ ] **Step 7: 手动检查设置页安全行为**
 

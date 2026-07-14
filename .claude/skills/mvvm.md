@@ -13,9 +13,9 @@ This project uses [CommunityToolkit.Mvvm](https://learn.microsoft.com/dotnet/com
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using Hoshi.Services.XXX;
+using Niratan.Services.XXX;
 
-namespace Hoshi.ViewModels.Pages;
+namespace Niratan.ViewModels.Pages;
 
 public partial class FooViewModel : ObservableObject
 {

@@ -156,8 +156,8 @@ Add focused tests before implementation:
 Manual verification after tests:
 
 - Build with `dotnet build -p:Platform=x64`.
-- Run `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`.
-- Start Hoshi, scan a video folder, switch List/Posters repeatedly, create a smart collection, and confirm thumbnails appear without delaying video open or restore.
+- Run `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`.
+- Start Niratan, scan a video folder, switch List/Posters repeatedly, create a smart collection, and confirm thumbnails appear without delaying video open or restore.
 
 ## Acceptance Criteria
 

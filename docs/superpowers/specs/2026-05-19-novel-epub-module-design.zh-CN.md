@@ -5,9 +5,9 @@
 
 ## 目标
 
-在 Hoshi 现有漫画/Comic 模块之外，新增一个独立的小说/Novel 模块。第一阶段只支持本地 EPUB 文件，产品和业务域统一使用 `Novel` 命名，`Epub` 只出现在格式相关的导入、解析、渲染代码里。
+在 Niratan 现有漫画/Comic 模块之外，新增一个独立的小说/Novel 模块。第一阶段只支持本地 EPUB 文件，产品和业务域统一使用 `Novel` 命名，`Epub` 只出现在格式相关的导入、解析、渲染代码里。
 
-这个模块复用 Hoshi 的 Windows 外壳骨架：WinUI 3、MVVM、依赖注入、Dapper、SQLite 和现有导航风格。小说功能不复用漫画服务，也不写入漫画数据库表。
+这个模块复用 Niratan 的 Windows 外壳骨架：WinUI 3、MVVM、依赖注入、Dapper、SQLite 和现有导航风格。小说功能不复用漫画服务，也不写入漫画数据库表。
 
 ## 第一阶段不做
 

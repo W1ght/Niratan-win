@@ -174,7 +174,7 @@ selection
 ### Runtime verification
 
 - Build with `dotnet build -p:Platform=x64`.
-- Run dictionary-focused tests and the full Hoshi test project.
+- Run dictionary-focused tests and the full Niratan test project.
 - Launch the unpackaged x64 app with the existing build/run workflow.
 - Open the supplied video and reproduce lookup for `せっかく`.
 - Confirm the first visible frame contains expression, tags, buttons, and all

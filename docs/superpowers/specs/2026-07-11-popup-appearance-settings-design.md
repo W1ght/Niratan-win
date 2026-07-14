@@ -2,10 +2,10 @@
 
 ## Problem
 
-Hoshi currently exposes only dictionary-popup maximum width and height, and
+Niratan currently exposes only dictionary-popup maximum width and height, and
 places those controls on the Dictionary settings page. The settings do not
-match Niratan: Hoshi defaults to `560 x 420`, limits width to `900`, limits
-height to `820`, and gives child popups separate `600 x 520` caps. Hoshi has no
+match Niratan: Niratan defaults to `560 x 420`, limits width to `900`, limits
+height to `820`, and gives child popups separate `600 x 520` caps. Niratan has no
 popup scale, action-bar, or full-width setting.
 
 The popup host already passes one `DictionaryDisplaySettings` snapshot to the
@@ -97,7 +97,7 @@ Every nested popup consumes the same settings, including full-width. A
 full-width child therefore appears above its parent in z-order at the same
 bottom placement; dismissing it reveals the parent. This deliberately differs
 from Niratan's current reader child-selection call, which forces child
-`isFullWidth` to `false`. The deviation is required by the explicit Hoshi
+`isFullWidth` to `false`. The deviation is required by the explicit Niratan
 Windows requirement that nested popups consume all popup appearance settings.
 
 Embedded standalone dictionary surfaces continue filling their owning panel;
@@ -201,7 +201,7 @@ selection coordinates, and narrow typed messages.
 
 - Run dictionary-focused tests, then the complete x64 test project.
 - Build with `dotnet build -p:Platform=x64`.
-- Launch with `build-and-run.ps1` and confirm a real responsive Hoshi window.
+- Launch with `build-and-run.ps1` and confirm a real responsive Niratan window.
 - In both reader and video lookup, verify `320 x 250`, `1400 x 800`, scale
   `0.8`, scale `1.5`, action bar on/off, and full-width on/off.
 - Open nested lookups at each scale and with full-width enabled; verify each

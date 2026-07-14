@@ -55,8 +55,8 @@ Only one sync per book is active. Later changes set a pending flag and run one f
 ## Runtime Verification
 
 1. Run `dotnet build -p:Platform=x64`.
-2. Run `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`.
-3. Launch Hoshi and verify a responsive top-level window.
+2. Run `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`.
+3. Launch Niratan and verify a responsive top-level window.
 4. Open the configured test EPUB and verify manual pages, continuous scroll, adjacent chapters, resize/reflow, Reader statistics display, and persistence.
 5. Confirm chapter-list, bookmark/highlight, history, internal-link, and manual Sasayaki jumps do not inflate characters.
 6. Confirm Sasayaki natural movement and normal page turns trigger Page Turn autostart.

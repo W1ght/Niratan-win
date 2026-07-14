@@ -115,8 +115,8 @@ The dashboard has one width-driven adaptive implementation. It records the curre
 ### Runtime verification
 
 1. Build with `dotnet build -p:Platform=x64`.
-2. Run `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`.
-3. Launch with `build-and-run.ps1` and confirm a responsive top-level Hoshi window.
+2. Run `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`.
+3. Launch with `build-and-run.ps1` and confirm a responsive top-level Niratan window.
 4. Verify the Reading, custom, Google Drive, and Unshelved ordering and multi-row wrapping at wide, medium, and narrow widths.
 5. Invoke local cards through UI Automation and verify the reader opens.
 6. Refresh Google Drive, confirm covers appear progressively, start at least four downloads, and confirm three active per-card progress indicators with the fourth queued.

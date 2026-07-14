@@ -14,37 +14,37 @@
 
 Create:
 
-- `Hoshi/Models/NovelBook.cs`: domain model for imported EPUB novels.
-- `Hoshi/Models/Data/NovelReadingProgress.cs`: persisted reading location model for future reader work.
-- `Hoshi/Models/DTO/NovelImportResult.cs`: import result returned by EPUB import code.
-- `Hoshi/Models/DTO/NovelReaderNavigationArgs.cs`: route parameter for the novel reader placeholder.
-- `Hoshi/Services/Novels/INovelLibraryService.cs`: domain-facing service interface for library list/import.
-- `Hoshi/Services/Novels/NovelLibraryService.cs`: result-wrapped orchestration between import, storage, and logging.
-- `Hoshi/Services/Novels/INovelEpubImportService.cs`: EPUB-specific metadata import interface.
-- `Hoshi/Services/Novels/NovelEpubImportService.cs`: minimal EPUB validation and metadata extraction.
-- `Hoshi/Services/Storage/Migrations/Migration_003.cs`: novel tables.
-- `Hoshi/ViewModels/Components/NovelBookItemViewModel.cs`: display wrapper for library items.
-- `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs`: import/list/open commands for the Novel library.
-- `Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs`: placeholder reader state.
-- `Hoshi/Views/Pages/NovelLibraryPage.xaml`: Novel library UI.
-- `Hoshi/Views/Pages/NovelLibraryPage.xaml.cs`: library page code-behind.
-- `Hoshi/Views/Pages/NovelReaderPage.xaml`: placeholder reader UI.
-- `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`: reader page code-behind.
-- `Hoshi.Tests/Services/Novels/NovelEpubImportServiceTests.cs`: import validation and fallback tests.
-- `Hoshi.Tests/Services/Storage/NovelDataServiceTests.cs`: storage and migration tests.
-- `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`: ViewModel behavior tests.
+- `Niratan/Models/NovelBook.cs`: domain model for imported EPUB novels.
+- `Niratan/Models/Data/NovelReadingProgress.cs`: persisted reading location model for future reader work.
+- `Niratan/Models/DTO/NovelImportResult.cs`: import result returned by EPUB import code.
+- `Niratan/Models/DTO/NovelReaderNavigationArgs.cs`: route parameter for the novel reader placeholder.
+- `Niratan/Services/Novels/INovelLibraryService.cs`: domain-facing service interface for library list/import.
+- `Niratan/Services/Novels/NovelLibraryService.cs`: result-wrapped orchestration between import, storage, and logging.
+- `Niratan/Services/Novels/INovelEpubImportService.cs`: EPUB-specific metadata import interface.
+- `Niratan/Services/Novels/NovelEpubImportService.cs`: minimal EPUB validation and metadata extraction.
+- `Niratan/Services/Storage/Migrations/Migration_003.cs`: novel tables.
+- `Niratan/ViewModels/Components/NovelBookItemViewModel.cs`: display wrapper for library items.
+- `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs`: import/list/open commands for the Novel library.
+- `Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs`: placeholder reader state.
+- `Niratan/Views/Pages/NovelLibraryPage.xaml`: Novel library UI.
+- `Niratan/Views/Pages/NovelLibraryPage.xaml.cs`: library page code-behind.
+- `Niratan/Views/Pages/NovelReaderPage.xaml`: placeholder reader UI.
+- `Niratan/Views/Pages/NovelReaderPage.xaml.cs`: reader page code-behind.
+- `Niratan.Tests/Services/Novels/NovelEpubImportServiceTests.cs`: import validation and fallback tests.
+- `Niratan.Tests/Services/Storage/NovelDataServiceTests.cs`: storage and migration tests.
+- `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`: ViewModel behavior tests.
 
 Modify:
 
-- `Hoshi/App.xaml.cs`: register Novel services/ViewModels.
-- `Hoshi/Enums/AppMode.cs`: add `NovelReader`.
-- `Hoshi/Enums/AppPage.cs`: add `NovelLibraryPage`.
-- `Hoshi/Services/Storage/DatabaseMigrator.cs`: include `Migration_003`.
-- `Hoshi/Services/Storage/IDataService.cs`: add Novel storage methods.
-- `Hoshi/Services/Storage/DataService.cs`: implement Novel storage methods.
-- `Hoshi/Services/NavigationService.cs`: recognize `NovelLibraryPage`.
-- `Hoshi/Views/Pages/NavigationPage.xaml`: add Novel navigation item.
-- `Hoshi/Views/Pages/ShellPage.xaml.cs`: route `AppMode.NovelReader` to `NovelReaderPage`.
+- `Niratan/App.xaml.cs`: register Novel services/ViewModels.
+- `Niratan/Enums/AppMode.cs`: add `NovelReader`.
+- `Niratan/Enums/AppPage.cs`: add `NovelLibraryPage`.
+- `Niratan/Services/Storage/DatabaseMigrator.cs`: include `Migration_003`.
+- `Niratan/Services/Storage/IDataService.cs`: add Novel storage methods.
+- `Niratan/Services/Storage/DataService.cs`: implement Novel storage methods.
+- `Niratan/Services/NavigationService.cs`: recognize `NovelLibraryPage`.
+- `Niratan/Views/Pages/NavigationPage.xaml`: add Novel navigation item.
+- `Niratan/Views/Pages/ShellPage.xaml.cs`: route `AppMode.NovelReader` to `NovelReaderPage`.
 
 Do not modify:
 
@@ -57,19 +57,19 @@ Do not modify:
 ### Task 1: Add Novel Models
 
 **Files:**
-- Create: `Hoshi/Models/NovelBook.cs`
-- Create: `Hoshi/Models/Data/NovelReadingProgress.cs`
-- Create: `Hoshi/Models/DTO/NovelImportResult.cs`
-- Create: `Hoshi/Models/DTO/NovelReaderNavigationArgs.cs`
+- Create: `Niratan/Models/NovelBook.cs`
+- Create: `Niratan/Models/Data/NovelReadingProgress.cs`
+- Create: `Niratan/Models/DTO/NovelImportResult.cs`
+- Create: `Niratan/Models/DTO/NovelReaderNavigationArgs.cs`
 
 - [ ] **Step 1: Add `NovelBook`**
 
-Create `Hoshi/Models/NovelBook.cs`:
+Create `Niratan/Models/NovelBook.cs`:
 
 ```csharp
 using System;
 
-namespace Hoshi.Models;
+namespace Niratan.Models;
 
 public class NovelBook
 {
@@ -87,12 +87,12 @@ public class NovelBook
 
 - [ ] **Step 2: Add `NovelReadingProgress`**
 
-Create `Hoshi/Models/Data/NovelReadingProgress.cs`:
+Create `Niratan/Models/Data/NovelReadingProgress.cs`:
 
 ```csharp
 using System;
 
-namespace Hoshi.Models.Data;
+namespace Niratan.Models.Data;
 
 public class NovelReadingProgress
 {
@@ -105,20 +105,20 @@ public class NovelReadingProgress
 
 - [ ] **Step 3: Add DTOs**
 
-Create `Hoshi/Models/DTO/NovelImportResult.cs`:
+Create `Niratan/Models/DTO/NovelImportResult.cs`:
 
 ```csharp
-using Hoshi.Models;
+using Niratan.Models;
 
-namespace Hoshi.Models.DTO;
+namespace Niratan.Models.DTO;
 
 public sealed record NovelImportResult(NovelBook Book);
 ```
 
-Create `Hoshi/Models/DTO/NovelReaderNavigationArgs.cs`:
+Create `Niratan/Models/DTO/NovelReaderNavigationArgs.cs`:
 
 ```csharp
-namespace Hoshi.Models.DTO;
+namespace Niratan.Models.DTO;
 
 public sealed record NovelReaderNavigationArgs(string BookId);
 ```
@@ -128,7 +128,7 @@ public sealed record NovelReaderNavigationArgs(string BookId);
 Run:
 
 ```powershell
-& 'C:\Program Files\dotnet\dotnet.exe' build .\Hoshi.slnx -c Debug -p:Platform=x64 --no-restore
+& 'C:\Program Files\dotnet\dotnet.exe' build .\Niratan.slnx -c Debug -p:Platform=x64 --no-restore
 ```
 
 Expected: build succeeds. Existing nullable warnings may remain.
@@ -136,7 +136,7 @@ Expected: build succeeds. Existing nullable warnings may remain.
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add Hoshi\Models\NovelBook.cs Hoshi\Models\Data\NovelReadingProgress.cs Hoshi\Models\DTO\NovelImportResult.cs Hoshi\Models\DTO\NovelReaderNavigationArgs.cs
+git add Niratan\Models\NovelBook.cs Niratan\Models\Data\NovelReadingProgress.cs Niratan\Models\DTO\NovelImportResult.cs Niratan\Models\DTO\NovelReaderNavigationArgs.cs
 git commit -m "feat(novels): add novel domain models"
 ```
 
@@ -145,22 +145,22 @@ git commit -m "feat(novels): add novel domain models"
 ### Task 2: Add Novel Database Migration and Storage Methods
 
 **Files:**
-- Create: `Hoshi/Services/Storage/Migrations/Migration_003.cs`
-- Modify: `Hoshi/Services/Storage/DatabaseMigrator.cs`
-- Modify: `Hoshi/Services/Storage/IDataService.cs`
-- Modify: `Hoshi/Services/Storage/DataService.cs`
-- Test: `Hoshi.Tests/Services/Storage/NovelDataServiceTests.cs`
+- Create: `Niratan/Services/Storage/Migrations/Migration_003.cs`
+- Modify: `Niratan/Services/Storage/DatabaseMigrator.cs`
+- Modify: `Niratan/Services/Storage/IDataService.cs`
+- Modify: `Niratan/Services/Storage/DataService.cs`
+- Test: `Niratan.Tests/Services/Storage/NovelDataServiceTests.cs`
 
 - [ ] **Step 1: Write migration/storage tests**
 
-Create `Hoshi.Tests/Services/Storage/NovelDataServiceTests.cs`:
+Create `Niratan.Tests/Services/Storage/NovelDataServiceTests.cs`:
 
 ```csharp
 using System.Reflection;
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 
-namespace Hoshi.Tests.Services.Storage;
+namespace Niratan.Tests.Services.Storage;
 
 public class NovelDataServiceTests
 {
@@ -213,9 +213,9 @@ public class NovelDataServiceTests
         SqliteTransaction transaction
     )
     {
-        var appAssembly = typeof(Hoshi.Models.NovelBook).Assembly;
+        var appAssembly = typeof(Niratan.Models.NovelBook).Assembly;
         var migrationType = appAssembly.GetType(
-            "Hoshi.Services.Storage.Migrations.Migration_003",
+            "Niratan.Services.Storage.Migrations.Migration_003",
             throwOnError: true
         )!;
         var migration = Activator.CreateInstance(migrationType, nonPublic: true)!;
@@ -234,14 +234,14 @@ public class NovelDataServiceTests
 Run:
 
 ```powershell
-& 'C:\Program Files\dotnet\dotnet.exe' test .\Hoshi.slnx -c Debug -p:Platform=x64 --no-build --filter NovelDataServiceTests
+& 'C:\Program Files\dotnet\dotnet.exe' test .\Niratan.slnx -c Debug -p:Platform=x64 --no-build --filter NovelDataServiceTests
 ```
 
 Expected: fail because `NovelBook` and `Migration_003` do not exist.
 
 - [ ] **Step 3: Add `Migration_003`**
 
-Create `Hoshi/Services/Storage/Migrations/Migration_003.cs`:
+Create `Niratan/Services/Storage/Migrations/Migration_003.cs`:
 
 ```csharp
 using System.Data.Common;
@@ -249,7 +249,7 @@ using System.Threading.Tasks;
 using Dapper;
 using Microsoft.Data.Sqlite;
 
-namespace Hoshi.Services.Storage.Migrations;
+namespace Niratan.Services.Storage.Migrations;
 
 internal class Migration_003 : IMigration
 {
@@ -300,7 +300,7 @@ internal class Migration_003 : IMigration
 
 - [ ] **Step 4: Register migration**
 
-Modify `Hoshi/Services/Storage/DatabaseMigrator.cs`:
+Modify `Niratan/Services/Storage/DatabaseMigrator.cs`:
 
 ```csharp
 private static readonly IReadOnlyList<IMigration> AllMigrations =
@@ -313,7 +313,7 @@ private static readonly IReadOnlyList<IMigration> AllMigrations =
 
 - [ ] **Step 5: Add storage interface methods**
 
-Append to `Hoshi/Services/Storage/IDataService.cs` near the other read/write methods:
+Append to `Niratan/Services/Storage/IDataService.cs` near the other read/write methods:
 
 ```csharp
 Task<IReadOnlyList<NovelBook>> GetNovelBooksAsync(
@@ -329,7 +329,7 @@ Add `using System;` if not already present.
 
 - [ ] **Step 6: Implement storage methods**
 
-Append to `Hoshi/Services/Storage/DataService.cs` before `CleanupUnfavoriteComicsDataAsync`:
+Append to `Niratan/Services/Storage/DataService.cs` before `CleanupUnfavoriteComicsDataAsync`:
 
 ```csharp
 public async Task<IReadOnlyList<NovelBook>> GetNovelBooksAsync(
@@ -409,7 +409,7 @@ public async Task UpdateNovelLastOpenedAsync(
 Run:
 
 ```powershell
-& 'C:\Program Files\dotnet\dotnet.exe' test .\Hoshi.slnx -c Debug -p:Platform=x64 --filter NovelDataServiceTests
+& 'C:\Program Files\dotnet\dotnet.exe' test .\Niratan.slnx -c Debug -p:Platform=x64 --filter NovelDataServiceTests
 ```
 
 Expected: `NovelDataServiceTests` pass.
@@ -417,7 +417,7 @@ Expected: `NovelDataServiceTests` pass.
 - [ ] **Step 8: Commit**
 
 ```powershell
-git add Hoshi\Services\Storage\Migrations\Migration_003.cs Hoshi\Services\Storage\DatabaseMigrator.cs Hoshi\Services\Storage\IDataService.cs Hoshi\Services\Storage\DataService.cs Hoshi.Tests\Services\Storage\NovelDataServiceTests.cs
+git add Niratan\Services\Storage\Migrations\Migration_003.cs Niratan\Services\Storage\DatabaseMigrator.cs Niratan\Services\Storage\IDataService.cs Niratan\Services\Storage\DataService.cs Niratan.Tests\Services\Storage\NovelDataServiceTests.cs
 git commit -m "feat(novels): add novel storage schema"
 ```
 
@@ -426,21 +426,21 @@ git commit -m "feat(novels): add novel storage schema"
 ### Task 3: Add EPUB Import Service
 
 **Files:**
-- Create: `Hoshi/Services/Novels/INovelEpubImportService.cs`
-- Create: `Hoshi/Services/Novels/NovelEpubImportService.cs`
-- Test: `Hoshi.Tests/Services/Novels/NovelEpubImportServiceTests.cs`
+- Create: `Niratan/Services/Novels/INovelEpubImportService.cs`
+- Create: `Niratan/Services/Novels/NovelEpubImportService.cs`
+- Test: `Niratan.Tests/Services/Novels/NovelEpubImportServiceTests.cs`
 
 - [ ] **Step 1: Write EPUB import tests**
 
-Create `Hoshi.Tests/Services/Novels/NovelEpubImportServiceTests.cs`:
+Create `Niratan.Tests/Services/Novels/NovelEpubImportServiceTests.cs`:
 
 ```csharp
 using System.IO.Compression;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
-using Hoshi.Services.Novels;
+using Niratan.Services.Novels;
 
-namespace Hoshi.Tests.Services.Novels;
+namespace Niratan.Tests.Services.Novels;
 
 public class NovelEpubImportServiceTests
 {
@@ -485,22 +485,22 @@ public class NovelEpubImportServiceTests
 Run:
 
 ```powershell
-& 'C:\Program Files\dotnet\dotnet.exe' test .\Hoshi.slnx -c Debug -p:Platform=x64 --no-build --filter NovelEpubImportServiceTests
+& 'C:\Program Files\dotnet\dotnet.exe' test .\Niratan.slnx -c Debug -p:Platform=x64 --no-build --filter NovelEpubImportServiceTests
 ```
 
 Expected: fail because service files do not exist.
 
 - [ ] **Step 3: Add EPUB import interface**
 
-Create `Hoshi/Services/Novels/INovelEpubImportService.cs`:
+Create `Niratan/Services/Novels/INovelEpubImportService.cs`:
 
 ```csharp
 using System.Threading;
 using System.Threading.Tasks;
-using Hoshi.Models.Common;
-using Hoshi.Models.DTO;
+using Niratan.Models.Common;
+using Niratan.Models.DTO;
 
-namespace Hoshi.Services.Novels;
+namespace Niratan.Services.Novels;
 
 public interface INovelEpubImportService
 {
@@ -510,7 +510,7 @@ public interface INovelEpubImportService
 
 - [ ] **Step 4: Add minimal EPUB import implementation**
 
-Create `Hoshi/Services/Novels/NovelEpubImportService.cs`:
+Create `Niratan/Services/Novels/NovelEpubImportService.cs`:
 
 ```csharp
 using System;
@@ -521,11 +521,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Microsoft.Extensions.Logging;
-using Hoshi.Models;
-using Hoshi.Models.Common;
-using Hoshi.Models.DTO;
+using Niratan.Models;
+using Niratan.Models.Common;
+using Niratan.Models.DTO;
 
-namespace Hoshi.Services.Novels;
+namespace Niratan.Services.Novels;
 
 internal sealed class NovelEpubImportService : INovelEpubImportService
 {
@@ -610,7 +610,7 @@ internal sealed class NovelEpubImportService : INovelEpubImportService
 Run:
 
 ```powershell
-& 'C:\Program Files\dotnet\dotnet.exe' test .\Hoshi.slnx -c Debug -p:Platform=x64 --filter NovelEpubImportServiceTests
+& 'C:\Program Files\dotnet\dotnet.exe' test .\Niratan.slnx -c Debug -p:Platform=x64 --filter NovelEpubImportServiceTests
 ```
 
 Expected: tests pass.
@@ -618,7 +618,7 @@ Expected: tests pass.
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add Hoshi\Services\Novels\INovelEpubImportService.cs Hoshi\Services\Novels\NovelEpubImportService.cs Hoshi.Tests\Services\Novels\NovelEpubImportServiceTests.cs
+git add Niratan\Services\Novels\INovelEpubImportService.cs Niratan\Services\Novels\NovelEpubImportService.cs Niratan.Tests\Services\Novels\NovelEpubImportServiceTests.cs
 git commit -m "feat(novels): add epub import service"
 ```
 
@@ -627,22 +627,22 @@ git commit -m "feat(novels): add epub import service"
 ### Task 4: Add Novel Library Service
 
 **Files:**
-- Create: `Hoshi/Services/Novels/INovelLibraryService.cs`
-- Create: `Hoshi/Services/Novels/NovelLibraryService.cs`
-- Modify: `Hoshi/App.xaml.cs`
+- Create: `Niratan/Services/Novels/INovelLibraryService.cs`
+- Create: `Niratan/Services/Novels/NovelLibraryService.cs`
+- Modify: `Niratan/App.xaml.cs`
 
 - [ ] **Step 1: Add library service interface**
 
-Create `Hoshi/Services/Novels/INovelLibraryService.cs`:
+Create `Niratan/Services/Novels/INovelLibraryService.cs`:
 
 ```csharp
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Hoshi.Models;
-using Hoshi.Models.Common;
+using Niratan.Models;
+using Niratan.Models.Common;
 
-namespace Hoshi.Services.Novels;
+namespace Niratan.Services.Novels;
 
 public interface INovelLibraryService
 {
@@ -661,7 +661,7 @@ public interface INovelLibraryService
 
 - [ ] **Step 2: Add library service implementation**
 
-Create `Hoshi/Services/Novels/NovelLibraryService.cs`:
+Create `Niratan/Services/Novels/NovelLibraryService.cs`:
 
 ```csharp
 using System;
@@ -669,11 +669,11 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Hoshi.Models;
-using Hoshi.Models.Common;
-using Hoshi.Services.Storage;
+using Niratan.Models;
+using Niratan.Models.Common;
+using Niratan.Services.Storage;
 
-namespace Hoshi.Services.Novels;
+namespace Niratan.Services.Novels;
 
 internal sealed class NovelLibraryService : INovelLibraryService
 {
@@ -779,12 +779,12 @@ internal sealed class NovelLibraryService : INovelLibraryService
 
 - [ ] **Step 3: Register services**
 
-Modify `Hoshi/App.xaml.cs`:
+Modify `Niratan/App.xaml.cs`:
 
 Add using:
 
 ```csharp
-using Hoshi.Services.Novels;
+using Niratan.Services.Novels;
 ```
 
 Add registrations:
@@ -799,7 +799,7 @@ services.AddSingleton<INovelLibraryService, NovelLibraryService>();
 Run:
 
 ```powershell
-& 'C:\Program Files\dotnet\dotnet.exe' build .\Hoshi.slnx -c Debug -p:Platform=x64 --no-restore
+& 'C:\Program Files\dotnet\dotnet.exe' build .\Niratan.slnx -c Debug -p:Platform=x64 --no-restore
 ```
 
 Expected: build succeeds.
@@ -807,7 +807,7 @@ Expected: build succeeds.
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add Hoshi\Services\Novels\INovelLibraryService.cs Hoshi\Services\Novels\NovelLibraryService.cs Hoshi\App.xaml.cs
+git add Niratan\Services\Novels\INovelLibraryService.cs Niratan\Services\Novels\NovelLibraryService.cs Niratan\App.xaml.cs
 git commit -m "feat(novels): add novel library service"
 ```
 
@@ -816,28 +816,28 @@ git commit -m "feat(novels): add novel library service"
 ### Task 5: Add Novel Library ViewModel
 
 **Files:**
-- Create: `Hoshi/ViewModels/Components/NovelBookItemViewModel.cs`
-- Create: `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs`
-- Modify: `Hoshi/App.xaml.cs`
-- Test: `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
+- Create: `Niratan/ViewModels/Components/NovelBookItemViewModel.cs`
+- Create: `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs`
+- Modify: `Niratan/App.xaml.cs`
+- Test: `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
 
 - [ ] **Step 1: Add ViewModel tests**
 
-Create `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs` with a small fake service:
+Create `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs` with a small fake service:
 
 ```csharp
 using FluentAssertions;
 using Moq;
-using Hoshi.Messages;
-using Hoshi.Models;
-using Hoshi.Models.Common;
-using Hoshi.Services.Novels;
-using Hoshi.Services.UI;
-using Hoshi.Tests.TestUtils;
-using Hoshi.ViewModels.Components;
-using Hoshi.ViewModels.Pages;
+using Niratan.Messages;
+using Niratan.Models;
+using Niratan.Models.Common;
+using Niratan.Services.Novels;
+using Niratan.Services.UI;
+using Niratan.Tests.TestUtils;
+using Niratan.ViewModels.Components;
+using Niratan.ViewModels.Pages;
 
-namespace Hoshi.Tests.ViewModels.Pages;
+namespace Niratan.Tests.ViewModels.Pages;
 
 public class NovelLibraryPageViewModelTests
 {
@@ -910,19 +910,19 @@ public class NovelLibraryPageViewModelTests
 Run:
 
 ```powershell
-& 'C:\Program Files\dotnet\dotnet.exe' test .\Hoshi.slnx -c Debug -p:Platform=x64 --no-build --filter NovelLibraryPageViewModelTests
+& 'C:\Program Files\dotnet\dotnet.exe' test .\Niratan.slnx -c Debug -p:Platform=x64 --no-build --filter NovelLibraryPageViewModelTests
 ```
 
 Expected: fail because ViewModels do not exist.
 
 - [ ] **Step 3: Add item ViewModel**
 
-Create `Hoshi/ViewModels/Components/NovelBookItemViewModel.cs`:
+Create `Niratan/ViewModels/Components/NovelBookItemViewModel.cs`:
 
 ```csharp
-using Hoshi.Models;
+using Niratan.Models;
 
-namespace Hoshi.ViewModels.Components;
+namespace Niratan.ViewModels.Components;
 
 public class NovelBookItemViewModel
 {
@@ -937,7 +937,7 @@ public class NovelBookItemViewModel
 
 - [ ] **Step 4: Add page ViewModel**
 
-Create `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs`:
+Create `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs`:
 
 ```csharp
 using System.Collections.Generic;
@@ -947,14 +947,14 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using Hoshi.Enums;
-using Hoshi.Messages;
-using Hoshi.Models.DTO;
-using Hoshi.Services.Novels;
-using Hoshi.Services.UI;
-using Hoshi.ViewModels.Components;
+using Niratan.Enums;
+using Niratan.Messages;
+using Niratan.Models.DTO;
+using Niratan.Services.Novels;
+using Niratan.Services.UI;
+using Niratan.ViewModels.Components;
 
-namespace Hoshi.ViewModels.Pages;
+namespace Niratan.ViewModels.Pages;
 
 public partial class NovelLibraryPageViewModel : ObservableObject
 {
@@ -1045,7 +1045,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
 - [ ] **Step 5: Register ViewModel**
 
-Modify `Hoshi/App.xaml.cs`:
+Modify `Niratan/App.xaml.cs`:
 
 ```csharp
 services.AddTransient<NovelLibraryPageViewModel>();
@@ -1056,7 +1056,7 @@ services.AddTransient<NovelLibraryPageViewModel>();
 Run:
 
 ```powershell
-& 'C:\Program Files\dotnet\dotnet.exe' test .\Hoshi.slnx -c Debug -p:Platform=x64 --filter NovelLibraryPageViewModelTests
+& 'C:\Program Files\dotnet\dotnet.exe' test .\Niratan.slnx -c Debug -p:Platform=x64 --filter NovelLibraryPageViewModelTests
 ```
 
 Expected: tests pass. `FakeMessenger` already exposes `SentMessages`.
@@ -1064,7 +1064,7 @@ Expected: tests pass. `FakeMessenger` already exposes `SentMessages`.
 - [ ] **Step 7: Commit**
 
 ```powershell
-git add Hoshi\ViewModels\Components\NovelBookItemViewModel.cs Hoshi\ViewModels\Pages\NovelLibraryPageViewModel.cs Hoshi\App.xaml.cs Hoshi.Tests\ViewModels\Pages\NovelLibraryPageViewModelTests.cs
+git add Niratan\ViewModels\Components\NovelBookItemViewModel.cs Niratan\ViewModels\Pages\NovelLibraryPageViewModel.cs Niratan\App.xaml.cs Niratan.Tests\ViewModels\Pages\NovelLibraryPageViewModelTests.cs
 git commit -m "feat(novels): add novel library view model"
 ```
 
@@ -1073,24 +1073,24 @@ git commit -m "feat(novels): add novel library view model"
 ### Task 6: Add Novel Pages and Navigation
 
 **Files:**
-- Create: `Hoshi/Views/Pages/NovelLibraryPage.xaml`
-- Create: `Hoshi/Views/Pages/NovelLibraryPage.xaml.cs`
-- Create: `Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs`
-- Create: `Hoshi/Views/Pages/NovelReaderPage.xaml`
-- Create: `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
-- Modify: `Hoshi/App.xaml.cs`
-- Modify: `Hoshi/Enums/AppMode.cs`
-- Modify: `Hoshi/Enums/AppPage.cs`
-- Modify: `Hoshi/Services/NavigationService.cs`
-- Modify: `Hoshi/Views/Pages/NavigationPage.xaml`
-- Modify: `Hoshi/Views/Pages/ShellPage.xaml.cs`
+- Create: `Niratan/Views/Pages/NovelLibraryPage.xaml`
+- Create: `Niratan/Views/Pages/NovelLibraryPage.xaml.cs`
+- Create: `Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs`
+- Create: `Niratan/Views/Pages/NovelReaderPage.xaml`
+- Create: `Niratan/Views/Pages/NovelReaderPage.xaml.cs`
+- Modify: `Niratan/App.xaml.cs`
+- Modify: `Niratan/Enums/AppMode.cs`
+- Modify: `Niratan/Enums/AppPage.cs`
+- Modify: `Niratan/Services/NavigationService.cs`
+- Modify: `Niratan/Views/Pages/NavigationPage.xaml`
+- Modify: `Niratan/Views/Pages/ShellPage.xaml.cs`
 
 - [ ] **Step 1: Add AppMode**
 
-Modify `Hoshi/Enums/AppMode.cs`:
+Modify `Niratan/Enums/AppMode.cs`:
 
 ```csharp
-namespace Hoshi.Enums;
+namespace Niratan.Enums;
 
 public enum AppMode
 {
@@ -1102,7 +1102,7 @@ public enum AppMode
 
 - [ ] **Step 2: Add AppPage value**
 
-Modify `Hoshi/Enums/AppPage.cs` by adding:
+Modify `Niratan/Enums/AppPage.cs` by adding:
 
 ```csharp
 NovelLibraryPage,
@@ -1110,20 +1110,20 @@ NovelLibraryPage,
 
 - [ ] **Step 3: Add reader ViewModel**
 
-Create `Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs`:
+Create `Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs`:
 
 ```csharp
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using Hoshi.Enums;
-using Hoshi.Messages;
-using Hoshi.Models;
-using Hoshi.Models.DTO;
-using Hoshi.Services.Novels;
-using Hoshi.Services.UI;
+using Niratan.Enums;
+using Niratan.Messages;
+using Niratan.Models;
+using Niratan.Models.DTO;
+using Niratan.Services.Novels;
+using Niratan.Services.UI;
 
-namespace Hoshi.ViewModels.Pages;
+namespace Niratan.ViewModels.Pages;
 
 public partial class NovelReaderPageViewModel : ObservableObject
 {
@@ -1170,18 +1170,18 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
 - [ ] **Step 4: Add Novel library XAML**
 
-Create `Hoshi/Views/Pages/NovelLibraryPage.xaml`:
+Create `Niratan/Views/Pages/NovelLibraryPage.xaml`:
 
 ```xml
 <?xml version="1.0" encoding="utf-8" ?>
-<Page x:Class="Hoshi.Views.Pages.NovelLibraryPage"
+<Page x:Class="Niratan.Views.Pages.NovelLibraryPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      xmlns:converters="using:Hoshi.Helpers.UI.Converters"
+      xmlns:converters="using:Niratan.Helpers.UI.Converters"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:ui="using:CommunityToolkit.WinUI"
-      xmlns:vmc="using:Hoshi.ViewModels.Components"
+      xmlns:vmc="using:Niratan.ViewModels.Components"
       mc:Ignorable="d">
 
     <Page.Resources>
@@ -1254,15 +1254,15 @@ Create `Hoshi/Views/Pages/NovelLibraryPage.xaml`:
 
 - [ ] **Step 5: Add Novel library code-behind**
 
-Create `Hoshi/Views/Pages/NovelLibraryPage.xaml.cs`:
+Create `Niratan/Views/Pages/NovelLibraryPage.xaml.cs`:
 
 ```csharp
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
-using Hoshi.ViewModels.Components;
-using Hoshi.ViewModels.Pages;
+using Niratan.ViewModels.Components;
+using Niratan.ViewModels.Pages;
 
-namespace Hoshi.Views.Pages;
+namespace Niratan.Views.Pages;
 
 public sealed partial class NovelLibraryPage : Page
 {
@@ -1297,11 +1297,11 @@ public sealed partial class NovelLibraryPage : Page
 
 - [ ] **Step 6: Add reader placeholder XAML and code-behind**
 
-Create `Hoshi/Views/Pages/NovelReaderPage.xaml`:
+Create `Niratan/Views/Pages/NovelReaderPage.xaml`:
 
 ```xml
 <?xml version="1.0" encoding="utf-8" ?>
-<Page x:Class="Hoshi.Views.Pages.NovelReaderPage"
+<Page x:Class="Niratan.Views.Pages.NovelReaderPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -1330,15 +1330,15 @@ Create `Hoshi/Views/Pages/NovelReaderPage.xaml`:
 </Page>
 ```
 
-Create `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`:
+Create `Niratan/Views/Pages/NovelReaderPage.xaml.cs`:
 
 ```csharp
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
-using Hoshi.Models.DTO;
-using Hoshi.ViewModels.Pages;
+using Niratan.Models.DTO;
+using Niratan.ViewModels.Pages;
 
-namespace Hoshi.Views.Pages;
+namespace Niratan.Views.Pages;
 
 public sealed partial class NovelReaderPage : Page
 {
@@ -1362,7 +1362,7 @@ public sealed partial class NovelReaderPage : Page
 
 - [ ] **Step 7: Register reader ViewModel**
 
-Modify `Hoshi/App.xaml.cs`:
+Modify `Niratan/App.xaml.cs`:
 
 ```csharp
 services.AddTransient<NovelReaderPageViewModel>();
@@ -1370,15 +1370,15 @@ services.AddTransient<NovelReaderPageViewModel>();
 
 - [ ] **Step 8: Add navigation item**
 
-Modify `Hoshi/Views/Pages/NavigationPage.xaml` inside `NavigationView.MenuItems`:
+Modify `Niratan/Views/Pages/NavigationPage.xaml` inside `NavigationView.MenuItems`:
 
 ```xml
-<NavigationViewItem Content="Novels" Icon="Book" Tag="Hoshi.Views.Pages.NovelLibraryPage" />
+<NavigationViewItem Content="Novels" Icon="Book" Tag="Niratan.Views.Pages.NovelLibraryPage" />
 ```
 
 - [ ] **Step 9: Recognize Novel page in navigation service**
 
-Modify `Hoshi/Services/NavigationService.cs` switch:
+Modify `Niratan/Services/NavigationService.cs` switch:
 
 ```csharp
 Type t when t == typeof(NovelLibraryPage) => AppPage.NovelLibraryPage,
@@ -1386,7 +1386,7 @@ Type t when t == typeof(NovelLibraryPage) => AppPage.NovelLibraryPage,
 
 - [ ] **Step 10: Route novel reader mode**
 
-Modify `Hoshi/Views/Pages/ShellPage.xaml.cs`:
+Modify `Niratan/Views/Pages/ShellPage.xaml.cs`:
 
 ```csharp
 var pageType = m.appMode switch
@@ -1408,7 +1408,7 @@ var isReaderMode = m.appMode is AppMode.Reader or AppMode.NovelReader;
 Run:
 
 ```powershell
-& 'C:\Program Files\dotnet\dotnet.exe' build .\Hoshi.slnx -c Debug -p:Platform=x64 --no-restore
+& 'C:\Program Files\dotnet\dotnet.exe' build .\Niratan.slnx -c Debug -p:Platform=x64 --no-restore
 ```
 
 Expected: build succeeds.
@@ -1416,7 +1416,7 @@ Expected: build succeeds.
 - [ ] **Step 12: Commit**
 
 ```powershell
-git add Hoshi\Views\Pages\NovelLibraryPage.xaml Hoshi\Views\Pages\NovelLibraryPage.xaml.cs Hoshi\ViewModels\Pages\NovelReaderPageViewModel.cs Hoshi\Views\Pages\NovelReaderPage.xaml Hoshi\Views\Pages\NovelReaderPage.xaml.cs Hoshi\App.xaml.cs Hoshi\Enums\AppMode.cs Hoshi\Enums\AppPage.cs Hoshi\Services\NavigationService.cs Hoshi\Views\Pages\NavigationPage.xaml Hoshi\Views\Pages\ShellPage.xaml.cs
+git add Niratan\Views\Pages\NovelLibraryPage.xaml Niratan\Views\Pages\NovelLibraryPage.xaml.cs Niratan\ViewModels\Pages\NovelReaderPageViewModel.cs Niratan\Views\Pages\NovelReaderPage.xaml Niratan\Views\Pages\NovelReaderPage.xaml.cs Niratan\App.xaml.cs Niratan\Enums\AppMode.cs Niratan\Enums\AppPage.cs Niratan\Services\NavigationService.cs Niratan\Views\Pages\NavigationPage.xaml Niratan\Views\Pages\ShellPage.xaml.cs
 git commit -m "feat(novels): add novel library navigation"
 ```
 
@@ -1434,7 +1434,7 @@ Run:
 ```powershell
 $env:HTTP_PROXY='http://127.0.0.1:7890'
 $env:HTTPS_PROXY='http://127.0.0.1:7890'
-& 'C:\Program Files\dotnet\dotnet.exe' restore .\Hoshi.slnx -r win-x64
+& 'C:\Program Files\dotnet\dotnet.exe' restore .\Niratan.slnx -r win-x64
 ```
 
 Expected: restore succeeds.
@@ -1444,7 +1444,7 @@ Expected: restore succeeds.
 Run:
 
 ```powershell
-& 'C:\Program Files\dotnet\dotnet.exe' build .\Hoshi.slnx -c Debug -p:Platform=x64 --no-restore
+& 'C:\Program Files\dotnet\dotnet.exe' build .\Niratan.slnx -c Debug -p:Platform=x64 --no-restore
 ```
 
 Expected: build succeeds. Existing nullable warnings may remain unless introduced warnings point to new Novel code.
@@ -1454,7 +1454,7 @@ Expected: build succeeds. Existing nullable warnings may remain unless introduce
 Run:
 
 ```powershell
-& 'C:\Program Files\dotnet\dotnet.exe' test .\Hoshi.slnx -c Debug -p:Platform=x64 --no-build --logger "console;verbosity=minimal"
+& 'C:\Program Files\dotnet\dotnet.exe' test .\Niratan.slnx -c Debug -p:Platform=x64 --no-build --logger "console;verbosity=minimal"
 ```
 
 Expected: all tests pass.
@@ -1464,12 +1464,12 @@ Expected: all tests pass.
 Run:
 
 ```powershell
-Start-Process -FilePath 'D:\CODE\Hoshi\Hoshi\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64\Hoshi.exe' -WorkingDirectory 'D:\CODE\Hoshi\Hoshi\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64'
+Start-Process -FilePath 'D:\CODE\Niratan\Niratan\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64\Niratan.exe' -WorkingDirectory 'D:\CODE\Niratan\Niratan\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64'
 Start-Sleep -Seconds 5
-Get-Process Hoshi -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,Responding,StartTime
+Get-Process Niratan -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,Responding,StartTime
 ```
 
-Expected: `Hoshi` process exists and `Responding` is `True`.
+Expected: `Niratan` process exists and `Responding` is `True`.
 
 - [ ] **Step 5: Manual UI smoke test**
 
@@ -1489,7 +1489,7 @@ In the running app:
 If manual smoke testing shows that the Novel navigation item opens but selection state does not update, make the navigation recognition fix and commit these exact files:
 
 ```powershell
-git add Hoshi\Views\Pages\NavigationPage.xaml Hoshi\Services\NavigationService.cs
+git add Niratan\Views\Pages\NavigationPage.xaml Niratan\Services\NavigationService.cs
 git commit -m "fix(novels): complete novel library smoke fixes"
 ```
 

@@ -10,37 +10,37 @@
 
 ## Global Constraints
 
-- Behavior source: `docs/reference/hoshi/Niratan` at `v1.3.0`, commit `e40ca3a`.
+- Behavior source: `docs/reference/Niratan` at `v1.3.0`, commit `e40ca3a`.
 - Target Windows 10+ x64; do not build ARM64 by default.
 - Build: `dotnet build -p:Platform=x64`.
-- Test: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`.
+- Test: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`.
 - Do not modify `native/hoshidicts/` or replace WebView2 EPUB rendering.
 - Keep statistics/network policy out of View code-behind; ViewModels do not access SQLite or Google Drive directly.
 - Preserve TTU v1.6 fields, `statistics.json`, Merge/Replace semantics, and the Bookshelf dashboard.
 - Treat WebView2 messages, EPUBs, sidecars, and remote responses as untrusted input.
 - Add no database, chart, or synchronization package.
-- Preserve unrelated working-tree changes, especially `Hoshi/Views/Dictionary/DictionaryPopupOverlay.cs` and pre-existing plan files.
+- Preserve unrelated working-tree changes, especially `Niratan/Views/Dictionary/DictionaryPopupOverlay.cs` and pre-existing plan files.
 
 ## File Map
 
-- `Hoshi/Models/Novel/ReaderPageNavigationModels.cs`: typed page result, direction, event, and outcome.
-- `Hoshi/Services/Novels/ReaderStatisticsEventClassifier.cs`: bridge parsing and pure movement classification.
-- `Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs`: manual movement, autostart, display projection, and lifecycle orchestration.
-- `Hoshi/Views/Controls/ReaderStatisticsPanelContent.xaml(.cs)`: compact Session/Today/All Time UI.
-- `Hoshi/ViewModels/Pages/StatisticsSettingsPageViewModel.cs`: master/global-sync visibility.
-- `Hoshi/Services/Sync/IReaderAutoSyncCoordinator.cs`: narrow per-Reader sync contract.
-- `Hoshi/Services/Sync/ReaderAutoSyncCoordinator.cs`: open import, debounce, single-flight, replay, cancel, and logging.
+- `Niratan/Models/Novel/ReaderPageNavigationModels.cs`: typed page result, direction, event, and outcome.
+- `Niratan/Services/Novels/ReaderStatisticsEventClassifier.cs`: bridge parsing and pure movement classification.
+- `Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs`: manual movement, autostart, display projection, and lifecycle orchestration.
+- `Niratan/Views/Controls/ReaderStatisticsPanelContent.xaml(.cs)`: compact Session/Today/All Time UI.
+- `Niratan/ViewModels/Pages/StatisticsSettingsPageViewModel.cs`: master/global-sync visibility.
+- `Niratan/Services/Sync/IReaderAutoSyncCoordinator.cs`: narrow per-Reader sync contract.
+- `Niratan/Services/Sync/ReaderAutoSyncCoordinator.cs`: open import, debounce, single-flight, replay, cancel, and logging.
 
 ---
 
 ### Task 1: Type and repair the page-turn bridge contract
 
 **Files:**
-- Create: `Hoshi/Models/Novel/ReaderPageNavigationModels.cs`
-- Modify: `Hoshi/Services/Novels/ReaderStatisticsEventClassifier.cs`
-- Modify: `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
-- Modify: `Hoshi.Tests/Services/Novels/ReaderStatisticsEventClassifierTests.cs`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Create: `Niratan/Models/Novel/ReaderPageNavigationModels.cs`
+- Modify: `Niratan/Services/Novels/ReaderStatisticsEventClassifier.cs`
+- Modify: `Niratan/Views/Pages/NovelReaderPage.xaml.cs`
+- Modify: `Niratan.Tests/Services/Novels/ReaderStatisticsEventClassifierTests.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
 - Consumes: bridge strings `scrolled`, `limit`, `forward`, `backward`.
@@ -90,7 +90,7 @@ classifier.Should().NotContain("\"moved\"");
 - [ ] **Step 2: Verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderStatisticsEventClassifierTests|FullyQualifiedName~NovelReaderWebAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderStatisticsEventClassifierTests|FullyQualifiedName~NovelReaderWebAssetTests"
 ```
 
 Expected: FAIL because the typed models/parser do not exist and the classifier expects `moved`.
@@ -98,7 +98,7 @@ Expected: FAIL because the typed models/parser do not exist and the classifier e
 - [ ] **Step 3: Create typed models**
 
 ```csharp
-namespace Hoshi.Models.Novel;
+namespace Niratan.Models.Novel;
 
 public enum ReaderPageNavigationResult { Scrolled, Limit }
 public enum ReaderPageNavigationDirection { Forward, Backward }
@@ -163,8 +163,8 @@ Implement typed `AdjacentChapterTarget` by accepting only `Limit`, adding/subtra
 - [ ] **Step 5: Verify GREEN and commit**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderStatisticsEventClassifierTests|FullyQualifiedName~NovelReaderWebAssetTests"
-git add Hoshi/Models/Novel/ReaderPageNavigationModels.cs Hoshi/Services/Novels/ReaderStatisticsEventClassifier.cs Hoshi/Views/Pages/NovelReaderPage.xaml.cs Hoshi.Tests/Services/Novels/ReaderStatisticsEventClassifierTests.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderStatisticsEventClassifierTests|FullyQualifiedName~NovelReaderWebAssetTests"
+git add Niratan/Models/Novel/ReaderPageNavigationModels.cs Niratan/Services/Novels/ReaderStatisticsEventClassifier.cs Niratan/Views/Pages/NovelReaderPage.xaml.cs Niratan.Tests/Services/Novels/ReaderStatisticsEventClassifierTests.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "fix(statistics): recognize reader page movement"
 ```
 
@@ -175,9 +175,9 @@ Expected: targeted tests PASS.
 ### Task 2: Move manual statistics policy into the Reader ViewModel
 
 **Files:**
-- Modify: `Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs`
-- Modify: `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs`
+- Modify: `Niratan/Views/Pages/NovelReaderPage.xaml.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`
 
 **Interfaces:**
 - Consumes: `ReaderPageNavigationEvent`, `ISettingsService.Current.StatisticsSettings`.
@@ -223,7 +223,7 @@ Add one adjacent `Limit` test expecting `AdjacentChapter(1)` plus one `AdjacentC
 - [ ] **Step 2: Verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests"
 ```
 
 Expected: FAIL because the ViewModel has no typed handler or settings dependency.
@@ -335,8 +335,8 @@ The page parses/forwards, clears forward history when `DidMove`, loads an adjace
 - [ ] **Step 5: Verify GREEN and commit**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~NovelReaderWebAssetTests"
-git add Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs Hoshi/Views/Pages/NovelReaderPage.xaml.cs Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~NovelReaderWebAssetTests"
+git add Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs Niratan/Views/Pages/NovelReaderPage.xaml.cs Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs
 git commit -m "refactor(statistics): move page-turn policy into reader viewmodel"
 ```
 
@@ -347,15 +347,15 @@ Expected: same-chapter test records 30 raw characters and exactly one checkpoint
 ### Task 3: Build the compact language-aware Reader statistics panel
 
 **Files:**
-- Create: `Hoshi/Views/Controls/ReaderStatisticsPanelContent.xaml`
-- Create: `Hoshi/Views/Controls/ReaderStatisticsPanelContent.xaml.cs`
-- Modify: `Hoshi/Views/Pages/NovelReaderPage.xaml`
-- Modify: `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
-- Modify: `Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs`
-- Modify: `Hoshi/Strings/en-US/Resources.resw`
-- Modify: `Hoshi/Strings/zh-CN/Resources.resw`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Create: `Niratan/Views/Controls/ReaderStatisticsPanelContent.xaml`
+- Create: `Niratan/Views/Controls/ReaderStatisticsPanelContent.xaml.cs`
+- Modify: `Niratan/Views/Pages/NovelReaderPage.xaml`
+- Modify: `Niratan/Views/Pages/NovelReaderPage.xaml.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs`
+- Modify: `Niratan/Strings/en-US/Resources.resw`
+- Modify: `Niratan/Strings/zh-CN/Resources.resw`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
 - Consumes: `_profileRuntime.ActiveLanguage`, raw statistics, `ToggleStatisticsTrackingCommand`.
@@ -416,7 +416,7 @@ readerXaml.Should().NotContain("<Grid Width=\"1120\"\r\n                  Height
 - [ ] **Step 3: Verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~NovelReaderWebAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~NovelReaderWebAssetTests"
 ```
 
 Expected: FAIL because counts are raw-only and the panel control is absent.
@@ -444,10 +444,10 @@ Use these helpers for Session, Today, and All Time count/speed properties. Keep 
 Create `ReaderStatisticsPanelContent.xaml` with one scroll owner and explicit rows:
 
 ```xml
-<UserControl x:Class="Hoshi.Views.Controls.ReaderStatisticsPanelContent"
+<UserControl x:Class="Niratan.Views.Controls.ReaderStatisticsPanelContent"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:converters="using:Hoshi.Helpers.UI.Converters">
+             xmlns:converters="using:Niratan.Helpers.UI.Converters">
     <UserControl.Resources>
         <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
         <Style x:Key="StatisticsValueStyle" TargetType="TextBlock">
@@ -521,7 +521,7 @@ The `.xaml.cs` contains only `InitializeComponent()`:
 ```csharp
 using Microsoft.UI.Xaml.Controls;
 
-namespace Hoshi.Views.Controls;
+namespace Niratan.Views.Controls;
 
 public sealed partial class ReaderStatisticsPanelContent : UserControl
 {
@@ -544,9 +544,9 @@ Delete the click handler/named icon refresh. Remove `FlushStatisticsAsync` from 
 - [ ] **Step 7: Verify GREEN, build, and commit**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~NovelReaderWebAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~NovelReaderWebAssetTests"
 dotnet build -p:Platform=x64
-git add Hoshi/Views/Controls/ReaderStatisticsPanelContent.xaml Hoshi/Views/Controls/ReaderStatisticsPanelContent.xaml.cs Hoshi/Views/Pages/NovelReaderPage.xaml Hoshi/Views/Pages/NovelReaderPage.xaml.cs Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs Hoshi/Strings/en-US/Resources.resw Hoshi/Strings/zh-CN/Resources.resw Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add Niratan/Views/Controls/ReaderStatisticsPanelContent.xaml Niratan/Views/Controls/ReaderStatisticsPanelContent.xaml.cs Niratan/Views/Pages/NovelReaderPage.xaml Niratan/Views/Pages/NovelReaderPage.xaml.cs Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs Niratan/Strings/en-US/Resources.resw Niratan/Strings/zh-CN/Resources.resw Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "feat(statistics): align reader statistics panel"
 ```
 
@@ -557,11 +557,11 @@ Expected: targeted tests and x64 build PASS.
 ### Task 4: Align statistics settings with global Google Drive sync
 
 **Files:**
-- Modify: `Hoshi/ViewModels/Pages/StatisticsSettingsPageViewModel.cs`
-- Modify: `Hoshi/Views/Pages/StatisticsSettingsPage.xaml`
-- Modify: `Hoshi/Views/Pages/StatisticsSettingsPage.xaml.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/StatisticsSettingsPageViewModelTests.cs`
-- Modify: `Hoshi.Tests/Services/Sync/TtuSyncSettingsAssetTests.cs`
+- Modify: `Niratan/ViewModels/Pages/StatisticsSettingsPageViewModel.cs`
+- Modify: `Niratan/Views/Pages/StatisticsSettingsPage.xaml`
+- Modify: `Niratan/Views/Pages/StatisticsSettingsPage.xaml.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/StatisticsSettingsPageViewModelTests.cs`
+- Modify: `Niratan.Tests/Services/Sync/TtuSyncSettingsAssetTests.cs`
 
 **Interfaces:**
 - Consumes: `AppSettings.TtuSyncSettings.EnableSync` and existing statistics preferences.
@@ -620,7 +620,7 @@ Add a test that disabling statistics hides both subordinate groups while preserv
 - [ ] **Step 2: Verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~StatisticsSettingsPageViewModelTests|FullyQualifiedName~TtuSyncSettingsAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~StatisticsSettingsPageViewModelTests|FullyQualifiedName~TtuSyncSettingsAssetTests"
 ```
 
 Expected: FAIL because derived visibility properties do not exist.
@@ -675,8 +675,8 @@ viewModelCode.Should().NotContain("SelectedSyncMode = StatisticsSyncMode.Merge;"
 - [ ] **Step 5: Verify GREEN and commit**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~StatisticsSettingsPageViewModelTests|FullyQualifiedName~TtuSyncSettingsAssetTests"
-git add Hoshi/ViewModels/Pages/StatisticsSettingsPageViewModel.cs Hoshi/Views/Pages/StatisticsSettingsPage.xaml Hoshi/Views/Pages/StatisticsSettingsPage.xaml.cs Hoshi.Tests/ViewModels/Pages/StatisticsSettingsPageViewModelTests.cs Hoshi.Tests/Services/Sync/TtuSyncSettingsAssetTests.cs
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~StatisticsSettingsPageViewModelTests|FullyQualifiedName~TtuSyncSettingsAssetTests"
+git add Niratan/ViewModels/Pages/StatisticsSettingsPageViewModel.cs Niratan/Views/Pages/StatisticsSettingsPage.xaml Niratan/Views/Pages/StatisticsSettingsPage.xaml.cs Niratan.Tests/ViewModels/Pages/StatisticsSettingsPageViewModelTests.cs Niratan.Tests/Services/Sync/TtuSyncSettingsAssetTests.cs
 git commit -m "feat(statistics): gate sync settings behind google drive"
 ```
 
@@ -687,10 +687,10 @@ Expected: targeted tests PASS and hidden settings remain persisted.
 ### Task 5: Add the per-Reader Google Drive auto-sync coordinator
 
 **Files:**
-- Create: `Hoshi/Services/Sync/IReaderAutoSyncCoordinator.cs`
-- Create: `Hoshi/Services/Sync/ReaderAutoSyncCoordinator.cs`
-- Create: `Hoshi.Tests/Services/Sync/ReaderAutoSyncCoordinatorTests.cs`
-- Modify: `Hoshi/App.xaml.cs`
+- Create: `Niratan/Services/Sync/IReaderAutoSyncCoordinator.cs`
+- Create: `Niratan/Services/Sync/ReaderAutoSyncCoordinator.cs`
+- Create: `Niratan.Tests/Services/Sync/ReaderAutoSyncCoordinatorTests.cs`
+- Modify: `Niratan/App.xaml.cs`
 
 **Interfaces:**
 - Consumes: `ITtuSyncService`, `ISettingsService.Current`, `IGoogleDriveAuthService.HasCredentials`, `NovelBook`.
@@ -791,7 +791,7 @@ private static ReaderAutoSyncCoordinator CreateCoordinator(
 
 - [ ] **Step 2: Write failing debounce/single-flight tests**
 
-Use the internal delay delegate allowed by `InternalsVisibleTo("Hoshi.Tests")`. Hold delay and first export with `TaskCompletionSource` values:
+Use the internal delay delegate allowed by `InternalsVisibleTo("Niratan.Tests")`. Hold delay and first export with `TaskCompletionSource` values:
 
 ```csharp
 sut.ScheduleExport(Book);
@@ -815,7 +815,7 @@ Add tests for contained network failure, cancellation, `Cancel`, and final `Flus
 - [ ] **Step 3: Verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderAutoSyncCoordinatorTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderAutoSyncCoordinatorTests"
 ```
 
 Expected: FAIL because coordinator types do not exist.
@@ -984,8 +984,8 @@ services.AddTransient<IReaderAutoSyncCoordinator, ReaderAutoSyncCoordinator>();
 Then run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderAutoSyncCoordinatorTests|FullyQualifiedName~TtuSyncServiceTests"
-git add Hoshi/Services/Sync/IReaderAutoSyncCoordinator.cs Hoshi/Services/Sync/ReaderAutoSyncCoordinator.cs Hoshi.Tests/Services/Sync/ReaderAutoSyncCoordinatorTests.cs Hoshi/App.xaml.cs
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderAutoSyncCoordinatorTests|FullyQualifiedName~TtuSyncServiceTests"
+git add Niratan/Services/Sync/IReaderAutoSyncCoordinator.cs Niratan/Services/Sync/ReaderAutoSyncCoordinator.cs Niratan.Tests/Services/Sync/ReaderAutoSyncCoordinatorTests.cs Niratan/App.xaml.cs
 git commit -m "feat(sync): add reader auto-sync coordinator"
 ```
 
@@ -996,10 +996,10 @@ Expected: tests PASS without a real Drive request.
 ### Task 6: Integrate auto-sync with Reader state and lifecycle
 
 **Files:**
-- Modify: `Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs`
-- Modify: `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`
-- Modify: `Hoshi.Tests/Views/Pages/NovelReaderStatisticsLifecycleTests.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs`
+- Modify: `Niratan/Views/Pages/NovelReaderPage.xaml.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`
+- Modify: `Niratan.Tests/Views/Pages/NovelReaderStatisticsLifecycleTests.cs`
 
 **Interfaces:**
 - Consumes: `IReaderAutoSyncCoordinator` from Task 5.
@@ -1064,7 +1064,7 @@ Call close twice concurrently and assert one final flush. Preserve one Backgroun
 - [ ] **Step 3: Verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~NovelReaderStatisticsLifecycleTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~NovelReaderStatisticsLifecycleTests"
 ```
 
 Expected: FAIL because the ViewModel does not consume the coordinator.
@@ -1102,8 +1102,8 @@ After the close-only flush succeeds or is safely contained, call `_readerAutoSyn
 - [ ] **Step 7: Verify GREEN and commit**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~NovelReaderStatisticsLifecycleTests|FullyQualifiedName~ReaderStatisticsSessionTests|FullyQualifiedName~ReaderAutoSyncCoordinatorTests|FullyQualifiedName~TtuSyncServiceTests"
-git add Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs Hoshi/Views/Pages/NovelReaderPage.xaml.cs Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs Hoshi.Tests/Views/Pages/NovelReaderStatisticsLifecycleTests.cs
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~NovelReaderStatisticsLifecycleTests|FullyQualifiedName~ReaderStatisticsSessionTests|FullyQualifiedName~ReaderAutoSyncCoordinatorTests|FullyQualifiedName~TtuSyncServiceTests"
+git add Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs Niratan/Views/Pages/NovelReaderPage.xaml.cs Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs Niratan.Tests/Views/Pages/NovelReaderStatisticsLifecycleTests.cs
 git commit -m "feat(statistics): sync reader progress lifecycle"
 ```
 
@@ -1124,16 +1124,16 @@ Expected: all targeted lifecycle tests PASS.
 - [ ] **Step 1: Run formatting and diff checks**
 
 ```powershell
-dotnet format Hoshi.sln --verify-no-changes
+dotnet format Niratan.sln --verify-no-changes
 git diff --check
 ```
 
-Expected: exit 0. If files changed by this feature need formatting, run `dotnet format Hoshi.sln`, inspect the diff, then rerun verification.
+Expected: exit 0. If files changed by this feature need formatting, run `dotnet format Niratan.sln`, inspect the diff, then rerun verification.
 
 - [ ] **Step 2: Run targeted statistics/sync tests**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Statistics|FullyQualifiedName~TtuSync|FullyQualifiedName~GoogleDrive|FullyQualifiedName~NovelReaderWebAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Statistics|FullyQualifiedName~TtuSync|FullyQualifiedName~GoogleDrive|FullyQualifiedName~NovelReaderWebAssetTests"
 ```
 
 Expected: zero failed tests.
@@ -1142,7 +1142,7 @@ Expected: zero failed tests.
 
 ```powershell
 dotnet build -p:Platform=x64
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: PASS without new warnings.

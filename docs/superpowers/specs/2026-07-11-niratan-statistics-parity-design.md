@@ -2,9 +2,9 @@
 
 ## Goal
 
-Align Hoshi Windows with the current local Niratan statistics experience and its novel-storage architecture. The result includes Niratan-compatible file-backed books and shelves, trustworthy Reader statistics, the complete statistics dashboard, and TTU statistics synchronization. SQLite remains only for the video catalog and read-only external audio databases.
+Align Niratan Windows with the current local Niratan statistics experience and its novel-storage architecture. The result includes Niratan-compatible file-backed books and shelves, trustworthy Reader statistics, the complete statistics dashboard, and TTU statistics synchronization. SQLite remains only for the video catalog and read-only external audio databases.
 
-The behavior source of truth is `docs/reference/hoshi/Niratan` at the revision present during design. WinUI uses native Windows controls and responsive conventions instead of mechanically copying SwiftUI visuals.
+The behavior source of truth is `docs/reference/Niratan` at the revision present during design. WinUI uses native Windows controls and responsive conventions instead of mechanically copying SwiftUI visuals.
 
 ## Confirmed Product Decisions
 
@@ -66,7 +66,7 @@ Each increment must keep the app buildable and preserve user data. The complete 
 ## Compatibility Boundaries
 
 - Preserve TTU v1.6's nine-field daily statistics payload and its filename calculations.
-- Preserve existing Hoshi sidecar names.
+- Preserve existing Niratan sidecar names.
 - Treat all JSON and EPUB content as untrusted input.
 - Use atomic file replacement and narrow, typed models.
 - Do not change `native/hoshidicts/`.

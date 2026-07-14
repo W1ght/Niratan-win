@@ -20,8 +20,8 @@
 ### Task 1: Define Niratan-compatible shadow parameters
 
 **Files:**
-- Modify: `Hoshi/Services/Video/VideoSubtitleShadowLayout.cs`
-- Modify: `Hoshi.Tests/Services/Video/VideoSubtitleShadowLayoutTests.cs`
+- Modify: `Niratan/Services/Video/VideoSubtitleShadowLayout.cs`
+- Modify: `Niratan.Tests/Services/Video/VideoSubtitleShadowLayoutTests.cs`
 
 **Interfaces:**
 - Produces: `VideoSubtitleShadowLayout.Create(double radius, double contentOpacity) -> VideoSubtitleShadowStyle`
@@ -36,7 +36,7 @@ style.Should().Be(new VideoSubtitleShadowStyle(10, 0, 1, 0.9f));
 
 - [ ] **Step 2: Run the focused test and confirm it fails because `Create` and `VideoSubtitleShadowStyle` do not exist**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitleShadowLayoutTests" --no-restore`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitleShadowLayoutTests" --no-restore`
 
 - [ ] **Step 3: Replace the eight-offset model with the clamped single-shadow style**
 
@@ -59,14 +59,14 @@ public static VideoSubtitleShadowStyle Create(double radius, double contentOpaci
 
 - [ ] **Step 4: Run the focused test and confirm all shadow layout cases pass**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitleShadowLayoutTests" --no-restore`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitleShadowLayoutTests" --no-restore`
 
 ### Task 2: Render the soft shadow and subtitle composite with Win2D
 
 **Files:**
-- Create: `Hoshi/Services/Video/VideoSubtitleCanvasRenderer.cs`
-- Delete: `Hoshi/Services/Video/VideoSubtitleMaskBitmapRenderer.cs`
-- Modify: `Hoshi.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs`
+- Create: `Niratan/Services/Video/VideoSubtitleCanvasRenderer.cs`
+- Delete: `Niratan/Services/Video/VideoSubtitleMaskBitmapRenderer.cs`
+- Modify: `Niratan.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs`
 
 **Interfaces:**
 - Consumes: `VideoSubtitleShadowLayout.Create(double, double)`
@@ -76,7 +76,7 @@ Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filt
 
 - [ ] **Step 2: Run the focused asset tests and confirm they fail because the canvas renderer is missing**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitleLookupAssetTests" --no-restore`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitleLookupAssetTests" --no-restore`
 
 - [ ] **Step 3: Implement the minimal renderer**
 
@@ -87,15 +87,15 @@ command list.
 
 - [ ] **Step 4: Run the focused asset tests and shadow parameter tests**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitleLookupAssetTests|FullyQualifiedName~VideoSubtitleShadowLayoutTests" --no-restore`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitleLookupAssetTests|FullyQualifiedName~VideoSubtitleShadowLayoutTests" --no-restore`
 
 ### Task 3: Replace the native layer with one CanvasControl
 
 **Files:**
-- Modify: `Hoshi/Views/Video/VideoPlayerWindow.xaml`
-- Modify: `Hoshi/Views/Video/VideoPlayerWindow.SubtitleOverlay.cs`
-- Modify: `Hoshi/Views/Video/VideoPlayerWindow.xaml.cs`
-- Modify: `Hoshi.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs`
+- Modify: `Niratan/Views/Video/VideoPlayerWindow.xaml`
+- Modify: `Niratan/Views/Video/VideoPlayerWindow.SubtitleOverlay.cs`
+- Modify: `Niratan/Views/Video/VideoPlayerWindow.xaml.cs`
+- Modify: `Niratan.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs`
 
 **Interfaces:**
 - Consumes: `VideoSubtitleCanvasRenderer.Draw(...)`
@@ -111,7 +111,7 @@ Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filt
 
 - [ ] **Step 5: Run all subtitle-focused tests**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitle" --no-restore`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitle" --no-restore`
 
 ### Task 4: Verify build, tests, and launch
 
@@ -124,9 +124,9 @@ Run: `dotnet build -p:Platform=x64`
 
 - [ ] **Step 2: Run the full x64 test suite**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`
 
-- [ ] **Step 3: Launch through the repository workflow and confirm a responsive top-level Hoshi window**
+- [ ] **Step 3: Launch through the repository workflow and confirm a responsive top-level Niratan window**
 
 Run: `.\build-and-run.ps1`
 

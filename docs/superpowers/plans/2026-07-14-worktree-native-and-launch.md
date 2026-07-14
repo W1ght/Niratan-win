@@ -20,8 +20,8 @@
 ### Task 1: Lock down development-script behavior
 
 **Files:**
-- Create: `Hoshi.Tests/Build/DevelopmentScriptAssetTests.cs`
-- Test: `Hoshi.Tests/Build/DevelopmentScriptAssetTests.cs`
+- Create: `Niratan.Tests/Build/DevelopmentScriptAssetTests.cs`
+- Test: `Niratan.Tests/Build/DevelopmentScriptAssetTests.cs`
 
 **Interfaces:**
 - Consumes: repository-root scripts and project XML as text assets.
@@ -33,8 +33,8 @@
 [Fact]
 public void BuildProjects_PrepareNativeDllBeforeCopyingIt()
 {
-    Project("Hoshi", "Hoshi.csproj").Should().Contain("Ensure-NativeHoshidicts.ps1");
-    Project("Hoshi.Tests", "Hoshi.Tests.csproj").Should().Contain("Ensure-NativeHoshidicts.ps1");
+    Project("Niratan", "Niratan.csproj").Should().Contain("Ensure-NativeHoshidicts.ps1");
+    Project("Niratan.Tests", "Niratan.Tests.csproj").Should().Contain("Ensure-NativeHoshidicts.ps1");
 }
 
 [Fact]
@@ -49,7 +49,7 @@ public void BuildAndRun_AnchorsBuildAndLaunchToItsOwnWorktree()
 
 - [ ] **Step 2: Run the focused tests and verify RED**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~DevelopmentScriptAssetTests`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~DevelopmentScriptAssetTests`
 
 Expected: FAIL because the preparation script and exact launch code do not exist.
 
@@ -61,9 +61,9 @@ The assertions define the externally reviewable script contract; do not weaken t
 
 **Files:**
 - Create: `scripts/Ensure-NativeHoshidicts.ps1`
-- Modify: `Hoshi/Hoshi.csproj`
-- Modify: `Hoshi.Tests/Hoshi.Tests.csproj`
-- Test: `Hoshi.Tests/Build/DevelopmentScriptAssetTests.cs`
+- Modify: `Niratan/Niratan.csproj`
+- Modify: `Niratan.Tests/Niratan.Tests.csproj`
+- Test: `Niratan.Tests/Build/DevelopmentScriptAssetTests.cs`
 
 **Interfaces:**
 - Consumes: optional `-RepositoryRoot`, `git rev-parse --path-format=absolute --git-common-dir`, primary checkout `native/out/hoshidicts_c_api.dll`, and `build-native.ps1`.
@@ -103,7 +103,7 @@ Add an `EnsureNativeHoshidicts` target to each project with `BeforeTargets="Copy
 
 - [ ] **Step 3: Run the focused tests and verify the native part is GREEN**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~DevelopmentScriptAssetTests`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~DevelopmentScriptAssetTests`
 
 Expected: the project-wiring test passes; the launch-script test still fails.
 
@@ -111,23 +111,23 @@ Expected: the project-wiring test passes; the launch-script test still fails.
 
 **Files:**
 - Modify: `build-and-run.ps1`
-- Test: `Hoshi.Tests/Build/DevelopmentScriptAssetTests.cs`
+- Test: `Niratan.Tests/Build/DevelopmentScriptAssetTests.cs`
 
 **Interfaces:**
-- Consumes: `$PSScriptRoot`, `scripts/Ensure-NativeHoshidicts.ps1`, explicit `Hoshi/Hoshi.csproj` path.
-- Produces: an x64 Debug Hoshi process whose executable is the current worktree output and whose main window is ready.
+- Consumes: `$PSScriptRoot`, `scripts/Ensure-NativeHoshidicts.ps1`, explicit `Niratan/Niratan.csproj` path.
+- Produces: an x64 Debug Niratan process whose executable is the current worktree output and whose main window is ready.
 
 - [ ] **Step 1: Replace relative build and launch paths**
 
 ```powershell
 $repositoryRoot = (Resolve-Path -LiteralPath $PSScriptRoot).Path
-$project = Join-Path $repositoryRoot 'Hoshi\Hoshi.csproj'
-$outputDirectory = Join-Path $repositoryRoot 'Hoshi\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64'
-$executable = Join-Path $outputDirectory 'Hoshi.exe'
+$project = Join-Path $repositoryRoot 'Niratan\Niratan.csproj'
+$outputDirectory = Join-Path $repositoryRoot 'Niratan\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64'
+$executable = Join-Path $outputDirectory 'Niratan.exe'
 & (Join-Path $repositoryRoot 'scripts\Ensure-NativeHoshidicts.ps1') -RepositoryRoot $repositoryRoot
 dotnet build $project -c Debug -p:Platform=x64
-if ($LASTEXITCODE -ne 0) { throw 'Hoshi build failed.' }
-if (-not (Test-Path -LiteralPath $executable)) { throw "Hoshi executable not found: $executable" }
+if ($LASTEXITCODE -ne 0) { throw 'Niratan build failed.' }
+if (-not (Test-Path -LiteralPath $executable)) { throw "Niratan executable not found: $executable" }
 $process = Start-Process -FilePath $executable -WorkingDirectory $outputDirectory -PassThru
 ```
 
@@ -140,21 +140,21 @@ $deadline = [DateTime]::UtcNow.AddSeconds(20)
 do {
     Start-Sleep -Milliseconds 250
     $process.Refresh()
-    if ($process.HasExited) { throw "Hoshi exited during startup with code $($process.ExitCode)." }
+    if ($process.HasExited) { throw "Niratan exited during startup with code $($process.ExitCode)." }
 } while ($process.MainWindowHandle -eq 0 -and [DateTime]::UtcNow -lt $deadline)
-if ($process.MainWindowHandle -eq 0) { throw 'Hoshi did not create a main window within 20 seconds.' }
+if ($process.MainWindowHandle -eq 0) { throw 'Niratan did not create a main window within 20 seconds.' }
 ```
 
 - [ ] **Step 3: Run the focused tests and verify GREEN**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~DevelopmentScriptAssetTests`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~DevelopmentScriptAssetTests`
 
 Expected: PASS.
 
 ### Task 4: Prove fresh-worktree recovery and exact launch
 
 **Files:**
-- Verify: ignored output under `native/out`, `Hoshi/bin`, and `Hoshi.Tests/bin`
+- Verify: ignored output under `native/out`, `Niratan/bin`, and `Niratan.Tests/bin`
 
 **Interfaces:**
 - Consumes: the new preparation and launch paths.
@@ -166,7 +166,7 @@ Resolve and verify all absolute targets are under the feature worktree, then rem
 
 - [ ] **Step 2: Run a normal x64 test build**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`
 
 Expected: preparation copies the primary checkout DLL and all tests pass without `DllNotFoundException`.
 
@@ -179,6 +179,6 @@ Expected: printed executable path begins with `D:\CODE\Yukari\.worktrees\bookshe
 - [ ] **Step 4: Commit the infrastructure fix**
 
 ```powershell
-git add -- build-and-run.ps1 scripts/Ensure-NativeHoshidicts.ps1 Hoshi/Hoshi.csproj Hoshi.Tests/Hoshi.Tests.csproj Hoshi.Tests/Build/DevelopmentScriptAssetTests.cs
+git add -- build-and-run.ps1 scripts/Ensure-NativeHoshidicts.ps1 Niratan/Niratan.csproj Niratan.Tests/Niratan.Tests.csproj Niratan.Tests/Build/DevelopmentScriptAssetTests.cs
 git commit -m "fix(dev): prepare native dll in worktrees"
 ```

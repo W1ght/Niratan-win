@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Build only x64 with `dotnet build -p:Platform=x64`; do not build ARM64 by default.
-- Run tests with `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`.
+- Run tests with `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`.
 - Do not modify any file under `native/hoshidicts/`.
 - Preserve the View → ViewModel → Service layering; page code-behind only coordinates UI controls and WebView2.
 - Do not change TTU conflict resolution, Google Drive file formats, or remote filenames.
@@ -23,10 +23,10 @@
 
 ## File Structure
 
-- `Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs` — separate local initialization from open import and make the back command navigation-only.
-- `Hoshi/Views/Pages/NovelReaderPage.xaml.cs` — schedule and cancel the page-owned open-sync task, then reapply imported sidecars to the active Reader.
-- `Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs` — prove local initialization is independent of the import wait, imported state is reloaded, and back navigation does not await close flush.
-- `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs` — constrain lifecycle orchestration order and imported-state refresh in WinUI code-behind.
+- `Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs` — separate local initialization from open import and make the back command navigation-only.
+- `Niratan/Views/Pages/NovelReaderPage.xaml.cs` — schedule and cancel the page-owned open-sync task, then reapply imported sidecars to the active Reader.
+- `Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs` — prove local initialization is independent of the import wait, imported state is reloaded, and back navigation does not await close flush.
+- `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs` — constrain lifecycle orchestration order and imported-state refresh in WinUI code-behind.
 - `docs/CHANGELOG.md` — record the blocking network waits and the local-first/detached-close fix.
 
 ---
@@ -34,8 +34,8 @@
 ### Task 1: Split Local Initialization From Open-Time Import
 
 **Files:**
-- Modify: `Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`
 
 **Interfaces:**
 - Consumes: `IReaderAutoSyncCoordinator.ImportOnOpenAsync(NovelBook, CancellationToken)` and `INovelLibraryService.GetNovelBookAsync(string, CancellationToken)`.
@@ -126,7 +126,7 @@ public async Task SyncOnOpenAsync_WhenImportSucceeds_ReloadsImportedBook()
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~InitializeAsync_CompletesLocalOpenWithoutWaitingForAutoSync|FullyQualifiedName~SyncOnOpenAsync_WhenImportSucceeds_ReloadsImportedBook"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~InitializeAsync_CompletesLocalOpenWithoutWaitingForAutoSync|FullyQualifiedName~SyncOnOpenAsync_WhenImportSucceeds_ReloadsImportedBook"
 ```
 
 Expected: the first test fails because `InitializeAsync` invokes `ImportOnOpenAsync`; the second does not compile because `SyncOnOpenAsync` is absent.
@@ -163,7 +163,7 @@ Expected: both tests pass with zero failures.
 - [ ] **Step 5: Commit the local/open-sync separation**
 
 ```powershell
-git add Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs
+git add Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs
 git commit -m "refactor(reader): separate local open from auto sync"
 ```
 
@@ -172,8 +172,8 @@ git commit -m "refactor(reader): separate local open from auto sync"
 ### Task 2: Start Import After Local Render and Reapply Imported State
 
 **Files:**
-- Modify: `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Niratan/Views/Pages/NovelReaderPage.xaml.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
 - Consumes: `NovelReaderPageViewModel.SyncOnOpenAsync`, `LoadChapter(int, double?)`, `LoadStatisticsAsync`, `SasayakiSidecarService.LoadPlaybackAsync` and `ApplySasayakiPlayback`.
@@ -227,7 +227,7 @@ public void ImportedReaderState_ReappliesBookmarkStatisticsAndSasayakiPlayback()
 - [ ] **Step 2: Run the page contracts and verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderOpenSync_StartsAfterLocalReaderAndIsCancelledOnDetach|FullyQualifiedName~ImportedReaderState_ReappliesBookmarkStatisticsAndSasayakiPlayback"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderOpenSync_StartsAfterLocalReaderAndIsCancelledOnDetach|FullyQualifiedName~ImportedReaderState_ReappliesBookmarkStatisticsAndSasayakiPlayback"
 ```
 
 Expected: both tests fail because the page-owned background import lifecycle is absent.
@@ -269,7 +269,7 @@ Do not rematch subtitles, recreate the player, save a zero playback position, or
 - [ ] **Step 5: Run the page contracts and the existing Reader asset suite**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests"
 ```
 
 Expected: all `NovelReaderWebAssetTests` pass with zero failures.
@@ -277,7 +277,7 @@ Expected: all `NovelReaderWebAssetTests` pass with zero failures.
 - [ ] **Step 6: Commit the local-first page lifecycle**
 
 ```powershell
-git add Hoshi/Views/Pages/NovelReaderPage.xaml.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add Niratan/Views/Pages/NovelReaderPage.xaml.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "fix(reader): apply open sync after local render"
 ```
 
@@ -286,9 +286,9 @@ git commit -m "fix(reader): apply open sync after local render"
 ### Task 3: Navigate Away Before Detached Close Flush
 
 **Files:**
-- Modify: `Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 - Modify: `docs/CHANGELOG.md`
 
 **Interfaces:**
@@ -333,7 +333,7 @@ public async Task BackToLibraryCommand_SendsNavigationWithoutStartingCloseFlush(
 - [ ] **Step 2: Run the test and verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~BackToLibraryCommand_SendsNavigationWithoutStartingCloseFlush"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~BackToLibraryCommand_SendsNavigationWithoutStartingCloseFlush"
 ```
 
 Expected: the command does not complete because it waits for `PrepareForReaderLifecycleCloseAsync`/`FlushAsync`.
@@ -357,7 +357,7 @@ Extend the existing lifecycle asset test to assert that `OnNavigatedFrom` still 
 - [ ] **Step 5: Run ViewModel and Reader lifecycle tests**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~NovelReaderWebAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~NovelReaderWebAssetTests"
 ```
 
 Expected: all selected tests pass with zero failures, including existing close-boundary ordering tests.
@@ -369,7 +369,7 @@ Add a concise entry to `docs/CHANGELOG.md`: open-time Google Drive import was aw
 - [ ] **Step 7: Commit the non-blocking exit**
 
 ```powershell
-git add Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs docs/CHANGELOG.md
+git add Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs docs/CHANGELOG.md
 git commit -m "fix(reader): detach close sync from navigation"
 ```
 
@@ -381,7 +381,7 @@ git commit -m "fix(reader): detach close sync from navigation"
 - Verify only; modify production files only if a failing test or reproduced delay identifies a remaining root cause.
 
 **Interfaces:**
-- Consumes: worktree build scripts, Hoshi logs, UI Automation IDs and the imported test library.
+- Consumes: worktree build scripts, Niratan logs, UI Automation IDs and the imported test library.
 - Produces: fresh build/test evidence and a running exact worktree instance.
 
 - [ ] **Step 1: Run formatting/diff checks**
@@ -396,7 +396,7 @@ Expected: no whitespace errors and only intended files are modified.
 - [ ] **Step 2: Run the complete x64 test suite**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: zero failed tests.

@@ -1,0 +1,583 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl x:Class="Niratan.Views.Controls.NovelStatisticsDashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Niratan.Views.Controls"
+             xmlns:converters="using:Niratan.Helpers.UI.Converters"
+             xmlns:novel="using:Niratan.Models.Novel">
+
+    <UserControl.Resources>
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+
+        <Style x:Key="DashboardCardStyle"
+               TargetType="Border">
+            <Setter Property="Padding" Value="20" />
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+        </Style>
+
+        <DataTemplate x:Key="MetricTemplate"
+                      x:DataType="novel:NovelStatisticsMetricDisplay">
+            <StackPanel MinWidth="170"
+                        Padding="0,6"
+                        Spacing="4">
+                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="{x:Bind Label}" />
+                <TextBlock FontSize="18"
+                           FontWeight="SemiBold"
+                           Text="{x:Bind Value}" />
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="WeekDayTemplate"
+                      x:DataType="novel:NovelStatisticsWeekDayDisplay">
+            <Border MinWidth="44"
+                    MinHeight="58"
+                    Margin="3"
+                    Padding="8"
+                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                    CornerRadius="8"
+                    AutomationProperties.Name="{x:Bind Weekday}">
+                <StackPanel HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Spacing="4">
+                    <TextBlock HorizontalAlignment="Center"
+                               FontWeight="SemiBold"
+                               Text="{x:Bind Weekday}" />
+                    <TextBlock HorizontalAlignment="Center"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="{x:Bind PercentText}" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="CalendarDayTemplate"
+                      x:DataType="novel:NovelStatisticsCalendarDayDisplay">
+            <Grid Width="12"
+                  Height="12"
+                  Margin="2"
+                  AutomationProperties.Name="{x:Bind AccessibleText}">
+                <Border Background="{ThemeResource AccentFillColorDefaultBrush}"
+                        CornerRadius="3"
+                        Opacity="{x:Bind HeatOpacity}" />
+                <Border BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="3"
+                        Visibility="{x:Bind IsInSelectedRange, Converter={StaticResource BooleanToVisibilityConverter}}" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="BookRankingTemplate"
+                      x:DataType="novel:NovelStatisticsBookRankingDisplayRow">
+            <StackPanel Padding="0,7"
+                        Spacing="6">
+                <Grid ColumnDefinitions="*,Auto"
+                      ColumnSpacing="12">
+                    <TextBlock FontWeight="SemiBold"
+                               Text="{x:Bind Title}"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="1"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="{x:Bind ValueText}" />
+                </Grid>
+                <ProgressBar Maximum="1"
+                             Value="{x:Bind NormalizedValue}" />
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ShelfComparisonTemplate"
+                      x:DataType="novel:NovelStatisticsShelfComparisonDisplayRow">
+            <StackPanel Padding="0,8"
+                        Spacing="6">
+                <Grid ColumnDefinitions="*,Auto"
+                      ColumnSpacing="12">
+                    <StackPanel Spacing="2">
+                        <TextBlock FontWeight="SemiBold"
+                                   Text="{x:Bind Name}" />
+                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="{x:Bind DetailText}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="1"
+                               VerticalAlignment="Center"
+                               Text="{x:Bind SpeedText}" />
+                </Grid>
+                <ProgressBar Maximum="1"
+                             Value="{x:Bind NormalizedVolume}" />
+                <ProgressBar Height="3"
+                             Maximum="1"
+                             Opacity="0.55"
+                             Value="{x:Bind RecordedProgress}" />
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid Padding="20,0,36,24">
+        <ScrollViewer x:Name="NovelStatisticsDashboardScrollViewer"
+                      AutomationProperties.AutomationId="NovelStatisticsDashboardScrollViewer"
+                      HorizontalContentAlignment="Stretch"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto"
+                      VerticalScrollMode="Enabled"
+                      Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}">
+            <StackPanel MaxWidth="1440"
+                        Width="{Binding ViewportWidth, ElementName=NovelStatisticsDashboardScrollViewer}"
+                        HorizontalAlignment="Center"
+                        Spacing="18">
+                <StackPanel Margin="0,8,0,6"
+                            Spacing="4">
+                    <TextBlock x:Uid="NovelStatisticsDashboardTitle"
+                               Style="{StaticResource TitleTextBlockStyle}" />
+                    <TextBlock x:Uid="NovelStatisticsDashboardSubtitle"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+
+                <InfoBar AutomationProperties.AutomationId="NovelStatisticsCorruptWarning"
+                         IsClosable="False"
+                         IsOpen="{Binding HasCorruptBooks}"
+                         Message="{Binding CorruptWarningText}"
+                         Severity="Warning" />
+
+                <Border AutomationProperties.AutomationId="NovelStatisticsEmptyState"
+                        Style="{StaticResource DashboardCardStyle}"
+                        Visibility="{Binding HasNoData, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel HorizontalAlignment="Center"
+                                Padding="24"
+                                Spacing="8">
+                        <FontIcon FontSize="36"
+                                  Glyph="&#xE9D9;"
+                                  Opacity="0.5" />
+                        <TextBlock x:Uid="NovelStatisticsEmptyTitle"
+                                   HorizontalAlignment="Center"
+                                   Style="{StaticResource BodyLargeStrongTextBlockStyle}" />
+                        <TextBlock x:Uid="NovelStatisticsEmptyDescription"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </Border>
+
+                <Border AutomationProperties.AutomationId="NovelStatisticsTrendCard"
+                        Style="{StaticResource DashboardCardStyle}"
+                        Visibility="{Binding HasData, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Spacing="14">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Spacing="3">
+                                <TextBlock x:Uid="NovelStatisticsTrendCardTitle"
+                                           Style="{StaticResource SubtitleTextBlockStyle}" />
+                                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Text="{Binding RangeTitle}" />
+                            </StackPanel>
+                            <TextBlock Grid.Column="1"
+                                       VerticalAlignment="Bottom"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="{Binding RangeText}" />
+                        </Grid>
+
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                      HorizontalScrollMode="Enabled"
+                                      VerticalScrollBarVisibility="Disabled"
+                                      VerticalScrollMode="Disabled">
+                            <StackPanel Orientation="Horizontal"
+                                        Spacing="12">
+                                <StackPanel Spacing="4">
+                                    <TextBlock x:Uid="NovelStatisticsRangeLabel" />
+                                    <ComboBox MinWidth="110"
+                                              x:Uid="NovelStatisticsRangeModeControl"
+                                              AutomationProperties.AutomationId="NovelStatisticsRangeMode"
+                                              ItemsSource="{Binding RangeModes}"
+                                              SelectedItem="{Binding SelectedRangeMode, Mode=TwoWay}" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock x:Uid="NovelStatisticsTrendGrainLabel" />
+                                    <ComboBox MinWidth="105"
+                                              x:Uid="NovelStatisticsTrendGrainControl"
+                                              AutomationProperties.AutomationId="NovelStatisticsTrendGrain"
+                                              ItemsSource="{Binding TrendGrains}"
+                                              SelectedItem="{Binding SelectedTrendGrain, Mode=TwoWay}" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock x:Uid="NovelStatisticsTrendMetricLabel" />
+                                    <ComboBox MinWidth="116"
+                                              x:Uid="NovelStatisticsTrendMetricControl"
+                                              AutomationProperties.AutomationId="NovelStatisticsTrendMetric"
+                                              ItemsSource="{Binding TrendMetrics}"
+                                              SelectedItem="{Binding SelectedTrendMetric, Mode=TwoWay}" />
+                                </StackPanel>
+                                <StackPanel Spacing="4">
+                                    <TextBlock x:Uid="NovelStatisticsTrendStyleLabel" />
+                                    <ComboBox MinWidth="96"
+                                              x:Uid="NovelStatisticsTrendStyleControl"
+                                              AutomationProperties.AutomationId="NovelStatisticsTrendStyle"
+                                              ItemsSource="{Binding TrendStyles}"
+                                              SelectedItem="{Binding SelectedTrendStyle, Mode=TwoWay}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <TextBlock x:Uid="NovelStatisticsTrendHelp"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <controls:NovelStatisticsTrendChart x:Uid="NovelStatisticsTrendChartControl"
+                                                            Height="260"
+                                                            ItemsSource="{Binding TrendPoints}"
+                                                            AxisTicks="{Binding TrendAxisTicks}"
+                                                            ChartStyle="{Binding SelectedTrendStyle}" />
+                        <Slider x:Uid="NovelStatisticsRangeScrollBar"
+                                AutomationProperties.AutomationId="NovelStatisticsRangeScrollBar"
+                                AutomationProperties.HelpText="{Binding RangeScrollAccessibleText}"
+                                Orientation="Horizontal"
+                                Minimum="0"
+                                Maximum="{Binding RangeScrollMaximum}"
+                                StepFrequency="1"
+                                SnapsTo="StepValues"
+                                SmallChange="1"
+                                LargeChange="{Binding RangeScrollLargeChange}"
+                                IsEnabled="{Binding CanScrollRange}"
+                                Value="{Binding SelectedRangeOffsetValue, Mode=TwoWay}" />
+                    </StackPanel>
+                </Border>
+
+                <Grid x:Name="DashboardCardsGrid"
+                      ColumnSpacing="14"
+                      RowSpacing="14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="DashboardPrimaryColumn" Width="*" />
+                        <ColumnDefinition x:Name="DashboardSecondaryColumn" Width="*" />
+                        <ColumnDefinition x:Name="DashboardTertiaryColumn" Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Border x:Name="TodayCard"
+                            Grid.Row="0"
+                            Grid.Column="0"
+                            AutomationProperties.AutomationId="NovelStatisticsTodayCard"
+                            Style="{StaticResource DashboardCardStyle}"
+                            Visibility="{Binding HasData, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel Spacing="14">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Spacing="3">
+                                    <TextBlock x:Uid="NovelStatisticsTodayTitle"
+                                               Style="{StaticResource SubtitleTextBlockStyle}" />
+                                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               Text="{Binding TodayText}" />
+                                </StackPanel>
+                                <Grid Grid.Column="1"
+                                      Width="118"
+                                      Height="118">
+                                    <ProgressRing IsActive="True"
+                                                  Width="118"
+                                                  Height="118"
+                                                  IsIndeterminate="False"
+                                                  Maximum="100"
+                                                  Value="{Binding Today.TargetPercent}" />
+                                    <TextBlock HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               FontWeight="SemiBold"
+                                               Text="{Binding TodayGoalPercentText}" />
+                                </Grid>
+                            </Grid>
+                            <ItemsControl ItemTemplate="{StaticResource MetricTemplate}"
+                                          ItemsSource="{Binding TodayMetrics}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <ItemsWrapGrid ItemWidth="160"
+                                                       MaximumRowsOrColumns="2"
+                                                       Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <Border x:Name="GoalCard"
+                            Grid.Row="1"
+                            Grid.Column="0"
+                            AutomationProperties.AutomationId="NovelStatisticsGoalCard"
+                            Style="{StaticResource DashboardCardStyle}">
+                        <StackPanel Spacing="12">
+                            <TextBlock x:Uid="NovelStatisticsGoalTitle"
+                                       Style="{StaticResource SubtitleTextBlockStyle}" />
+                            <Grid ColumnDefinitions="*,Auto"
+                                  ColumnSpacing="12">
+                                <TextBlock x:Uid="NovelStatisticsGoalTypeLabel"
+                                           VerticalAlignment="Center" />
+                                <ComboBox Grid.Column="1"
+                                          MinWidth="130"
+                                          x:Uid="NovelStatisticsGoalTypeControl"
+                                          AutomationProperties.AutomationId="NovelStatisticsGoalType"
+                                          ItemsSource="{Binding DailyTargetTypes}"
+                                          SelectedItem="{Binding SelectedDailyTargetType, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto"
+                                  ColumnSpacing="12">
+                                <TextBlock x:Uid="NovelStatisticsCharacterTargetLabel"
+                                           VerticalAlignment="Center" />
+                                <NumberBox Grid.Column="1"
+                                           Width="126"
+                                           x:Uid="NovelStatisticsCharacterTargetControl"
+                                           AutomationProperties.AutomationId="NovelStatisticsCharacterTarget"
+                                           Minimum="500"
+                                           Maximum="20000"
+                                           SmallChange="500"
+                                           Value="{Binding DailyCharacterTargetValue, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto"
+                                  ColumnSpacing="12">
+                                <TextBlock x:Uid="NovelStatisticsDurationTargetLabel"
+                                           VerticalAlignment="Center" />
+                                <NumberBox Grid.Column="1"
+                                           Width="126"
+                                           x:Uid="NovelStatisticsDurationTargetControl"
+                                           AutomationProperties.AutomationId="NovelStatisticsDurationTarget"
+                                           Minimum="5"
+                                           Maximum="240"
+                                           SmallChange="5"
+                                           Value="{Binding DailyDurationTargetMinutesValue, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto"
+                                  ColumnSpacing="12">
+                                <TextBlock x:Uid="NovelStatisticsWeeklyTargetLabel"
+                                           VerticalAlignment="Center" />
+                                <NumberBox Grid.Column="1"
+                                           Width="126"
+                                           x:Uid="NovelStatisticsWeeklyTargetControl"
+                                           AutomationProperties.AutomationId="NovelStatisticsWeeklyTarget"
+                                           Minimum="1"
+                                           Maximum="7"
+                                           SmallChange="1"
+                                           Value="{Binding WeeklyTargetDaysValue, Mode=TwoWay}" />
+                            </Grid>
+                            <TextBlock x:Uid="NovelStatisticsGoalHelp"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border x:Name="WeekCard"
+                            Grid.Row="2"
+                            Grid.Column="0"
+                            VerticalAlignment="Top"
+                            AutomationProperties.AutomationId="NovelStatisticsWeekCard"
+                            Style="{StaticResource DashboardCardStyle}"
+                            Visibility="{Binding HasData, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel Spacing="12">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock x:Uid="NovelStatisticsWeekTitle"
+                                           Style="{StaticResource SubtitleTextBlockStyle}" />
+                                <TextBlock Grid.Column="1"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Text="{Binding WeekText}" />
+                            </Grid>
+                            <ItemsControl ItemTemplate="{StaticResource MetricTemplate}"
+                                          ItemsSource="{Binding WeekMetrics}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <ItemsWrapGrid ItemWidth="160"
+                                                       MaximumRowsOrColumns="2"
+                                                       Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                            <ItemsControl AutomationProperties.AutomationId="NovelStatisticsWeekDays"
+                                          ItemTemplate="{StaticResource WeekDayTemplate}"
+                                          ItemsSource="{Binding WeekDays}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel HorizontalAlignment="Stretch"
+                                                    Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <Border x:Name="SelectedRangeCard"
+                            Grid.Row="0"
+                            Grid.Column="2"
+                            AutomationProperties.AutomationId="NovelStatisticsSelectedRangeCard"
+                            Style="{StaticResource DashboardCardStyle}"
+                            Visibility="{Binding HasData, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel Spacing="12">
+                            <TextBlock x:Uid="NovelStatisticsSelectedRangeTitle"
+                                       Style="{StaticResource SubtitleTextBlockStyle}" />
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="{Binding RangeTitle}" />
+                            <ItemsControl ItemTemplate="{StaticResource MetricTemplate}"
+                                          ItemsSource="{Binding RangeMetrics}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <ItemsWrapGrid ItemWidth="160"
+                                                       MaximumRowsOrColumns="2"
+                                                       Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                            <ProgressBar Maximum="100"
+                                         Value="{Binding SelectedRange.TargetProgressPercent}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border x:Name="SpeedCard"
+                            Grid.Row="1"
+                            Grid.Column="2"
+                            AutomationProperties.AutomationId="NovelStatisticsSpeedCard"
+                            Style="{StaticResource DashboardCardStyle}"
+                            Visibility="{Binding HasData, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel Spacing="12">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock x:Uid="NovelStatisticsSpeedTitle"
+                                           Style="{StaticResource SubtitleTextBlockStyle}" />
+                                <TextBlock Grid.Column="1"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Text="{Binding SpeedText}" />
+                            </Grid>
+                            <ItemsControl ItemTemplate="{StaticResource MetricTemplate}"
+                                          ItemsSource="{Binding SpeedMetrics}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <ItemsWrapGrid ItemWidth="190"
+                                                       MaximumRowsOrColumns="3"
+                                                       Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                            <TextBlock x:Uid="NovelStatisticsSpeedHelp"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border x:Name="CalendarCard"
+                            Grid.Row="0"
+                            Grid.Column="1"
+                            AutomationProperties.AutomationId="NovelStatisticsCalendarCard"
+                            Style="{StaticResource DashboardCardStyle}"
+                            Visibility="{Binding HasData, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel Spacing="12">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Spacing="3">
+                                    <TextBlock x:Uid="NovelStatisticsCalendarTitle"
+                                               Style="{StaticResource SubtitleTextBlockStyle}" />
+                                    <TextBlock x:Uid="NovelStatisticsCalendarRecentYear"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="1"
+                                           VerticalAlignment="Bottom"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Text="{Binding RangeTitle}" />
+                            </Grid>
+                            <ListView MaxHeight="132"
+                                      Padding="10"
+                                      x:Uid="NovelStatisticsCalendarControl"
+                                      AutomationProperties.AutomationId="NovelStatisticsCalendar"
+                                      ItemTemplate="{StaticResource CalendarDayTemplate}"
+                                      ItemsSource="{Binding CalendarDays}"
+                                      SelectedItem="{Binding SelectedCalendarDay, Mode=TwoWay}"
+                                      SelectionMode="Single"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                      ScrollViewer.HorizontalScrollMode="Enabled"
+                                      ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                      ScrollViewer.VerticalScrollMode="Disabled">
+                                <ListView.ItemContainerStyle>
+                                    <Style TargetType="ListViewItem">
+                                        <Setter Property="Width" Value="16" />
+                                        <Setter Property="Height" Value="16" />
+                                        <Setter Property="MinWidth" Value="0" />
+                                        <Setter Property="MinHeight" Value="0" />
+                                        <Setter Property="Padding" Value="0" />
+                                        <Setter Property="Margin" Value="0" />
+                                        <Setter Property="HorizontalContentAlignment" Value="Left" />
+                                        <Setter Property="VerticalContentAlignment" Value="Top" />
+                                    </Style>
+                                </ListView.ItemContainerStyle>
+                                <ListView.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <ItemsWrapGrid ItemWidth="16"
+                                                       ItemHeight="16"
+                                                       MaximumRowsOrColumns="7"
+                                                       Orientation="Vertical" />
+                                    </ItemsPanelTemplate>
+                                </ListView.ItemsPanel>
+                            </ListView>
+                            <Border Padding="12"
+                                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                    CornerRadius="8">
+                                <TextBlock AutomationProperties.AutomationId="NovelStatisticsCalendarDetail"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Text="{Binding CalendarDetail.Text}"
+                                           TextWrapping="Wrap" />
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <Border x:Name="RankingCard"
+                            Grid.Row="2"
+                            Grid.Column="1"
+                            Grid.ColumnSpan="2"
+                            AutomationProperties.AutomationId="NovelStatisticsBookRankingCard"
+                            Style="{StaticResource DashboardCardStyle}"
+                            Visibility="{Binding HasData, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel Spacing="12">
+                            <Grid ColumnDefinitions="*,Auto"
+                                  ColumnSpacing="12">
+                                <StackPanel Spacing="3">
+                                    <TextBlock x:Uid="NovelStatisticsRankingTitle"
+                                               Style="{StaticResource SubtitleTextBlockStyle}" />
+                                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               Text="{Binding RangeTitle}" />
+                                </StackPanel>
+                                <ComboBox Grid.Column="1"
+                                          MinWidth="120"
+                                          x:Uid="NovelStatisticsRankingMetricControl"
+                                          AutomationProperties.AutomationId="NovelStatisticsRankingMetric"
+                                          ItemsSource="{Binding RankingMetrics}"
+                                          SelectedItem="{Binding SelectedRankingMetric, Mode=TwoWay}" />
+                            </Grid>
+                            <ItemsControl AutomationProperties.AutomationId="NovelStatisticsBookRanking"
+                                          ItemTemplate="{StaticResource BookRankingTemplate}"
+                                          ItemsSource="{Binding BookRankingRows}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border x:Name="ShelfCard"
+                            Grid.Row="1"
+                            Grid.Column="1"
+                            AutomationProperties.AutomationId="NovelStatisticsShelfComparisonCard"
+                            Style="{StaticResource DashboardCardStyle}"
+                            Visibility="{Binding HasData, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel Spacing="12">
+                            <StackPanel Spacing="3">
+                                <TextBlock x:Uid="NovelStatisticsShelfTitle"
+                                           Style="{StaticResource SubtitleTextBlockStyle}" />
+                                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Text="{Binding RangeTitle}" />
+                            </StackPanel>
+                            <ItemsControl AutomationProperties.AutomationId="NovelStatisticsShelfComparison"
+                                          ItemTemplate="{StaticResource ShelfComparisonTemplate}"
+                                          ItemsSource="{Binding ShelfComparisonRows}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    AutomationProperties.AutomationId="NovelStatisticsLoadingStatus"
+                    Spacing="12"
+                    Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <ProgressRing Width="48"
+                          Height="48"
+                          IsActive="{Binding IsLoading}" />
+            <TextBlock x:Uid="NovelStatisticsLoadingText" />
+        </StackPanel>
+
+    </Grid>
+</UserControl>

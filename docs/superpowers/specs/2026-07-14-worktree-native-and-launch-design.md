@@ -2,7 +2,7 @@
 
 ## Goal
 
-Make a fresh linked worktree build/test successfully without manually copying `hoshidicts_c_api.dll`, and make `build-and-run.ps1` always build and launch the Hoshi executable belonging to the script's own worktree.
+Make a fresh linked worktree build/test successfully without manually copying `hoshidicts_c_api.dll`, and make `build-and-run.ps1` always build and launch the Niratan executable belonging to the script's own worktree.
 
 ## Root cause
 
@@ -20,7 +20,7 @@ Add `scripts/Ensure-NativeHoshidicts.ps1` with this deterministic order:
 4. If no shared DLL exists, invoke the current worktree's existing `build-native.ps1`.
 5. Fail if the local DLL still does not exist.
 
-Both `Hoshi.csproj` and `Hoshi.Tests.csproj` run this preparation before copying the DLL on x64 builds. ARM64 behavior is unchanged. No file under `native/hoshidicts/` is modified.
+Both `Niratan.csproj` and `Niratan.Tests.csproj` run this preparation before copying the DLL on x64 builds. ARM64 behavior is unchanged. No file under `native/hoshidicts/` is modified.
 
 ## Exact-worktree launch
 
@@ -28,13 +28,13 @@ Both `Hoshi.csproj` and `Hoshi.Tests.csproj` run this preparation before copying
 
 - derive every path from `$PSScriptRoot`, independent of the caller's current directory;
 - run the native preparation script for that root;
-- build the explicit `Hoshi/Hoshi.csproj` x64 Debug target;
+- build the explicit `Niratan/Niratan.csproj` x64 Debug target;
 - require the exact worktree output executable to exist;
 - start that absolute executable with its output folder as the working directory and retain the process object;
 - wait for a non-zero main-window handle or fail if the process exits/never creates a window;
 - print the launched PID and absolute executable path.
 
-The existing behavior of closing running Hoshi processes before the build is retained so the user sees only the newly verified instance.
+The existing behavior of closing running Niratan processes before the build is retained so the user sees only the newly verified instance.
 
 ## Verification
 

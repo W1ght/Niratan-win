@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Window x:Class="Niratan.Views.Dictionary.GlobalLookupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid x:Name="RootGrid"
+          Padding="16"
+          RowDefinitions="Auto,Auto,*"
+          RowSpacing="12"
+          Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+            <TextBox x:Name="LookupQueryBox"
+                     x:Uid="GlobalLookupQueryBox"
+                     AutomationProperties.AutomationId="GlobalLookupQueryBox"
+                     PlaceholderText="Enter text to look up"
+                     Text="{x:Bind ViewModel.Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     KeyDown="LookupQueryBox_KeyDown" />
+            <Button Grid.Column="1"
+                    x:Uid="GlobalLookupSearchButton"
+                    AutomationProperties.AutomationId="GlobalLookupSearchButton"
+                    Click="LookupButton_Click">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xE721;" FontSize="14" />
+                    <TextBlock x:Uid="GlobalLookupSearchButtonText" Text="Search" />
+                </StackPanel>
+            </Button>
+            <Button Grid.Column="2"
+                    x:Uid="GlobalLookupPasteButton"
+                    AutomationProperties.AutomationId="GlobalLookupPasteButton"
+                    Click="PasteButton_Click">
+                <FontIcon Glyph="&#xE77F;" FontSize="14" />
+            </Button>
+        </Grid>
+
+        <TextBlock Grid.Row="1"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                   Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
+
+        <Border x:Name="DictionaryPanelRoot"
+                Grid.Row="2"
+                MinHeight="360"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Visibility="Collapsed">
+            <Canvas x:Name="DictionaryOverlayCanvas"
+                    Background="Transparent" />
+        </Border>
+    </Grid>
+</Window>

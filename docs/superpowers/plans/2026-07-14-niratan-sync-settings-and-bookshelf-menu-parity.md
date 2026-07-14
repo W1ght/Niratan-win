@@ -23,20 +23,20 @@
 
 ## File Map
 
-- `Hoshi/Models/Sync/TtuSyncModels.cs` — Niratan-aligned defaults for global sync settings.
-- `Hoshi/Services/Sync/IGoogleDriveCoverCacheService.cs` — cover-cache clearing contract.
-- `Hoshi/Services/Sync/GoogleDriveCoverCacheService.cs` — file-backed cover-cache clearing implementation.
-- `Hoshi/ViewModels/Pages/TtuSyncSettingsPageViewModel.cs` — unified global/statistics/Sasayaki settings projection, credential restoration, confirmations, and connection actions.
-- `Hoshi/Views/Pages/TtuSyncSettingsPage.xaml` — Niratan-aligned settings hierarchy and connection-state presentation.
-- `Hoshi/Views/Pages/TtuSyncSettingsPage.xaml.cs` — async navigation initialization only.
-- `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs` — per-book sync commands, option snapshot, in-flight guard, and result notifications.
-- `Hoshi/Views/Pages/NovelLibraryPage.xaml` — automatic Sync item and manual Import/Export submenu.
-- `Hoshi/Strings/en-US/Resources.resw` and `Hoshi/Strings/zh-CN/Resources.resw` — settings, confirmation, menu, status, result, and error strings.
-- `Hoshi.Tests/Services/Sync/GoogleDriveCoverCacheServiceTests.cs` — cover-cache clearing behavior.
-- `Hoshi.Tests/ViewModels/Pages/TtuSyncSettingsPageViewModelTests.cs` — defaults, credential persistence, confirmation, and projected preferences.
-- `Hoshi.Tests/Services/Sync/TtuSyncSettingsAssetTests.cs` — settings XAML/localization contract.
-- `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs` — direction/option/result/duplicate command behavior.
-- `Hoshi.Tests/Services/Sync/NovelLibraryTtuSyncAssetTests.cs` — bookshelf context-menu contract.
+- `Niratan/Models/Sync/TtuSyncModels.cs` — Niratan-aligned defaults for global sync settings.
+- `Niratan/Services/Sync/IGoogleDriveCoverCacheService.cs` — cover-cache clearing contract.
+- `Niratan/Services/Sync/GoogleDriveCoverCacheService.cs` — file-backed cover-cache clearing implementation.
+- `Niratan/ViewModels/Pages/TtuSyncSettingsPageViewModel.cs` — unified global/statistics/Sasayaki settings projection, credential restoration, confirmations, and connection actions.
+- `Niratan/Views/Pages/TtuSyncSettingsPage.xaml` — Niratan-aligned settings hierarchy and connection-state presentation.
+- `Niratan/Views/Pages/TtuSyncSettingsPage.xaml.cs` — async navigation initialization only.
+- `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs` — per-book sync commands, option snapshot, in-flight guard, and result notifications.
+- `Niratan/Views/Pages/NovelLibraryPage.xaml` — automatic Sync item and manual Import/Export submenu.
+- `Niratan/Strings/en-US/Resources.resw` and `Niratan/Strings/zh-CN/Resources.resw` — settings, confirmation, menu, status, result, and error strings.
+- `Niratan.Tests/Services/Sync/GoogleDriveCoverCacheServiceTests.cs` — cover-cache clearing behavior.
+- `Niratan.Tests/ViewModels/Pages/TtuSyncSettingsPageViewModelTests.cs` — defaults, credential persistence, confirmation, and projected preferences.
+- `Niratan.Tests/Services/Sync/TtuSyncSettingsAssetTests.cs` — settings XAML/localization contract.
+- `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs` — direction/option/result/duplicate command behavior.
+- `Niratan.Tests/Services/Sync/NovelLibraryTtuSyncAssetTests.cs` — bookshelf context-menu contract.
 - `docs/VERIFICATION.md` and `docs/CHANGELOG.md` — repeatable runtime checks and concise root-cause/fix record.
 
 ---
@@ -44,12 +44,12 @@
 ### Task 1: Niratan Defaults and Complete Drive Cache Clearing
 
 **Files:**
-- Modify: `Hoshi.Tests/ViewModels/Pages/TtuSyncSettingsPageViewModelTests.cs`
-- Modify: `Hoshi.Tests/Services/Sync/GoogleDriveCoverCacheServiceTests.cs`
-- Modify: `Hoshi/Models/Sync/TtuSyncModels.cs`
-- Modify: `Hoshi/Services/Sync/IGoogleDriveCoverCacheService.cs`
-- Modify: `Hoshi/Services/Sync/GoogleDriveCoverCacheService.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/TtuSyncSettingsPageViewModelTests.cs`
+- Modify: `Niratan.Tests/Services/Sync/GoogleDriveCoverCacheServiceTests.cs`
+- Modify: `Niratan/Models/Sync/TtuSyncModels.cs`
+- Modify: `Niratan/Services/Sync/IGoogleDriveCoverCacheService.cs`
+- Modify: `Niratan/Services/Sync/GoogleDriveCoverCacheService.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
 
 **Interfaces:**
 - Produces: `Task IGoogleDriveCoverCacheService.ClearAsync(CancellationToken ct = default)`.
@@ -103,7 +103,7 @@ public async Task ClearAsync_RemovesCachedCoversAndAllowsCacheToBeRecreated()
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuSyncSettingsPageViewModelTests.Defaults_AreAlignedWithNiratanTtuSyncSettings|FullyQualifiedName~GoogleDriveCoverCacheServiceTests.ClearAsync_RemovesCachedCoversAndAllowsCacheToBeRecreated"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuSyncSettingsPageViewModelTests.Defaults_AreAlignedWithNiratanTtuSyncSettings|FullyQualifiedName~GoogleDriveCoverCacheServiceTests.ClearAsync_RemovesCachedCoversAndAllowsCacheToBeRecreated"
 ```
 
 Expected: the default test reports `Expected true, but found false`, and the cache test reports that `ClearAsync` is missing.
@@ -167,7 +167,7 @@ Run the Step 2 command again. Expected: both tests pass with no warnings or erro
 - [ ] **Step 5: Commit the foundation change**
 
 ```powershell
-git add -- Hoshi/Models/Sync/TtuSyncModels.cs Hoshi/Services/Sync/IGoogleDriveCoverCacheService.cs Hoshi/Services/Sync/GoogleDriveCoverCacheService.cs Hoshi.Tests/Services/Sync/GoogleDriveCoverCacheServiceTests.cs Hoshi.Tests/ViewModels/Pages/TtuSyncSettingsPageViewModelTests.cs Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs
+git add -- Niratan/Models/Sync/TtuSyncModels.cs Niratan/Services/Sync/IGoogleDriveCoverCacheService.cs Niratan/Services/Sync/GoogleDriveCoverCacheService.cs Niratan.Tests/Services/Sync/GoogleDriveCoverCacheServiceTests.cs Niratan.Tests/ViewModels/Pages/TtuSyncSettingsPageViewModelTests.cs Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs
 git commit -m "feat(sync): align defaults and clear Drive cover cache"
 ```
 
@@ -176,8 +176,8 @@ git commit -m "feat(sync): align defaults and clear Drive cover cache"
 ### Task 2: Secure Credential Restoration and Unified Sync Settings State
 
 **Files:**
-- Modify: `Hoshi.Tests/ViewModels/Pages/TtuSyncSettingsPageViewModelTests.cs`
-- Modify: `Hoshi/ViewModels/Pages/TtuSyncSettingsPageViewModel.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/TtuSyncSettingsPageViewModelTests.cs`
+- Modify: `Niratan/ViewModels/Pages/TtuSyncSettingsPageViewModel.cs`
 
 **Interfaces:**
 - Consumes: `IGoogleDriveCredentialStore.LoadAsync` and `IGoogleDriveCoverCacheService.ClearAsync`.
@@ -266,7 +266,7 @@ private sealed class RecordingCoverCache : IGoogleDriveCoverCacheService
 }
 ```
 
-Add `using Hoshi.Models.Sasayaki;` and `using Hoshi.Services.UI;` to the test file.
+Add `using Niratan.Models.Sasayaki;` and `using Niratan.Services.UI;` to the test file.
 
 Add these tests:
 
@@ -373,7 +373,7 @@ Update the existing successful-connect assertion from `BeEmpty()` to `Be("deskto
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuSyncSettingsPageViewModelTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuSyncSettingsPageViewModelTests"
 ```
 
 Expected: compilation/test failures identify the missing constructor dependencies, `InitializeAsync`, connection-state properties, projected toggles, and retained-secret behavior.
@@ -713,7 +713,7 @@ Run the Step 2 command. Expected: all `TtuSyncSettingsPageViewModelTests` pass.
 - [ ] **Step 5: Commit the ViewModel behavior**
 
 ```powershell
-git add -- Hoshi/ViewModels/Pages/TtuSyncSettingsPageViewModel.cs Hoshi.Tests/ViewModels/Pages/TtuSyncSettingsPageViewModelTests.cs
+git add -- Niratan/ViewModels/Pages/TtuSyncSettingsPageViewModel.cs Niratan.Tests/ViewModels/Pages/TtuSyncSettingsPageViewModelTests.cs
 git commit -m "feat(sync): restore credentials and unify sync preferences"
 ```
 
@@ -722,11 +722,11 @@ git commit -m "feat(sync): restore credentials and unify sync preferences"
 ### Task 3: Niratan-Aligned Settings Page and Localization
 
 **Files:**
-- Modify: `Hoshi.Tests/Services/Sync/TtuSyncSettingsAssetTests.cs`
-- Modify: `Hoshi/Views/Pages/TtuSyncSettingsPage.xaml`
-- Modify: `Hoshi/Views/Pages/TtuSyncSettingsPage.xaml.cs`
-- Modify: `Hoshi/Strings/en-US/Resources.resw`
-- Modify: `Hoshi/Strings/zh-CN/Resources.resw`
+- Modify: `Niratan.Tests/Services/Sync/TtuSyncSettingsAssetTests.cs`
+- Modify: `Niratan/Views/Pages/TtuSyncSettingsPage.xaml`
+- Modify: `Niratan/Views/Pages/TtuSyncSettingsPage.xaml.cs`
+- Modify: `Niratan/Strings/en-US/Resources.resw`
+- Modify: `Niratan/Strings/zh-CN/Resources.resw`
 
 **Interfaces:**
 - Consumes: Task 2 connection-state and projected-preference properties.
@@ -773,7 +773,7 @@ Add these resource keys to the existing bilingual-key loop:
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuSyncSettingsAssetTests.TtuSyncSettingsPage_UsesLocalizedSettingsControls"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuSyncSettingsAssetTests.TtuSyncSettingsPage_UsesLocalizedSettingsControls"
 ```
 
 Expected: assertions fail for the new sections, state bindings, controls, async initialization, and resources.
@@ -906,7 +906,7 @@ protected override async void OnNavigatedTo(NavigationEventArgs e)
 Add these entries to `en-US/Resources.resw`:
 
 ```xml
-<data name="TtuSyncExplanationText.Text" xml:space="preserve"><value>Sync bookmarks and statistics with ッツ Reader or between Hoshi devices through Google Drive. Configure a desktop OAuth client, then right-click a book and choose Sync.</value></data>
+<data name="TtuSyncExplanationText.Text" xml:space="preserve"><value>Sync bookmarks and statistics with ッツ Reader or between Niratan devices through Google Drive. Configure a desktop OAuth client, then right-click a book and choose Sync.</value></data>
 <data name="TtuSyncClientCredentialsSectionHeader.Text" xml:space="preserve"><value>Client credentials</value></data>
 <data name="TtuSyncStatisticsToggle.Header" xml:space="preserve"><value>Sync Stats</value></data>
 <data name="TtuSyncStatisticsToggle.Description" xml:space="preserve"><value>Include Niratan-compatible reading statistics</value></data>
@@ -933,7 +933,7 @@ Add these entries to `en-US/Resources.resw`:
 Add these entries to `zh-CN/Resources.resw`:
 
 ```xml
-<data name="TtuSyncExplanationText.Text" xml:space="preserve"><value>通过 Google Drive 与 ッツ Reader 或其他 Hoshi 设备同步书签和统计。配置桌面 OAuth 客户端后，右键单本书籍并选择“同步”。</value></data>
+<data name="TtuSyncExplanationText.Text" xml:space="preserve"><value>通过 Google Drive 与 ッツ Reader 或其他 Niratan 设备同步书签和统计。配置桌面 OAuth 客户端后，右键单本书籍并选择“同步”。</value></data>
 <data name="TtuSyncClientCredentialsSectionHeader.Text" xml:space="preserve"><value>客户端凭据</value></data>
 <data name="TtuSyncStatisticsToggle.Header" xml:space="preserve"><value>同步统计</value></data>
 <data name="TtuSyncStatisticsToggle.Description" xml:space="preserve"><value>包含 Niratan 兼容的阅读统计</value></data>
@@ -974,7 +974,7 @@ Also change these existing resource values:
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuSyncSettings"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuSyncSettings"
 dotnet build -p:Platform=x64
 ```
 
@@ -983,7 +983,7 @@ Expected: both commands succeed with no XAML compiler error and no new warnings.
 - [ ] **Step 6: Commit the settings page**
 
 ```powershell
-git add -- Hoshi/Views/Pages/TtuSyncSettingsPage.xaml Hoshi/Views/Pages/TtuSyncSettingsPage.xaml.cs Hoshi/Strings/en-US/Resources.resw Hoshi/Strings/zh-CN/Resources.resw Hoshi.Tests/Services/Sync/TtuSyncSettingsAssetTests.cs
+git add -- Niratan/Views/Pages/TtuSyncSettingsPage.xaml Niratan/Views/Pages/TtuSyncSettingsPage.xaml.cs Niratan/Strings/en-US/Resources.resw Niratan/Strings/zh-CN/Resources.resw Niratan.Tests/Services/Sync/TtuSyncSettingsAssetTests.cs
 git commit -m "feat(sync): align settings page with Niratan"
 ```
 
@@ -992,8 +992,8 @@ git commit -m "feat(sync): align settings page with Niratan"
 ### Task 4: Per-Book Sync Command Behavior
 
 **Files:**
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
-- Modify: `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs`
 
 **Interfaces:**
 - Consumes: `ITtuSyncService.SyncBookAsync(NovelBook, TtuSyncOptions, CancellationToken)`.
@@ -1277,7 +1277,7 @@ private static ISettingsService EnabledSyncSettings() =>
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageViewModelTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageViewModelTests"
 ```
 
 Expected: compilation/test failures identify the missing service dependency, menu-state properties, commands, option mapping, guard, and result handling.
@@ -1408,7 +1408,7 @@ Run the Step 2 command. Expected: all `NovelLibraryPageViewModelTests` pass, inc
 - [ ] **Step 6: Commit the per-book behavior**
 
 ```powershell
-git add -- Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs
+git add -- Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs
 git commit -m "feat(sync): add per-book bookshelf sync commands"
 ```
 
@@ -1417,10 +1417,10 @@ git commit -m "feat(sync): add per-book bookshelf sync commands"
 ### Task 5: Bookshelf Context Menu, Bilingual Resources, and Documentation
 
 **Files:**
-- Modify: `Hoshi.Tests/Services/Sync/NovelLibraryTtuSyncAssetTests.cs`
-- Modify: `Hoshi/Views/Pages/NovelLibraryPage.xaml`
-- Modify: `Hoshi/Strings/en-US/Resources.resw`
-- Modify: `Hoshi/Strings/zh-CN/Resources.resw`
+- Modify: `Niratan.Tests/Services/Sync/NovelLibraryTtuSyncAssetTests.cs`
+- Modify: `Niratan/Views/Pages/NovelLibraryPage.xaml`
+- Modify: `Niratan/Strings/en-US/Resources.resw`
+- Modify: `Niratan/Strings/zh-CN/Resources.resw`
 - Modify: `docs/VERIFICATION.md`
 - Modify: `docs/CHANGELOG.md`
 
@@ -1473,7 +1473,7 @@ public void NovelLibraryPage_ExposesNiratanPerBookSyncMenu()
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryTtuSyncAssetTests.NovelLibraryPage_ExposesNiratanPerBookSyncMenu"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryTtuSyncAssetTests.NovelLibraryPage_ExposesNiratanPerBookSyncMenu"
 ```
 
 Expected: the menu IDs, bindings, commands, and resource keys are missing.
@@ -1583,7 +1583,7 @@ At the top of `docs/CHANGELOG.md`, add:
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryTtuSyncAssetTests|FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~TtuSyncSettings|FullyQualifiedName~GoogleDriveCoverCacheServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryTtuSyncAssetTests|FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~TtuSyncSettings|FullyQualifiedName~GoogleDriveCoverCacheServiceTests"
 ```
 
 Expected: all focused tests pass with no warnings or errors.
@@ -1591,7 +1591,7 @@ Expected: all focused tests pass with no warnings or errors.
 - [ ] **Step 7: Commit the UI and documentation**
 
 ```powershell
-git add -- Hoshi/Views/Pages/NovelLibraryPage.xaml Hoshi/Strings/en-US/Resources.resw Hoshi/Strings/zh-CN/Resources.resw Hoshi.Tests/Services/Sync/NovelLibraryTtuSyncAssetTests.cs docs/VERIFICATION.md docs/CHANGELOG.md
+git add -- Niratan/Views/Pages/NovelLibraryPage.xaml Niratan/Strings/en-US/Resources.resw Niratan/Strings/zh-CN/Resources.resw Niratan.Tests/Services/Sync/NovelLibraryTtuSyncAssetTests.cs docs/VERIFICATION.md docs/CHANGELOG.md
 git commit -m "feat(sync): expose Niratan bookshelf sync menu"
 ```
 
@@ -1618,7 +1618,7 @@ Expected: no whitespace errors. Confirm unrelated pre-existing dirty files remai
 - [ ] **Step 2: Run the complete x64 test suite**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: all tests pass; no test is skipped because of this feature.
@@ -1639,7 +1639,7 @@ Run:
 .\build-and-run.ps1
 ```
 
-Confirm the actual Hoshi top-level window is visible, responsive, and belongs to this workspace build. If another Hoshi instance causes single-instance redirection, stop and report that runtime UI boundaries were not verified rather than operating the wrong process.
+Confirm the actual Niratan top-level window is visible, responsive, and belongs to this workspace build. If another Niratan instance causes single-instance redirection, stop and report that runtime UI boundaries were not verified rather than operating the wrong process.
 
 - [ ] **Step 5: Verify the settings and menu states without remote mutation**
 
@@ -1656,6 +1656,6 @@ Do not activate Import, Export, Clear Cache, or Sign out against the user's real
 
 - [ ] **Step 6: Leave the verified app running and report evidence**
 
-Leave the final verified Hoshi instance running. Report focused test count/result, full test result, build result, startup evidence, which UI states were exercised, and that real Drive mutation was not performed.
+Leave the final verified Niratan instance running. Report focused test count/result, full test result, build result, startup evidence, which UI states were exercised, and that real Drive mutation was not performed.
 
 

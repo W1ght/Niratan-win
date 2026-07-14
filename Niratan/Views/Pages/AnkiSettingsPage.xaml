@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page x:Class="Niratan.Views.Pages.AnkiSettingsPage"
+      x:Name="AnkiPageRoot"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
+      xmlns:ui="using:CommunityToolkit.WinUI"
+      xmlns:vm="using:Niratan.ViewModels.Pages"
+      xmlns:helpers="using:Niratan.Helpers.UI.Converters"
+      mc:Ignorable="d">
+
+    <Page.Resources>
+        <helpers:BooleanNegationConverter x:Key="BoolNegationConverter" />
+        <Style x:Key="AnkiSectionHeaderStyle" BasedOn="{StaticResource BodyStrongTextBlockStyle}" TargetType="TextBlock">
+            <Style.Setters>
+                <Setter Property="Margin" Value="1,30,0,6" />
+            </Style.Setters>
+        </Style>
+    </Page.Resources>
+
+    <Grid RowDefinitions="Auto,*">
+        <StackPanel Padding="20,14,36,16"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center">
+            <Button x:Name="AnkiSettingsBackButton"
+                    Width="36"
+                    Height="36"
+                    Padding="0"
+                    AutomationProperties.Name="Back"
+                    x:Uid="AnkiSettingsBackButton"
+                    Click="BackButton_Click">
+                <FontIcon Glyph="&#xE72B;" />
+            </Button>
+            <FontIcon FontSize="24" Glyph="&#xE71B;" />
+            <TextBlock VerticalAlignment="Center"
+                       x:Uid="AnkiSettingsPageTitle"
+                       Style="{StaticResource TitleTextBlockStyle}"
+                       Text="AnkiConnect" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1">
+            <Grid Padding="0,0,16,16">
+                <StackPanel MaxWidth="1000" HorizontalAlignment="Stretch" Spacing="4">
+
+                    <!-- Connection -->
+                    <TextBlock x:Uid="AnkiConnectionSectionHeader"
+                               Style="{StaticResource AnkiSectionHeaderStyle}"
+                               Text="Connection" />
+
+                    <toolkit:SettingsCard x:Uid="AnkiConnectUrlCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="AnkiConnect HTTP endpoint (Anki must be running with the AnkiConnect plugin)"
+                                          Header="AnkiConnect URL"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE71B;}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBox x:Uid="AnkiConnectUrlTextBox"
+                                     Width="360"
+                                     AutomationProperties.Name="AnkiConnect URL"
+                                     PlaceholderText="http://localhost:8765"
+                                     Text="{x:Bind ViewModel.AnkiConnectUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button AutomationProperties.AutomationId="TestConnectionButton"
+                                    Command="{x:Bind ViewModel.TestConnectionCommand}"
+                                    IsEnabled="{x:Bind ViewModel.IsTestingConnection, Mode=OneWay, Converter={StaticResource BoolNegationConverter}}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon FontSize="12" Glyph="&#xE8D4;" />
+                                    <TextBlock x:Uid="AnkiTestConnectionButtonText"
+                                               Text="Test Connection" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </toolkit:SettingsCard>
+
+                    <TextBlock Margin="1,4,0,0"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="{x:Bind ViewModel.ConnectionStatusText, Mode=OneWay}" />
+
+                    <toolkit:SettingsCard x:Uid="AnkiFetchDataCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="Fetch available decks and note types from AnkiConnect"
+                                          Header="Fetch Data"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE895;}">
+                        <Button AutomationProperties.AutomationId="FetchDataButton"
+                                Command="{x:Bind ViewModel.FetchDataCommand}"
+                                IsEnabled="{x:Bind ViewModel.IsFetchingData, Mode=OneWay, Converter={StaticResource BoolNegationConverter}}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon FontSize="12" Glyph="&#xE895;" />
+                                <TextBlock x:Uid="AnkiFetchDataButtonText"
+                                           Text="Fetch Decks &amp; Note Types" />
+                            </StackPanel>
+                        </Button>
+                    </toolkit:SettingsCard>
+
+                    <!-- Deck & Note Type -->
+                    <TextBlock x:Uid="AnkiDeckNoteTypeSectionHeader"
+                               Style="{StaticResource AnkiSectionHeaderStyle}"
+                               Text="Deck &amp; Note Type" />
+
+                    <toolkit:SettingsCard x:Uid="AnkiDeckCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Header="Deck"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8F1;}">
+                        <ComboBox x:Uid="AnkiDeckComboBox"
+                                  MinWidth="260"
+                                  AutomationProperties.AutomationId="AnkiDeckComboBox"
+                                  DisplayMemberPath="Name"
+                                  ItemsSource="{x:Bind ViewModel.AvailableDecks}"
+                                  SelectedItem="{x:Bind ViewModel.SelectedDeck, Mode=TwoWay}"
+                                  PlaceholderText="Select a deck..." />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="AnkiNoteTypeCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Header="Note Type"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8A9;}">
+                        <ComboBox x:Uid="AnkiNoteTypeComboBox"
+                                  MinWidth="260"
+                                  AutomationProperties.AutomationId="AnkiNoteTypeComboBox"
+                                  DisplayMemberPath="Name"
+                                  ItemsSource="{x:Bind ViewModel.AvailableNoteTypes}"
+                                  SelectedItem="{x:Bind ViewModel.SelectedNoteType, Mode=TwoWay}"
+                                  PlaceholderText="Select a note type..." />
+                    </toolkit:SettingsCard>
+
+                    <!-- Field Mappings -->
+                    <TextBlock x:Uid="AnkiFieldMappingsSectionHeader"
+                               Style="{StaticResource AnkiSectionHeaderStyle}"
+                               Text="Field Mappings" />
+
+                    <toolkit:SettingsCard x:Uid="AnkiFieldMappingDefaultsCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="Restore known safe mappings for supported note types"
+                                          Header="Field Presets"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8A5;}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button AutomationProperties.AutomationId="ApplyNovelDefaultsButton"
+                                    Command="{x:Bind ViewModel.ApplyNovelDefaultsCommand}"
+                                    IsEnabled="{x:Bind ViewModel.HasFieldMappingDefaults, Mode=OneWay}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon FontSize="12" Glyph="&#xE8A5;" />
+                                    <TextBlock x:Uid="AnkiApplyNovelDefaultsButtonText"
+                                               Text="Apply Novel Defaults" />
+                                </StackPanel>
+                            </Button>
+                            <Button AutomationProperties.AutomationId="ApplyAnimeDefaultsButton"
+                                    Command="{x:Bind ViewModel.ApplyAnimeDefaultsCommand}"
+                                    IsEnabled="{x:Bind ViewModel.HasFieldMappingDefaults, Mode=OneWay}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon FontSize="12" Glyph="&#xE8B9;" />
+                                    <TextBlock x:Uid="AnkiApplyAnimeDefaultsButtonText"
+                                               Text="Apply Anime Defaults" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </toolkit:SettingsCard>
+
+                    <ItemsRepeater ItemsSource="{x:Bind ViewModel.FieldMappings}">
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AnkiFieldMappingViewModel">
+                                <toolkit:SettingsCard HorizontalAlignment="Stretch"
+                                                      HorizontalContentAlignment="Stretch"
+                                                      Header="{x:Bind FieldName, Mode=OneWay}">
+                                    <ComboBox x:Uid="AnkiFieldMappingComboBox"
+                                              MinWidth="220"
+                                              ItemsSource="{Binding DataContext.HandlebarOptions, ElementName=AnkiPageRoot}"
+                                              SelectedItem="{x:Bind Template, Mode=TwoWay}"
+                                              PlaceholderText="Select handlebar..." />
+                                </toolkit:SettingsCard>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+
+                    <TextBlock Margin="1,4,0,0"
+                               x:Uid="AnkiFieldMappingsHelpText"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="Supported note types are automatically filled with missing safe field mappings." />
+
+                    <!-- Tags -->
+                    <TextBlock x:Uid="AnkiTagsSectionHeader"
+                               Style="{StaticResource AnkiSectionHeaderStyle}"
+                               Text="Tags" />
+
+                    <toolkit:SettingsCard x:Uid="AnkiTagsCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="Space, comma, or semicolon separated tags added to each card"
+                                          Header="Tags"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8EC;}">
+                        <TextBox x:Uid="AnkiTagsTextBox"
+                                 Width="360"
+                                 AutomationProperties.Name="Tags"
+                                 PlaceholderText="hoshi japanese"
+                                 Text="{x:Bind ViewModel.Tags, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    </toolkit:SettingsCard>
+
+                    <!-- Duplicate Options -->
+                    <TextBlock x:Uid="AnkiDuplicateSectionHeader"
+                               Style="{StaticResource AnkiSectionHeaderStyle}"
+                               Text="Duplicate Handling" />
+
+                    <toolkit:SettingsCard x:Uid="AnkiAllowDupesCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="Allow creating duplicate cards"
+                                          Header="Allow Duplicates"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8C8;}">
+                        <ToggleSwitch AutomationProperties.AutomationId="AllowDupesToggle"
+                                      IsOn="{x:Bind ViewModel.AllowDupes, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="AnkiDuplicateScopeCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="Scope for duplicate detection"
+                                          Header="Duplicate Scope"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8B9;}">
+                        <ComboBox MinWidth="160"
+                                  AutomationProperties.AutomationId="DuplicateScopeComboBox"
+                                  ItemsSource="{x:Bind ViewModel.AvailableDuplicateScopes}"
+                                  SelectedItem="{x:Bind ViewModel.SelectedDuplicateScope, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="AnkiCheckAcrossModelsCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="Check for duplicates across all note types, not just the selected one"
+                                          Header="Check Across All Models"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8A9;}">
+                        <ToggleSwitch AutomationProperties.AutomationId="CheckAcrossModelsToggle"
+                                      IsOn="{x:Bind ViewModel.CheckDuplicatesAcrossAllModels, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <!-- Display Options -->
+                    <TextBlock x:Uid="AnkiCardContentSectionHeader"
+                               Style="{StaticResource AnkiSectionHeaderStyle}"
+                               Text="Card Content" />
+
+                    <toolkit:SettingsCard x:Uid="AnkiCompactGlossariesCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="Use compact glossary format in Anki cards"
+                                          Header="Compact Glossaries"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8A6;}">
+                        <ToggleSwitch AutomationProperties.AutomationId="CompactGlossariesToggle"
+                                      IsOn="{x:Bind ViewModel.CompactGlossaries, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="AnkiEmbedMediaCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="Embed dictionary images and media in Anki cards"
+                                          Header="Embed Media"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8B9;}">
+                        <ToggleSwitch AutomationProperties.AutomationId="EmbedMediaToggle"
+                                      IsOn="{x:Bind ViewModel.EmbedMedia, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="AnkiForceSyncCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="Automatically sync with AnkiWeb after creating a card"
+                                          Header="Force Sync After Mining"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE895;}">
+                        <ToggleSwitch AutomationProperties.AutomationId="ForceSyncToggle"
+                                      IsOn="{x:Bind ViewModel.AnkiConnectForceSync, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</Page>

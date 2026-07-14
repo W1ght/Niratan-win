@@ -20,19 +20,19 @@
 
 ## File Structure
 
-- `Hoshi/Models/Settings/JapaneseFontCatalog.cs`: exposes the default subtitle font selected by every video settings consumer.
-- `Hoshi/Models/Settings/VideoSettings.cs`: owns the approved initial and reset-equivalent subtitle values and a shallow settings copy operation.
-- `Hoshi/ViewModels/Pages/VideoPlayerViewModel.cs`: loads and persists player inspector appearance mutations.
-- `Hoshi.Tests/Models/Settings/VideoSettingsTests.cs`: documents model defaults.
-- `Hoshi.Tests/ViewModels/Pages/VideoPlayerViewModelSubtitleAppearanceTests.cs`: verifies defaults, reset behavior, and settings-service persistence.
+- `Niratan/Models/Settings/JapaneseFontCatalog.cs`: exposes the default subtitle font selected by every video settings consumer.
+- `Niratan/Models/Settings/VideoSettings.cs`: owns the approved initial and reset-equivalent subtitle values and a shallow settings copy operation.
+- `Niratan/ViewModels/Pages/VideoPlayerViewModel.cs`: loads and persists player inspector appearance mutations.
+- `Niratan.Tests/Models/Settings/VideoSettingsTests.cs`: documents model defaults.
+- `Niratan.Tests/ViewModels/Pages/VideoPlayerViewModelSubtitleAppearanceTests.cs`: verifies defaults, reset behavior, and settings-service persistence.
 
 ### Task 1: Establish approved subtitle defaults
 
 **Files:**
-- Modify: `Hoshi/Models/Settings/JapaneseFontCatalog.cs:11-31`
-- Modify: `Hoshi/Models/Settings/VideoSettings.cs:21-27, 142-143`
-- Modify: `Hoshi.Tests/Models/Settings/VideoSettingsTests.cs:8-47`
-- Modify: `Hoshi.Tests/ViewModels/Pages/VideoPlayerViewModelSubtitleAppearanceTests.cs:12-25, 71-91`
+- Modify: `Niratan/Models/Settings/JapaneseFontCatalog.cs:11-31`
+- Modify: `Niratan/Models/Settings/VideoSettings.cs:21-27, 142-143`
+- Modify: `Niratan.Tests/Models/Settings/VideoSettingsTests.cs:8-47`
+- Modify: `Niratan.Tests/ViewModels/Pages/VideoPlayerViewModelSubtitleAppearanceTests.cs:12-25, 71-91`
 
 **Interfaces:**
 - Consumes: `JapaneseFontCatalog.DefaultSubtitleFontFamily`, consumed by `VideoSettings` and `VideoPlayerViewModel`.
@@ -58,7 +58,7 @@ Update the reset assertions to expect the same values.
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSettingsTests|FullyQualifiedName~VideoPlayerViewModelSubtitleAppearanceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSettingsTests|FullyQualifiedName~VideoPlayerViewModelSubtitleAppearanceTests"
 ```
 
 Expected: FAIL because the existing baseline remains `Klee One`, `36`, `3`, and `0`.
@@ -93,7 +93,7 @@ public partial double SubtitleVerticalPosition { get; set; } = -51;
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSettingsTests|FullyQualifiedName~VideoPlayerViewModelSubtitleAppearanceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSettingsTests|FullyQualifiedName~VideoPlayerViewModelSubtitleAppearanceTests"
 ```
 
 Expected: PASS with zero failed tests.
@@ -101,16 +101,16 @@ Expected: PASS with zero failed tests.
 - [ ] **Step 5: Commit the default update**
 
 ```powershell
-git add -- Hoshi/Models/Settings/JapaneseFontCatalog.cs Hoshi/Models/Settings/VideoSettings.cs Hoshi/ViewModels/Pages/VideoPlayerViewModel.cs Hoshi.Tests/Models/Settings/VideoSettingsTests.cs Hoshi.Tests/ViewModels/Pages/VideoPlayerViewModelSubtitleAppearanceTests.cs
+git add -- Niratan/Models/Settings/JapaneseFontCatalog.cs Niratan/Models/Settings/VideoSettings.cs Niratan/ViewModels/Pages/VideoPlayerViewModel.cs Niratan.Tests/Models/Settings/VideoSettingsTests.cs Niratan.Tests/ViewModels/Pages/VideoPlayerViewModelSubtitleAppearanceTests.cs
 git commit -m "fix(video): align subtitle appearance defaults"
 ```
 
 ### Task 2: Persist player inspector subtitle appearance
 
 **Files:**
-- Modify: `Hoshi/Models/Settings/VideoSettings.cs:142-143`
-- Modify: `Hoshi/ViewModels/Pages/VideoPlayerViewModel.cs:21-310, 1094-1249, 1552-1593`
-- Modify: `Hoshi.Tests/ViewModels/Pages/VideoPlayerViewModelSubtitleAppearanceTests.cs:9-122`
+- Modify: `Niratan/Models/Settings/VideoSettings.cs:142-143`
+- Modify: `Niratan/ViewModels/Pages/VideoPlayerViewModel.cs:21-310, 1094-1249, 1552-1593`
+- Modify: `Niratan.Tests/ViewModels/Pages/VideoPlayerViewModelSubtitleAppearanceTests.cs:9-122`
 
 **Interfaces:**
 - Consumes: `ISettingsService.Current`, `ISettingsService.Set(Expression<Func<AppSettings, VideoSettings>>, VideoSettings)`, and `ISettingsService.SaveAsync()`.
@@ -179,7 +179,7 @@ private static VideoPlayerViewModel CreateSut(ISettingsService? settingsService 
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoPlayerViewModelSubtitleAppearanceTests.SubtitleAppearanceChanges_PersistAndAreRestoredForNextPlayer"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoPlayerViewModelSubtitleAppearanceTests.SubtitleAppearanceChanges_PersistAndAreRestoredForNextPlayer"
 ```
 
 Expected: FAIL because the player view model does not write inspector mutations to `ISettingsService`.
@@ -265,7 +265,7 @@ Call `_settingsService.Set(settings => settings.VideoSettings, updatedSettings);
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoPlayerViewModelSubtitleAppearanceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoPlayerViewModelSubtitleAppearanceTests"
 ```
 
 Expected: PASS with zero failed tests.
@@ -273,15 +273,15 @@ Expected: PASS with zero failed tests.
 - [ ] **Step 5: Commit the persistence implementation**
 
 ```powershell
-git add -- Hoshi/Models/Settings/VideoSettings.cs Hoshi/ViewModels/Pages/VideoPlayerViewModel.cs Hoshi.Tests/ViewModels/Pages/VideoPlayerViewModelSubtitleAppearanceTests.cs
+git add -- Niratan/Models/Settings/VideoSettings.cs Niratan/ViewModels/Pages/VideoPlayerViewModel.cs Niratan.Tests/ViewModels/Pages/VideoPlayerViewModelSubtitleAppearanceTests.cs
 git commit -m "fix(video): persist subtitle appearance changes"
 ```
 
 ### Task 3: Verify application integration
 
 **Files:**
-- Verify only: `Hoshi/Views/Video/VideoPlayerWindow.xaml.cs`
-- Verify only: `Hoshi/Views/Video/VideoPlayerWindow.SubtitleOverlay.cs`
+- Verify only: `Niratan/Views/Video/VideoPlayerWindow.xaml.cs`
+- Verify only: `Niratan/Views/Video/VideoPlayerWindow.SubtitleOverlay.cs`
 
 **Interfaces:**
 - Consumes: the view model’s persisted property notifications.
@@ -292,7 +292,7 @@ git commit -m "fix(video): persist subtitle appearance changes"
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: PASS with zero failed tests.
@@ -315,4 +315,4 @@ Run:
 .\build-and-run.ps1
 ```
 
-Expected: the Hoshi top-level window opens. Open a video, change subtitle font/size/shadow/position in the inspector, close and reopen the player, and confirm the changed values remain. Use reset and confirm it restores `Noto Serif CJK JP`, `52`, `700`, `10`, `-51`, and white.
+Expected: the Niratan top-level window opens. Open a video, change subtitle font/size/shadow/position in the inspector, close and reopen the player, and confirm the changed values remain. Use reset and confirm it restores `Noto Serif CJK JP`, `52`, `700`, `10`, `-51`, and white.

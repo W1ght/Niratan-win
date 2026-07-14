@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add Niratan-aligned Profiles and true English dictionary lookup to Hoshi Windows.
+**Goal:** Add Niratan-aligned Profiles and true English dictionary lookup to Niratan Windows.
 
 **Architecture:** Profiles are a first-class service layer that resolves runtime contexts for Global, EPUB books, and Video. Physical dictionaries and AnkiConnect transport stay global, while dictionary enable/order/display settings, Reader appearance, and Anki mining mappings are loaded and saved per resolved Profile. Lookup passes the resolved language into WebView selection and the hoshidicts native query.
 
@@ -12,7 +12,7 @@
 
 - Target platform: Windows 10+ x64.
 - Build command: `dotnet build -p:Platform=x64`.
-- Test command: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`.
+- Test command: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`.
 - Do not modify `native/hoshidicts/` source files directly.
 - Dictionary logic stays in C#/native services, not WebView JavaScript.
 - ViewModel must not directly access SQLite.
@@ -25,38 +25,38 @@
 
 ## File Structure
 
-- Create `Hoshi/Models/Profiles/ContentLanguageProfile.cs`: supported language IDs (`ja`, `en`), normalization, display-unit conversion.
-- Create `Hoshi/Models/Profiles/HoshiProfile.cs`: profile model, index model, context model, resolution result.
-- Create `Hoshi/Services/Profiles/IProfileService.cs`: profile lifecycle, resolution, activation, profile-owned path APIs.
-- Create `Hoshi/Services/Profiles/ProfileService.cs`: JSON-backed profile index/store and migration from global settings.
-- Create `Hoshi/Services/Profiles/IProfileActivationService.cs`: applies resolved profile to settings, dictionaries, Anki, Reader, and lookup.
-- Create `Hoshi/Services/Profiles/ProfileActivationService.cs`: runtime activation coordinator.
-- Create `Hoshi/ViewModels/Pages/ProfileSettingsPageViewModel.cs`: settings page ViewModel for active profile, language defaults, create/rename/delete.
-- Create `Hoshi/Views/Pages/ProfileSettingsPage.xaml` and `.xaml.cs`: WinUI page using existing settings patterns.
-- Modify `Hoshi/Models/Settings/AppSettings.cs`: add profile/global activation fields and move only global Anki transport into global settings.
-- Modify `Hoshi/Models/Settings/AnkiSettings.cs`: support transport/global clone and profile-owned mining clone.
-- Modify `Hoshi/Services/Settings/*SettingsService.cs`: allow profile activation to replace current snapshots without bypassing change notifications.
-- Modify `Hoshi/Services/Dictionary/*`: make config path/profile language explicit and preserve physical storage globally.
+- Create `Niratan/Models/Profiles/ContentLanguageProfile.cs`: supported language IDs (`ja`, `en`), normalization, display-unit conversion.
+- Create `Niratan/Models/Profiles/NiratanProfile.cs`: profile model, index model, context model, resolution result.
+- Create `Niratan/Services/Profiles/IProfileService.cs`: profile lifecycle, resolution, activation, profile-owned path APIs.
+- Create `Niratan/Services/Profiles/ProfileService.cs`: JSON-backed profile index/store and migration from global settings.
+- Create `Niratan/Services/Profiles/IProfileActivationService.cs`: applies resolved profile to settings, dictionaries, Anki, Reader, and lookup.
+- Create `Niratan/Services/Profiles/ProfileActivationService.cs`: runtime activation coordinator.
+- Create `Niratan/ViewModels/Pages/ProfileSettingsPageViewModel.cs`: settings page ViewModel for active profile, language defaults, create/rename/delete.
+- Create `Niratan/Views/Pages/ProfileSettingsPage.xaml` and `.xaml.cs`: WinUI page using existing settings patterns.
+- Modify `Niratan/Models/Settings/AppSettings.cs`: add profile/global activation fields and move only global Anki transport into global settings.
+- Modify `Niratan/Models/Settings/AnkiSettings.cs`: support transport/global clone and profile-owned mining clone.
+- Modify `Niratan/Services/Settings/*SettingsService.cs`: allow profile activation to replace current snapshots without bypassing change notifications.
+- Modify `Niratan/Services/Dictionary/*`: make config path/profile language explicit and preserve physical storage globally.
 - Modify `native/hoshidicts_c_api/*`: add language-aware rebuild API and serialize pitch transcriptions.
-- Modify `Hoshi/Services/Dictionary/HoshiDictsNative.cs`: P/Invoke new language-aware rebuild with backward-compatible wrapper.
+- Modify `Niratan/Services/Dictionary/HoshiDictsNative.cs`: P/Invoke new language-aware rebuild with backward-compatible wrapper.
 - Modify `.gitmodules` and `native/hoshidicts` submodule pointer: point to the multilingual hoshidicts fork/revision used by Niratan, without editing submodule source files.
-- Modify `Hoshi/Web/NovelReader/selection.js`: add Niratan English word/phrase boundary behavior.
-- Modify `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`: activate book profile context and inject content language into selection JS.
-- Modify `Hoshi/Views/Video/*` and `Hoshi/ViewModels/Pages/VideoPlayerViewModel.cs`: activate remembered Video profile and pass context into lookup.
-- Modify `Hoshi/Views/Pages/SettingsPage.xaml/.cs` and `Hoshi/App.xaml.cs`: enable Profiles page and register services/ViewModels.
-- Modify `Hoshi/Services/Storage/Migrations/*`, `DataService.cs`, `NovelBook.cs`, `VideoItem.cs`: persist nullable profile override IDs.
-- Add focused tests under `Hoshi.Tests/Services/Profiles`, `Hoshi.Tests/Services/Dictionary`, `Hoshi.Tests/Services/Storage`, and web asset tests.
+- Modify `Niratan/Web/NovelReader/selection.js`: add Niratan English word/phrase boundary behavior.
+- Modify `Niratan/Views/Pages/NovelReaderPage.xaml.cs`: activate book profile context and inject content language into selection JS.
+- Modify `Niratan/Views/Video/*` and `Niratan/ViewModels/Pages/VideoPlayerViewModel.cs`: activate remembered Video profile and pass context into lookup.
+- Modify `Niratan/Views/Pages/SettingsPage.xaml/.cs` and `Niratan/App.xaml.cs`: enable Profiles page and register services/ViewModels.
+- Modify `Niratan/Services/Storage/Migrations/*`, `DataService.cs`, `NovelBook.cs`, `VideoItem.cs`: persist nullable profile override IDs.
+- Add focused tests under `Niratan.Tests/Services/Profiles`, `Niratan.Tests/Services/Dictionary`, `Niratan.Tests/Services/Storage`, and web asset tests.
 
 ---
 
 ### Task 1: Profile Domain, Storage, and Resolution
 
 **Files:**
-- Create: `Hoshi/Models/Profiles/ContentLanguageProfile.cs`
-- Create: `Hoshi/Models/Profiles/HoshiProfile.cs`
-- Create: `Hoshi/Services/Profiles/IProfileService.cs`
-- Create: `Hoshi/Services/Profiles/ProfileService.cs`
-- Test: `Hoshi.Tests/Services/Profiles/ProfileServiceTests.cs`
+- Create: `Niratan/Models/Profiles/ContentLanguageProfile.cs`
+- Create: `Niratan/Models/Profiles/NiratanProfile.cs`
+- Create: `Niratan/Services/Profiles/IProfileService.cs`
+- Create: `Niratan/Services/Profiles/ProfileService.cs`
+- Test: `Niratan.Tests/Services/Profiles/ProfileServiceTests.cs`
 
 **Interfaces:**
 - Produces: `ContentLanguageProfile.Normalize(string?)`, `DisplayUnitsFromRawCharacters(int)`, `RawCharactersFromDisplayUnits(int)`.
@@ -91,7 +91,7 @@ public void EnglishDisplayUnits_AreApproximateWords()
 
 - [ ] **Step 2: Run test to verify RED**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ProfileServiceTests"`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ProfileServiceTests"`
 
 Expected: FAIL because `ProfileServiceTests`, `ProfileService`, and profile models do not exist.
 
@@ -101,20 +101,20 @@ Create immutable language IDs `ja` and `en`, bootstrap built-ins `default-ja` an
 
 - [ ] **Step 4: Run test to verify GREEN**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ProfileServiceTests"`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ProfileServiceTests"`
 
 Expected: PASS.
 
 ### Task 2: Profile-Owned Settings Snapshots
 
 **Files:**
-- Modify: `Hoshi/Services/Settings/ISettingsService.cs`
-- Modify: `Hoshi/Services/Settings/SettingsService.cs`
-- Modify: `Hoshi/Services/Settings/IReaderSettingsService.cs`
-- Modify: `Hoshi/Services/Settings/ReaderSettingsService.cs`
-- Modify: `Hoshi/Models/Settings/AnkiSettings.cs`
-- Create: `Hoshi/Services/Profiles/ProfileSettingsStore.cs`
-- Test: `Hoshi.Tests/Services/Profiles/ProfileSettingsStoreTests.cs`
+- Modify: `Niratan/Services/Settings/ISettingsService.cs`
+- Modify: `Niratan/Services/Settings/SettingsService.cs`
+- Modify: `Niratan/Services/Settings/IReaderSettingsService.cs`
+- Modify: `Niratan/Services/Settings/ReaderSettingsService.cs`
+- Modify: `Niratan/Models/Settings/AnkiSettings.cs`
+- Create: `Niratan/Services/Profiles/ProfileSettingsStore.cs`
+- Test: `Niratan.Tests/Services/Profiles/ProfileSettingsStoreTests.cs`
 
 **Interfaces:**
 - Consumes: `IProfileService.GetProfileDirectory(profileId)`.
@@ -150,7 +150,7 @@ public async Task ActivateAsync_PersistsCurrentProfileAndLoadsTargetProfile()
 
 - [ ] **Step 2: Run test to verify RED**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ProfileSettingsStoreTests"`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ProfileSettingsStoreTests"`
 
 Expected: FAIL because `ProfileSettingsStore` and replace APIs do not exist.
 
@@ -160,18 +160,18 @@ Save per-profile files named `dictionary-settings.json`, `reader-settings.json`,
 
 - [ ] **Step 4: Run test to verify GREEN**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ProfileSettingsStoreTests"`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ProfileSettingsStoreTests"`
 
 Expected: PASS.
 
 ### Task 3: Profile-Owned Dictionary Configuration
 
 **Files:**
-- Modify: `Hoshi/Services/Dictionary/DictionaryConfigurationStore.cs`
-- Modify: `Hoshi/Services/Dictionary/DictionaryImportService.cs`
-- Modify: `Hoshi/Services/Dictionary/DictionaryLookupService.cs`
-- Create: `Hoshi/Services/Dictionary/IDictionaryProfileContext.cs`
-- Test: `Hoshi.Tests/Services/Dictionary/DictionaryProfileConfigurationTests.cs`
+- Modify: `Niratan/Services/Dictionary/DictionaryConfigurationStore.cs`
+- Modify: `Niratan/Services/Dictionary/DictionaryImportService.cs`
+- Modify: `Niratan/Services/Dictionary/DictionaryLookupService.cs`
+- Create: `Niratan/Services/Dictionary/IDictionaryProfileContext.cs`
+- Test: `Niratan.Tests/Services/Dictionary/DictionaryProfileConfigurationTests.cs`
 
 **Interfaces:**
 - Consumes: active profile ID and language from `IProfileService`.
@@ -213,7 +213,7 @@ public async Task DeleteAsync_RemovesDictionaryReferencesFromEveryProfile()
 
 - [ ] **Step 2: Run test to verify RED**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryProfileConfigurationTests"`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryProfileConfigurationTests"`
 
 Expected: FAIL because profile-aware config APIs do not exist.
 
@@ -223,7 +223,7 @@ Add overloads that take explicit config file paths or profile roots. Keep old gl
 
 - [ ] **Step 4: Run dictionary profile tests and existing dictionary tests**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"`
 
 Expected: PASS.
 
@@ -234,9 +234,9 @@ Expected: PASS.
 - Update submodule pointer: `native/hoshidicts`
 - Modify: `native/hoshidicts_c_api/hoshidicts_c_api.h`
 - Modify: `native/hoshidicts_c_api/hoshidicts_c_api.cpp`
-- Modify: `Hoshi/Services/Dictionary/HoshiDictsNative.cs`
-- Modify: `Hoshi/Models/Dictionary/DictionaryLookupResult.cs`
-- Test: `Hoshi.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs`
+- Modify: `Niratan/Services/Dictionary/HoshiDictsNative.cs`
+- Modify: `Niratan/Models/Dictionary/DictionaryLookupResult.cs`
+- Test: `Niratan.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs`
 
 **Interfaces:**
 - Produces: `HoshiDictsNative.HoshiSessionRebuild(session, termPaths, freqPaths, pitchPaths, languageId)`.
@@ -283,7 +283,7 @@ public async Task LookupAsync_MapsEnglishIpaTranscriptions()
 
 - [ ] **Step 2: Run test to verify RED**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~LookupAsync_EnglishProfile|FullyQualifiedName~LookupAsync_MapsEnglishIpaTranscriptions"`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~LookupAsync_EnglishProfile|FullyQualifiedName~LookupAsync_MapsEnglishIpaTranscriptions"`
 
 Expected: FAIL because current native lookup is Japanese-only and `Transcriptions` does not exist.
 
@@ -295,25 +295,25 @@ Point `native/hoshidicts` to `https://github.com/HuangAntimony/hoshidicts.git` a
 
 Run: `.\build-native.ps1`
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"`
 
 Expected: PASS.
 
 ### Task 5: Reader, Video, and Global Lookup Context Activation
 
 **Files:**
-- Modify: `Hoshi/Web/NovelReader/selection.js`
-- Modify: `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
-- Modify: `Hoshi/Views/Video/VideoPlayerWindow.SubtitleOverlay.cs`
-- Modify: `Hoshi/ViewModels/Pages/VideoPlayerViewModel.cs`
-- Modify: `Hoshi/Services/Dictionary/DictionaryPopupRequestService.cs`
-- Modify: `Hoshi/Views/Dictionary/DictionaryPopupOverlay.cs`
-- Test: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
-- Test: `Hoshi.Tests/Services/Video/VideoSubtitleLookupTextExtractorTests.cs`
+- Modify: `Niratan/Web/NovelReader/selection.js`
+- Modify: `Niratan/Views/Pages/NovelReaderPage.xaml.cs`
+- Modify: `Niratan/Views/Video/VideoPlayerWindow.SubtitleOverlay.cs`
+- Modify: `Niratan/ViewModels/Pages/VideoPlayerViewModel.cs`
+- Modify: `Niratan/Services/Dictionary/DictionaryPopupRequestService.cs`
+- Modify: `Niratan/Views/Dictionary/DictionaryPopupOverlay.cs`
+- Test: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Test: `Niratan.Tests/Services/Video/VideoSubtitleLookupTextExtractorTests.cs`
 
 **Interfaces:**
 - Consumes: `ProfileContext` at lookup call sites.
-- Produces: JS global `window.hoshiSelection.language = "ja" | "en"`.
+- Produces: JS global `window.niratanSelection.language = "ja" | "en"`.
 - Produces: English hit-test behavior that starts at the beginning of the English word and treats apostrophes/hyphens as internal only between word characters.
 
 - [ ] **Step 1: Write failing asset tests**
@@ -323,7 +323,7 @@ Expected: PASS.
 public void SelectionJs_ContainsEnglishWordBoundaryMode()
 {
     var code = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Web", "NovelReader", "selection.js"));
-    code.Should().Contain("window.hoshiSelection.language");
+    code.Should().Contain("window.niratanSelection.language");
     code.Should().Contain("findEnglishWordStart");
     code.Should().Contain("EnglishWordInternalDelimiters");
 }
@@ -331,16 +331,16 @@ public void SelectionJs_ContainsEnglishWordBoundaryMode()
 [Fact]
 public void NovelReader_InjectsResolvedContentLanguageBeforeSelectionScript()
 {
-    var code = File.ReadAllText(Path.Combine(ProjectRoot, "Hoshi", "Views", "Pages", "NovelReaderPage.xaml.cs"));
-    code.Should().Contain("__hoshiLookupSettings");
-    code.Should().Contain("hoshiSelection.language");
+    var code = File.ReadAllText(Path.Combine(ProjectRoot, "Niratan", "Views", "Pages", "NovelReaderPage.xaml.cs"));
+    code.Should().Contain("__niratanLookupSettings");
+    code.Should().Contain("niratanSelection.language");
     code.Should().Contain("ProfileContext.Book");
 }
 ```
 
 - [ ] **Step 2: Run test to verify RED**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "SelectionJs_ContainsEnglishWordBoundaryMode|NovelReader_InjectsResolvedContentLanguageBeforeSelectionScript"`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "SelectionJs_ContainsEnglishWordBoundaryMode|NovelReader_InjectsResolvedContentLanguageBeforeSelectionScript"`
 
 Expected: FAIL because English selection and profile context injection are absent.
 
@@ -350,20 +350,20 @@ Activate book context when opening a novel, inject resolved language on DOM read
 
 - [ ] **Step 4: Run reader/video/dictionary tests**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAsset|FullyQualifiedName~VideoSubtitle|FullyQualifiedName~Dictionary"`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAsset|FullyQualifiedName~VideoSubtitle|FullyQualifiedName~Dictionary"`
 
 Expected: PASS.
 
 ### Task 6: Persistence for Book and Video Profile Overrides
 
 **Files:**
-- Modify: `Hoshi/Models/NovelBook.cs`
-- Modify: `Hoshi/Models/VideoItem.cs`
-- Modify: `Hoshi/Services/Storage/DataService.cs`
-- Create: `Hoshi/Services/Storage/Migrations/Migration_010.cs`
-- Modify: `Hoshi/Services/Storage/DatabaseMigrator.cs`
-- Test: `Hoshi.Tests/Services/Storage/NovelDataServiceTests.cs`
-- Test: `Hoshi.Tests/Services/Storage/VideoDataServiceTests.cs`
+- Modify: `Niratan/Models/NovelBook.cs`
+- Modify: `Niratan/Models/VideoItem.cs`
+- Modify: `Niratan/Services/Storage/DataService.cs`
+- Create: `Niratan/Services/Storage/Migrations/Migration_010.cs`
+- Modify: `Niratan/Services/Storage/DatabaseMigrator.cs`
+- Test: `Niratan.Tests/Services/Storage/NovelDataServiceTests.cs`
+- Test: `Niratan.Tests/Services/Storage/VideoDataServiceTests.cs`
 
 **Interfaces:**
 - Produces: nullable `ProfileId` columns on `NovelBooks` and `VideoItems`.
@@ -393,7 +393,7 @@ public async Task Migration010_AddsProfileOverrideColumns()
 
 - [ ] **Step 2: Run test to verify RED**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "Migration010_AddsProfileOverrideColumns"`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "Migration010_AddsProfileOverrideColumns"`
 
 Expected: FAIL because migration 010 does not exist.
 
@@ -403,21 +403,21 @@ Add nullable columns with idempotent `AddColumnIfMissingAsync`, update selects/i
 
 - [ ] **Step 4: Run storage tests**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Storage"`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Storage"`
 
 Expected: PASS.
 
 ### Task 7: Profiles Settings Page and DI
 
 **Files:**
-- Modify: `Hoshi/App.xaml.cs`
-- Modify: `Hoshi/Views/Pages/SettingsPage.xaml`
-- Create: `Hoshi/Views/Pages/ProfileSettingsPage.xaml`
-- Create: `Hoshi/Views/Pages/ProfileSettingsPage.xaml.cs`
-- Create: `Hoshi/ViewModels/Pages/ProfileSettingsPageViewModel.cs`
-- Modify: `Hoshi/Views/Pages/AnkiSettingsPage.xaml/.cs`
-- Modify: `Hoshi/ViewModels/Pages/AnkiSettingsPageViewModel.cs`
-- Test: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Niratan/App.xaml.cs`
+- Modify: `Niratan/Views/Pages/SettingsPage.xaml`
+- Create: `Niratan/Views/Pages/ProfileSettingsPage.xaml`
+- Create: `Niratan/Views/Pages/ProfileSettingsPage.xaml.cs`
+- Create: `Niratan/ViewModels/Pages/ProfileSettingsPageViewModel.cs`
+- Modify: `Niratan/Views/Pages/AnkiSettingsPage.xaml/.cs`
+- Modify: `Niratan/ViewModels/Pages/AnkiSettingsPageViewModel.cs`
+- Test: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
 - Produces: enabled Settings > Profiles navigation item.
@@ -430,15 +430,15 @@ Expected: PASS.
 [Fact]
 public void SettingsPage_EnablesProfilesNavigation()
 {
-    var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Hoshi", "Views", "Pages", "SettingsPage.xaml"));
-    xaml.Should().Contain("Tag=\"Hoshi.Views.Pages.ProfileSettingsPage\"");
+    var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Niratan", "Views", "Pages", "SettingsPage.xaml"));
+    xaml.Should().Contain("Tag=\"Niratan.Views.Pages.ProfileSettingsPage\"");
     xaml.Should().NotContain("SettingsProfilesNavItem\"\r\n                                x:Uid=\"SettingsProfilesNavItem\"\r\n                                AutomationProperties.AutomationId=\"SettingsProfilesNavItem\"\r\n                                Content=\"Profiles\"\r\n                                IsEnabled=\"False\"");
 }
 ```
 
 - [ ] **Step 2: Run test to verify RED**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "SettingsPage_EnablesProfilesNavigation"`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "SettingsPage_EnablesProfilesNavigation"`
 
 Expected: FAIL because Profiles nav is disabled.
 
@@ -448,7 +448,7 @@ Use existing settings page patterns, `ObservableCollection`, and `RelayCommand`.
 
 - [ ] **Step 4: Build and run settings tests**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Settings|FullyQualifiedName~Profile"`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Settings|FullyQualifiedName~Profile"`
 
 Expected: PASS.
 
@@ -468,7 +468,7 @@ Expected: PASS.
 
 - [ ] **Step 2: Run full tests**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`
 
 Expected: PASS.
 
@@ -476,11 +476,11 @@ Expected: PASS.
 
 Run: `.\build-and-run.ps1`
 
-Expected: Hoshi opens a responsive WinUI window. Leave the verified app instance running unless it blocks further work.
+Expected: Niratan opens a responsive WinUI window. Leave the verified app instance running unless it blocks further work.
 
 - [ ] **Step 4: Dictionary manual verification**
 
-Run: `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"`
+Run: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"`
 
 Expected: PASS. Then verify in-app Japanese lookup still works, English profile lookup uses English dictionaries, Shift hover does not block, nested popup lookup works, and light/dark popup rendering remains readable.
 

@@ -1,4 +1,4 @@
-# Hoshi 架构文档
+# Niratan 架构文档
 
 ## 1. 技术栈详情
 
@@ -20,8 +20,8 @@
 | 项 | 选型 | 原因 |
 |---|---|---|
 | 渲染层 | WebView2 | Chromium 对 CJK 排版、竖排、ruby 支持远强于 WinUI 原生文本控件 |
-| 分页 | CSS multi-column | Hoshi 风格直接章节加载 + `column-width: var(--page-width)` 分页 |
-| JS 层 | `reader-bridge.js` | Hoshi 风格分页/进度/翻页，无嵌套 shadow DOM/iframe |
+| 分页 | CSS multi-column | Niratan 行为的直接章节加载 + `column-width: var(--page-width)` 分页 |
+| JS 层 | `reader-bridge.js` | Niratan 行为的分页/进度/翻页，无嵌套 shadow DOM/iframe |
 
 foliate-js 已于 2026-05-19 移除，禁止引回主阅读链路。
 
@@ -29,9 +29,9 @@ foliate-js 已于 2026-05-19 移除，禁止引回主阅读链路。
 
 | 项 | 选型 | 原因 |
 |---|---|---|
-| 字典后端 | hoshidicts (C# P/Invoke) | 与 Hoshi Android 行为一致 |
+| 字典后端 | hoshidicts (C# P/Invoke) | 与 Niratan 的 hoshidicts 查词行为一致 |
 | 字典格式 | Yomitan zip | 生态成熟，可直接导入 |
-| 变形还原 | C# 重实现 | 对齐 Android `deinflector.cpp` |
+| 变形还原 | C# 重实现 | 对齐上游 hoshidicts `src/language/ja/deinflector.cpp` |
 
 重要原则：
 - hoshidicts 作为“字典查询后端”；主 App SQLite 只保存视频业务数据，不保存小说、书架或小说统计。
@@ -47,7 +47,7 @@ foliate-js 已于 2026-05-19 移除，禁止引回主阅读链路。
 | 旧小说迁移 | Dapper + Microsoft.Data.Sqlite（只读入旧表） | 一次性导出后退役旧小说表 |
 | JSON | System.Text.Json + 原子替换 | 强类型、可恢复，不暴露半写文件 |
 
-不引入 EF Core 或第二套数据库技术。外部音频数据库仍按原有只读边界访问，不成为 Hoshi 的业务真源。
+不引入 EF Core 或第二套数据库技术。外部音频数据库仍按原有只读边界访问，不成为 Niratan 的业务真源。
 
 ### 1.5 测试
 
@@ -63,9 +63,9 @@ foliate-js 已于 2026-05-19 移除，禁止引回主阅读链路。
 ## 2. 项目目录结构
 
 ```text
-Hoshi.slnx
+Niratan.slnx
 
-Hoshi/
+Niratan/
   App.xaml / App.xaml.cs
   Views/
     Pages/           NovelReaderPage, NovelLibraryPage, SettingsPage, DictionarySettingsPage
@@ -93,7 +93,7 @@ Hoshi/
     DictionaryPopup/ popup.js
   Helpers/           AppDataHelper
 
-Hoshi.Tests/
+Niratan.Tests/
   Services/          Dictionary tests, Novel tests
 ```
 
@@ -108,7 +108,7 @@ EpubParserService 解析 EPUB
   → WebResourceRequested 拦截章节 HTML 请求
     → NovelReaderContentStyles.GenerateCss() 注入分页 CSS
     → reader-bridge.js 注入分页/进度/翻页 JS
-      → window.hoshiReader 接管渲染
+      → window.niratanReader 接管渲染
 ```
 
 ### 3.2 IPC 消息
@@ -130,6 +130,7 @@ JS → C#:
 | `pageChanged` | 翻页事件 (direction, result, progress) |
 | `restoreCompleted` | 进度/fragment 恢复完成，回显 navigation generation |
 | `internalLink` | 被拦截的同源 EPUB 链接；native 校验并解析到 spine |
+| `readerBlankClick` | 已验证的 Reader 空白点击坐标与 viewport；native 决定控制条开关 |
 | `error` | 错误信息 |
 
 消息格式: `{ version: 1, type: "...", payload: {...} }`
@@ -162,7 +163,14 @@ ruby { ruby-position: over; }
 - 安全区：`column-width = pageWidth - 2 * safeInline`，`column-gap = 2 * safeInline`。
 - reflow 后优先按逻辑进度恢复位置。
 
-### 3.5 阅读统计会话与导航事务
+### 3.5 Windows Reader chrome
+
+- 主窗口沿用 Windows 原生 caption buttons，客户区标题栏固定为 32px 空白拖拽区，不在标题栏放应用名称、图标或搜索框。
+- Reader 顶部 Acrylic 控制条默认隐藏。隐藏时只有 `y <= 64` CSS px 的空白点击可以打开；打开后任意空白点击关闭。该控制条覆盖在 WebView 上，不参与 viewport 尺寸和分页步长计算。
+- 这是 Windows 端相对 Niratan 默认“任意空白切换 focus mode”的明确偏差：桌面窗口顶部需要稳定、容易发现且不干扰正文查词的激活区，64 CSS px 同时兼顾窄标题栏下的命中容错与正文误触控制。
+- 专注模式优先级更高：进入或退出专注模式后控制条均保持关闭，必须重新点击顶部激活区；popup 打开时空白点击先关闭已打开的控制条并关闭 popup，不会借此打开控制条。
+
+### 3.6 阅读统计会话与导航事务
 
 `ReaderStatisticsSession` 是阅读时间、字符基线、本地日期 rollover、TTU 统计公式和 `statistics.json` 写入的唯一所有者。`NovelReaderPageViewModel` 只投影状态并转发 typed operation；Page 只分类 WebView2/WinUI 事件。
 
@@ -253,12 +261,12 @@ NovelReaderPage
 - 弹窗关闭、滚动、章节切换时清理子弹窗。
 - `popup.js` 的 `lookupRedirect` 是嵌套查词入口。
 - 弹窗定位接收 writing mode 信息：竖排优先左右，横排优先上下。
-- 弹窗定位对齐 Android `LookupPopupLayout`：横排只在选区下方空间足够时放下方。
+- 弹窗定位对齐 Niratan `PopupLayout`：横排只在选区下方空间足够时放下方。
 
 ### 4.4 变形还原
 
-`JapaneseDeinflector` 对齐 Android `hoshidicts/deinflector.cpp`：
-- 条件位与 Android `Conditions` 语义一致。
+`JapaneseDeinflector` 对齐上游 `native/hoshidicts/src/language/ja/deinflector.cpp`：
+- 条件位与上游 `Conditions` 语义一致。
 - `AddRule(...)` 输入/输出条件、规则组名称和说明与参考实现一致。
 - 特殊动词与例外规则不能被通用后缀规则吞掉。
 - `PosToConditions()` 正确解析 Yomitan term `rules`。
@@ -285,7 +293,7 @@ NovelReaderPage
 ### 6.1 小说文件布局
 
 ```text
-AppData/Roaming/Hoshi/Novels/
+AppData/Roaming/Niratan/Novels/
   book_order.json
   shelves.json
   novel_storage_migration_v1.json
@@ -301,7 +309,7 @@ AppData/Roaming/Hoshi/Novels/
 
 - `metadata.json` 是书名、作者、相对 EPUB/封面路径、导入与最近打开时间的真源。
 - `bookmark.json` 保存章节、逻辑进度和字符位置；Reader 每次保存只写一次 canonical bookmark。
-- `bookinfo.json`、`statistics.json`、`highlights.json` 按 Niratan/Hoshi sidecar 语义独立演进。
+- `bookinfo.json`、`statistics.json`、`highlights.json` 按 Niratan sidecar 语义独立演进。
 - `book_order.json` 保存全局/未归档顺序；`shelves.json` 保存自定义书架及书架内顺序。
 - 所有路径必须限制在对应书籍目录内；所有 JSON 写入使用同目录临时文件和原子替换。
 - JSON 缺失与损坏必须区分。损坏文件保留原件、显示非阻断警告，并禁止归一化流程覆盖它。

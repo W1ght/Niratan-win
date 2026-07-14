@@ -19,9 +19,9 @@
 
 ## File map
 
-- `Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs`: declares the explicit JSON constructor for persisted book contributions.
-- `Hoshi/Services/Novels/NovelStatisticsDashboardCache.cs`: converts unsupported derived-cache models into a cache miss and clears only the derived cache.
-- `Hoshi.Tests/Services/Novels/NovelStatisticsDashboardCacheTests.cs`: covers real contribution round trips and unsupported-cache recovery.
+- `Niratan/Models/Novel/NovelStatisticsDashboardModels.cs`: declares the explicit JSON constructor for persisted book contributions.
+- `Niratan/Services/Novels/NovelStatisticsDashboardCache.cs`: converts unsupported derived-cache models into a cache miss and clears only the derived cache.
+- `Niratan.Tests/Services/Novels/NovelStatisticsDashboardCacheTests.cs`: covers real contribution round trips and unsupported-cache recovery.
 - `docs/CHANGELOG.md`: records the root cause and durable fix.
 - `docs/VERIFICATION.md`: records the incompatible-cache regression scenario.
 
@@ -30,8 +30,8 @@
 ### Task 1: Persist and reload book contributions
 
 **Files:**
-- Modify: `Hoshi.Tests/Services/Novels/NovelStatisticsDashboardCacheTests.cs:42-70`
-- Modify: `Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs:20-40`
+- Modify: `Niratan.Tests/Services/Novels/NovelStatisticsDashboardCacheTests.cs:42-70`
+- Modify: `Niratan/Models/Novel/NovelStatisticsDashboardModels.cs:20-40`
 
 **Interfaces:**
 - Consumes: `NovelStatisticsDashboardCache.StoreAsync(string, NovelStatisticsDashboardSnapshot, CancellationToken)` and `TryLoadAsync(string, CancellationToken)`.
@@ -73,7 +73,7 @@ loaded!.Days.Should().ContainSingle()
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardCacheTests.StoredSnapshot_ReloadsFromDiskInNewCacheInstance"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardCacheTests.StoredSnapshot_ReloadsFromDiskInNewCacheInstance"
 ```
 
 Expected: FAIL with `NotSupportedException` stating that `NovelStatisticsBookContribution` does not have a supported JSON constructor.
@@ -104,7 +104,7 @@ Expected: PASS, 1 test passed and 0 failed.
 - [ ] **Step 5: Commit the serialization fix**
 
 ```powershell
-git add -- Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs Hoshi.Tests/Services/Novels/NovelStatisticsDashboardCacheTests.cs
+git add -- Niratan/Models/Novel/NovelStatisticsDashboardModels.cs Niratan.Tests/Services/Novels/NovelStatisticsDashboardCacheTests.cs
 git commit -m "fix(statistics): deserialize cached book contributions"
 ```
 
@@ -113,8 +113,8 @@ git commit -m "fix(statistics): deserialize cached book contributions"
 ### Task 2: Recover from incompatible derived caches
 
 **Files:**
-- Modify: `Hoshi.Tests/Services/Novels/NovelStatisticsDashboardCacheTests.cs:72-100,130-160`
-- Modify: `Hoshi/Services/Novels/NovelStatisticsDashboardCache.cs:45-88`
+- Modify: `Niratan.Tests/Services/Novels/NovelStatisticsDashboardCacheTests.cs:72-100,130-160`
+- Modify: `Niratan/Services/Novels/NovelStatisticsDashboardCache.cs:45-88`
 
 **Interfaces:**
 - Consumes: `INiratanJsonFileStore.ReadAsync<T>(string, CancellationToken)` which may throw `NotSupportedException` for an incompatible model contract.
@@ -171,7 +171,7 @@ private sealed class UnsupportedReadStore : INiratanJsonFileStore
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardCacheTests.UnsupportedCacheModel_DeletesOnlyDerivedCache"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardCacheTests.UnsupportedCacheModel_DeletesOnlyDerivedCache"
 ```
 
 Expected: FAIL because `NotSupportedException: Unsupported cached model.` escapes `TryLoadAsync`.
@@ -221,7 +221,7 @@ Do not add `NotSupportedException` handling to `NiratanJsonFileStore`.
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardCacheTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardCacheTests"
 ```
 
 Expected: PASS, all `NovelStatisticsDashboardCacheTests` pass with 0 failures.
@@ -229,7 +229,7 @@ Expected: PASS, all `NovelStatisticsDashboardCacheTests` pass with 0 failures.
 - [ ] **Step 5: Commit cache recovery**
 
 ```powershell
-git add -- Hoshi/Services/Novels/NovelStatisticsDashboardCache.cs Hoshi.Tests/Services/Novels/NovelStatisticsDashboardCacheTests.cs
+git add -- Niratan/Services/Novels/NovelStatisticsDashboardCache.cs Niratan.Tests/Services/Novels/NovelStatisticsDashboardCacheTests.cs
 git commit -m "fix(statistics): rebuild unsupported dashboard cache"
 ```
 
@@ -274,7 +274,7 @@ Replace item 10 in section `1.11 Niratan Dashboard 验证` with:
 - [ ] **Step 3: Run focused statistics tests**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboard"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboard"
 ```
 
 Expected: all dashboard tests pass with 0 failures.
@@ -282,7 +282,7 @@ Expected: all dashboard tests pass with 0 failures.
 - [ ] **Step 4: Run the full x64 test suite**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: all tests pass with 0 failures. Existing NU1903 and xUnit analyzer warnings may remain.
@@ -295,7 +295,7 @@ dotnet build -p:Platform=x64
 
 Expected: build succeeds with 0 errors. Existing NU1903 warnings may remain.
 
-- [ ] **Step 6: Verify the real imported statistics in Hoshi**
+- [ ] **Step 6: Verify the real imported statistics in Niratan**
 
 Run:
 
@@ -303,7 +303,7 @@ Run:
 .\build-and-run.ps1
 ```
 
-Open Statistics from the bookshelf. Confirm the app stays running and the existing `かがみの孤城` sidecar contributes its 10 rows, 153371 characters, and 44387.1125397682 seconds across 2026-03-16 through 2026-07-06. Confirm the latest Hoshi log has no new `NovelStatisticsBookContribution` deserialization exception.
+Open Statistics from the bookshelf. Confirm the app stays running and the existing `かがみの孤城` sidecar contributes its 10 rows, 153371 characters, and 44387.1125397682 seconds across 2026-03-16 through 2026-07-06. Confirm the latest Niratan log has no new `NovelStatisticsBookContribution` deserialization exception.
 
 - [ ] **Step 7: Check the patch and commit documentation**
 

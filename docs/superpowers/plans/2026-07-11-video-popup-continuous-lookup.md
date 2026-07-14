@@ -28,14 +28,14 @@
 
 ## File Structure
 
-- Create Hoshi/Services/Dictionary/DictionaryPopupDisplayTransaction.cs for UI-independent generation state.
-- Create Hoshi.Tests/Services/Dictionary/DictionaryPopupDisplayTransactionTests.cs for transaction behavior.
-- Modify Hoshi/Services/Dictionary/PopupHtmlGenerator.cs to inject a complete pending render payload without overwriting committed globals.
-- Modify Hoshi/Web/DictionaryPopup/popup.js for detached first-frame staging and native-acknowledged commit.
-- Modify Hoshi/Views/Dictionary/DictionaryLookupPopup.cs for native committed/pending visibility.
-- Modify Hoshi/Views/Dictionary/DictionaryPopupOverlay.cs for video input mode and pending root layout.
-- Modify Hoshi/Views/Video/VideoPlayerWindow.xaml, VideoPlayerWindow.xaml.cs, and VideoPlayerWindow.SubtitleOverlay.cs for continuous lookup.
-- Modify Hoshi/Services/Video/VideoSubtitleLookupRequestCoordinator.cs for pending highlight ownership.
+- Create Niratan/Services/Dictionary/DictionaryPopupDisplayTransaction.cs for UI-independent generation state.
+- Create Niratan.Tests/Services/Dictionary/DictionaryPopupDisplayTransactionTests.cs for transaction behavior.
+- Modify Niratan/Services/Dictionary/PopupHtmlGenerator.cs to inject a complete pending render payload without overwriting committed globals.
+- Modify Niratan/Web/DictionaryPopup/popup.js for detached first-frame staging and native-acknowledged commit.
+- Modify Niratan/Views/Dictionary/DictionaryLookupPopup.cs for native committed/pending visibility.
+- Modify Niratan/Views/Dictionary/DictionaryPopupOverlay.cs for video input mode and pending root layout.
+- Modify Niratan/Views/Video/VideoPlayerWindow.xaml, VideoPlayerWindow.xaml.cs, and VideoPlayerWindow.SubtitleOverlay.cs for continuous lookup.
+- Modify Niratan/Services/Video/VideoSubtitleLookupRequestCoordinator.cs for pending highlight ownership.
 - Modify the matching dictionary/video test files and docs/CHANGELOG.md.
 
 ---
@@ -43,8 +43,8 @@
 ### Task 1: Model committed and pending popup generations
 
 **Files:**
-- Create: Hoshi/Services/Dictionary/DictionaryPopupDisplayTransaction.cs
-- Create: Hoshi.Tests/Services/Dictionary/DictionaryPopupDisplayTransactionTests.cs
+- Create: Niratan/Services/Dictionary/DictionaryPopupDisplayTransaction.cs
+- Create: Niratan.Tests/Services/Dictionary/DictionaryPopupDisplayTransactionTests.cs
 
 **Interfaces:**
 - Consumes: generation long and trace id string?.
@@ -54,9 +54,9 @@
 
 ~~~csharp
 using FluentAssertions;
-using Hoshi.Services.Dictionary;
+using Niratan.Services.Dictionary;
 
-namespace Hoshi.Tests.Services.Dictionary;
+namespace Niratan.Tests.Services.Dictionary;
 
 public class DictionaryPopupDisplayTransactionTests
 {
@@ -103,7 +103,7 @@ public class DictionaryPopupDisplayTransactionTests
 - [ ] **Step 2: Run RED**
 
 ~~~powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupDisplayTransactionTests" --no-restore
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupDisplayTransactionTests" --no-restore
 ~~~
 
 Expected: build fails because the transaction types do not exist.
@@ -113,7 +113,7 @@ Expected: build fails because the transaction types do not exist.
 ~~~csharp
 using System;
 
-namespace Hoshi.Services.Dictionary;
+namespace Niratan.Services.Dictionary;
 
 internal readonly record struct DictionaryPopupContentCommit(long Generation, string? TraceId);
 
@@ -189,7 +189,7 @@ Run the Step 2 command. Expected: 2 passed, 0 failed.
 - [ ] **Step 5: Commit**
 
 ~~~powershell
-git add Hoshi/Services/Dictionary/DictionaryPopupDisplayTransaction.cs Hoshi.Tests/Services/Dictionary/DictionaryPopupDisplayTransactionTests.cs
+git add Niratan/Services/Dictionary/DictionaryPopupDisplayTransaction.cs Niratan.Tests/Services/Dictionary/DictionaryPopupDisplayTransactionTests.cs
 git commit -m "test(dictionary): model popup display transactions"
 ~~~
 
@@ -198,13 +198,13 @@ git commit -m "test(dictionary): model popup display transactions"
 ### Task 2: Stage popup DOM and runtime data until native commit
 
 **Files:**
-- Modify: Hoshi/Services/Dictionary/PopupHtmlGenerator.cs:286-354
-- Modify: Hoshi/Web/DictionaryPopup/popup.js:1484-1504,1650-1855
-- Modify: Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+- Modify: Niratan/Services/Dictionary/PopupHtmlGenerator.cs:286-354
+- Modify: Niratan/Web/DictionaryPopup/popup.js:1484-1504,1650-1855
+- Modify: Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 
 **Interfaces:**
 - Consumes: a complete pending payload containing generation, entries, styles, display settings, trace, audio, and Anki state.
-- Produces: epoch-tagged contentPrepared, window.hoshiCommitPopupRender(epoch, generation), window.hoshiCancelPopupRender(epoch, generation), and epoch-tagged contentReady after native acknowledgement.
+- Produces: epoch-tagged contentPrepared, window.niratanCommitPopupRender(epoch, generation), window.niratanCancelPopupRender(epoch, generation), and epoch-tagged contentReady after native acknowledgement.
 
 - [ ] **Step 1: Add a failing asset test**
 
@@ -218,18 +218,18 @@ public void DictionaryPopup_StagesReplacementUntilFirstFrameReady()
     js.Should().Contain("var liveContainer = document.getElementById('entries-container');");
     js.Should().Contain("var stagingContainer = document.createElement('div');");
     js.Should().Contain("postPopupMessage('contentPrepared', { generation: generation })");
-    js.Should().Contain("window.hoshiCommitPopupRender = function (expectedGeneration)");
+    js.Should().Contain("window.niratanCommitPopupRender = function (expectedGeneration)");
     js.Should().Contain("liveContainer.replaceChildren.apply(liveContainer");
-    js.Should().Contain("window.hoshiCancelPopupRender = function (expectedGeneration)");
+    js.Should().Contain("window.niratanCancelPopupRender = function (expectedGeneration)");
 
-    var start = js.IndexOf("window.hoshiInjectResults = function", StringComparison.Ordinal);
+    var start = js.IndexOf("window.niratanInjectResults = function", StringComparison.Ordinal);
     var end = js.IndexOf("function snapshot()", start, StringComparison.Ordinal);
     js[start..end].Should().NotContain("window.lookupEntries = entriesJson");
     js[start..end].Should().NotContain("container.innerHTML = ''");
 
     var generator = File.ReadAllText(
         Path.Combine(ProjectRoot, "Services", "Dictionary", "PopupHtmlGenerator.cs"));
-    generator.Should().Contain("window.hoshiStagePopupRender({");
+    generator.Should().Contain("window.niratanStagePopupRender({");
     generator.Should().NotContain("window.lookupEntries = {entriesJson};");
 }
 ~~~
@@ -237,17 +237,17 @@ public void DictionaryPopup_StagesReplacementUntilFirstFrameReady()
 - [ ] **Step 2: Run RED**
 
 ~~~powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopup_StagesReplacementUntilFirstFrameReady" --no-restore
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopup_StagesReplacementUntilFirstFrameReady" --no-restore
 ~~~
 
 Expected: FAIL because the two-phase stage/commit protocol and pending payload are absent.
 
 - [ ] **Step 3: Inject one pending payload instead of committed globals**
 
-Change `GenerateInjectionScript` so it calls `window.hoshiStagePopupRender` with one object containing `generation`, `entries`, `entryCount`, `dictionaryStyles`, all display booleans/numbers/CSS, `traceId`, `audioSources`, audio playback/autoplay, and all Anki flags. Remove the preceding assignments to `window.lookupEntries`, `window.dictionaryStyles`, `window.audioSources`, `window.useAnkiConnect`, and the other committed runtime globals.
+Change `GenerateInjectionScript` so it calls `window.niratanStagePopupRender` with one object containing `generation`, `entries`, `entryCount`, `dictionaryStyles`, all display booleans/numbers/CSS, `traceId`, `audioSources`, audio playback/autoplay, and all Anki flags. Remove the preceding assignments to `window.lookupEntries`, `window.dictionaryStyles`, `window.audioSources`, `window.useAnkiConnect`, and the other committed runtime globals.
 
 ~~~javascript
-window.hoshiStagePopupRender({
+window.niratanStagePopupRender({
   generation: renderGeneration,
   entries: entriesJson,
   entryCount: finalResultCount,
@@ -280,7 +280,7 @@ window.hoshiStagePopupRender({
 
 - [ ] **Step 4: Stage first frame and expose native commit/cancel**
 
-Add `capturePopupRuntime` and `applyPopupRuntime` listing every runtime key emitted above. `hoshiStagePopupRender(payload)` temporarily applies the pending runtime only while synchronously building the detached first entry, then restores the committed runtime before returning and posts `contentPrepared`.
+Add `capturePopupRuntime` and `applyPopupRuntime` listing every runtime key emitted above. `niratanStagePopupRender(payload)` temporarily applies the pending runtime only while synchronously building the detached first entry, then restores the committed runtime before returning and posts `contentPrepared`.
 
 At `renderPopup` start, capture local entry data and use it throughout the render closure instead of reading mutable globals:
 
@@ -297,7 +297,7 @@ var generation = window.popupRenderGeneration || 0;
 When the detached first entry is complete, do not swap. Store a pending object with a commit closure and restore the committed runtime:
 
 ~~~javascript
-window.hoshiPendingPopupRender = {
+window.niratanPendingPopupRender = {
   generation: generation,
   payload: pendingPayload,
   commit: function () {
@@ -324,18 +324,18 @@ postPopupMessage('contentPrepared', { generation: generation });
 Expose exact-generation operations:
 
 ~~~javascript
-window.hoshiCommitPopupRender = function (expectedGeneration) {
-  var pending = window.hoshiPendingPopupRender;
+window.niratanCommitPopupRender = function (expectedGeneration) {
+  var pending = window.niratanPendingPopupRender;
   if (!pending || pending.generation !== expectedGeneration) return false;
-  window.hoshiPendingPopupRender = null;
+  window.niratanPendingPopupRender = null;
   pending.commit();
   return true;
 };
 
-window.hoshiCancelPopupRender = function (expectedGeneration) {
-  var pending = window.hoshiPendingPopupRender;
+window.niratanCancelPopupRender = function (expectedGeneration) {
+  var pending = window.niratanPendingPopupRender;
   if (!pending || pending.generation !== expectedGeneration) return false;
-  window.hoshiPendingPopupRender = null;
+  window.niratanPendingPopupRender = null;
   return true;
 };
 ~~~
@@ -345,7 +345,7 @@ The old committed globals and DOM remain unchanged between `contentPrepared` and
 - [ ] **Step 5: Run GREEN**
 
 ~~~powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopup_StagesReplacementUntilFirstFrameReady|FullyQualifiedName~NovelReaderWebAssetTests" --no-restore
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopup_StagesReplacementUntilFirstFrameReady|FullyQualifiedName~NovelReaderWebAssetTests" --no-restore
 ~~~
 
 Expected: all matching tests pass.
@@ -353,7 +353,7 @@ Expected: all matching tests pass.
 - [ ] **Step 6: Commit**
 
 ~~~powershell
-git add Hoshi/Services/Dictionary/PopupHtmlGenerator.cs Hoshi/Web/DictionaryPopup/popup.js Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add Niratan/Services/Dictionary/PopupHtmlGenerator.cs Niratan/Web/DictionaryPopup/popup.js Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "fix(dictionary): stage popup replacements atomically"
 ~~~
 
@@ -362,11 +362,11 @@ git commit -m "fix(dictionary): stage popup replacements atomically"
 ### Task 3: Preserve the native committed popup during replacement
 
 **Files:**
-- Modify: Hoshi/Views/Dictionary/DictionaryLookupPopup.cs:43-60,343-418,512-522,845-864,1027-1079
-- Modify: Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+- Modify: Niratan/Views/Dictionary/DictionaryLookupPopup.cs:43-60,343-418,512-522,845-864,1027-1079
+- Modify: Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 
 **Interfaces:**
-- Consumes: DictionaryPopupDisplayTransaction plus hoshiCommitPopupRender/hoshiCancelPopupRender from Task 2.
+- Consumes: DictionaryPopupDisplayTransaction plus niratanCommitPopupRender/niratanCancelPopupRender from Task 2.
 - Produces: contentPrepared commit linearization, one latest queued replacement, generation-scoped native interaction context, DictionaryPopupContentCommittedEventArgs, ContentCommitted, HasCommittedContent, CancelPendingContent(generation, traceId), and generationStarted callback.
 
 - [ ] **Step 1: Add a failing lifecycle test**
@@ -383,16 +383,16 @@ public void DictionaryLookupPopup_PreservesCommittedVisualDuringReplacement()
     code.Should().Contain("var preserveCommittedContent = _displayTransaction.BeginPending(");
     code.Should().Contain("if (!preserveCommittedContent)");
     code.Should().Contain("case \"contentPrepared\":");
-    code.Should().Contain("window.hoshiCommitPopupRender");
+    code.Should().Contain("window.niratanCommitPopupRender");
     code.Should().Contain("public void CancelPendingContent(long generation, string? traceId)");
-    code.Should().Contain("window.hoshiCancelPopupRender");
+    code.Should().Contain("window.niratanCancelPopupRender");
 }
 ~~~
 
 - [ ] **Step 2: Run RED**
 
 ~~~powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryLookupPopup_PreservesCommittedVisualDuringReplacement" --no-restore
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryLookupPopup_PreservesCommittedVisualDuringReplacement" --no-restore
 ~~~
 
 Expected: FAIL because the native transaction API is absent.
@@ -455,7 +455,7 @@ if (!CanShowReadyContent(preparedGeneration)
     return;
 
 _ = _contentWebView.CoreWebView2.ExecuteScriptAsync(
-    $"window.hoshiCommitPopupRender?.({preparedGeneration});");
+    $"window.niratanCommitPopupRender?.({preparedGeneration});");
 ~~~
 
 Do not await `contentPrepared` or `contentReady` from `ShowResultsWarmAsync`.
@@ -499,7 +499,7 @@ public void CancelPendingContent(long generation, string? traceId)
     if (_contentWebView.CoreWebView2 is not null)
     {
         _ = _contentWebView.CoreWebView2.ExecuteScriptAsync(
-            $"window.hoshiCancelPopupRender?.({generation});");
+            $"window.niratanCancelPopupRender?.({generation});");
     }
 
     if (!_displayTransaction.HasCommittedContent)
@@ -517,9 +517,9 @@ Third-review hardening protocol:
 
 1. Extract a testable single-flight warm coordinator. Concurrent cold callers share one warm task; success remains cached, failure resets it, and WebView process failure resets readiness for a later retry.
 2. Add exact-generation `TryAbortCommit`. Aborting clears only the matching accepted generation and preserves previous committed generation/context.
-3. Route `hoshiCommitPopupRender(generation)` through a non-blocking async helper with a bounded timeout. `ShowResultsWarmAsync`, `contentPrepared`, and the lookup caller never await ready or commit acknowledgement.
+3. Route `niratanCommitPopupRender(generation)` through a non-blocking async helper with a bounded timeout. `ShowResultsWarmAsync`, `contentPrepared`, and the lookup caller never await ready or commit acknowledgement.
 4. Treat matching `contentReady` and a parsed script result of `true` as idempotent completion signals. A `false` result aborts immediately.
-5. On script exception/timeout, call `hoshiGetCommittedPopupGeneration()`. Complete when it equals the accepted generation; otherwise call narrow `hoshiDiscardPopupRender(generation)` and reconcile. The unavailable-renderer abort portion of this third-review step is superseded by the fourth-review forced-shell protocol below.
+5. On script exception/timeout, call `niratanGetCommittedPopupGeneration()`. Complete when it equals the accepted generation; otherwise call narrow `niratanDiscardPopupRender(generation)` and reconcile. The unavailable-renderer abort portion of this third-review step is superseded by the fourth-review forced-shell protocol below.
 6. Extract executable coordination tests for concurrent warm success/failure retry and commit true/false/exception/timeout/ready races plus queue recovery. Keep source assertions only for WebView bridge wiring.
 
 Fourth-review renderer epoch and recovery protocol:
@@ -535,7 +535,7 @@ Fourth-review renderer epoch and recovery protocol:
 - [ ] **Step 8: Run GREEN**
 
 ~~~powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupDisplayTransactionTests|FullyQualifiedName~DictionaryLookupPopup_PreservesCommittedVisualDuringReplacement|FullyQualifiedName~NovelReaderWebAssetTests" --no-restore
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupDisplayTransactionTests|FullyQualifiedName~DictionaryLookupPopup_PreservesCommittedVisualDuringReplacement|FullyQualifiedName~NovelReaderWebAssetTests" --no-restore
 ~~~
 
 Expected: all matching tests pass.
@@ -543,7 +543,7 @@ Expected: all matching tests pass.
 - [ ] **Step 9: Commit**
 
 ~~~powershell
-git add Hoshi/Views/Dictionary/DictionaryLookupPopup.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add Niratan/Views/Dictionary/DictionaryLookupPopup.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "fix(dictionary): preserve committed popup generations"
 ~~~
 
@@ -552,10 +552,10 @@ git commit -m "fix(dictionary): preserve committed popup generations"
 ### Task 4: Add video-only pointer passthrough and pending layout
 
 **Files:**
-- Modify: Hoshi/Views/Dictionary/DictionaryPopupOverlay.cs:22-102,150-174,197-298,529-654,855-916
-- Modify: Hoshi/Views/Video/VideoPlayerWindow.xaml:84-97
-- Modify: Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
-- Modify: Hoshi.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs
+- Modify: Niratan/Views/Dictionary/DictionaryPopupOverlay.cs:22-102,150-174,197-298,529-654,855-916
+- Modify: Niratan/Views/Video/VideoPlayerWindow.xaml:84-97
+- Modify: Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+- Modify: Niratan.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs
 
 **Interfaces:**
 - Consumes: DictionaryLookupPopup.ContentCommitted, HasCommittedContent, and exact-generation CancelPendingContent.
@@ -597,7 +597,7 @@ public void VideoSubtitleLookup_PopupEmptySpacePassesThrough()
 - [ ] **Step 2: Run RED**
 
 ~~~powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupOverlay_DefaultInputModeRemainsModal|FullyQualifiedName~VideoSubtitleLookup_PopupEmptySpacePassesThrough" --no-restore
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupOverlay_DefaultInputModeRemainsModal|FullyQualifiedName~VideoSubtitleLookup_PopupEmptySpacePassesThrough" --no-restore
 ~~~
 
 Expected: both tests fail.
@@ -708,7 +708,7 @@ CancelShow must require the matching PendingRootCommit and call `_rootHost.Cance
 - [ ] **Step 5: Run GREEN**
 
 ~~~powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests|FullyQualifiedName~VideoSubtitleLookupAssetTests" --no-restore
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests|FullyQualifiedName~VideoSubtitleLookupAssetTests" --no-restore
 ~~~
 
 Expected: all matching tests pass and default overlay contracts remain green.
@@ -716,7 +716,7 @@ Expected: all matching tests pass and default overlay contracts remain green.
 - [ ] **Step 6: Commit**
 
 ~~~powershell
-git add Hoshi/Views/Dictionary/DictionaryPopupOverlay.cs Hoshi/Views/Video/VideoPlayerWindow.xaml Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs Hoshi.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs
+git add Niratan/Views/Dictionary/DictionaryPopupOverlay.cs Niratan/Views/Video/VideoPlayerWindow.xaml Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs Niratan.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs
 git commit -m "fix(video): pass popup empty space to subtitles"
 ~~~
 
@@ -725,11 +725,11 @@ git commit -m "fix(video): pass popup empty space to subtitles"
 ### Task 5: Commit only the current video lookup and preserve misses
 
 **Files:**
-- Modify: Hoshi/Services/Video/VideoSubtitleLookupRequestCoordinator.cs
-- Modify: Hoshi.Tests/Services/Video/VideoSubtitleLookupRequestCoordinatorTests.cs
-- Modify: Hoshi/Views/Video/VideoPlayerWindow.xaml.cs:611-735,887-935
-- Modify: Hoshi/Views/Video/VideoPlayerWindow.SubtitleOverlay.cs:361-429,547-598
-- Modify: Hoshi.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs
+- Modify: Niratan/Services/Video/VideoSubtitleLookupRequestCoordinator.cs
+- Modify: Niratan.Tests/Services/Video/VideoSubtitleLookupRequestCoordinatorTests.cs
+- Modify: Niratan/Views/Video/VideoPlayerWindow.xaml.cs:611-735,887-935
+- Modify: Niratan/Views/Video/VideoPlayerWindow.SubtitleOverlay.cs:361-429,547-598
+- Modify: Niratan.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs
 
 **Interfaces:**
 - Consumes: RootContentCommitted and current VideoSubtitleLookupRequest.
@@ -766,7 +766,7 @@ public void NewRequest_InvalidatesPreviousPendingPopupCommit()
 - [ ] **Step 2: Run RED**
 
 ~~~powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitleLookupRequestCoordinatorTests" --no-restore
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitleLookupRequestCoordinatorTests" --no-restore
 ~~~
 
 Expected: build fails because popup commit APIs are absent.
@@ -848,7 +848,7 @@ public void VideoSubtitleLookup_ReplacesVisiblePopupWithoutPredismiss()
 - [ ] **Step 5: Run RED**
 
 ~~~powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitleLookup_ReplacesVisiblePopupWithoutPredismiss" --no-restore
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitleLookup_ReplacesVisiblePopupWithoutPredismiss" --no-restore
 ~~~
 
 Expected: FAIL because committed-event ownership is absent.
@@ -916,7 +916,7 @@ Stale/cancellation paths call CancelShow(traceId), which Task 4 makes non-destru
 - [ ] **Step 9: Run GREEN**
 
 ~~~powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitleLookupRequestCoordinatorTests|FullyQualifiedName~VideoSubtitleLookupAssetTests" --no-restore
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitleLookupRequestCoordinatorTests|FullyQualifiedName~VideoSubtitleLookupAssetTests" --no-restore
 ~~~
 
 Expected: all matching tests pass.
@@ -924,7 +924,7 @@ Expected: all matching tests pass.
 - [ ] **Step 10: Commit**
 
 ~~~powershell
-git add Hoshi/Services/Video/VideoSubtitleLookupRequestCoordinator.cs Hoshi.Tests/Services/Video/VideoSubtitleLookupRequestCoordinatorTests.cs Hoshi/Views/Video/VideoPlayerWindow.xaml.cs Hoshi/Views/Video/VideoPlayerWindow.SubtitleOverlay.cs Hoshi.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs
+git add Niratan/Services/Video/VideoSubtitleLookupRequestCoordinator.cs Niratan.Tests/Services/Video/VideoSubtitleLookupRequestCoordinatorTests.cs Niratan/Views/Video/VideoPlayerWindow.xaml.cs Niratan/Views/Video/VideoPlayerWindow.SubtitleOverlay.cs Niratan.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs
 git commit -m "fix(video): replace visible popup with current lookup"
 ~~~
 
@@ -968,7 +968,7 @@ Expected: diff check exits 0.
 - [ ] **Step 3: Run focused tests**
 
 ~~~powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopup|FullyQualifiedName~NovelReaderWebAssetTests|FullyQualifiedName~VideoSubtitle" --no-restore
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopup|FullyQualifiedName~NovelReaderWebAssetTests|FullyQualifiedName~VideoSubtitle" --no-restore
 ~~~
 
 Expected: all matching tests pass.
@@ -977,7 +977,7 @@ Expected: all matching tests pass.
 
 ~~~powershell
 dotnet build -p:Platform=x64
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --no-restore
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --no-restore
 ~~~
 
 Expected: build has 0 errors and all 555+ tests pass. Report the existing SQLitePCLRaw.lib.e_sqlite3 NU1903 warning separately.

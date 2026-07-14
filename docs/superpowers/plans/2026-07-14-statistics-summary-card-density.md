@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Enlarge the Today goal ring to the Hoshi reference size and remove the stretched empty interior from the This Week card.
+**Goal:** Enlarge the Today goal ring to the Niratan reference size and remove the stretched empty interior from the This Week card.
 
 **Architecture:** Keep the existing dashboard view model, adaptive placement, and data templates unchanged. Express both visual requirements as XAML layout contracts: a fixed `118×118` ring host with a directly sized `118×118` `ProgressRing`, and a top-aligned week card whose height is content-driven inside a shared Grid row.
 
@@ -13,15 +13,15 @@
 - Target Windows 10+ x64 and do not build ARM64 by default.
 - Preserve the existing MVVM boundaries; this change is view-only.
 - Do not change statistics calculations, bindings, breakpoints, card order, or weekday tile dimensions.
-- Use `dotnet build -p:Platform=x64` and `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64` for verification.
+- Use `dotnet build -p:Platform=x64` and `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64` for verification.
 
 ---
 
 ### Task 1: Lock the summary card layout contract
 
 **Files:**
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs:2610`
-- Modify: `Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml:258-390`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs:2610`
+- Modify: `Niratan/Views/Controls/NovelStatisticsDashboardView.xaml:258-390`
 
 **Interfaces:**
 - Consumes: the existing `NovelStatisticsDashboardView.xaml` resource file loaded by `NovelLibraryPage_ExposesStatisticsDashboard`.
@@ -77,7 +77,7 @@ weekCardXaml.Should().Contain("VerticalAlignment=\"Top\"");
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests.NovelLibraryPage_ExposesStatisticsDashboard"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests.NovelLibraryPage_ExposesStatisticsDashboard"
 ```
 
 Expected: FAIL because the Today `ProgressRing` has no direct width or height and therefore uses WinUI's default `32×32` style; the Week card also has no `VerticalAlignment="Top"`.
@@ -116,8 +116,8 @@ Change the Week card opening element to include:
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests.NovelLibraryPage_ExposesStatisticsDashboard"
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --no-build --filter "FullyQualifiedName~NovelStatisticsDashboard|FullyQualifiedName~NovelReaderWebAssetTests.NovelLibraryPage_ExposesStatisticsDashboard"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests.NovelLibraryPage_ExposesStatisticsDashboard"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --no-build --filter "FullyQualifiedName~NovelStatisticsDashboard|FullyQualifiedName~NovelReaderWebAssetTests.NovelLibraryPage_ExposesStatisticsDashboard"
 ```
 
 Expected: the exact contract test passes, followed by all dashboard-focused tests passing.
@@ -125,7 +125,7 @@ Expected: the exact contract test passes, followed by all dashboard-focused test
 - [ ] **Step 5: Commit the implementation**
 
 ```powershell
-git add Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml
+git add Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs Niratan/Views/Controls/NovelStatisticsDashboardView.xaml
 git commit -m "fix(statistics): rebalance summary card density"
 ```
 
@@ -151,7 +151,7 @@ Add this changelog entry above the existing dashboard entries:
 - 宽屏三列布局中，本周卡片与更高的排行卡共用同一 Grid 行；Border 默认纵向拉伸，使本周卡片内部出现大块空白。
 
 **解决**：
-- 将宿主与 `ProgressRing` 控件本身都固定为 118×118 effective pixels，对齐 Hoshi 的视觉层级。
+- 将宿主与 `ProgressRing` 控件本身都固定为 118×118 effective pixels，对齐 Niratan 的视觉层级。
 - 让本周卡片顶部对齐并按自身内容高度呈现，保留指标、七日状态和自适应列布局。
 
 ---
@@ -169,7 +169,7 @@ Run:
 
 ```powershell
 git diff --check
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 dotnet build -p:Platform=x64 --no-restore
 ```
 

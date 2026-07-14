@@ -17,13 +17,13 @@ AudioSettings → PopupHtmlGenerator injects settings → popup.js
 ## Affected Files
 
 When modifying any of these, this skill is mandatory:
-- `Hoshi/Services/Audio/AudioService.cs`
-- `Hoshi/Services/Audio/IAudioService.cs`
-- `Hoshi/Models/Settings/AudioSettings.cs`
-- `Hoshi/Views/Dictionary/DictionaryLookupPopup.cs` (playWordAudio handler)
-- `Hoshi/Services/Dictionary/PopupHtmlGenerator.cs` (SerializeAudioSources, audio injection)
-- `Hoshi/Web/DictionaryPopup/popup.js` (fetchAudioUrl, expandAudioTemplate, playWordAudio, autoplay)
-- `Hoshi/ViewModels/Pages/AudioSettingsPageViewModel.cs`
+- `Niratan/Services/Audio/AudioService.cs`
+- `Niratan/Services/Audio/IAudioService.cs`
+- `Niratan/Models/Settings/AudioSettings.cs`
+- `Niratan/Views/Dictionary/DictionaryLookupPopup.cs` (playWordAudio handler)
+- `Niratan/Services/Dictionary/PopupHtmlGenerator.cs` (SerializeAudioSources, audio injection)
+- `Niratan/Web/DictionaryPopup/popup.js` (fetchAudioUrl, expandAudioTemplate, playWordAudio, autoplay)
+- `Niratan/ViewModels/Pages/AudioSettingsPageViewModel.cs`
 
 ## Build and Launch
 
@@ -77,7 +77,7 @@ When modifying any of these, this skill is mandatory:
 ## Automated Test Filter (when tests exist)
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Audio"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Audio"
 ```
 
 ## Log Keywords

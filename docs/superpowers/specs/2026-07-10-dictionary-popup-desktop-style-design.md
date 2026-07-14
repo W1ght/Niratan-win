@@ -100,7 +100,7 @@ states, and scroll-activity behavior remain unchanged.
 
 - Build with `dotnet build -p:Platform=x64`.
 - Run dictionary-focused tests.
-- Launch Hoshi and open root and nested popups in light and dark themes.
+- Launch Niratan and open root and nested popups in light and dark themes.
 - Verify all four outer corners and the outline at 100% and high-DPI scaling.
 - Verify card outlines, theme switching, scrolling, resizing, Shift-hover, and
   first-frame reveal behavior.

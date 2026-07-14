@@ -1,11 +1,11 @@
 ---
 name: test
-description: Run Hoshi unit tests (x64 Debug) with xUnit + FluentAssertions
+description: Run Niratan unit tests (x64 Debug) with xUnit + FluentAssertions
 ---
 
 # Run Tests
 
-Run the full test suite for Hoshi.
+Run the full test suite for Niratan.
 
 ## Test Framework
 
@@ -14,7 +14,7 @@ Run the full test suite for Hoshi.
 ## Commands
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 ## Notes

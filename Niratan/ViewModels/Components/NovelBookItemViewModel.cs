@@ -1,0 +1,43 @@
+using System;
+using System.IO;
+using Microsoft.UI.Xaml.Media.Imaging;
+using Niratan.Models;
+
+namespace Niratan.ViewModels.Components;
+
+public class NovelBookItemViewModel
+{
+    public NovelBook Book { get; }
+    public string AutomationId => $"NovelBookCard_{Book.Id}";
+    public double OverallProgress => Book.TotalCharacterCount > 0
+        ? Math.Clamp(Book.CurrentCharacterCount / (double)Book.TotalCharacterCount, 0, 1)
+        : Book.ChapterCount <= 0
+            ? Math.Clamp(Book.Progress, 0, 1)
+            : Math.Clamp((Book.CurrentChapterIndex + Book.Progress) / Book.ChapterCount, 0, 1);
+    public double OverallProgressPercent => OverallProgress * 100;
+    public string OverallProgressText => $"{OverallProgressPercent:0.0}%";
+
+    public BitmapImage? CoverImage { get; }
+    public bool HasCover => CoverImage != null;
+
+    public NovelBookItemViewModel(NovelBook book)
+    {
+        Book = book;
+        CoverImage = LoadCover(book.CoverPath);
+    }
+
+    private static BitmapImage? LoadCover(string? coverPath)
+    {
+        if (string.IsNullOrEmpty(coverPath) || !File.Exists(coverPath))
+            return null;
+
+        try
+        {
+            return new BitmapImage(new Uri(coverPath));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+}

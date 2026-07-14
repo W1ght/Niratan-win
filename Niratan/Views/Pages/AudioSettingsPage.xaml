@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page x:Class="Niratan.Views.Pages.AudioSettingsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
+      xmlns:ui="using:CommunityToolkit.WinUI"
+      xmlns:vm="using:Niratan.ViewModels.Pages"
+      xmlns:helpers="using:Niratan.Helpers.UI.Converters"
+      mc:Ignorable="d">
+
+    <Page.Resources>
+        <helpers:BooleanNegationConverter x:Key="BoolNegationConverter" />
+        <Style x:Key="AudioSectionHeaderStyle" BasedOn="{StaticResource BodyStrongTextBlockStyle}" TargetType="TextBlock">
+            <Style.Setters>
+                <Setter Property="Margin" Value="1,30,0,6" />
+            </Style.Setters>
+        </Style>
+    </Page.Resources>
+
+    <Grid x:Name="AudioPageRoot" RowDefinitions="Auto,*">
+        <StackPanel Padding="20,14,36,16"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center">
+            <Button x:Name="AudioSettingsBackButton"
+                    x:Uid="AudioSettingsBackButton"
+                    Width="36"
+                    Height="36"
+                    Padding="0"
+                    Click="BackButton_Click">
+                <FontIcon Glyph="&#xE72B;" />
+            </Button>
+            <FontIcon FontSize="24" Glyph="&#xE767;" />
+            <TextBlock x:Uid="AudioSettingsPageTitle"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource TitleTextBlockStyle}" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1">
+            <Grid Padding="0,0,16,16">
+                <StackPanel MaxWidth="1000" HorizontalAlignment="Stretch" Spacing="4">
+
+                    <TextBlock x:Uid="AudioSourcesSectionHeader"
+                               Style="{StaticResource AudioSectionHeaderStyle}" />
+
+                    <ItemsRepeater ItemsSource="{x:Bind ViewModel.AudioSources}">
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AudioSourceViewModel">
+                                <toolkit:SettingsCard HorizontalAlignment="Stretch"
+                                                      HorizontalContentAlignment="Stretch"
+                                                      Description="{x:Bind Url, Mode=OneWay}"
+                                                      Header="{x:Bind DisplayName, Mode=OneWay}"
+                                                      HeaderIcon="{ui:FontIcon Glyph=&#xE767;}">
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <Button x:Uid="AudioMoveSourceUpButton"
+                                                Width="32"
+                                                Height="32"
+                                                Padding="0"
+                                                Command="{Binding DataContext.MoveSourceUpCommand, ElementName=AudioPageRoot}"
+                                                CommandParameter="{x:Bind}"
+                                                IsEnabled="{x:Bind CanMoveUp, Mode=OneWay}">
+                                            <FontIcon FontSize="12" Glyph="&#xE70E;" />
+                                        </Button>
+                                        <Button x:Uid="AudioMoveSourceDownButton"
+                                                Width="32"
+                                                Height="32"
+                                                Padding="0"
+                                                Command="{Binding DataContext.MoveSourceDownCommand, ElementName=AudioPageRoot}"
+                                                CommandParameter="{x:Bind}"
+                                                IsEnabled="{x:Bind CanMoveDown, Mode=OneWay}">
+                                            <FontIcon FontSize="12" Glyph="&#xE70D;" />
+                                        </Button>
+                                        <Button x:Uid="AudioDeleteSourceButton"
+                                                Width="32"
+                                                Height="32"
+                                                Padding="0"
+                                                Command="{Binding DataContext.DeleteSourceCommand, ElementName=AudioPageRoot}"
+                                                CommandParameter="{x:Bind}"
+                                                IsEnabled="{x:Bind CanDelete, Mode=OneWay}">
+                                            <FontIcon FontSize="12" Glyph="&#xE74D;" />
+                                        </Button>
+                                        <ToggleSwitch x:Uid="AudioEnableSourceToggle"
+                                                      IsOn="{x:Bind IsEnabled, Mode=TwoWay}"
+                                                      MinWidth="0" />
+                                    </StackPanel>
+                                </toolkit:SettingsCard>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+
+                    <TextBlock x:Uid="AudioAddSourceSectionHeader"
+                               Style="{StaticResource AudioSectionHeaderStyle}" />
+
+                    <toolkit:SettingsCard x:Uid="AudioSourceNameCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8D4;}">
+                        <TextBox x:Uid="AudioSourceNameTextBox"
+                                 Width="200"
+                                 Text="{x:Bind ViewModel.NewSourceName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="AudioSourceUrlCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE71B;}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBox x:Uid="AudioSourceUrlTextBox"
+                                     Width="400"
+                                     PlaceholderText="https://example.com/audio?term={term}&amp;reading={reading}"
+                                     Text="{x:Bind ViewModel.NewSourceUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button x:Uid="AudioAddSourceButton"
+                                    Command="{x:Bind ViewModel.AddSourceCommand}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon FontSize="12" Glyph="&#xE710;" />
+                                    <TextBlock x:Uid="AudioAddSourceButtonText" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </toolkit:SettingsCard>
+
+                    <TextBlock x:Uid="AudioYomitanJsonHint"
+                               Margin="1,4,0,0"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                    <TextBlock x:Uid="AudioPlaybackSectionHeader"
+                               Style="{StaticResource AudioSectionHeaderStyle}" />
+
+                    <toolkit:SettingsCard x:Uid="AudioAutoplayCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE768;}">
+                        <ToggleSwitch x:Uid="AudioAutoplayToggle"
+                                      AutomationProperties.AutomationId="AudioAutoplayToggle"
+                                      IsOn="{x:Bind ViewModel.EnableAutoplay, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="AudioPlaybackModeCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE767;}">
+                        <ComboBox x:Uid="AudioPlaybackModeComboBox"
+                                  MinWidth="180"
+                                  AutomationProperties.AutomationId="AudioPlaybackModeComboBox"
+                                  DisplayMemberPath="Label"
+                                  ItemsSource="{x:Bind ViewModel.AvailablePlaybackModes}"
+                                  SelectedValue="{x:Bind ViewModel.SelectedPlaybackMode, Mode=TwoWay}"
+                                  SelectedValuePath="Mode" />
+                    </toolkit:SettingsCard>
+
+                    <TextBlock x:Uid="AudioLocalAudioSectionHeader"
+                               Style="{StaticResource AudioSectionHeaderStyle}" />
+
+                    <toolkit:SettingsCard x:Uid="AudioLocalAudioEnabledCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8F1;}">
+                        <ToggleSwitch x:Uid="AudioLocalAudioToggle"
+                                      AutomationProperties.AutomationId="LocalAudioToggle"
+                                      IsOn="{x:Bind ViewModel.EnableLocalAudio, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="AudioAndroidAudioDatabaseCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="{x:Bind ViewModel.LocalAudioStatusText, Mode=OneWay}"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8B7;}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button x:Uid="AudioImportLocalAudioButton"
+                                    AutomationProperties.AutomationId="ImportLocalAudioButton"
+                                    Command="{x:Bind ViewModel.ImportLocalAudioCommand}"
+                                    IsEnabled="{x:Bind ViewModel.IsImporting, Mode=OneWay, Converter={StaticResource BoolNegationConverter}}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon FontSize="12" Glyph="&#xE8A5;" />
+                                    <TextBlock x:Uid="AudioImportLocalAudioButtonText" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Uid="AudioDeleteLocalAudioButton"
+                                    AutomationProperties.AutomationId="DeleteLocalAudioButton"
+                                    Command="{x:Bind ViewModel.DeleteLocalAudioCommand}"
+                                    IsEnabled="{x:Bind ViewModel.IsLocalAudioImported, Mode=OneWay}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon FontSize="12" Glyph="&#xE74D;" />
+                                    <TextBlock x:Uid="AudioDeleteLocalAudioButtonText" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </toolkit:SettingsCard>
+
+                    <TextBlock x:Uid="AudioLocalAudioDatabaseHelpText"
+                               Margin="1,4,0,24"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</Page>

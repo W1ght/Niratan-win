@@ -23,16 +23,16 @@
 
 ## File map
 
-- `Hoshi.Tests/Views/Pages/NovelLibraryPageAssetTests.cs`: adds the regression contract that fails while sync actions depend on `ElementName=ThisPage` from inside the flyout namescope.
-- `Hoshi/Views/Pages/NovelLibraryPage.xaml`: declares the flyout opening event, tags each action with the templated book item, and replaces broken command/visibility bindings with UI event hooks.
-- `Hoshi/Views/Pages/NovelLibraryPage.xaml.cs`: applies mutually exclusive Auto/Manual presentation and forwards the selected book to the existing ViewModel commands.
+- `Niratan.Tests/Views/Pages/NovelLibraryPageAssetTests.cs`: adds the regression contract that fails while sync actions depend on `ElementName=ThisPage` from inside the flyout namescope.
+- `Niratan/Views/Pages/NovelLibraryPage.xaml`: declares the flyout opening event, tags each action with the templated book item, and replaces broken command/visibility bindings with UI event hooks.
+- `Niratan/Views/Pages/NovelLibraryPage.xaml.cs`: applies mutually exclusive Auto/Manual presentation and forwards the selected book to the existing ViewModel commands.
 
 ### Task 1: Restore the per-book sync flyout bridge
 
 **Files:**
-- Modify: `Hoshi.Tests/Views/Pages/NovelLibraryPageAssetTests.cs`
-- Modify: `Hoshi/Views/Pages/NovelLibraryPage.xaml`
-- Modify: `Hoshi/Views/Pages/NovelLibraryPage.xaml.cs`
+- Modify: `Niratan.Tests/Views/Pages/NovelLibraryPageAssetTests.cs`
+- Modify: `Niratan/Views/Pages/NovelLibraryPage.xaml`
+- Modify: `Niratan/Views/Pages/NovelLibraryPage.xaml.cs`
 
 **Interfaces:**
 - Consumes: `NovelLibraryPageViewModel.ShowAutomaticBookSyncAction : bool`
@@ -84,7 +84,7 @@ public void LocalNovelSyncFlyout_UsesExplicitUiBridgeInsteadOfCrossNamescopeBind
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageAssetTests.LocalNovelSyncFlyout_UsesExplicitUiBridgeInsteadOfCrossNamescopeBindings"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageAssetTests.LocalNovelSyncFlyout_UsesExplicitUiBridgeInsteadOfCrossNamescopeBindings"
 ```
 
 Expected: FAIL because `NovelBookContextFlyout_Opening` and the three click handlers are absent, while the broken `ElementName` command and visibility bindings are still present.
@@ -194,7 +194,7 @@ These handlers must not inspect timestamps, choose directions, call services, or
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageAssetTests.LocalNovelSyncFlyout_UsesExplicitUiBridgeInsteadOfCrossNamescopeBindings"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageAssetTests.LocalNovelSyncFlyout_UsesExplicitUiBridgeInsteadOfCrossNamescopeBindings"
 ```
 
 Expected: PASS.
@@ -204,7 +204,7 @@ Expected: PASS.
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageAssetTests|FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~TtuSyncServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageAssetTests|FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~TtuSyncServiceTests"
 ```
 
 Expected: all selected tests PASS, including the existing Auto/Import/Export direction mapping, result notification, cancellation, and deduplication tests.
@@ -212,16 +212,16 @@ Expected: all selected tests PASS, including the existing Auto/Import/Export dir
 - [ ] **Step 7: Commit the tested fix**
 
 ```powershell
-git add -- Hoshi.Tests/Views/Pages/NovelLibraryPageAssetTests.cs Hoshi/Views/Pages/NovelLibraryPage.xaml Hoshi/Views/Pages/NovelLibraryPage.xaml.cs
+git add -- Niratan.Tests/Views/Pages/NovelLibraryPageAssetTests.cs Niratan/Views/Pages/NovelLibraryPage.xaml Niratan/Views/Pages/NovelLibraryPage.xaml.cs
 git commit -m "fix(sync): restore per-book flyout commands"
 ```
 
 ### Task 2: Verify the x64 app and Niratan menu behavior
 
 **Files:**
-- Verify only: `Hoshi/Hoshi.csproj`
-- Verify only: `Hoshi.Tests/Hoshi.Tests.csproj`
-- Verify only: `Hoshi/Views/Pages/NovelLibraryPage.xaml`
+- Verify only: `Niratan/Niratan.csproj`
+- Verify only: `Niratan.Tests/Niratan.Tests.csproj`
+- Verify only: `Niratan/Views/Pages/NovelLibraryPage.xaml`
 
 **Interfaces:**
 - Consumes: the Task 1 flyout handlers and existing ViewModel commands.
@@ -232,13 +232,13 @@ git commit -m "fix(sync): restore per-book flyout commands"
 Run from `D:\CODE\Yukari\.worktrees\niratan-sync-parity`:
 
 ```powershell
-$exe = [System.IO.Path]::GetFullPath('.\Hoshi\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64\Hoshi.exe')
-Get-CimInstance Win32_Process -Filter "Name='Hoshi.exe'" |
+$exe = [System.IO.Path]::GetFullPath('.\Niratan\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64\Niratan.exe')
+Get-CimInstance Win32_Process -Filter "Name='Niratan.exe'" |
     Where-Object { $_.ExecutablePath -eq $exe } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 ```
 
-Expected: only the exact `niratan-sync-parity` process stops; main-checkout and installed Hoshi processes remain untouched.
+Expected: only the exact `niratan-sync-parity` process stops; main-checkout and installed Niratan processes remain untouched.
 
 - [ ] **Step 2: Run the repository-required x64 build**
 
@@ -251,7 +251,7 @@ Expected: build succeeds with 0 errors. Existing NU1903 warnings do not fail the
 - [ ] **Step 3: Run the complete x64 test suite**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: all tests PASS. Existing xUnit1051 warnings may remain; no new warning category should be introduced by this fix.
@@ -259,12 +259,12 @@ Expected: all tests PASS. Existing xUnit1051 warnings may remain; no new warning
 - [ ] **Step 4: Launch the exact sync-worktree executable**
 
 ```powershell
-$exe = 'D:\CODE\Yukari\.worktrees\niratan-sync-parity\Hoshi\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64\Hoshi.exe'
+$exe = 'D:\CODE\Yukari\.worktrees\niratan-sync-parity\Niratan\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64\Niratan.exe'
 $outDir = Split-Path -Parent $exe
 Start-Process -FilePath $exe -WorkingDirectory $outDir
 ```
 
-Verify with process inspection that the running `Hoshi.exe` path equals `$exe`, its main window handle is non-zero, its title is `Hoshi`, and it is responding. Leave this verified worktree instance running.
+Verify with process inspection that the running `Niratan.exe` path equals `$exe`, its main window handle is non-zero, its title is `Niratan`, and it is responding. Leave this verified worktree instance running.
 
 - [ ] **Step 5: Verify Manual mode exposes one Sync entry**
 

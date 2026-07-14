@@ -22,17 +22,17 @@
 
 ## File Structure
 
-- `Hoshi/Views/Dictionary/DictionaryPopupMaterial.cs`: canonical theme-aware popup surface and outline colors.
-- `Hoshi/Views/Dictionary/DictionaryLookupPopup.cs`: native shell radius, border brush, border thickness, guard geometry, and theme synchronization.
-- `Hoshi/Web/DictionaryPopup/popup.css`: theme tokens and visual treatment for glossary cards; scrollbar blocks remain byte-for-byte unchanged.
-- `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`: source-level regression coverage for native shell, exact theme colors, card CSS, and preserved scrollbar chrome.
+- `Niratan/Views/Dictionary/DictionaryPopupMaterial.cs`: canonical theme-aware popup surface and outline colors.
+- `Niratan/Views/Dictionary/DictionaryLookupPopup.cs`: native shell radius, border brush, border thickness, guard geometry, and theme synchronization.
+- `Niratan/Web/DictionaryPopup/popup.css`: theme tokens and visual treatment for glossary cards; scrollbar blocks remain byte-for-byte unchanged.
+- `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`: source-level regression coverage for native shell, exact theme colors, card CSS, and preserved scrollbar chrome.
 
 ### Task 1: Native 8 DIP Outlined Popup Shell
 
 **Files:**
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs:1054`
-- Modify: `Hoshi/Views/Dictionary/DictionaryPopupMaterial.cs:43`
-- Modify: `Hoshi/Views/Dictionary/DictionaryLookupPopup.cs:48-170, 315-334`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs:1054`
+- Modify: `Niratan/Views/Dictionary/DictionaryPopupMaterial.cs:43`
+- Modify: `Niratan/Views/Dictionary/DictionaryLookupPopup.cs:48-170, 315-334`
 
 **Interfaces:**
 - Consumes: existing `DictionaryPopupMaterial.GetOpaqueSurfaceColor(ThemeMode)` and `DictionaryPopupCornerGuard.CalculateInset(double)`.
@@ -68,7 +68,7 @@ Remove the obsolete assertions that forbid `_strokeBrush` / `BorderBrush`; keep 
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryLookupPopup_UsesFluentFloatingCardShell"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryLookupPopup_UsesFluentFloatingCardShell"
 ```
 
 Expected: FAIL because `_outlineBrush`, `GetOutlineColor`, the 8 DIP default radius, and `BorderThickness` do not exist yet.
@@ -141,7 +141,7 @@ Do not alter `UseStandaloneWindowVisuals`, `UseNakedFloatingWindowVisuals`, `Set
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryLookupPopup_UsesFluentFloatingCardShell|FullyQualifiedName~DictionaryPopupCornerGuardTests|FullyQualifiedName~DictionaryPopup_WebDocumentUsesOpaqueHostSurface"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryLookupPopup_UsesFluentFloatingCardShell|FullyQualifiedName~DictionaryPopupCornerGuardTests|FullyQualifiedName~DictionaryPopup_WebDocumentUsesOpaqueHostSurface"
 ```
 
 Expected: PASS with no failed tests.
@@ -149,18 +149,18 @@ Expected: PASS with no failed tests.
 - [ ] **Step 6: Commit the native shell change**
 
 ```powershell
-git add -- Hoshi/Views/Dictionary/DictionaryPopupMaterial.cs Hoshi/Views/Dictionary/DictionaryLookupPopup.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add -- Niratan/Views/Dictionary/DictionaryPopupMaterial.cs Niratan/Views/Dictionary/DictionaryLookupPopup.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "style: match dictionary popup desktop shell"
 ```
 
 ### Task 2: Theme-aware Dictionary Cards Without Scrollbar Changes
 
 **Files:**
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs:229-245, 276-310`
-- Modify: `Hoshi/Web/DictionaryPopup/popup.css:12-24, 348-360, 563-607`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs:229-245, 276-310`
+- Modify: `Niratan/Web/DictionaryPopup/popup.css:12-24, 348-360, 563-607`
 
 **Interfaces:**
-- Consumes: the existing `data-hoshi-color-scheme` theme attribute emitted by `PopupHtmlGenerator`.
+- Consumes: the existing `data-niratan-color-scheme` theme attribute emitted by `PopupHtmlGenerator`.
 - Produces: CSS variables `--popup-card-border-color`, `--popup-card-inner-highlight`, and `--popup-card-shadow-color`, consumed only by `.glossary-group`.
 
 - [ ] **Step 1: Add the failing card-style regression assertions**
@@ -193,7 +193,7 @@ Keep `DictionaryPopup_UsesPanningIndicatorScrollbarChrome` unchanged; it remains
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopup_UsesDesktopReferenceDictionaryCards|FullyQualifiedName~DictionaryPopup_UsesPanningIndicatorScrollbarChrome"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopup_UsesDesktopReferenceDictionaryCards|FullyQualifiedName~DictionaryPopup_UsesPanningIndicatorScrollbarChrome"
 ```
 
 Expected: one FAIL for missing card variables and one PASS for unchanged scrollbar chrome.
@@ -226,7 +226,7 @@ Change only the visual declarations in `.glossary-group`:
 
 - [ ] **Step 4: Add explicit dark-theme card variables**
 
-Add the following three declarations to both existing dark-theme variable blocks: the `@media (prefers-color-scheme: dark)` `html, body` block and the `html[data-hoshi-color-scheme="dark"]` block:
+Add the following three declarations to both existing dark-theme variable blocks: the `@media (prefers-color-scheme: dark)` `html, body` block and the `html[data-niratan-color-scheme="dark"]` block:
 
 ```css
 --popup-card-border-color: rgba(255, 255, 255, 0.18);
@@ -241,7 +241,7 @@ Delete the two now-redundant dark `.glossary-group` rules that override `border-
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopup_UsesDesktopReferenceDictionaryCards|FullyQualifiedName~DictionaryPopup_UsesPanningIndicatorScrollbarChrome|FullyQualifiedName~DictionaryPopup_WebDocumentUsesOpaqueHostSurface|FullyQualifiedName~DictionaryPopup_UsesNiratanStyleTwoColumnDictionaryCards"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopup_UsesDesktopReferenceDictionaryCards|FullyQualifiedName~DictionaryPopup_UsesPanningIndicatorScrollbarChrome|FullyQualifiedName~DictionaryPopup_WebDocumentUsesOpaqueHostSurface|FullyQualifiedName~DictionaryPopup_UsesNiratanStyleTwoColumnDictionaryCards"
 ```
 
 Expected: PASS with no failed tests.
@@ -249,7 +249,7 @@ Expected: PASS with no failed tests.
 - [ ] **Step 6: Commit the dictionary card change**
 
 ```powershell
-git add -- Hoshi/Web/DictionaryPopup/popup.css Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add -- Niratan/Web/DictionaryPopup/popup.css Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "style: match dictionary popup desktop cards"
 ```
 
@@ -267,7 +267,7 @@ git commit -m "style: match dictionary popup desktop cards"
 Run:
 
 ```powershell
-node --check Hoshi/Web/DictionaryPopup/popup.js
+node --check Niratan/Web/DictionaryPopup/popup.js
 ```
 
 Expected: exit code 0 and no output.
@@ -277,7 +277,7 @@ Expected: exit code 0 and no output.
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"
 ```
 
 Expected: PASS with no failed tests.
@@ -288,12 +288,12 @@ Run:
 
 ```powershell
 dotnet build -p:Platform=x64
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: both commands exit 0 with no failed tests.
 
-- [ ] **Step 4: Launch Hoshi and verify objective startup**
+- [ ] **Step 4: Launch Niratan and verify objective startup**
 
 Run:
 
@@ -301,7 +301,7 @@ Run:
 .\build-and-run.ps1
 ```
 
-Expected: a responsive Hoshi top-level window opens. If an existing instance locks build output, close that instance, rebuild, and relaunch.
+Expected: a responsive Niratan top-level window opens. If an existing instance locks build output, close that instance, rebuild, and relaunch.
 
 - [ ] **Step 5: Verify popup appearance and preserved behavior**
 
@@ -314,7 +314,7 @@ Open `C:\Users\Wight\Downloads\哈利波特1魔法石.epub`, show a root lookup 
 - first-frame reveal has no black/white flash or corner wedge;
 - scrolling, resize, nested lookup, and Shift-hover remain responsive.
 
-Repeat at 100% scaling and one available high-DPI scaling configuration. Leave the final verified Hoshi instance running.
+Repeat at 100% scaling and one available high-DPI scaling configuration. Leave the final verified Niratan instance running.
 
 - [ ] **Step 6: Inspect the final diff and repository state**
 
@@ -322,7 +322,7 @@ Run:
 
 ```powershell
 git diff HEAD~2 --check
-git diff HEAD~2 -- Hoshi/Views/Dictionary/DictionaryPopupMaterial.cs Hoshi/Views/Dictionary/DictionaryLookupPopup.cs Hoshi/Web/DictionaryPopup/popup.css Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git diff HEAD~2 -- Niratan/Views/Dictionary/DictionaryPopupMaterial.cs Niratan/Views/Dictionary/DictionaryLookupPopup.cs Niratan/Web/DictionaryPopup/popup.css Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git status --short
 ```
 

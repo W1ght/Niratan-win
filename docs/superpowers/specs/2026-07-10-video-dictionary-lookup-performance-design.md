@@ -73,7 +73,7 @@ entry and posts generation-scoped `contentReady`, making the popup visible.
 
 After the initial injection returns, C# schedules deferred batches without
 blocking `ShowLookupAsync`. Each deferred batch is serialized independently and
-sent through a narrow `window.hoshiAppendResults(entries, finalCount,
+sent through a narrow `window.niratanAppendResults(entries, finalCount,
 generation)` function. The JavaScript side appends the entries to
 `window.lookupEntries`, updates `window.entryCount`, and continues rendering in
 animation-frame-sized work.
@@ -178,7 +178,7 @@ the optimization does not add more per-entry information-level logging.
 
 - Build x64 and run the dictionary and video lookup test filters.
 - Run the full x64 test suite.
-- Launch Hoshi and open the configured test video/subtitle workflow.
+- Launch Niratan and open the configured test video/subtitle workflow.
 - Verify the popup is already warm before the first lookup.
 - Verify click lookup and Shift-hover across several characters.
 - Verify all configured results eventually appear in stable order.

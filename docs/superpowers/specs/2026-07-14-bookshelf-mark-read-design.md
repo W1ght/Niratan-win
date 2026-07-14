@@ -7,7 +7,7 @@ Add a localized, icon-free **Mark Read** action to each local novel card's conte
 ## User experience
 
 - The action is available from every local novel card context menu, including books already at 100%.
-- The menu item has no icon, matching the current Hoshi Windows bookshelf menu treatment.
+- The menu item has no icon, matching the current Niratan Windows bookshelf menu treatment.
 - Selecting it opens a localized confirmation whose title is `Mark "{book title}" as read?` / `将“{书名}”标记为已读？`.
 - The dialog uses localized `Confirm` / `Cancel` buttons and defaults to cancel.
 - Cancelling performs no write and no catalog refresh.

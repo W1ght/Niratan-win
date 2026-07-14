@@ -22,10 +22,10 @@
 ### Task 1: Remote Book Transport
 
 **Files:**
-- Modify: `Hoshi/Models/Sync/TtuSyncModels.cs`
-- Modify: `Hoshi/Services/Sync/ITtuSyncRemoteStore.cs`
-- Modify: `Hoshi/Services/Sync/GoogleDriveTtuSyncRemoteStore.cs`
-- Test: `Hoshi.Tests/Services/Sync/GoogleDriveTtuSyncRemoteStoreTests.cs`
+- Modify: `Niratan/Models/Sync/TtuSyncModels.cs`
+- Modify: `Niratan/Services/Sync/ITtuSyncRemoteStore.cs`
+- Modify: `Niratan/Services/Sync/GoogleDriveTtuSyncRemoteStore.cs`
+- Test: `Niratan.Tests/Services/Sync/GoogleDriveTtuSyncRemoteStoreTests.cs`
 
 **Interfaces:**
 - Produces `TtuRemoteBook`, `ListRemoteBooksAsync`, and `DownloadBookDataAsync`.
@@ -38,10 +38,10 @@
 ### Task 2: TTU Book Import Service
 
 **Files:**
-- Create: `Hoshi/Services/Sync/ITtuBookImportService.cs`
-- Create: `Hoshi/Services/Sync/TtuBookImportService.cs`
-- Modify: `Hoshi/App.xaml.cs`
-- Test: `Hoshi.Tests/Services/Sync/TtuBookImportServiceTests.cs`
+- Create: `Niratan/Services/Sync/ITtuBookImportService.cs`
+- Create: `Niratan/Services/Sync/TtuBookImportService.cs`
+- Modify: `Niratan/App.xaml.cs`
+- Test: `Niratan.Tests/Services/Sync/TtuBookImportServiceTests.cs`
 
 **Interfaces:**
 - Consumes `ITtuSyncRemoteStore`, `INovelLibraryService`, `ITtuSyncService`.
@@ -55,8 +55,8 @@
 ### Task 3: Bookshelf ViewModel
 
 **Files:**
-- Modify: `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs`
-- Test: `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs`
+- Test: `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
 
 **Interfaces:**
 - Consumes `ITtuSyncRemoteStore`, `ITtuBookImportService`, `ISettingsService`.
@@ -70,10 +70,10 @@
 ### Task 4: Homepage UI
 
 **Files:**
-- Modify: `Hoshi/Views/Pages/NovelLibraryPage.xaml`
-- Modify: `Hoshi/Strings/en-US/Resources.resw`
-- Modify: `Hoshi/Strings/zh-CN/Resources.resw`
-- Test: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs` or a new sync asset test if narrower.
+- Modify: `Niratan/Views/Pages/NovelLibraryPage.xaml`
+- Modify: `Niratan/Strings/en-US/Resources.resw`
+- Modify: `Niratan/Strings/zh-CN/Resources.resw`
+- Test: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs` or a new sync asset test if narrower.
 
 **Interfaces:**
 - Binds to `NovelLibraryPageViewModel.RemoteBooks` and commands.
@@ -89,5 +89,5 @@
 - No production files unless test failures identify a small fix.
 
 - [ ] Run `dotnet build -p:Platform=x64`.
-- [ ] Run `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`.
-- [ ] Launch `Hoshi.exe`, confirm top-level `Hoshi` window responds, then close it if continuing work.
+- [ ] Run `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`.
+- [ ] Launch `Niratan.exe`, confirm top-level `Niratan` window responds, then close it if continuing work.

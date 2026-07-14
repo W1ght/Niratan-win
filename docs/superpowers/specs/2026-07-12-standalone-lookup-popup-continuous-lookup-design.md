@@ -6,7 +6,7 @@
 
 ## 当前问题与根因
 
-`Hoshi/Web/DictionaryPopup/popup.js` 已经具备 popup 内连续查词入口：
+`Niratan/Web/DictionaryPopup/popup.js` 已经具备 popup 内连续查词入口：
 
 - 鼠标单击正文时调用 `lookupAtPopupPoint(...)`。
 - 按住 Shift 移动鼠标时调用同一文本命中流程。
@@ -29,7 +29,7 @@
 
 使用指针相对 `DictionaryPanelRoot` 的坐标和实际尺寸判断是否点在结果区内。
 
-优点：仍可点击页面空白关闭。缺点：继续维护第二套关闭策略，并需要处理布局变化、DPI、子 popup 超出根面板边界等情况；仍与 Hoshi 的点外策略冲突。
+优点：仍可点击页面空白关闭。缺点：继续维护第二套关闭策略，并需要处理布局变化、DPI、子 popup 超出根面板边界等情况；仍与 Niratan 的点外策略冲突。
 
 ### 方案 C：在 WebView2 或 overlay 中转发并消费指针
 
@@ -67,15 +67,15 @@
 
 ## 架构与改动边界
 
-- `Hoshi/Views/Pages/NovelLookupPage.xaml.cs`
+- `Niratan/Views/Pages/NovelLookupPage.xaml.cs`
   - 移除页面级 `PointerPressed` 注册、注销和 `OnPagePointerPressed` 关闭处理器。
   - 保留主搜索、无结果关闭、尺寸同步、预热和生命周期清理。
-- `Hoshi/Web/DictionaryPopup/popup.js`
+- `Niratan/Web/DictionaryPopup/popup.js`
   - 复用已有单击和 Shift 连续查词实现；只有回归测试证明存在遗漏时才做最小修正。
-- `Hoshi/Views/Dictionary/DictionaryPopupOverlay.cs`
+- `Niratan/Views/Dictionary/DictionaryPopupOverlay.cs`
   - 复用已有 `lookupRedirect`、`Nested` 路由、子 host 池和栈清理逻辑。
   - 不改变当前工作区中已有的嵌入式根 popup 尺寸修正。
-- `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs` 与现有 popup 单元测试
+- `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs` 与现有 popup 单元测试
   - 先增加失败的回归契约，再实现最小修复。
 
 不修改 `native/hoshidicts/`，不增加依赖，不把字典查询逻辑放进 JavaScript，不重写 Yomitan structured content。

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make Hoshi reliably replace same-title dictionaries, retry observed Windows path-conversion failures, and give large valid Yomitan archives a safe size-aware native import timeout.
+**Goal:** Make Niratan reliably replace same-title dictionaries, retry observed Windows path-conversion failures, and give large valid Yomitan archives a safe size-aware native import timeout.
 
 **Architecture:** Keep the existing C# staging flow and `hoshidicts` backend. Add a focused filesystem transaction helper for prepared copies, stable title-based replacement, backup, and rollback; extend the C API wrapper with a timeout-aware export whose worker state is heap-owned; keep the existing lookup-safe compatibility ZIP behavior.
 
@@ -23,8 +23,8 @@
 ### Task 1: Specify managed timeout and retry classification
 
 **Files:**
-- Modify: `Hoshi.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs`
-- Modify: `Hoshi/Services/Dictionary/DictionaryImportService.cs`
+- Modify: `Niratan.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs`
+- Modify: `Niratan/Services/Dictionary/DictionaryImportService.cs`
 
 **Interfaces:**
 - Produces: `internal static int GetNativeImportTimeoutSeconds(long zipSizeBytes)`
@@ -80,7 +80,7 @@ public void DictionaryImportService_ComputesSizeAwareNativeTimeout(long bytes, i
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryImportService_RetriesObservedWindowsCharacterConversionFailures|FullyQualifiedName~DictionaryImportService_DoesNotRetryInvalidDictionaryFormats|FullyQualifiedName~DictionaryImportService_ComputesSizeAwareNativeTimeout"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryImportService_RetriesObservedWindowsCharacterConversionFailures|FullyQualifiedName~DictionaryImportService_DoesNotRetryInvalidDictionaryFormats|FullyQualifiedName~DictionaryImportService_ComputesSizeAwareNativeTimeout"
 ```
 
 Expected: compilation fails because the retry classifier is private and `GetNativeImportTimeoutSeconds` does not exist.
@@ -133,7 +133,7 @@ Run the Step 3 command again. Expected: all new tests pass.
 - [ ] **Step 6: Commit managed classification and timeout policy**
 
 ```powershell
-git add -- Hoshi/Services/Dictionary/DictionaryImportService.cs Hoshi.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs
+git add -- Niratan/Services/Dictionary/DictionaryImportService.cs Niratan.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs
 git commit -m "fix(dictionary): classify import retries and timeouts"
 ```
 
@@ -144,9 +144,9 @@ git commit -m "fix(dictionary): classify import retries and timeouts"
 **Files:**
 - Modify: `native/hoshidicts_c_api/hoshidicts_c_api.h`
 - Modify: `native/hoshidicts_c_api/hoshidicts_c_api.cpp`
-- Modify: `Hoshi/Services/Dictionary/HoshiDictsNative.cs`
-- Modify: `Hoshi/Services/Dictionary/DictionaryImportService.cs`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Niratan/Services/Dictionary/HoshiDictsNative.cs`
+- Modify: `Niratan/Services/Dictionary/DictionaryImportService.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
 - Produces: `hoshi_import_with_timeout(const char*, const char*, int)`
@@ -165,11 +165,11 @@ private static string FindRepositoryRoot()
          directory != null;
          directory = directory.Parent)
     {
-        if (File.Exists(Path.Combine(directory.FullName, "Hoshi.slnx")))
+        if (File.Exists(Path.Combine(directory.FullName, "Niratan.slnx")))
             return directory.FullName;
     }
 
-    throw new DirectoryNotFoundException("Could not locate the Hoshi repository root.");
+    throw new DirectoryNotFoundException("Could not locate the Niratan repository root.");
 }
 
 [Fact]
@@ -178,8 +178,8 @@ public void DictionaryNativeImport_UsesTimeoutAwareHeapOwnedWorkerContract()
     var root = FindRepositoryRoot();
     var header = File.ReadAllText(Path.Combine(root, "native", "hoshidicts_c_api", "hoshidicts_c_api.h"));
     var source = File.ReadAllText(Path.Combine(root, "native", "hoshidicts_c_api", "hoshidicts_c_api.cpp"));
-    var pinvoke = File.ReadAllText(Path.Combine(root, "Hoshi", "Services", "Dictionary", "HoshiDictsNative.cs"));
-    var service = File.ReadAllText(Path.Combine(root, "Hoshi", "Services", "Dictionary", "DictionaryImportService.cs"));
+    var pinvoke = File.ReadAllText(Path.Combine(root, "Niratan", "Services", "Dictionary", "HoshiDictsNative.cs"));
+    var service = File.ReadAllText(Path.Combine(root, "Niratan", "Services", "Dictionary", "DictionaryImportService.cs"));
 
     header.Should().Contain("hoshi_import_with_timeout");
     source.Should().Contain("struct ImportThreadState");
@@ -196,7 +196,7 @@ public void DictionaryNativeImport_UsesTimeoutAwareHeapOwnedWorkerContract()
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryNativeImport_UsesTimeoutAwareHeapOwnedWorkerContract"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryNativeImport_UsesTimeoutAwareHeapOwnedWorkerContract"
 ```
 
 Expected: assertions fail because the new export and heap-owned state do not exist.
@@ -206,7 +206,7 @@ Expected: assertions fail because the new export and heap-owned state do not exi
 Add to the C header:
 
 ```cpp
-HOSHI_API char* hoshi_import_with_timeout(
+NIRATAN_API char* hoshi_import_with_timeout(
     const char* zip_path,
     const char* output_dir,
     int timeout_seconds);
@@ -258,7 +258,7 @@ success, join and move/copy `state->result` into the response. If poisoned befor
 starting, return a failure immediately. Implement the compatibility wrapper:
 
 ```cpp
-HOSHI_API char* hoshi_import(const char* zip_path, const char* output_dir) {
+NIRATAN_API char* hoshi_import(const char* zip_path, const char* output_dir) {
   return hoshi_import_with_timeout(zip_path, output_dir, 3 * 60);
 }
 ```
@@ -291,7 +291,7 @@ Expected: C++ build succeeds and `native/out/hoshidicts_c_api.dll` has a fresh t
 - [ ] **Step 7: Run the contract and managed dictionary-import tests**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryNativeImport_UsesTimeoutAwareHeapOwnedWorkerContract|FullyQualifiedName~DictionaryImportService"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryNativeImport_UsesTimeoutAwareHeapOwnedWorkerContract|FullyQualifiedName~DictionaryImportService"
 ```
 
 Expected: all selected tests pass.
@@ -299,7 +299,7 @@ Expected: all selected tests pass.
 - [ ] **Step 8: Commit the timeout-aware native bridge**
 
 ```powershell
-git add -- native/hoshidicts_c_api/hoshidicts_c_api.h native/hoshidicts_c_api/hoshidicts_c_api.cpp Hoshi/Services/Dictionary/HoshiDictsNative.cs Hoshi/Services/Dictionary/DictionaryImportService.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add -- native/hoshidicts_c_api/hoshidicts_c_api.h native/hoshidicts_c_api/hoshidicts_c_api.cpp Niratan/Services/Dictionary/HoshiDictsNative.cs Niratan/Services/Dictionary/DictionaryImportService.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "fix(dictionary): harden native import timeout"
 ```
 
@@ -308,9 +308,9 @@ git commit -m "fix(dictionary): harden native import timeout"
 ### Task 3: Implement transactional same-title replacement
 
 **Files:**
-- Create: `Hoshi/Services/Dictionary/DictionaryImportCommitter.cs`
-- Modify: `Hoshi/Services/Dictionary/DictionaryImportService.cs`
-- Modify: `Hoshi.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs`
+- Create: `Niratan/Services/Dictionary/DictionaryImportCommitter.cs`
+- Modify: `Niratan/Services/Dictionary/DictionaryImportService.cs`
+- Modify: `Niratan.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs`
 
 **Interfaces:**
 - Produces: `DictionaryImportCommitter.Commit(string dictionaryRoot, string importedDirectory, string displayTitle, IReadOnlyList<DictionaryType> types, string transactionId)`
@@ -349,8 +349,8 @@ public async Task DictionaryImportService_ReplacesSameTitleDictionaryPayload()
 
 - [ ] **Step 3: Add a failing compatibility-directory identity test**
 
-Seed `Term/hoshi-import-existing` with an index title of `SameTitle`, then import a
-new `SameTitle` ZIP. Assert `hoshi-import-existing` remains the only directory and
+Seed `Term/niratan-import-existing` with an index title of `SameTitle`, then import a
+new `SameTitle` ZIP. Assert `niratan-import-existing` remains the only directory and
 its revision changes to `v2`.
 
 - [ ] **Step 4: Add a failing rollback integration test**
@@ -363,7 +363,7 @@ rebuild was not called.
 - [ ] **Step 5: Run the three replacement tests and verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryImportService_ReplacesSameTitleDictionaryPayload|FullyQualifiedName~DictionaryImportService_ReusesCompatibilityDirectoryForSameTitle|FullyQualifiedName~DictionaryImportService_RollsBackReplacementWhenLaterTypeCommitFails"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryImportService_ReplacesSameTitleDictionaryPayload|FullyQualifiedName~DictionaryImportService_ReusesCompatibilityDirectoryForSameTitle|FullyQualifiedName~DictionaryImportService_RollsBackReplacementWhenLaterTypeCommitFails"
 ```
 
 Expected: replacement retains v1 or creates a second directory, compatibility
@@ -410,7 +410,7 @@ delete a backup whose target is missing.
 - [ ] **Step 9: Run replacement and existing import tests and verify GREEN**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryImportService"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryImportService"
 ```
 
 Expected: all new and existing import tests pass.
@@ -418,13 +418,13 @@ Expected: all new and existing import tests pass.
 - [ ] **Step 10: Commit transactional replacement**
 
 ```powershell
-git add -- Hoshi/Services/Dictionary/DictionaryImportCommitter.cs Hoshi/Services/Dictionary/DictionaryImportService.cs Hoshi.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs
+git add -- Niratan/Services/Dictionary/DictionaryImportCommitter.cs Niratan/Services/Dictionary/DictionaryImportService.cs Niratan.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs
 git commit -m "fix(dictionary): replace same-title imports atomically"
 ```
 
 ---
 
-### Task 4: Verify behavior, document the root-cause fix, and launch Hoshi
+### Task 4: Verify behavior, document the root-cause fix, and launch Niratan
 
 **Files:**
 - Modify: `docs/CHANGELOG.md`
@@ -458,7 +458,7 @@ Expected: no file or submodule pointer change under `native/hoshidicts/`.
 - [ ] **Step 3: Run dictionary tests**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"
 ```
 
 Expected: zero failures.
@@ -467,7 +467,7 @@ Expected: zero failures.
 
 ```powershell
 dotnet build -p:Platform=x64
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: build succeeds and the full test suite has zero failures. Record the
@@ -479,7 +479,7 @@ existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 warning separately if it remains.
 .\build-and-run.ps1
 ```
 
-Confirm a responsive Hoshi top-level window appears. Import two small test ZIPs
+Confirm a responsive Niratan top-level window appears. Import two small test ZIPs
 with the same title and different revisions, then verify the dictionary list has
 one entry and lookup uses the second payload. Leave the verified app instance
 running.

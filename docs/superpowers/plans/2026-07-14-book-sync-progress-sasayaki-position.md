@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Build only x64 with `dotnet build -p:Platform=x64`; do not build ARM64 by default.
-- Run tests with `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`.
+- Run tests with `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`.
 - Do not modify any file under `native/hoshidicts/`.
 - Preserve the View → ViewModel → Service layering; code-behind only coordinates UI controls and file pickers.
 - Do not change Google Drive file formats, TTU filenames, or remote data models.
@@ -23,18 +23,18 @@
 
 ## File Structure
 
-- `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs` — expose book-sync busy state from the existing `_activeNovelSyncs` set.
-- `Hoshi/Views/Pages/NovelLibraryPage.xaml` — render the blocking native WinUI synchronization overlay.
-- `Hoshi/Strings/en-US/Resources.resw` — English overlay name and visible text.
-- `Hoshi/Strings/zh-CN/Resources.resw` — Simplified Chinese overlay name and visible text.
-- `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs` — verify single, concurrent, duplicate, unavailable, failure, and cancellation busy-state transitions.
-- `Hoshi.Tests/Views/Pages/NovelLibraryPageAssetTests.cs` — verify the XAML overlay, binding, localization, automation ID, and hit-test surface.
-- `Hoshi/Services/Sasayaki/SasayakiMatchService.cs` — stop match creation from owning or resetting playback state.
-- `Hoshi/Services/Sasayaki/SasayakiPlayer.cs` — retain a requested seek until media is open and clamp it against the real duration.
-- `Hoshi/Views/Pages/NovelReaderPage.xaml.cs` — load the existing playback state through the sidecar service and apply it to the newly loaded player.
-- `Hoshi.Tests/Services/Sasayaki/SasayakiMatchServiceTests.cs` — integration-test match creation against a real playback sidecar.
-- `Hoshi.Tests/Services/Sasayaki/SasayakiPlayerTests.cs` — test saved-position normalization before and after media duration is known.
-- `Hoshi.Tests/Views/Pages/NovelReaderSasayakiAssetTests.cs` — constrain Reader import orchestration to load/apply, never reset, playback state.
+- `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs` — expose book-sync busy state from the existing `_activeNovelSyncs` set.
+- `Niratan/Views/Pages/NovelLibraryPage.xaml` — render the blocking native WinUI synchronization overlay.
+- `Niratan/Strings/en-US/Resources.resw` — English overlay name and visible text.
+- `Niratan/Strings/zh-CN/Resources.resw` — Simplified Chinese overlay name and visible text.
+- `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs` — verify single, concurrent, duplicate, unavailable, failure, and cancellation busy-state transitions.
+- `Niratan.Tests/Views/Pages/NovelLibraryPageAssetTests.cs` — verify the XAML overlay, binding, localization, automation ID, and hit-test surface.
+- `Niratan/Services/Sasayaki/SasayakiMatchService.cs` — stop match creation from owning or resetting playback state.
+- `Niratan/Services/Sasayaki/SasayakiPlayer.cs` — retain a requested seek until media is open and clamp it against the real duration.
+- `Niratan/Views/Pages/NovelReaderPage.xaml.cs` — load the existing playback state through the sidecar service and apply it to the newly loaded player.
+- `Niratan.Tests/Services/Sasayaki/SasayakiMatchServiceTests.cs` — integration-test match creation against a real playback sidecar.
+- `Niratan.Tests/Services/Sasayaki/SasayakiPlayerTests.cs` — test saved-position normalization before and after media duration is known.
+- `Niratan.Tests/Views/Pages/NovelReaderSasayakiAssetTests.cs` — constrain Reader import orchestration to load/apply, never reset, playback state.
 - `docs/CHANGELOG.md` — record the root causes and the focused fixes.
 
 ---
@@ -42,12 +42,12 @@
 ### Task 1: Niratan-Aligned Bookshelf Sync Overlay
 
 **Files:**
-- Modify: `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs`
-- Modify: `Hoshi/Views/Pages/NovelLibraryPage.xaml`
-- Modify: `Hoshi/Strings/en-US/Resources.resw`
-- Modify: `Hoshi/Strings/zh-CN/Resources.resw`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
-- Modify: `Hoshi.Tests/Views/Pages/NovelLibraryPageAssetTests.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs`
+- Modify: `Niratan/Views/Pages/NovelLibraryPage.xaml`
+- Modify: `Niratan/Strings/en-US/Resources.resw`
+- Modify: `Niratan/Strings/zh-CN/Resources.resw`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
+- Modify: `Niratan.Tests/Views/Pages/NovelLibraryPageAssetTests.cs`
 
 **Interfaces:**
 - Consumes: `ConcurrentDictionary<string, byte> _activeNovelSyncs`, `Task SyncNovelCoreAsync(NovelBookItemViewModel, TtuSyncDirection)`, and `BooleanToVisibilityConverter`.
@@ -125,7 +125,7 @@ sut.IsBookSyncing.Should().BeFalse();
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageViewModelTests.SyncNovelCommand_KeepsBusyStateUntilEveryBookFinishes|FullyQualifiedName~NovelLibraryPageViewModelTests.SyncNovelCommand_WhenSyncUnavailable_DoesNotCallServiceAndShowsError|FullyQualifiedName~NovelLibraryPageViewModelTests.SyncNovelCommand_WhenServiceFails_ShowsLocalizedError|FullyQualifiedName~NovelLibraryPageViewModelTests.SyncNovelCommand_WhenCancelled_ShowsNoError|FullyQualifiedName~NovelLibraryPageViewModelTests.SyncNovelCommand_DeduplicatesSameBookButAllowsDifferentBooks"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageViewModelTests.SyncNovelCommand_KeepsBusyStateUntilEveryBookFinishes|FullyQualifiedName~NovelLibraryPageViewModelTests.SyncNovelCommand_WhenSyncUnavailable_DoesNotCallServiceAndShowsError|FullyQualifiedName~NovelLibraryPageViewModelTests.SyncNovelCommand_WhenServiceFails_ShowsLocalizedError|FullyQualifiedName~NovelLibraryPageViewModelTests.SyncNovelCommand_WhenCancelled_ShowsNoError|FullyQualifiedName~NovelLibraryPageViewModelTests.SyncNovelCommand_DeduplicatesSameBookButAllowsDifferentBooks"
 ```
 
 Expected: compilation fails because `NovelLibraryPageViewModel` does not expose `IsBookSyncing`.
@@ -200,7 +200,7 @@ public void BookSyncProgressOverlay_IsBlockingLocalizedAndBoundToBusyState()
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageAssetTests.BookSyncProgressOverlay_IsBlockingLocalizedAndBoundToBusyState"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageAssetTests.BookSyncProgressOverlay_IsBlockingLocalizedAndBoundToBusyState"
 ```
 
 Expected: the test fails because `NovelBookSyncProgressOverlay` is absent.
@@ -250,7 +250,7 @@ Add the matching entries in `zh-CN/Resources.resw`:
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~NovelLibraryPageAssetTests|FullyQualifiedName~NovelLibraryTtuSyncAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~NovelLibraryPageAssetTests|FullyQualifiedName~NovelLibraryTtuSyncAssetTests"
 ```
 
 Expected: all selected tests pass with zero failures.
@@ -258,7 +258,7 @@ Expected: all selected tests pass with zero failures.
 Commit:
 
 ```powershell
-git add -- Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs Hoshi/Views/Pages/NovelLibraryPage.xaml Hoshi/Strings/en-US/Resources.resw Hoshi/Strings/zh-CN/Resources.resw Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs Hoshi.Tests/Views/Pages/NovelLibraryPageAssetTests.cs
+git add -- Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs Niratan/Views/Pages/NovelLibraryPage.xaml Niratan/Strings/en-US/Resources.resw Niratan/Strings/zh-CN/Resources.resw Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs Niratan.Tests/Views/Pages/NovelLibraryPageAssetTests.cs
 git commit -m "feat(sync): show bookshelf sync progress"
 ```
 
@@ -267,12 +267,12 @@ git commit -m "feat(sync): show bookshelf sync progress"
 ### Task 2: Preserve and Restore Synced Sasayaki Playback State
 
 **Files:**
-- Create: `Hoshi.Tests/Services/Sasayaki/SasayakiMatchServiceTests.cs`
-- Create: `Hoshi.Tests/Services/Sasayaki/SasayakiPlayerTests.cs`
-- Create: `Hoshi.Tests/Views/Pages/NovelReaderSasayakiAssetTests.cs`
-- Modify: `Hoshi/Services/Sasayaki/SasayakiMatchService.cs`
-- Modify: `Hoshi/Services/Sasayaki/SasayakiPlayer.cs`
-- Modify: `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
+- Create: `Niratan.Tests/Services/Sasayaki/SasayakiMatchServiceTests.cs`
+- Create: `Niratan.Tests/Services/Sasayaki/SasayakiPlayerTests.cs`
+- Create: `Niratan.Tests/Views/Pages/NovelReaderSasayakiAssetTests.cs`
+- Modify: `Niratan/Services/Sasayaki/SasayakiMatchService.cs`
+- Modify: `Niratan/Services/Sasayaki/SasayakiPlayer.cs`
+- Modify: `Niratan/Views/Pages/NovelReaderPage.xaml.cs`
 
 **Interfaces:**
 - Consumes: `ISasayakiSidecarService.LoadPlaybackAsync`, `ISasayakiSidecarService.SaveMatchAsync`, `ApplySasayakiPlayback(SasayakiPlaybackData)`, and `SasayakiPlayer.LoadAsync(string)`.
@@ -280,17 +280,17 @@ git commit -m "feat(sync): show bookshelf sync progress"
 
 - [ ] **Step 1: Write failing integration tests for playback preservation**
 
-Create `Hoshi.Tests/Services/Sasayaki/SasayakiMatchServiceTests.cs`:
+Create `Niratan.Tests/Services/Sasayaki/SasayakiMatchServiceTests.cs`:
 
 ```csharp
 using FluentAssertions;
-using Hoshi.Models;
-using Hoshi.Models.Novel;
-using Hoshi.Models.Sasayaki;
-using Hoshi.Services.Novels;
-using Hoshi.Services.Sasayaki;
+using Niratan.Models;
+using Niratan.Models.Novel;
+using Niratan.Models.Sasayaki;
+using Niratan.Services.Novels;
+using Niratan.Services.Sasayaki;
 
-namespace Hoshi.Tests.Services.Sasayaki;
+namespace Niratan.Tests.Services.Sasayaki;
 
 public sealed class SasayakiMatchServiceTests
 {
@@ -431,7 +431,7 @@ public sealed class SasayakiMatchServiceTests
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~SasayakiMatchServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~SasayakiMatchServiceTests"
 ```
 
 Expected: the existing-playback test reports that position/rate/delay/bookmark were replaced, and the missing-playback test reports that `sasayaki_playback.json` was created.
@@ -453,13 +453,13 @@ Expected: both tests pass with zero failures.
 
 - [ ] **Step 5: Write failing player normalization and Reader import contracts**
 
-Create `Hoshi.Tests/Services/Sasayaki/SasayakiPlayerTests.cs`:
+Create `Niratan.Tests/Services/Sasayaki/SasayakiPlayerTests.cs`:
 
 ```csharp
 using FluentAssertions;
-using Hoshi.Services.Sasayaki;
+using Niratan.Services.Sasayaki;
 
-namespace Hoshi.Tests.Services.Sasayaki;
+namespace Niratan.Tests.Services.Sasayaki;
 
 public sealed class SasayakiPlayerTests
 {
@@ -480,17 +480,17 @@ public sealed class SasayakiPlayerTests
 }
 ```
 
-Create `Hoshi.Tests/Views/Pages/NovelReaderSasayakiAssetTests.cs`:
+Create `Niratan.Tests/Views/Pages/NovelReaderSasayakiAssetTests.cs`:
 
 ```csharp
 using FluentAssertions;
 
-namespace Hoshi.Tests.Views.Pages;
+namespace Niratan.Tests.Views.Pages;
 
 public sealed class NovelReaderSasayakiAssetTests
 {
     private static readonly string ProjectRoot = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "Hoshi"));
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "Niratan"));
 
     [Fact]
     public void AudioSubtitleImport_LoadsAndAppliesPlaybackWithoutResettingPosition()
@@ -525,7 +525,7 @@ public sealed class NovelReaderSasayakiAssetTests
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~SasayakiPlayerTests|FullyQualifiedName~NovelReaderSasayakiAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~SasayakiPlayerTests|FullyQualifiedName~NovelReaderSasayakiAssetTests"
 ```
 
 Expected: compilation fails because `NormalizeSeekSeconds` is absent; the asset contract also reports that Reader does not load/apply playback, still contains `SaveSasayakiPlaybackAsync(0)`, and the player has no pending seek.
@@ -654,7 +654,7 @@ Keep `ApplySasayakiPlayback` as the single Reader projection point. It already n
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~SasayakiMatchServiceTests|FullyQualifiedName~SasayakiPlayerTests|FullyQualifiedName~NovelReaderSasayakiAssetTests|FullyQualifiedName~SasayakiSidecarServiceTests|FullyQualifiedName~TtuSyncServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~SasayakiMatchServiceTests|FullyQualifiedName~SasayakiPlayerTests|FullyQualifiedName~NovelReaderSasayakiAssetTests|FullyQualifiedName~SasayakiSidecarServiceTests|FullyQualifiedName~TtuSyncServiceTests"
 ```
 
 Expected: all selected tests pass with zero failures, including the existing non-zero remote audiobook position import tests.
@@ -662,7 +662,7 @@ Expected: all selected tests pass with zero failures, including the existing non
 Commit:
 
 ```powershell
-git add -- Hoshi/Services/Sasayaki/SasayakiMatchService.cs Hoshi/Services/Sasayaki/SasayakiPlayer.cs Hoshi/Views/Pages/NovelReaderPage.xaml.cs Hoshi.Tests/Services/Sasayaki/SasayakiMatchServiceTests.cs Hoshi.Tests/Services/Sasayaki/SasayakiPlayerTests.cs Hoshi.Tests/Views/Pages/NovelReaderSasayakiAssetTests.cs
+git add -- Niratan/Services/Sasayaki/SasayakiMatchService.cs Niratan/Services/Sasayaki/SasayakiPlayer.cs Niratan/Views/Pages/NovelReaderPage.xaml.cs Niratan.Tests/Services/Sasayaki/SasayakiMatchServiceTests.cs Niratan.Tests/Services/Sasayaki/SasayakiPlayerTests.cs Niratan.Tests/Views/Pages/NovelReaderSasayakiAssetTests.cs
 git commit -m "fix(sasayaki): preserve synced playback position"
 ```
 
@@ -675,7 +675,7 @@ git commit -m "fix(sasayaki): preserve synced playback position"
 
 **Interfaces:**
 - Consumes: the completed overlay and playback-preservation behavior from Tasks 1 and 2.
-- Produces: documented root cause, a clean x64 build/test result, and a responsive exact-worktree Hoshi instance left running.
+- Produces: documented root cause, a clean x64 build/test result, and a responsive exact-worktree Niratan instance left running.
 
 - [ ] **Step 1: Record the root causes and fixes**
 
@@ -700,13 +700,13 @@ Insert this section immediately below `# Changelog`:
 Run:
 
 ```powershell
-$exe = 'D:\CODE\Yukari\.worktrees\niratan-sync-parity\Hoshi\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64\Hoshi.exe'
-Get-Process -Name Hoshi -ErrorAction SilentlyContinue |
+$exe = 'D:\CODE\Yukari\.worktrees\niratan-sync-parity\Niratan\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64\Niratan.exe'
+Get-Process -Name Niratan -ErrorAction SilentlyContinue |
     Where-Object { $_.Path -eq $exe } |
     Stop-Process
 ```
 
-Expected: only the `niratan-sync-parity` process stops; main-checkout and installed Hoshi processes remain running.
+Expected: only the `niratan-sync-parity` process stops; main-checkout and installed Niratan processes remain running.
 
 - [ ] **Step 3: Run the complete x64 build**
 
@@ -723,7 +723,7 @@ Expected: exit code 0 and zero build errors. Existing dependency or analyzer war
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --no-build
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --no-build
 ```
 
 Expected: all tests pass with zero failures and zero skipped tests.
@@ -733,7 +733,7 @@ Expected: all tests pass with zero failures and zero skipped tests.
 Run:
 
 ```powershell
-$exe = 'D:\CODE\Yukari\.worktrees\niratan-sync-parity\Hoshi\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64\Hoshi.exe'
+$exe = 'D:\CODE\Yukari\.worktrees\niratan-sync-parity\Niratan\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64\Niratan.exe'
 $process = Start-Process -FilePath $exe -PassThru
 Start-Sleep -Seconds 4
 $process.Refresh()
@@ -746,7 +746,7 @@ $process.Refresh()
 } | Format-List
 ```
 
-Expected: `Path` is the exact `niratan-sync-parity` executable, `MainWindowHandle` is non-zero, title is `Hoshi`, and `Responding` is `True`.
+Expected: `Path` is the exact `niratan-sync-parity` executable, `MainWindowHandle` is non-zero, title is `Niratan`, and `Responding` is `True`.
 
 - [ ] **Step 6: Verify the visible sync lifecycle without changing direction settings**
 
@@ -766,7 +766,7 @@ Expected: there is immediate process feedback and the bookshelf cannot be operat
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --no-build --filter "FullyQualifiedName~SasayakiMatchServiceTests.MatchAsync_PreservesExistingPlaybackSidecar|FullyQualifiedName~NovelReaderSasayakiAssetTests.AudioSubtitleImport_LoadsAndAppliesPlaybackWithoutResettingPosition|FullyQualifiedName~TtuSyncServiceTests.SyncBookAsync_ImportOnlyImportsNewerAudioBookWhenBookmarkProgressIsSynced"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --no-build --filter "FullyQualifiedName~SasayakiMatchServiceTests.MatchAsync_PreservesExistingPlaybackSidecar|FullyQualifiedName~NovelReaderSasayakiAssetTests.AudioSubtitleImport_LoadsAndAppliesPlaybackWithoutResettingPosition|FullyQualifiedName~TtuSyncServiceTests.SyncBookAsync_ImportOnlyImportsNewerAudioBookWhenBookmarkProgressIsSynced"
 ```
 
 Expected: all three preservation contracts pass. The tests jointly prove that Google Drive imports a non-zero audiobook position, matching does not replace it, and Reader import loads/applies rather than resets it.
@@ -782,4 +782,4 @@ git status --short
 git log -6 --oneline
 ```
 
-Expected: the changelog commit succeeds, `git status --short` prints nothing, and the recent log includes the Task 1, Task 2, and Task 3 commits. Leave the verified exact-worktree Hoshi instance running.
+Expected: the changelog commit succeeds, `git status --short` prints nothing, and the recent log includes the Task 1, Task 2, and Task 3 commits. Leave the verified exact-worktree Niratan instance running.

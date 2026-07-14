@@ -23,8 +23,8 @@
 ### Task 1: Define deterministic popup result batches
 
 **Files:**
-- Create: `Hoshi/Services/Dictionary/DictionaryPopupBatchPlanner.cs`
-- Create: `Hoshi.Tests/Services/Dictionary/DictionaryPopupBatchPlannerTests.cs`
+- Create: `Niratan/Services/Dictionary/DictionaryPopupBatchPlanner.cs`
+- Create: `Niratan.Tests/Services/Dictionary/DictionaryPopupBatchPlannerTests.cs`
 
 **Interfaces:**
 - Produces: `DictionaryPopupBatchPlanner.Create(int resultCount) -> IReadOnlyList<DictionaryPopupBatchRange>`.
@@ -35,9 +35,9 @@
 
 ```csharp
 using FluentAssertions;
-using Hoshi.Services.Dictionary;
+using Niratan.Services.Dictionary;
 
-namespace Hoshi.Tests.Services.Dictionary;
+namespace Niratan.Tests.Services.Dictionary;
 
 public class DictionaryPopupBatchPlannerTests
 {
@@ -70,7 +70,7 @@ public class DictionaryPopupBatchPlannerTests
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~DictionaryPopupBatchPlannerTests
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~DictionaryPopupBatchPlannerTests
 ```
 
 Expected: compilation fails because `DictionaryPopupBatchPlanner` and `DictionaryPopupBatchRange` do not exist.
@@ -78,7 +78,7 @@ Expected: compilation fails because `DictionaryPopupBatchPlanner` and `Dictionar
 - [ ] **Step 3: Implement the minimal planner**
 
 ```csharp
-namespace Hoshi.Services.Dictionary;
+namespace Niratan.Services.Dictionary;
 
 internal readonly record struct DictionaryPopupBatchRange(int Offset, int Count);
 
@@ -116,7 +116,7 @@ Run the Step 2 command. Expected: all `DictionaryPopupBatchPlannerTests` pass.
 - [ ] **Step 5: Commit the planner cycle**
 
 ```powershell
-git add -- Hoshi/Services/Dictionary/DictionaryPopupBatchPlanner.cs Hoshi.Tests/Services/Dictionary/DictionaryPopupBatchPlannerTests.cs
+git add -- Niratan/Services/Dictionary/DictionaryPopupBatchPlanner.cs Niratan.Tests/Services/Dictionary/DictionaryPopupBatchPlannerTests.cs
 git commit -m "test: define dictionary popup result batches"
 ```
 
@@ -125,14 +125,14 @@ git commit -m "test: define dictionary popup result batches"
 ### Task 2: Add a generation-scoped deferred append bridge
 
 **Files:**
-- Modify: `Hoshi/Services/Dictionary/PopupHtmlGenerator.cs`
-- Modify: `Hoshi/Web/DictionaryPopup/popup.js`
-- Modify: `Hoshi.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs`
+- Modify: `Niratan/Services/Dictionary/PopupHtmlGenerator.cs`
+- Modify: `Niratan/Web/DictionaryPopup/popup.js`
+- Modify: `Niratan.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs`
 
 **Interfaces:**
 - Extends: `PopupHtmlGenerator.GenerateInjectionScript(..., int? totalResultCount = null)` so the initial payload may contain one result while advertising the final result count.
 - Produces: `PopupHtmlGenerator.GenerateAppendResultsScript(List<DictionaryLookupResult> results, int totalResultCount, long renderGeneration)`.
-- Produces JavaScript bridge: `window.hoshiAppendResults(entries, finalCount, generation) -> boolean`.
+- Produces JavaScript bridge: `window.niratanAppendResults(entries, finalCount, generation) -> boolean`.
 
 - [ ] **Step 1: Add failing generator and asset tests**
 
@@ -167,7 +167,7 @@ public void PopupHtmlGenerator_SeparatesInitialAndDeferredResultScripts()
     initial.Should().Contain("window.entryCount = 2;");
     initial.Should().Contain("first");
     initial.Should().NotContain("deferred");
-    append.Should().Contain("window.hoshiAppendResults");
+    append.Should().Contain("window.niratanAppendResults");
     append.Should().Contain("deferred");
     append.Should().Contain(", 2, 7)");
 }
@@ -178,7 +178,7 @@ public void PopupScript_AppendsOnlyToTheCurrentGeneration()
     var script = File.ReadAllText(
         Path.Combine(AppContext.BaseDirectory, "Web", "DictionaryPopup", "popup.js"));
 
-    script.Should().Contain("window.hoshiAppendResults = function");
+    script.Should().Contain("window.niratanAppendResults = function");
     script.Should().Contain("expectedGeneration !== generation");
     script.Should().Contain("Array.prototype.push.apply(window.lookupEntries, entries)");
     script.Should().Contain("renderAvailableEntries()");
@@ -190,7 +190,7 @@ public void PopupScript_AppendsOnlyToTheCurrentGeneration()
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~PopupHtmlGenerator_SeparatesInitialAndDeferredResultScripts|FullyQualifiedName~PopupScript_AppendsOnlyToTheCurrentGeneration"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~PopupHtmlGenerator_SeparatesInitialAndDeferredResultScripts|FullyQualifiedName~PopupScript_AppendsOnlyToTheCurrentGeneration"
 ```
 
 Expected: compilation/assertion failures because the total-count parameter, append generator, and JavaScript bridge are absent.
@@ -212,7 +212,7 @@ public string GenerateInjectionScript(
     int? totalResultCount = null)
 ```
 
-Inside it, use `var finalResultCount = totalResultCount ?? results.Count;` and pass that value to `window.hoshiInjectResults` and `window.entryCount`.
+Inside it, use `var finalResultCount = totalResultCount ?? results.Count;` and pass that value to `window.niratanInjectResults` and `window.entryCount`.
 
 Add:
 
@@ -223,7 +223,7 @@ public string GenerateAppendResultsScript(
     long renderGeneration)
 {
     var entriesJson = SerializeLookupEntries(results);
-    return $"window.hoshiAppendResults?.({entriesJson}, {totalResultCount}, {renderGeneration});";
+    return $"window.niratanAppendResults?.({entriesJson}, {totalResultCount}, {renderGeneration});";
 }
 ```
 
@@ -258,7 +258,7 @@ function renderAvailableEntries() {
   requestAnimationFrame(next);
 }
 
-window.hoshiAppendResults = function (entries, finalCount, expectedGeneration) {
+window.niratanAppendResults = function (entries, finalCount, expectedGeneration) {
   if (expectedGeneration !== generation
       || expectedGeneration !== (window.popupRenderGeneration || 0)
       || !Array.isArray(entries)) return false;
@@ -276,7 +276,7 @@ After `commitFirstFrame`, call `renderAvailableEntries()`. Do not post a second 
 Run the Step 2 command, then:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryLookupServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryLookupServiceTests"
 ```
 
 Expected: all focused tests pass, including the existing single-`contentReady` assertion.
@@ -284,7 +284,7 @@ Expected: all focused tests pass, including the existing single-`contentReady` a
 - [ ] **Step 6: Commit the bridge cycle**
 
 ```powershell
-git add -- Hoshi/Services/Dictionary/PopupHtmlGenerator.cs Hoshi/Web/DictionaryPopup/popup.js Hoshi.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs
+git add -- Niratan/Services/Dictionary/PopupHtmlGenerator.cs Niratan/Web/DictionaryPopup/popup.js Niratan.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs
 git commit -m "perf: add deferred dictionary popup result bridge"
 ```
 
@@ -293,8 +293,8 @@ git commit -m "perf: add deferred dictionary popup result bridge"
 ### Task 3: Send only one result in the first popup injection
 
 **Files:**
-- Modify: `Hoshi/Views/Dictionary/DictionaryLookupPopup.cs`
-- Create: `Hoshi.Tests/Views/Dictionary/DictionaryPopupBatchIntegrationTests.cs`
+- Modify: `Niratan/Views/Dictionary/DictionaryLookupPopup.cs`
+- Create: `Niratan.Tests/Views/Dictionary/DictionaryPopupBatchIntegrationTests.cs`
 
 **Interfaces:**
 - Consumes: `DictionaryPopupBatchPlanner.Create` and `PopupHtmlGenerator.GenerateAppendResultsScript`.
@@ -306,7 +306,7 @@ git commit -m "perf: add deferred dictionary popup result bridge"
 ```csharp
 using FluentAssertions;
 
-namespace Hoshi.Tests.Views.Dictionary;
+namespace Niratan.Tests.Views.Dictionary;
 
 public class DictionaryPopupBatchIntegrationTests
 {
@@ -318,7 +318,7 @@ public class DictionaryPopupBatchIntegrationTests
             "..",
             "..",
             "..",
-            "Hoshi"));
+            "Niratan"));
 
     [Fact]
     public void PopupHost_UsesOneInitialBatchAndCancelsDeferredWorkOnLifecycleChanges()
@@ -342,7 +342,7 @@ public class DictionaryPopupBatchIntegrationTests
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~DictionaryPopupBatchIntegrationTests
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~DictionaryPopupBatchIntegrationTests
 ```
 
 Expected: assertions fail because the popup still injects all results at once.
@@ -414,7 +414,7 @@ _ = AppendDeferredResultsAsync(
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupBatchIntegrationTests|FullyQualifiedName~DictionaryLookupServiceTests|FullyQualifiedName~DictionaryPopup"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupBatchIntegrationTests|FullyQualifiedName~DictionaryLookupServiceTests|FullyQualifiedName~DictionaryPopup"
 ```
 
 Expected: all selected tests pass.
@@ -422,7 +422,7 @@ Expected: all selected tests pass.
 - [ ] **Step 7: Commit the popup integration cycle**
 
 ```powershell
-git add -- Hoshi/Views/Dictionary/DictionaryLookupPopup.cs Hoshi.Tests/Views/Dictionary/DictionaryPopupBatchIntegrationTests.cs
+git add -- Niratan/Views/Dictionary/DictionaryLookupPopup.cs Niratan.Tests/Views/Dictionary/DictionaryPopupBatchIntegrationTests.cs
 git commit -m "perf: stream deferred dictionary popup results"
 ```
 
@@ -431,12 +431,12 @@ git commit -m "perf: stream deferred dictionary popup results"
 ### Task 4: Add latest-request-wins subtitle lookup coordination
 
 **Files:**
-- Create: `Hoshi/Services/Video/VideoSubtitleLookupRequestCoordinator.cs`
-- Create: `Hoshi.Tests/Services/Video/VideoSubtitleLookupRequestCoordinatorTests.cs`
-- Modify: `Hoshi/Views/Video/VideoPlayerWindow.xaml.cs`
-- Modify: `Hoshi/Views/Video/VideoPlayerWindow.SubtitleOverlay.cs`
-- Modify: `Hoshi/Views/Video/VideoPlayerWindow.Playback.cs`
-- Modify: `Hoshi.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs`
+- Create: `Niratan/Services/Video/VideoSubtitleLookupRequestCoordinator.cs`
+- Create: `Niratan.Tests/Services/Video/VideoSubtitleLookupRequestCoordinatorTests.cs`
+- Modify: `Niratan/Views/Video/VideoPlayerWindow.xaml.cs`
+- Modify: `Niratan/Views/Video/VideoPlayerWindow.SubtitleOverlay.cs`
+- Modify: `Niratan/Views/Video/VideoPlayerWindow.Playback.cs`
+- Modify: `Niratan.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs`
 
 **Interfaces:**
 - Produces: `VideoSubtitleLookupRequestCoordinator.BeginRequest()` returning `VideoSubtitleLookupRequest(long Version, CancellationToken CancellationToken)`.
@@ -477,7 +477,7 @@ public void CancelCurrent_InvalidatesTheCurrentRequest()
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~VideoSubtitleLookupRequestCoordinatorTests
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~VideoSubtitleLookupRequestCoordinatorTests
 ```
 
 Expected: compilation fails because the coordinator types do not exist.
@@ -609,7 +609,7 @@ keyboard shortcut to call the versioned wrapper. On window close, call
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitleLookupRequestCoordinatorTests|FullyQualifiedName~VideoSubtitleLookupAssetTests|FullyQualifiedName~VideoSubtitleLookupTextExtractorTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitleLookupRequestCoordinatorTests|FullyQualifiedName~VideoSubtitleLookupAssetTests|FullyQualifiedName~VideoSubtitleLookupTextExtractorTests"
 ```
 
 Expected: all selected tests pass.
@@ -617,7 +617,7 @@ Expected: all selected tests pass.
 - [ ] **Step 8: Commit latest-request-wins coordination**
 
 ```powershell
-git add -- Hoshi/Services/Video/VideoSubtitleLookupRequestCoordinator.cs Hoshi.Tests/Services/Video/VideoSubtitleLookupRequestCoordinatorTests.cs Hoshi/Views/Video/VideoPlayerWindow.xaml.cs Hoshi/Views/Video/VideoPlayerWindow.SubtitleOverlay.cs Hoshi/Views/Video/VideoPlayerWindow.Playback.cs Hoshi.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs
+git add -- Niratan/Services/Video/VideoSubtitleLookupRequestCoordinator.cs Niratan.Tests/Services/Video/VideoSubtitleLookupRequestCoordinatorTests.cs Niratan/Views/Video/VideoPlayerWindow.xaml.cs Niratan/Views/Video/VideoPlayerWindow.SubtitleOverlay.cs Niratan/Views/Video/VideoPlayerWindow.Playback.cs Niratan.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs
 git commit -m "perf: make video subtitle lookup latest wins"
 ```
 
@@ -626,9 +626,9 @@ git commit -m "perf: make video subtitle lookup latest wins"
 ### Task 5: Prewarm the popup from subtitle WebView readiness
 
 **Files:**
-- Modify: `Hoshi/Views/Video/VideoPlayerWindow.SubtitleOverlay.cs`
-- Modify: `Hoshi/Views/Video/VideoPlayerWindow.xaml.cs`
-- Modify: `Hoshi.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs`
+- Modify: `Niratan/Views/Video/VideoPlayerWindow.SubtitleOverlay.cs`
+- Modify: `Niratan/Views/Video/VideoPlayerWindow.xaml.cs`
+- Modify: `Niratan.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs`
 
 **Interfaces:**
 - Produces: `PrewarmVideoDictionaryPopupAsync()` that observes and logs all exceptions.
@@ -657,7 +657,7 @@ public void VideoSubtitleLookup_PrewarmsPopupWhenSubtitleWebViewIsReady()
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~VideoSubtitleLookup_PrewarmsPopupWhenSubtitleWebViewIsReady
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter FullyQualifiedName~VideoSubtitleLookup_PrewarmsPopupWhenSubtitleWebViewIsReady
 ```
 
 Expected: assertion failure because video prewarm currently starts only after results return.
@@ -699,7 +699,7 @@ Remove the redundant fire-and-forget `PrewarmAsync` call after lookup results;
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitleLookupAssetTests|FullyQualifiedName~VideoSubtitleLookupRequestCoordinatorTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoSubtitleLookupAssetTests|FullyQualifiedName~VideoSubtitleLookupRequestCoordinatorTests"
 ```
 
 Expected: all selected tests pass.
@@ -707,7 +707,7 @@ Expected: all selected tests pass.
 - [ ] **Step 5: Commit early prewarming**
 
 ```powershell
-git add -- Hoshi/Views/Video/VideoPlayerWindow.SubtitleOverlay.cs Hoshi/Views/Video/VideoPlayerWindow.xaml.cs Hoshi.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs
+git add -- Niratan/Views/Video/VideoPlayerWindow.SubtitleOverlay.cs Niratan/Views/Video/VideoPlayerWindow.xaml.cs Niratan.Tests/Services/Video/VideoSubtitleLookupAssetTests.cs
 git commit -m "perf: prewarm video dictionary popup"
 ```
 
@@ -740,7 +740,7 @@ Run:
 
 ```powershell
 git diff --check
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary|FullyQualifiedName~VideoSubtitleLookup"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary|FullyQualifiedName~VideoSubtitleLookup"
 ```
 
 Expected: `git diff --check` prints nothing and all selected tests pass.
@@ -751,7 +751,7 @@ Run:
 
 ```powershell
 dotnet build -p:Platform=x64
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: both commands exit 0 with zero test failures. Record any pre-existing package vulnerability warning separately; do not describe warning-bearing output as pristine.
@@ -767,7 +767,7 @@ Run `./build-and-run.ps1`, open the existing video/subtitle test workflow, and v
 5. A rapid Shift sweep ends on the final hovered word without an older popup replacing it.
 6. Nested lookup, autoplay/manual audio, Anki mining, dismissal, resize, and light/dark themes remain functional.
 
-Leave the final verified Hoshi instance running.
+Leave the final verified Niratan instance running.
 
 - [ ] **Step 5: Commit documentation and any verification-only adjustments**
 

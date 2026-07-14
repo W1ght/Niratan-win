@@ -12,7 +12,7 @@
 
 - Target Windows 10+ x64; do not build ARM64 by default.
 - Build with `dotnet build -p:Platform=x64`.
-- Test with `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`.
+- Test with `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`.
 - Do not modify `native/hoshidicts/`.
 - Keep WebView2 as the dictionary-body renderer; do not replace Yomitan structured content with WinUI text controls.
 - Keep lookup, database, dictionary, IPC, popup-stack, and Anki behavior unchanged.
@@ -24,12 +24,12 @@
 
 ## File Map
 
-- Create `Hoshi/Views/Dictionary/DictionaryPopupCornerGuard.cs`: pure radius-to-inset geometry; no XAML or service dependencies.
-- Create `Hoshi.Tests/Views/Dictionary/DictionaryPopupCornerGuardTests.cs`: real unit coverage for the three supported presentation radii and defensive negative input.
-- Modify `Hoshi/Views/Dictionary/DictionaryLookupPopup.cs`: native rounded shell, guard inset, opaque synchronized WebView2 background, and presentation-mode updates.
-- Modify `Hoshi/Views/Dictionary/DictionaryPopupMaterial.cs`: canonical popup colors shared by native and web surfaces.
-- Modify `Hoshi/Web/DictionaryPopup/popup.css`: opaque root document background; no transparent outer corners.
-- Modify `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`: source-level integration assertions tying the WinUI shell and web asset together.
+- Create `Niratan/Views/Dictionary/DictionaryPopupCornerGuard.cs`: pure radius-to-inset geometry; no XAML or service dependencies.
+- Create `Niratan.Tests/Views/Dictionary/DictionaryPopupCornerGuardTests.cs`: real unit coverage for the three supported presentation radii and defensive negative input.
+- Modify `Niratan/Views/Dictionary/DictionaryLookupPopup.cs`: native rounded shell, guard inset, opaque synchronized WebView2 background, and presentation-mode updates.
+- Modify `Niratan/Views/Dictionary/DictionaryPopupMaterial.cs`: canonical popup colors shared by native and web surfaces.
+- Modify `Niratan/Web/DictionaryPopup/popup.css`: opaque root document background; no transparent outer corners.
+- Modify `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`: source-level integration assertions tying the WinUI shell and web asset together.
 - Modify `docs/CHANGELOG.md`: record the root cause and solution after verification.
 
 ---
@@ -37,8 +37,8 @@
 ### Task 1: Add Tested Corner-Guard Geometry
 
 **Files:**
-- Create: `Hoshi/Views/Dictionary/DictionaryPopupCornerGuard.cs`
-- Create: `Hoshi.Tests/Views/Dictionary/DictionaryPopupCornerGuardTests.cs`
+- Create: `Niratan/Views/Dictionary/DictionaryPopupCornerGuard.cs`
+- Create: `Niratan.Tests/Views/Dictionary/DictionaryPopupCornerGuardTests.cs`
 
 **Interfaces:**
 - Consumes: a popup corner radius in DIPs as `double`.
@@ -46,13 +46,13 @@
 
 - [ ] **Step 1: Write the failing geometry test**
 
-Create `Hoshi.Tests/Views/Dictionary/DictionaryPopupCornerGuardTests.cs`:
+Create `Niratan.Tests/Views/Dictionary/DictionaryPopupCornerGuardTests.cs`:
 
 ```csharp
 using FluentAssertions;
-using Hoshi.Views.Dictionary;
+using Niratan.Views.Dictionary;
 
-namespace Hoshi.Tests.Views.Dictionary;
+namespace Niratan.Tests.Views.Dictionary;
 
 public sealed class DictionaryPopupCornerGuardTests
 {
@@ -75,19 +75,19 @@ public sealed class DictionaryPopupCornerGuardTests
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupCornerGuardTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupCornerGuardTests"
 ```
 
 Expected: FAIL to compile because `DictionaryPopupCornerGuard` does not exist. This is the missing production behavior, not a test typo.
 
 - [ ] **Step 3: Implement the minimum pure geometry helper**
 
-Create `Hoshi/Views/Dictionary/DictionaryPopupCornerGuard.cs`:
+Create `Niratan/Views/Dictionary/DictionaryPopupCornerGuard.cs`:
 
 ```csharp
 using System;
 
-namespace Hoshi.Views.Dictionary;
+namespace Niratan.Views.Dictionary;
 
 internal static class DictionaryPopupCornerGuard
 {
@@ -106,7 +106,7 @@ internal static class DictionaryPopupCornerGuard
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupCornerGuardTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupCornerGuardTests"
 ```
 
 Expected: PASS, four cases.
@@ -114,7 +114,7 @@ Expected: PASS, four cases.
 - [ ] **Step 5: Commit only the helper and its test**
 
 ```powershell
-git add -- Hoshi/Views/Dictionary/DictionaryPopupCornerGuard.cs Hoshi.Tests/Views/Dictionary/DictionaryPopupCornerGuardTests.cs
+git add -- Niratan/Views/Dictionary/DictionaryPopupCornerGuard.cs Niratan.Tests/Views/Dictionary/DictionaryPopupCornerGuardTests.cs
 git diff --cached --check
 git commit -m "test: define dictionary popup corner guard geometry"
 ```
@@ -126,10 +126,10 @@ Expected: the commit contains exactly the two new files.
 ### Task 2: Replace Unsupported Transparent Corners with the Native Guard Shell
 
 **Files:**
-- Modify: `Hoshi/Views/Dictionary/DictionaryLookupPopup.cs`
-- Modify: `Hoshi/Views/Dictionary/DictionaryPopupMaterial.cs`
-- Modify: `Hoshi/Web/DictionaryPopup/popup.css`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Niratan/Views/Dictionary/DictionaryLookupPopup.cs`
+- Modify: `Niratan/Views/Dictionary/DictionaryPopupMaterial.cs`
+- Modify: `Niratan/Web/DictionaryPopup/popup.css`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
 - Consumes: `DictionaryPopupCornerGuard.CalculateInset(double radius)` from Task 1 and `DictionaryPopupMaterial.GetOpaqueSurfaceColor(ThemeMode)`.
@@ -190,7 +190,7 @@ Also update the later global-popup shell assertions to require `VisualRoot.Corne
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopup_WebDocumentUsesOpaqueHostSurface|FullyQualifiedName~DictionaryLookupPopup_UsesFluentFloatingCardShell|FullyQualifiedName~GlobalLookupPopup"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopup_WebDocumentUsesOpaqueHostSurface|FullyQualifiedName~DictionaryLookupPopup_UsesFluentFloatingCardShell|FullyQualifiedName~GlobalLookupPopup"
 ```
 
 Expected: FAIL because CSS still forces transparent root pixels, WebView2 still defaults to transparent, and the native guard shell does not yet exist.
@@ -331,7 +331,7 @@ _contentWebView.DefaultBackgroundColor = _surfaceBrush.Color;
 
 - [ ] **Step 5: Make the web document root opaque**
 
-In `Hoshi/Web/DictionaryPopup/popup.css`, change only the root background declaration:
+In `Niratan/Web/DictionaryPopup/popup.css`, change only the root background declaration:
 
 ```css
 html,
@@ -348,7 +348,7 @@ Keep scrollbar tracks transparent; they are contained inside the already opaque 
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupCornerGuardTests|FullyQualifiedName~DictionaryPopup_WebDocumentUsesOpaqueHostSurface|FullyQualifiedName~DictionaryLookupPopup_UsesFluentFloatingCardShell|FullyQualifiedName~GlobalLookupPopup"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupCornerGuardTests|FullyQualifiedName~DictionaryPopup_WebDocumentUsesOpaqueHostSurface|FullyQualifiedName~DictionaryLookupPopup_UsesFluentFloatingCardShell|FullyQualifiedName~GlobalLookupPopup"
 ```
 
 Expected: PASS with no build errors or failed assertions.
@@ -356,7 +356,7 @@ Expected: PASS with no build errors or failed assertions.
 - [ ] **Step 7: Commit only the guard-shell implementation**
 
 ```powershell
-git add -- Hoshi/Views/Dictionary/DictionaryLookupPopup.cs Hoshi/Views/Dictionary/DictionaryPopupMaterial.cs Hoshi/Web/DictionaryPopup/popup.css Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add -- Niratan/Views/Dictionary/DictionaryLookupPopup.cs Niratan/Views/Dictionary/DictionaryPopupMaterial.cs Niratan/Web/DictionaryPopup/popup.css Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git diff --cached --check
 git commit -m "fix: guard dictionary popup rounded corners"
 ```
@@ -371,13 +371,13 @@ Expected: no unrelated files are staged. If a listed file contains pre-existing 
 - Modify: `docs/CHANGELOG.md`
 
 **Interfaces:**
-- Consumes: the completed native guard shell and existing Hoshi build/run workflow.
+- Consumes: the completed native guard shell and existing Niratan build/run workflow.
 - Produces: build/test evidence, runtime visual evidence, and a concise root-cause record.
 
 - [ ] **Step 1: Run dictionary-focused regression tests**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"
 ```
 
 Expected: PASS; no dictionary test failures.
@@ -385,7 +385,7 @@ Expected: PASS; no dictionary test failures.
 - [ ] **Step 2: Run the complete x64 test project**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: PASS; no failed tests.
@@ -404,7 +404,7 @@ Expected: `Build succeeded.` with zero errors.
 .\build-and-run.ps1
 ```
 
-Expected: the unpackaged x64 Hoshi process opens a responsive top-level window. Leave the final verified instance running.
+Expected: the unpackaged x64 Niratan process opens a responsive top-level window. Leave the final verified instance running.
 
 - [ ] **Step 5: Perform runtime visual verification**
 
@@ -455,7 +455,7 @@ Expected: the commit contains only `docs/CHANGELOG.md`.
 - [ ] Popup integration tests were observed failing against transparent corners and passing after the guard shell.
 - [ ] Dictionary-focused and full x64 tests pass.
 - [ ] x64 build succeeds.
-- [ ] Hoshi launches as a responsive unpackaged WinUI application.
+- [ ] Niratan launches as a responsive unpackaged WinUI application.
 - [ ] All four popup corners reveal the underlying bright video frame with no black/white wedges.
 - [ ] 12 DIP, 8 DIP, and standalone presentations behave as specified.
 - [ ] Light/dark theme, nested lookup, scrolling, resize, high DPI, and Shift-hover checks pass.

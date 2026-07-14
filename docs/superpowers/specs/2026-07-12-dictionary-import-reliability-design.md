@@ -2,12 +2,12 @@
 
 ## Context
 
-Hoshi Windows and Niratan use the same `hoshidicts` revision, but Hoshi adds a
+Niratan Windows and Niratan use the same `hoshidicts` revision, but Niratan adds a
 Windows C API wrapper and a C# staging/commit layer. Three reliability gaps in
 those Windows-specific layers explain dictionary imports that fail or appear to
 have no effect:
 
-- Hoshi skips the copy when a target directory already exists, while still
+- Niratan skips the copy when a target directory already exists, while still
   returning a successful import result.
 - The Windows compatibility retry does not recognize the observed
   `__char_to_wide: Illegal byte sequence` filesystem error.
@@ -63,7 +63,7 @@ preferred future step if native importer crashes continue after these fixes.
 
 ### Source staging and native import
 
-The selected ZIP is copied to the existing ASCII-only staging directory. Hoshi
+The selected ZIP is copied to the existing ASCII-only staging directory. Niratan
 computes a timeout from the copied ZIP size:
 
 - Up to 64 MiB: 5 minutes.
@@ -95,7 +95,7 @@ worker thread. A timeout may still detach the blocked worker, but no detached
 code references the returned function's stack.
 
 After a timeout, the wrapper marks the importer process as poisoned. Subsequent
-imports return a typed JSON failure telling the user to restart Hoshi instead of
+imports return a typed JSON failure telling the user to restart Niratan instead of
 starting another native import beside an abandoned worker. Normal successful or
 ordinary failed imports do not poison the process.
 
@@ -124,14 +124,14 @@ restored after native import.
 
 ### Identity
 
-For each imported dictionary type, Hoshi searches installed type directories for
+For each imported dictionary type, Niratan searches installed type directories for
 an `index.json` whose `title` equals the imported display title using ordinal
 comparison. This handles both normal title-named directories and existing
-`hoshi-import-*` compatibility directories.
+`niratan-import-*` compatibility directories.
 
 When a title match exists, the replacement reuses that directory's file name.
 This keeps all profile configuration references stable. When no title match
-exists, Hoshi uses the native imported directory name as today.
+exists, Niratan uses the native imported directory name as today.
 
 ### Prepare, commit, and rollback
 
@@ -173,7 +173,7 @@ Add regression coverage in `DictionaryLookupServiceTests` for:
 
 - Two different ZIPs with the same `index.json.title` replace the installed
   `index.json.revision` and keep one installed directory.
-- Replacement reuses a pre-existing `hoshi-import-*` directory whose index title
+- Replacement reuses a pre-existing `niratan-import-*` directory whose index title
   matches the imported title.
 - Commit rollback restores the old directory when a later type commit fails,
   using an internal filesystem commit helper with deterministic failure
@@ -196,12 +196,12 @@ Add a native wrapper source contract test for:
 Verification after implementation:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"
 dotnet build -p:Platform=x64
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
-Then build and launch Hoshi, import a small same-title replacement, and confirm
+Then build and launch Niratan, import a small same-title replacement, and confirm
 the dictionary list contains one updated entry and lookup uses the new payload.
 
 ## Security and Constraints

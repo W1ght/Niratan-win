@@ -1,0 +1,125 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <LangVersion>preview</LangVersion>
+    <RootNamespace>Niratan</RootNamespace>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <DefaultLanguage>en-US</DefaultLanguage>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <PublishProfile>win-$(Platform).pubxml</PublishProfile>
+    <UseWinUI>true</UseWinUI>
+    <Nullable>enable</Nullable>
+    <EnableMsixTooling>false</EnableMsixTooling>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>True</WindowsAppSDKSelfContained>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NativeHoshidictsDll>$(MSBuildProjectDirectory)\..\native\out\hoshidicts_c_api.dll</NativeHoshidictsDll>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <VersionPrefix>0.3.0</VersionPrefix>
+    <VersionSuffix></VersionSuffix>
+    <Version>$(VersionPrefix)$([System.String]::Copy('-$(VersionSuffix)').TrimEnd('-'))</Version>
+    <AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
+    <AssemblyFileVersion>$(VersionPrefix)</AssemblyFileVersion>
+    <AssemblyInformationalVersion>$(Version)</AssemblyInformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <AssemblyTitle>Niratan</AssemblyTitle>
+    <AssemblyProduct>Niratan</AssemblyProduct>
+    <Copyright>Copyright © TXG0Fk3. All rights reserved.</Copyright>
+    <AssemblyCopyright>Copyright © TXG0Fk3. All rights reserved.</AssemblyCopyright>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <!-- Copy native hoshidicts DLL to output directory if it exists -->
+  <Target Name="EnsureNativeHoshidicts"
+          BeforeTargets="CopyNativeHoshidicts"
+          Condition="'$(Platform)' == 'x64' And !Exists('$(NativeHoshidictsDll)')">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\scripts\Ensure-NativeHoshidicts.ps1&quot; -RepositoryRoot &quot;$(MSBuildProjectDirectory)\..&quot;" />
+  </Target>
+
+  <Target Name="CopyNativeHoshidicts" AfterTargets="Build" Condition="'$(Platform)' == 'x64'">
+    <ItemGroup>
+      <_NativeDll Include="$(NativeHoshidictsDll)" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_NativeDll)" DestinationFolder="$(TargetDir)" Condition="Exists('%(FullPath)')" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyNativeHoshidictsToPublish" AfterTargets="Publish" Condition="'$(Platform)' == 'x64'">
+    <Error Text="Native dictionary DLL not found. Run .\build-native.ps1 before publishing."
+           Condition="!Exists('$(NativeHoshidictsDll)')" />
+    <ItemGroup>
+      <_NativePublishDll Include="$(NativeHoshidictsDll)" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_NativePublishDll)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CleanPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <_AiFiles Include="$(PublishDir)Microsoft.Windows.AI.*" />
+      <_NpuDetectFolder Include="$(PublishDir)NpuDetect" />
+    </ItemGroup>
+    <Delete Files="@(_AiFiles)" />
+    <RemoveDir Directories="@(_NpuDetectFolder)" />
+
+    <ItemGroup>
+      <_MuiFiles Include="$(PublishDir)**\*.mui" Exclude="$(PublishDir)en-us\*.mui" />
+      <_MuiFolders Include="@(_MuiFiles->'%(RootDir)%(Directory)')" />
+    </ItemGroup>
+    <RemoveDir Directories="@(_MuiFolders)" />
+  </Target>
+
+  <ItemGroup>
+    <Content Include="Assets\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+
+    <Content Include="Web\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+
+    <None Include="$(TargetDir)$(TargetName).pri">
+      <Link>$(TargetName).pri</Link>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <MpvWindowsX64IncludeFiles Include="libmpv-2.dll" />
+    <MpvWindowsArm64IncludeFiles Include="libmpv-2.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.2.251219" />
+    <PackageReference Include="Dapper" Version="2.1.72" />
+    <PackageReference Include="Endpne.LibMPV.Windows" Version="0.41.0" />
+    <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.1839" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.0.1" />
+    <PackageReference Include="NAudio" Version="2.3.0" />
+    <PackageReference Include="Serilog" Version="4.3.1" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+  </ItemGroup>
+</Project>

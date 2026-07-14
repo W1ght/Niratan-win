@@ -2,7 +2,7 @@
 
 ## Context
 
-Hoshi exposes per-book ッツ sync actions from the local novel card context menu. The current implementation declares those actions inside a `DataTemplate` and binds their commands and visibility back to `NovelLibraryPage` with `ElementName=ThisPage`.
+Niratan exposes per-book ッツ sync actions from the local novel card context menu. The current implementation declares those actions inside a `DataTemplate` and binds their commands and visibility back to `NovelLibraryPage` with `ElementName=ThisPage`.
 
 At runtime, a `MenuFlyout` uses a separate XAML namescope. Those page-level bindings do not resolve from the flyout. The failure has two visible consequences:
 

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog x:Class="Niratan.Views.Dialogs.NovelShelfManagementDialog"
+               x:Name="RootDialog"
+               xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+               xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+               xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+               xmlns:novel="using:Niratan.Models.Novel"
+               mc:Ignorable="d"
+               x:Uid="NovelShelfManagementDialog"
+               DefaultButton="Close"
+               MinWidth="480">
+    <Grid RowDefinitions="Auto,*,Auto"
+          RowSpacing="12">
+        <Grid ColumnDefinitions="*,Auto"
+              ColumnSpacing="8">
+            <TextBox x:Name="ShelfNameBox"
+                     x:Uid="NovelShelfNameBox"
+                     AutomationProperties.AutomationId="NovelShelfNameBox" />
+            <Button Grid.Column="1"
+                    x:Name="NovelShelfCreateButton"
+                    x:Uid="NovelShelfCreateButton"
+                    AutomationProperties.AutomationId="NovelShelfCreateButton"
+                    Click="CreateShelfButton_Click" />
+        </Grid>
+
+        <ListView x:Name="NovelShelfList"
+                  Grid.Row="1"
+                  MinHeight="220"
+                  AutomationProperties.AutomationId="NovelShelfList"
+                  ItemsSource="{x:Bind ViewModel.Shelves, Mode=OneWay}"
+                  SelectionMode="Single"
+                  AllowDrop="True"
+                  CanDragItems="True"
+                  CanReorderItems="True"
+                  DragItemsCompleted="ShelfList_DragItemsCompleted"
+                  SelectionChanged="ShelfList_SelectionChanged">
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="novel:NovelShelf">
+                    <TextBlock Text="{x:Bind Name}"
+                               Style="{StaticResource BodyStrongTextBlockStyle}" />
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+
+        <Grid Grid.Row="2"
+              ColumnDefinitions="*,Auto,Auto"
+              ColumnSpacing="8">
+            <TextBox x:Name="ShelfRenameBox"
+                     x:Uid="NovelShelfRenameBox"
+                     AutomationProperties.AutomationId="NovelShelfRenameBox" />
+            <Button x:Name="NovelShelfRenameButton"
+                    Grid.Column="1"
+                    x:Uid="NovelShelfRenameButton"
+                    AutomationProperties.AutomationId="NovelShelfRenameButton"
+                    IsEnabled="False"
+                    Click="RenameShelfButton_Click" />
+            <Button x:Name="NovelShelfDeleteButton"
+                    Grid.Column="2"
+                    x:Uid="NovelShelfDeleteButton"
+                    AutomationProperties.AutomationId="NovelShelfDeleteButton"
+                    IsEnabled="False">
+                <Button.Flyout>
+                    <Flyout x:Name="NovelShelfDeleteConfirmationFlyout"
+                            AutomationProperties.AutomationId="NovelShelfDeleteConfirmationFlyout"
+                            Opening="DeleteConfirmationFlyout_Opening">
+                        <StackPanel MaxWidth="320"
+                                    Spacing="12">
+                            <TextBlock x:Name="NovelShelfDeleteConfirmationText"
+                                       TextWrapping="Wrap" />
+                            <StackPanel HorizontalAlignment="Right"
+                                        Orientation="Horizontal"
+                                        Spacing="8">
+                                <Button x:Uid="NovelShelfCancelDeleteButton"
+                                        AutomationProperties.AutomationId="NovelShelfCancelDeleteButton"
+                                        Click="CancelDeleteShelfButton_Click" />
+                                <Button x:Uid="NovelShelfConfirmDeleteButton"
+                                        AutomationProperties.AutomationId="NovelShelfConfirmDeleteButton"
+                                        Style="{StaticResource AccentButtonStyle}"
+                                        Click="ConfirmDeleteShelfButton_Click" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Flyout>
+                </Button.Flyout>
+            </Button>
+        </Grid>
+    </Grid>
+</ContentDialog>

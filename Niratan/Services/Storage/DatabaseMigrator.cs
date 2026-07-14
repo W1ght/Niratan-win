@@ -1,0 +1,115 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Dapper;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
+using Niratan.Services.Storage.Migrations;
+
+namespace Niratan.Services.Storage;
+
+internal class DatabaseMigrator
+{
+    private readonly ILogger<DatabaseMigrator> _logger;
+    private readonly string _connectionString;
+
+    // Migration version slots must never be reordered or removed.
+    // Versions 3-7 intentionally keep their released numbers: existing databases have
+    // the legacy novel schema, while fresh databases skip it and use file-backed novels.
+    // Their table guards preserve upgrades for old databases before one-time export.
+    private static readonly IReadOnlyList<IMigration> AllMigrations =
+    [
+        new Migration_001(),
+        new Migration_002(),
+        new Migration_003(),
+        new Migration_004(),
+        new Migration_005(),
+        new Migration_006(),
+        new Migration_007(),
+        new Migration_008(),
+        new Migration_009(),
+        new Migration_010(),
+        new Migration_011(),
+        new Migration_012(),
+    ];
+
+    public DatabaseMigrator(ILogger<DatabaseMigrator> logger, string connectionString)
+    {
+        _logger = logger;
+        _connectionString = connectionString;
+    }
+
+    public async Task MigrateAsync()
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+
+        int currentVersion = await GetCurrentVersionAsync(connection);
+        int targetVersion = AllMigrations.Max(m => m.Version);
+
+        if (currentVersion == targetVersion)
+            return;
+
+        if (currentVersion > targetVersion)
+            throw new InvalidOperationException(
+                $"The database is in version {currentVersion}, but the app supports up to version {targetVersion}. "
+                    + "Please update the application."
+            );
+
+        var pending = AllMigrations
+            .Where(m => m.Version > currentVersion)
+            .OrderBy(m => m.Version)
+            .ToList();
+
+        // Explicitly disable foreign key constraints on every connection.
+        // Migrations must be able to run arbitrary SQL, including schema changes that may temporarily violate constraints.
+        await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
+
+        foreach (var migration in pending)
+        {
+            _logger.LogInformation(
+                "Running migration {Version}: {Description}",
+                migration.Version,
+                migration.Description
+            );
+            await ApplyMigrationAsync(connection, migration);
+        }
+        _logger.LogInformation("Database migration completed. Version: {Version}", targetVersion);
+    }
+
+    private async Task ApplyMigrationAsync(SqliteConnection connection, IMigration migration)
+    {
+        using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            await migration.UpAsync(connection, transaction);
+
+            // PRAGMA user_version is updated inside the same transaction as the migration SQL.
+            // If the SQL fails, the version is not advanced — the migration will be retried on next startup.
+            await connection.ExecuteAsync(
+                $"PRAGMA user_version = {migration.Version};",
+                transaction: transaction
+            );
+
+            await transaction.CommitAsync();
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+
+            _logger.LogError(ex, "Migration {Version} failed", migration.Version);
+            throw new InvalidOperationException(
+                $"Migration {migration.Version} ({migration.Description}) failed: {ex.Message}",
+                ex
+            );
+        }
+    }
+
+    private static async Task<int> GetCurrentVersionAsync(SqliteConnection connection)
+    {
+        var result = await connection.QueryFirstAsync<int>("PRAGMA user_version;");
+        return result;
+    }
+}

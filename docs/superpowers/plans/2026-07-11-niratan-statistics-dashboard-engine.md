@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Port behavior from `docs/reference/hoshi/Niratan/Features/Bookshelf/StatisticsDashboardModels.swift`.
+- Port behavior from `docs/reference/Niratan/Features/Bookshelf/StatisticsDashboardModels.swift`.
 - Dashboard window is the recent year ending on the current local date.
 - Valid speed samples require positive characters and at least 60 seconds; invalid samples remain in totals.
 - Percentages use rounding, may exceed 100, and future week cells have no percentage.
@@ -24,11 +24,11 @@
 ### Task 1: Complete Dashboard Snapshot and Repository Models
 
 **Files:**
-- Replace: `Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs`
-- Modify: `Hoshi/Services/Novels/INovelStatisticsDashboardService.cs`
-- Modify: `Hoshi/Services/Novels/NovelStatisticsDashboardService.cs`
-- Modify: `Hoshi/Services/Novels/NovelStatisticsSidecarService.cs`
-- Test: `Hoshi.Tests/Services/Novels/NovelStatisticsDashboardRepositoryTests.cs`
+- Replace: `Niratan/Models/Novel/NovelStatisticsDashboardModels.cs`
+- Modify: `Niratan/Services/Novels/INovelStatisticsDashboardService.cs`
+- Modify: `Niratan/Services/Novels/NovelStatisticsDashboardService.cs`
+- Modify: `Niratan/Services/Novels/NovelStatisticsSidecarService.cs`
+- Test: `Niratan.Tests/Services/Novels/NovelStatisticsDashboardRepositoryTests.cs`
 
 **Interfaces:**
 - Consumes: visible `NovelBook` list, `INovelBookSidecarService`, `INovelStatisticsSidecarService`.
@@ -60,7 +60,7 @@ public async Task LoadSnapshot_ReportsCorruptStatisticsWithoutOverwritingThem()
 - [ ] **Step 2: Run and verify failures**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardRepositoryTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardRepositoryTests"
 ```
 
 - [ ] **Step 3: Add exact snapshot types and status-aware loading**
@@ -86,17 +86,17 @@ Change sidecar loading to return a status-bearing result so missing and corrupt 
 - [ ] **Step 4: Run repository tests and commit**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardRepositoryTests|FullyQualifiedName~NovelStatisticsSidecarServiceTests"
-git add Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs Hoshi/Services/Novels/INovelStatisticsDashboardService.cs Hoshi/Services/Novels/NovelStatisticsDashboardService.cs Hoshi/Services/Novels/NovelStatisticsSidecarService.cs Hoshi.Tests/Services/Novels/NovelStatisticsDashboardRepositoryTests.cs
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardRepositoryTests|FullyQualifiedName~NovelStatisticsSidecarServiceTests"
+git add Niratan/Models/Novel/NovelStatisticsDashboardModels.cs Niratan/Services/Novels/INovelStatisticsDashboardService.cs Niratan/Services/Novels/NovelStatisticsDashboardService.cs Niratan/Services/Novels/NovelStatisticsSidecarService.cs Niratan.Tests/Services/Novels/NovelStatisticsDashboardRepositoryTests.cs
 git commit -m "feat(statistics): load complete dashboard snapshots"
 ```
 
 ### Task 2: Target Snapping, Range Selection, Today, and Week
 
 **Files:**
-- Create: `Hoshi/Services/Novels/NovelStatisticsDashboardCalculator.cs`
-- Modify: `Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs`
-- Test: `Hoshi.Tests/Services/Novels/NovelStatisticsDashboardSummaryTests.cs`
+- Create: `Niratan/Services/Novels/NovelStatisticsDashboardCalculator.cs`
+- Modify: `Niratan/Models/Novel/NovelStatisticsDashboardModels.cs`
+- Test: `Niratan.Tests/Services/Novels/NovelStatisticsDashboardSummaryTests.cs`
 
 **Interfaces:**
 - Produces: `RecentYear`, `SelectedRange`, `TodaySummary`, `WeekSummary`, `RangeSummary`.
@@ -114,7 +114,7 @@ NovelStatisticsDashboardTargets.SnapDurationTarget(33).Should().Be(35);
 - [ ] **Step 2: Run and verify failures**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardSummaryTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardSummaryTests"
 ```
 
 - [ ] **Step 3: Implement pure target/range/summary functions**
@@ -124,17 +124,17 @@ Use `DateOnly`; Monday offset is `((int)DayOfWeek + 6) % 7`. Today may extend an
 - [ ] **Step 4: Run and commit**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardSummaryTests"
-git add Hoshi/Services/Novels/NovelStatisticsDashboardCalculator.cs Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs Hoshi.Tests/Services/Novels/NovelStatisticsDashboardSummaryTests.cs
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardSummaryTests"
+git add Niratan/Services/Novels/NovelStatisticsDashboardCalculator.cs Niratan/Models/Novel/NovelStatisticsDashboardModels.cs Niratan.Tests/Services/Novels/NovelStatisticsDashboardSummaryTests.cs
 git commit -m "feat(statistics): port dashboard goal summaries"
 ```
 
 ### Task 3: Speed Summary and Active-Day Windows
 
 **Files:**
-- Modify: `Hoshi/Services/Novels/NovelStatisticsDashboardCalculator.cs`
-- Modify: `Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs`
-- Test: `Hoshi.Tests/Services/Novels/NovelStatisticsDashboardSpeedTests.cs`
+- Modify: `Niratan/Services/Novels/NovelStatisticsDashboardCalculator.cs`
+- Modify: `Niratan/Models/Novel/NovelStatisticsDashboardModels.cs`
+- Test: `Niratan.Tests/Services/Novels/NovelStatisticsDashboardSpeedTests.cs`
 
 **Interfaces:**
 - Produces: `NovelStatisticsSpeedSummary` with weighted, median, last-seven-active-days, change, fastest, and slowest values.
@@ -146,7 +146,7 @@ Assert short bursts contribute totals but not speed, weighted speed combines onl
 - [ ] **Step 2: Run and verify failures**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardSpeedTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardSpeedTests"
 ```
 
 - [ ] **Step 3: Implement the speed API**
@@ -166,17 +166,17 @@ Filter contributions with `Characters > 0 && ReadingTime >= 60`; never introduce
 - [ ] **Step 4: Run and commit**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardSpeedTests"
-git add Hoshi/Services/Novels/NovelStatisticsDashboardCalculator.cs Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs Hoshi.Tests/Services/Novels/NovelStatisticsDashboardSpeedTests.cs
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardSpeedTests"
+git add Niratan/Services/Novels/NovelStatisticsDashboardCalculator.cs Niratan/Models/Novel/NovelStatisticsDashboardModels.cs Niratan.Tests/Services/Novels/NovelStatisticsDashboardSpeedTests.cs
 git commit -m "feat(statistics): port dashboard speed windows"
 ```
 
 ### Task 4: Trends and Reading Calendar
 
 **Files:**
-- Modify: `Hoshi/Services/Novels/NovelStatisticsDashboardCalculator.cs`
-- Modify: `Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs`
-- Test: `Hoshi.Tests/Services/Novels/NovelStatisticsDashboardTrendTests.cs`
+- Modify: `Niratan/Services/Novels/NovelStatisticsDashboardCalculator.cs`
+- Modify: `Niratan/Models/Novel/NovelStatisticsDashboardModels.cs`
+- Test: `Niratan.Tests/Services/Novels/NovelStatisticsDashboardTrendTests.cs`
 
 **Interfaces:**
 - Produces: day/week/month `TrendPoints` and recent-year `CalendarDays`.
@@ -188,7 +188,7 @@ Cover day/week/month grains independent of range mode; characters/duration/valid
 - [ ] **Step 2: Run and verify failures**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardTrendTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardTrendTests"
 ```
 
 - [ ] **Step 3: Implement typed trend/calendar models**
@@ -207,17 +207,17 @@ Group week points by Monday and month points by first day. Sort tooltip contribu
 - [ ] **Step 4: Run and commit**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardTrendTests"
-git add Hoshi/Services/Novels/NovelStatisticsDashboardCalculator.cs Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs Hoshi.Tests/Services/Novels/NovelStatisticsDashboardTrendTests.cs
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardTrendTests"
+git add Niratan/Services/Novels/NovelStatisticsDashboardCalculator.cs Niratan/Models/Novel/NovelStatisticsDashboardModels.cs Niratan.Tests/Services/Novels/NovelStatisticsDashboardTrendTests.cs
 git commit -m "feat(statistics): port trends and calendar"
 ```
 
 ### Task 5: Book Ranking and Shelf Comparison
 
 **Files:**
-- Modify: `Hoshi/Services/Novels/NovelStatisticsDashboardCalculator.cs`
-- Modify: `Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs`
-- Test: `Hoshi.Tests/Services/Novels/NovelStatisticsDashboardComparisonTests.cs`
+- Modify: `Niratan/Services/Novels/NovelStatisticsDashboardCalculator.cs`
+- Modify: `Niratan/Models/Novel/NovelStatisticsDashboardModels.cs`
+- Test: `Niratan.Tests/Services/Novels/NovelStatisticsDashboardComparisonTests.cs`
 
 **Interfaces:**
 - Consumes: snapshot plus `NovelShelfState`.
@@ -230,7 +230,7 @@ Cover ranking by characters, duration, valid weighted speed, deterministic ties,
 - [ ] **Step 2: Run and verify failures**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardComparisonTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardComparisonTests"
 ```
 
 - [ ] **Step 3: Implement ranking and shelf rows**
@@ -247,18 +247,18 @@ Aggregate contributions by book before joining shelf IDs; use only valid samples
 - [ ] **Step 4: Run and commit**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardComparisonTests"
-git add Hoshi/Services/Novels/NovelStatisticsDashboardCalculator.cs Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs Hoshi.Tests/Services/Novels/NovelStatisticsDashboardComparisonTests.cs
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardComparisonTests"
+git add Niratan/Services/Novels/NovelStatisticsDashboardCalculator.cs Niratan/Models/Novel/NovelStatisticsDashboardModels.cs Niratan.Tests/Services/Novels/NovelStatisticsDashboardComparisonTests.cs
 git commit -m "feat(statistics): rank books and compare shelves"
 ```
 
 ### Task 6: Versioned Derived Cache and Invalidation
 
 **Files:**
-- Create: `Hoshi/Services/Novels/NovelStatisticsDashboardCache.cs`
-- Modify: `Hoshi/Services/Novels/NovelStatisticsDashboardService.cs`
-- Modify: `Hoshi/Messages/NovelLibraryChangedMessage.cs`
-- Test: `Hoshi.Tests/Services/Novels/NovelStatisticsDashboardCacheTests.cs`
+- Create: `Niratan/Services/Novels/NovelStatisticsDashboardCache.cs`
+- Modify: `Niratan/Services/Novels/NovelStatisticsDashboardService.cs`
+- Modify: `Niratan/Messages/NovelLibraryChangedMessage.cs`
+- Test: `Niratan.Tests/Services/Novels/NovelStatisticsDashboardCacheTests.cs`
 
 **Interfaces:**
 - Produces: schema-versioned cache keyed by visible book identity and invalidated by metadata/statistics/book-info/shelves/removal changes.
@@ -270,7 +270,7 @@ Assert stable keys include ID, folder, title, metadata/book-info/statistics modi
 - [ ] **Step 2: Run and verify failures**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardCacheTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardCacheTests"
 ```
 
 - [ ] **Step 3: Implement cache-as-derivative**
@@ -280,17 +280,17 @@ Store `statistics_dashboard_cache_v1.json` through `INiratanJsonFileStore`. Retu
 - [ ] **Step 4: Run and commit**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardCacheTests|FullyQualifiedName~NovelStatisticsDashboardRepositoryTests"
-git add Hoshi/Services/Novels/NovelStatisticsDashboardCache.cs Hoshi/Services/Novels/NovelStatisticsDashboardService.cs Hoshi/Messages/NovelLibraryChangedMessage.cs Hoshi.Tests/Services/Novels/NovelStatisticsDashboardCacheTests.cs
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardCacheTests|FullyQualifiedName~NovelStatisticsDashboardRepositoryTests"
+git add Niratan/Services/Novels/NovelStatisticsDashboardCache.cs Niratan/Services/Novels/NovelStatisticsDashboardService.cs Niratan/Messages/NovelLibraryChangedMessage.cs Niratan.Tests/Services/Novels/NovelStatisticsDashboardCacheTests.cs
 git commit -m "feat(statistics): cache derived dashboard snapshots"
 ```
 
 ### Task 7: Remove Legacy Distribution and Verify Engine Parity
 
 **Files:**
-- Modify: `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs`
-- Modify: `Hoshi/Views/Pages/NovelLibraryPage.xaml`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs`
+- Modify: `Niratan/Views/Pages/NovelLibraryPage.xaml`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `docs/VERIFICATION.md`
 - Modify: `docs/CHANGELOG.md`
@@ -306,13 +306,13 @@ Expose snapshot/loading/corrupt IDs and derived today/week/range/speed/trend/cal
 - [ ] **Step 2: Run focused engine/ViewModel tests**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboard|FullyQualifiedName~NovelLibraryPageViewModelTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboard|FullyQualifiedName~NovelLibraryPageViewModelTests"
 ```
 
 - [ ] **Step 3: Run full verification**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 dotnet build -p:Platform=x64
 ```
 
@@ -321,6 +321,6 @@ Expected: all tests pass and build has zero errors; retained video SQLite may st
 - [ ] **Step 4: Document and commit**
 
 ```powershell
-git add Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs Hoshi/Views/Pages/NovelLibraryPage.xaml Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs docs/ARCHITECTURE.md docs/VERIFICATION.md docs/CHANGELOG.md
+git add Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs Niratan/Views/Pages/NovelLibraryPage.xaml Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs docs/ARCHITECTURE.md docs/VERIFICATION.md docs/CHANGELOG.md
 git commit -m "feat(statistics): complete niratan dashboard engine"
 ```

@@ -12,7 +12,7 @@
 
 - Target Windows 10+ x64; do not build ARM64 by default.
 - Build with `dotnet build -p:Platform=x64`.
-- Test with `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`.
+- Test with `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`.
 - Do not modify `native/hoshidicts/`.
 - Keep WebView2 as the popup content renderer; do not replace structured content with WinUI text controls.
 - Keep View code-behind UI-only and keep persistence in the ViewModel/service layers.
@@ -29,25 +29,25 @@
 
 ## File Structure
 
-- Create `Hoshi/Models/Settings/DictionaryPopupAppearanceConstraints.cs`: canonical defaults, ranges, steps, and normalization.
-- Create `Hoshi.Tests/Models/Settings/DictionaryPopupAppearanceConstraintsTests.cs`: real unit coverage for the settings contract.
-- Create `Hoshi/Services/Dictionary/DictionaryPopupScaleCss.cs`: culture-invariant Niratan scale declarations and custom-CSS pixel transformation.
-- Create `Hoshi.Tests/Services/Dictionary/DictionaryPopupScaleCssTests.cs`: focused scale and custom-CSS tests.
-- Create `Hoshi/Views/Dictionary/DictionaryPopupRedirectRouter.cs`: pure classification of in-place structured links versus nested text lookups.
-- Create `Hoshi.Tests/Views/Dictionary/DictionaryPopupRedirectRouterTests.cs`: routing tests independent of WinUI.
-- Modify `Hoshi/Models/Settings/DictionaryDisplaySettings.cs`: add scale/action/full-width and change size defaults.
-- Modify `Hoshi/ViewModels/Pages/SettingsPageViewModel.cs`: own Appearance bindings and persistence.
-- Modify `Hoshi/ViewModels/Pages/DictionarySettingsPageViewModel.cs`: remove popup presentation ownership.
-- Modify `Hoshi/Views/Controls/ReaderAppearanceSettingsContent.xaml`: render the Niratan Popup section.
-- Modify `Hoshi/Views/Pages/DictionarySettingsPage.xaml`: remove Popup Size cards.
-- Modify `Hoshi/Strings/en-US/Resources.resw` and `Hoshi/Strings/zh-CN/Resources.resw`: localize the new section, controls, and action bar.
-- Modify `Hoshi/Views/Dictionary/DictionaryPopupLayoutCalculator.cs`: resolve full-width bottom placement and shared root/child dimensions.
-- Modify `Hoshi/Views/Dictionary/DictionaryPopupOverlay.cs`: remove child caps, route in-place redirects, and propagate one normalized settings snapshot.
-- Modify `Hoshi/Views/Dictionary/DictionaryLookupPopup.cs`: add the native action bar, navigation state, and in-place result injection.
-- Modify `Hoshi/Services/Dictionary/PopupHtmlGenerator.cs`: inject scale declarations and in-place result scripts.
-- Modify `Hoshi/Web/DictionaryPopup/popup.css`: consume Niratan scale variables.
-- Modify `Hoshi/Web/DictionaryPopup/popup.js`: expose in-place redirect/history state without moving lookup logic into JavaScript.
-- Modify focused existing tests under `Hoshi.Tests/Services/Dictionary`, `Hoshi.Tests/Services/Profiles`, and `Hoshi.Tests/Services/Novels`.
+- Create `Niratan/Models/Settings/DictionaryPopupAppearanceConstraints.cs`: canonical defaults, ranges, steps, and normalization.
+- Create `Niratan.Tests/Models/Settings/DictionaryPopupAppearanceConstraintsTests.cs`: real unit coverage for the settings contract.
+- Create `Niratan/Services/Dictionary/DictionaryPopupScaleCss.cs`: culture-invariant Niratan scale declarations and custom-CSS pixel transformation.
+- Create `Niratan.Tests/Services/Dictionary/DictionaryPopupScaleCssTests.cs`: focused scale and custom-CSS tests.
+- Create `Niratan/Views/Dictionary/DictionaryPopupRedirectRouter.cs`: pure classification of in-place structured links versus nested text lookups.
+- Create `Niratan.Tests/Views/Dictionary/DictionaryPopupRedirectRouterTests.cs`: routing tests independent of WinUI.
+- Modify `Niratan/Models/Settings/DictionaryDisplaySettings.cs`: add scale/action/full-width and change size defaults.
+- Modify `Niratan/ViewModels/Pages/SettingsPageViewModel.cs`: own Appearance bindings and persistence.
+- Modify `Niratan/ViewModels/Pages/DictionarySettingsPageViewModel.cs`: remove popup presentation ownership.
+- Modify `Niratan/Views/Controls/ReaderAppearanceSettingsContent.xaml`: render the Niratan Popup section.
+- Modify `Niratan/Views/Pages/DictionarySettingsPage.xaml`: remove Popup Size cards.
+- Modify `Niratan/Strings/en-US/Resources.resw` and `Niratan/Strings/zh-CN/Resources.resw`: localize the new section, controls, and action bar.
+- Modify `Niratan/Views/Dictionary/DictionaryPopupLayoutCalculator.cs`: resolve full-width bottom placement and shared root/child dimensions.
+- Modify `Niratan/Views/Dictionary/DictionaryPopupOverlay.cs`: remove child caps, route in-place redirects, and propagate one normalized settings snapshot.
+- Modify `Niratan/Views/Dictionary/DictionaryLookupPopup.cs`: add the native action bar, navigation state, and in-place result injection.
+- Modify `Niratan/Services/Dictionary/PopupHtmlGenerator.cs`: inject scale declarations and in-place result scripts.
+- Modify `Niratan/Web/DictionaryPopup/popup.css`: consume Niratan scale variables.
+- Modify `Niratan/Web/DictionaryPopup/popup.js`: expose in-place redirect/history state without moving lookup logic into JavaScript.
+- Modify focused existing tests under `Niratan.Tests/Services/Dictionary`, `Niratan.Tests/Services/Profiles`, and `Niratan.Tests/Services/Novels`.
 - Modify `docs/VERIFICATION.md`: record the popup appearance runtime matrix and automation identifiers.
 
 ---
@@ -55,12 +55,12 @@
 ### Task 1: Define and snapshot the popup appearance contract
 
 **Files:**
-- Create: `Hoshi/Models/Settings/DictionaryPopupAppearanceConstraints.cs`
-- Create: `Hoshi.Tests/Models/Settings/DictionaryPopupAppearanceConstraintsTests.cs`
-- Modify: `Hoshi/Models/Settings/DictionaryDisplaySettings.cs`
-- Modify: `Hoshi.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs`
-- Modify: `Hoshi.Tests/Services/Dictionary/DictionaryPopupRequestServiceTests.cs`
-- Modify: `Hoshi.Tests/Services/Profiles/ProfileSettingsStoreTests.cs`
+- Create: `Niratan/Models/Settings/DictionaryPopupAppearanceConstraints.cs`
+- Create: `Niratan.Tests/Models/Settings/DictionaryPopupAppearanceConstraintsTests.cs`
+- Modify: `Niratan/Models/Settings/DictionaryDisplaySettings.cs`
+- Modify: `Niratan.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs`
+- Modify: `Niratan.Tests/Services/Dictionary/DictionaryPopupRequestServiceTests.cs`
+- Modify: `Niratan.Tests/Services/Profiles/ProfileSettingsStoreTests.cs`
 
 **Interfaces:**
 - Produces: `DictionaryPopupAppearanceConstraints.NormalizeWidth(int) -> int`.
@@ -71,13 +71,13 @@
 
 - [ ] **Step 1: Write the failing constraints and defaults tests**
 
-Create `Hoshi.Tests/Models/Settings/DictionaryPopupAppearanceConstraintsTests.cs`:
+Create `Niratan.Tests/Models/Settings/DictionaryPopupAppearanceConstraintsTests.cs`:
 
 ```csharp
 using FluentAssertions;
-using Hoshi.Models.Settings;
+using Niratan.Models.Settings;
 
-namespace Hoshi.Tests.Models.Settings;
+namespace Niratan.Tests.Models.Settings;
 
 public sealed class DictionaryPopupAppearanceConstraintsTests
 {
@@ -133,7 +133,7 @@ public sealed class DictionaryPopupAppearanceConstraintsTests
 ```
 
 Update `DictionaryDisplaySettings_DefaultsMatchHoshiReaderAndroid` to rename it
-`DictionaryDisplaySettings_DefaultsMatchHoshiAndNiratan` and assert the five
+`DictionaryDisplaySettings_DefaultsMatchNiratan` and assert the five
 values above instead of `560` and `420`.
 
 Extend `CreateAsync_CapturesSettingsSnapshotForPopupDisplay` with:
@@ -183,7 +183,7 @@ settings.Current.DictionaryDisplaySettings.Should().Match<DictionaryDisplaySetti
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupAppearanceConstraintsTests|FullyQualifiedName~DictionaryDisplaySettings_Defaults|FullyQualifiedName~CreateAsync_CapturesSettingsSnapshotForPopupDisplay|FullyQualifiedName~ProfileSettingsStoreTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupAppearanceConstraintsTests|FullyQualifiedName~DictionaryDisplaySettings_Defaults|FullyQualifiedName~CreateAsync_CapturesSettingsSnapshotForPopupDisplay|FullyQualifiedName~ProfileSettingsStoreTests"
 ```
 
 Expected: compilation fails because the constraints type and three settings
@@ -196,7 +196,7 @@ Create `DictionaryPopupAppearanceConstraints.cs`:
 ```csharp
 using System;
 
-namespace Hoshi.Models.Settings;
+namespace Niratan.Models.Settings;
 
 internal static class DictionaryPopupAppearanceConstraints
 {
@@ -242,7 +242,7 @@ Run the Step 2 command. Expected: all selected tests pass.
 - [ ] **Step 5: Commit the contract**
 
 ```powershell
-git add -- Hoshi/Models/Settings/DictionaryDisplaySettings.cs Hoshi/Models/Settings/DictionaryPopupAppearanceConstraints.cs Hoshi.Tests/Models/Settings/DictionaryPopupAppearanceConstraintsTests.cs Hoshi.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs Hoshi.Tests/Services/Dictionary/DictionaryPopupRequestServiceTests.cs Hoshi.Tests/Services/Profiles/ProfileSettingsStoreTests.cs
+git add -- Niratan/Models/Settings/DictionaryDisplaySettings.cs Niratan/Models/Settings/DictionaryPopupAppearanceConstraints.cs Niratan.Tests/Models/Settings/DictionaryPopupAppearanceConstraintsTests.cs Niratan.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs Niratan.Tests/Services/Dictionary/DictionaryPopupRequestServiceTests.cs Niratan.Tests/Services/Profiles/ProfileSettingsStoreTests.cs
 git commit -m "feat: define popup appearance settings"
 ```
 
@@ -251,13 +251,13 @@ git commit -m "feat: define popup appearance settings"
 ### Task 2: Move popup controls from Dictionary to Appearance
 
 **Files:**
-- Modify: `Hoshi/ViewModels/Pages/SettingsPageViewModel.cs`
-- Modify: `Hoshi/ViewModels/Pages/DictionarySettingsPageViewModel.cs`
-- Modify: `Hoshi/Views/Controls/ReaderAppearanceSettingsContent.xaml`
-- Modify: `Hoshi/Views/Pages/DictionarySettingsPage.xaml`
-- Modify: `Hoshi/Strings/en-US/Resources.resw`
-- Modify: `Hoshi/Strings/zh-CN/Resources.resw`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Niratan/ViewModels/Pages/SettingsPageViewModel.cs`
+- Modify: `Niratan/ViewModels/Pages/DictionarySettingsPageViewModel.cs`
+- Modify: `Niratan/Views/Controls/ReaderAppearanceSettingsContent.xaml`
+- Modify: `Niratan/Views/Pages/DictionarySettingsPage.xaml`
+- Modify: `Niratan/Strings/en-US/Resources.resw`
+- Modify: `Niratan/Strings/zh-CN/Resources.resw`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
 - Consumes: `DictionaryPopupAppearanceConstraints` and `DictionaryDisplaySettings` from Task 1.
@@ -320,7 +320,7 @@ Extend the resource-key contract test to require:
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~PopupAppearanceSettings_AreOwnedByAppearanceAndMatchNiratanControls|FullyQualifiedName~SettingsResourceKeys"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~PopupAppearanceSettings_AreOwnedByAppearanceAndMatchNiratanControls|FullyQualifiedName~SettingsResourceKeys"
 ```
 
 Expected: the Appearance XAML and ViewModel assertions fail because popup
@@ -490,7 +490,7 @@ generation.
 - [ ] **Step 6: Commit the settings move**
 
 ```powershell
-git add -- Hoshi/ViewModels/Pages/SettingsPageViewModel.cs Hoshi/ViewModels/Pages/DictionarySettingsPageViewModel.cs Hoshi/Views/Controls/ReaderAppearanceSettingsContent.xaml Hoshi/Views/Pages/DictionarySettingsPage.xaml Hoshi/Strings/en-US/Resources.resw Hoshi/Strings/zh-CN/Resources.resw Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add -- Niratan/ViewModels/Pages/SettingsPageViewModel.cs Niratan/ViewModels/Pages/DictionarySettingsPageViewModel.cs Niratan/Views/Controls/ReaderAppearanceSettingsContent.xaml Niratan/Views/Pages/DictionarySettingsPage.xaml Niratan/Strings/en-US/Resources.resw Niratan/Strings/zh-CN/Resources.resw Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "feat: move popup controls to appearance"
 ```
 
@@ -499,10 +499,10 @@ git commit -m "feat: move popup controls to appearance"
 ### Task 3: Unify root, child, and full-width layout
 
 **Files:**
-- Modify: `Hoshi/Views/Dictionary/DictionaryPopupLayoutCalculator.cs`
-- Modify: `Hoshi/Views/Dictionary/DictionaryPopupOverlay.cs`
-- Modify: `Hoshi.Tests/Views/Dictionary/DictionaryPopupLayoutCalculatorTests.cs`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Niratan/Views/Dictionary/DictionaryPopupLayoutCalculator.cs`
+- Modify: `Niratan/Views/Dictionary/DictionaryPopupOverlay.cs`
+- Modify: `Niratan.Tests/Views/Dictionary/DictionaryPopupLayoutCalculatorTests.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
 - Consumes: normalized dimensions and `PopupFullWidth` from Task 1.
@@ -559,7 +559,7 @@ Add an asset assertion that `DictionaryPopupOverlay.cs` no longer contains
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupLayoutCalculatorTests|FullyQualifiedName~DictionaryPopupSettings"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupLayoutCalculatorTests|FullyQualifiedName~DictionaryPopupSettings"
 ```
 
 Expected: compilation fails because `Resolve` has no `isFullWidth` parameter,
@@ -610,7 +610,7 @@ Expected: tests pass and the build succeeds.
 - [ ] **Step 5: Commit unified layout**
 
 ```powershell
-git add -- Hoshi/Views/Dictionary/DictionaryPopupLayoutCalculator.cs Hoshi/Views/Dictionary/DictionaryPopupOverlay.cs Hoshi.Tests/Views/Dictionary/DictionaryPopupLayoutCalculatorTests.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add -- Niratan/Views/Dictionary/DictionaryPopupLayoutCalculator.cs Niratan/Views/Dictionary/DictionaryPopupOverlay.cs Niratan.Tests/Views/Dictionary/DictionaryPopupLayoutCalculatorTests.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "feat: apply popup layout settings to nested lookups"
 ```
 
@@ -619,11 +619,11 @@ git commit -m "feat: apply popup layout settings to nested lookups"
 ### Task 4: Apply Niratan-compatible popup scale
 
 **Files:**
-- Create: `Hoshi/Services/Dictionary/DictionaryPopupScaleCss.cs`
-- Create: `Hoshi.Tests/Services/Dictionary/DictionaryPopupScaleCssTests.cs`
-- Modify: `Hoshi/Services/Dictionary/PopupHtmlGenerator.cs`
-- Modify: `Hoshi/Web/DictionaryPopup/popup.css`
-- Modify: `Hoshi.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs`
+- Create: `Niratan/Services/Dictionary/DictionaryPopupScaleCss.cs`
+- Create: `Niratan.Tests/Services/Dictionary/DictionaryPopupScaleCssTests.cs`
+- Modify: `Niratan/Services/Dictionary/PopupHtmlGenerator.cs`
+- Modify: `Niratan/Web/DictionaryPopup/popup.css`
+- Modify: `Niratan.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs`
 
 **Interfaces:**
 - Consumes: normalized `DictionaryDisplaySettings.PopupScale`.
@@ -637,9 +637,9 @@ Create `DictionaryPopupScaleCssTests.cs`:
 
 ```csharp
 using FluentAssertions;
-using Hoshi.Services.Dictionary;
+using Niratan.Services.Dictionary;
 
-namespace Hoshi.Tests.Services.Dictionary;
+namespace Niratan.Tests.Services.Dictionary;
 
 public sealed class DictionaryPopupScaleCssTests
 {
@@ -681,7 +681,7 @@ public void PopupHtml_AppliesScaleBeforeRendering()
     shell.Should().Contain("--popup-scale:1.25;");
     shell.Should().Contain("calc(8px * var(--popup-scale))");
     injection.IndexOf("--popup-scale", StringComparison.Ordinal)
-        .Should().BeLessThan(injection.IndexOf("window.hoshiInjectResults", StringComparison.Ordinal));
+        .Should().BeLessThan(injection.IndexOf("window.niratanInjectResults", StringComparison.Ordinal));
 }
 ```
 
@@ -690,7 +690,7 @@ public void PopupHtml_AppliesScaleBeforeRendering()
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupScaleCssTests|FullyQualifiedName~PopupHtml_AppliesScaleBeforeRendering"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupScaleCssTests|FullyQualifiedName~PopupHtml_AppliesScaleBeforeRendering"
 ```
 
 Expected: compilation fails because `DictionaryPopupScaleCss` does not exist.
@@ -703,9 +703,9 @@ variable set:
 ```csharp
 using System.Globalization;
 using System.Text.RegularExpressions;
-using Hoshi.Models.Settings;
+using Niratan.Models.Settings;
 
-namespace Hoshi.Services.Dictionary;
+namespace Niratan.Services.Dictionary;
 
 internal static partial class DictionaryPopupScaleCss
 {
@@ -755,7 +755,7 @@ internal static partial class DictionaryPopupScaleCss
 In `PopupHtmlGenerator`, place `BuildDeclarations(settings.PopupScale)` in the
 shell's root style and set the same declarations on `document.documentElement`
 and `document.body` before assigning `window.customCSS` and calling
-`window.hoshiInjectResults`. Pass `ScaleCustomCss(settings.CustomCSS)` instead
+`window.niratanInjectResults`. Pass `ScaleCustomCss(settings.CustomCSS)` instead
 of raw custom CSS in both shell and injection paths.
 
 In `popup.css`, define the variables at `1.0` defaults and replace fixed popup
@@ -780,7 +780,7 @@ Keep percentage, `em`, and structured-content author dimensions unchanged.
 Run the Step 2 command, then:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryLookupServiceTests|FullyQualifiedName~DictionaryPopup"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryLookupServiceTests|FullyQualifiedName~DictionaryPopup"
 ```
 
 Expected: all selected tests pass.
@@ -788,7 +788,7 @@ Expected: all selected tests pass.
 - [ ] **Step 5: Commit scale support**
 
 ```powershell
-git add -- Hoshi/Services/Dictionary/DictionaryPopupScaleCss.cs Hoshi/Services/Dictionary/PopupHtmlGenerator.cs Hoshi/Web/DictionaryPopup/popup.css Hoshi.Tests/Services/Dictionary/DictionaryPopupScaleCssTests.cs Hoshi.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs
+git add -- Niratan/Services/Dictionary/DictionaryPopupScaleCss.cs Niratan/Services/Dictionary/PopupHtmlGenerator.cs Niratan/Web/DictionaryPopup/popup.css Niratan.Tests/Services/Dictionary/DictionaryPopupScaleCssTests.cs Niratan.Tests/Services/Dictionary/DictionaryLookupServiceTests.cs
 git commit -m "feat: scale dictionary popup content"
 ```
 
@@ -797,15 +797,15 @@ git commit -m "feat: scale dictionary popup content"
 ### Task 5: Add the Niratan action bar and in-place history
 
 **Files:**
-- Create: `Hoshi/Views/Dictionary/DictionaryPopupRedirectRouter.cs`
-- Create: `Hoshi.Tests/Views/Dictionary/DictionaryPopupRedirectRouterTests.cs`
-- Modify: `Hoshi/Views/Dictionary/DictionaryLookupPopup.cs`
-- Modify: `Hoshi/Views/Dictionary/DictionaryPopupOverlay.cs`
-- Modify: `Hoshi/Services/Dictionary/PopupHtmlGenerator.cs`
-- Modify: `Hoshi/Web/DictionaryPopup/popup.js`
-- Modify: `Hoshi/Strings/en-US/Resources.resw`
-- Modify: `Hoshi/Strings/zh-CN/Resources.resw`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Create: `Niratan/Views/Dictionary/DictionaryPopupRedirectRouter.cs`
+- Create: `Niratan.Tests/Views/Dictionary/DictionaryPopupRedirectRouterTests.cs`
+- Modify: `Niratan/Views/Dictionary/DictionaryLookupPopup.cs`
+- Modify: `Niratan/Views/Dictionary/DictionaryPopupOverlay.cs`
+- Modify: `Niratan/Services/Dictionary/PopupHtmlGenerator.cs`
+- Modify: `Niratan/Web/DictionaryPopup/popup.js`
+- Modify: `Niratan/Strings/en-US/Resources.resw`
+- Modify: `Niratan/Strings/zh-CN/Resources.resw`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
 - Produces: `DictionaryPopupRedirectMode { InPlace, Nested }`.
@@ -821,9 +821,9 @@ Create `DictionaryPopupRedirectRouterTests.cs`:
 
 ```csharp
 using FluentAssertions;
-using Hoshi.Views.Dictionary;
+using Niratan.Views.Dictionary;
 
-namespace Hoshi.Tests.Views.Dictionary;
+namespace Niratan.Tests.Views.Dictionary;
 
 public sealed class DictionaryPopupRedirectRouterTests
 {
@@ -853,7 +853,7 @@ popupCode.Should().Contain("NavigateBackAsync");
 popupCode.Should().Contain("NavigateForwardAsync");
 popupCode.Should().Contain("case \"navigationState\"");
 overlayCode.Should().Contain("DictionaryPopupRedirectMode.InPlace");
-popupJs.Should().Contain("window.hoshiRedirectResults");
+popupJs.Should().Contain("window.niratanRedirectResults");
 popupJs.Should().Contain("postNavigationState");
 popupJs.Should().Contain("canGoBack: backStack.length > 0");
 popupJs.Should().Contain("canGoForward: forwardStack.length > 0");
@@ -864,7 +864,7 @@ popupJs.Should().Contain("canGoForward: forwardStack.length > 0");
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupRedirectRouterTests|FullyQualifiedName~DictionaryPopupActionBar"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupRedirectRouterTests|FullyQualifiedName~DictionaryPopupActionBar"
 ```
 
 Expected: compilation fails because the router does not exist and asset
@@ -875,7 +875,7 @@ assertions fail because the popup has only Sasayaki controls.
 Create `DictionaryPopupRedirectRouter.cs`:
 
 ```csharp
-namespace Hoshi.Views.Dictionary;
+namespace Niratan.Views.Dictionary;
 
 internal enum DictionaryPopupRedirectMode
 {
@@ -907,7 +907,7 @@ function postNavigationState() {
   });
 }
 
-window.hoshiRedirectResults = function (entriesJson, count) {
+window.niratanRedirectResults = function (entriesJson, count) {
   flushPendingHistoryRestore();
   backStack.push(snapshot());
   forwardStack.length = 0;
@@ -955,7 +955,7 @@ It applies the same theme, scale, dictionary, audio, Anki, and trace variables
 as `GenerateInjectionScript`, then calls:
 
 ```javascript
-window.hoshiRedirectResults(serializedEntries, resultCount);
+window.niratanRedirectResults(serializedEntries, resultCount);
 ```
 
 - [ ] **Step 5: Add the native WinUI CommandBar**
@@ -1036,7 +1036,7 @@ gets action-bar visibility and its own history.
 Run the Step 2 command, then:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryLookupServiceTests|FullyQualifiedName~DictionaryPopup"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryLookupServiceTests|FullyQualifiedName~DictionaryPopup"
 dotnet build -p:Platform=x64
 ```
 
@@ -1045,7 +1045,7 @@ Expected: selected tests pass and the x64 build succeeds.
 - [ ] **Step 8: Commit action-bar history**
 
 ```powershell
-git add -- Hoshi/Views/Dictionary/DictionaryPopupRedirectRouter.cs Hoshi/Views/Dictionary/DictionaryLookupPopup.cs Hoshi/Views/Dictionary/DictionaryPopupOverlay.cs Hoshi/Services/Dictionary/PopupHtmlGenerator.cs Hoshi/Web/DictionaryPopup/popup.js Hoshi/Strings/en-US/Resources.resw Hoshi/Strings/zh-CN/Resources.resw Hoshi.Tests/Views/Dictionary/DictionaryPopupRedirectRouterTests.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add -- Niratan/Views/Dictionary/DictionaryPopupRedirectRouter.cs Niratan/Views/Dictionary/DictionaryLookupPopup.cs Niratan/Views/Dictionary/DictionaryPopupOverlay.cs Niratan/Services/Dictionary/PopupHtmlGenerator.cs Niratan/Web/DictionaryPopup/popup.js Niratan/Strings/en-US/Resources.resw Niratan/Strings/zh-CN/Resources.resw Niratan.Tests/Views/Dictionary/DictionaryPopupRedirectRouterTests.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "feat: add popup action bar history"
 ```
 
@@ -1055,7 +1055,7 @@ git commit -m "feat: add popup action bar history"
 
 **Files:**
 - Modify: `docs/VERIFICATION.md`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs` only if a final contract gap is found before implementation; do not weaken passing assertions.
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs` only if a final contract gap is found before implementation; do not weaken passing assertions.
 
 **Interfaces:**
 - Consumes: all Tasks 1-5.
@@ -1087,7 +1087,7 @@ Add this checklist to the Dictionary verification section of
 - [ ] **Step 2: Run dictionary-focused tests**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Dictionary"
 ```
 
 Expected: all dictionary-focused tests pass with zero failures.
@@ -1096,7 +1096,7 @@ Expected: all dictionary-focused tests pass with zero failures.
 
 ```powershell
 dotnet build -p:Platform=x64
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: build and all tests pass with zero failures.
@@ -1109,7 +1109,7 @@ Run:
 .\build-and-run.ps1
 ```
 
-Confirm a responsive Hoshi top-level window exists. Use the existing UI
+Confirm a responsive Niratan top-level window exists. Use the existing UI
 automation path and `C:\Users\Wight\Downloads\哈利波特1魔法石.epub` to execute
 the six runtime checks written in Step 1. Also verify video popup configuration
 on the existing test video flow. Leave the final verified app instance running.

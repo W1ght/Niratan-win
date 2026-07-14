@@ -9,7 +9,7 @@ Execute the full reader verification flow defined in [docs/VERIFICATION.md §2](
 
 ## Prerequisites
 
-- `HOSHI_NOVEL_READER_ARTIFACT_DIR` env var set (default: `docs/superpowers/artifacts/novel-reader`)
+- `NIRATAN_NOVEL_READER_ARTIFACT_DIR` env var set (default: `docs/superpowers/artifacts/novel-reader`)
 - Test EPUB available at `C:\Users\Wight\Downloads\哈利波特1魔法石.epub`
 
 ## Verification Flow
@@ -26,7 +26,7 @@ Use FlaUI / UIA3 to:
 1. Navigate to `NovelNavItem`
 2. Open the test EPUB (Harry Potter) via `NovelBookCard_<bookId>`
 3. Wait for `NovelReaderPage` to appear
-4. Wait for `window.__hoshiReaderState.bridgeReady == true`
+4. Wait for `window.__niratanReaderState.bridgeReady == true`
 5. Wait for `statusText` to show `EPUB loaded`
 6. Wait for `hasRenderedText == true`
 
@@ -38,7 +38,7 @@ Use FlaUI / UIA3 to:
 
 ### 4. Capture Diagnostics
 
-Read `window.__hoshiReaderState` and verify:
+Read `window.__niratanReaderState` and verify:
 - `bridgeReady == true`
 - `statusText` does NOT contain `Reader bridge error`
 - `sectionCount > 0`
@@ -49,9 +49,9 @@ Read `window.__hoshiReaderState` and verify:
 
 ### 5. Save Artifacts
 
-Save to `$env:HOSHI_NOVEL_READER_ARTIFACT_DIR`:
+Save to `$env:NIRATAN_NOVEL_READER_ARTIFACT_DIR`:
 - WebView2 content screenshot
-- `window.__hoshiReaderState` JSON
+- `window.__niratanReaderState` JSON
 - UIA tree summary
 - Window screenshot
 
@@ -76,5 +76,5 @@ Expected: bridge ready, EPUB loaded, visible content, no errors
 # Full verification
 .\build-and-run.ps1
 # Wait for app, then run UIA verification
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReader"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReader"
 ```

@@ -2,13 +2,13 @@
 
 ## Goal
 
-Make the Dashboard reading calendar match the compact Hoshi heatmap: small day cells with consistently small gaps, seven rows, and horizontal scrolling through the recent year.
+Make the Dashboard reading calendar match the compact Niratan heatmap: small day cells with consistently small gaps, seven rows, and horizontal scrolling through the recent year.
 
 ## Root Cause
 
 The WinUI calendar uses a `ListView` with an `ItemsWrapGrid`, but neither the item container nor the panel slot has a compact fixed size. The default `ListViewItem` preserves a touch-oriented minimum extent, so the 18-pixel day square is centered inside a much larger row and column slot. The result is the widely separated grid shown in the reported screenshot.
 
-The Hoshi macOS reference uses 12-by-12 day cells, four effective pixels between cells, seven fixed rows, and ten pixels of heatmap padding.
+The Niratan macOS reference uses 12-by-12 day cells, four effective pixels between cells, seven fixed rows, and ten pixels of heatmap padding.
 
 ## Layout
 

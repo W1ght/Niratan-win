@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the oversized WinUI reading-calendar item slots with the compact 12-pixel Hoshi heatmap and consistent four-pixel gaps.
+**Goal:** Replace the oversized WinUI reading-calendar item slots with the compact 12-pixel Niratan heatmap and consistent four-pixel gaps.
 
 **Architecture:** Keep the existing `CalendarDays` data and `ListView` selection flow. Constrain the view layer at all three sizing boundaries: the day template, the `ListViewItem` container, and the `ItemsWrapGrid` slot, so WinUI theme touch-target defaults cannot expand the heatmap.
 
@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Do not modify `native/hoshidicts/` or either Hoshi reference submodule.
+- Do not modify `native/hoshidicts/` or either Niratan reference submodule.
 - Keep the existing View → ViewModel → Service layering; this fix is XAML-only production code.
 - Each visible day cell is exactly 12 by 12 effective pixels.
 - The visible gap between adjacent cells is exactly four effective pixels.
@@ -22,9 +22,9 @@
 ### Task 1: Enforce compact heatmap slots
 
 **Files:**
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs:2618-2645`
-- Modify: `Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml:55-69`
-- Modify: `Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml:472-496`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs:2618-2645`
+- Modify: `Niratan/Views/Controls/NovelStatisticsDashboardView.xaml:55-69`
+- Modify: `Niratan/Views/Controls/NovelStatisticsDashboardView.xaml:472-496`
 
 **Interfaces:**
 - Consumes: `NovelStatisticsCalendarDayDisplay`, `CalendarDays`, and `SelectedCalendarDay` without changing their types.
@@ -64,7 +64,7 @@ dashboardXaml.Should().Contain("MaximumRowsOrColumns=\"7\"");
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --no-restore --filter "FullyQualifiedName=Hoshi.Tests.Services.Novels.NovelReaderWebAssetTests.NovelLibraryPage_ExposesStatisticsDashboard"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --no-restore --filter "FullyQualifiedName=Niratan.Tests.Services.Novels.NovelReaderWebAssetTests.NovelLibraryPage_ExposesStatisticsDashboard"
 ```
 
 Expected: FAIL because the day template is 18 pixels, the list is 190 pixels high, and the container/panel do not have compact fixed sizing.
@@ -123,7 +123,7 @@ Fix the panel slot:
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --no-restore --filter "FullyQualifiedName~NovelReaderWebAssetTests.NovelLibraryPage_ExposesStatisticsDashboard|FullyQualifiedName~NovelStatisticsDashboard"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --no-restore --filter "FullyQualifiedName~NovelReaderWebAssetTests.NovelLibraryPage_ExposesStatisticsDashboard|FullyQualifiedName~NovelStatisticsDashboard"
 ```
 
 Expected: PASS with all matching tests and zero failures.
@@ -131,7 +131,7 @@ Expected: PASS with all matching tests and zero failures.
 - [ ] **Step 5: Commit the compact layout**
 
 ```powershell
-git add Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml
+git add Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs Niratan/Views/Controls/NovelStatisticsDashboardView.xaml
 git commit -m "fix(statistics): compact calendar heatmap spacing"
 ```
 
@@ -157,7 +157,7 @@ Run:
 
 ```powershell
 git diff --check
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 dotnet build -p:Platform=x64
 ```
 

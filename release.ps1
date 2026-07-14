@@ -57,7 +57,7 @@ function New-ReleasePlan {
         RunsLocalBuildOrTests = $false
         Steps = @(
             'Require clean main working tree'
-            'Update Hoshi.csproj release version and commit it if needed'
+            'Update Niratan.csproj release version and commit it if needed'
             'Push main and immutable release tag'
             'Wait for GitHub Actions packaging workflow to test, package, validate hoshidicts_c_api.dll, and create the release'
             'Validate GitHub Release assets created directly by GitHub Actions'
@@ -142,15 +142,15 @@ function Set-ProjectVersion {
         [string]$ReleaseVersion
     )
 
-    $projectPath = Join-Path $RepoRoot 'Hoshi\Hoshi.csproj'
+    $projectPath = Join-Path $RepoRoot 'Niratan\Niratan.csproj'
     $content = Get-Content -LiteralPath $projectPath -Raw -Encoding UTF8
 
     if ($content -notmatch '<VersionPrefix>[^<]+</VersionPrefix>') {
-        throw 'Hoshi.csproj is missing VersionPrefix.'
+        throw 'Niratan.csproj is missing VersionPrefix.'
     }
 
     if ($content -notmatch '<VersionSuffix>[^<]*</VersionSuffix>') {
-        throw 'Hoshi.csproj is missing VersionSuffix.'
+        throw 'Niratan.csproj is missing VersionSuffix.'
     }
 
     $updated = $content -replace '<VersionPrefix>[^<]+</VersionPrefix>', "<VersionPrefix>$ReleaseVersion</VersionPrefix>"
@@ -280,13 +280,13 @@ function Assert-ReleaseAssets {
 
     $assetNames = @($Release.assets | ForEach-Object { [string]$_.name })
 
-    if (-not ($assetNames -contains 'Hoshi.Minimal.x64.zip')) {
-        throw "GitHub Release $Tag is missing Hoshi.Minimal.x64.zip. Assets: $($assetNames -join ', ')"
+    if (-not ($assetNames -contains 'Niratan.Minimal.x64.zip')) {
+        throw "GitHub Release $Tag is missing Niratan.Minimal.x64.zip. Assets: $($assetNames -join ', ')"
     }
 
-    $setupAsset = $assetNames | Where-Object { $_ -like 'Hoshi.Setup.x64*.exe' } | Select-Object -First 1
+    $setupAsset = $assetNames | Where-Object { $_ -like 'Niratan.Setup.x64*.exe' } | Select-Object -First 1
     if (-not $setupAsset) {
-        throw "GitHub Release $Tag is missing Hoshi.Setup.x64*.exe. Assets: $($assetNames -join ', ')"
+        throw "GitHub Release $Tag is missing Niratan.Setup.x64*.exe. Assets: $($assetNames -join ', ')"
     }
 }
 
@@ -332,11 +332,11 @@ try {
 
     $versionChanged = Set-ProjectVersion -RepoRoot $repoRoot -ReleaseVersion $normalized.Version
     if ($versionChanged) {
-        Invoke-External git @('add', 'Hoshi/Hoshi.csproj')
+        Invoke-External git @('add', 'Niratan/Niratan.csproj')
         Invoke-External git @('commit', '-m', "chore: release $($normalized.Tag)")
     }
     else {
-        Write-Host "Hoshi.csproj already has version $($normalized.Version)."
+        Write-Host "Niratan.csproj already has version $($normalized.Version)."
     }
 
     Invoke-External git @('push', 'origin', $Branch)

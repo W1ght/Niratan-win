@@ -9,7 +9,7 @@ description: WinUI 3 XAML conventions — x:Uid i18n, layout, styles, data bindi
 
 ```xml
 <Page
-    x:Class="Hoshi.Views.Pages.FooPage"
+    x:Class="Niratan.Views.Pages.FooPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -26,9 +26,9 @@ description: WinUI 3 XAML conventions — x:Uid i18n, layout, styles, data bindi
 
 ```csharp
 using Microsoft.UI.Xaml.Controls;
-using Hoshi.ViewModels.Pages;
+using Niratan.ViewModels.Pages;
 
-namespace Hoshi.Views.Pages;
+namespace Niratan.Views.Pages;
 
 public sealed partial class FooPage : Page
 {

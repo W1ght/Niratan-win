@@ -10,43 +10,43 @@
 
 ## Global Constraints
 
-- Export only the original EPUB retained in Hoshi private storage; do not include sidecars.
+- Export only the original EPUB retained in Niratan private storage; do not include sidecars.
 - Do not modify `native/hoshidicts/`.
 - Keep View → ViewModel → Service layering; no business logic in code-behind and no file I/O in the ViewModel.
 - Keep the operation asynchronous and do not block the UI thread.
 - Do not add a second storage or database technology.
 - Target Windows 10+ x64; do not build ARM64 by default.
 - Preserve unrelated dirty-worktree changes.
-- Verify with `dotnet build -p:Platform=x64` and `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`.
+- Verify with `dotnet build -p:Platform=x64` and `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`.
 
 ---
 
 ## File Map
 
-- Create `Hoshi/Services/Novels/NovelExportFileName.cs`: pure creation of the save picker's safe base file name.
-- Modify `Hoshi/Services/Novels/INovelLibraryService.cs`: expose `ExportEpubAsync`.
-- Modify `Hoshi/Services/Novels/NovelLibraryService.cs`: validate and asynchronously copy the private EPUB.
-- Modify `Hoshi/Services/UI/IDialogService.cs`: expose a save-file picker boundary.
-- Modify `Hoshi/Services/UI/DialogService.cs`: configure the Windows App SDK picker and return its selected path.
-- Modify `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs`: coordinate picker, export result, and notifications.
-- Modify `Hoshi/Views/Pages/NovelLibraryPage.xaml`: add the local-book context-menu item.
-- Modify `Hoshi/Strings/en-US/Resources.resw` and `Hoshi/Strings/zh-CN/Resources.resw`: localize the item and its automation name.
-- Modify `Hoshi.Tests/Services/Novels/NovelLibraryServiceTests.cs`: prove exact copying and safe failure behavior.
-- Create `Hoshi.Tests/Services/Novels/NovelExportFileNameTests.cs`: prove suggested-name sanitization.
-- Modify `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`: prove cancel, success, and failure orchestration; update its hand-written interface fake.
-- Modify `Hoshi.Tests/Services/Sync/TtuBookImportServiceTests.cs`: update its hand-written interface fake for the new method.
-- Modify `Hoshi.Tests/Views/Pages/NovelLibraryPageAssetTests.cs`: prove the menu binding and localized accessibility assets.
+- Create `Niratan/Services/Novels/NovelExportFileName.cs`: pure creation of the save picker's safe base file name.
+- Modify `Niratan/Services/Novels/INovelLibraryService.cs`: expose `ExportEpubAsync`.
+- Modify `Niratan/Services/Novels/NovelLibraryService.cs`: validate and asynchronously copy the private EPUB.
+- Modify `Niratan/Services/UI/IDialogService.cs`: expose a save-file picker boundary.
+- Modify `Niratan/Services/UI/DialogService.cs`: configure the Windows App SDK picker and return its selected path.
+- Modify `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs`: coordinate picker, export result, and notifications.
+- Modify `Niratan/Views/Pages/NovelLibraryPage.xaml`: add the local-book context-menu item.
+- Modify `Niratan/Strings/en-US/Resources.resw` and `Niratan/Strings/zh-CN/Resources.resw`: localize the item and its automation name.
+- Modify `Niratan.Tests/Services/Novels/NovelLibraryServiceTests.cs`: prove exact copying and safe failure behavior.
+- Create `Niratan.Tests/Services/Novels/NovelExportFileNameTests.cs`: prove suggested-name sanitization.
+- Modify `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`: prove cancel, success, and failure orchestration; update its hand-written interface fake.
+- Modify `Niratan.Tests/Services/Sync/TtuBookImportServiceTests.cs`: update its hand-written interface fake for the new method.
+- Modify `Niratan.Tests/Views/Pages/NovelLibraryPageAssetTests.cs`: prove the menu binding and localized accessibility assets.
 
 ---
 
 ### Task 1: Safe, byte-exact library export
 
 **Files:**
-- Modify: `Hoshi/Services/Novels/INovelLibraryService.cs`
-- Modify: `Hoshi/Services/Novels/NovelLibraryService.cs`
-- Modify: `Hoshi.Tests/Services/Novels/NovelLibraryServiceTests.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
-- Modify: `Hoshi.Tests/Services/Sync/TtuBookImportServiceTests.cs`
+- Modify: `Niratan/Services/Novels/INovelLibraryService.cs`
+- Modify: `Niratan/Services/Novels/NovelLibraryService.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelLibraryServiceTests.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
+- Modify: `Niratan.Tests/Services/Sync/TtuBookImportServiceTests.cs`
 
 **Interfaces:**
 - Consumes: `INovelBookStorageService.LoadAsync(string bookId, CancellationToken ct)` and `NovelBook.FilePath`.
@@ -177,14 +177,14 @@ public async Task ExportEpubAsync_RemainsAvailableWhenLibraryIsReadOnly()
 }
 ```
 
-Use the existing `Hoshi.Tests.TestUtils.TempDirectory` namespace import if it is not already present.
+Use the existing `Niratan.Tests.TestUtils.TempDirectory` namespace import if it is not already present.
 
 - [ ] **Step 2: Run the focused tests and verify RED**
 
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryServiceTests"
 ```
 
 Expected: compilation fails because `NovelLibraryService.ExportEpubAsync` does not exist.
@@ -291,7 +291,7 @@ Expected: all `NovelLibraryServiceTests` pass.
 - [ ] **Step 5: Commit the service boundary**
 
 ```powershell
-git add Hoshi/Services/Novels/INovelLibraryService.cs Hoshi/Services/Novels/NovelLibraryService.cs Hoshi.Tests/Services/Novels/NovelLibraryServiceTests.cs Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs Hoshi.Tests/Services/Sync/TtuBookImportServiceTests.cs
+git add Niratan/Services/Novels/INovelLibraryService.cs Niratan/Services/Novels/NovelLibraryService.cs Niratan.Tests/Services/Novels/NovelLibraryServiceTests.cs Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs Niratan.Tests/Services/Sync/TtuBookImportServiceTests.cs
 git commit -m "feat(novels): export private EPUB bytes"
 ```
 
@@ -300,12 +300,12 @@ git commit -m "feat(novels): export private EPUB bytes"
 ### Task 2: Save picker and ViewModel orchestration
 
 **Files:**
-- Create: `Hoshi/Services/Novels/NovelExportFileName.cs`
-- Create: `Hoshi.Tests/Services/Novels/NovelExportFileNameTests.cs`
-- Modify: `Hoshi/Services/UI/IDialogService.cs`
-- Modify: `Hoshi/Services/UI/DialogService.cs`
-- Modify: `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
+- Create: `Niratan/Services/Novels/NovelExportFileName.cs`
+- Create: `Niratan.Tests/Services/Novels/NovelExportFileNameTests.cs`
+- Modify: `Niratan/Services/UI/IDialogService.cs`
+- Modify: `Niratan/Services/UI/DialogService.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
 
 **Interfaces:**
 - Consumes: `INovelLibraryService.ExportEpubAsync(string, string, CancellationToken)` from Task 1.
@@ -317,9 +317,9 @@ Create `NovelExportFileNameTests.cs`:
 
 ```csharp
 using FluentAssertions;
-using Hoshi.Services.Novels;
+using Niratan.Services.Novels;
 
-namespace Hoshi.Tests.Services.Novels;
+namespace Niratan.Tests.Services.Novels;
 
 public sealed class NovelExportFileNameTests
 {
@@ -341,7 +341,7 @@ public sealed class NovelExportFileNameTests
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelExportFileNameTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelExportFileNameTests"
 ```
 
 Expected: compilation fails because `NovelExportFileName` does not exist.
@@ -355,7 +355,7 @@ using System;
 using System.IO;
 using System.Linq;
 
-namespace Hoshi.Services.Novels;
+namespace Niratan.Services.Novels;
 
 internal static class NovelExportFileName
 {
@@ -461,7 +461,7 @@ public async Task ExportNovelCommand_FailureShowsServiceError()
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageViewModelTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageViewModelTests"
 ```
 
 Expected: compilation fails because the save-picker method and `ExportNovelCommand` do not exist.
@@ -535,7 +535,7 @@ private async Task ExportNovelAsync(NovelBookItemViewModel item)
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelExportFileNameTests|FullyQualifiedName~NovelLibraryPageViewModelTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelExportFileNameTests|FullyQualifiedName~NovelLibraryPageViewModelTests"
 ```
 
 Expected: all selected tests pass.
@@ -553,7 +553,7 @@ Expected: build succeeds with zero errors. In particular, `FileSavePicker(Window
 - [ ] **Step 10: Commit picker orchestration**
 
 ```powershell
-git add Hoshi/Services/Novels/NovelExportFileName.cs Hoshi.Tests/Services/Novels/NovelExportFileNameTests.cs Hoshi/Services/UI/IDialogService.cs Hoshi/Services/UI/DialogService.cs Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs
+git add Niratan/Services/Novels/NovelExportFileName.cs Niratan.Tests/Services/Novels/NovelExportFileNameTests.cs Niratan/Services/UI/IDialogService.cs Niratan/Services/UI/DialogService.cs Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs
 git commit -m "feat(novels): add EPUB save workflow"
 ```
 
@@ -562,10 +562,10 @@ git commit -m "feat(novels): add EPUB save workflow"
 ### Task 3: Context-menu UI, localization, and end-to-end verification
 
 **Files:**
-- Modify: `Hoshi/Views/Pages/NovelLibraryPage.xaml`
-- Modify: `Hoshi/Strings/en-US/Resources.resw`
-- Modify: `Hoshi/Strings/zh-CN/Resources.resw`
-- Modify: `Hoshi.Tests/Views/Pages/NovelLibraryPageAssetTests.cs`
+- Modify: `Niratan/Views/Pages/NovelLibraryPage.xaml`
+- Modify: `Niratan/Strings/en-US/Resources.resw`
+- Modify: `Niratan/Strings/zh-CN/Resources.resw`
+- Modify: `Niratan.Tests/Views/Pages/NovelLibraryPageAssetTests.cs`
 
 **Interfaces:**
 - Consumes: generated `NovelLibraryPageViewModel.ExportNovelCommand` from Task 2.
@@ -602,7 +602,7 @@ public void LocalNovelContextMenu_ExposesLocalizedExportCommand()
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageAssetTests.LocalNovelContextMenu_ExposesLocalizedExportCommand"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageAssetTests.LocalNovelContextMenu_ExposesLocalizedExportCommand"
 ```
 
 Expected: test fails because the menu item is absent.
@@ -645,7 +645,7 @@ Run:
 
 ```powershell
 dotnet build -p:Platform=x64
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: both commands exit with code 0 and report zero failed tests.
@@ -658,12 +658,12 @@ Run:
 .\build-and-run.ps1
 ```
 
-Verify objective startup evidence: a responsive Hoshi top-level window with a non-zero main window handle. On the bookshelf, right-click a local novel and verify **导出 EPUB…** or **Export EPUB…** appears before **Move to shelf…**. Choose it, save to a temporary destination, confirm the success notification, and compare the exported file bytes with the book's private `NovelBook.FilePath`. Cancel a second export and confirm no error or success notification appears. Leave the final verified app instance running.
+Verify objective startup evidence: a responsive Niratan top-level window with a non-zero main window handle. On the bookshelf, right-click a local novel and verify **导出 EPUB…** or **Export EPUB…** appears before **Move to shelf…**. Choose it, save to a temporary destination, confirm the success notification, and compare the exported file bytes with the book's private `NovelBook.FilePath`. Cancel a second export and confirm no error or success notification appears. Leave the final verified app instance running.
 
 - [ ] **Step 7: Commit the user-visible feature**
 
 ```powershell
-git add Hoshi/Views/Pages/NovelLibraryPage.xaml Hoshi/Strings/en-US/Resources.resw Hoshi/Strings/zh-CN/Resources.resw Hoshi.Tests/Views/Pages/NovelLibraryPageAssetTests.cs
+git add Niratan/Views/Pages/NovelLibraryPage.xaml Niratan/Strings/en-US/Resources.resw Niratan/Strings/zh-CN/Resources.resw Niratan.Tests/Views/Pages/NovelLibraryPageAssetTests.cs
 git commit -m "feat(novels): expose EPUB export in bookshelf menu"
 ```
 

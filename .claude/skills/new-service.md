@@ -1,30 +1,30 @@
 ---
 name: new-service
-description: Scaffold a new Service + Interface + DI registration following Hoshi conventions
+description: Scaffold a new Service + Interface + DI registration following Niratan conventions
 ---
 
 # New Service Scaffold
 
-Create a new service in Hoshi following project conventions.
+Create a new service in Niratan following project conventions.
 
 ## Files to Create
 
 | File | Purpose |
 |---|---|
-| `Hoshi/Services/Xxx/IXxxService.cs` | Interface |
-| `Hoshi/Services/Xxx/XxxService.cs` | Implementation |
-| Update `Hoshi/App.xaml.cs` | DI registration |
+| `Niratan/Services/Xxx/IXxxService.cs` | Interface |
+| `Niratan/Services/Xxx/XxxService.cs` | Implementation |
+| Update `Niratan/App.xaml.cs` | DI registration |
 
 If the service belongs to an existing namespace (Novels, Dictionary, Audio, etc.), add to that folder.
 
 ## Step 1: Interface
 
-`Hoshi/Services/Foo/IFooService.cs`:
+`Niratan/Services/Foo/IFooService.cs`:
 
 ```csharp
 using System.Threading.Tasks;
 
-namespace Hoshi.Services.Foo;
+namespace Niratan.Services.Foo;
 
 public interface IFooService
 {
@@ -35,14 +35,14 @@ public interface IFooService
 
 ## Step 2: Implementation
 
-`Hoshi/Services/Foo/FooService.cs`:
+`Niratan/Services/Foo/FooService.cs`:
 
 ```csharp
 using System;
 using System.Threading.Tasks;
 using Serilog;
 
-namespace Hoshi.Services.Foo;
+namespace Niratan.Services.Foo;
 
 public sealed class FooService : IFooService
 {
@@ -72,7 +72,7 @@ public sealed class FooService : IFooService
 
 ## Step 3: DI Registration
 
-In `Hoshi/App.xaml.cs`, add to the `ServiceCollection`:
+In `Niratan/App.xaml.cs`, add to the `ServiceCollection`:
 
 ```csharp
 services.AddSingleton<IFooService, FooService>();

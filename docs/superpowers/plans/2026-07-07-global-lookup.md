@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a reusable global lookup path that can be opened from Hoshi and can grow into Niratan-style cross-application selected-text lookup while using the existing dictionary popup rendering pipeline.
+**Goal:** Add a reusable global lookup path that can be opened from Niratan and can grow into Niratan-style cross-application selected-text lookup while using the existing dictionary popup rendering pipeline.
 
 **Architecture:** Build a shared dictionary popup request service that gathers lookup results, dictionary styles, display settings, theme, audio settings, Anki settings, and optional mining context. The global lookup window owns only UI concerns: text input, paste, focus, embedded popup overlay, and window activation. A global selection lookup coordinator owns opt-in enablement, hotkey/trigger status, one-shot selected-text reading, and window activation; it must not monitor the clipboard in the background. Existing reader and popup JavaScript remain unchanged.
 
@@ -13,11 +13,11 @@
 ### Task 1: Shared Popup Request Service
 
 **Files:**
-- Create: `Hoshi/Models/Dictionary/DictionaryPopupRequest.cs`
-- Create: `Hoshi/Services/Dictionary/IDictionaryPopupRequestService.cs`
-- Create: `Hoshi/Services/Dictionary/DictionaryPopupRequestService.cs`
-- Modify: `Hoshi/ViewModels/Pages/VideoPlayerViewModel.cs`
-- Test: `Hoshi.Tests/Services/Dictionary/DictionaryPopupRequestServiceTests.cs`
+- Create: `Niratan/Models/Dictionary/DictionaryPopupRequest.cs`
+- Create: `Niratan/Services/Dictionary/IDictionaryPopupRequestService.cs`
+- Create: `Niratan/Services/Dictionary/DictionaryPopupRequestService.cs`
+- Modify: `Niratan/ViewModels/Pages/VideoPlayerViewModel.cs`
+- Test: `Niratan.Tests/Services/Dictionary/DictionaryPopupRequestServiceTests.cs`
 
 - [ ] Write tests for blank query, no results, lookup settings propagation, style dictionary mapping, settings snapshot, and optional Anki mining context.
 - [ ] Verify the new tests fail because the service does not exist yet.
@@ -29,10 +29,10 @@
 ### Task 2: Global Lookup ViewModel And Window Service
 
 **Files:**
-- Create: `Hoshi/ViewModels/Windows/GlobalLookupWindowViewModel.cs`
-- Create: `Hoshi/Services/Dictionary/IGlobalLookupWindowService.cs`
-- Create: `Hoshi/Services/Dictionary/GlobalLookupWindowService.cs`
-- Test: `Hoshi.Tests/ViewModels/Windows/GlobalLookupWindowViewModelTests.cs`
+- Create: `Niratan/ViewModels/Windows/GlobalLookupWindowViewModel.cs`
+- Create: `Niratan/Services/Dictionary/IGlobalLookupWindowService.cs`
+- Create: `Niratan/Services/Dictionary/GlobalLookupWindowService.cs`
+- Test: `Niratan.Tests/ViewModels/Windows/GlobalLookupWindowViewModelTests.cs`
 
 - [ ] Write tests for empty input status, in-progress state, no-results status, successful request emission, initial query lookup, and exception status handling.
 - [ ] Verify the new tests fail because the view model and service do not exist yet.
@@ -44,22 +44,22 @@
 ### Task 3: Global Lookup Window UI And DI
 
 **Files:**
-- Create: `Hoshi/Views/Dictionary/GlobalLookupWindow.xaml`
-- Create: `Hoshi/Views/Dictionary/GlobalLookupWindow.xaml.cs`
-- Create: `Hoshi/Models/Settings/GlobalLookupSettings.cs`
-- Create: `Hoshi/Services/Dictionary/IGlobalSelectionLookupService.cs`
-- Create: `Hoshi/Services/Dictionary/IGlobalSelectedTextReader.cs`
-- Create: `Hoshi/Services/Dictionary/GlobalSelectionLookupService.cs`
-- Create: `Hoshi/Services/Dictionary/ClipboardSelectedTextReader.cs`
-- Modify: `Hoshi/App.xaml.cs`
-- Modify: `Hoshi/Models/Settings/AppSettings.cs`
-- Modify: `Hoshi/Views/Pages/NavigationPage.xaml`
-- Modify: `Hoshi/Views/Pages/NavigationPage.xaml.cs`
-- Modify: `Hoshi/ViewModels/Pages/NavigationPageViewModel.cs`
-- Modify: `Hoshi/Strings/en-US/Resources.resw`
-- Modify: `Hoshi/Strings/zh-CN/Resources.resw`
-- Test: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
-- Test: `Hoshi.Tests/Services/Dictionary/GlobalSelectionLookupServiceTests.cs`
+- Create: `Niratan/Views/Dictionary/GlobalLookupWindow.xaml`
+- Create: `Niratan/Views/Dictionary/GlobalLookupWindow.xaml.cs`
+- Create: `Niratan/Models/Settings/GlobalLookupSettings.cs`
+- Create: `Niratan/Services/Dictionary/IGlobalSelectionLookupService.cs`
+- Create: `Niratan/Services/Dictionary/IGlobalSelectedTextReader.cs`
+- Create: `Niratan/Services/Dictionary/GlobalSelectionLookupService.cs`
+- Create: `Niratan/Services/Dictionary/ClipboardSelectedTextReader.cs`
+- Modify: `Niratan/App.xaml.cs`
+- Modify: `Niratan/Models/Settings/AppSettings.cs`
+- Modify: `Niratan/Views/Pages/NavigationPage.xaml`
+- Modify: `Niratan/Views/Pages/NavigationPage.xaml.cs`
+- Modify: `Niratan/ViewModels/Pages/NavigationPageViewModel.cs`
+- Modify: `Niratan/Strings/en-US/Resources.resw`
+- Modify: `Niratan/Strings/zh-CN/Resources.resw`
+- Test: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Test: `Niratan.Tests/Services/Dictionary/GlobalSelectionLookupServiceTests.cs`
 
 - [ ] Add asset tests proving the global lookup services are registered, the window embeds `DictionaryPopupOverlay`, and navigation exposes a global lookup command without adding a custom results list.
 - [ ] Add service tests proving global lookup is disabled by default, disabled mode does not read selected text, enabled trigger opens the lookup window only for non-empty text, and empty/no selection reports a visible status without starting a dictionary query.
@@ -82,7 +82,7 @@
 - [ ] Run targeted tests that do not depend on the native hoshidicts DLL:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupRequestServiceTests|FullyQualifiedName~GlobalLookupWindowViewModelTests|FullyQualifiedName~NovelReaderWebAssetTests|FullyQualifiedName~VideoMiningContextFactoryTests|FullyQualifiedName~VideoPlayerViewModel"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~DictionaryPopupRequestServiceTests|FullyQualifiedName~GlobalLookupWindowViewModelTests|FullyQualifiedName~NovelReaderWebAssetTests|FullyQualifiedName~VideoMiningContextFactoryTests|FullyQualifiedName~VideoPlayerViewModel"
 ```
 
 - [ ] Run full build:
@@ -94,7 +94,7 @@ dotnet build -p:Platform=x64
 - [ ] Try the full test suite and record any native DLL baseline failure separately:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 - [ ] If the app can launch in the current environment, run `.\build-and-run.ps1` and verify the global lookup window opens, accepts typed/pasted text, renders popup results, and supports nested lookup.

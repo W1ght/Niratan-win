@@ -22,8 +22,8 @@
 ### Task 1: Add Failing Asset Coverage
 
 **Files:**
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
-- Test: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Test: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
 - Consumes: `ReadNovelReaderPageXaml()`
@@ -73,7 +73,7 @@ Assert these strings do not exist:
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderPage_DefinesNiratanStyleSasayakiPanelWithoutLyricsMode"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderPage_DefinesNiratanStyleSasayakiPanelWithoutLyricsMode"
 ```
 
 Expected: one failing test because the dialog does not exist yet.
@@ -81,8 +81,8 @@ Expected: one failing test because the dialog does not exist yet.
 ### Task 2: Add the WinUI Sasayaki Panel
 
 **Files:**
-- Modify: `Hoshi/Views/Pages/NovelReaderPage.xaml`
-- Modify: `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
+- Modify: `Niratan/Views/Pages/NovelReaderPage.xaml`
+- Modify: `Niratan/Views/Pages/NovelReaderPage.xaml.cs`
 
 **Interfaces:**
 - Consumes: `_sasayakiVM`, `CurrentSasayakiSettings`, `LoadSasayakiFromPickerAsync`, `ToggleSasayakiPlaybackAsync`, `GoToPreviousSasayakiCueAsync`, `GoToNextSasayakiCueAsync`, `SkipSasayakiBackAsync`, `SkipSasayakiForwardAsync`, `ApplySasayakiPlayback`, `SaveSasayakiPlaybackAsync`, `HighlightSasayakiCueAsync`.
@@ -119,8 +119,8 @@ Run the same focused test. Expected: PASS.
 ### Task 3: Resource Copy and Full Verification
 
 **Files:**
-- Modify: `Hoshi/Strings/en-US/Resources.resw`
-- Modify: `Hoshi/Strings/zh-CN/Resources.resw`
+- Modify: `Niratan/Strings/en-US/Resources.resw`
+- Modify: `Niratan/Strings/zh-CN/Resources.resw`
 
 **Interfaces:**
 - Consumes: new `x:Uid` values from `NovelReaderPage.xaml`.
@@ -135,7 +135,7 @@ Add English and Chinese strings for the panel title and controls. Keep labels co
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests"
 ```
 
 Expected: PASS.
@@ -158,4 +158,4 @@ Run:
 .\build-and-run.ps1
 ```
 
-Expected: Hoshi launches and the main window responds.
+Expected: Niratan launches and the main window responds.

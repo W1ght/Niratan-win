@@ -41,7 +41,7 @@ Cancellation could remain available while a bookmark save is in flight, followed
 
 ### Transaction owner
 
-Create a focused `ReaderNavigationTransactionCoordinator` in `Hoshi/Services/Novels`. It contains no WebView2 dependency and no database access. `NovelReaderPageViewModel` owns one transient coordinator instance and remains the business-facing API. `NovelReaderPage` renders instructions returned by the ViewModel and forwards validated bridge events.
+Create a focused `ReaderNavigationTransactionCoordinator` in `Niratan/Services/Novels`. It contains no WebView2 dependency and no database access. `NovelReaderPageViewModel` owns one transient coordinator instance and remains the business-facing API. `NovelReaderPage` renders instructions returned by the ViewModel and forwards validated bridge events.
 
 The Page must not independently decide whether a navigation is pending, committing, cancelled, or complete. It may retain UI-only facts such as whether `chapterReady` arrived and WebView opacity.
 

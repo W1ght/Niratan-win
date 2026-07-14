@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Target Windows 10+ x64; do not add ARM64 as a default verification target.
-- Build with `dotnet build -p:Platform=x64` and test with `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`.
+- Build with `dotnet build -p:Platform=x64` and test with `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`.
 - Do not modify `native/hoshidicts/`.
 - Novel runtime operations must not read or write SQLite after successful cutover.
 - Keep the video catalog in SQLite and keep external audio databases read-only.
@@ -26,18 +26,18 @@
 
 New focused units:
 
-- `Hoshi/Models/Novel/NovelBookMetadata.cs`: Niratan metadata DTO and domain mapping.
-- `Hoshi/Models/Novel/NovelShelfModels.cs`: shelf/state models.
-- `Hoshi/Services/Novels/NiratanJsonFileStore.cs`: shared JSON compatibility, read-status, and atomic writes.
-- `Hoshi/Services/Novels/INovelBookStorageService.cs`: file-catalog contract.
-- `Hoshi/Models/Novel/NovelBookStorageModels.cs`: catalog snapshot and recoverable scan warnings.
-- `Hoshi/Services/Novels/NovelBookStorageService.cs`: metadata scan and book projection.
-- `Hoshi/Services/Storage/NovelStorageMigrationService.cs`: legacy export, validation, cutover, and table retirement.
-- `Hoshi/Services/Storage/IVideoDataService.cs` and `VideoDataService.cs`: video-only SQLite boundary.
-- `Hoshi/Services/Novels/INovelShelfService.cs` and `NovelShelfService.cs`: shelf CRUD, membership, and order.
-- `Hoshi/ViewModels/Components/NovelShelfSectionViewModel.cs`: section projection.
-- `Hoshi/ViewModels/Dialogs/NovelShelfManagementViewModel.cs`: shelf-management commands.
-- `Hoshi/Views/Dialogs/NovelShelfManagementDialog.xaml(.cs)`: UI-only shelf dialog.
+- `Niratan/Models/Novel/NovelBookMetadata.cs`: Niratan metadata DTO and domain mapping.
+- `Niratan/Models/Novel/NovelShelfModels.cs`: shelf/state models.
+- `Niratan/Services/Novels/NiratanJsonFileStore.cs`: shared JSON compatibility, read-status, and atomic writes.
+- `Niratan/Services/Novels/INovelBookStorageService.cs`: file-catalog contract.
+- `Niratan/Models/Novel/NovelBookStorageModels.cs`: catalog snapshot and recoverable scan warnings.
+- `Niratan/Services/Novels/NovelBookStorageService.cs`: metadata scan and book projection.
+- `Niratan/Services/Storage/NovelStorageMigrationService.cs`: legacy export, validation, cutover, and table retirement.
+- `Niratan/Services/Storage/IVideoDataService.cs` and `VideoDataService.cs`: video-only SQLite boundary.
+- `Niratan/Services/Novels/INovelShelfService.cs` and `NovelShelfService.cs`: shelf CRUD, membership, and order.
+- `Niratan/ViewModels/Components/NovelShelfSectionViewModel.cs`: section projection.
+- `Niratan/ViewModels/Dialogs/NovelShelfManagementViewModel.cs`: shelf-management commands.
+- `Niratan/Views/Dialogs/NovelShelfManagementDialog.xaml(.cs)`: UI-only shelf dialog.
 
 Existing files change only where their responsibility changes: import/library/Reader/TTU consumers, DI, migrations, bookshelf XAML/ViewModel, tests, and architecture/verification documentation.
 
@@ -46,11 +46,11 @@ Existing files change only where their responsibility changes: import/library/Re
 ### Task 1: Niratan JSON and Metadata Contract
 
 **Files:**
-- Create: `Hoshi/Models/Novel/NovelBookMetadata.cs`
-- Create: `Hoshi/Services/Novels/NiratanJsonFileStore.cs`
-- Modify: `Hoshi/Services/Novels/NovelBookSidecarService.cs`
-- Test: `Hoshi.Tests/Services/Novels/NiratanJsonFileStoreTests.cs`
-- Test: `Hoshi.Tests/Services/Novels/NovelBookMetadataTests.cs`
+- Create: `Niratan/Models/Novel/NovelBookMetadata.cs`
+- Create: `Niratan/Services/Novels/NiratanJsonFileStore.cs`
+- Modify: `Niratan/Services/Novels/NovelBookSidecarService.cs`
+- Test: `Niratan.Tests/Services/Novels/NiratanJsonFileStoreTests.cs`
+- Test: `Niratan.Tests/Services/Novels/NovelBookMetadataTests.cs`
 
 **Interfaces:**
 - Produces: `NovelBookMetadata`, `NovelJsonReadStatus`, `NovelJsonReadResult<T>`, `INiratanJsonFileStore.ReadAsync<T>()`, and `INiratanJsonFileStore.WriteAsync<T>()`.
@@ -98,7 +98,7 @@ public async Task ReadAsync_DistinguishesMissingFromInvalidJson()
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NiratanJsonFileStoreTests|FullyQualifiedName~NovelBookMetadataTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NiratanJsonFileStoreTests|FullyQualifiedName~NovelBookMetadataTests"
 ```
 
 Expected: FAIL because the new DTO and store types do not exist.
@@ -155,7 +155,7 @@ Map `Missing` and `Invalid` to the existing nullable load result, and keep the p
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NiratanJsonFileStoreTests|FullyQualifiedName~NovelBookMetadataTests|FullyQualifiedName~NovelBookSidecarServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NiratanJsonFileStoreTests|FullyQualifiedName~NovelBookMetadataTests|FullyQualifiedName~NovelBookSidecarServiceTests"
 ```
 
 Expected: PASS.
@@ -163,19 +163,19 @@ Expected: PASS.
 - [ ] **Step 6: Commit the JSON contract**
 
 ```powershell
-git add Hoshi/Models/Novel/NovelBookMetadata.cs Hoshi/Services/Novels/NiratanJsonFileStore.cs Hoshi/Services/Novels/NovelBookSidecarService.cs Hoshi.Tests/Services/Novels/NiratanJsonFileStoreTests.cs Hoshi.Tests/Services/Novels/NovelBookMetadataTests.cs
+git add Niratan/Models/Novel/NovelBookMetadata.cs Niratan/Services/Novels/NiratanJsonFileStore.cs Niratan/Services/Novels/NovelBookSidecarService.cs Niratan.Tests/Services/Novels/NiratanJsonFileStoreTests.cs Niratan.Tests/Services/Novels/NovelBookMetadataTests.cs
 git commit -m "feat(storage): add niratan novel metadata contract"
 ```
 
 ### Task 2: File-Backed Novel Catalog
 
 **Files:**
-- Create: `Hoshi/Models/Novel/NovelBookStorageModels.cs`
-- Create: `Hoshi/Services/Novels/INovelBookStorageService.cs`
-- Create: `Hoshi/Services/Novels/NovelBookStorageService.cs`
-- Modify: `Hoshi/Helpers/AppDataHelper.cs`
-- Modify: `Hoshi/Models/NovelBook.cs`
-- Test: `Hoshi.Tests/Services/Novels/NovelBookStorageServiceTests.cs`
+- Create: `Niratan/Models/Novel/NovelBookStorageModels.cs`
+- Create: `Niratan/Services/Novels/INovelBookStorageService.cs`
+- Create: `Niratan/Services/Novels/NovelBookStorageService.cs`
+- Modify: `Niratan/Helpers/AppDataHelper.cs`
+- Modify: `Niratan/Models/NovelBook.cs`
+- Test: `Niratan.Tests/Services/Novels/NovelBookStorageServiceTests.cs`
 
 **Interfaces:**
 - Consumes: `INiratanJsonFileStore`, `INovelBookSidecarService`, `NovelBookMetadata`.
@@ -219,7 +219,7 @@ Add companion cases for query filtering, corrupt metadata reporting, relative co
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelBookStorageServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelBookStorageServiceTests"
 ```
 
 Expected: FAIL because `INovelBookStorageService` and `NovelBookStorageService` do not exist.
@@ -278,7 +278,7 @@ Add `OriginalTitle`, `RenamedTitle`, and `Folder` to `NovelBook`; keep `Title` a
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelBookStorageServiceTests|FullyQualifiedName~NovelBookSidecarServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelBookStorageServiceTests|FullyQualifiedName~NovelBookSidecarServiceTests"
 ```
 
 Expected: PASS.
@@ -286,17 +286,17 @@ Expected: PASS.
 - [ ] **Step 6: Commit the catalog service**
 
 ```powershell
-git add Hoshi/Helpers/AppDataHelper.cs Hoshi/Models/NovelBook.cs Hoshi/Models/Novel/NovelBookStorageModels.cs Hoshi/Services/Novels/INovelBookStorageService.cs Hoshi/Services/Novels/NovelBookStorageService.cs Hoshi.Tests/Services/Novels/NovelBookStorageServiceTests.cs
+git add Niratan/Helpers/AppDataHelper.cs Niratan/Models/NovelBook.cs Niratan/Models/Novel/NovelBookStorageModels.cs Niratan/Services/Novels/INovelBookStorageService.cs Niratan/Services/Novels/NovelBookStorageService.cs Niratan.Tests/Services/Novels/NovelBookStorageServiceTests.cs
 git commit -m "feat(storage): scan novels from metadata sidecars"
 ```
 
 ### Task 3: Idempotent Legacy SQLite Migration
 
 **Files:**
-- Create: `Hoshi/Models/Novel/NovelStorageMigrationModels.cs`
-- Create: `Hoshi/Services/Storage/NovelStorageMigrationService.cs`
-- Modify: `Hoshi/Services/Novels/NovelBookStorageService.cs`
-- Test: `Hoshi.Tests/Services/Storage/NovelStorageMigrationServiceTests.cs`
+- Create: `Niratan/Models/Novel/NovelStorageMigrationModels.cs`
+- Create: `Niratan/Services/Storage/NovelStorageMigrationService.cs`
+- Modify: `Niratan/Services/Novels/NovelBookStorageService.cs`
+- Test: `Niratan.Tests/Services/Storage/NovelStorageMigrationServiceTests.cs`
 
 **Interfaces:**
 - Consumes: SQLite connection string, `INovelBookStorageService`, `INovelBookSidecarService`, `INiratanJsonFileStore`.
@@ -322,7 +322,7 @@ Add a second fixture with malformed existing metadata and assert `IsReadOnly == 
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStorageMigrationServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStorageMigrationServiceTests"
 ```
 
 Expected: FAIL because the migration service does not exist.
@@ -372,7 +372,7 @@ internal sealed class NovelStorageAccessState : INovelStorageAccessState
 
 Use `sqlite_master` to detect `NovelBooks`. If it is absent, ensure missing global files contain `[]` and return success. If present:
 
-1. Copy `hoshi.db` to a versioned `.pre-novel-files-v1.bak` path while no connection is open.
+1. Copy `niratan.db` to a versioned `.pre-novel-files-v1.bak` path while no connection is open.
 2. Load legacy rows with every current column.
 3. Write missing metadata; preserve valid existing metadata.
 4. Write bookmark/book-info only when missing or invalid.
@@ -427,7 +427,7 @@ Assert an interrupted first run can be repeated, a completed manifest produces a
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStorageMigrationServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStorageMigrationServiceTests"
 ```
 
 Expected: PASS.
@@ -435,21 +435,21 @@ Expected: PASS.
 - [ ] **Step 7: Commit the migration service**
 
 ```powershell
-git add Hoshi/Models/Novel/NovelStorageMigrationModels.cs Hoshi/Services/Storage/NovelStorageMigrationService.cs Hoshi/Services/Novels/NovelBookStorageService.cs Hoshi.Tests/Services/Storage/NovelStorageMigrationServiceTests.cs
+git add Niratan/Models/Novel/NovelStorageMigrationModels.cs Niratan/Services/Storage/NovelStorageMigrationService.cs Niratan/Services/Novels/NovelBookStorageService.cs Niratan.Tests/Services/Storage/NovelStorageMigrationServiceTests.cs
 git commit -m "feat(storage): migrate sqlite novels to sidecars"
 ```
 
 ### Task 4: Cut Novel Library, Import, Reader Progress, and TTU Progress Over to Files
 
 **Files:**
-- Modify: `Hoshi/Services/Novels/NovelLibraryService.cs`
-- Modify: `Hoshi/Services/Novels/NovelEpubImportService.cs`
-- Modify: `Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs`
-- Modify: `Hoshi/Services/Sync/TtuSyncService.cs`
-- Modify: `Hoshi/Services/Novels/INovelLibraryService.cs`
-- Test: `Hoshi.Tests/Services/Novels/NovelLibraryServiceTests.cs`
-- Test: `Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`
-- Test: `Hoshi.Tests/Services/Sync/TtuSyncServiceTests.cs`
+- Modify: `Niratan/Services/Novels/NovelLibraryService.cs`
+- Modify: `Niratan/Services/Novels/NovelEpubImportService.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs`
+- Modify: `Niratan/Services/Sync/TtuSyncService.cs`
+- Modify: `Niratan/Services/Novels/INovelLibraryService.cs`
+- Test: `Niratan.Tests/Services/Novels/NovelLibraryServiceTests.cs`
+- Test: `Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`
+- Test: `Niratan.Tests/Services/Sync/TtuSyncServiceTests.cs`
 
 **Interfaces:**
 - Consumes: `INovelBookStorageService`, `INovelStorageAccessState`, and existing sidecar services.
@@ -464,7 +464,7 @@ Change library tests to mock `INovelBookStorageService`. Change Reader tests to 
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryServiceTests|FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~TtuSyncServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryServiceTests|FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~TtuSyncServiceTests"
 ```
 
 Expected: FAIL while constructors and expectations still use `IDataService`.
@@ -569,7 +569,7 @@ await _bookSidecars.SaveBookmarkAsync(bookRootPath, bookmark, ct);
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryServiceTests|FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~TtuSyncServiceTests|FullyQualifiedName~TtuBookImportServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryServiceTests|FullyQualifiedName~NovelReaderPageViewModelTests|FullyQualifiedName~TtuSyncServiceTests|FullyQualifiedName~TtuBookImportServiceTests"
 ```
 
 Expected: PASS.
@@ -577,30 +577,30 @@ Expected: PASS.
 - [ ] **Step 8: Commit the novel call-chain cutover**
 
 ```powershell
-git add Hoshi/Services/Novels Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs Hoshi/Services/Sync/TtuSyncService.cs Hoshi.Tests/Services/Novels Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs Hoshi.Tests/Services/Sync/TtuSyncServiceTests.cs
+git add Niratan/Services/Novels Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs Niratan/Services/Sync/TtuSyncService.cs Niratan.Tests/Services/Novels Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs Niratan.Tests/Services/Sync/TtuSyncServiceTests.cs
 git commit -m "refactor(novels): use sidecars as runtime truth"
 ```
 
 ### Task 5: Split the Video SQLite Boundary and Retire Novel Schema Creation
 
 **Files:**
-- Create: `Hoshi/Services/Storage/IVideoDataService.cs`
-- Create: `Hoshi/Services/Storage/VideoDataService.cs`
-- Delete: `Hoshi/Services/Storage/IDataService.cs`
-- Delete: `Hoshi/Services/Storage/DataService.cs`
-- Modify: `Hoshi/Services/Video/VideoLibraryService.cs`
-- Modify: `Hoshi/Services/Video/VideoThumbnailService.cs`
-- Modify: `Hoshi/App.xaml.cs`
-- Modify: `Hoshi/Services/Storage/Migrations/Migration_003.cs`
-- Modify: `Hoshi/Services/Storage/Migrations/Migration_004.cs`
-- Modify: `Hoshi/Services/Storage/Migrations/Migration_005.cs`
-- Modify: `Hoshi/Services/Storage/Migrations/Migration_006.cs`
-- Modify: `Hoshi/Services/Storage/Migrations/Migration_007.cs`
-- Modify: `Hoshi/Services/Storage/Migrations/Migration_010.cs`
-- Test: `Hoshi.Tests/Services/Storage/VideoDataServiceTests.cs`
-- Replace: `Hoshi.Tests/Services/Storage/NovelDataServiceTests.cs` with migration coverage from Task 3.
-- Modify: `Hoshi.Tests/Services/Video/VideoLibraryServiceTests.cs`
-- Modify: `Hoshi.Tests/Services/Video/VideoThumbnailServiceTests.cs`
+- Create: `Niratan/Services/Storage/IVideoDataService.cs`
+- Create: `Niratan/Services/Storage/VideoDataService.cs`
+- Delete: `Niratan/Services/Storage/IDataService.cs`
+- Delete: `Niratan/Services/Storage/DataService.cs`
+- Modify: `Niratan/Services/Video/VideoLibraryService.cs`
+- Modify: `Niratan/Services/Video/VideoThumbnailService.cs`
+- Modify: `Niratan/App.xaml.cs`
+- Modify: `Niratan/Services/Storage/Migrations/Migration_003.cs`
+- Modify: `Niratan/Services/Storage/Migrations/Migration_004.cs`
+- Modify: `Niratan/Services/Storage/Migrations/Migration_005.cs`
+- Modify: `Niratan/Services/Storage/Migrations/Migration_006.cs`
+- Modify: `Niratan/Services/Storage/Migrations/Migration_007.cs`
+- Modify: `Niratan/Services/Storage/Migrations/Migration_010.cs`
+- Test: `Niratan.Tests/Services/Storage/VideoDataServiceTests.cs`
+- Replace: `Niratan.Tests/Services/Storage/NovelDataServiceTests.cs` with migration coverage from Task 3.
+- Modify: `Niratan.Tests/Services/Video/VideoLibraryServiceTests.cs`
+- Modify: `Niratan.Tests/Services/Video/VideoThumbnailServiceTests.cs`
 
 **Interfaces:**
 - Consumes: successful Task 4 cutover and Task 3 migration.
@@ -615,7 +615,7 @@ Replace each `Mock<IDataService>` with `Mock<IVideoDataService>` and retain the 
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoDataServiceTests|FullyQualifiedName~VideoLibraryServiceTests|FullyQualifiedName~VideoThumbnailServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoDataServiceTests|FullyQualifiedName~VideoLibraryServiceTests|FullyQualifiedName~VideoThumbnailServiceTests"
 ```
 
 Expected: FAIL because `IVideoDataService` does not exist.
@@ -648,7 +648,7 @@ public interface IVideoDataService
 services.AddSingleton<IVideoDataService, VideoDataService>();
 ```
 
-Delete `IDataService` and `DataService` only after `rg "IDataService|DataService" Hoshi Hoshi.Tests` reports no intended references.
+Delete `IDataService` and `DataService` only after `rg "IDataService|DataService" Niratan Niratan.Tests` reports no intended references.
 
 - [ ] **Step 4: Stop fresh databases from creating novel tables**
 
@@ -701,7 +701,7 @@ await InitializeAppAsync();
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Storage|FullyQualifiedName~VideoDataServiceTests|FullyQualifiedName~VideoLibraryServiceTests|FullyQualifiedName~VideoThumbnailServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Storage|FullyQualifiedName~VideoDataServiceTests|FullyQualifiedName~VideoLibraryServiceTests|FullyQualifiedName~VideoThumbnailServiceTests"
 ```
 
 Expected: PASS, including fresh-database tests that find video tables and no novel tables.
@@ -709,19 +709,19 @@ Expected: PASS, including fresh-database tests that find video tables and no nov
 - [ ] **Step 7: Commit the SQLite boundary split**
 
 ```powershell
-git add Hoshi/Services/Storage Hoshi/Services/Video Hoshi/App.xaml.cs Hoshi.Tests/Services/Storage Hoshi.Tests/Services/Video
+git add Niratan/Services/Storage Niratan/Services/Video Niratan/App.xaml.cs Niratan.Tests/Services/Storage Niratan.Tests/Services/Video
 git commit -m "refactor(storage): limit sqlite to video data"
 ```
 
 ### Task 6: Persistent Shelf Service
 
 **Files:**
-- Create: `Hoshi/Models/Novel/NovelShelfModels.cs`
-- Create: `Hoshi/Services/Novels/INovelShelfService.cs`
-- Create: `Hoshi/Services/Novels/NovelShelfService.cs`
-- Modify: `Hoshi/Services/Novels/NovelLibraryService.cs`
-- Test: `Hoshi.Tests/Services/Novels/NovelShelfServiceTests.cs`
-- Test: `Hoshi.Tests/Services/Novels/NovelLibraryServiceTests.cs`
+- Create: `Niratan/Models/Novel/NovelShelfModels.cs`
+- Create: `Niratan/Services/Novels/INovelShelfService.cs`
+- Create: `Niratan/Services/Novels/NovelShelfService.cs`
+- Modify: `Niratan/Services/Novels/NovelLibraryService.cs`
+- Test: `Niratan.Tests/Services/Novels/NovelShelfServiceTests.cs`
+- Test: `Niratan.Tests/Services/Novels/NovelLibraryServiceTests.cs`
 
 **Interfaces:**
 - Consumes: `INovelBookStorageService.LoadSnapshotAsync`, `LoadBookOrderAsync`, `SaveBookOrderAsync`, and `INiratanJsonFileStore`.
@@ -752,7 +752,7 @@ public async Task DeleteShelf_MakesBooksUnshelvedWithoutDeletingThem()
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelShelfServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelShelfServiceTests"
 ```
 
 Expected: FAIL because shelf models and service do not exist.
@@ -819,7 +819,7 @@ public async Task<Result<NovelShelfState>> MoveBooksAsync(
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelShelfServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelShelfServiceTests"
 ```
 
 Expected: PASS.
@@ -842,7 +842,7 @@ Add `services.AddSingleton<INovelShelfService, NovelShelfService>();`.
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelShelfServiceTests|FullyQualifiedName~NovelLibraryServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelShelfServiceTests|FullyQualifiedName~NovelLibraryServiceTests"
 ```
 
 Expected: PASS.
@@ -850,19 +850,19 @@ Expected: PASS.
 - [ ] **Step 8: Commit the shelf service**
 
 ```powershell
-git add Hoshi/Models/Novel/NovelShelfModels.cs Hoshi/Services/Novels/INovelShelfService.cs Hoshi/Services/Novels/NovelShelfService.cs Hoshi/Services/Novels/NovelLibraryService.cs Hoshi/App.xaml.cs Hoshi.Tests/Services/Novels/NovelShelfServiceTests.cs Hoshi.Tests/Services/Novels/NovelLibraryServiceTests.cs
+git add Niratan/Models/Novel/NovelShelfModels.cs Niratan/Services/Novels/INovelShelfService.cs Niratan/Services/Novels/NovelShelfService.cs Niratan/Services/Novels/NovelLibraryService.cs Niratan/App.xaml.cs Niratan.Tests/Services/Novels/NovelShelfServiceTests.cs Niratan.Tests/Services/Novels/NovelLibraryServiceTests.cs
 git commit -m "feat(bookshelf): add niratan shelf persistence"
 ```
 
 ### Task 7: Shelf Section Projection and Commands
 
 **Files:**
-- Create: `Hoshi/ViewModels/Components/NovelShelfSectionViewModel.cs`
-- Create: `Hoshi/ViewModels/Dialogs/NovelShelfManagementViewModel.cs`
-- Modify: `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs`
-- Modify: `Hoshi/Models/Settings/AppSettings.cs`
-- Test: `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
-- Create: `Hoshi.Tests/ViewModels/Dialogs/NovelShelfManagementViewModelTests.cs`
+- Create: `Niratan/ViewModels/Components/NovelShelfSectionViewModel.cs`
+- Create: `Niratan/ViewModels/Dialogs/NovelShelfManagementViewModel.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs`
+- Modify: `Niratan/Models/Settings/AppSettings.cs`
+- Test: `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
+- Create: `Niratan.Tests/ViewModels/Dialogs/NovelShelfManagementViewModelTests.cs`
 
 **Interfaces:**
 - Consumes: `INovelShelfService` and file-backed `INovelLibraryService`.
@@ -877,7 +877,7 @@ Assert Reading (when enabled) precedes custom shelves in `RailSections`, Google 
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~NovelShelfManagementViewModelTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~NovelShelfManagementViewModelTests"
 ```
 
 Expected: FAIL because section and management ViewModels do not exist.
@@ -926,7 +926,7 @@ public sealed record NovelShelfMoveRequest(
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~NovelShelfManagementViewModelTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~NovelShelfManagementViewModelTests"
 ```
 
 Expected: PASS.
@@ -934,20 +934,20 @@ Expected: PASS.
 - [ ] **Step 6: Commit the shelf ViewModels**
 
 ```powershell
-git add Hoshi/ViewModels/Components/NovelShelfSectionViewModel.cs Hoshi/ViewModels/Dialogs/NovelShelfManagementViewModel.cs Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs Hoshi/Models/Settings/AppSettings.cs Hoshi.Tests/ViewModels
+git add Niratan/ViewModels/Components/NovelShelfSectionViewModel.cs Niratan/ViewModels/Dialogs/NovelShelfManagementViewModel.cs Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs Niratan/Models/Settings/AppSettings.cs Niratan.Tests/ViewModels
 git commit -m "feat(bookshelf): project novels into shelf sections"
 ```
 
 ### Task 8: WinUI Shelf Surface and Management Dialog
 
 **Files:**
-- Create: `Hoshi/Views/Dialogs/NovelShelfManagementDialog.xaml`
-- Create: `Hoshi/Views/Dialogs/NovelShelfManagementDialog.xaml.cs`
-- Modify: `Hoshi/Views/Pages/NovelLibraryPage.xaml`
-- Modify: `Hoshi/Views/Pages/NovelLibraryPage.xaml.cs`
-- Modify: `Hoshi/Strings/en-US/Resources.resw`
-- Modify: `Hoshi/Strings/zh-CN/Resources.resw`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Create: `Niratan/Views/Dialogs/NovelShelfManagementDialog.xaml`
+- Create: `Niratan/Views/Dialogs/NovelShelfManagementDialog.xaml.cs`
+- Modify: `Niratan/Views/Pages/NovelLibraryPage.xaml`
+- Modify: `Niratan/Views/Pages/NovelLibraryPage.xaml.cs`
+- Modify: `Niratan/Strings/en-US/Resources.resw`
+- Modify: `Niratan/Strings/zh-CN/Resources.resw`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
 - Consumes: Task 7 section and management ViewModels.
@@ -973,7 +973,7 @@ Also assert English and Simplified Chinese keys exist for Reading, Unshelved, Ma
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests"
 ```
 
 Expected: FAIL because the shelf surface is absent.
@@ -1047,7 +1047,7 @@ Use page rows `Auto,Auto,*`: CommandBar in row 0, warning in row 1, and the scro
 Use a `ContentDialog` with a reorderable shelf list, create field, rename action, and delete confirmation. Code-behind only maps UI events to ViewModel commands and dialog results.
 
 ```xml
-<ContentDialog x:Class="Hoshi.Views.Dialogs.NovelShelfManagementDialog"
+<ContentDialog x:Class="Niratan.Views.Dialogs.NovelShelfManagementDialog"
                x:Name="RootDialog"
                Title="Manage Shelves"
                CloseButtonText="Close">
@@ -1082,7 +1082,7 @@ private async void CreateShelfButton_Click(object sender, RoutedEventArgs e)
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests|FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~NovelShelfManagementViewModelTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderWebAssetTests|FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~NovelShelfManagementViewModelTests"
 ```
 
 Expected: PASS.
@@ -1090,7 +1090,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit the shelf UI**
 
 ```powershell
-git add Hoshi/Views/Pages/NovelLibraryPage.xaml Hoshi/Views/Pages/NovelLibraryPage.xaml.cs Hoshi/Views/Dialogs/NovelShelfManagementDialog.xaml Hoshi/Views/Dialogs/NovelShelfManagementDialog.xaml.cs Hoshi/Strings Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add Niratan/Views/Pages/NovelLibraryPage.xaml Niratan/Views/Pages/NovelLibraryPage.xaml.cs Niratan/Views/Dialogs/NovelShelfManagementDialog.xaml Niratan/Views/Dialogs/NovelShelfManagementDialog.xaml.cs Niratan/Strings Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "feat(bookshelf): add winui shelf management"
 ```
 
@@ -1119,7 +1119,7 @@ Add migration fixtures, shelf CRUD/reorder/move checks, corrupt JSON recovery, a
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: PASS with zero failed tests.
@@ -1142,7 +1142,7 @@ Run:
 .\build-and-run.ps1
 ```
 
-Verify a responsive top-level Hoshi window, the existing library migrates once, books retain progress/Profile/cover/title, import creates metadata, shelf create/rename/reorder/delete works, context and multi-select moves work, in-section drag persists, delete cleans shelf references, and close/reopen preserves the same sections.
+Verify a responsive top-level Niratan window, the existing library migrates once, books retain progress/Profile/cover/title, import creates metadata, shelf create/rename/reorder/delete works, context and multi-select moves work, in-section drag persists, delete cleans shelf references, and close/reopen preserves the same sections.
 
 - [ ] **Step 6: Verify data-failure behavior with disposable fixtures**
 

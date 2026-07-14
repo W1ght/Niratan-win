@@ -5,15 +5,15 @@ description: Scaffold a new WinUI 3 Page + ViewModel + navigation + i18n resourc
 
 # New Page Scaffold
 
-Create a new page in Hoshi following project conventions.
+Create a new page in Niratan following project conventions.
 
 ## Files to Create
 
 | File | Purpose |
 |---|---|
-| `Hoshi/ViewModels/Pages/FooPageViewModel.cs` | ViewModel |
-| `Hoshi/Views/Pages/FooPage.xaml` | XAML UI |
-| `Hoshi/Views/Pages/FooPage.xaml.cs` | Code-behind |
+| `Niratan/ViewModels/Pages/FooPageViewModel.cs` | ViewModel |
+| `Niratan/Views/Pages/FooPage.xaml` | XAML UI |
+| `Niratan/Views/Pages/FooPage.xaml.cs` | Code-behind |
 | Update `Strings/en-US/Resources.resw` | English strings |
 | Update `Strings/zh-CN/Resources.resw` | Chinese strings |
 | Update `App.xaml.cs` | DI registration |
@@ -21,13 +21,13 @@ Create a new page in Hoshi following project conventions.
 
 ## Step 1: ViewModel
 
-`Hoshi/ViewModels/Pages/FooPageViewModel.cs`:
+`Niratan/ViewModels/Pages/FooPageViewModel.cs`:
 
 ```csharp
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
-namespace Hoshi.ViewModels.Pages;
+namespace Niratan.ViewModels.Pages;
 
 public partial class FooPageViewModel : ObservableObject
 {
@@ -44,11 +44,11 @@ public partial class FooPageViewModel : ObservableObject
 
 ## Step 2: XAML Page
 
-`Hoshi/Views/Pages/FooPage.xaml`:
+`Niratan/Views/Pages/FooPage.xaml`:
 
 ```xml
 <Page
-    x:Class="Hoshi.Views.Pages.FooPage"
+    x:Class="Niratan.Views.Pages.FooPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -63,13 +63,13 @@ public partial class FooPageViewModel : ObservableObject
 
 ## Step 3: Code-behind
 
-`Hoshi/Views/Pages/FooPage.xaml.cs`:
+`Niratan/Views/Pages/FooPage.xaml.cs`:
 
 ```csharp
 using Microsoft.UI.Xaml.Controls;
-using Hoshi.ViewModels.Pages;
+using Niratan.ViewModels.Pages;
 
-namespace Hoshi.Views.Pages;
+namespace Niratan.Views.Pages;
 
 public sealed partial class FooPage : Page
 {
@@ -100,6 +100,6 @@ services.AddTransient<FooPageViewModel>();
 
 ## Step 6: Navigation (if needed)
 
-- Add enum value to `Hoshi/Enums/AppPage.cs`
+- Add enum value to `Niratan/Enums/AppPage.cs`
 - Add `case typeof(FooPage) => AppPage.Foo` in `NavigationService.CurrentPage`
 - Navigate: `_navigationService.Navigate(typeof(FooPage))`

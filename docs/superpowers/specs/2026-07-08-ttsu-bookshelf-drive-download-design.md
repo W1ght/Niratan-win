@@ -35,4 +35,4 @@ Niratan does not store raw EPUBs in Drive. It stores `bookdata_1_6_...zip` insid
 
 - Unit tests cover Drive remote listing/download, TTU import orchestration, and bookshelf ViewModel command behavior.
 - Asset tests cover the new homepage sync button and remote book item bindings.
-- Final verification runs `dotnet build -p:Platform=x64`, full `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`, and WinUI launch smoke check.
+- Final verification runs `dotnet build -p:Platform=x64`, full `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`, and WinUI launch smoke check.

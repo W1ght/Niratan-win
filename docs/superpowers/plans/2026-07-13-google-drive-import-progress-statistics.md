@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Target Windows 10+ x64; build with `dotnet build -p:Platform=x64`.
-- Run tests with `dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64`.
+- Run tests with `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`.
 - Do not modify `native/hoshidicts/` or either reference repository.
 - Do not access real Google Drive in automated verification; use fake `ITtuSyncRemoteStore` data only.
 - Do not remove or bypass the statistics-sync switch: disabled means no remote statistics request and no `statistics.json` creation.
@@ -23,13 +23,13 @@
 
 ## File Structure
 
-- `Hoshi/Services/Novels/NovelEpubImportService.cs`: parse an imported EPUB, calculate chapter character counts, and save initial `bookinfo.json` before returning success.
-- `Hoshi.Tests/Services/Novels/NovelEpubImportServiceTests.cs`: prove `bookinfo.json` exists and contains Reader-compatible chapter mappings at import completion.
-- `Hoshi/Models/Sync/TtuSyncModels.cs`: carry an optional immutable snapshot of already-discovered remote files in `TtuSyncOptions`.
-- `Hoshi/Services/Sync/TtuSyncService.cs`: prefer the supplied snapshot while leaving existing title-based discovery unchanged when no snapshot is supplied.
-- `Hoshi.Tests/Services/Sync/TtuSyncServiceTests.cs`: cover snapshot identity, no re-list, chapter boundary mapping, book-end mapping, and statistics switch behavior.
-- `Hoshi/Services/Sync/TtuBookImportService.cs`: pass the selected remote files to sync and remove a newly imported local book if sidecar synchronization throws.
-- `Hoshi.Tests/Services/Sync/TtuBookImportServiceTests.cs`: cover exact snapshot propagation and incomplete-import cleanup.
+- `Niratan/Services/Novels/NovelEpubImportService.cs`: parse an imported EPUB, calculate chapter character counts, and save initial `bookinfo.json` before returning success.
+- `Niratan.Tests/Services/Novels/NovelEpubImportServiceTests.cs`: prove `bookinfo.json` exists and contains Reader-compatible chapter mappings at import completion.
+- `Niratan/Models/Sync/TtuSyncModels.cs`: carry an optional immutable snapshot of already-discovered remote files in `TtuSyncOptions`.
+- `Niratan/Services/Sync/TtuSyncService.cs`: prefer the supplied snapshot while leaving existing title-based discovery unchanged when no snapshot is supplied.
+- `Niratan.Tests/Services/Sync/TtuSyncServiceTests.cs`: cover snapshot identity, no re-list, chapter boundary mapping, book-end mapping, and statistics switch behavior.
+- `Niratan/Services/Sync/TtuBookImportService.cs`: pass the selected remote files to sync and remove a newly imported local book if sidecar synchronization throws.
+- `Niratan.Tests/Services/Sync/TtuBookImportServiceTests.cs`: cover exact snapshot propagation and incomplete-import cleanup.
 - `docs/CHANGELOG.md`: record the root causes and resolution after code verification.
 
 ---
@@ -37,8 +37,8 @@
 ### Task 1: Generate `bookinfo.json` During EPUB Import
 
 **Files:**
-- Modify: `Hoshi/Services/Novels/NovelEpubImportService.cs:13-103`
-- Test: `Hoshi.Tests/Services/Novels/NovelEpubImportServiceTests.cs:10-111`
+- Modify: `Niratan/Services/Novels/NovelEpubImportService.cs:13-103`
+- Test: `Niratan.Tests/Services/Novels/NovelEpubImportServiceTests.cs:10-111`
 
 **Interfaces:**
 - Consumes: `INovelBookSidecarService.CreateBookInfo(IReadOnlyList<EpubChapter>, IReadOnlyList<int>, string?)` and `SaveBookInfoAsync(string, NovelBookInfo, CancellationToken)`.
@@ -115,7 +115,7 @@ public async Task ImportAsync_SavesBookInfoBeforeReturningSuccess()
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelEpubImportServiceTests.ImportAsync_SavesBookInfoBeforeReturningSuccess"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelEpubImportServiceTests.ImportAsync_SavesBookInfoBeforeReturningSuccess"
 ```
 
 Expected: FAIL because `NovelEpubImportService` does not accept the sidecar dependency and does not write `bookinfo.json`.
@@ -182,7 +182,7 @@ Update the existing internal-constructor test to pass a `NovelBookSidecarService
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelEpubImportServiceTests|FullyQualifiedName~ReaderTextFilterTests|FullyQualifiedName~NovelBookSidecarServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelEpubImportServiceTests|FullyQualifiedName~ReaderTextFilterTests|FullyQualifiedName~NovelBookSidecarServiceTests"
 ```
 
 Expected: PASS with all selected tests green.
@@ -190,7 +190,7 @@ Expected: PASS with all selected tests green.
 - [ ] **Step 5: Commit the isolated EPUB-import change**
 
 ```powershell
-git add -- Hoshi/Services/Novels/NovelEpubImportService.cs Hoshi.Tests/Services/Novels/NovelEpubImportServiceTests.cs
+git add -- Niratan/Services/Novels/NovelEpubImportService.cs Niratan.Tests/Services/Novels/NovelEpubImportServiceTests.cs
 git commit -m "fix(novels): create book info during EPUB import"
 ```
 
@@ -199,9 +199,9 @@ git commit -m "fix(novels): create book info during EPUB import"
 ### Task 2: Use the Selected Drive File Snapshot and Resolve Exact Positions
 
 **Files:**
-- Modify: `Hoshi/Models/Sync/TtuSyncModels.cs:22-29`
-- Modify: `Hoshi/Services/Sync/TtuSyncService.cs:35-53`
-- Test: `Hoshi.Tests/Services/Sync/TtuSyncServiceTests.cs:137-375,437-535`
+- Modify: `Niratan/Models/Sync/TtuSyncModels.cs:22-29`
+- Modify: `Niratan/Services/Sync/TtuSyncService.cs:35-53`
+- Test: `Niratan.Tests/Services/Sync/TtuSyncServiceTests.cs:137-375,437-535`
 
 **Interfaces:**
 - Consumes: the selected `TtuRemoteBookFiles` value supplied by the new-book import path.
@@ -369,7 +369,7 @@ public async Task SyncBookAsync_ImportMapsChapterBoundaryAndBookEnd(
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuSyncServiceTests.SyncBookAsync_ImportUsesKnownFiles|FullyQualifiedName~TtuSyncServiceTests.SyncBookAsync_KnownFiles|FullyQualifiedName~TtuSyncServiceTests.SyncBookAsync_ImportMapsChapterBoundary"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuSyncServiceTests.SyncBookAsync_ImportUsesKnownFiles|FullyQualifiedName~TtuSyncServiceTests.SyncBookAsync_KnownFiles|FullyQualifiedName~TtuSyncServiceTests.SyncBookAsync_ImportMapsChapterBoundary"
 ```
 
 Expected: FAIL to compile because `KnownRemoteFiles` does not exist; after adding only the option, the first test must still fail because the service calls `ListBookFilesAsync`.
@@ -403,7 +403,7 @@ No export call site supplies `KnownRemoteFiles`; therefore title-based lookup an
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuSyncServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuSyncServiceTests"
 ```
 
 Expected: PASS, including the existing Merge, Replace, rollback, auto-direction, and audiobook cases.
@@ -411,7 +411,7 @@ Expected: PASS, including the existing Merge, Replace, rollback, auto-direction,
 - [ ] **Step 5: Commit the sync-service change**
 
 ```powershell
-git add -- Hoshi/Models/Sync/TtuSyncModels.cs Hoshi/Services/Sync/TtuSyncService.cs Hoshi.Tests/Services/Sync/TtuSyncServiceTests.cs
+git add -- Niratan/Models/Sync/TtuSyncModels.cs Niratan/Services/Sync/TtuSyncService.cs Niratan.Tests/Services/Sync/TtuSyncServiceTests.cs
 git commit -m "fix(sync): use selected Drive sidecar snapshot"
 ```
 
@@ -420,8 +420,8 @@ git commit -m "fix(sync): use selected Drive sidecar snapshot"
 ### Task 3: Pass the Snapshot Through Drive Import and Clean Failed Imports
 
 **Files:**
-- Modify: `Hoshi/Services/Sync/TtuBookImportService.cs:31-92`
-- Test: `Hoshi.Tests/Services/Sync/TtuBookImportServiceTests.cs:10-169`
+- Modify: `Niratan/Services/Sync/TtuBookImportService.cs:31-92`
+- Test: `Niratan.Tests/Services/Sync/TtuBookImportServiceTests.cs:10-169`
 
 **Interfaces:**
 - Consumes: `TtuSyncOptions.KnownRemoteFiles` from Task 2 and `INovelLibraryService.DeleteNovelAsync(string, CancellationToken)`.
@@ -522,7 +522,7 @@ private static TtuRemoteBook CreateRemoteBook() => new(
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuBookImportServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuBookImportServiceTests"
 ```
 
 Expected: FAIL because `KnownRemoteFiles` is not passed and the imported book is not deleted after the sync exception.
@@ -590,7 +590,7 @@ private async Task TryDeleteImportedBookAsync(NovelBook? book)
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuBookImportServiceTests|FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~TtuSyncServiceTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~TtuBookImportServiceTests|FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~TtuSyncServiceTests"
 ```
 
 Expected: PASS. Existing `NovelLibraryPageViewModelTests` must continue proving that `StatisticsSettings.EnableSync` controls `TtuBookImportOptions.SyncStatistics`.
@@ -598,7 +598,7 @@ Expected: PASS. Existing `NovelLibraryPageViewModelTests` must continue proving 
 - [ ] **Step 5: Commit the import orchestration change**
 
 ```powershell
-git add -- Hoshi/Services/Sync/TtuBookImportService.cs Hoshi.Tests/Services/Sync/TtuBookImportServiceTests.cs
+git add -- Niratan/Services/Sync/TtuBookImportService.cs Niratan.Tests/Services/Sync/TtuBookImportServiceTests.cs
 git commit -m "fix(sync): preserve Drive import sidecars"
 ```
 
@@ -639,7 +639,7 @@ Run:
 
 ```powershell
 git diff --check
-node --test Hoshi.Tests/Web/NovelReader/reader-bridge.runtime.test.js Hoshi.Tests/Web/NovelReader/selection.runtime.test.js
+node --test Niratan.Tests/Web/NovelReader/reader-bridge.runtime.test.js Niratan.Tests/Web/NovelReader/selection.runtime.test.js
 ```
 
 Expected: `git diff --check` exits 0 and all Node tests pass.
@@ -649,7 +649,7 @@ Expected: `git diff --check` exits 0 and all Node tests pass.
 Run:
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 ```
 
 Expected: all tests pass with zero failed and zero skipped tests unless the repository already marks a test skipped.
@@ -664,7 +664,7 @@ dotnet build -p:Platform=x64
 
 Expected: build succeeds with zero errors.
 
-- [ ] **Step 5: Build and launch Hoshi for controlled Reader verification**
+- [ ] **Step 5: Build and launch Niratan for controlled Reader verification**
 
 Run:
 

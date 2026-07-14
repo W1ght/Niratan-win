@@ -2,7 +2,7 @@
 
 ## 背景
 
-Hoshi Windows 的书架手动同步命令已经可以执行，但同步期间没有持续可见的 UI，用户只能在操作结束后看到结果通知。Niratan 在书架同步期间使用全书架 `LoadingOverlay("Syncing...")`，使操作状态和输入阻塞都清晰可见。
+Niratan Windows 的书架手动同步命令已经可以执行，但同步期间没有持续可见的 UI，用户只能在操作结束后看到结果通知。Niratan 在书架同步期间使用全书架 `LoadingOverlay("Syncing...")`，使操作状态和输入阻塞都清晰可见。
 
 同步有声书位置还存在独立的数据覆盖问题。Google Drive 导入会把远端 `playbackPosition` 写入 `sasayaki_playback.json`，但 Windows 后续导入音频和字幕时会把播放状态重置为零：
 

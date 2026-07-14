@@ -23,10 +23,10 @@
 ### Task 1: Session Contract and Pure TTU Math
 
 **Files:**
-- Create: `Hoshi/Models/Novel/ReaderStatisticsSessionModels.cs`
-- Create: `Hoshi/Services/Novels/IReaderStatisticsSession.cs`
-- Create: `Hoshi/Services/Novels/ReaderStatisticsMath.cs`
-- Test: `Hoshi.Tests/Services/Novels/ReaderStatisticsMathTests.cs`
+- Create: `Niratan/Models/Novel/ReaderStatisticsSessionModels.cs`
+- Create: `Niratan/Services/Novels/IReaderStatisticsSession.cs`
+- Create: `Niratan/Services/Novels/ReaderStatisticsMath.cs`
+- Test: `Niratan.Tests/Services/Novels/ReaderStatisticsMathTests.cs`
 
 **Interfaces:**
 - Consumes: `NovelReadingStatistic`.
@@ -58,7 +58,7 @@ public void Deduplicate_KeepsNewestModificationForEachDateKey()
 - [ ] **Step 2: Run tests and verify missing-type failures**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderStatisticsMathTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderStatisticsMathTests"
 ```
 
 - [ ] **Step 3: Add the typed API**
@@ -99,17 +99,17 @@ public interface IReaderStatisticsSession
 - [ ] **Step 4: Run tests and commit**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderStatisticsMathTests"
-git add Hoshi/Models/Novel/ReaderStatisticsSessionModels.cs Hoshi/Services/Novels/IReaderStatisticsSession.cs Hoshi/Services/Novels/ReaderStatisticsMath.cs Hoshi.Tests/Services/Novels/ReaderStatisticsMathTests.cs
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderStatisticsMathTests"
+git add Niratan/Models/Novel/ReaderStatisticsSessionModels.cs Niratan/Services/Novels/IReaderStatisticsSession.cs Niratan/Services/Novels/ReaderStatisticsMath.cs Niratan.Tests/Services/Novels/ReaderStatisticsMathTests.cs
 git commit -m "feat(statistics): define reader session math"
 ```
 
 ### Task 2: Deterministic Session, Checkpoints, and Local Rollover
 
 **Files:**
-- Create: `Hoshi/Services/Novels/ReaderStatisticsSession.cs`
-- Modify: `Hoshi/App.xaml.cs`
-- Test: `Hoshi.Tests/Services/Novels/ReaderStatisticsSessionTests.cs`
+- Create: `Niratan/Services/Novels/ReaderStatisticsSession.cs`
+- Modify: `Niratan/App.xaml.cs`
+- Test: `Niratan.Tests/Services/Novels/ReaderStatisticsSessionTests.cs`
 
 **Interfaces:**
 - Consumes: `TimeProvider`, `INovelStatisticsSidecarService`, Task 1 types.
@@ -131,7 +131,7 @@ sidecars.Verify(x => x.SaveAsync(root, It.IsAny<IReadOnlyList<NovelReadingStatis
 - [ ] **Step 2: Run and verify failures**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderStatisticsSessionTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderStatisticsSessionTests"
 ```
 
 - [ ] **Step 3: Implement ownership and DI**
@@ -148,16 +148,16 @@ services.AddTransient<IReaderStatisticsSession>(provider =>
 - [ ] **Step 4: Run focused regression and commit**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderStatisticsSessionTests|FullyQualifiedName~NovelStatisticsSidecarServiceTests"
-git add Hoshi/Services/Novels/ReaderStatisticsSession.cs Hoshi/App.xaml.cs Hoshi.Tests/Services/Novels/ReaderStatisticsSessionTests.cs
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~ReaderStatisticsSessionTests|FullyQualifiedName~NovelStatisticsSidecarServiceTests"
+git add Niratan/Services/Novels/ReaderStatisticsSession.cs Niratan/App.xaml.cs Niratan.Tests/Services/Novels/ReaderStatisticsSessionTests.cs
 git commit -m "feat(statistics): track deterministic reader sessions"
 ```
 
 ### Task 3: Refactor Reader ViewModel into a Session Projection
 
 **Files:**
-- Modify: `Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs`
 
 **Interfaces:**
 - Consumes: `IReaderStatisticsSession`.
@@ -177,7 +177,7 @@ Assert sidecar writes and timestamps no longer belong to the ViewModel. A `State
 - [ ] **Step 2: Run and observe constructor/expectation failures**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests"
 ```
 
 - [ ] **Step 3: Delegate all tracking policy**
@@ -204,17 +204,17 @@ public async Task SaveProgressNowAsync(
 - [ ] **Step 4: Run and commit**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests"
-git add Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs Hoshi.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderPageViewModelTests"
+git add Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs Niratan.Tests/ViewModels/Pages/NovelReaderPageViewModelTests.cs
 git commit -m "refactor(statistics): project reader session state"
 ```
 
 ### Task 4: Actual-Movement Autostart and Reading Checkpoints
 
 **Files:**
-- Modify: `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
-- Create: `Hoshi.Tests/Views/Pages/NovelReaderStatisticsEventMatrixTests.cs`
+- Modify: `Niratan/Views/Pages/NovelReaderPage.xaml.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Create: `Niratan.Tests/Views/Pages/NovelReaderStatisticsEventMatrixTests.cs`
 
 **Interfaces:**
 - Consumes: Task 3 ViewModel methods and typed bridge results.
@@ -227,7 +227,7 @@ Require PageTurn start only after bridge `moved`, changed continuous-scroll prog
 - [ ] **Step 2: Run and verify current failures**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderStatisticsEventMatrixTests|FullyQualifiedName~NovelReaderWebAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderStatisticsEventMatrixTests|FullyQualifiedName~NovelReaderWebAssetTests"
 ```
 
 - [ ] **Step 3: Route verified movement**
@@ -237,17 +237,17 @@ Move PageTurn autostart inside successful-result branches. Ordinary moves call `
 - [ ] **Step 4: Run and commit**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderStatisticsEventMatrixTests|FullyQualifiedName~NovelReaderWebAssetTests"
-git add Hoshi/Views/Pages/NovelReaderPage.xaml.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs Hoshi.Tests/Views/Pages/NovelReaderStatisticsEventMatrixTests.cs
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderStatisticsEventMatrixTests|FullyQualifiedName~NovelReaderWebAssetTests"
+git add Niratan/Views/Pages/NovelReaderPage.xaml.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs Niratan.Tests/Views/Pages/NovelReaderStatisticsEventMatrixTests.cs
 git commit -m "fix(statistics): count only actual reader movement"
 ```
 
 ### Task 5: Programmatic Navigation Transaction
 
 **Files:**
-- Modify: `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
-- Modify: `Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs`
-- Modify: `Hoshi.Tests/Views/Pages/NovelReaderStatisticsEventMatrixTests.cs`
+- Modify: `Niratan/Views/Pages/NovelReaderPage.xaml.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs`
+- Modify: `Niratan.Tests/Views/Pages/NovelReaderStatisticsEventMatrixTests.cs`
 
 **Interfaces:**
 - Consumes: `ProgrammaticDeparture`, bookmark save without a statistics flush, baseline reset.
@@ -260,7 +260,7 @@ Assert flush old → resolve → save bookmark → reset. Assert no second stati
 - [ ] **Step 2: Run and verify failures**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderStatisticsEventMatrixTests.Programmatic"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderStatisticsEventMatrixTests.Programmatic"
 ```
 
 - [ ] **Step 3: Add transaction helpers**
@@ -281,18 +281,18 @@ Use one pending destination generation for cross-chapter resolution so stale bri
 - [ ] **Step 4: Run and commit**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderStatisticsEventMatrixTests|FullyQualifiedName~NovelReaderPageViewModelTests"
-git add Hoshi/Views/Pages/NovelReaderPage.xaml.cs Hoshi/ViewModels/Pages/NovelReaderPageViewModel.cs Hoshi.Tests/Views/Pages/NovelReaderStatisticsEventMatrixTests.cs
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderStatisticsEventMatrixTests|FullyQualifiedName~NovelReaderPageViewModelTests"
+git add Niratan/Views/Pages/NovelReaderPage.xaml.cs Niratan/ViewModels/Pages/NovelReaderPageViewModel.cs Niratan.Tests/Views/Pages/NovelReaderStatisticsEventMatrixTests.cs
 git commit -m "fix(statistics): isolate programmatic navigation"
 ```
 
 ### Task 6: One-Second Projection and Lifecycle Flushes
 
 **Files:**
-- Modify: `Hoshi/Views/Pages/NovelReaderPage.xaml.cs`
-- Modify: `Hoshi/App.xaml.cs`
-- Create: `Hoshi/Messages/AppBackgroundingMessage.cs`
-- Create: `Hoshi.Tests/Views/Pages/NovelReaderStatisticsLifecycleTests.cs`
+- Modify: `Niratan/Views/Pages/NovelReaderPage.xaml.cs`
+- Modify: `Niratan/App.xaml.cs`
+- Create: `Niratan/Messages/AppBackgroundingMessage.cs`
+- Create: `Niratan.Tests/Views/Pages/NovelReaderStatisticsLifecycleTests.cs`
 
 **Interfaces:**
 - Consumes: session tick/close/background operations.
@@ -305,7 +305,7 @@ Assert a one-second tick only while tracking/unpaused. Assert Reader close and a
 - [ ] **Step 2: Run and verify failures**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderStatisticsLifecycleTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderStatisticsLifecycleTests"
 ```
 
 - [ ] **Step 3: Implement native lifecycle routing**
@@ -315,8 +315,8 @@ Use `DispatcherQueueTimer` for ticks. Publish `AppBackgroundingMessage` from the
 - [ ] **Step 4: Run and commit**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderStatisticsLifecycleTests|FullyQualifiedName~NovelReaderPageViewModelTests"
-git add Hoshi/Views/Pages/NovelReaderPage.xaml.cs Hoshi/App.xaml.cs Hoshi/Messages/AppBackgroundingMessage.cs Hoshi.Tests/Views/Pages/NovelReaderStatisticsLifecycleTests.cs
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelReaderStatisticsLifecycleTests|FullyQualifiedName~NovelReaderPageViewModelTests"
+git add Niratan/Views/Pages/NovelReaderPage.xaml.cs Niratan/App.xaml.cs Niratan/Messages/AppBackgroundingMessage.cs Niratan.Tests/Views/Pages/NovelReaderStatisticsLifecycleTests.cs
 git commit -m "feat(statistics): flush reader lifecycle checkpoints"
 ```
 
@@ -336,8 +336,8 @@ git commit -m "feat(statistics): flush reader lifecycle checkpoints"
 - [ ] **Step 2: Run focused and full verification**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Statistics|FullyQualifiedName~NovelReaderPageViewModelTests"
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Statistics|FullyQualifiedName~NovelReaderPageViewModelTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 dotnet build -p:Platform=x64
 ```
 

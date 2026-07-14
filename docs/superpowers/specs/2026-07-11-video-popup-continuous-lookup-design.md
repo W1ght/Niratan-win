@@ -82,7 +82,7 @@ overlay 截获输入后，再换算并调用字幕命中。
 
 `PopupHtmlGenerator` 不再先覆盖 `window.lookupEntries`、样式、音频、Anki 或 trace 等 committed 全局状态，而是把新 generation 的完整渲染上下文作为 pending payload 交给 `popup.js`。`popup.js` 在独立暂存容器中构造首个词条，保留 committed DOM 和 committed 交互上下文，然后发送带 generation 的 `contentPrepared`。
 
-native 收到 `contentPrepared` 后，必须再次校验 lookup request、document epoch、generation 和取消令牌。只有仍属于当前文档的 generation 才会收到 `hoshiCommitPopupRender(epoch, generation)`；JavaScript 随后在同一个同步任务中提升 pending 全局上下文、原子替换 DOM，并发送带 epoch 的 `contentReady`。native 不在查词路径等待任一消息。
+native 收到 `contentPrepared` 后，必须再次校验 lookup request、document epoch、generation 和取消令牌。只有仍属于当前文档的 generation 才会收到 `niratanCommitPopupRender(epoch, generation)`；JavaScript 随后在同一个同步任务中提升 pending 全局上下文、原子替换 DOM，并发送带 epoch 的 `contentReady`。native 不在查词路径等待任一消息。
 
 native 发出 commit 命令前把该 generation 线性化为 **commit-in-flight**。commit-in-flight 不能被后来取消或新的 `BeginPending` 覆盖；后续查词仍可完成 native lookup，但 popup 只保存一个 latest queued replacement，并在当前 generation 的 `contentReady` 后异步启动，调用方不等待 ready。这样 commit 命令与取消命令不存在“先提交 DOM、后清除 native 所有权”的窗口。
 
@@ -90,9 +90,9 @@ native 发出 commit 命令前把该 generation 线性化为 **commit-in-flight*
 
 native commit acknowledgement 由非阻塞 async helper 执行并观察 `ExecuteScriptAsync` 的布尔结果；查词路径仍不 await。`contentReady` 与成功的脚本返回都可以幂等完成相同 generation。脚本返回 `false` 时立即精确 abort accepted commit。脚本异常或超时时，native 通过窄接口查询 JavaScript 当前 committed generation：若与 accepted generation 匹配则完成 native commit；否则精确 abort，并保留之前 committed DOM/native context。无论 abort 或对账完成，都必须释放 commit-in-flight 并异步启动 latest queued replacement。
 
-每次 popup shell 初始化分配不可复用且单调递增的 document epoch。stage、commit、query、discard、cancel 和 append 命令都携带 epoch；JavaScript 对不等于当前 `window.hoshiPopupDocumentEpoch` 的命令立即拒绝。`shellReady`、`contentPrepared` 和 `contentReady` 也回传 epoch，旧文档的迟到消息不能满足新文档 waiter 或完成 native transaction。
+每次 popup shell 初始化分配不可复用且单调递增的 document epoch。stage、commit、query、discard、cancel 和 append 命令都携带 epoch；JavaScript 对不等于当前 `window.niratanPopupDocumentEpoch` 的命令立即拒绝。`shellReady`、`contentPrepared` 和 `contentReady` 也回传 epoch，旧文档的迟到消息不能满足新文档 waiter 或完成 native transaction。
 
-JavaScript 只暴露 epoch + generation-scoped 的 `hoshiGetCommittedPopupGeneration(epoch)` 与必要的 `hoshiDiscardPopupRender(epoch, generation)`；查询不得返回词条或扩大 native API。若 commit/query 无法确认 renderer 状态，不能立即 abort accepted generation：native 保持旧 committed native context、accepted ownership 和唯一 latest queue，强制使 warm shell 失效并导航到带新 epoch 的空 shell。只有收到该新 epoch 的 `shellReady` 后，旧 DOM 已被导航销毁，native 才精确 abort 旧 accepted generation、清理 staged context，并在新 epoch shell 中启动 latest request。恢复失败只结束本次 recovery attempt，不释放 ownership 或 queue；后续请求触发同一 generation + failed epoch 的新 attempt。
+JavaScript 只暴露 epoch + generation-scoped 的 `niratanGetCommittedPopupGeneration(epoch)` 与必要的 `niratanDiscardPopupRender(epoch, generation)`；查询不得返回词条或扩大 native API。若 commit/query 无法确认 renderer 状态，不能立即 abort accepted generation：native 保持旧 committed native context、accepted ownership 和唯一 latest queue，强制使 warm shell 失效并导航到带新 epoch 的空 shell。只有收到该新 epoch 的 `shellReady` 后，旧 DOM 已被导航销毁，native 才精确 abort 旧 accepted generation、清理 staged context，并在新 epoch shell 中启动 latest request。恢复失败只结束本次 recovery attempt，不释放 ownership 或 queue；后续请求触发同一 generation + failed epoch 的新 attempt。
 
 recovery ticket 一旦为 accepted generation + failed epoch 建立，该组合立刻进入不可完成状态。无论迟到的 `contentReady` 还是 commit/reconcile 成功结果，都必须在统一的 `CompleteAcceptedCommit` 边界被拒绝；不能因为 fresh shell 尚未 ready、`_rendererEpoch` 暂时仍等于 failed epoch 而提升旧 staged context。只有 fresh epoch `shellReady` 完成 recovery ticket 后，恢复路径才能精确 abort 旧 accepted generation 并启动 latest queue；普通 generation/epoch、Hide 后的新事务以及旧 ticket 回调不受该 gate 误伤。
 

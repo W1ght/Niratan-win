@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Match `docs/reference/hoshi/Niratan/Features/Bookshelf/StatisticsDashboardView.swift` and its full-page switch in `NativeReuseViews.swift`.
+- Match `docs/reference/Niratan/Features/Bookshelf/StatisticsDashboardView.swift` and its full-page switch in `NativeReuseViews.swift`.
 - Do not change `statistics.json`, `bookinfo.json`, `metadata.json`, `shelves.json`, or cache schemas.
 - Do not add a chart package or any other dependency.
 - ViewModels must not access SQLite, sidecar files, or WinUI controls directly.
@@ -24,12 +24,12 @@
 ### Task 1: Extract the Dashboard Presentation ViewModel
 
 **Files:**
-- Create: `Hoshi/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs`
-- Modify: `Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs`
-- Modify: `Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs`
-- Modify: `Hoshi/App.xaml.cs`
-- Create: `Hoshi.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
+- Create: `Niratan/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs`
+- Modify: `Niratan/Models/Novel/NovelStatisticsDashboardModels.cs`
+- Modify: `Niratan/App.xaml.cs`
+- Create: `Niratan.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs`
 
 **Interfaces:**
 - Consumes: `INovelStatisticsDashboardService`, `ISettingsService`, visible `IReadOnlyList<NovelBook>`, and `NovelShelfState`.
@@ -91,7 +91,7 @@ Update library tests so entering Statistics activates the child and returning de
 - [ ] **Step 2: Run the tests and verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardViewModelTests|FullyQualifiedName~NovelLibraryPageViewModelTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardViewModelTests|FullyQualifiedName~NovelLibraryPageViewModelTests"
 ```
 
 Expected: compilation failures because `NovelStatisticsDashboardViewModel`, `NovelStatisticsTrendChartStyle`, and the new parent commands do not exist.
@@ -180,7 +180,7 @@ Move all dashboard properties, formatting, selector change handlers, and target 
 - [ ] **Step 4: Run extraction tests and verify GREEN**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardViewModelTests|FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~NovelStatisticsDashboard"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardViewModelTests|FullyQualifiedName~NovelLibraryPageViewModelTests|FullyQualifiedName~NovelStatisticsDashboard"
 ```
 
 Expected: all selected tests pass.
@@ -188,18 +188,18 @@ Expected: all selected tests pass.
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add Hoshi/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs Hoshi/ViewModels/Pages/NovelLibraryPageViewModel.cs Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs Hoshi/App.xaml.cs Hoshi.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs Hoshi.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs
+git add Niratan/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs Niratan/ViewModels/Pages/NovelLibraryPageViewModel.cs Niratan/Models/Novel/NovelStatisticsDashboardModels.cs Niratan/App.xaml.cs Niratan.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs Niratan.Tests/ViewModels/Pages/NovelLibraryPageViewModelTests.cs
 git commit -m "refactor(statistics): isolate dashboard presentation"
 ```
 
 ### Task 2: Replace the Embedded Panel with a Full-Page Surface
 
 **Files:**
-- Create: `Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml`
-- Create: `Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml.cs`
-- Modify: `Hoshi/Views/Pages/NovelLibraryPage.xaml`
-- Modify: `Hoshi/Views/Pages/NovelLibraryPage.xaml.cs`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Create: `Niratan/Views/Controls/NovelStatisticsDashboardView.xaml`
+- Create: `Niratan/Views/Controls/NovelStatisticsDashboardView.xaml.cs`
+- Modify: `Niratan/Views/Pages/NovelLibraryPage.xaml`
+- Modify: `Niratan/Views/Pages/NovelLibraryPage.xaml.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
 - Consumes: `NovelLibraryPageViewModel.StatisticsDashboard` and the two surface-switch commands.
@@ -225,7 +225,7 @@ dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatist
 - [ ] **Step 2: Run and verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPage_ExposesStatisticsDashboard"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPage_ExposesStatisticsDashboard"
 ```
 
 Expected: failure because the dashboard is still embedded and the new view does not exist.
@@ -254,8 +254,8 @@ Start the new control with header, warning, loading overlay, empty state, and a 
 - [ ] **Step 4: Build and run the contract test**
 
 ```powershell
-dotnet build Hoshi/Hoshi.csproj -c Debug -p:Platform=x64
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPage_ExposesStatisticsDashboard"
+dotnet build Niratan/Niratan.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelLibraryPage_ExposesStatisticsDashboard"
 ```
 
 Expected: build succeeds and the contract test passes.
@@ -263,20 +263,20 @@ Expected: build succeeds and the contract test passes.
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml.cs Hoshi/Views/Pages/NovelLibraryPage.xaml Hoshi/Views/Pages/NovelLibraryPage.xaml.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+git add Niratan/Views/Controls/NovelStatisticsDashboardView.xaml Niratan/Views/Controls/NovelStatisticsDashboardView.xaml.cs Niratan/Views/Pages/NovelLibraryPage.xaml Niratan/Views/Pages/NovelLibraryPage.xaml.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "feat(statistics): add full-page dashboard surface"
 ```
 
 ### Task 3: Add the Trend Chart and Summary Cards
 
 **Files:**
-- Create: `Hoshi/Views/Controls/NovelStatisticsTrendChart.xaml`
-- Create: `Hoshi/Views/Controls/NovelStatisticsTrendChart.xaml.cs`
-- Modify: `Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml`
-- Modify: `Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs`
-- Modify: `Hoshi/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Create: `Niratan/Views/Controls/NovelStatisticsTrendChart.xaml`
+- Create: `Niratan/Views/Controls/NovelStatisticsTrendChart.xaml.cs`
+- Modify: `Niratan/Views/Controls/NovelStatisticsDashboardView.xaml`
+- Modify: `Niratan/Models/Novel/NovelStatisticsDashboardModels.cs`
+- Modify: `Niratan/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
 - Consumes: normalized trend display points and summary display records.
@@ -316,7 +316,7 @@ Add static assertions for `NovelStatisticsTrendChartStyle`, `Polyline`, the five
 - [ ] **Step 2: Run and verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardViewModelTests|FullyQualifiedName~NovelLibraryPage_ExposesStatisticsDashboard"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardViewModelTests|FullyQualifiedName~NovelLibraryPage_ExposesStatisticsDashboard"
 ```
 
 Expected: projection/card assertions fail.
@@ -348,20 +348,20 @@ Add the full-width Range & Trend card and native controls for Range, Anchor, Tim
 - [ ] **Step 5: Build, run focused tests, and commit**
 
 ```powershell
-dotnet build Hoshi/Hoshi.csproj -c Debug -p:Platform=x64
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardViewModelTests|FullyQualifiedName~NovelLibraryPage_ExposesStatisticsDashboard"
-git add Hoshi/Views/Controls/NovelStatisticsTrendChart.xaml Hoshi/Views/Controls/NovelStatisticsTrendChart.xaml.cs Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs Hoshi/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs Hoshi.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+dotnet build Niratan/Niratan.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardViewModelTests|FullyQualifiedName~NovelLibraryPage_ExposesStatisticsDashboard"
+git add Niratan/Views/Controls/NovelStatisticsTrendChart.xaml Niratan/Views/Controls/NovelStatisticsTrendChart.xaml.cs Niratan/Views/Controls/NovelStatisticsDashboardView.xaml Niratan/Models/Novel/NovelStatisticsDashboardModels.cs Niratan/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs Niratan.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "feat(statistics): render niratan trend and summaries"
 ```
 
 ### Task 4: Add Calendar, Ranking, Shelves, and Adaptive Layout
 
 **Files:**
-- Modify: `Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml`
-- Modify: `Hoshi/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs`
-- Modify: `Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Niratan/Views/Controls/NovelStatisticsDashboardView.xaml`
+- Modify: `Niratan/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs`
+- Modify: `Niratan/Models/Novel/NovelStatisticsDashboardModels.cs`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 
 **Interfaces:**
 - Consumes: calendar, ranking, and shelf display records.
@@ -398,7 +398,7 @@ Static tests assert `WideDashboardState`, `MediumDashboardState`, `NarrowDashboa
 - [ ] **Step 2: Run and verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardViewModelTests|FullyQualifiedName~NovelLibraryPage_ExposesStatisticsDashboard"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardViewModelTests|FullyQualifiedName~NovelLibraryPage_ExposesStatisticsDashboard"
 ```
 
 Expected: heat/bar/adaptive assertions fail.
@@ -432,21 +432,21 @@ Add:
 - [ ] **Step 5: Build, test, and commit**
 
 ```powershell
-dotnet build Hoshi/Hoshi.csproj -c Debug -p:Platform=x64
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardViewModelTests|FullyQualifiedName~NovelLibraryPage_ExposesStatisticsDashboard"
-git add Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml Hoshi/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs Hoshi/Models/Novel/NovelStatisticsDashboardModels.cs Hoshi.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs
+dotnet build Niratan/Niratan.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardViewModelTests|FullyQualifiedName~NovelLibraryPage_ExposesStatisticsDashboard"
+git add Niratan/Views/Controls/NovelStatisticsDashboardView.xaml Niratan/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs Niratan/Models/Novel/NovelStatisticsDashboardModels.cs Niratan.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs
 git commit -m "feat(statistics): complete adaptive dashboard modules"
 ```
 
 ### Task 5: Finalize Lifecycle, Accessibility, Documentation, and Runtime Verification
 
 **Files:**
-- Modify: `Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml`
-- Modify: `Hoshi/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs`
-- Modify: `Hoshi/Strings/en-US/Resources.resw`
-- Modify: `Hoshi/Strings/zh-CN/Resources.resw`
-- Modify: `Hoshi.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs`
-- Modify: `Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
+- Modify: `Niratan/Views/Controls/NovelStatisticsDashboardView.xaml`
+- Modify: `Niratan/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs`
+- Modify: `Niratan/Strings/en-US/Resources.resw`
+- Modify: `Niratan/Strings/zh-CN/Resources.resw`
+- Modify: `Niratan.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs`
+- Modify: `Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs`
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `docs/VERIFICATION.md`
 - Modify: `docs/CHANGELOG.md`
@@ -476,7 +476,7 @@ public async Task Deactivate_IgnoresLaterSnapshotRefresh()
 - [ ] **Step 2: Run and verify RED**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardViewModelTests|FullyQualifiedName~NovelReaderWebAssetTests"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~NovelStatisticsDashboardViewModelTests|FullyQualifiedName~NovelReaderWebAssetTests"
 ```
 
 Expected: lifecycle/resource assertions fail.
@@ -492,18 +492,18 @@ Document the parent/child ViewModel boundary, full-page switching, UI-only chart
 - [ ] **Step 5: Run complete verification**
 
 ```powershell
-dotnet test Hoshi.Tests/Hoshi.Tests.csproj -c Debug -p:Platform=x64
-dotnet build Hoshi/Hoshi.csproj -c Debug -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
+dotnet build Niratan/Niratan.csproj -c Debug -p:Platform=x64
 git diff --check
 ```
 
 Expected: every test passes; build has zero errors. The retained video SQLite dependency may emit the already documented `SQLitePCLRaw.lib.e_sqlite3` advisory.
 
-Run `build-and-run.ps1`, verify a responsive `Hoshi` window, open Statistics, exercise selectors and calendar selection, and resize across 1260 and 840 effective pixels. Return to Bookshelf and confirm book rails remain interactive. Leave the final verified app instance running.
+Run `build-and-run.ps1`, verify a responsive `Niratan` window, open Statistics, exercise selectors and calendar selection, and resize across 1260 and 840 effective pixels. Return to Bookshelf and confirm book rails remain interactive. Leave the final verified app instance running.
 
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add Hoshi/Views/Controls/NovelStatisticsDashboardView.xaml Hoshi/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs Hoshi/Strings/en-US/Resources.resw Hoshi/Strings/zh-CN/Resources.resw Hoshi.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs Hoshi.Tests/Services/Novels/NovelReaderWebAssetTests.cs docs/ARCHITECTURE.md docs/VERIFICATION.md docs/CHANGELOG.md
+git add Niratan/Views/Controls/NovelStatisticsDashboardView.xaml Niratan/ViewModels/Pages/NovelStatisticsDashboardViewModel.cs Niratan/Strings/en-US/Resources.resw Niratan/Strings/zh-CN/Resources.resw Niratan.Tests/ViewModels/Pages/NovelStatisticsDashboardViewModelTests.cs Niratan.Tests/Services/Novels/NovelReaderWebAssetTests.cs docs/ARCHITECTURE.md docs/VERIFICATION.md docs/CHANGELOG.md
 git commit -m "docs: verify full niratan statistics dashboard"
 ```

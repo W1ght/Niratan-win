@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page x:Class="Niratan.Views.Pages.KeyboardShortcutsSettingsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:vm="using:Niratan.ViewModels.Pages"
+      mc:Ignorable="d">
+
+    <Grid x:Name="KeyboardShortcutsRoot"
+          RowDefinitions="Auto,*"
+          IsTabStop="True"
+          KeyDown="KeyboardShortcutsRoot_KeyDown">
+        <StackPanel Padding="20,14,36,16"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center">
+            <Button x:Name="KeyboardShortcutsBackButton"
+                    x:Uid="KeyboardShortcutsBackButton"
+                    Width="36"
+                    Height="36"
+                    Padding="0"
+                    AutomationProperties.AutomationId="KeyboardShortcutsBackButton"
+                    Click="BackButton_Click">
+                <FontIcon Glyph="&#xE72B;" />
+            </Button>
+            <FontIcon FontSize="24" Glyph="&#xE765;" />
+            <StackPanel>
+                <TextBlock x:Uid="KeyboardShortcutsPageTitle"
+                           Style="{StaticResource TitleTextBlockStyle}"
+                           Text="Keyboard Shortcuts" />
+                <TextBlock Text="{x:Bind ViewModel.RecordingHintText, Mode=OneWay}"
+                           Style="{StaticResource CaptionTextBlockStyle}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+        </StackPanel>
+
+        <ListView Grid.Row="1"
+                  Margin="20,0,16,16"
+                  AutomationProperties.AutomationId="KeyboardShortcutsList"
+                  ItemsSource="{x:Bind ViewModel.Rows, Mode=OneWay}"
+                  SelectionMode="None">
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="vm:ShortcutRowViewModel">
+                    <Grid ColumnDefinitions="*,Auto,Auto"
+                          ColumnSpacing="12"
+                          Padding="0,10">
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="{x:Bind Title, Mode=OneWay}"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="{x:Bind CategoryTitle, Mode=OneWay}"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Text="{x:Bind DefaultShortcutLabel, Mode=OneWay}"
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                            <TextBlock Text="{x:Bind ConflictText, Mode=OneWay}"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                MinWidth="108"
+                                HorizontalAlignment="Right"
+                                AutomationProperties.AutomationId="ShortcutRecordButton"
+                                Click="RecordShortcutButton_Click"
+                                Content="{x:Bind CurrentShortcutLabel, Mode=OneWay}" />
+                        <Button Grid.Column="2"
+                                x:Uid="KeyboardShortcutResetButton"
+                                AutomationProperties.AutomationId="ShortcutResetButton"
+                                Click="ResetShortcutButton_Click"
+                                Content="Reset" />
+                    </Grid>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+    </Grid>
+</Page>
