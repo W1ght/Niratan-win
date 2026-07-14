@@ -189,17 +189,25 @@ public partial class NovelReaderPageViewModel : ObservableObject
         if (CurrentBook != null)
         {
             await _profileRuntime.ActivateForBookAsync(CurrentBook, ct);
-            if (await _readerAutoSyncCoordinator.ImportOnOpenAsync(CurrentBook, ct))
-            {
-                var imported = await _novelLibraryService.GetNovelBookAsync(CurrentBook.Id, ct);
-                if (imported.IsSuccess && imported.Value != null)
-                    CurrentBook = imported.Value;
-            }
-
             await _novelLibraryService.MarkOpenedAsync(CurrentBook.Id, ct);
         }
 
         OnPropertyChanged(nameof(ReaderTitle));
+    }
+
+    public async Task<bool> SyncOnOpenAsync(CancellationToken ct = default)
+    {
+        var book = CurrentBook;
+        if (book == null || !await _readerAutoSyncCoordinator.ImportOnOpenAsync(book, ct))
+            return false;
+
+        var imported = await _novelLibraryService.GetNovelBookAsync(book.Id, ct);
+        if (!imported.IsSuccess || imported.Value == null)
+            return false;
+
+        CurrentBook = imported.Value;
+        OnPropertyChanged(nameof(ReaderTitle));
+        return true;
     }
 
     public void SetChapter(int index, int count)
@@ -1638,9 +1646,6 @@ public partial class NovelReaderPageViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task BackToLibrary()
-    {
-        await PrepareForReaderLifecycleCloseAsync();
+    private void BackToLibrary() =>
         _messenger.Send(new SwitchAppModeMessage(AppMode.Navigation, null));
-    }
 }
