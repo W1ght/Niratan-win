@@ -54,8 +54,8 @@
 
         <DataTemplate x:Key="CalendarDayTemplate"
                       x:DataType="novel:NovelStatisticsCalendarDayDisplay">
-            <Grid Width="18"
-                  Height="18"
+            <Grid Width="12"
+                  Height="12"
                   Margin="2"
                   AutomationProperties.Name="{x:Bind AccessibleText}">
                 <Border Background="{ThemeResource AccentFillColorDefaultBrush}"
@@ -470,7 +470,8 @@
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                            Text="{Binding RangeTitle}" />
                             </Grid>
-                            <ListView MaxHeight="190"
+                            <ListView MaxHeight="132"
+                                      Padding="10"
                                       x:Uid="NovelStatisticsCalendarControl"
                                       AutomationProperties.AutomationId="NovelStatisticsCalendar"
                                       ItemTemplate="{StaticResource CalendarDayTemplate}"
@@ -481,9 +482,23 @@
                                       ScrollViewer.HorizontalScrollMode="Enabled"
                                       ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                       ScrollViewer.VerticalScrollMode="Disabled">
+                                <ListView.ItemContainerStyle>
+                                    <Style TargetType="ListViewItem">
+                                        <Setter Property="Width" Value="16" />
+                                        <Setter Property="Height" Value="16" />
+                                        <Setter Property="MinWidth" Value="0" />
+                                        <Setter Property="MinHeight" Value="0" />
+                                        <Setter Property="Padding" Value="0" />
+                                        <Setter Property="Margin" Value="0" />
+                                        <Setter Property="HorizontalContentAlignment" Value="Left" />
+                                        <Setter Property="VerticalContentAlignment" Value="Top" />
+                                    </Style>
+                                </ListView.ItemContainerStyle>
                                 <ListView.ItemsPanel>
                                     <ItemsPanelTemplate>
-                                        <ItemsWrapGrid MaximumRowsOrColumns="7"
+                                        <ItemsWrapGrid ItemWidth="16"
+                                                       ItemHeight="16"
+                                                       MaximumRowsOrColumns="7"
                                                        Orientation="Vertical" />
                                     </ItemsPanelTemplate>
                                 </ListView.ItemsPanel>

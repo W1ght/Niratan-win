@@ -2628,6 +2628,28 @@ public class NovelReaderWebAssetTests
         dashboardXaml.Should().NotContain("NovelStatisticsAnchorDate");
         dashboardXaml.Should().NotContain("CalendarDatePicker");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsCalendarCard\"");
+        var calendarTemplateStart = dashboardXaml.IndexOf(
+            "<DataTemplate x:Key=\"CalendarDayTemplate\"",
+            StringComparison.Ordinal);
+        var calendarTemplateEnd = dashboardXaml.IndexOf(
+            "</DataTemplate>",
+            calendarTemplateStart,
+            StringComparison.Ordinal);
+        calendarTemplateStart.Should().BeGreaterThanOrEqualTo(0);
+        calendarTemplateEnd.Should().BeGreaterThan(calendarTemplateStart);
+
+        var calendarTemplateXaml = dashboardXaml[calendarTemplateStart..calendarTemplateEnd];
+        calendarTemplateXaml.Should().Contain("<Grid Width=\"12\"");
+        calendarTemplateXaml.Should().Contain("Height=\"12\"");
+        calendarTemplateXaml.Should().Contain("Margin=\"2\"");
+
+        dashboardXaml.Should().Contain("<ListView MaxHeight=\"132\"");
+        dashboardXaml.Should().Contain("Padding=\"10\"");
+        dashboardXaml.Should().Contain("<Setter Property=\"MinWidth\" Value=\"0\" />");
+        dashboardXaml.Should().Contain("<Setter Property=\"MinHeight\" Value=\"0\" />");
+        dashboardXaml.Should().Contain("<ItemsWrapGrid ItemWidth=\"16\"");
+        dashboardXaml.Should().Contain("ItemHeight=\"16\"");
+        dashboardXaml.Should().Contain("MaximumRowsOrColumns=\"7\"");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsBookRankingCard\"");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsShelfComparisonCard\"");
         dashboardXaml.Should().NotContain("AccentStrokeColorDefaultBrush");
