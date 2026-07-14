@@ -1,5 +1,17 @@
 # Changelog
 
+## 同步设置与书架右键未对齐 Niratan
+
+**原因**：
+- ッツ Sync 设置页只暴露全局、方向和上传书籍选项；连接成功后还会主动清空 Client Secret，重新进入页面也不会从 Windows 凭据管理器回读。
+- 清缓存只清除了 Drive 文件夹 ID，未清理封面文件；本地书籍右键菜单没有 Niratan 的自动 Sync 或手动 Import/Export 入口。
+
+**解决**：
+- 按 Niratan 重组 Syncing、客户端凭据、Connection、Behaviour、Data 分组，统一投影书籍、统计与 Sasayaki 同步偏好；Client Secret 仅保存在 Windows 凭据管理器，并在页面进入时安全回读。
+- 清缓存同时删除文件夹 ID 与封面缓存；书架右键按 Auto/Manual 模式显示 Sync 或 Import/Export，并由 ViewModel 调用现有 `ITtuSyncService`。
+
+---
+
 ## Dashboard 今日圆环偏小且本周卡片过高
 
 **原因**：

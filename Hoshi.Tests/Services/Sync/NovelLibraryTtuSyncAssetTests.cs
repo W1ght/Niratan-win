@@ -26,4 +26,53 @@ public sealed class NovelLibraryTtuSyncAssetTests
         appCode.Should().Contain("AddSingleton<ITtuBookImportService, TtuBookImportService>");
         appCode.Should().Contain("AddSingleton<ITtuBookDataConverter, TtuBookDataConverter>");
     }
+
+    [Fact]
+    public void NovelLibraryPage_ExposesNiratanPerBookSyncMenu()
+    {
+        var xaml = File.ReadAllText(Path.Combine(
+            ProjectRoot,
+            "Views",
+            "Pages",
+            "NovelLibraryPage.xaml"));
+        var en = File.ReadAllText(Path.Combine(
+            ProjectRoot,
+            "Strings",
+            "en-US",
+            "Resources.resw"));
+        var zh = File.ReadAllText(Path.Combine(
+            ProjectRoot,
+            "Strings",
+            "zh-CN",
+            "Resources.resw"));
+
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelBookSyncMenuItem\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelBookSyncSubmenu\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelBookSyncImportMenuItem\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelBookSyncExportMenuItem\"");
+        xaml.Should().Contain("ViewModel.ShowAutomaticBookSyncAction");
+        xaml.Should().Contain("ViewModel.ShowManualBookSyncAction");
+        xaml.Should().Contain("ViewModel.SyncNovelCommand");
+        xaml.Should().Contain("ViewModel.ImportNovelFromTtuCommand");
+        xaml.Should().Contain("ViewModel.ExportNovelCommand");
+
+        foreach (var key in new[]
+        {
+            "NovelBookSyncMenuItem.Text",
+            "NovelBookSyncSubmenu.Text",
+            "NovelBookSyncImportMenuItem.Text",
+            "NovelBookSyncExportMenuItem.Text",
+            "NovelBookSyncUnavailableTitle",
+            "NovelBookSyncUnavailableMessage",
+            "NovelBookAlreadySyncedFormat",
+            "NovelBookSyncedFromTtuFormat",
+            "NovelBookSyncedToTtuFormat",
+            "NovelBookSyncFailedTitle",
+            "NovelBookSyncFailedFormat",
+        })
+        {
+            en.Should().Contain(key);
+            zh.Should().Contain(key);
+        }
+    }
 }

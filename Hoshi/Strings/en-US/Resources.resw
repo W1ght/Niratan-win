@@ -785,6 +785,17 @@
   <data name="NovelShelfRenameButton.Content" xml:space="preserve"><value>Rename</value></data>
   <data name="NovelShelfDeleteButton.Content" xml:space="preserve"><value>Delete</value></data>
   <data name="NovelBookMoveToShelfMenuItem.Text" xml:space="preserve"><value>Move to shelf…</value></data>
+  <data name="NovelBookSyncMenuItem.Text" xml:space="preserve"><value>Sync</value></data>
+  <data name="NovelBookSyncSubmenu.Text" xml:space="preserve"><value>Sync</value></data>
+  <data name="NovelBookSyncImportMenuItem.Text" xml:space="preserve"><value>Import</value></data>
+  <data name="NovelBookSyncExportMenuItem.Text" xml:space="preserve"><value>Export</value></data>
+  <data name="NovelBookSyncUnavailableTitle" xml:space="preserve"><value>Sync unavailable</value></data>
+  <data name="NovelBookSyncUnavailableMessage" xml:space="preserve"><value>Enable ッツ Sync and connect Google Drive before syncing a book.</value></data>
+  <data name="NovelBookAlreadySyncedFormat" xml:space="preserve"><value>{0} is already synced.</value></data>
+  <data name="NovelBookSyncedFromTtuFormat" xml:space="preserve"><value>Synced {0} from ッツ ({1} characters).</value></data>
+  <data name="NovelBookSyncedToTtuFormat" xml:space="preserve"><value>Synced {0} to ッツ ({1} characters).</value></data>
+  <data name="NovelBookSyncFailedTitle" xml:space="preserve"><value>Sync failed</value></data>
+  <data name="NovelBookSyncFailedFormat" xml:space="preserve"><value>Sync failed: {0}</value></data>
   <data name="NovelStorageWarningInfoBar.Title" xml:space="preserve"><value>Book metadata needs attention</value></data>
   <data name="NovelStorageWarningInfoBar.Message" xml:space="preserve"><value>Some book metadata could not be read. Original files were preserved.</value></data>
   <data name="NovelShelfDeleteConfirmation.Title" xml:space="preserve"><value>Delete shelf</value></data>

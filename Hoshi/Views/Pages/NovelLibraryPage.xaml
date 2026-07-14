@@ -35,6 +35,39 @@
                         <MenuFlyoutItem x:Uid="NovelBookMoveToShelfMenuItem"
                                         Tag="{x:Bind}"
                                         Click="MoveNovelToShelfMenuItem_Click" />
+                        <MenuFlyoutItem x:Uid="NovelBookSyncMenuItem"
+                                        AutomationProperties.AutomationId="NovelBookSyncMenuItem"
+                                        Command="{Binding ViewModel.SyncNovelCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}"
+                                        Visibility="{Binding ViewModel.ShowAutomaticBookSyncAction, ElementName=ThisPage, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE895;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutSubItem x:Uid="NovelBookSyncSubmenu"
+                                           AutomationProperties.AutomationId="NovelBookSyncSubmenu"
+                                           Visibility="{Binding ViewModel.ShowManualBookSyncAction, ElementName=ThisPage, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <MenuFlyoutSubItem.Icon>
+                                <FontIcon Glyph="&#xE895;" />
+                            </MenuFlyoutSubItem.Icon>
+                            <MenuFlyoutItem x:Uid="NovelBookSyncImportMenuItem"
+                                            AutomationProperties.AutomationId="NovelBookSyncImportMenuItem"
+                                            Command="{Binding ViewModel.ImportNovelFromTtuCommand, ElementName=ThisPage}"
+                                            CommandParameter="{x:Bind}">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE896;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem x:Uid="NovelBookSyncExportMenuItem"
+                                            AutomationProperties.AutomationId="NovelBookSyncExportMenuItem"
+                                            Command="{Binding ViewModel.ExportNovelCommand, ElementName=ThisPage}"
+                                            CommandParameter="{x:Bind}">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE898;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                        </MenuFlyoutSubItem>
+                        <MenuFlyoutSeparator />
                         <MenuFlyoutItem Text="Delete"
                                         AutomationProperties.AutomationId="NovelBookDeleteMenuItem"
                                         Tag="{x:Bind}"
