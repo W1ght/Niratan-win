@@ -91,9 +91,10 @@
                                        Text="{x:Bind OverallProgressText, Mode=OneWay}" />
                         </Grid>
                         <TextBlock Text="{x:Bind Book.Title, Mode=OneTime}"
+                                   Width="180"
                                    MaxLines="2"
                                    TextTrimming="Clip"
-                                   TextWrapping="Wrap"
+                                   TextWrapping="WrapWholeWords"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                     </StackPanel>
                 </StackPanel>
@@ -159,9 +160,10 @@
                                    Text="{x:Bind DownloadStatusText, Mode=OneWay}"
                                    Visibility="{x:Bind HasDownloadStatus, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
                         <TextBlock Text="{x:Bind Book.Title, Mode=OneTime}"
+                                   Width="180"
                                    MaxLines="2"
                                    TextTrimming="Clip"
-                                   TextWrapping="Wrap"
+                                   TextWrapping="WrapWholeWords"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                     </StackPanel>
                 </StackPanel>
