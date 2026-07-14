@@ -4080,6 +4080,71 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void ReaderOpenSync_StartsAfterLocalReaderAndIsCancelledOnDetach()
+    {
+        var code = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+        var navigatedTo = code.IndexOf(
+            "protected override async void OnNavigatedTo",
+            StringComparison.Ordinal);
+        var navigatedFrom = code.IndexOf(
+            "protected override void OnNavigatedFrom",
+            navigatedTo,
+            StringComparison.Ordinal);
+        var openBody = code[navigatedTo..navigatedFrom];
+
+        openBody.IndexOf("await InitializeReaderAsync();", StringComparison.Ordinal)
+            .Should().BeLessThan(openBody.IndexOf("StartOpenSync();", StringComparison.Ordinal));
+        code.Should().Contain("private CancellationTokenSource? _openSyncCts;");
+        code.Should().Contain("private async Task RunOpenSyncAsync(CancellationToken ct)");
+        code.Should().Contain("await ViewModel.SyncOnOpenAsync(ct)");
+        code.Should().Contain("await ApplyImportedReaderStateAsync(ct)");
+        code.Should().Contain("_openSyncCts?.Cancel();");
+    }
+
+    [Fact]
+    public void ImportedReaderState_ReappliesBookmarkStatisticsAndSasayakiPlayback()
+    {
+        var code = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+        var start = code.IndexOf(
+            "private async Task ApplyImportedReaderStateAsync",
+            StringComparison.Ordinal);
+
+        start.Should().BeGreaterThanOrEqualTo(0);
+        var end = code.IndexOf("\n    private ", start + 10, StringComparison.Ordinal);
+        var body = code[start..end];
+        body.Should().Contain("ViewModel.CurrentBook.CurrentChapterIndex");
+        body.Should().Contain("ViewModel.CurrentBook.Progress");
+        body.Should().Contain("await ViewModel.LoadStatisticsAsync(ct)");
+        body.Should().Contain("await _sasayakiLoadTask.WaitAsync(ct)");
+        body.Should().Contain("SasayakiSidecarService.LoadPlaybackAsync");
+        body.Should().Contain("ApplySasayakiPlayback(playback)");
+        body.Should().Contain("LoadChapter(");
+        code.Should().Contain("private Task _sasayakiLoadTask = Task.CompletedTask;");
+        code.Should().Contain("_sasayakiLoadTask = LoadSasayakiSidecarAsync();");
+    }
+
+    [Fact]
+    public void ReaderBack_NavigatesBeforeDetachedLifecycleClose()
+    {
+        var viewModelCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "ViewModels", "Pages", "NovelReaderPageViewModel.cs"));
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+        var methodIndex = viewModelCode.LastIndexOf("BackToLibrary", StringComparison.Ordinal);
+        var attributeIndex = viewModelCode.LastIndexOf(
+            "[RelayCommand]",
+            methodIndex,
+            StringComparison.Ordinal);
+        var back = viewModelCode[attributeIndex..];
+
+        back.Should().Contain("SwitchAppModeMessage");
+        back.Should().NotContain("PrepareForReaderLifecycleCloseAsync");
+        readerCode.Should().Contain("_ = CompleteReaderLifecycleCloseAfterDetachAsync();");
+    }
+
+    [Fact]
     public void ReaderPage_AttachedLifecycleTreatsOwnedSettlementAsWaitOnly()
     {
         var readerCode = File.ReadAllText(

@@ -23,7 +23,7 @@ public sealed class NovelReaderStatisticsLifecycleTests
     }
 
     [Fact]
-    public void MainWindowAndReaderPage_AwaitSharedLifecycleCheckpointBoundary()
+    public void MainWindowAndReaderPage_PreserveSharedLifecycleCheckpointBoundary()
     {
         var windowCode = File.ReadAllText(Path.Combine(ProjectRoot, "MainWindow.xaml.cs"));
         var readerCode = File.ReadAllText(
@@ -52,7 +52,7 @@ public sealed class NovelReaderStatisticsLifecycleTests
             @"(?s)SettleNavigationForLifecycleAsync.*?ApplyNavigationSettlement.*?WaitForTerminalRenderAsync.*?(CheckpointAppBackgroundingAsync|PrepareForReaderLifecycleCloseAsync)"));
         lifecycleBody.Should().NotContain("ResetStatisticsBaselineAsync");
         readerCode.Should().MatchRegex(new Regex(
-            @"(?s)case string id when id == ReaderShortcutActions\.Close\.Id:\s*await ViewModel\.BackToLibraryCommand\.ExecuteAsync\(null\);\s*return true;"));
+            @"(?s)case string id when id == ReaderShortcutActions\.Close\.Id:\s*ViewModel\.BackToLibraryCommand\.Execute\(null\);\s*return true;"));
         readerCode.Should().MatchRegex(new Regex(
             @"(?ms)^    protected override void OnNavigatedFrom\(NavigationEventArgs e\)\s*\{.*?_ = CompleteReaderLifecycleCloseAfterDetachAsync\(\);.*?^    \}"));
         var navigatedFromBody = Regex.Match(

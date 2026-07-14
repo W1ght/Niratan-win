@@ -70,6 +70,7 @@ public sealed partial class NovelReaderPage : Page
     private bool _terminalFailureRecoveryInProgress;
     private CancellationTokenSource? _reloadCts;
     private CancellationTokenSource? _searchCts;
+    private CancellationTokenSource? _openSyncCts;
     private long _searchRequestVersion;
     private readonly ReaderNavigationInputCoordinator _navigationInput;
     private string? _pendingProgrammaticFragment;
@@ -98,6 +99,7 @@ public sealed partial class NovelReaderPage : Page
     // Sasayaki fields
     private readonly DispatcherQueue _dispatcherQueue;
     private SasayakiPlayer? _sasayakiPlayer;
+    private Task _sasayakiLoadTask = Task.CompletedTask;
     private readonly SasayakiParser _sasayakiParser = new();
     private readonly SasayakiMatcher _sasayakiMatcher = new();
     private readonly SasayakiCueNavigationController _sasayakiNav = new();
@@ -263,14 +265,22 @@ public sealed partial class NovelReaderPage : Page
                 message.Reply(((NovelReaderPage)recipient).HandleAppLifecycleCheckpointAsync(message)));
         if (e.Parameter is NovelReaderNavigationArgs args)
         {
+            var localOpen = Stopwatch.StartNew();
             await ViewModel.InitializeAsync(args);
             await InitializeReaderAsync();
+            Log.Information(
+                "[NovelReader] Local reader initialization scheduled in {ElapsedMs}ms",
+                localOpen.ElapsedMilliseconds);
+            StartOpenSync();
         }
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)
     {
         base.OnNavigatedFrom(e);
+        _openSyncCts?.Cancel();
+        _openSyncCts?.Dispose();
+        _openSyncCts = null;
         StopStatisticsProjectionTimer();
         _messenger.Unregister<AppBackgroundingMessage>(this);
         _pendingProgrammaticFragment = null;
@@ -320,6 +330,70 @@ public sealed partial class NovelReaderPage : Page
 
         CloseReaderPanels();
         _ = CompleteReaderLifecycleCloseAfterDetachAsync();
+    }
+
+    private void StartOpenSync()
+    {
+        _openSyncCts?.Cancel();
+        _openSyncCts?.Dispose();
+        _openSyncCts = new CancellationTokenSource();
+        _ = RunOpenSyncAsync(_openSyncCts.Token);
+    }
+
+    private async Task RunOpenSyncAsync(CancellationToken ct)
+    {
+        var sync = Stopwatch.StartNew();
+        try
+        {
+            if (!await ViewModel.SyncOnOpenAsync(ct) || ct.IsCancellationRequested)
+                return;
+
+            await ApplyImportedReaderStateAsync(ct);
+            Log.Information(
+                "[NovelReader] Open sync import applied in {ElapsedMs}ms",
+                sync.ElapsedMilliseconds);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "[NovelReader] Failed to apply open sync import");
+        }
+    }
+
+    private async Task ApplyImportedReaderStateAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (_epubBook == null || ViewModel.CurrentBook == null)
+            return;
+
+        var importedChapterIndex = Math.Clamp(
+            ViewModel.CurrentBook.CurrentChapterIndex,
+            0,
+            _epubBook.Chapters.Count - 1);
+        var importedProgress = Math.Clamp(ViewModel.CurrentBook.Progress, 0, 1);
+
+        ViewModel.SetChapter(importedChapterIndex, _epubBook.Chapters.Count);
+        ViewModel.UpdateProgress(importedProgress);
+        await ViewModel.LoadStatisticsAsync(ct);
+        ct.ThrowIfCancellationRequested();
+
+        await _sasayakiLoadTask.WaitAsync(ct);
+        ct.ThrowIfCancellationRequested();
+        var bookRootPath = ViewModel.CurrentBook.ExtractedPath;
+        if (_sasayakiPlayer != null
+            && CurrentSasayakiSettings.EnableSasayaki
+            && !string.IsNullOrWhiteSpace(bookRootPath))
+        {
+            var playback = await SasayakiSidecarService.LoadPlaybackAsync(bookRootPath, ct);
+            ct.ThrowIfCancellationRequested();
+            ApplySasayakiPlayback(playback);
+        }
+
+        RefreshReaderDisplayChrome();
+        RefreshReaderStatisticsChrome();
+        LoadChapter(importedChapterIndex, importedProgress);
     }
 
     private void EnsureStatisticsProjectionTimer()
@@ -633,7 +707,7 @@ public sealed partial class NovelReaderPage : Page
 
         UpdateSasayakiChromeVisibility();
         if (CurrentSasayakiSettings.EnableSasayaki)
-            _ = LoadSasayakiSidecarAsync();
+            _sasayakiLoadTask = LoadSasayakiSidecarAsync();
 
         Log.Information("[NovelReader] Loading chapter {Index}", initialChapterIndex);
         LoadChapter(initialChapterIndex);
@@ -797,7 +871,7 @@ public sealed partial class NovelReaderPage : Page
             case string id when id == ReaderShortcutActions.NextPage.Id:
                 return await NavigateReaderPageAsync("forward");
             case string id when id == ReaderShortcutActions.Close.Id:
-                await ViewModel.BackToLibraryCommand.ExecuteAsync(null);
+                ViewModel.BackToLibraryCommand.Execute(null);
                 return true;
             case string id when id == ReaderShortcutActions.ToggleFocusMode.Id:
                 ToggleReaderFocusMode();
@@ -940,7 +1014,7 @@ public sealed partial class NovelReaderPage : Page
         {
             UpdateSasayakiChromeVisibility();
             if (CurrentSasayakiSettings.EnableSasayaki && _sasayakiMatchData == null)
-                _ = LoadSasayakiSidecarAsync();
+                _sasayakiLoadTask = LoadSasayakiSidecarAsync();
             return;
         }
 

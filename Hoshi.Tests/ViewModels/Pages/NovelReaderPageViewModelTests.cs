@@ -3,6 +3,7 @@ using System.Text.Json;
 using CommunityToolkit.Mvvm.Messaging;
 using FluentAssertions;
 using Moq;
+using Hoshi.Enums;
 using Hoshi.Messages;
 using Hoshi.Models;
 using Hoshi.Models.Common;
@@ -23,7 +24,7 @@ namespace Hoshi.Tests.ViewModels.Pages;
 public sealed class NovelReaderPageViewModelTests
 {
     [Fact]
-    public async Task InitializeAsync_WhenOpenSyncImports_ReloadsBookBeforeRestore()
+    public async Task InitializeAsync_CompletesLocalOpenWithoutCallingAutoSync()
     {
         var ct = TestContext.Current.CancellationToken;
         var events = new List<string>();
@@ -34,32 +35,19 @@ public sealed class NovelReaderPageViewModelTests
             Progress = 0.10,
             CurrentChapterIndex = 0,
         };
-        var imported = new NovelBook
-        {
-            Id = "book-1",
-            Title = "Imported",
-            Progress = 0.65,
-            CurrentChapterIndex = 2,
-        };
         var library = new Mock<INovelLibraryService>();
-        var loadCount = 0;
         library.Setup(service => service.GetNovelBookAsync(
                 "book-1", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() =>
-            {
-                loadCount++;
-                events.Add(loadCount == 1 ? "load-local" : "load-imported");
-                return Result<NovelBook?>.Success(loadCount == 1 ? local : imported);
-            });
+            .Callback(() => events.Add("load-local"))
+            .ReturnsAsync(Result<NovelBook?>.Success(local));
         library.Setup(service => service.MarkOpenedAsync(
                 "book-1", It.IsAny<CancellationToken>()))
             .Callback(() => events.Add("mark-opened"))
             .ReturnsAsync(Result.Success());
-        var autoSync = CreateAutoSyncCoordinator(imported: true);
+        var autoSync = CreateAutoSyncCoordinator();
         autoSync.Setup(service => service.ImportOnOpenAsync(
-                local, It.IsAny<CancellationToken>()))
-            .Callback(() => events.Add("import-open"))
-            .ReturnsAsync(true);
+                It.IsAny<NovelBook>(), It.IsAny<CancellationToken>()))
+            .Throws(new InvalidOperationException("local initialization must not start network sync"));
         var settings = new Mock<ISettingsService>();
         settings.SetupGet(service => service.Current).Returns(new AppSettings());
         var sut = new NovelReaderPageViewModel(
@@ -78,18 +66,94 @@ public sealed class NovelReaderPageViewModelTests
 
         await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
 
+        sut.CurrentBook.Should().BeSameAs(local);
+        sut.ReaderTitle.Should().Be("Local");
+        library.Verify(service => service.GetNovelBookAsync(
+            "book-1", It.IsAny<CancellationToken>()), Times.Once);
+        autoSync.Verify(service => service.ImportOnOpenAsync(
+            It.IsAny<NovelBook>(), It.IsAny<CancellationToken>()), Times.Never);
+        events.Should().Equal(
+            "load-local",
+            "activate-profile",
+            "mark-opened");
+    }
+
+    [Fact]
+    public async Task SyncOnOpenAsync_WhenImportSucceeds_ReloadsImportedBook()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var local = new NovelBook { Id = "book-1", Title = "Local" };
+        var imported = new NovelBook
+        {
+            Id = "book-1",
+            Title = "Imported",
+            Progress = 0.65,
+            CurrentChapterIndex = 2,
+        };
+        var library = new Mock<INovelLibraryService>();
+        var loadCount = 0;
+        library.Setup(service => service.GetNovelBookAsync(
+                "book-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => Result<NovelBook?>.Success(
+                ++loadCount == 1 ? local : imported));
+        library.Setup(service => service.MarkOpenedAsync(
+                "book-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        var autoSync = CreateAutoSyncCoordinator(imported: true);
+        var sut = CreateSut(
+            library.Object,
+            Mock.Of<INotificationService>(),
+            new FakeMessenger(),
+            new FakeReaderStatisticsSession(),
+            autoSync.Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+
+        var changed = await sut.SyncOnOpenAsync(ct);
+
+        changed.Should().BeTrue();
         sut.CurrentBook.Should().BeSameAs(imported);
         sut.ReaderTitle.Should().Be("Imported");
         library.Verify(service => service.GetNovelBookAsync(
             "book-1", It.IsAny<CancellationToken>()), Times.Exactly(2));
         autoSync.Verify(service => service.ImportOnOpenAsync(
             local, It.IsAny<CancellationToken>()), Times.Once);
-        events.Should().Equal(
-            "load-local",
-            "activate-profile",
-            "import-open",
-            "load-imported",
-            "mark-opened");
+    }
+
+    [Fact]
+    public async Task BackToLibraryCommand_SendsNavigationWithoutStartingCloseFlush()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var messenger = new FakeMessenger();
+        var novelService = CreateNovelService(temp.Path);
+        novelService.Setup(service => service.SaveProgressAsync(
+                "book-1",
+                It.IsAny<int>(),
+                It.IsAny<double>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        var autoSync = CreateAutoSyncCoordinator();
+        autoSync.Setup(service => service.FlushAsync(
+                It.IsAny<NovelBook>(), It.IsAny<CancellationToken>()))
+            .Returns(new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously).Task);
+        var sut = CreateSut(
+            novelService.Object,
+            Mock.Of<INotificationService>(),
+            messenger,
+            new FakeReaderStatisticsSession(),
+            autoSync.Object);
+        await sut.InitializeAsync(new NovelReaderNavigationArgs("book-1"), ct);
+
+        sut.BackToLibraryCommand.Execute(null);
+        await Task.Yield();
+
+        messenger.GetSingleSentMessage<SwitchAppModeMessage>().appMode
+            .Should().Be(AppMode.Navigation);
+        autoSync.Verify(service => service.FlushAsync(
+            It.IsAny<NovelBook>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
