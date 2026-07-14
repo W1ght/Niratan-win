@@ -28,7 +28,16 @@ public sealed class StatisticsSettingsPageViewModelTests
     [Fact]
     public void UpdatingSettings_SavesStatisticsSettings()
     {
-        var appSettings = new AppSettings();
+        var appSettings = new AppSettings
+        {
+            StatisticsSettings = new NovelStatisticsSettings
+            {
+                DailyTargetType = StatisticsDailyTargetType.Duration,
+                DailyCharacterTarget = 9000,
+                DailyDurationTargetMinutes = 45,
+                WeeklyTargetDays = 5,
+            },
+        };
         NovelStatisticsSettings? saved = null;
         var settingsService = new Mock<ISettingsService>();
         settingsService.SetupGet(s => s.Current).Returns(appSettings);
@@ -48,10 +57,6 @@ public sealed class StatisticsSettingsPageViewModelTests
         {
             EnableStatistics = true,
             SelectedAutostartMode = StatisticsAutostartMode.PageTurn,
-            SelectedDailyTargetType = StatisticsDailyTargetType.Duration,
-            DailyCharacterTarget = 9000,
-            DailyDurationTargetMinutes = 45,
-            WeeklyTargetDays = 5,
             EnableSync = true,
             SelectedSyncMode = StatisticsSyncMode.Replace,
         };
@@ -120,10 +125,6 @@ public sealed class StatisticsSettingsPageViewModelTests
         sut.ShowStatisticsOptions.Should().BeFalse();
         sut.ShowStatisticsSyncOptions.Should().BeFalse();
         sut.SelectedAutostartMode.Should().Be(StatisticsAutostartMode.PageTurn);
-        sut.SelectedDailyTargetType.Should().Be(StatisticsDailyTargetType.Duration);
-        sut.DailyCharacterTarget.Should().Be(8500);
-        sut.DailyDurationTargetMinutes.Should().Be(75);
-        sut.WeeklyTargetDays.Should().Be(6);
         sut.EnableSync.Should().BeTrue();
         sut.SelectedSyncMode.Should().Be(StatisticsSyncMode.Replace);
 

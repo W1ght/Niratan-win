@@ -480,7 +480,7 @@
   <data name="ReaderStatisticsBookRemainingLabel.Text" xml:space="preserve"><value>Time to finish Book</value></data>
   <data name="ReaderStatisticsChapterRemainingLabel.Text" xml:space="preserve"><value>Time to finish Chapter</value></data>
   <data name="SettingsStatisticsCard.Header" xml:space="preserve"><value>Statistics</value></data>
-  <data name="SettingsStatisticsCard.Description" xml:space="preserve"><value>Reading goals, autostart, and statistics sync</value></data>
+  <data name="SettingsStatisticsCard.Description" xml:space="preserve"><value>Autostart and statistics sync</value></data>
   <data name="StatisticsSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>Open Statistics Settings</value></data>
   <data name="SettingsOpenStatisticsText.Text" xml:space="preserve"><value>Open</value></data>
   <data name="StatisticsSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>Back</value></data>
@@ -490,16 +490,6 @@
   <data name="StatisticsEnableToggle.Description" xml:space="preserve"><value>Show statistics controls and save reading history sidecars</value></data>
   <data name="StatisticsAutostartModeComboBox.Header" xml:space="preserve"><value>Autostart</value></data>
   <data name="StatisticsAutostartModeComboBox.Description" xml:space="preserve"><value>Start tracking manually, on page turn, or when the reader opens</value></data>
-  <data name="StatisticsDailyGoalSectionHeader.Text" xml:space="preserve"><value>Daily Goal</value></data>
-  <data name="StatisticsDailyTargetTypeComboBox.Header" xml:space="preserve"><value>Goal Type</value></data>
-  <data name="StatisticsDailyTargetTypeComboBox.Description" xml:space="preserve"><value>Use characters or reading time for the daily goal</value></data>
-  <data name="StatisticsDailyCharacterTargetNumberBox.Header" xml:space="preserve"><value>Character Target</value></data>
-  <data name="StatisticsDailyCharacterTargetNumberBox.Description" xml:space="preserve"><value>Daily character target</value></data>
-  <data name="StatisticsDailyDurationTargetNumberBox.Header" xml:space="preserve"><value>Duration Target</value></data>
-  <data name="StatisticsDailyDurationTargetNumberBox.Description" xml:space="preserve"><value>Daily reading time target in minutes</value></data>
-  <data name="StatisticsWeeklyGoalSectionHeader.Text" xml:space="preserve"><value>Weekly Goal</value></data>
-  <data name="StatisticsWeeklyTargetDaysNumberBox.Header" xml:space="preserve"><value>Target Days</value></data>
-  <data name="StatisticsWeeklyTargetDaysNumberBox.Description" xml:space="preserve"><value>Days per week that should meet the daily goal</value></data>
   <data name="StatisticsSyncSectionHeader.Text" xml:space="preserve"><value>Sync</value></data>
   <data name="StatisticsEnableSyncToggle.Header" xml:space="preserve"><value>ッツ Sync</value></data>
   <data name="StatisticsEnableSyncToggle.Description" xml:space="preserve"><value>Enable statistics sync metadata</value></data>

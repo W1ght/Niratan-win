@@ -480,7 +480,7 @@
   <data name="ReaderStatisticsBookRemainingLabel.Text" xml:space="preserve"><value>读完整本预计时间</value></data>
   <data name="ReaderStatisticsChapterRemainingLabel.Text" xml:space="preserve"><value>读完本章预计时间</value></data>
   <data name="SettingsStatisticsCard.Header" xml:space="preserve"><value>统计</value></data>
-  <data name="SettingsStatisticsCard.Description" xml:space="preserve"><value>阅读目标、自动开始和统计同步</value></data>
+  <data name="SettingsStatisticsCard.Description" xml:space="preserve"><value>自动开始和统计同步</value></data>
   <data name="StatisticsSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>打开统计设置</value></data>
   <data name="SettingsOpenStatisticsText.Text" xml:space="preserve"><value>打开</value></data>
   <data name="StatisticsSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>返回</value></data>
@@ -490,16 +490,6 @@
   <data name="StatisticsEnableToggle.Description" xml:space="preserve"><value>显示统计控件并保存阅读历史 sidecar</value></data>
   <data name="StatisticsAutostartModeComboBox.Header" xml:space="preserve"><value>自动开始</value></data>
   <data name="StatisticsAutostartModeComboBox.Description" xml:space="preserve"><value>手动开始、翻页时开始或打开阅读器时开始统计</value></data>
-  <data name="StatisticsDailyGoalSectionHeader.Text" xml:space="preserve"><value>每日目标</value></data>
-  <data name="StatisticsDailyTargetTypeComboBox.Header" xml:space="preserve"><value>目标类型</value></data>
-  <data name="StatisticsDailyTargetTypeComboBox.Description" xml:space="preserve"><value>每日目标按字数或阅读时长计算</value></data>
-  <data name="StatisticsDailyCharacterTargetNumberBox.Header" xml:space="preserve"><value>字数目标</value></data>
-  <data name="StatisticsDailyCharacterTargetNumberBox.Description" xml:space="preserve"><value>每日阅读字数目标</value></data>
-  <data name="StatisticsDailyDurationTargetNumberBox.Header" xml:space="preserve"><value>时长目标</value></data>
-  <data name="StatisticsDailyDurationTargetNumberBox.Description" xml:space="preserve"><value>每日阅读时长目标（分钟）</value></data>
-  <data name="StatisticsWeeklyGoalSectionHeader.Text" xml:space="preserve"><value>每周目标</value></data>
-  <data name="StatisticsWeeklyTargetDaysNumberBox.Header" xml:space="preserve"><value>目标天数</value></data>
-  <data name="StatisticsWeeklyTargetDaysNumberBox.Description" xml:space="preserve"><value>每周需要达成每日目标的天数</value></data>
   <data name="StatisticsSyncSectionHeader.Text" xml:space="preserve"><value>同步</value></data>
   <data name="StatisticsEnableSyncToggle.Header" xml:space="preserve"><value>ッツ Sync</value></data>
   <data name="StatisticsEnableSyncToggle.Description" xml:space="preserve"><value>启用统计同步元数据</value></data>

@@ -1277,14 +1277,20 @@ public class NovelReaderWebAssetTests
         statisticsXaml.Should().Contain("x:Class=\"Hoshi.Views.Pages.StatisticsSettingsPage\"");
         statisticsXaml.Should().Contain("AutomationProperties.AutomationId=\"StatisticsEnableToggle\"");
         statisticsXaml.Should().Contain("AutomationProperties.AutomationId=\"StatisticsAutostartModeComboBox\"");
-        statisticsXaml.Should().Contain("AutomationProperties.AutomationId=\"StatisticsDailyTargetTypeComboBox\"");
-        statisticsXaml.Should().Contain("AutomationProperties.AutomationId=\"StatisticsDailyCharacterTargetNumberBox\"");
-        statisticsXaml.Should().Contain("AutomationProperties.AutomationId=\"StatisticsWeeklyTargetDaysNumberBox\"");
+        statisticsXaml.Should().NotContain("StatisticsDailyGoalSectionHeader");
+        statisticsXaml.Should().NotContain("StatisticsDailyTargetTypeComboBox");
+        statisticsXaml.Should().NotContain("StatisticsDailyCharacterTargetNumberBox");
+        statisticsXaml.Should().NotContain("StatisticsDailyDurationTargetNumberBox");
+        statisticsXaml.Should().NotContain("StatisticsWeeklyGoalSectionHeader");
+        statisticsXaml.Should().NotContain("StatisticsWeeklyTargetDaysNumberBox");
         statisticsXaml.Should().Contain("IsOn=\"{x:Bind ViewModel.EnableStatistics, Mode=TwoWay}\"");
         statisticsViewModel.Should().Contain("NovelStatisticsSettings");
         statisticsViewModel.Should().Contain("StatisticsAutostartMode");
-        statisticsViewModel.Should().Contain("DailyCharacterTarget");
-        statisticsViewModel.Should().Contain("WeeklyTargetDays");
+        statisticsViewModel.Should().NotContain("AvailableDailyTargetTypes");
+        statisticsViewModel.Should().NotContain("SelectedDailyTargetType");
+        statisticsViewModel.Should().NotContain("DailyCharacterTargetValue");
+        statisticsViewModel.Should().NotContain("DailyDurationTargetMinutesValue");
+        statisticsViewModel.Should().NotContain("WeeklyTargetDaysValue");
 
         appCode.Should().Contain("AddTransient<StatisticsSettingsPageViewModel>");
         appSettingsCode.Should().Contain("NovelStatisticsSettings StatisticsSettings");
@@ -1299,13 +1305,24 @@ public class NovelReaderWebAssetTests
             "StatisticsSettingsPageTitle.Text",
             "StatisticsEnableToggle.Header",
             "StatisticsAutostartModeComboBox.Header",
-            "StatisticsDailyTargetTypeComboBox.Header",
-            "StatisticsDailyCharacterTargetNumberBox.Header",
-            "StatisticsWeeklyTargetDaysNumberBox.Header",
         })
         {
             enResources.Should().Contain(key);
             zhResources.Should().Contain(key);
+        }
+
+        foreach (var key in new[]
+        {
+            "StatisticsDailyGoalSectionHeader.Text",
+            "StatisticsDailyTargetTypeComboBox.Header",
+            "StatisticsDailyCharacterTargetNumberBox.Header",
+            "StatisticsDailyDurationTargetNumberBox.Header",
+            "StatisticsWeeklyGoalSectionHeader.Text",
+            "StatisticsWeeklyTargetDaysNumberBox.Header",
+        })
+        {
+            enResources.Should().NotContain(key);
+            zhResources.Should().NotContain(key);
         }
     }
 
