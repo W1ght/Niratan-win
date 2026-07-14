@@ -29,6 +29,7 @@ public sealed class DevelopmentScriptAssetTests
         script.Should().Contain("rev-parse --path-format=absolute --git-common-dir");
         script.Should().Contain("native\\out\\hoshidicts_c_api.dll");
         script.Should().Contain("build-native.ps1");
+        script.Should().Contain("Push-Location $RepositoryRoot");
     }
 
     [Fact]

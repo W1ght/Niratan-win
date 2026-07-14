@@ -27,9 +27,16 @@ if (Test-Path -LiteralPath $sharedDll) {
         throw "Native build script not found: $buildNativeScript"
     }
 
-    & $buildNativeScript
-    if ($LASTEXITCODE -ne 0) {
-        throw "Native dictionary build failed with exit code $LASTEXITCODE."
+    $nativeExitCode = 0
+    Push-Location $RepositoryRoot
+    try {
+        & $buildNativeScript
+        $nativeExitCode = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    if ($nativeExitCode -ne 0) {
+        throw "Native dictionary build failed with exit code $nativeExitCode."
     }
 }
 
