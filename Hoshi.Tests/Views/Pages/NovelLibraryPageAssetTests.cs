@@ -108,7 +108,8 @@ public sealed class NovelLibraryPageAssetTests
         xaml.Split("MaxLines=\"2\"").Should().HaveCount(3);
         xaml.Split("TextTrimming=\"Clip\"").Should().HaveCount(3);
         xaml.Should().Contain("Width=\"180\"");
-        xaml.Split("TextWrapping=\"WrapWholeWords\"").Should().HaveCount(3);
+        xaml.Split("TextWrapping=\"Wrap\"").Should().HaveCount(3);
+        xaml.Should().NotContain("TextWrapping=\"WrapWholeWords\"");
     }
 
     [Fact]

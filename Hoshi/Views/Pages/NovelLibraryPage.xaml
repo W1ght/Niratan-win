@@ -99,7 +99,7 @@
                                    Width="180"
                                    MaxLines="2"
                                    TextTrimming="Clip"
-                                   TextWrapping="WrapWholeWords"
+                                   TextWrapping="Wrap"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                     </StackPanel>
                 </StackPanel>
@@ -168,7 +168,7 @@
                                    Width="180"
                                    MaxLines="2"
                                    TextTrimming="Clip"
-                                   TextWrapping="WrapWholeWords"
+                                   TextWrapping="Wrap"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                     </StackPanel>
                 </StackPanel>
