@@ -167,6 +167,9 @@ public sealed class TtuBookImportServiceTests
         public Task<Result> MarkOpenedAsync(string bookId, CancellationToken ct = default) =>
             Task.FromResult(Result.Success());
 
+        public Task<Result> MarkReadAsync(string bookId, CancellationToken ct = default) =>
+            Task.FromResult(Result.Success());
+
         public Task<Result> DeleteNovelAsync(string bookId, CancellationToken ct = default)
         {
             DeletedBookId = bookId;

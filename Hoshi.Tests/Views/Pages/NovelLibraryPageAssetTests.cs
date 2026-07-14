@@ -67,6 +67,31 @@ public sealed class NovelLibraryPageAssetTests
     }
 
     [Fact]
+    public void LocalNovelContextMenu_ExposesLocalizedIconFreeMarkReadCommand()
+    {
+        var xaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelLibraryPage.xaml"));
+        var code = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelLibraryPage.xaml.cs"));
+        var english = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "en-US", "Resources.resw"));
+        var chinese = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw"));
+
+        xaml.Should().Contain("x:Uid=\"NovelBookMarkReadMenuItem\"");
+        xaml.Should().Contain(
+            "AutomationProperties.AutomationId=\"NovelBookMarkReadMenuItem\"");
+        xaml.Should().Contain("Click=\"MarkReadNovelMenuItem_Click\"");
+        xaml.Should().Contain("Tag=\"{x:Bind}\"");
+        xaml.Should().NotContain("<MenuFlyoutItem.Icon>");
+        code.Should().Contain("ViewModel.MarkReadNovelCommand.ExecuteAsync(novelItem)");
+        english.Should().Contain("name=\"NovelBookMarkReadMenuItem.Text\"");
+        english.Should().Contain("name=\"NovelBookMarkReadConfirmation.Title\"");
+        chinese.Should().Contain("name=\"NovelBookMarkReadMenuItem.Text\"");
+        chinese.Should().Contain("name=\"NovelBookMarkReadConfirmation.Title\"");
+    }
+
+    [Fact]
     public void LocalNovelSyncFlyout_UsesExplicitUiBridgeInsteadOfCrossNamescopeBindings()
     {
         var xaml = File.ReadAllText(

@@ -26,6 +26,10 @@
                     CommandParameter="{x:Bind}">
                 <Button.ContextFlyout>
                     <MenuFlyout Opening="NovelBookContextFlyout_Opening">
+                        <MenuFlyoutItem x:Uid="NovelBookMarkReadMenuItem"
+                                        AutomationProperties.AutomationId="NovelBookMarkReadMenuItem"
+                                        Tag="{x:Bind}"
+                                        Click="MarkReadNovelMenuItem_Click" />
                         <MenuFlyoutItem x:Uid="NovelBookMatchSasayakiMenuItem"
                                         Text="Match Sasayaki"
                                         AutomationProperties.AutomationId="NovelBookMatchSasayakiMenuItem"

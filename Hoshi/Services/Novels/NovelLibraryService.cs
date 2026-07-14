@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Hoshi.Models;
@@ -207,6 +208,41 @@ internal sealed class NovelLibraryService : INovelLibraryService
                 return Result.Success();
             },
             "Error deleting novel",
+            ct);
+    }
+
+    public async Task<Result> MarkReadAsync(
+        string bookId,
+        CancellationToken ct = default)
+    {
+        var readOnly = ReadOnlyFailure();
+        if (readOnly is not null)
+            return readOnly;
+
+        return await ExecuteAsync(
+            async token =>
+            {
+                var rootPath = _storage.ResolveRootPath(bookId);
+                var bookInfo = await _sidecars.LoadBookInfoAsync(rootPath, token);
+                if (bookInfo is null)
+                    return Result.Success();
+
+                var finalChapterIndex = bookInfo.ChapterInfo.Values
+                    .Where(chapter => chapter.SpineIndex.HasValue)
+                    .Select(chapter => chapter.SpineIndex!.Value)
+                    .DefaultIfEmpty(0)
+                    .Max();
+                await _sidecars.SaveBookmarkAsync(
+                    rootPath,
+                    new NovelBookmark(
+                        finalChapterIndex,
+                        1,
+                        bookInfo.CharacterCount,
+                        DateTimeOffset.UtcNow),
+                    token);
+                return Result.Success();
+            },
+            "Error marking novel as read",
             ct);
     }
 

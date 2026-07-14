@@ -647,6 +647,37 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task MarkReadNovelAsync(NovelBookItemViewModel item)
+    {
+        var confirmed = await _dialogService.ConfirmAsync(
+            ResourceStringHelper.FormatString(
+                "NovelBookMarkReadConfirmation/Title",
+                "Mark \"{0}\" as read?",
+                item.Book.Title),
+            string.Empty,
+            ResourceStringHelper.GetString(
+                "NovelBookMarkReadConfirmation/PrimaryButtonText",
+                "Confirm"),
+            ResourceStringHelper.GetString(
+                "NovelBookMarkReadConfirmation/CloseButtonText",
+                "Cancel"));
+        if (!confirmed)
+            return;
+
+        var result = await _novelLibraryService.MarkReadAsync(
+            item.Book.Id,
+            _pageCts.Token);
+        if (!result.IsSuccess)
+        {
+            if (!result.IsCancelled)
+                _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+            return;
+        }
+
+        await LoadNovelsAsync();
+    }
+
+    [RelayCommand]
     private async Task DeleteNovelAsync(NovelBookItemViewModel item)
     {
         var confirmed = await _dialogService.ConfirmAsync(
