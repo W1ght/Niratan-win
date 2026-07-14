@@ -40,6 +40,34 @@ public sealed class NovelLibraryPageAssetTests
     }
 
     [Fact]
+    public void LocalNovelSyncFlyout_UsesExplicitUiBridgeInsteadOfCrossNamescopeBindings()
+    {
+        var xaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelLibraryPage.xaml"));
+        var code = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelLibraryPage.xaml.cs"));
+
+        xaml.Should().Contain("Opening=\"NovelBookContextFlyout_Opening\"");
+        xaml.Should().Contain("Click=\"SyncNovelMenuItem_Click\"");
+        xaml.Should().Contain("Click=\"ImportNovelFromTtuMenuItem_Click\"");
+        xaml.Should().Contain("Click=\"ExportNovelMenuItem_Click\"");
+        xaml.Should().NotContain(
+            "Command=\"{Binding ViewModel.SyncNovelCommand, ElementName=ThisPage}\"");
+        xaml.Should().NotContain(
+            "Visibility=\"{Binding ViewModel.ShowAutomaticBookSyncAction");
+        xaml.Should().NotContain(
+            "Visibility=\"{Binding ViewModel.ShowManualBookSyncAction");
+
+        code.Should().Contain(
+            "automaticItem.Visibility = ViewModel.ShowAutomaticBookSyncAction");
+        code.Should().Contain(
+            "manualSubmenu.Visibility = ViewModel.ShowManualBookSyncAction");
+        code.Should().Contain("ViewModel.SyncNovelCommand.ExecuteAsync(novelItem)");
+        code.Should().Contain("ViewModel.ImportNovelFromTtuCommand.ExecuteAsync(novelItem)");
+        code.Should().Contain("ViewModel.ExportNovelCommand.ExecuteAsync(novelItem)");
+    }
+
+    [Fact]
     public void CommandBar_UsesVisiblePrimaryActionsAndStatisticsIcon()
     {
         var xaml = File.ReadAllText(

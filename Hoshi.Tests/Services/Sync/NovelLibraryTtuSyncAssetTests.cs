@@ -35,6 +35,11 @@ public sealed class NovelLibraryTtuSyncAssetTests
             "Views",
             "Pages",
             "NovelLibraryPage.xaml"));
+        var code = File.ReadAllText(Path.Combine(
+            ProjectRoot,
+            "Views",
+            "Pages",
+            "NovelLibraryPage.xaml.cs"));
         var en = File.ReadAllText(Path.Combine(
             ProjectRoot,
             "Strings",
@@ -50,11 +55,11 @@ public sealed class NovelLibraryTtuSyncAssetTests
         xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelBookSyncSubmenu\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelBookSyncImportMenuItem\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelBookSyncExportMenuItem\"");
-        xaml.Should().Contain("ViewModel.ShowAutomaticBookSyncAction");
-        xaml.Should().Contain("ViewModel.ShowManualBookSyncAction");
-        xaml.Should().Contain("ViewModel.SyncNovelCommand");
-        xaml.Should().Contain("ViewModel.ImportNovelFromTtuCommand");
-        xaml.Should().Contain("ViewModel.ExportNovelCommand");
+        code.Should().Contain("ViewModel.ShowAutomaticBookSyncAction");
+        code.Should().Contain("ViewModel.ShowManualBookSyncAction");
+        code.Should().Contain("ViewModel.SyncNovelCommand");
+        code.Should().Contain("ViewModel.ImportNovelFromTtuCommand");
+        code.Should().Contain("ViewModel.ExportNovelCommand");
 
         foreach (var key in new[]
         {

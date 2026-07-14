@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.ApplicationModel.DataTransfer;
@@ -106,6 +107,53 @@ public sealed partial class NovelLibraryPage : Page
             await ViewModel.MoveBookCommand.ExecuteAsync(
                 new NovelBookShelfMoveRequest(novelItem.Book.Id, target.ShelfName));
         }
+    }
+
+    private void NovelBookContextFlyout_Opening(object sender, object e)
+    {
+        if (sender is not MenuFlyout flyout)
+            return;
+
+        var automaticItem = flyout.Items
+            .OfType<MenuFlyoutItem>()
+            .FirstOrDefault(item =>
+                AutomationProperties.GetAutomationId(item) == "NovelBookSyncMenuItem");
+        var manualSubmenu = flyout.Items
+            .OfType<MenuFlyoutSubItem>()
+            .FirstOrDefault(item =>
+                AutomationProperties.GetAutomationId(item) == "NovelBookSyncSubmenu");
+
+        if (automaticItem != null)
+        {
+            automaticItem.Visibility = ViewModel.ShowAutomaticBookSyncAction
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+
+        if (manualSubmenu != null)
+        {
+            manualSubmenu.Visibility = ViewModel.ShowManualBookSyncAction
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+    }
+
+    private async void SyncNovelMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as MenuFlyoutItem)?.Tag is NovelBookItemViewModel novelItem)
+            await ViewModel.SyncNovelCommand.ExecuteAsync(novelItem);
+    }
+
+    private async void ImportNovelFromTtuMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as MenuFlyoutItem)?.Tag is NovelBookItemViewModel novelItem)
+            await ViewModel.ImportNovelFromTtuCommand.ExecuteAsync(novelItem);
+    }
+
+    private async void ExportNovelMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as MenuFlyoutItem)?.Tag is NovelBookItemViewModel novelItem)
+            await ViewModel.ExportNovelCommand.ExecuteAsync(novelItem);
     }
 
     private async void DeleteNovelMenuItem_Click(object sender, RoutedEventArgs e)
