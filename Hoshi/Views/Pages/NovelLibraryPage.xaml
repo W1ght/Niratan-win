@@ -39,33 +39,18 @@
                                         AutomationProperties.AutomationId="NovelBookSyncMenuItem"
                                         Tag="{x:Bind}"
                                         Visibility="Collapsed"
-                                        Click="SyncNovelMenuItem_Click">
-                            <MenuFlyoutItem.Icon>
-                                <FontIcon Glyph="&#xE895;" />
-                            </MenuFlyoutItem.Icon>
-                        </MenuFlyoutItem>
+                                        Click="SyncNovelMenuItem_Click" />
                         <MenuFlyoutSubItem x:Uid="NovelBookSyncSubmenu"
                                            AutomationProperties.AutomationId="NovelBookSyncSubmenu"
                                            Visibility="Collapsed">
-                            <MenuFlyoutSubItem.Icon>
-                                <FontIcon Glyph="&#xE895;" />
-                            </MenuFlyoutSubItem.Icon>
                             <MenuFlyoutItem x:Uid="NovelBookSyncImportMenuItem"
                                             AutomationProperties.AutomationId="NovelBookSyncImportMenuItem"
                                             Tag="{x:Bind}"
-                                            Click="ImportNovelFromTtuMenuItem_Click">
-                                <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xE896;" />
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
+                                            Click="ImportNovelFromTtuMenuItem_Click" />
                             <MenuFlyoutItem x:Uid="NovelBookSyncExportMenuItem"
                                             AutomationProperties.AutomationId="NovelBookSyncExportMenuItem"
                                             Tag="{x:Bind}"
-                                            Click="ExportNovelMenuItem_Click">
-                                <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xE898;" />
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
+                                            Click="ExportNovelMenuItem_Click" />
                         </MenuFlyoutSubItem>
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem Text="Delete"
@@ -106,6 +91,8 @@
                                        Text="{x:Bind OverallProgressText, Mode=OneWay}" />
                         </Grid>
                         <TextBlock Text="{x:Bind Book.Title, Mode=OneTime}"
+                                   MaxLines="2"
+                                   TextTrimming="Clip"
                                    TextWrapping="Wrap"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                     </StackPanel>
@@ -172,6 +159,8 @@
                                    Text="{x:Bind DownloadStatusText, Mode=OneWay}"
                                    Visibility="{x:Bind HasDownloadStatus, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
                         <TextBlock Text="{x:Bind Book.Title, Mode=OneTime}"
+                                   MaxLines="2"
+                                   TextTrimming="Clip"
                                    TextWrapping="Wrap"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                     </StackPanel>

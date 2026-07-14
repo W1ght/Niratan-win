@@ -68,6 +68,21 @@ public sealed class NovelLibraryPageAssetTests
     }
 
     [Fact]
+    public void BookCards_ClampTitlesToTwoLinesAndSyncMenuHasNoIcons()
+    {
+        var xaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelLibraryPage.xaml"));
+
+        xaml.Should().NotContain("Glyph=\"&#xE895;\"");
+        xaml.Should().NotContain("Glyph=\"&#xE896;\"");
+        xaml.Should().NotContain("Glyph=\"&#xE898;\"");
+        xaml.Should().NotContain("<MenuFlyoutItem.Icon>");
+        xaml.Should().NotContain("<MenuFlyoutSubItem.Icon>");
+        xaml.Split("MaxLines=\"2\"").Should().HaveCount(3);
+        xaml.Split("TextTrimming=\"Clip\"").Should().HaveCount(3);
+    }
+
+    [Fact]
     public void CommandBar_UsesVisiblePrimaryActionsAndStatisticsIcon()
     {
         var xaml = File.ReadAllText(
