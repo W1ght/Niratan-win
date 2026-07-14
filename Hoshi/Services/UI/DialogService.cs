@@ -16,7 +16,14 @@ internal class DialogService : IDialogService
 
     public void Initialize(XamlRoot root) => _xamlRoot = root;
 
-    public async Task<bool> ConfirmAsync(string title, string message)
+    public Task<bool> ConfirmAsync(string title, string message) =>
+        ConfirmAsync(title, message, "Delete", "Cancel");
+
+    public async Task<bool> ConfirmAsync(
+        string title,
+        string message,
+        string primaryButtonText,
+        string secondaryButtonText)
     {
         if (_xamlRoot == null)
             throw new InvalidOperationException("XamlRoot must be initialized.");
@@ -24,9 +31,9 @@ internal class DialogService : IDialogService
         var dialog = new ContentDialog
         {
             Title = title,
-            Content = message,
-            PrimaryButtonText = "Delete",
-            SecondaryButtonText = "Cancel",
+            Content = string.IsNullOrWhiteSpace(message) ? null : message,
+            PrimaryButtonText = primaryButtonText,
+            SecondaryButtonText = secondaryButtonText,
             DefaultButton = ContentDialogButton.Secondary,
             XamlRoot = _xamlRoot,
             RequestedTheme = AppTheme,

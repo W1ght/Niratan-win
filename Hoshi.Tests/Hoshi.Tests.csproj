@@ -7,6 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <NativeHoshidictsDll>$(MSBuildProjectDirectory)\..\native\out\hoshidicts_c_api.dll</NativeHoshidictsDll>
   </PropertyGroup>
 
   <ItemGroup>
@@ -37,9 +38,15 @@
   </ItemGroup>
 
   <!-- Copy native hoshidicts DLL to test output -->
+  <Target Name="EnsureNativeHoshidicts"
+          BeforeTargets="CopyNativeHoshidicts"
+          Condition="'$(Platform)' == 'x64' And !Exists('$(NativeHoshidictsDll)')">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\scripts\Ensure-NativeHoshidicts.ps1&quot; -RepositoryRoot &quot;$(MSBuildProjectDirectory)\..&quot;" />
+  </Target>
+
   <Target Name="CopyNativeHoshidicts" AfterTargets="Build" Condition="'$(Platform)' == 'x64'">
     <ItemGroup>
-      <_NativeDll Include="$(MSBuildProjectDirectory)\..\native\out\hoshidicts_c_api.dll" />
+      <_NativeDll Include="$(NativeHoshidictsDll)" />
     </ItemGroup>
     <Copy SourceFiles="@(_NativeDll)"
           DestinationFolder="$(TargetDir)"

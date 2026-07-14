@@ -18,4 +18,9 @@ public interface IDialogService
         string primaryButtonText,
         string secondaryButtonText);
     Task<bool> ConfirmAsync(string title, string message);
+    Task<bool> ConfirmAsync(
+        string title,
+        string message,
+        string primaryButtonText,
+        string secondaryButtonText);
 }

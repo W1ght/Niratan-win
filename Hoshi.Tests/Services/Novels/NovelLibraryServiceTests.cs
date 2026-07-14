@@ -62,6 +62,94 @@ public sealed class NovelLibraryServiceTests
     }
 
     [Fact]
+    public async Task MarkReadAsync_WritesNiratanCompatibleFinalBookmark()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var storage = new Mock<INovelBookStorageService>();
+        storage.Setup(service => service.ResolveRootPath("book-a"))
+            .Returns(@"D:\Books\book-a");
+        var sidecars = new Mock<INovelBookSidecarService>();
+        sidecars.Setup(service => service.LoadBookInfoAsync(@"D:\Books\book-a", ct))
+            .ReturnsAsync(new NovelBookInfo(
+                9000,
+                new Dictionary<string, NovelBookInfoChapter>
+                {
+                    ["chapter-a"] = new(1, 100, 100),
+                    ["chapter-b"] = new(null, 200, 200),
+                    ["chapter-c"] = new(7, 300, 300),
+                }));
+        sidecars.Setup(service => service.SaveBookmarkAsync(
+                @"D:\Books\book-a",
+                It.Is<NovelBookmark>(bookmark =>
+                    bookmark.ChapterIndex == 7
+                    && bookmark.Progress == 1
+                    && bookmark.CharacterCount == 9000
+                    && bookmark.LastModified != null),
+                ct))
+            .Returns(Task.CompletedTask);
+        var sut = CreateSut(storage, sidecars);
+
+        var result = await sut.MarkReadAsync("book-a", ct);
+
+        result.IsSuccess.Should().BeTrue(result.Error);
+        sidecars.VerifyAll();
+        sidecars.Verify(service => service.SaveBookmarkAsync(
+            It.IsAny<string>(),
+            It.IsAny<NovelBookmark>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task MarkReadAsync_NoSpineIndicesUsesFirstChapterIndex()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var storage = new Mock<INovelBookStorageService>();
+        storage.Setup(service => service.ResolveRootPath("book-a"))
+            .Returns(@"D:\Books\book-a");
+        var sidecars = new Mock<INovelBookSidecarService>();
+        sidecars.Setup(service => service.LoadBookInfoAsync(@"D:\Books\book-a", ct))
+            .ReturnsAsync(new NovelBookInfo(
+                500,
+                new Dictionary<string, NovelBookInfoChapter>
+                {
+                    ["chapter-a"] = new(null, 500, 500),
+                }));
+        sidecars.Setup(service => service.SaveBookmarkAsync(
+                @"D:\Books\book-a",
+                It.Is<NovelBookmark>(bookmark => bookmark.ChapterIndex == 0),
+                ct))
+            .Returns(Task.CompletedTask);
+        var sut = CreateSut(storage, sidecars);
+
+        var result = await sut.MarkReadAsync("book-a", ct);
+
+        result.IsSuccess.Should().BeTrue(result.Error);
+        sidecars.VerifyAll();
+    }
+
+    [Fact]
+    public async Task MarkReadAsync_MissingBookInfoReturnsSuccessWithoutWriting()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var storage = new Mock<INovelBookStorageService>();
+        storage.Setup(service => service.ResolveRootPath("book-a"))
+            .Returns(@"D:\Books\book-a");
+        var sidecars = new Mock<INovelBookSidecarService>();
+        sidecars.Setup(service => service.LoadBookInfoAsync(@"D:\Books\book-a", ct))
+            .ReturnsAsync((NovelBookInfo?)null);
+        var sut = CreateSut(storage, sidecars);
+
+        var result = await sut.MarkReadAsync("book-a", ct);
+
+        result.IsSuccess.Should().BeTrue(result.Error);
+        sidecars.VerifyAll();
+        sidecars.Verify(service => service.SaveBookmarkAsync(
+            It.IsAny<string>(),
+            It.IsAny<NovelBookmark>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task ImportEpubAsync_PersistsMetadataBeforeReturningSuccess()
     {
         var ct = TestContext.Current.CancellationToken;

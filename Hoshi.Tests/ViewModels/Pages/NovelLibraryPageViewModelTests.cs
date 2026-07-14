@@ -495,6 +495,109 @@ public class NovelLibraryPageViewModelTests
     }
 
     [Fact]
+    public async Task MarkReadNovelCommand_ConfirmedMarksAndReloadsWithoutSuccessNotification()
+    {
+        var item = BookItem("book-a");
+        var completedBook = new NovelBook
+        {
+            Id = "book-a",
+            Title = "Book A",
+            CurrentCharacterCount = 9000,
+            TotalCharacterCount = 9000,
+        };
+        var library = new Mock<INovelLibraryService>();
+        library.Setup(service => service.MarkReadAsync(
+                "book-a",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        library.Setup(service => service.GetNovelBooksAsync(
+                null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelBookCatalogSnapshot>.Success(
+                new NovelBookCatalogSnapshot([completedBook], [])));
+        var dialog = new Mock<IDialogService>();
+        dialog.Setup(service => service.ConfirmAsync(
+                It.Is<string>(title => title.Contains("book-a", StringComparison.Ordinal)),
+                string.Empty,
+                It.Is<string>(text => !string.IsNullOrWhiteSpace(text)),
+                It.Is<string>(text => !string.IsNullOrWhiteSpace(text))))
+            .ReturnsAsync(true);
+        var notification = new Mock<INotificationService>();
+        var sut = CreateSut(
+            novelService: library.Object,
+            dialogService: dialog.Object,
+            notificationService: notification.Object);
+
+        await sut.MarkReadNovelCommand.ExecuteAsync(item);
+
+        sut.NovelBooks.Should().ContainSingle()
+            .Which.Book.Should().BeSameAs(completedBook);
+        library.VerifyAll();
+        dialog.VerifyAll();
+        notification.Verify(service => service.ShowSuccess(
+            It.IsAny<string>(),
+            It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task MarkReadNovelCommand_CancelledDoesNotWriteOrReload()
+    {
+        var item = BookItem("book-a");
+        var library = new Mock<INovelLibraryService>();
+        var dialog = new Mock<IDialogService>();
+        dialog.Setup(service => service.ConfirmAsync(
+                It.IsAny<string>(),
+                string.Empty,
+                It.Is<string>(text => !string.IsNullOrWhiteSpace(text)),
+                It.Is<string>(text => !string.IsNullOrWhiteSpace(text))))
+            .ReturnsAsync(false);
+        var sut = CreateSut(
+            novelService: library.Object,
+            dialogService: dialog.Object);
+
+        await sut.MarkReadNovelCommand.ExecuteAsync(item);
+
+        library.Verify(service => service.MarkReadAsync(
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        library.Verify(service => service.GetNovelBooksAsync(
+            It.IsAny<string?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task MarkReadNovelCommand_FailureShowsErrorWithoutReloading()
+    {
+        var item = BookItem("book-a");
+        var library = new Mock<INovelLibraryService>();
+        library.Setup(service => service.MarkReadAsync(
+                "book-a",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Failure("disk full", "Mark read failed"));
+        var dialog = new Mock<IDialogService>();
+        dialog.Setup(service => service.ConfirmAsync(
+                It.IsAny<string>(),
+                string.Empty,
+                It.Is<string>(text => !string.IsNullOrWhiteSpace(text)),
+                It.Is<string>(text => !string.IsNullOrWhiteSpace(text))))
+            .ReturnsAsync(true);
+        var notification = new Mock<INotificationService>();
+        var sut = CreateSut(
+            novelService: library.Object,
+            dialogService: dialog.Object,
+            notificationService: notification.Object);
+
+        await sut.MarkReadNovelCommand.ExecuteAsync(item);
+
+        notification.Verify(service => service.ShowError(
+            "disk full",
+            "Mark read failed"), Times.Once);
+        library.Verify(service => service.GetNovelBooksAsync(
+            It.IsAny<string?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task DownloadRemoteBookCommand_RunsThreeImportsAndQueuesFourth()
     {
         var importer = new ControlledTtuBookImportService();
@@ -1142,6 +1245,9 @@ public class NovelLibraryPageViewModelTests
             Task.FromResult(Result<NovelBook?>.Success(Books.FirstOrDefault(book => book.Id == bookId)));
 
         public Task<Result> MarkOpenedAsync(string bookId, CancellationToken ct = default) =>
+            Task.FromResult(Result.Success());
+
+        public Task<Result> MarkReadAsync(string bookId, CancellationToken ct = default) =>
             Task.FromResult(Result.Success());
 
         public Task<Result> DeleteNovelAsync(string bookId, CancellationToken ct = default) =>
