@@ -16,6 +16,11 @@ public interface INovelLibraryService
 
     Task<Result<NovelBook>> ImportEpubAsync(string filePath, CancellationToken ct = default);
 
+    Task<Result> ExportEpubAsync(
+        string bookId,
+        string destinationPath,
+        CancellationToken ct = default);
+
     Task<Result<NovelBook?>> GetNovelBookAsync(string bookId, CancellationToken ct = default);
 
     Task<Result> MarkOpenedAsync(string bookId, CancellationToken ct = default);

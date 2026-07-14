@@ -4,6 +4,7 @@ using Hoshi.Models.Common;
 using Hoshi.Models.DTO;
 using Hoshi.Models.Novel;
 using Hoshi.Services.Novels;
+using Hoshi.Tests.TestUtils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -116,6 +117,125 @@ public sealed class NovelLibraryServiceTests
         storage.Verify(service => service.DeleteAsync(
             It.IsAny<string>(),
             It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ExportEpubAsync_CopiesPrivateEpubBytesExactly()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "private.epub");
+        var destination = Path.Combine(temp.Path, "exported.epub");
+        var bytes = new byte[] { 0x50, 0x4B, 0x03, 0x04, 0x00, 0xFF };
+        await File.WriteAllBytesAsync(source, bytes, ct);
+        var storage = new Mock<INovelBookStorageService>();
+        storage.Setup(service => service.LoadAsync("book-a", ct))
+            .ReturnsAsync(new NovelBook { Id = "book-a", FilePath = source });
+        var sut = CreateSut(storage: storage);
+
+        var result = await sut.ExportEpubAsync("book-a", destination, ct);
+
+        result.IsSuccess.Should().BeTrue(result.Error);
+        (await File.ReadAllBytesAsync(destination, ct)).Should().Equal(bytes);
+        (await File.ReadAllBytesAsync(source, ct)).Should().Equal(bytes);
+    }
+
+    [Fact]
+    public async Task ExportEpubAsync_SourceEqualDestinationFailsWithoutChangingSource()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "private.epub");
+        var bytes = new byte[] { 1, 2, 3 };
+        await File.WriteAllBytesAsync(source, bytes, ct);
+        var storage = new Mock<INovelBookStorageService>();
+        storage.Setup(service => service.LoadAsync("book-a", ct))
+            .ReturnsAsync(new NovelBook { Id = "book-a", FilePath = source });
+        var sut = CreateSut(storage: storage);
+
+        var result = await sut.ExportEpubAsync("book-a", source, ct);
+
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorTitle.Should().Be("EPUB export failed");
+        (await File.ReadAllBytesAsync(source, ct)).Should().Equal(bytes);
+    }
+
+    [Fact]
+    public async Task ExportEpubAsync_MissingPrivateEpubReturnsFileNotFound()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var storage = new Mock<INovelBookStorageService>();
+        storage.Setup(service => service.LoadAsync("book-a", ct))
+            .ReturnsAsync(new NovelBook
+            {
+                Id = "book-a",
+                FilePath = Path.Combine(temp.Path, "missing.epub"),
+            });
+        var sut = CreateSut(storage: storage);
+
+        var result = await sut.ExportEpubAsync(
+            "book-a",
+            Path.Combine(temp.Path, "exported.epub"),
+            ct);
+
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorTitle.Should().Be("EPUB file not found");
+    }
+
+    [Fact]
+    public async Task ExportEpubAsync_MissingCatalogBookReturnsExportFailure()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var storage = new Mock<INovelBookStorageService>();
+        storage.Setup(service => service.LoadAsync("missing", ct))
+            .ReturnsAsync((NovelBook?)null);
+        var sut = CreateSut(storage: storage);
+
+        var result = await sut.ExportEpubAsync(
+            "missing",
+            Path.Combine(temp.Path, "exported.epub"),
+            ct);
+
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorTitle.Should().Be("EPUB export failed");
+        result.Error.Should().Contain("Book not found");
+    }
+
+    [Fact]
+    public async Task ExportEpubAsync_NonEpubDestinationFailsBeforeOpeningSource()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var storage = new Mock<INovelBookStorageService>(MockBehavior.Strict);
+        var sut = CreateSut(storage: storage);
+
+        var result = await sut.ExportEpubAsync("book-a", "exported.zip", ct);
+
+        result.IsSuccess.Should().BeFalse();
+        result.ErrorTitle.Should().Be("EPUB export failed");
+        storage.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ExportEpubAsync_RemainsAvailableWhenLibraryIsReadOnly()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var source = Path.Combine(temp.Path, "private.epub");
+        var destination = Path.Combine(temp.Path, "exported.epub");
+        await File.WriteAllBytesAsync(source, new byte[] { 1, 2, 3 }, ct);
+        var storage = new Mock<INovelBookStorageService>();
+        storage.Setup(service => service.LoadAsync("book-a", ct))
+            .ReturnsAsync(new NovelBook { Id = "book-a", FilePath = source });
+        var accessState = new Mock<INovelStorageAccessState>();
+        accessState.SetupGet(state => state.IsReadOnly).Returns(true);
+        var sut = CreateSut(storage: storage, accessState: accessState);
+
+        var result = await sut.ExportEpubAsync("book-a", destination, ct);
+
+        result.IsSuccess.Should().BeTrue(result.Error);
+        File.Exists(destination).Should().BeTrue();
     }
 
     private static NovelLibraryService CreateSut(

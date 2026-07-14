@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Hoshi.Models;
@@ -87,6 +88,75 @@ internal sealed class NovelLibraryService : INovelLibraryService
         ExecuteAsync(
             async token => Result<NovelBook?>.Success(await _storage.LoadAsync(bookId, token)),
             "Error loading novel",
+            ct);
+
+    public Task<Result> ExportEpubAsync(
+        string bookId,
+        string destinationPath,
+        CancellationToken ct = default) =>
+        ExecuteAsync(
+            async token =>
+            {
+                if (string.IsNullOrWhiteSpace(destinationPath)
+                    || !string.Equals(
+                        Path.GetExtension(destinationPath),
+                        ".epub",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return Result.Failure(
+                        "Choose a valid .epub destination.",
+                        "EPUB export failed");
+                }
+
+                var book = await _storage.LoadAsync(bookId, token);
+                if (book is null)
+                    return Result.Failure("Book not found.", "EPUB export failed");
+                if (string.IsNullOrWhiteSpace(book.FilePath) || !File.Exists(book.FilePath))
+                {
+                    return Result.Failure(
+                        "The private EPUB file no longer exists.",
+                        "EPUB file not found");
+                }
+
+                var sourcePath = Path.GetFullPath(book.FilePath);
+                var targetPath = Path.GetFullPath(destinationPath);
+                if (string.Equals(sourcePath, targetPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    return Result.Failure(
+                        "The export destination must differ from the private EPUB.",
+                        "EPUB export failed");
+                }
+
+                var targetDirectory = Path.GetDirectoryName(targetPath);
+                if (string.IsNullOrWhiteSpace(targetDirectory) || !Directory.Exists(targetDirectory))
+                {
+                    return Result.Failure(
+                        "The export folder does not exist.",
+                        "EPUB export failed");
+                }
+
+                await using var source = new FileStream(
+                    sourcePath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read,
+                    bufferSize: 81920,
+                    useAsync: true);
+                await using var target = new FileStream(
+                    targetPath,
+                    FileMode.Create,
+                    FileAccess.Write,
+                    FileShare.None,
+                    bufferSize: 81920,
+                    useAsync: true);
+                await source.CopyToAsync(target, token);
+                _logger.LogInformation(
+                    "Exported novel EPUB {BookId} to {DestinationPath}",
+                    bookId,
+                    targetPath);
+                return Result.Success();
+            },
+            "EPUB export failed",
             ct);
 
     public async Task<Result> MarkOpenedAsync(

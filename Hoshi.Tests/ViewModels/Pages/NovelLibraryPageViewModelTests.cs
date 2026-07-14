@@ -796,6 +796,12 @@ public class NovelLibraryPageViewModelTests
         public Task<Result> DeleteNovelAsync(string bookId, CancellationToken ct = default) =>
             Task.FromResult(Result.Success());
 
+        public Task<Result> ExportEpubAsync(
+            string bookId,
+            string destinationPath,
+            CancellationToken ct = default) =>
+            Task.FromResult(Result.Success());
+
         public Task<Result> SaveProgressAsync(
             string bookId,
             int chapterIndex,
