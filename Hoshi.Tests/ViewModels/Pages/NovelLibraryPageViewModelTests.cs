@@ -110,6 +110,73 @@ public class NovelLibraryPageViewModelTests
     }
 
     [Fact]
+    public async Task ExportNovelCommand_PickerCancellationDoesNothing()
+    {
+        var dialog = new Mock<IDialogService>();
+        dialog.Setup(service => service.SaveFilePickerAsync("星_空", "EPUB books", ".epub"))
+            .ReturnsAsync((string?)null);
+        var library = new Mock<INovelLibraryService>();
+        var notification = new Mock<INotificationService>();
+        var sut = CreateSut(
+            novelService: library.Object,
+            dialogService: dialog.Object,
+            notificationService: notification.Object);
+
+        await sut.ExportNovelCommand.ExecuteAsync(new NovelBookItemViewModel(
+            new NovelBook { Id = "book-a", Title = "星?空.epub" }));
+
+        library.Verify(service => service.ExportEpubAsync(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        notification.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ExportNovelCommand_SuccessExportsSelectedBookAndNotifies()
+    {
+        var destination = @"D:\Exports\星.epub";
+        var dialog = new Mock<IDialogService>();
+        dialog.Setup(service => service.SaveFilePickerAsync("星", "EPUB books", ".epub"))
+            .ReturnsAsync(destination);
+        var library = new Mock<INovelLibraryService>();
+        library.Setup(service => service.ExportEpubAsync(
+                "book-a", destination, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        var notification = new Mock<INotificationService>();
+        var sut = CreateSut(
+            novelService: library.Object,
+            dialogService: dialog.Object,
+            notificationService: notification.Object);
+
+        await sut.ExportNovelCommand.ExecuteAsync(new NovelBookItemViewModel(
+            new NovelBook { Id = "book-a", Title = "星" }));
+
+        notification.Verify(service => service.ShowSuccess("EPUB exported.", "Novel exported"));
+    }
+
+    [Fact]
+    public async Task ExportNovelCommand_FailureShowsServiceError()
+    {
+        var destination = @"D:\Exports\星.epub";
+        var dialog = new Mock<IDialogService>();
+        dialog.Setup(service => service.SaveFilePickerAsync("星", "EPUB books", ".epub"))
+            .ReturnsAsync(destination);
+        var library = new Mock<INovelLibraryService>();
+        library.Setup(service => service.ExportEpubAsync(
+                "book-a", destination, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Failure("source missing", "EPUB file not found"));
+        var notification = new Mock<INotificationService>();
+        var sut = CreateSut(
+            novelService: library.Object,
+            dialogService: dialog.Object,
+            notificationService: notification.Object);
+
+        await sut.ExportNovelCommand.ExecuteAsync(new NovelBookItemViewModel(
+            new NovelBook { Id = "book-a", Title = "星" }));
+
+        notification.Verify(service => service.ShowError("source missing", "EPUB file not found"));
+    }
+
+    [Fact]
     public void OpenNovelCommand_SendsNavigateMessage()
     {
         var messenger = new FakeMessenger();

@@ -7,6 +7,10 @@ public interface IDialogService
 {
     void Initialize(XamlRoot root);
     Task<string?> OpenFilePickerAsync(params string[] fileTypeFilters);
+    Task<string?> SaveFilePickerAsync(
+        string suggestedFileName,
+        string fileTypeDescription,
+        string fileExtension);
     Task<string?> OpenFolderPickerAsync();
     Task<string?> PromptTextAsync(
         string title,

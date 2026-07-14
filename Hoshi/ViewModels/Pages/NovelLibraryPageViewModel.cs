@@ -163,6 +163,31 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task ExportNovelAsync(NovelBookItemViewModel item)
+    {
+        var destinationPath = await _dialogService.SaveFilePickerAsync(
+            NovelExportFileName.CreateBaseName(item.Book.Title),
+            "EPUB books",
+            ".epub");
+        if (destinationPath is null)
+            return;
+
+        var result = await _novelLibraryService.ExportEpubAsync(
+            item.Book.Id,
+            destinationPath,
+            _pageCts.Token);
+        if (result.IsCancelled)
+            return;
+        if (!result.IsSuccess)
+        {
+            _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+            return;
+        }
+
+        _notificationService.ShowSuccess("EPUB exported.", "Novel exported");
+    }
+
+    [RelayCommand]
     private async Task ImportDroppedNovelsAsync(IEnumerable<string> filePaths)
     {
         var epubPaths = filePaths

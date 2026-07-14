@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
@@ -97,5 +98,27 @@ internal class DialogService : IDialogService
 
         var folder = await picker.PickSingleFolderAsync();
         return folder?.Path;
+    }
+
+    public async Task<string?> SaveFilePickerAsync(
+        string suggestedFileName,
+        string fileTypeDescription,
+        string fileExtension)
+    {
+        if (_xamlRoot == null)
+            throw new InvalidOperationException("XamlRoot must be initialized.");
+
+        var picker = new FileSavePicker(_xamlRoot.ContentIslandEnvironment.AppWindowId)
+        {
+            SuggestedStartLocation = PickerLocationId.Downloads,
+            SuggestedFileName = suggestedFileName,
+            DefaultFileExtension = fileExtension,
+            ShowOverwritePrompt = true,
+        };
+        picker.FileTypeChoices.Add(
+            fileTypeDescription,
+            new List<string> { fileExtension });
+        var result = await picker.PickSaveFileAsync();
+        return result?.Path;
     }
 }
