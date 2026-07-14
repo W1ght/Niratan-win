@@ -41,6 +41,12 @@
   </PropertyGroup>
 
   <!-- Copy native hoshidicts DLL to output directory if it exists -->
+  <Target Name="EnsureNativeHoshidicts"
+          BeforeTargets="CopyNativeHoshidicts"
+          Condition="'$(Platform)' == 'x64' And !Exists('$(NativeHoshidictsDll)')">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\scripts\Ensure-NativeHoshidicts.ps1&quot; -RepositoryRoot &quot;$(MSBuildProjectDirectory)\..&quot;" />
+  </Target>
+
   <Target Name="CopyNativeHoshidicts" AfterTargets="Build" Condition="'$(Platform)' == 'x64'">
     <ItemGroup>
       <_NativeDll Include="$(NativeHoshidictsDll)" />
