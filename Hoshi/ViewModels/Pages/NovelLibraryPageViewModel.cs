@@ -53,6 +53,8 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     private bool _suppressSortApplication;
     private bool _hasExplicitSortSelection;
 
+    public bool IsBookSyncing => !_activeNovelSyncs.IsEmpty;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NoNovels))]
     public partial ObservableCollection<NovelBookItemViewModel> NovelBooks { get; set; } = new();
@@ -428,6 +430,8 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         if (!_activeNovelSyncs.TryAdd(item.Book.Id, 0))
             return;
 
+        OnPropertyChanged(nameof(IsBookSyncing));
+
         var options = new TtuSyncOptions(
             Direction: direction,
             SyncBookData: global.UploadBooks,
@@ -488,7 +492,8 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         }
         finally
         {
-            _activeNovelSyncs.TryRemove(item.Book.Id, out _);
+            if (_activeNovelSyncs.TryRemove(item.Book.Id, out _))
+                OnPropertyChanged(nameof(IsBookSyncing));
         }
     }
 

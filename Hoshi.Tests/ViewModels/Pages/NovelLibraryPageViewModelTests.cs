@@ -685,6 +685,7 @@ public class NovelLibraryPageViewModelTests
         await sut.SyncNovelCommand.ExecuteAsync(BookItem("book-1"));
 
         sync.Calls.Should().BeEmpty();
+        sut.IsBookSyncing.Should().BeFalse();
         notification.Verify(service => service.ShowError(
             It.IsAny<string>(),
             It.IsAny<string>()), Times.Once);
@@ -754,6 +755,7 @@ public class NovelLibraryPageViewModelTests
 
         await sut.SyncNovelCommand.ExecuteAsync(BookItem("book-1"));
 
+        sut.IsBookSyncing.Should().BeFalse();
         notification.Verify(service => service.ShowError(
             It.Is<string>(message => message.Contains("network down", StringComparison.Ordinal)),
             It.IsAny<string>()), Times.Once);
@@ -775,6 +777,7 @@ public class NovelLibraryPageViewModelTests
 
         await sut.SyncNovelCommand.ExecuteAsync(BookItem("book-1"));
 
+        sut.IsBookSyncing.Should().BeFalse();
         notification.Verify(service => service.ShowError(
             It.IsAny<string>(),
             It.IsAny<string>()), Times.Never);
@@ -804,15 +807,59 @@ public class NovelLibraryPageViewModelTests
 
         var first = sut.SyncNovelCommand.ExecuteAsync(BookItem("book-1"));
         (await started.WaitAsync(TimeSpan.FromSeconds(2), ct)).Should().BeTrue();
+        sut.IsBookSyncing.Should().BeTrue();
         var duplicate = sut.SyncNovelCommand.ExecuteAsync(BookItem("book-1"));
         await duplicate;
+        sut.IsBookSyncing.Should().BeTrue();
         var secondBook = sut.SyncNovelCommand.ExecuteAsync(BookItem("book-2"));
         (await started.WaitAsync(TimeSpan.FromSeconds(2), ct)).Should().BeTrue();
+        sut.IsBookSyncing.Should().BeTrue();
 
         sync.Calls.Select(call => call.Book.Id).Should().Equal("book-1", "book-2");
         gates["book-1"].SetResult(new TtuSyncResult(TtuSyncResultKind.Synced, "book-1"));
+        await first;
+        sut.IsBookSyncing.Should().BeTrue();
         gates["book-2"].SetResult(new TtuSyncResult(TtuSyncResultKind.Synced, "book-2"));
-        await Task.WhenAll(first, secondBook);
+        await secondBook;
+        sut.IsBookSyncing.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task SyncNovelCommand_KeepsBusyStateUntilEveryBookFinishes()
+    {
+        var gates = new ConcurrentDictionary<string, TaskCompletionSource<TtuSyncResult>>();
+        var started = new SemaphoreSlim(0);
+        var sync = new RecordingTtuSyncService
+        {
+            Handler = (book, _, _) =>
+            {
+                var gate = gates.GetOrAdd(
+                    book.Id,
+                    _ => new TaskCompletionSource<TtuSyncResult>(
+                        TaskCreationOptions.RunContinuationsAsynchronously));
+                started.Release();
+                return gate.Task;
+            },
+        };
+        var sut = CreateSut(
+            settingsService: EnabledSyncSettings(),
+            ttuSyncService: sync);
+        var ct = TestContext.Current.CancellationToken;
+
+        var first = sut.SyncNovelCommand.ExecuteAsync(BookItem("book-1"));
+        var second = sut.SyncNovelCommand.ExecuteAsync(BookItem("book-2"));
+        (await started.WaitAsync(TimeSpan.FromSeconds(2), ct)).Should().BeTrue();
+        (await started.WaitAsync(TimeSpan.FromSeconds(2), ct)).Should().BeTrue();
+
+        sut.IsBookSyncing.Should().BeTrue();
+
+        gates["book-1"].SetResult(new TtuSyncResult(TtuSyncResultKind.Synced, "book-1"));
+        await first;
+        sut.IsBookSyncing.Should().BeTrue();
+
+        gates["book-2"].SetResult(new TtuSyncResult(TtuSyncResultKind.Synced, "book-2"));
+        await second;
+        sut.IsBookSyncing.Should().BeFalse();
     }
 
     [Fact]

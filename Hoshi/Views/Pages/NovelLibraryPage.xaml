@@ -327,5 +327,26 @@
                                                AutomationProperties.AutomationId="NovelStatisticsDashboardView"
                                                DataContext="{x:Bind ViewModel.StatisticsDashboard, Mode=OneWay}"
                                                Visibility="{x:Bind ViewModel.ShowStatisticsDashboard, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+
+        <Grid x:Uid="NovelBookSyncProgressOverlay"
+              Grid.RowSpan="3"
+              Canvas.ZIndex="100"
+              Background="Transparent"
+              AutomationProperties.AutomationId="NovelBookSyncProgressOverlay"
+              Visibility="{x:Bind ViewModel.IsBookSyncing, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+            <Border Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    Opacity="0.82" />
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="16">
+                <ProgressRing Width="48"
+                              Height="48"
+                              HorizontalAlignment="Center"
+                              IsActive="{x:Bind ViewModel.IsBookSyncing, Mode=OneWay}" />
+                <TextBlock x:Uid="NovelBookSyncProgressText"
+                           HorizontalAlignment="Center"
+                           Style="{StaticResource BodyStrongTextBlockStyle}" />
+            </StackPanel>
+        </Grid>
     </Grid>
 </Page>

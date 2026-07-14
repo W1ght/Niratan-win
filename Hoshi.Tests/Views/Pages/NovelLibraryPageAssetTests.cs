@@ -113,4 +113,36 @@ public sealed class NovelLibraryPageAssetTests
         xaml.Should().NotContain(
             "SelectedValue=\"{x:Bind ViewModel.SelectedSortOption, Mode=TwoWay}\"");
     }
+
+    [Fact]
+    public void BookSyncProgressOverlay_IsBlockingLocalizedAndBoundToBusyState()
+    {
+        var xaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelLibraryPage.xaml"));
+        var englishResources = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "en-US", "Resources.resw"));
+        var chineseResources = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw"));
+
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelBookSyncProgressOverlay\"");
+        xaml.Should().Contain("Grid.RowSpan=\"3\"");
+        xaml.Should().Contain("Canvas.ZIndex=\"100\"");
+        xaml.Should().Contain(
+            "Visibility=\"{x:Bind ViewModel.IsBookSyncing, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}\"");
+        xaml.Should().Contain(
+            "IsActive=\"{x:Bind ViewModel.IsBookSyncing, Mode=OneWay}\"");
+        xaml.Should().Contain("x:Uid=\"NovelBookSyncProgressText\"");
+
+        foreach (var key in new[]
+                 {
+                     "NovelBookSyncProgressOverlay.AutomationProperties.Name",
+                     "NovelBookSyncProgressText.Text",
+                 })
+        {
+            englishResources.Should().Contain($"name=\"{key}\"");
+            chineseResources.Should().Contain($"name=\"{key}\"");
+        }
+
+        chineseResources.Should().Contain("<value>正在同步…</value>");
+    }
 }

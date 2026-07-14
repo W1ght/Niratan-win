@@ -796,6 +796,8 @@
   <data name="NovelBookSyncedToTtuFormat" xml:space="preserve"><value>已将 {0} 同步到 ッツ（{1} 字符）。</value></data>
   <data name="NovelBookSyncFailedTitle" xml:space="preserve"><value>同步失败</value></data>
   <data name="NovelBookSyncFailedFormat" xml:space="preserve"><value>同步失败：{0}</value></data>
+  <data name="NovelBookSyncProgressOverlay.AutomationProperties.Name" xml:space="preserve"><value>正在同步书籍</value></data>
+  <data name="NovelBookSyncProgressText.Text" xml:space="preserve"><value>正在同步…</value></data>
   <data name="NovelStorageWarningInfoBar.Title" xml:space="preserve"><value>书籍元数据需要处理</value></data>
   <data name="NovelStorageWarningInfoBar.Message" xml:space="preserve"><value>部分书籍元数据无法读取，原始文件已保留。</value></data>
   <data name="NovelShelfDeleteConfirmation.Title" xml:space="preserve"><value>删除书架</value></data>
