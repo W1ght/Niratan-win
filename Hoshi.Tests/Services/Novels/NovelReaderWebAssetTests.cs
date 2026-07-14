@@ -2610,6 +2610,32 @@ public class NovelReaderWebAssetTests
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsTodayCard\"");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsGoalCard\"");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsWeekCard\"");
+        var todayCardStart = dashboardXaml.IndexOf(
+            "<Border x:Name=\"TodayCard\"",
+            StringComparison.Ordinal);
+        var todayCardEnd = dashboardXaml.IndexOf(
+            "<Border x:Name=\"GoalCard\"",
+            todayCardStart,
+            StringComparison.Ordinal);
+        todayCardStart.Should().BeGreaterThanOrEqualTo(0);
+        todayCardEnd.Should().BeGreaterThan(todayCardStart);
+
+        var todayCardXaml = dashboardXaml[todayCardStart..todayCardEnd];
+        todayCardXaml.Should().Contain("Width=\"118\"");
+        todayCardXaml.Should().Contain("Height=\"118\"");
+
+        var weekCardStart = dashboardXaml.IndexOf(
+            "<Border x:Name=\"WeekCard\"",
+            StringComparison.Ordinal);
+        var weekCardEnd = dashboardXaml.IndexOf(
+            "<Border x:Name=\"SelectedRangeCard\"",
+            weekCardStart,
+            StringComparison.Ordinal);
+        weekCardStart.Should().BeGreaterThanOrEqualTo(0);
+        weekCardEnd.Should().BeGreaterThan(weekCardStart);
+
+        var weekCardXaml = dashboardXaml[weekCardStart..weekCardEnd];
+        weekCardXaml.Should().Contain("VerticalAlignment=\"Top\"");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsSelectedRangeCard\"");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsSpeedCard\"");
         dashboardXaml.Should().Contain("ItemsSource=\"{Binding WeekDays}\"");

@@ -270,8 +270,8 @@
                                                Text="{Binding TodayText}" />
                                 </StackPanel>
                                 <Grid Grid.Column="1"
-                                      Width="88"
-                                      Height="88">
+                                      Width="118"
+                                      Height="118">
                                     <ProgressRing IsActive="True"
                                                   IsIndeterminate="False"
                                                   Maximum="100"
@@ -362,6 +362,7 @@
                     <Border x:Name="WeekCard"
                             Grid.Row="2"
                             Grid.Column="0"
+                            VerticalAlignment="Top"
                             AutomationProperties.AutomationId="NovelStatisticsWeekCard"
                             Style="{StaticResource DashboardCardStyle}"
                             Visibility="{Binding HasData, Converter={StaticResource BooleanToVisibilityConverter}}">
