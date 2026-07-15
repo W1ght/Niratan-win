@@ -13,9 +13,11 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.Web.WebView2.Core;
 using Niratan.Helpers;
+using Niratan.Models.Settings;
 using Niratan.Models.Shortcuts;
 using Niratan.Services.Settings;
 using Niratan.Services.Video;
+using Niratan.Views.Controls;
 using Niratan.Views.Dictionary;
 using Serilog;
 
@@ -200,11 +202,11 @@ public sealed partial class VideoPlayerWindow
         if (ViewModel == null || _isUpdatingSubtitleAppearance)
             return;
 
-        ViewModel.SubtitleVerticalPosition = Math.Clamp(e.NewValue, -200, 200);
+        ViewModel.SubtitleVerticalPosition = VideoSubtitlePositionPolicy.Normalize(e.NewValue);
         ApplySubtitleAppearance();
     }
 
-    private void SubtitleColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+    private void SubtitleColorPicker_ColorChanged(CompactColorPicker sender, ColorChangedEventArgs args)
     {
         if (ViewModel == null || _isUpdatingSubtitleAppearance)
             return;
@@ -514,6 +516,16 @@ public sealed partial class VideoPlayerWindow
     private void SubtitlePanelBorder_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         SubtitleCanvas.Invalidate();
+        ApplySubtitleAppearance();
+    }
+
+    private void UpdateSubtitleVideoViewport(VideoViewportGeometry? geometry)
+    {
+        if (_subtitleVideoViewport == geometry)
+            return;
+
+        _subtitleVideoViewport = geometry;
+        ApplySubtitleAppearance();
     }
 
     private void ApplySubtitleAppearance()
@@ -521,7 +533,41 @@ public sealed partial class VideoPlayerWindow
         if (ViewModel == null)
             return;
 
-        SubtitlePanelTransform.Y = -ViewModel.SubtitleVerticalPosition;
+        var surfaceWidth = Math.Max(BottomChromePopupRoot.ActualWidth, 0);
+        var surfaceHeight = Math.Max(BottomChromePopupRoot.ActualHeight, 0);
+        var viewportTop = 0.0;
+        var viewportHeight = surfaceHeight;
+        var viewportLeft = 0.0;
+        var viewportRight = 0.0;
+
+        if (_subtitleVideoViewport is { IsValid: true } geometry
+            && surfaceWidth > 0
+            && surfaceHeight > 0)
+        {
+            var horizontalScale = surfaceWidth / geometry.OsdWidth;
+            var verticalScale = surfaceHeight / geometry.OsdHeight;
+            viewportTop = geometry.TopMargin * verticalScale;
+            viewportHeight = Math.Max(
+                surfaceHeight - ((geometry.TopMargin + geometry.BottomMargin) * verticalScale),
+                0);
+            viewportLeft = geometry.LeftMargin * horizontalScale;
+            viewportRight = geometry.RightMargin * horizontalScale;
+        }
+
+        var viewportWidth = Math.Max(surfaceWidth - viewportLeft - viewportRight, 0);
+        var horizontalInset = Math.Min(16, viewportWidth / 4);
+        SubtitlePanelBorder.Margin = new Thickness(
+            viewportLeft + horizontalInset,
+            0,
+            viewportRight + horizontalInset,
+            0);
+        var subtitleHeight = SubtitlePanelBorder.ActualHeight > 0
+            ? SubtitlePanelBorder.ActualHeight
+            : ViewModel.SubtitlePanelHeight;
+        SubtitlePanelTransform.Y = viewportTop + VideoSubtitlePositionPolicy.OriginY(
+            viewportHeight,
+            subtitleHeight,
+            ViewModel.SubtitleVerticalPosition);
         var backgroundOpacity = ViewModel.SubtitleBackgroundDisabled
             ? 0
             : Math.Clamp(ViewModel.SubtitleBackgroundOpacity, 0, 1);

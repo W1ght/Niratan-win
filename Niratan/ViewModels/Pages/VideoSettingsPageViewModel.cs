@@ -134,9 +134,6 @@ public partial class VideoSettingsPageViewModel : ObservableObject
     public partial double SubtitleVerticalPosition { get; set; }
 
     [ObservableProperty]
-    public partial string SubtitleVerticalPositionText { get; set; } = "0";
-
-    [ObservableProperty]
     public partial string SubtitleColorHex { get; set; } = "#FFFFFFFF";
 
     [ObservableProperty]
@@ -192,7 +189,7 @@ public partial class VideoSettingsPageViewModel : ObservableObject
         SubtitleShadowRadius = settings.SubtitleShadowRadius;
         SubtitleBackgroundOpacity = settings.SubtitleBackgroundOpacity;
         SubtitleBackgroundDisabled = settings.SubtitleBackgroundDisabled;
-        SubtitleVerticalPosition = settings.SubtitleVerticalPosition;
+        SubtitleVerticalPosition = settings.SubtitleVerticalPositionFraction;
         SubtitleColorHex = settings.SubtitleColorHex;
         SubtitleLookupHighlightColorHex = settings.SubtitleLookupHighlightColorHex;
         SubtitleLookupHighlightTextColorHex = settings.SubtitleLookupHighlightTextColorHex;
@@ -229,7 +226,7 @@ public partial class VideoSettingsPageViewModel : ObservableObject
                 SubtitleShadowRadius = SubtitleShadowRadius,
                 SubtitleBackgroundOpacity = SubtitleBackgroundOpacity,
                 SubtitleBackgroundDisabled = SubtitleBackgroundDisabled,
-                SubtitleVerticalPosition = SubtitleVerticalPosition,
+                SubtitleVerticalPositionFraction = SubtitleVerticalPosition,
                 SubtitleColorHex = SubtitleColorHex,
                 SubtitleLookupHighlightColorHex = SubtitleLookupHighlightColorHex,
                 SubtitleLookupHighlightTextColorHex = SubtitleLookupHighlightTextColorHex,
@@ -318,7 +315,13 @@ public partial class VideoSettingsPageViewModel : ObservableObject
 
     partial void OnSubtitleVerticalPositionChanged(double value)
     {
-        SubtitleVerticalPositionText = $"{Math.Clamp(value, -200, 200):0}";
+        var normalized = VideoSubtitlePositionPolicy.Normalize(value);
+        if (value != normalized)
+        {
+            SubtitleVerticalPosition = normalized;
+            return;
+        }
+
         SaveSettings();
     }
 

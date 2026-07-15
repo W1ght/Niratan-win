@@ -381,6 +381,27 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
         return Task.CompletedTask;
     }
 
+    public Task<VideoViewportGeometry?> GetVideoViewportGeometryAsync(CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_syncRoot)
+        {
+            ThrowIfDisposed();
+            if (_handle == IntPtr.Zero)
+                return Task.FromResult<VideoViewportGeometry?>(null);
+
+            var geometry = new VideoViewportGeometry(
+                TryGetDoubleProperty("osd-dimensions/w") ?? 0,
+                TryGetDoubleProperty("osd-dimensions/h") ?? 0,
+                TryGetDoubleProperty("osd-dimensions/mt") ?? 0,
+                TryGetDoubleProperty("osd-dimensions/mb") ?? 0,
+                TryGetDoubleProperty("osd-dimensions/ml") ?? 0,
+                TryGetDoubleProperty("osd-dimensions/mr") ?? 0);
+
+            return Task.FromResult<VideoViewportGeometry?>(geometry.IsValid ? geometry : null);
+        }
+    }
+
     private static string NormalizeVideoEqualizerAdjustment(string adjustment) =>
         adjustment.Trim().ToLowerInvariant() switch
         {

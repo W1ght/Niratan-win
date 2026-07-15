@@ -20,6 +20,9 @@ public class VideoLibraryPageAssetTests
         var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml"));
 
         xaml.Should().Contain("x:Name=\"VideoLibrarySecondaryNavigationView\"");
+        xaml.Should().Contain("Padding=\"20,14,28,16\"");
+        xaml.Should().NotContain("VideoLibraryTitleBarBackground");
+        xaml.Should().NotContain("Margin=\"0,-32,0,0\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryAllNavItem\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryContinueWatchingNavItem\"");
         xaml.Should().NotContain("AutomationProperties.AutomationId=\"VideoLibraryWatchedNavItem\"");

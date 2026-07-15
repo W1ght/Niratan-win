@@ -23,11 +23,11 @@
                         OpenPaneLength="200"
                         PaneDisplayMode="Auto">
             <NavigationView.Resources>
-                <Thickness x:Key="NavigationViewContentMargin">0,32,0,0</Thickness>
-                <Thickness x:Key="NavigationViewMinimalContentMargin">0,32,0,0</Thickness>
-                <Thickness x:Key="NavigationViewContentGridBorderThickness">1,1,0,0</Thickness>
+                <Thickness x:Key="NavigationViewContentMargin">0</Thickness>
+                <Thickness x:Key="NavigationViewMinimalContentMargin">0</Thickness>
+                <Thickness x:Key="NavigationViewContentGridBorderThickness">1,0,0,0</Thickness>
                 <Thickness x:Key="NavigationViewHeaderMargin">36,30,36,0</Thickness>
-                <CornerRadius x:Key="NavigationViewContentGridCornerRadius">8,0,0,0</CornerRadius>
+                <CornerRadius x:Key="NavigationViewContentGridCornerRadius">0</CornerRadius>
             </NavigationView.Resources>
 
             <NavigationView.MenuItems>
@@ -55,24 +55,9 @@
                                     Content="Settings"
                                     Icon="Setting"
                                     Tag="Niratan.Views.Pages.SettingsPage" />
-                <NavigationViewItem AutomationProperties.AutomationId="NormalLogsNavItem"
-                                    x:Uid="NormalLogsNavItem"
-                                    Content="Normal Logs"
-                                    Icon="Document"
-                                    Tag="Niratan.Views.Pages.NormalLogsPage" />
-                <NavigationViewItem AutomationProperties.AutomationId="ErrorLogsNavItem"
-                                    x:Uid="ErrorLogsNavItem"
-                                    Content="Error Logs"
-                                    Icon="ReportHacked"
-                                    Tag="Niratan.Views.Pages.ErrorLogsPage" />
-                <NavigationViewItem x:Uid="HelpNavItem"
-                                    Content="Help"
-                                    Icon="Help"
-                                    IsEnabled="False"
-                                    Tag="Niratan.Views.Pages.HelpPage" />
             </NavigationView.FooterMenuItems>
 
-            <Frame x:Name="ContentFrame" Padding="16,16,0,0" Navigated="ContentFrame_Navigated">
+            <Frame x:Name="ContentFrame" Padding="0" Navigated="ContentFrame_Navigated">
                 <Frame.ContentTransitions>
                     <TransitionCollection>
                         <NavigationThemeTransition />

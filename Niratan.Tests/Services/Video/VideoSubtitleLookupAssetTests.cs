@@ -800,6 +800,9 @@ public class VideoSubtitleLookupAssetTests
         pageXaml.Should().Contain("SelectedValuePath=\"SubtitleFontFamily\"");
         pageXaml.Should().Contain("SelectedValue=\"{x:Bind ViewModel.SubtitleFontFamily, Mode=TwoWay}\"");
         pageXaml.Should().NotContain("VideoSubtitleFontFamilyTextBox");
+        pageXaml.Should().Contain("Minimum=\"0\"");
+        pageXaml.Should().Contain("Maximum=\"1\"");
+        pageXaml.Should().NotContain("SubtitleVerticalPositionText");
         pageCode.Should().Contain("Frame.Navigate(typeof(KeyboardShortcutsSettingsPage)");
         settingsXaml.Should().Contain("Tag=\"Niratan.Views.Pages.KeyboardShortcutsSettingsPage\"");
         enResources.Should().Contain("VideoSettingsPageTitle.Text");

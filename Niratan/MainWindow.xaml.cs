@@ -38,6 +38,7 @@ public sealed partial class MainWindow : Window, IRecipient<SetFullscreenMessage
     private readonly OverlappedPresenter _presenter;
 
     private readonly Frame _rootFrame = new() { Content = new SplashPage() };
+    private WindowState _lastNormalWindowState = new();
     private bool _wasMinimized;
 
     public MainWindow()
@@ -60,14 +61,9 @@ public sealed partial class MainWindow : Window, IRecipient<SetFullscreenMessage
         AppWindow.SetPresenter(_presenter);
 
         _scaleFactor = GetScaleFactor();
-        AppWindow.MoveAndResize(
-            new RectInt32(
-                (int)(_settingsService.Current.MainWindowState.Left * _scaleFactor),
-                (int)(_settingsService.Current.MainWindowState.Top * _scaleFactor),
-                (int)(_settingsService.Current.MainWindowState.Width * _scaleFactor),
-                (int)(_settingsService.Current.MainWindowState.Height * _scaleFactor)
-            )
-        );
+        var restoredBounds = GetSafeRestoredBounds(_settingsService.Current.MainWindowState);
+        AppWindow.MoveAndResize(restoredBounds);
+        _lastNormalWindowState = CreateWindowState(restoredBounds, isMaximized: false);
 
         if (_settingsService.Current.MainWindowState.IsMaximized)
             _presenter.Maximize();
@@ -128,6 +124,9 @@ public sealed partial class MainWindow : Window, IRecipient<SetFullscreenMessage
         titleBar.ForegroundColor = foregroundColor;
         titleBar.ButtonForegroundColor = foregroundColor;
         titleBar.ButtonHoverForegroundColor = foregroundColor;
+        titleBar.ButtonPressedForegroundColor = foregroundColor;
+        titleBar.ButtonInactiveForegroundColor = foregroundColor;
+        titleBar.InactiveForegroundColor = foregroundColor;
     }
 
     private void Settings_Changed(object? sender, SettingsChangedEventArgs e)
@@ -151,22 +150,14 @@ public sealed partial class MainWindow : Window, IRecipient<SetFullscreenMessage
 
         await SendAppLifecycleCheckpointAsync(AppLifecycleCheckpointReason.Closing);
 
-        var isMaximized = _presenter.State == OverlappedPresenterState.Maximized;
+        UpdateLastNormalWindowState();
         var lastWindowState = new WindowState
         {
-            IsMaximized = isMaximized,
-            Width = isMaximized
-                ? _settingsService.Current.MainWindowState.Width
-                : AppWindow.Size.Width / _scaleFactor,
-            Height = isMaximized
-                ? _settingsService.Current.MainWindowState.Height
-                : AppWindow.Size.Height / _scaleFactor,
-            Left = isMaximized
-                ? _settingsService.Current.MainWindowState.Left
-                : AppWindow.Position.X / _scaleFactor,
-            Top = isMaximized
-                ? _settingsService.Current.MainWindowState.Top
-                : AppWindow.Position.Y / _scaleFactor,
+            IsMaximized = _presenter.State == OverlappedPresenterState.Maximized,
+            Width = _lastNormalWindowState.Width,
+            Height = _lastNormalWindowState.Height,
+            Left = _lastNormalWindowState.Left,
+            Top = _lastNormalWindowState.Top,
         };
 
         _settingsService.Set(s => s.MainWindowState, lastWindowState);
@@ -188,8 +179,77 @@ public sealed partial class MainWindow : Window, IRecipient<SetFullscreenMessage
         var isMinimized = _presenter.State == OverlappedPresenterState.Minimized;
         if (isMinimized && !_wasMinimized)
             await SendAppLifecycleCheckpointAsync(AppLifecycleCheckpointReason.Background);
+        if (!isMinimized)
+            UpdateLastNormalWindowState();
         _wasMinimized = isMinimized;
     }
+
+    private RectInt32 GetSafeRestoredBounds(WindowState state)
+    {
+        var requestedBounds = new RectInt32(
+            (int)(state.Left * _scaleFactor),
+            (int)(state.Top * _scaleFactor),
+            (int)(state.Width * _scaleFactor),
+            (int)(state.Height * _scaleFactor));
+
+        if (HasUsableWindowBounds(requestedBounds))
+            return requestedBounds;
+
+        var defaults = new WindowState();
+        var primaryDisplay = DisplayArea.GetFromRect(
+            new RectInt32(0, 0, 1, 1),
+            DisplayAreaFallback.Primary);
+        var workArea = primaryDisplay.WorkArea;
+        var width = Math.Min((int)(defaults.Width * _scaleFactor), workArea.Width);
+        var height = Math.Min((int)(defaults.Height * _scaleFactor), workArea.Height);
+
+        return new RectInt32(
+            workArea.X + Math.Max(0, (workArea.Width - width) / 2),
+            workArea.Y + Math.Max(0, (workArea.Height - height) / 2),
+            width,
+            height);
+    }
+
+    private bool HasUsableWindowBounds(RectInt32 bounds)
+    {
+        if (bounds.Width < MinWidth * _scaleFactor || bounds.Height < MinHeight * _scaleFactor)
+            return false;
+
+        var display = DisplayArea.GetFromRect(bounds, DisplayAreaFallback.None);
+        if (display is null)
+            return false;
+
+        var workArea = display.WorkArea;
+        var visibleWidth = Math.Min(bounds.X + bounds.Width, workArea.X + workArea.Width)
+            - Math.Max(bounds.X, workArea.X);
+        var visibleHeight = Math.Min(bounds.Y + bounds.Height, workArea.Y + workArea.Height)
+            - Math.Max(bounds.Y, workArea.Y);
+        return visibleWidth >= 64 && visibleHeight >= 32;
+    }
+
+    private void UpdateLastNormalWindowState()
+    {
+        if (_presenter.State != OverlappedPresenterState.Restored)
+            return;
+
+        var bounds = new RectInt32(
+            AppWindow.Position.X,
+            AppWindow.Position.Y,
+            AppWindow.Size.Width,
+            AppWindow.Size.Height);
+        if (HasUsableWindowBounds(bounds))
+            _lastNormalWindowState = CreateWindowState(bounds, isMaximized: false);
+    }
+
+    private WindowState CreateWindowState(RectInt32 bounds, bool isMaximized) =>
+        new()
+        {
+            IsMaximized = isMaximized,
+            Width = bounds.Width / _scaleFactor,
+            Height = bounds.Height / _scaleFactor,
+            Left = bounds.X / _scaleFactor,
+            Top = bounds.Y / _scaleFactor,
+        };
 
     private async Task<bool> SendAppLifecycleCheckpointAsync(
         AppLifecycleCheckpointReason reason)

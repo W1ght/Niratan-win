@@ -8,14 +8,15 @@
       xmlns:novel="using:Niratan.Models.Novel"
       xmlns:vm="using:Niratan.ViewModels.Components"
       CharacterReceived="NovelReaderPage_CharacterReceived"
+      KeyboardAcceleratorPlacementMode="Hidden"
       mc:Ignorable="d">
 
     <Page.Resources>
         <Style x:Key="CompactReaderToolbarButtonStyle" TargetType="Button">
-            <Setter Property="Width" Value="40" />
-            <Setter Property="Height" Value="40" />
-            <Setter Property="MinWidth" Value="40" />
-            <Setter Property="MinHeight" Value="40" />
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinWidth" Value="32" />
+            <Setter Property="MinHeight" Value="32" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Margin" Value="0" />
             <Setter Property="Background" Value="Transparent" />
@@ -26,12 +27,12 @@
             <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
         <Style x:Key="CompactReaderToolbarIconStyle" TargetType="FontIcon">
-            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontSize" Value="13" />
         </Style>
         <Style x:Key="CompactReaderTitleTextStyle"
                BasedOn="{StaticResource BodyStrongTextBlockStyle}"
                TargetType="TextBlock">
-            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontSize" Value="15" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="MaxLines" Value="1" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
@@ -45,21 +46,17 @@
         </Style>
     </Page.Resources>
 
-    <Grid RowDefinitions="*,Auto">
+    <Grid RowDefinitions="Auto,*,Auto">
         <Border Grid.Row="0"
                 x:Name="ReaderTopChrome"
-                Margin="8,8,8,0"
                 HorizontalAlignment="Stretch"
-                VerticalAlignment="Top"
-                Canvas.ZIndex="10"
-                Background="{ThemeResource AcrylicInAppFillColorDefaultBrush}"
+                VerticalAlignment="Stretch"
+                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                BorderThickness="1"
-                CornerRadius="6"
-                Tapped="ReaderTopChrome_Tapped"
-                Visibility="Collapsed">
-            <Grid Padding="0,2"
-                  ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto"
+                BorderThickness="0,0,0,1">
+            <Grid Height="32"
+                  Padding="4,0,0,0"
+                  ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,*,144"
                   ColumnSpacing="0">
             <Button HorizontalAlignment="Left"
                     x:Name="NovelReaderBackButton"
@@ -122,7 +119,7 @@
                 </Button.Content>
             </Button>
 
-            <Button Grid.Column="6"
+            <Button Grid.Column="3"
                     HorizontalAlignment="Left"
                     AutomationProperties.AutomationId="NovelReaderAppearanceButton"
                     x:Uid="NovelReaderAppearanceButton"
@@ -134,7 +131,7 @@
                 </Button.Content>
             </Button>
 
-            <Button Grid.Column="7"
+            <Button Grid.Column="6"
                     x:Name="SasayakiButton"
                     HorizontalAlignment="Left"
                     AutomationProperties.AutomationId="NovelReaderSasayakiButton"
@@ -219,33 +216,34 @@
                 </Button.ContextFlyout>
             </Button>
 
-            <StackPanel Grid.Column="3"
-                        Margin="12,0"
-                        HorizontalAlignment="Center"
-                        Orientation="Horizontal"
-                        VerticalAlignment="Center"
-                        Spacing="8">
+            <Grid Grid.Column="7"
+                  Margin="8,0"
+                  ColumnDefinitions="*,Auto,Auto"
+                  ColumnSpacing="6">
                 <TextBlock x:Name="NovelReaderTitleText"
+                           Grid.Column="0"
                            VerticalAlignment="Center"
                            Style="{StaticResource CompactReaderTitleTextStyle}"
                            Text="{x:Bind ViewModel.ReaderTitle, Mode=OneWay}" />
                 <TextBlock x:Name="NovelReaderTopProgressText"
+                           Grid.Column="1"
                            AutomationProperties.AutomationId="NovelReaderProgressText"
                            VerticalAlignment="Center"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            Style="{StaticResource CompactReaderProgressTextStyle}"
                            Visibility="Collapsed" />
                 <TextBlock x:Name="NovelReaderStatisticsText"
+                           Grid.Column="2"
                            AutomationProperties.AutomationId="NovelReaderStatisticsText"
                            VerticalAlignment="Center"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            Style="{StaticResource CompactReaderProgressTextStyle}"
                            Visibility="Collapsed" />
-            </StackPanel>
+            </Grid>
             </Grid>
         </Border>
 
-        <Grid Grid.Row="0">
+        <Grid Grid.Row="1">
             <WebView2 x:Name="NovelWebView"
                       HorizontalAlignment="Stretch"
                       VerticalAlignment="Stretch"
@@ -255,7 +253,7 @@
 
         <!-- Dictionary popup overlay — lives in the main visual tree so MicaBackdrop shows through -->
         <Canvas x:Name="DictionaryOverlayCanvas"
-                Grid.Row="0"
+                Grid.Row="1"
                 Canvas.ZIndex="20"
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch"
@@ -458,10 +456,11 @@
                                                       Height="620" />
         </ContentDialog>
 
-        <Grid Grid.Row="1"
+        <Grid Grid.Row="2"
               x:Name="ReaderBottomChrome"
               Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-              RowDefinitions="Auto,Auto">
+              RowDefinitions="Auto,Auto"
+              Visibility="Collapsed">
             <Grid Grid.Row="0"
                   Padding="12,4"
                   ColumnDefinitions="*,Auto,*">
@@ -674,40 +673,36 @@
                             <StackPanel Spacing="8">
                                 <TextBlock x:Uid="NovelReaderSasayakiLightTextColorLabel"
                                            Text="Light Text" />
-                                <ColorPicker x:Name="SasayakiPanelLightTextColorPicker"
-                                             AutomationProperties.AutomationId="NovelReaderSasayakiLightTextColorPicker"
-                                             IsAlphaEnabled="True"
-                                             IsMoreButtonVisible="False"
-                                             ColorChanged="SasayakiPanelLightTextColorPicker_ColorChanged" />
+                                <controls:CompactColorPicker x:Name="SasayakiPanelLightTextColorPicker"
+                                                             AutomationProperties.AutomationId="NovelReaderSasayakiLightTextColorPicker"
+                                                             IsAlphaEnabled="True"
+                                                             ColorChanged="SasayakiPanelLightTextColorPicker_ColorChanged" />
                             </StackPanel>
                             <StackPanel Grid.Column="1" Spacing="8">
                                 <TextBlock x:Uid="NovelReaderSasayakiLightBackgroundColorLabel"
                                            Text="Light Background" />
-                                <ColorPicker x:Name="SasayakiPanelLightBackgroundColorPicker"
-                                             AutomationProperties.AutomationId="NovelReaderSasayakiLightBackgroundColorPicker"
-                                             IsAlphaEnabled="True"
-                                             IsMoreButtonVisible="False"
-                                             ColorChanged="SasayakiPanelLightBackgroundColorPicker_ColorChanged" />
+                                <controls:CompactColorPicker x:Name="SasayakiPanelLightBackgroundColorPicker"
+                                                             AutomationProperties.AutomationId="NovelReaderSasayakiLightBackgroundColorPicker"
+                                                             IsAlphaEnabled="True"
+                                                             ColorChanged="SasayakiPanelLightBackgroundColorPicker_ColorChanged" />
                             </StackPanel>
                             <StackPanel Grid.Row="1" Spacing="8">
                                 <TextBlock x:Uid="NovelReaderSasayakiDarkTextColorLabel"
                                            Text="Dark Text" />
-                                <ColorPicker x:Name="SasayakiPanelDarkTextColorPicker"
-                                             AutomationProperties.AutomationId="NovelReaderSasayakiDarkTextColorPicker"
-                                             IsAlphaEnabled="True"
-                                             IsMoreButtonVisible="False"
-                                             ColorChanged="SasayakiPanelDarkTextColorPicker_ColorChanged" />
+                                <controls:CompactColorPicker x:Name="SasayakiPanelDarkTextColorPicker"
+                                                             AutomationProperties.AutomationId="NovelReaderSasayakiDarkTextColorPicker"
+                                                             IsAlphaEnabled="True"
+                                                             ColorChanged="SasayakiPanelDarkTextColorPicker_ColorChanged" />
                             </StackPanel>
                             <StackPanel Grid.Row="1"
                                         Grid.Column="1"
                                         Spacing="8">
                                 <TextBlock x:Uid="NovelReaderSasayakiDarkBackgroundColorLabel"
                                            Text="Dark Background" />
-                                <ColorPicker x:Name="SasayakiPanelDarkBackgroundColorPicker"
-                                             AutomationProperties.AutomationId="NovelReaderSasayakiDarkBackgroundColorPicker"
-                                             IsAlphaEnabled="True"
-                                             IsMoreButtonVisible="False"
-                                             ColorChanged="SasayakiPanelDarkBackgroundColorPicker_ColorChanged" />
+                                <controls:CompactColorPicker x:Name="SasayakiPanelDarkBackgroundColorPicker"
+                                                             AutomationProperties.AutomationId="NovelReaderSasayakiDarkBackgroundColorPicker"
+                                                             IsAlphaEnabled="True"
+                                                             ColorChanged="SasayakiPanelDarkBackgroundColorPicker_ColorChanged" />
                             </StackPanel>
                         </Grid>
                     </StackPanel>

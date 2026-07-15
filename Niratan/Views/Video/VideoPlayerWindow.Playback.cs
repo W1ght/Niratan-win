@@ -52,6 +52,7 @@ public sealed partial class VideoPlayerWindow
         BottomChromePopupRoot.Height = VideoSurface.ActualHeight;
         BottomChromePopup.HorizontalOffset = point.X;
         BottomChromePopup.VerticalOffset = point.Y;
+        ApplySubtitleAppearance();
     }
 
     private void MaximizeVideoWindowForTesting()
@@ -702,6 +703,7 @@ public sealed partial class VideoPlayerWindow
         {
             var position = await _playbackEngine.GetPositionAsync();
             var duration = await _playbackEngine.GetDurationAsync();
+            UpdateSubtitleVideoViewport(await _playbackEngine.GetVideoViewportGeometryAsync());
             if (!_isScrubbing)
             {
                 ViewModel.UpdatePosition(position, duration);

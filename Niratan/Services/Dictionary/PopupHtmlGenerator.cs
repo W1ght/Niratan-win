@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using Microsoft.UI.Xaml;
 using Niratan.Enums;
 using Niratan.Models.Dictionary;
 using Niratan.Models.Settings;
@@ -13,9 +14,13 @@ public sealed class PopupHtmlGenerator
 {
     private readonly string _popupCss;
     private readonly string _popupJs;
+    private readonly Func<bool> _isSystemThemeDark;
 
-    public PopupHtmlGenerator()
+    public PopupHtmlGenerator(Func<bool>? isSystemThemeDark = null)
     {
+        _isSystemThemeDark = isSystemThemeDark ?? (() =>
+            Application.Current?.RequestedTheme == ApplicationTheme.Dark);
+
         var webDir = Path.Combine(AppContext.BaseDirectory, "Web", "DictionaryPopup");
 
         _popupCss = File.Exists(Path.Combine(webDir, "popup.css"))
@@ -504,20 +509,18 @@ return window.niratanRedirectResults?.({entriesJson}, {finalResultCount}, {rende
         return JsonSerializer.Serialize(styles);
     }
 
-    private static (string bgVar, string textColor) GetThemeColors(ThemeMode themeMode)
+    private (string bgVar, string textColor) GetThemeColors(ThemeMode themeMode)
     {
-        if (themeMode == ThemeMode.Dark)
+        if (IsThemeDark(themeMode))
             return ("#000000", "#fff");
-        if (themeMode == ThemeMode.Light)
-            return ("#FFFFFF", "#000");
         return ("#FFFFFF", "#000");
     }
 
-    private static bool IsThemeDark(ThemeMode themeMode) => themeMode switch
+    private bool IsThemeDark(ThemeMode themeMode) => themeMode switch
     {
         ThemeMode.Dark => true,
         ThemeMode.Light => false,
-        _ => false,
+        _ => _isSystemThemeDark(),
     };
 
     private static string SerializeAudioSources(AudioSettings? settings)

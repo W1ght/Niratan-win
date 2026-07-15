@@ -367,7 +367,7 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
-    public void ReaderPage_UsesFloatingCompactTopChrome()
+    public void ReaderPage_UsesFixedThirtyTwoPixelTitleBarChrome()
     {
         var readerXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml")
@@ -375,40 +375,49 @@ public class NovelReaderWebAssetTests
         var navigationXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NavigationPage.xaml")
         );
+        var navigationCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NavigationPage.xaml.cs")
+        );
         var windowCode = File.ReadAllText(Path.Combine(ProjectRoot, "MainWindow.xaml.cs"));
 
         readerXaml.Should().Contain("x:Key=\"CompactReaderToolbarButtonStyle\"");
-        readerXaml.Should().Contain("<Setter Property=\"Width\" Value=\"40\" />");
-        readerXaml.Should().Contain("<Setter Property=\"Height\" Value=\"40\" />");
+        readerXaml.Should().Contain("<Setter Property=\"Width\" Value=\"32\" />");
+        readerXaml.Should().Contain("<Setter Property=\"Height\" Value=\"32\" />");
         readerXaml.Should().Contain("<Setter Property=\"Background\" Value=\"Transparent\" />");
         readerXaml.Should().Contain("<Setter Property=\"BorderBrush\" Value=\"Transparent\" />");
         readerXaml.Should().Contain("<Setter Property=\"BorderThickness\" Value=\"0\" />");
         readerXaml.Should().Contain("x:Key=\"CompactReaderToolbarIconStyle\"");
-        readerXaml.Should().Contain("<Setter Property=\"FontSize\" Value=\"14\" />");
+        readerXaml.Should().Contain("<Setter Property=\"FontSize\" Value=\"13\" />");
         readerXaml.Should().Contain("x:Key=\"CompactReaderTitleTextStyle\"");
-        readerXaml.Should().Contain("RowDefinitions=\"*,Auto\"");
-        readerXaml.Should().Contain("Margin=\"8,8,8,0\"");
-        readerXaml.Should().Contain("Canvas.ZIndex=\"10\"");
-        readerXaml.Should().Contain("Background=\"{ThemeResource AcrylicInAppFillColorDefaultBrush}\"");
-        readerXaml.Should().Contain("CornerRadius=\"6\"");
-        readerXaml.Should().Contain("Padding=\"0,2\"");
-        readerXaml.Should().Contain("ColumnDefinitions=\"Auto,Auto,Auto,*,Auto,Auto,Auto,Auto\"");
+        readerXaml.Should().Contain("RowDefinitions=\"Auto,*,Auto\"");
+        readerXaml.Should().Contain("Background=\"{ThemeResource SolidBackgroundFillColorBaseBrush}\"");
+        readerXaml.Should().Contain("BorderThickness=\"0,0,0,1\"");
+        readerXaml.Should().Contain("Height=\"32\"");
+        readerXaml.Should().Contain("Padding=\"4,0,0,0\"");
+        readerXaml.Should().Contain("ColumnDefinitions=\"Auto,Auto,Auto,Auto,Auto,Auto,Auto,*,144\"");
         readerXaml.Should().Contain("ColumnSpacing=\"0\"");
         readerXaml.Should().Contain("Orientation=\"Horizontal\"");
-        readerXaml.Should().Contain("<StackPanel Grid.Column=\"3\"");
+        readerXaml.Should().Contain("<Grid Grid.Column=\"7\"");
         readerXaml.Should().Contain("Style=\"{StaticResource CompactReaderTitleTextStyle}\"");
         readerXaml.Should().Contain("Style=\"{StaticResource CompactReaderProgressTextStyle}\"");
         readerXaml.Should().Contain("Canvas.ZIndex=\"20\"");
-        readerXaml.Should().NotContain("RowDefinitions=\"Auto,*,Auto\"");
+        readerXaml.Should().NotContain("readerBlankClick");
         windowCode.Should().Contain("TitleBarHeightOption.Standard");
         windowCode.Should().NotContain("TitleBarHeightOption.Tall");
         navigationXaml.Should().Contain("Height=\"32\"");
-        navigationXaml.Should().Contain("NavigationViewContentMargin\">0,32,0,0</Thickness>");
+        navigationXaml.Should().Contain("NavigationViewContentMargin\">0</Thickness>");
+        navigationXaml.Should().Contain("NavigationViewMinimalContentMargin\">0</Thickness>");
+        navigationXaml.Should().Contain("NavigationViewContentGridBorderThickness\">1,0,0,0</Thickness>");
+        navigationXaml.Should().Contain("NavigationViewContentGridCornerRadius\">0</CornerRadius>");
+        navigationXaml.Should().Contain("x:Name=\"ContentFrame\" Padding=\"0\"");
+        navigationCode.Should().Contain("e.Content is NovelReaderPage readerPage");
+        navigationCode.Should().NotContain("ContentFrame.Padding");
+        navigationCode.Should().Contain("SetTitleBar(readerPage.ReaderTitleBarElement)");
         readerXaml.Should().NotContain("Style=\"{StaticResource TitleTextBlockStyle}\"\r\n                           Text=\"{x:Bind ViewModel.ReaderTitle, Mode=OneWay}\"");
     }
 
     [Fact]
-    public void NavigationPage_ExposesLogsAsSettingsLevelFooterItems()
+    public void NavigationPage_OnlyExposesSettingsAsFooterItem()
     {
         var navigationXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NavigationPage.xaml")
@@ -417,10 +426,9 @@ public class NovelReaderWebAssetTests
         navigationXaml.Should().Contain("IsSettingsVisible=\"False\"");
         navigationXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsNavItem\"");
         navigationXaml.Should().Contain("Tag=\"Niratan.Views.Pages.SettingsPage\"");
-        navigationXaml.Should().Contain("AutomationProperties.AutomationId=\"NormalLogsNavItem\"");
-        navigationXaml.Should().Contain("AutomationProperties.AutomationId=\"ErrorLogsNavItem\"");
-        navigationXaml.Should().Contain("Tag=\"Niratan.Views.Pages.NormalLogsPage\"");
-        navigationXaml.Should().Contain("Tag=\"Niratan.Views.Pages.ErrorLogsPage\"");
+        navigationXaml.Should().NotContain("NormalLogsNavItem");
+        navigationXaml.Should().NotContain("ErrorLogsNavItem");
+        navigationXaml.Should().NotContain("HelpNavItem");
     }
 
     [Fact]
@@ -834,6 +842,8 @@ public class NovelReaderWebAssetTests
 
         settingsXaml.Should().Contain("x:Name=\"SettingsSecondaryNavigationView\"");
         settingsXaml.Should().Contain("x:Name=\"SettingsContentFrame\"");
+        settingsXaml.Should().NotContain("SettingsTitleBarBackground");
+        settingsXaml.Should().NotContain("Margin=\"0,-32,0,0\"");
         settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsAppearanceNavItem\"");
         settingsXaml.Should().NotContain("Visibility=\"{x:Bind ViewModel.IsDictionaryListEmpty, Mode=OneWay}\"");
         settingsXaml.Should().Contain("AutomationProperties.AutomationId=\"SettingsDictionariesNavItem\"");
@@ -1691,9 +1701,11 @@ public class NovelReaderWebAssetTests
         script.Should().NotContain("setTimeout(() =>");
         script.Should().Contain("lookupAtPoint(e.clientX, e.clientY)");
         script.Should().Contain("window.__niratanLookupPopupActive === true");
+        script.Should().Contain("&& !selectedText");
         script.Should().Contain("postToHost('lookupDismiss'");
         readerCode.Should().Contain("window.__niratanLookupSettings");
         readerCode.Should().Contain("case \"lookupDismiss\":");
+        readerCode.Should().Contain("DictionaryPopupCanvasInputMode.VisibleHostsOnly");
         readerCode.Should().Contain("SetLookupPopupActiveAsync(true)");
         readerCode.Should().Contain("SetLookupPopupActiveAsync(false)");
         settingsCode.Should().NotContain("ShiftHoverLookupDelayMs");
@@ -3445,6 +3457,8 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("NovelReaderTopProgressText.Visibility");
         readerCode.Should().Contain("NovelReaderBottomProgressText.Text");
         readerCode.Should().Contain("NovelReaderBottomProgressText.Visibility");
+        readerCode.Should().Contain("UpdateReaderBottomChromeVisibility");
+        readerCode.Should().Contain("!_readerFocusMode && hasVisibleContent");
         readerCode.Should().Contain("nameof(ViewModel.ReaderProgressText)");
     }
 
@@ -3464,6 +3478,7 @@ public class NovelReaderWebAssetTests
         readerXaml.Should().Contain("x:Name=\"ReaderTopChrome\"");
         readerXaml.Should().Contain("x:Name=\"ReaderBottomChrome\"");
         readerXaml.Should().NotContain("<Page.KeyboardAccelerators>");
+        readerXaml.Should().Contain("KeyboardAcceleratorPlacementMode=\"Hidden\"");
         readerXaml.Should().Contain("CharacterReceived=\"NovelReaderPage_CharacterReceived\"");
         readerXaml.Should().Contain("x:Name=\"NovelReaderBackButton\"");
         readerXaml.Should().Contain("x:Name=\"NovelReaderSearchButton\"");

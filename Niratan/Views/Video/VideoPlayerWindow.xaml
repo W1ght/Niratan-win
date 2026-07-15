@@ -2,6 +2,7 @@
 <Window x:Class="Niratan.Views.Video.VideoPlayerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:Niratan.Views.Controls"
         xmlns:models="using:Niratan.Models"
         xmlns:video="using:Niratan.Views.Video"
         xmlns:win2d="using:Microsoft.Graphics.Canvas.UI.Xaml"
@@ -97,9 +98,9 @@
 
                 <Border x:Name="SubtitlePanelBorder"
                         Canvas.ZIndex="20"
-                        VerticalAlignment="Bottom"
+                        VerticalAlignment="Top"
                         HorizontalAlignment="Stretch"
-                        Margin="16,0,16,112"
+                        Margin="16,0,16,0"
                         Height="{x:Bind ViewModel.SubtitlePanelHeight, Mode=OneWay}"
                         Padding="0"
                         Background="Transparent"
@@ -283,11 +284,35 @@
             </Grid>
         </Popup>
 
+        <Thumb x:Name="InspectorResizeThumb"
+               Grid.Column="1"
+               Width="24"
+               Margin="-12,0,0,0"
+               HorizontalAlignment="Left"
+               VerticalAlignment="Stretch"
+               AutomationProperties.AutomationId="VideoInspectorResizeThumb"
+               Canvas.ZIndex="10"
+               DragDelta="InspectorResizeThumb_DragDelta"
+               Visibility="{Binding Visibility, ElementName=InspectorPanel}">
+            <Thumb.Template>
+                <ControlTemplate TargetType="Thumb">
+                    <Grid Background="Transparent">
+                        <Border Width="2"
+                                HorizontalAlignment="Center"
+                                Background="#33111111"
+                                CornerRadius="1" />
+                    </Grid>
+                </ControlTemplate>
+            </Thumb.Template>
+        </Thumb>
+
         <Border x:Name="InspectorPanel"
                         Grid.Column="1"
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Stretch"
                         Width="380"
+                        MinWidth="320"
+                        MaxWidth="720"
                         Visibility="Collapsed"
                         Padding="12,20,16,20"
                         RequestedTheme="Light"
@@ -326,10 +351,8 @@
 
                         <Border Grid.Row="1"
                                 Padding="3"
-                                Background="#55FFFFFF"
-                                BorderBrush="#33FFFFFF"
-                                BorderThickness="1"
-                                CornerRadius="14">
+                                Background="Transparent"
+                                BorderThickness="0">
                             <Grid ColumnDefinitions="*,*,*">
                                 <ToggleButton x:Name="InspectorMiningHistoryTabButton"
                                               AutomationProperties.AutomationId="VideoInspectorMiningHistoryTabButton"
@@ -374,10 +397,8 @@
 
                         <Border Grid.Row="2"
                                 Padding="3"
-                                Background="#44FFFFFF"
-                                BorderBrush="#22FFFFFF"
-                                BorderThickness="1"
-                                CornerRadius="14">
+                                Background="Transparent"
+                                BorderThickness="0">
                             <Grid ColumnDefinitions="*,*,*">
                                 <ToggleButton x:Name="InspectorVideoTabButton"
                                               AutomationProperties.AutomationId="VideoInspectorVideoTabButton"
@@ -1448,30 +1469,50 @@
                                                            Text="Vertical Position"
                                                            VerticalAlignment="Center"
                                                            Style="{StaticResource VideoInspectorPrimaryTextStyle}" />
-                                                <TextBlock Grid.Column="1"
-                                                           Text="{x:Bind ViewModel.SubtitleVerticalPositionText, Mode=OneWay}"
-                                                           HorizontalAlignment="Right"
-                                                           VerticalAlignment="Center"
-                                                           Style="{StaticResource VideoInspectorValueTextStyle}" />
                                             </Grid>
-                                            <Slider x:Name="SubtitleVerticalPositionSlider"
-                                                    AutomationProperties.AutomationId="VideoInspectorSubtitleVerticalPositionSlider"
-                                                    Minimum="-200"
-                                                    Maximum="200"
-                                                    StepFrequency="1"
-                                                    Value="{x:Bind ViewModel.SubtitleVerticalPosition, Mode=OneWay}"
-                                                    ValueChanged="SubtitleVerticalPositionSlider_ValueChanged" />
+                                            <Grid ColumnDefinitions="Auto,*,Auto"
+                                                  ColumnSpacing="10">
+                                                <Grid Width="24" Height="18">
+                                                    <Border BorderBrush="#99111111"
+                                                            BorderThickness="1"
+                                                            CornerRadius="2" />
+                                                    <Border Height="4"
+                                                            Margin="3"
+                                                            VerticalAlignment="Top"
+                                                            Background="#FF0F6CBD"
+                                                            CornerRadius="1" />
+                                                </Grid>
+                                                <Slider x:Name="SubtitleVerticalPositionSlider"
+                                                        Grid.Column="1"
+                                                        AutomationProperties.AutomationId="VideoInspectorSubtitleVerticalPositionSlider"
+                                                        Minimum="0"
+                                                        Maximum="1"
+                                                        StepFrequency="0.01"
+                                                        Value="{x:Bind ViewModel.SubtitleVerticalPosition, Mode=OneWay}"
+                                                        ValueChanged="SubtitleVerticalPositionSlider_ValueChanged" />
+                                                <Grid Grid.Column="2" Width="24" Height="18">
+                                                    <Border BorderBrush="#99111111"
+                                                            BorderThickness="1"
+                                                            CornerRadius="2" />
+                                                    <Border Height="4"
+                                                            Margin="3"
+                                                            VerticalAlignment="Bottom"
+                                                            Background="#FF0F6CBD"
+                                                            CornerRadius="1" />
+                                                </Grid>
+                                            </Grid>
                                             <Grid ColumnDefinitions="Auto,*"
                                                   ColumnSpacing="12">
                                                 <TextBlock x:Uid="VideoInspectorSubtitleColorText"
                                                            Text="Subtitle Color"
                                                            VerticalAlignment="Center"
                                                            Style="{StaticResource VideoInspectorPrimaryTextStyle}" />
-                                                <ColorPicker x:Name="SubtitleColorPicker"
-                                                             AutomationProperties.AutomationId="VideoInspectorSubtitleColorPicker"
-                                                             Grid.Column="1"
-                                                             IsAlphaEnabled="True"
-                                                             ColorChanged="SubtitleColorPicker_ColorChanged" />
+                                                <controls:CompactColorPicker x:Name="SubtitleColorPicker"
+                                                                             AutomationProperties.AutomationId="VideoInspectorSubtitleColorPicker"
+                                                                             Grid.Column="1"
+                                                                             FlyoutPlacement="LeftEdgeAlignedBottom"
+                                                                             IsAlphaEnabled="True"
+                                                                             ColorChanged="SubtitleColorPicker_ColorChanged" />
                                             </Grid>
                                             <Grid ColumnDefinitions="Auto,*"
                                                   ColumnSpacing="12">
@@ -1479,11 +1520,12 @@
                                                            Text="Lookup Highlight Color"
                                                            VerticalAlignment="Center"
                                                            Style="{StaticResource VideoInspectorPrimaryTextStyle}" />
-                                                <ColorPicker x:Name="SubtitleLookupHighlightColorPicker"
-                                                             AutomationProperties.AutomationId="VideoInspectorLookupHighlightColorPicker"
-                                                             Grid.Column="1"
-                                                             IsAlphaEnabled="True"
-                                                             ColorChanged="SubtitleColorPicker_ColorChanged" />
+                                                <controls:CompactColorPicker x:Name="SubtitleLookupHighlightColorPicker"
+                                                                             AutomationProperties.AutomationId="VideoInspectorLookupHighlightColorPicker"
+                                                                             Grid.Column="1"
+                                                                             FlyoutPlacement="LeftEdgeAlignedBottom"
+                                                                             IsAlphaEnabled="True"
+                                                                             ColorChanged="SubtitleColorPicker_ColorChanged" />
                                             </Grid>
                                             <Grid ColumnDefinitions="Auto,*"
                                                   ColumnSpacing="12">
@@ -1491,11 +1533,12 @@
                                                            Text="Lookup Highlight Text Color"
                                                            VerticalAlignment="Center"
                                                            Style="{StaticResource VideoInspectorPrimaryTextStyle}" />
-                                                <ColorPicker x:Name="SubtitleLookupHighlightTextColorPicker"
-                                                             AutomationProperties.AutomationId="VideoInspectorLookupHighlightTextColorPicker"
-                                                             Grid.Column="1"
-                                                             IsAlphaEnabled="True"
-                                                             ColorChanged="SubtitleColorPicker_ColorChanged" />
+                                                <controls:CompactColorPicker x:Name="SubtitleLookupHighlightTextColorPicker"
+                                                                             AutomationProperties.AutomationId="VideoInspectorLookupHighlightTextColorPicker"
+                                                                             Grid.Column="1"
+                                                                             FlyoutPlacement="LeftEdgeAlignedBottom"
+                                                                             IsAlphaEnabled="True"
+                                                                             ColorChanged="SubtitleColorPicker_ColorChanged" />
                                             </Grid>
                                             <Button x:Uid="VideoInspectorRestoreDefaultsButton"
                                                     Content="Restore Defaults"

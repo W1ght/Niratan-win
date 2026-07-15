@@ -261,10 +261,7 @@ public partial class VideoPlayerViewModel : ObservableObject
     public partial string VideoRotationText { get; set; } = "0°";
 
     [ObservableProperty]
-    public partial double SubtitleVerticalPosition { get; set; } = -51;
-
-    [ObservableProperty]
-    public partial string SubtitleVerticalPositionText { get; set; } = "-51";
+    public partial double SubtitleVerticalPosition { get; set; } = VideoSubtitlePositionPolicy.DefaultPosition;
 
     [ObservableProperty]
     public partial bool SubtitleMaskEnabled { get; set; }
@@ -1129,7 +1126,7 @@ public partial class VideoPlayerViewModel : ObservableObject
         SetSubtitleShadowRadius(settings.SubtitleShadowRadius);
         SubtitleBackgroundOpacity = settings.SubtitleBackgroundOpacity;
         SubtitleBackgroundDisabled = settings.SubtitleBackgroundDisabled;
-        SubtitleVerticalPosition = settings.SubtitleVerticalPosition;
+        SubtitleVerticalPosition = settings.SubtitleVerticalPositionFraction;
         SetSubtitleColor(settings.SubtitleColorHex);
         SetSubtitleLookupHighlightColor(settings.SubtitleLookupHighlightColorHex);
         SetSubtitleLookupHighlightTextColor(settings.SubtitleLookupHighlightTextColorHex);
@@ -1258,7 +1255,7 @@ public partial class VideoPlayerViewModel : ObservableObject
         SubtitleShadowRadius = 10;
         SubtitleBackgroundOpacity = 0;
         SubtitleBackgroundDisabled = true;
-        SubtitleVerticalPosition = -51;
+        SubtitleVerticalPosition = VideoSubtitlePositionPolicy.DefaultPosition;
         SubtitleColorHex = "#FFFFFFFF";
         SubtitleLookupHighlightColorHex = "#3EB5C1CB";
         SubtitleLookupHighlightTextColorHex = "#FFFFFFFF";
@@ -1280,7 +1277,7 @@ public partial class VideoPlayerViewModel : ObservableObject
         updatedSettings.SubtitleShadowRadius = SubtitleShadowRadius;
         updatedSettings.SubtitleBackgroundOpacity = SubtitleBackgroundOpacity;
         updatedSettings.SubtitleBackgroundDisabled = SubtitleBackgroundDisabled;
-        updatedSettings.SubtitleVerticalPosition = SubtitleVerticalPosition;
+        updatedSettings.SubtitleVerticalPositionFraction = SubtitleVerticalPosition;
         updatedSettings.SubtitleColorHex = SubtitleColorHex;
         updatedSettings.SubtitleLookupHighlightColorHex = SubtitleLookupHighlightColorHex;
         updatedSettings.SubtitleLookupHighlightTextColorHex = SubtitleLookupHighlightTextColorHex;
@@ -1625,7 +1622,13 @@ public partial class VideoPlayerViewModel : ObservableObject
 
     partial void OnSubtitleVerticalPositionChanged(double value)
     {
-        SubtitleVerticalPositionText = $"{Math.Clamp(value, -200, 200):0}";
+        var normalized = VideoSubtitlePositionPolicy.Normalize(value);
+        if (value != normalized)
+        {
+            SubtitleVerticalPosition = normalized;
+            return;
+        }
+
         SaveSubtitleAppearance();
     }
 

@@ -4,6 +4,7 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:controls="using:Niratan.Views.Controls"
       xmlns:helpers="using:Niratan.Helpers.UI.Converters"
       xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
       xmlns:ui="using:CommunityToolkit.WinUI"
@@ -141,40 +142,36 @@
                                           HorizontalAlignment="Stretch"
                                           HorizontalContentAlignment="Stretch"
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE790;}">
-                        <ColorPicker AutomationProperties.AutomationId="SasayakiLightTextColorPicker"
-                                     IsAlphaEnabled="True"
-                                     IsMoreButtonVisible="False"
-                                     Color="{x:Bind ViewModel.LightTextColor, Mode=TwoWay}" />
+                        <controls:CompactColorPicker AutomationProperties.AutomationId="SasayakiLightTextColorPicker"
+                                                     IsAlphaEnabled="True"
+                                                     Color="{x:Bind ViewModel.LightTextColor, Mode=TwoWay}" />
                     </toolkit:SettingsCard>
 
                     <toolkit:SettingsCard x:Uid="SasayakiLightBackgroundColorCard"
                                           HorizontalAlignment="Stretch"
                                           HorizontalContentAlignment="Stretch"
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE790;}">
-                        <ColorPicker AutomationProperties.AutomationId="SasayakiLightBackgroundColorPicker"
-                                     IsAlphaEnabled="True"
-                                     IsMoreButtonVisible="False"
-                                     Color="{x:Bind ViewModel.LightBackgroundColor, Mode=TwoWay}" />
+                        <controls:CompactColorPicker AutomationProperties.AutomationId="SasayakiLightBackgroundColorPicker"
+                                                     IsAlphaEnabled="True"
+                                                     Color="{x:Bind ViewModel.LightBackgroundColor, Mode=TwoWay}" />
                     </toolkit:SettingsCard>
 
                     <toolkit:SettingsCard x:Uid="SasayakiDarkTextColorCard"
                                           HorizontalAlignment="Stretch"
                                           HorizontalContentAlignment="Stretch"
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE708;}">
-                        <ColorPicker AutomationProperties.AutomationId="SasayakiDarkTextColorPicker"
-                                     IsAlphaEnabled="True"
-                                     IsMoreButtonVisible="False"
-                                     Color="{x:Bind ViewModel.DarkTextColor, Mode=TwoWay}" />
+                        <controls:CompactColorPicker AutomationProperties.AutomationId="SasayakiDarkTextColorPicker"
+                                                     IsAlphaEnabled="True"
+                                                     Color="{x:Bind ViewModel.DarkTextColor, Mode=TwoWay}" />
                     </toolkit:SettingsCard>
 
                     <toolkit:SettingsCard x:Uid="SasayakiDarkBackgroundColorCard"
                                           HorizontalAlignment="Stretch"
                                           HorizontalContentAlignment="Stretch"
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE708;}">
-                        <ColorPicker AutomationProperties.AutomationId="SasayakiDarkBackgroundColorPicker"
-                                     IsAlphaEnabled="True"
-                                     IsMoreButtonVisible="False"
-                                     Color="{x:Bind ViewModel.DarkBackgroundColor, Mode=TwoWay}" />
+                        <controls:CompactColorPicker AutomationProperties.AutomationId="SasayakiDarkBackgroundColorPicker"
+                                                     IsAlphaEnabled="True"
+                                                     Color="{x:Bind ViewModel.DarkBackgroundColor, Mode=TwoWay}" />
                     </toolkit:SettingsCard>
                     </StackPanel>
                 </StackPanel>

@@ -7,7 +7,7 @@
       xmlns:viewModels="using:Niratan.ViewModels.Pages"
       mc:Ignorable="d">
 
-    <Grid RowDefinitions="Auto,*" Padding="8,0,24,24" RowSpacing="16" Background="Transparent">
+    <Grid RowDefinitions="Auto,*" Padding="8,32,24,24" RowSpacing="16" Background="Transparent">
         <StackPanel Spacing="8">
             <TextBlock x:Uid="NovelLookupPageTitle"
                        Style="{StaticResource TitleTextBlockStyle}"

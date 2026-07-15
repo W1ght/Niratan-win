@@ -55,6 +55,15 @@ public sealed partial class NavigationPage : Page
 
     private void ContentFrame_Navigated(object sender, NavigationEventArgs e)
     {
+        if (e.Content is NovelReaderPage readerPage)
+        {
+            App.MainWindow?.SetTitleBar(readerPage.ReaderTitleBarElement);
+        }
+        else
+        {
+            App.MainWindow?.SetTitleBar(AppTitleBar);
+        }
+
         var selectedMenuItem = NavigationViewControl
             .MenuItems.OfType<NavigationViewItem>()
             .Concat(NavigationViewControl.FooterMenuItems.OfType<NavigationViewItem>())

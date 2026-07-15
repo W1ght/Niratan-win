@@ -28,7 +28,6 @@
                     <toolkit:SettingsExpander x:Uid="SettingsAboutExpander"
                                               HorizontalAlignment="Stretch"
                                               HorizontalContentAlignment="Stretch"
-                                              Description="© 2026 TXG0Fk3. All rights reserved."
                                               Header="Niratan"
                                               HeaderIcon="{ui:BitmapIcon Source=ms-appx:///Assets/Square44x44Logo.altform-lightunplated_targetsize-32.png}">
                         <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" IsTextSelectionEnabled="True">

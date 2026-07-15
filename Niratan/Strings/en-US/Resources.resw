@@ -144,7 +144,6 @@
   <data name="DictionarySettingsButton.AutomationProperties.Name" xml:space="preserve"><value>Open Dictionary Settings</value></data>
   <data name="SettingsOpenDictionaryText.Text" xml:space="preserve"><value>Open</value></data>
   <data name="SettingsAboutSectionHeader.Text" xml:space="preserve"><value>About</value></data>
-  <data name="SettingsAboutExpander.Description" xml:space="preserve"><value>© 2026 TXG0Fk3. All rights reserved.</value></data>
   <data name="SettingsAboutVersionRun.Text" xml:space="preserve"><value>Version</value></data>
   <data name="SettingsProjectRepositoryLink.Content" xml:space="preserve"><value>Project Repository</value></data>
   <data name="SettingsSendFeedbackLink.Content" xml:space="preserve"><value>Send Feedback</value></data>

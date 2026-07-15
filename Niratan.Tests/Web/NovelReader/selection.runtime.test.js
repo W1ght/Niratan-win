@@ -393,53 +393,31 @@ function dispatchClick(targetElement, x, y) {
   }));
 }
 
-const originalGetCharacterAtPoint = window.niratanSelection.getCharacterAtPoint;
 const originalSelectText = window.niratanSelection.selectText;
 const originalGetSelection = window.getSelection;
-window.niratanSelection.getCharacterAtPoint = () => null;
-window.niratanSelection.selectText = () => null;
-
-dispatchClick(body, 30, 40);
-assert.deepEqual(JSON.parse(JSON.stringify(outbound.at(-1))), {
-  version: 1,
-  type: "readerBlankClick",
-  payload: { x: 30, y: 40, viewportWidth: 400, viewportHeight: 600 },
-}, "top blank clicks must publish the validated interaction coordinates");
-
-dispatchClick(body, 30, 240);
-assert.equal(outbound.at(-1).type, "readerBlankClick", "body blank clicks must reach native closing logic");
-assert.equal(outbound.at(-1).payload.y, 240);
-
-const beforeTextClick = outbound.length;
-window.niratanSelection.getCharacterAtPoint = () => ({ node: target, offset: 0 });
-window.niratanSelection.selectText = () => "終";
-dispatchClick(paragraph, 15, 15);
-assert.equal(outbound.length, beforeTextClick, "text clicks must not be reported as blank");
-
-const link = new FakeElement("a", paragraph);
-const beforeLinkClick = outbound.length;
-dispatchClick(link, 15, 15);
-assert.equal(outbound.length, beforeLinkClick, "link clicks must not be reported as blank");
-
-window.getSelection = () => ({ isCollapsed: false, removeAllRanges() {} });
-const beforeDragSelection = outbound.length;
-dispatchClick(body, 30, 40);
-assert.equal(outbound.length, beforeDragSelection, "drag selections must not be reported as blank");
-window.getSelection = originalGetSelection;
-
-window.niratanSelection.getCharacterAtPoint = () => null;
-window.niratanSelection.selectText = () => null;
+let clickLookupCalls = 0;
+window.niratanSelection.selectText = () => {
+  clickLookupCalls += 1;
+  return "語";
+};
 window.__niratanLookupPopupActive = true;
-const beforePopupBlankClick = outbound.length;
-dispatchClick(body, 30, 40);
-assert.deepEqual(
-  outbound.slice(beforePopupBlankClick).map(message => message.type),
-  ["readerBlankClick", "lookupDismiss"],
-  "popup blank clicks must let native close chrome before dismissing the popup",
+
+const beforeReplacementClick = outbound.length;
+dispatchClick(paragraph, 15, 15);
+assert.equal(clickLookupCalls, 1, "an open popup must not block a new click lookup");
+assert.equal(
+  outbound.length,
+  beforeReplacementClick,
+  "a successful replacement lookup must not dismiss the current popup first",
 );
+
+window.niratanSelection.selectText = () => null;
+dispatchClick(body, 30, 40);
+assert.equal(outbound.at(-1).type, "lookupDismiss", "a blank click must still dismiss an open popup");
+
 window.__niratanLookupPopupActive = false;
-window.niratanSelection.getCharacterAtPoint = originalGetCharacterAtPoint;
 window.niratanSelection.selectText = originalSelectText;
+window.getSelection = originalGetSelection;
 
 assert.equal(typeof context.normalizedNodeStartOffsets, "undefined");
 assert.equal(typeof context.normalizedOffsetGeneration, "undefined");

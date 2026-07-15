@@ -34,7 +34,7 @@ public sealed class VideoSettingsPageViewModelTests
                 SubtitleShadowRadius = 4,
                 SubtitleBackgroundOpacity = 0.35,
                 SubtitleBackgroundDisabled = false,
-                SubtitleVerticalPosition = -24,
+                SubtitleVerticalPositionFraction = 0.24,
                 SubtitleColorHex = "#FFEEDDCC",
                 SubtitleLookupHighlightColorHex = "#88112233",
                 SubtitleLookupHighlightTextColorHex = "#FF123456",
@@ -67,7 +67,7 @@ public sealed class VideoSettingsPageViewModelTests
         viewModel.SubtitleShadowRadius.Should().Be(4);
         viewModel.SubtitleBackgroundOpacity.Should().Be(0.35);
         viewModel.SubtitleBackgroundDisabled.Should().BeFalse();
-        viewModel.SubtitleVerticalPosition.Should().Be(-24);
+        viewModel.SubtitleVerticalPosition.Should().Be(0.24);
         viewModel.SubtitleColorHex.Should().Be("#FFEEDDCC");
         viewModel.SubtitleLookupHighlightColorHex.Should().Be("#88112233");
         viewModel.SubtitleLookupHighlightTextColorHex.Should().Be("#FF123456");
@@ -145,7 +145,7 @@ public sealed class VideoSettingsPageViewModelTests
         saved.SubtitleShadowRadius.Should().Be(10);
         saved.SubtitleBackgroundOpacity.Should().Be(1);
         saved.SubtitleBackgroundDisabled.Should().BeFalse();
-        saved.SubtitleVerticalPosition.Should().Be(-200);
+        saved.SubtitleVerticalPositionFraction.Should().Be(0);
         saved.SubtitleColorHex.Should().Be("#FFFFFFFF");
         saved.SubtitleLookupHighlightColorHex.Should().Be("#01020304");
         saved.SubtitleLookupHighlightTextColorHex.Should().Be("#FFFFFFFF");

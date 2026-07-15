@@ -58,5 +58,7 @@ public interface IVideoPlaybackEngine : IDisposable
 
     Task<TimeSpan> GetDurationAsync(CancellationToken ct = default);
 
+    Task<VideoViewportGeometry?> GetVideoViewportGeometryAsync(CancellationToken ct = default);
+
     Task<string?> CaptureScreenshotAsync(string outputPath, CancellationToken ct = default);
 }

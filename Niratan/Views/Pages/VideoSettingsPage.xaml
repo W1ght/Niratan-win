@@ -314,16 +314,36 @@
                                           HorizontalAlignment="Stretch"
                                           HorizontalContentAlignment="Stretch"
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE74A;}">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <Slider Width="260"
-                                    Minimum="-200"
-                                    Maximum="200"
-                                    StepFrequency="1"
+                        <Grid ColumnDefinitions="Auto,*,Auto"
+                              ColumnSpacing="10">
+                            <Grid Width="24" Height="18">
+                                <Border BorderBrush="{ThemeResource TextFillColorSecondaryBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="2" />
+                                <Border Height="4"
+                                        Margin="3"
+                                        VerticalAlignment="Top"
+                                        Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                        CornerRadius="1" />
+                            </Grid>
+                            <Slider Grid.Column="1"
+                                    Width="260"
+                                    Minimum="0"
+                                    Maximum="1"
+                                    StepFrequency="0.01"
                                     AutomationProperties.AutomationId="VideoSubtitleVerticalPositionSlider"
                                     Value="{x:Bind ViewModel.SubtitleVerticalPosition, Mode=TwoWay}" />
-                            <TextBlock Text="{x:Bind ViewModel.SubtitleVerticalPositionText, Mode=OneWay}"
-                                       Style="{StaticResource VideoSettingsValueTextStyle}" />
-                        </StackPanel>
+                            <Grid Grid.Column="2" Width="24" Height="18">
+                                <Border BorderBrush="{ThemeResource TextFillColorSecondaryBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="2" />
+                                <Border Height="4"
+                                        Margin="3"
+                                        VerticalAlignment="Bottom"
+                                        Background="{ThemeResource AccentFillColorDefaultBrush}"
+                                        CornerRadius="1" />
+                            </Grid>
+                        </Grid>
                     </toolkit:SettingsCard>
 
                     <TextBlock x:Uid="VideoSubtitleColorsSectionHeader"

@@ -23,7 +23,8 @@ public sealed class VideoSettings
     private int _subtitleFontWeight = 700;
     private double _subtitleShadowRadius = 10;
     private double _subtitleBackgroundOpacity;
-    private double _subtitleVerticalPosition = -51;
+    private double _subtitleVerticalPosition;
+    private double? _subtitleVerticalPositionFraction;
     private string _subtitleColorHex = "#FFFFFFFF";
     private string _subtitleLookupHighlightColorHex = "#3EB5C1CB";
     private string _subtitleLookupHighlightTextColorHex = "#FFFFFFFF";
@@ -114,7 +115,14 @@ public sealed class VideoSettings
     public double SubtitleVerticalPosition
     {
         get => _subtitleVerticalPosition;
-        set => _subtitleVerticalPosition = ClampFinite(value, -200, 200, -51);
+        set => _subtitleVerticalPosition = ClampFinite(value, -200, 200, 0);
+    }
+
+    public double SubtitleVerticalPositionFraction
+    {
+        get => _subtitleVerticalPositionFraction
+            ?? VideoSubtitlePositionPolicy.MigrateLegacyPosition(_subtitleVerticalPosition);
+        set => _subtitleVerticalPositionFraction = VideoSubtitlePositionPolicy.Normalize(value);
     }
 
     public string SubtitleColorHex

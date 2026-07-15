@@ -1,5 +1,5 @@
 #define MyAppName "Niratan"
-#define MyAppPublisher "TXG0Fk3"
+#define MyAppPublisher "Niratan"
 #define MyAppURL "https://github.com/W1ght/Niratan-win"
 #define MyAppExeName "Niratan.exe"
 #define MyArch "x64"

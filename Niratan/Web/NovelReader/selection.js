@@ -57,15 +57,6 @@
     });
   }
 
-  function postReaderBlankClick(x, y) {
-    postToHost('readerBlankClick', {
-      x,
-      y,
-      viewportWidth: window.innerWidth,
-      viewportHeight: window.innerHeight,
-    });
-  }
-
   function isInteractiveClickTarget(target) {
     return target instanceof Element && !!target.closest(
       'a, button, input, textarea, select, option, label, summary, [contenteditable]:not([contenteditable="false"]), [role="button"]',
@@ -476,21 +467,14 @@
     const browserSelection = window.getSelection();
     if (browserSelection && !browserSelection.isCollapsed) return;
 
-    const textHit = niratanSelection.getCharacterAtPoint(e.clientX, e.clientY);
-    if (window.__niratanLookupPopupActive === true) {
-      if (!textHit) postReaderBlankClick(e.clientX, e.clientY);
-      niratanSelection.clearSelection();
-      postToHost('lookupDismiss', {});
-      return;
-    }
-
     const selectedText = niratanSelection.selectText(
       e.clientX,
       e.clientY,
       getScanLength(),
     );
-    if (!selectedText && !textHit) {
-      postReaderBlankClick(e.clientX, e.clientY);
+    if (window.__niratanLookupPopupActive === true && !selectedText) {
+      niratanSelection.clearSelection();
+      postToHost('lookupDismiss', {});
     }
   });
 

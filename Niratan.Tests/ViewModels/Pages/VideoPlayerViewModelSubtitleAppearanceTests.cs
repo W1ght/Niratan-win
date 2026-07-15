@@ -26,7 +26,7 @@ public class VideoPlayerViewModelSubtitleAppearanceTests
         Get<string>(sut, "SubtitleShadowRadiusText").Should().Be("10.0");
         Get<string>(sut, "SubtitleFontFamily").Should().Be("Noto Serif CJK JP");
         Get<string>(sut, "SubtitleFontFamilyText").Should().Be("Noto Serif CJK JP");
-        Get<double>(sut, "SubtitleVerticalPosition").Should().Be(-51);
+        Get<double>(sut, "SubtitleVerticalPosition").Should().Be(0.9);
         Get<string>(sut, "SubtitleColorHex").Should().Be("#FFFFFFFF");
         Get<string>(sut, "SubtitleLookupHighlightColorHex").Should().Be("#3EB5C1CB");
         Get<string>(sut, "SubtitleLookupHighlightTextColorHex").Should().Be("#FFFFFFFF");
@@ -88,7 +88,7 @@ public class VideoPlayerViewModelSubtitleAppearanceTests
         sut.GetType().GetMethod("SetSubtitleColor", [typeof(string)])!.Invoke(sut, ["#FF223344"]);
         sut.SubtitleFontSize = 48;
         sut.SubtitleFontWeight = 300;
-        sut.SubtitleVerticalPosition = 42;
+        sut.SubtitleVerticalPosition = 0.2;
         sut.SubtitleBackgroundOpacity = 0.75;
         sut.SubtitleBackgroundDisabled = false;
         sut.SetSubtitleLookupHighlightColor("#112233");
@@ -107,7 +107,7 @@ public class VideoPlayerViewModelSubtitleAppearanceTests
         Get<string>(sut, "SubtitleFontFamily").Should().Be("Noto Serif CJK JP");
         Get<string>(sut, "SubtitleFontFamilyText").Should().Be("Noto Serif CJK JP");
         Get<double>(sut, "SubtitleShadowRadius").Should().Be(10);
-        Get<double>(sut, "SubtitleVerticalPosition").Should().Be(-51);
+        Get<double>(sut, "SubtitleVerticalPosition").Should().Be(0.9);
         Get<string>(sut, "SubtitleColorHex").Should().Be("#FFFFFFFF");
         Get<double>(sut, "SubtitleBackgroundOpacity").Should().Be(0);
         Get<bool>(sut, "SubtitleBackgroundDisabled").Should().BeTrue();
@@ -147,7 +147,7 @@ public class VideoPlayerViewModelSubtitleAppearanceTests
         first.SetSubtitleShadowRadius(8.5);
         first.SubtitleBackgroundOpacity = 0.4;
         first.SubtitleBackgroundDisabled = false;
-        first.SubtitleVerticalPosition = -24;
+        first.SubtitleVerticalPosition = 0.35;
         first.SetSubtitleColor("#112233");
         first.SetSubtitleLookupHighlightColor("#445566");
         first.SetSubtitleLookupHighlightTextColor("#778899");
@@ -164,7 +164,7 @@ public class VideoPlayerViewModelSubtitleAppearanceTests
         saved.SubtitleShadowRadius.Should().Be(8.5);
         saved.SubtitleBackgroundOpacity.Should().Be(0.4);
         saved.SubtitleBackgroundDisabled.Should().BeFalse();
-        saved.SubtitleVerticalPosition.Should().Be(-24);
+        saved.SubtitleVerticalPositionFraction.Should().Be(0.35);
         saved.SubtitleColorHex.Should().Be("#FF112233");
         saved.SubtitleLookupHighlightColorHex.Should().Be("#FF445566");
         saved.SubtitleLookupHighlightTextColorHex.Should().Be("#FF778899");
@@ -180,7 +180,7 @@ public class VideoPlayerViewModelSubtitleAppearanceTests
         second.SubtitleShadowRadius.Should().Be(8.5);
         second.SubtitleBackgroundOpacity.Should().Be(0.4);
         second.SubtitleBackgroundDisabled.Should().BeFalse();
-        second.SubtitleVerticalPosition.Should().Be(-24);
+        second.SubtitleVerticalPosition.Should().Be(0.35);
         second.SubtitleColorHex.Should().Be("#FF112233");
         second.SubtitleLookupHighlightColorHex.Should().Be("#FF445566");
         second.SubtitleLookupHighlightTextColorHex.Should().Be("#FF778899");

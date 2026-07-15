@@ -114,6 +114,7 @@ public sealed partial class VideoPlayerWindow : Window
     private bool _isLookupPopupVisible;
     private bool _isSubtitleWebViewInitialized;
     private bool _isSubtitleWebViewReady;
+    private VideoViewportGeometry? _subtitleVideoViewport;
     private int _subtitleSelectionStart = -1;
     private int _subtitleSelectionLength;
     private int _lastSubtitleHoverCharacterIndex = -1;

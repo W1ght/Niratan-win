@@ -7,7 +7,7 @@
       xmlns:models="using:Niratan.Models"
       mc:Ignorable="d">
 
-    <Grid RowDefinitions="Auto, *">
+    <Grid RowDefinitions="Auto, *" Padding="0,32,0,0">
         <StackPanel Grid.Row="0"
                     MaxWidth="1016"
                     Padding="20,14,36,16"

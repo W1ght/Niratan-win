@@ -170,6 +170,20 @@ public class DictionaryLookupServiceTests
     }
 
     [Fact]
+    public void PopupHtmlGenerator_SystemThemeUsesCurrentDarkAppearance()
+    {
+        var generator = new PopupHtmlGenerator(isSystemThemeDark: () => true);
+
+        var html = generator.GenerateHtml([], [], themeMode: ThemeMode.System);
+        var injection = generator.GenerateInjectionScript([], [], themeMode: ThemeMode.System);
+
+        html.Should().Contain("data-niratan-color-scheme=\"dark\"");
+        html.Should().Contain("--background-color: #000000;");
+        injection.Should().Contain("colorScheme: 'dark'");
+        injection.Should().Contain("backgroundColor: '#000000'");
+    }
+
+    [Fact]
     public void PopupHtmlGenerator_UsesChromiumCaretFallbackForNestedLookupSelection()
     {
         var html = new PopupHtmlGenerator().GenerateHtml(

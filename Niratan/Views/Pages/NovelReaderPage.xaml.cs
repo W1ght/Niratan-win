@@ -17,7 +17,6 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.UI;
 using WinRT.Interop;
@@ -58,6 +57,7 @@ public sealed partial class NovelReaderPage : Page
         TimeSpan.FromMilliseconds(250);
 
     public NovelReaderPageViewModel ViewModel { get; set; }
+    internal UIElement ReaderTitleBarElement => ReaderTopChrome;
     public SasayakiViewModel SasayakiPanelViewModel => _sasayakiVM;
     private EpubBook? _epubBook;
     private string _readerJs = "";
@@ -86,8 +86,6 @@ public sealed partial class NovelReaderPage : Page
     private DispatcherQueueTimer? _statisticsProjectionTimer;
     private long _lookupRequestVersion;
     private bool _readerFocusMode;
-    private bool _isReaderTopChromeOpen;
-    private bool _isLookupPopupActive;
     private KeyboardShortcutBinding _lastKeyDownShortcutBinding;
     private DateTimeOffset _lastKeyDownShortcutHandledAt = DateTimeOffset.MinValue;
     private ContentDialog? _activeReaderPanelDialog;
@@ -1091,55 +1089,13 @@ public sealed partial class NovelReaderPage : Page
     private void ToggleReaderFocusMode()
     {
         _readerFocusMode = !_readerFocusMode;
-        _isReaderTopChromeOpen = false;
-        UpdateReaderChromeVisibility();
+        ReaderTopChrome.Visibility = _readerFocusMode
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+        UpdateReaderBottomChromeVisibility();
 
         if (_readerFocusMode)
             CloseReaderPanels();
-    }
-
-    private void HandleReaderBlankClick(NovelReaderBlankClickPayload payload)
-    {
-        var action = ReaderTopChromeInteraction.ResolveBlankClick(
-            _isReaderTopChromeOpen,
-            _readerFocusMode,
-            _isLookupPopupActive,
-            payload.Y);
-
-        if (action == ReaderTopChromeClickAction.Open)
-            _isReaderTopChromeOpen = true;
-        else if (action == ReaderTopChromeClickAction.Close)
-            _isReaderTopChromeOpen = false;
-
-        UpdateReaderChromeVisibility();
-    }
-
-    private void UpdateReaderChromeVisibility()
-    {
-        ReaderTopChrome.Visibility = !_readerFocusMode && _isReaderTopChromeOpen
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        ReaderBottomChrome.Visibility = _readerFocusMode
-            ? Visibility.Collapsed
-            : Visibility.Visible;
-    }
-
-    private void ReaderTopChrome_Tapped(object sender, TappedRoutedEventArgs e)
-    {
-        if (e.OriginalSource is not DependencyObject source)
-            return;
-
-        for (var current = source; current != null; current = VisualTreeHelper.GetParent(current))
-        {
-            if (current is ButtonBase or TextBlock)
-                return;
-            if (ReferenceEquals(current, ReaderTopChrome))
-                break;
-        }
-
-        _isReaderTopChromeOpen = false;
-        UpdateReaderChromeVisibility();
-        e.Handled = true;
     }
 
     private void RefreshReaderDisplayChrome()
@@ -1177,6 +1133,17 @@ public sealed partial class NovelReaderPage : Page
             NovelReaderHistoryForwardText,
             _navigationInput.ForwardTarget,
             "Forward");
+        UpdateReaderBottomChromeVisibility();
+    }
+
+    private void UpdateReaderBottomChromeVisibility()
+    {
+        var hasVisibleContent = NovelReaderBottomProgressText.Visibility == Visibility.Visible
+            || NovelReaderHistoryBackButton.Visibility == Visibility.Visible
+            || NovelReaderHistoryForwardButton.Visibility == Visibility.Visible;
+        ReaderBottomChrome.Visibility = !_readerFocusMode && hasVisibleContent
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private void UpdateNavigationHistoryButton(
@@ -1633,17 +1600,6 @@ public sealed partial class NovelReaderPage : Page
                 case "lookupDismiss":
                     _popupOverlay?.Dismiss();
                     await SetLookupPopupActiveAsync(false);
-                    break;
-                case "readerBlankClick":
-                    if (!NovelReaderInteractionPayloadParser.TryParseReaderBlankClick(
-                        root,
-                        out var blankClickPayload))
-                    {
-                        Log.Warning("[NovelReader] Ignoring invalid readerBlankClick payload");
-                        break;
-                    }
-
-                    HandleReaderBlankClick(blankClickPayload);
                     break;
                 case "readerReady":
                     Log.Information("[NovelReader] Bridge ready, sending setChapter");
@@ -2270,7 +2226,9 @@ public sealed partial class NovelReaderPage : Page
 
         _popupOverlay = new DictionaryPopupOverlay();
         _popupOverlay.Dismissed += OnPopupOverlayDismissed;
-        _popupOverlay.UseCanvas(DictionaryOverlayCanvas);
+        _popupOverlay.UseCanvas(
+            DictionaryOverlayCanvas,
+            DictionaryPopupCanvasInputMode.VisibleHostsOnly);
         return _popupOverlay;
     }
 
@@ -2298,7 +2256,6 @@ public sealed partial class NovelReaderPage : Page
 
     private async Task SetLookupPopupActiveAsync(bool active)
     {
-        _isLookupPopupActive = active;
         if (NovelWebView.CoreWebView2 == null)
             return;
 
@@ -3269,7 +3226,7 @@ public sealed partial class NovelReaderPage : Page
     }
 
     private async void SasayakiPanelLightTextColorPicker_ColorChanged(
-        ColorPicker sender,
+        CompactColorPicker sender,
         ColorChangedEventArgs args)
     {
         if (_isRefreshingSasayakiPanel)
@@ -3281,7 +3238,7 @@ public sealed partial class NovelReaderPage : Page
     }
 
     private async void SasayakiPanelLightBackgroundColorPicker_ColorChanged(
-        ColorPicker sender,
+        CompactColorPicker sender,
         ColorChangedEventArgs args)
     {
         if (_isRefreshingSasayakiPanel)
@@ -3293,7 +3250,7 @@ public sealed partial class NovelReaderPage : Page
     }
 
     private async void SasayakiPanelDarkTextColorPicker_ColorChanged(
-        ColorPicker sender,
+        CompactColorPicker sender,
         ColorChangedEventArgs args)
     {
         if (_isRefreshingSasayakiPanel)
@@ -3305,7 +3262,7 @@ public sealed partial class NovelReaderPage : Page
     }
 
     private async void SasayakiPanelDarkBackgroundColorPicker_ColorChanged(
-        ColorPicker sender,
+        CompactColorPicker sender,
         ColorChangedEventArgs args)
     {
         if (_isRefreshingSasayakiPanel)

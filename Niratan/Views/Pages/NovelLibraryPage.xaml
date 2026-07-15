@@ -99,6 +99,7 @@
     </Page.Resources>
 
     <Grid RowDefinitions="Auto,Auto,*"
+          Padding="0,32,0,0"
           AllowDrop="True"
           DragOver="NovelLibrary_DragOver"
           Drop="NovelLibrary_Drop">

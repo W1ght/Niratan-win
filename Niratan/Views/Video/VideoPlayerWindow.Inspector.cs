@@ -1,3 +1,4 @@
+using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
@@ -6,6 +7,10 @@ namespace Niratan.Views.Video;
 
 public sealed partial class VideoPlayerWindow
 {
+    private const double InspectorMinimumWidth = 320;
+    private const double InspectorMaximumWidth = 720;
+    private const double MinimumVideoWidthWhileResizingInspector = 320;
+
     private void InspectorButton_Click(object sender, RoutedEventArgs e)
     {
         _isInspectorOpen = !_isInspectorOpen;
@@ -29,6 +34,33 @@ public sealed partial class VideoPlayerWindow
         InspectorPanel.Visibility = Visibility.Collapsed;
         RefreshVideoLayoutAfterInspectorChanged();
         RootGrid.Focus(FocusState.Programmatic);
+    }
+
+    private void InspectorResizeThumb_DragDelta(object sender, DragDeltaEventArgs e)
+    {
+        if (!_isInspectorOpen || RootGrid.ActualWidth <= 0)
+            return;
+
+        var currentWidth = double.IsNaN(InspectorPanel.Width)
+            ? InspectorPanel.ActualWidth
+            : InspectorPanel.Width;
+        var availableWidth = RootGrid.ActualWidth - MinimumVideoWidthWhileResizingInspector;
+        var maximumWidth = Math.Clamp(
+            availableWidth,
+            InspectorMinimumWidth,
+            InspectorMaximumWidth);
+        var nextWidth = Math.Clamp(
+            currentWidth - e.HorizontalChange,
+            InspectorMinimumWidth,
+            maximumWidth);
+
+        if (Math.Abs(nextWidth - currentWidth) < 0.5)
+            return;
+
+        InspectorPanel.Width = nextWidth;
+        RootGrid.UpdateLayout();
+        PositionBottomChromeOverlay();
+        PositionVideoHost();
     }
 
     private void InspectorMiningHistoryTabButton_Checked(object sender, RoutedEventArgs e) =>

@@ -28,7 +28,8 @@ public sealed class VideoSettingsTests
         settings.SubtitleShadowRadius.Should().Be(10);
         settings.SubtitleBackgroundOpacity.Should().Be(0);
         settings.SubtitleBackgroundDisabled.Should().BeTrue();
-        settings.SubtitleVerticalPosition.Should().Be(-51);
+        settings.SubtitleVerticalPosition.Should().Be(0);
+        settings.SubtitleVerticalPositionFraction.Should().Be(0.9);
         settings.SubtitleColorHex.Should().Be("#FFFFFFFF");
         settings.SubtitleLookupHighlightColorHex.Should().Be("#3EB5C1CB");
         settings.SubtitleLookupHighlightTextColorHex.Should().Be("#FFFFFFFF");
@@ -63,6 +64,7 @@ public sealed class VideoSettingsTests
             SubtitleShadowRadius = 99,
             SubtitleBackgroundOpacity = 2,
             SubtitleVerticalPosition = -999,
+            SubtitleVerticalPositionFraction = 999,
             SubtitleColorHex = "ffffff",
             SubtitleLookupHighlightColorHex = "not-a-color",
             SubtitleLookupHighlightTextColorHex = "#11223344",
@@ -82,6 +84,7 @@ public sealed class VideoSettingsTests
         settings.SubtitleShadowRadius.Should().Be(10);
         settings.SubtitleBackgroundOpacity.Should().Be(1);
         settings.SubtitleVerticalPosition.Should().Be(-200);
+        settings.SubtitleVerticalPositionFraction.Should().Be(1);
         settings.SubtitleColorHex.Should().Be("#FFFFFFFF");
         settings.SubtitleLookupHighlightColorHex.Should().Be("#3EB5C1CB");
         settings.SubtitleLookupHighlightTextColorHex.Should().Be("#11223344");
@@ -112,13 +115,24 @@ public sealed class VideoSettingsTests
     }
 
     [Fact]
-    public void InvalidSubtitleVerticalPosition_FallsBackToApprovedDefault()
+    public void InvalidSubtitleVerticalPositionFraction_FallsBackToApprovedDefault()
     {
         var settings = new VideoSettings
         {
-            SubtitleVerticalPosition = double.NaN,
+            SubtitleVerticalPositionFraction = double.NaN,
         };
 
-        settings.SubtitleVerticalPosition.Should().Be(-51);
+        settings.SubtitleVerticalPositionFraction.Should().Be(0.9);
+    }
+
+    [Fact]
+    public void MissingRelativePosition_MigratesLegacyPointOffset()
+    {
+        var settings = new VideoSettings
+        {
+            SubtitleVerticalPosition = -100,
+        };
+
+        settings.SubtitleVerticalPositionFraction.Should().Be(0.95);
     }
 }

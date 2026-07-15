@@ -32,7 +32,7 @@ public sealed class ReaderChromeContractTests
     }
 
     [Fact]
-    public void ReaderTopChrome_IsInitiallyHiddenFullWidthAcrylicOverlay()
+    public void ReaderTopChrome_IsFixedFullWidthToolbarAboveReaderContent()
     {
         var xaml = ReadProjectFile("Views", "Pages", "NovelReaderPage.xaml");
         var document = XDocument.Parse(xaml);
@@ -42,9 +42,18 @@ public sealed class ReaderChromeContractTests
         var chrome = document.Descendants(presentation + "Border")
             .Single(element => (string?)element.Attribute(x + "Name") == "ReaderTopChrome");
 
-        chrome.Attribute("Visibility")?.Value.Should().Be("Collapsed");
+        chrome.Attribute("Visibility").Should().BeNull();
         chrome.Attribute("HorizontalAlignment")?.Value.Should().Be("Stretch");
-        chrome.Attribute("Background")?.Value.Should().Contain("Acrylic");
-        chrome.Attribute("Tapped")?.Value.Should().Be("ReaderTopChrome_Tapped");
+        chrome.Attribute("Background")?.Value.Should().Contain("SolidBackground");
+        chrome.Attribute("BorderThickness")?.Value.Should().Be("0,0,0,1");
+        chrome.Attribute("Tapped").Should().BeNull();
+
+        var toolbarGrid = chrome.Element(presentation + "Grid");
+        toolbarGrid.Should().NotBeNull();
+        toolbarGrid!.Attribute("Height")?.Value.Should().Be("32");
+        toolbarGrid.Attribute("Padding")?.Value.Should().Be("4,0,0,0");
+
+        var rootGrid = document.Root!.Element(presentation + "Grid");
+        rootGrid!.Attribute("RowDefinitions")?.Value.Should().Be("Auto,*,Auto");
     }
 }
