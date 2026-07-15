@@ -45,6 +45,10 @@ public static class NovelReaderContentStyles
                 background: {{bg}} !important;
                 color: {{fg}} !important;
             }
+            html, body, .ttu-book-html-wrapper {
+                writing-mode: {{writingMode}} !important;
+                -webkit-writing-mode: {{writingMode}} !important;
+            }
             html {
                 -webkit-line-box-contain: block glyphs replaced;
             }
@@ -58,7 +62,6 @@ public static class NovelReaderContentStyles
                 font-size: {{settings.FontSize}}px !important;
                 -webkit-text-size-adjust: none !important;
                 box-sizing: border-box !important;
-                writing-mode: {{writingMode}} !important;
                 text-orientation: mixed;
                 column-width: var(--reader-content-width) !important;
                 column-gap: var(--reader-column-gap) !important;
@@ -205,7 +208,10 @@ public static class NovelReaderContentStyles
                 padding: 0 !important;
                 background: {{bg}} !important;
                 color: {{fg}} !important;
+            }
+            html, body, .ttu-book-html-wrapper {
                 writing-mode: {{writingMode}} !important;
+                -webkit-writing-mode: {{writingMode}} !important;
             }
             html {
                 -webkit-line-box-contain: block glyphs replaced;
