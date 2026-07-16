@@ -23,8 +23,9 @@ public sealed class SasayakiParser
             .Replace('\r', '\n');
         var blocks = Regex.Split(normalizedContent.Trim(), @"\n\s*\n");
 
-        foreach (var block in blocks)
+        for (var blockIndex = 0; blockIndex < blocks.Length; blockIndex++)
         {
+            var block = blocks[blockIndex];
             var trimmed = block.Trim();
             if (string.IsNullOrEmpty(trimmed))
                 continue;
@@ -33,7 +34,7 @@ public sealed class SasayakiParser
             if (lines.Length < 3)
                 continue;
 
-            if (!int.TryParse(lines[0].Trim().Trim('\uFEFF'), out var id))
+            if (!int.TryParse(lines[0].Trim().Trim('\uFEFF'), out _))
                 continue;
 
             var timestampLine = lines[1].Trim();
@@ -48,7 +49,7 @@ public sealed class SasayakiParser
 
             cues.Add(new SasayakiCue
             {
-                Id = id,
+                Id = blockIndex.ToString(CultureInfo.InvariantCulture),
                 StartTime = startTime,
                 EndTime = endTime,
                 Text = cueText,

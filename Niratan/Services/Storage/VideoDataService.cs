@@ -50,7 +50,8 @@ internal class VideoDataService : IVideoDataService
                    SourceFolderPath, PosterPath, Tags, CollectionName, IsWatched,
                    SubtitleSelectionKind, SubtitleSelectionPath,
                    SubtitleSelectionTrackId, SubtitleSelectionTrackName,
-                   ProfileId
+                   ProfileId, ProviderId, RemoteId, OriginalUrl, CanonicalUrl,
+                   RemoteThumbnailUrl, RemoteSubtitleLanguage
             FROM VideoItems
             WHERE @QueryText IS NULL
                 OR TRIM(@QueryText) = ''
@@ -59,6 +60,7 @@ internal class VideoDataService : IVideoDataService
                 OR SourceFolderPath LIKE '%' || @QueryText || '%' COLLATE NOCASE
                 OR Tags LIKE '%' || @QueryText || '%' COLLATE NOCASE
                 OR CollectionName LIKE '%' || @QueryText || '%' COLLATE NOCASE
+                OR OriginalUrl LIKE '%' || @QueryText || '%' COLLATE NOCASE
             ORDER BY COALESCE(LastOpenedAt, ImportedAt) DESC, Title ASC;
             """;
 
@@ -82,7 +84,8 @@ internal class VideoDataService : IVideoDataService
                    SourceFolderPath, PosterPath, Tags, CollectionName, IsWatched,
                    SubtitleSelectionKind, SubtitleSelectionPath,
                    SubtitleSelectionTrackId, SubtitleSelectionTrackName,
-                   ProfileId
+                   ProfileId, ProviderId, RemoteId, OriginalUrl, CanonicalUrl,
+                   RemoteThumbnailUrl, RemoteSubtitleLanguage
             FROM VideoItems
             WHERE Id = @VideoId;
             """;
@@ -103,7 +106,8 @@ internal class VideoDataService : IVideoDataService
                  SourceFolderPath, PosterPath, Tags, CollectionName, IsWatched,
                  SubtitleSelectionKind, SubtitleSelectionPath,
                  SubtitleSelectionTrackId, SubtitleSelectionTrackName,
-                 ProfileId)
+                 ProfileId, ProviderId, RemoteId, OriginalUrl, CanonicalUrl,
+                 RemoteThumbnailUrl, RemoteSubtitleLanguage)
             VALUES
                 (@Id, @Title, @FilePath, @SubtitlePath, @ImportedAt, @LastOpenedAt,
                  @LastPositionSeconds, @DurationSeconds, @ManualSortOrder,
@@ -111,7 +115,8 @@ internal class VideoDataService : IVideoDataService
                  @SourceFolderPath, @PosterPath, @Tags, @CollectionName, @IsWatched,
                  @SubtitleSelectionKind, @SubtitleSelectionPath,
                  @SubtitleSelectionTrackId, @SubtitleSelectionTrackName,
-                 @ProfileId)
+                 @ProfileId, @ProviderId, @RemoteId, @OriginalUrl, @CanonicalUrl,
+                 @RemoteThumbnailUrl, @RemoteSubtitleLanguage)
             ON CONFLICT(FilePath) DO UPDATE SET
                 Title = excluded.Title,
                 SubtitlePath = COALESCE(excluded.SubtitlePath, VideoItems.SubtitlePath),
@@ -126,7 +131,17 @@ internal class VideoDataService : IVideoDataService
                 PosterPath = COALESCE(excluded.PosterPath, VideoItems.PosterPath),
                 Tags = COALESCE(VideoItems.Tags, excluded.Tags),
                 CollectionName = COALESCE(VideoItems.CollectionName, excluded.CollectionName),
-                ProfileId = COALESCE(VideoItems.ProfileId, excluded.ProfileId);
+                ProfileId = COALESCE(VideoItems.ProfileId, excluded.ProfileId),
+                ProviderId = COALESCE(excluded.ProviderId, VideoItems.ProviderId),
+                RemoteId = COALESCE(excluded.RemoteId, VideoItems.RemoteId),
+                OriginalUrl = COALESCE(excluded.OriginalUrl, VideoItems.OriginalUrl),
+                CanonicalUrl = COALESCE(excluded.CanonicalUrl, VideoItems.CanonicalUrl),
+                RemoteThumbnailUrl = COALESCE(excluded.RemoteThumbnailUrl, VideoItems.RemoteThumbnailUrl),
+                RemoteSubtitleLanguage = COALESCE(VideoItems.RemoteSubtitleLanguage, excluded.RemoteSubtitleLanguage),
+                DurationSeconds = CASE
+                    WHEN excluded.DurationSeconds > 0 THEN excluded.DurationSeconds
+                    ELSE VideoItems.DurationSeconds
+                END;
             """;
 
         await connection.ExecuteAsync(new CommandDefinition(sql, video, cancellationToken: ct));
@@ -353,7 +368,8 @@ internal class VideoDataService : IVideoDataService
                     SubtitleSelectionKind = @SubtitleSelectionKind,
                     SubtitleSelectionPath = @SubtitleSelectionPath,
                     SubtitleSelectionTrackId = @SubtitleSelectionTrackId,
-                    SubtitleSelectionTrackName = @SubtitleSelectionTrackName
+                    SubtitleSelectionTrackName = @SubtitleSelectionTrackName,
+                    RemoteSubtitleLanguage = @RemoteSubtitleLanguage
                 WHERE Id = @VideoId;
                 """,
                 new
@@ -366,6 +382,7 @@ internal class VideoDataService : IVideoDataService
                     SubtitleSelectionPath = state.SubtitleSelection.ExternalPath,
                     SubtitleSelectionTrackId = state.SubtitleSelection.TrackId,
                     SubtitleSelectionTrackName = state.SubtitleSelection.TrackName,
+                    RemoteSubtitleLanguage = state.SubtitleSelection.RemoteLanguageCode,
                 },
                 cancellationToken: ct
             )

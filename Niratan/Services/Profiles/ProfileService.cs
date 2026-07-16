@@ -76,7 +76,8 @@ public sealed class ProfileService : IProfileService
         string name,
         string languageId,
         string? profileId = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? copyFromProfileId = null)
     {
         ct.ThrowIfCancellationRequested();
 
@@ -90,9 +91,15 @@ public sealed class ProfileService : IProfileService
         if (_index.FindProfile(id) is not null)
             throw new InvalidOperationException($"Profile '{id}' already exists.");
 
+        if (!string.IsNullOrWhiteSpace(copyFromProfileId))
+            RequireProfile(copyFromProfileId);
+
         var profile = new NiratanProfile(id, safeName, language.Id);
         _index.Profiles.Add(profile);
-        Directory.CreateDirectory(GetProfileDirectory(id));
+        var profileDirectory = GetProfileDirectory(id);
+        Directory.CreateDirectory(profileDirectory);
+        if (!string.IsNullOrWhiteSpace(copyFromProfileId))
+            CopyProfileOwnedFiles(GetProfileDirectory(copyFromProfileId), profileDirectory);
         await SaveAsync();
         return profile;
     }
@@ -173,6 +180,33 @@ public sealed class ProfileService : IProfileService
         ValidateProfileId(profileId);
         if (_index.FindProfile(profileId) is null)
             throw new InvalidOperationException($"Profile '{profileId}' does not exist.");
+    }
+
+    private static void CopyProfileOwnedFiles(string sourceDirectory, string destinationDirectory)
+    {
+        foreach (var fileName in new[]
+                 {
+                     "dictionary-settings.json",
+                     "reader-settings.json",
+                     "anki-settings.json",
+                 })
+        {
+            var sourcePath = Path.Combine(sourceDirectory, fileName);
+            if (File.Exists(sourcePath))
+                File.Copy(sourcePath, Path.Combine(destinationDirectory, fileName), overwrite: false);
+        }
+
+        var sourceDictionaryDirectory = Path.Combine(sourceDirectory, "dictionaries");
+        var sourceDictionaryConfig = Path.Combine(sourceDictionaryDirectory, "dictionary-config.json");
+        if (!File.Exists(sourceDictionaryConfig))
+            return;
+
+        var destinationDictionaryDirectory = Path.Combine(destinationDirectory, "dictionaries");
+        Directory.CreateDirectory(destinationDictionaryDirectory);
+        File.Copy(
+            sourceDictionaryConfig,
+            Path.Combine(destinationDictionaryDirectory, "dictionary-config.json"),
+            overwrite: false);
     }
 
     private void EnsureBuiltInProfiles()

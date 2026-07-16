@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page x:Class="Niratan.Views.Pages.BackupSettingsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:helpers="using:Niratan.Helpers.UI.Converters"
+      xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
+      xmlns:ui="using:CommunityToolkit.WinUI"
+      mc:Ignorable="d">
+
+    <Page.Resources>
+        <helpers:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <Style x:Key="BackupSectionHeaderStyle"
+               BasedOn="{StaticResource BodyStrongTextBlockStyle}"
+               TargetType="TextBlock">
+            <Setter Property="Margin" Value="1,30,0,6" />
+        </Style>
+    </Page.Resources>
+
+    <Grid RowDefinitions="Auto,*">
+        <StackPanel Padding="20,14,36,16"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center">
+            <Button x:Name="BackupSettingsBackButton"
+                    Width="36"
+                    Height="36"
+                    Padding="0"
+                    AutomationProperties.AutomationId="BackupSettingsBackButton"
+                    x:Uid="BackupSettingsBackButton"
+                    Click="BackButton_Click">
+                <FontIcon Glyph="&#xE72B;" />
+            </Button>
+            <FontIcon FontSize="24" Glyph="&#xE838;" />
+            <TextBlock x:Uid="BackupSettingsPageTitle"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource TitleTextBlockStyle}"
+                       Text="Backup" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1">
+            <Grid Padding="16,0,16,24">
+                <StackPanel MaxWidth="1280"
+                            HorizontalAlignment="Stretch"
+                            Spacing="4">
+                <TextBlock x:Uid="BackupBooksSectionHeader"
+                           Style="{StaticResource BackupSectionHeaderStyle}"
+                           Text="Books" />
+                <toolkit:SettingsCard x:Uid="BackupBooksCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE82D;}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button x:Uid="BackupBooksButton"
+                                AutomationProperties.AutomationId="BackupBooksButton"
+                                Command="{x:Bind ViewModel.BackupBooksCommand}"
+                                IsEnabled="{x:Bind ViewModel.CanRunActions, Mode=OneWay}" />
+                        <Button x:Uid="RestoreBooksButton"
+                                AutomationProperties.AutomationId="RestoreBooksButton"
+                                Command="{x:Bind ViewModel.RestoreBooksCommand}"
+                                IsEnabled="{x:Bind ViewModel.CanRunActions, Mode=OneWay}" />
+                    </StackPanel>
+                </toolkit:SettingsCard>
+
+                <TextBlock x:Uid="BackupDictionariesSectionHeader"
+                           Style="{StaticResource BackupSectionHeaderStyle}"
+                           Text="Dictionaries" />
+                <toolkit:SettingsCard x:Uid="BackupDictionariesCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE8F1;}">
+                    <StackPanel Spacing="10">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button x:Uid="BackupDictionariesButton"
+                                    AutomationProperties.AutomationId="BackupDictionariesButton"
+                                    Command="{x:Bind ViewModel.BackupDictionariesCommand}"
+                                    IsEnabled="{x:Bind ViewModel.CanRunActions, Mode=OneWay}" />
+                            <Button x:Uid="RestoreDictionariesButton"
+                                    AutomationProperties.AutomationId="RestoreDictionariesButton"
+                                    Command="{x:Bind ViewModel.RestoreDictionariesCommand}"
+                                    IsEnabled="{x:Bind ViewModel.CanRunActions, Mode=OneWay}" />
+                        </StackPanel>
+                        <TextBlock x:Uid="BackupDictionariesOverwriteText"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="Restoring will overwrite the current collection."
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </toolkit:SettingsCard>
+
+                <TextBlock x:Uid="BackupTtuSectionHeader"
+                           Style="{StaticResource BackupSectionHeaderStyle}"
+                           Text="ッツ Backup" />
+                <toolkit:SettingsCard x:Uid="BackupTtuCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE896;}">
+                    <StackPanel Spacing="10">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button x:Uid="BackupTtuExportButton"
+                                    AutomationProperties.AutomationId="BackupTtuExportButton"
+                                    Command="{x:Bind ViewModel.ExportTtuCommand}"
+                                    IsEnabled="{x:Bind ViewModel.CanRunActions, Mode=OneWay}" />
+                            <Button x:Uid="BackupTtuImportButton"
+                                    AutomationProperties.AutomationId="BackupTtuImportButton"
+                                    Command="{x:Bind ViewModel.ImportTtuCommand}"
+                                    IsEnabled="{x:Bind ViewModel.CanRunActions, Mode=OneWay}" />
+                        </StackPanel>
+                        <TextBlock x:Uid="BackupTtuImportHelpText"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="Importing a backup adds new books and overwrites the statistics and reading progress of books already present."
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </toolkit:SettingsCard>
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+
+        <Grid Grid.RowSpan="2"
+              Background="{ThemeResource SmokeFillColorDefaultBrush}"
+              Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="12">
+                <ProgressRing Width="40" Height="40" IsActive="True" />
+                <TextBlock HorizontalAlignment="Center"
+                           Style="{StaticResource BodyStrongTextBlockStyle}"
+                           Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Page>

@@ -259,6 +259,49 @@ public class VideoDataServiceTests
     }
 
     [Fact]
+    public async Task Migration013_AddsRemoteIdentityAndUniqueIndex()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+
+        await InvokeMigrationAsync("Migration_008", connection, transaction);
+        await InvokeMigrationAsync("Migration_013", connection, transaction);
+        await transaction.CommitAsync(ct);
+
+        var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT name
+            FROM pragma_table_info('VideoItems')
+            WHERE name IN (
+                'ProviderId', 'RemoteId', 'OriginalUrl', 'CanonicalUrl',
+                'RemoteThumbnailUrl', 'RemoteSubtitleLanguage')
+            ORDER BY name;
+            """;
+        var columns = new List<string>();
+        await using (var reader = await command.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+                columns.Add(reader.GetString(0));
+        }
+
+        columns.Should().Equal(
+            "CanonicalUrl",
+            "OriginalUrl",
+            "ProviderId",
+            "RemoteId",
+            "RemoteSubtitleLanguage",
+            "RemoteThumbnailUrl");
+
+        command.CommandText = """
+            SELECT COUNT(*) FROM sqlite_master
+            WHERE type = 'index' AND name = 'IX_VideoItems_RemoteIdentity';
+            """;
+        (await command.ExecuteScalarAsync(ct)).Should().Be(1L);
+    }
+
+    [Fact]
     public async Task DataService_PersistsVideoCollectionsAndMembership()
     {
         var ct = TestContext.Current.CancellationToken;

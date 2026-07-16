@@ -696,7 +696,13 @@ function getKanaMorae(text) {
 }
 
 function isVerbOrAdjective(rules) {
-  return (rules || []).some(function (tag) { return tag.startsWith('v') || tag.startsWith('adj-i'); });
+  var tags = Array.isArray(rules)
+    ? rules
+    : String(rules || '').split(/\s+/).filter(Boolean);
+  return tags.some(function (tag) {
+    tag = String(tag || '');
+    return tag.startsWith('v') || tag.startsWith('adj-i');
+  });
 }
 
 function getPitchCategory(reading, pitchAccentValue, verbOrAdjective) {
@@ -819,12 +825,39 @@ function createTags(entry) {
 
 function createButtonSlot(kind, entryIndex, enabled) {
   if (enabled === undefined) enabled = true;
-  return el('span', {
-    className: 'button-slot',
+  var title = kind === 'audio'
+    ? 'Play Audio'
+    : (kind === 'context'
+      ? 'Select Context'
+      : (kind === 'viewNote'
+        ? (window.viewAnkiNoteLabel || 'View added note in Anki')
+        : 'Add to Anki'));
+  var slot = el('button', {
+    type: 'button',
+    className: 'button-slot inline-action-button',
     'data-kind': kind,
     'data-entry-index': entryIndex,
-    'data-enabled': String(enabled)
+    'data-enabled': String(enabled),
+    title: title,
+    'aria-label': title,
   });
+  updateButtonSlot(slot, { state: 'default', enabled: enabled });
+  slot.onclick = function (event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (slot.dataset.state === 'pending' || slot.dataset.enabled === 'false') return;
+    if ((kind === 'mine' || kind === 'context') && miningRequestPending) return;
+    if (kind === 'audio') {
+      playEntryAudio(entryIndex);
+    } else if (kind === 'mine') {
+      mineEntryAtIndex(entryIndex);
+    } else if (kind === 'context') {
+      prepareContextMiningAtIndex(entryIndex);
+    } else if (kind === 'viewNote') {
+      openAnkiNoteAtIndex(entryIndex);
+    }
+  };
+  return slot;
 }
 
 function getButtonSlot(kind, entryIndex) {
@@ -832,9 +865,35 @@ function getButtonSlot(kind, entryIndex) {
 }
 
 function updateButtonSlot(slot, changes) {
-  if (!slot || !slot.isConnected) return;
+  if (!slot) return;
   if ('state' in changes) slot.dataset.state = changes.state;
   if ('enabled' in changes) slot.dataset.enabled = String(changes.enabled);
+  if ('noteID' in changes) slot.dataset.noteId = String(changes.noteID);
+  if ('hidden' in changes) slot.hidden = Boolean(changes.hidden);
+  var kind = slot.dataset.kind;
+  var state = slot.dataset.state || 'default';
+  var enabled = slot.dataset.enabled !== 'false';
+  slot.disabled = !enabled;
+  slot.innerHTML = inlineButtonIcon(kind, state);
+}
+
+function inlineButtonIcon(kind, state) {
+  if (kind === 'audio') {
+    if (state === 'error') {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l4 6m0-6l-4 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+    }
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9c1 1 1.5 2 1.5 3s-.5 2-1.5 3m3-9c2 2 3 4 3 6s-1 4-3 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  }
+  if (kind === 'context') {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 9h6M8 13h4M9 19h10V9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  }
+  if (kind === 'viewNote') {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15 15l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  }
+  if (state === 'duplicate') {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="7" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="8" y="4" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 11h7m-3.5-3.5v7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  }
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v8m-4-4h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 }
 
 // === Audio ===
@@ -1175,95 +1234,171 @@ function constructFrequencyHtml(entryIndex) {
   return container.innerHTML;
 }
 
-async function mineEntryAtIndex(entryIndex) {
+async function buildMiningPayload(entryIndex) {
   var entry = window.lookupEntries && window.lookupEntries[entryIndex];
-  if (!entry) return;
-  if (miningRequestPending) return;
+  if (!entry) return null;
 
   var expression = entry.expression || '';
   var reading = entry.reading || '';
   var matched = entry.matched || expression;
-  var mineSlot = getButtonSlot('mine', entryIndex);
-  if (mineSlot && mineSlot.dataset.state === 'pending') return;
-  miningRequestPending = true;
-  var submitted = false;
-  if (mineSlot) updateButtonSlot(mineSlot, { state: 'pending' });
-
+  currentDictionaryMedia = new Map();
   try {
-    currentDictionaryMedia = new Map();
     var glossaryHtml = constructGlossaryHtml(entryIndex);
     var singleGlossaries = constructSingleGlossaryHtml(entryIndex);
     var glossaryFirstHtml = Object.values(singleGlossaries)[0] || '';
-    var pitchPositions = constructPitchPositionHtml(entryIndex);
-    var pitchCategories = constructPitchCategories(entryIndex);
-    var frequenciesHtml = constructFrequencyHtml(entryIndex);
-    var freqHarmonicRank = getFrequencyHarmonicRank(entry.frequencies || []);
     var dictionaryMedia = currentDictionaryMedia;
-    currentDictionaryMedia = null;
-
     if (!audioUrls[entryIndex] && (window.audioSources || []).length && window.needsAudio) {
       var audioTraceId = nextAudioTraceId();
-      postAudioTrace(audioTraceId, 'mine-fetch-audio-start', { entryIndex: entryIndex, expression: expression, reading: reading || expression });
       audioUrls[entryIndex] = await fetchAudioUrl(expression, reading || expression, audioTraceId);
-      postAudioTrace(audioTraceId, 'mine-fetch-audio-finished', { entryIndex: entryIndex, url: audioUrls[entryIndex] || '' });
     }
-
-    var audio = audioUrls[entryIndex] || '';
-    var selectedDict = selectedDictionaries[entryIndex] ? selectedDictionaries[entryIndex].name : '';
-
     var dictMedia = [];
     if (dictionaryMedia && dictionaryMedia.size) {
       dictionaryMedia.forEach(function (value) { dictMedia.push(value); });
     }
-
-    var payload = {
+    var audio = audioUrls[entryIndex] || '';
+    return {
+      entryIndex: entryIndex,
+      renderGeneration: Number(window.popupRenderGeneration || 0),
       expression: expression,
       reading: reading,
       matched: matched,
       furiganaPlain: constructFuriganaPlain(expression, reading),
-      frequenciesHtml: frequenciesHtml,
-      freqHarmonicRank: freqHarmonicRank,
+      frequenciesHtml: constructFrequencyHtml(entryIndex),
+      freqHarmonicRank: getFrequencyHarmonicRank(entry.frequencies || []),
       glossary: glossaryHtml,
       glossaryFirst: glossaryFirstHtml,
       singleGlossaries: JSON.stringify(singleGlossaries),
-      pitchPositions: pitchPositions,
-      pitchCategories: pitchCategories,
+      pitchPositions: constructPitchPositionHtml(entryIndex),
+      pitchCategories: constructPitchCategories(entryIndex),
       popupSelectionText: getPopupSelectionText(),
       audio: audio,
-      selectedDictionary: selectedDict,
+      selectedDictionary: selectedDictionaries[entryIndex] ? selectedDictionaries[entryIndex].name : '',
       dictionaryMedia: JSON.stringify(dictMedia),
     };
-
-    postPopupMessage('mineEntry', payload);
-    submitted = true;
-  } catch (e) {
-    console.error('[Anki] mineEntry failed before native submit: ' + e.message);
-    postPopupMessage('popupError', 'mineEntry failed before native submit: ' + (e.message || e));
-    if (mineSlot) {
-      updateButtonSlot(mineSlot, { state: 'error' });
-      setTimeout(function () { updateButtonSlot(mineSlot, { state: 'default' }); }, 2000);
-    }
   } finally {
     currentDictionaryMedia = null;
-    if (!submitted) miningRequestPending = false;
   }
 }
 
-window.onMineComplete = function (success) {
-  miningRequestPending = false;
-  // Update button states for all pending mine slots
-  var slots = document.querySelectorAll('.button-slot[data-kind="mine"][data-state="pending"]');
-  for (var i = 0; i < slots.length; i++) {
-    updateButtonSlot(slots[i], { state: success ? 'default' : 'error' });
-    if (!success) {
-      setTimeout((function (s) { return function () { updateButtonSlot(s, { state: 'default' }); }; })(slots[i]), 2000);
-    }
+async function mineEntryAtIndex(entryIndex) {
+  if (miningRequestPending) return;
+  var mineSlot = getButtonSlot('mine', entryIndex);
+  if (!mineSlot || mineSlot.dataset.state === 'pending') return;
+  miningRequestPending = true;
+  updateButtonSlot(mineSlot, { state: 'pending', enabled: false });
+  try {
+    var payload = await buildMiningPayload(entryIndex);
+    if (!payload) throw new Error('Entry is no longer available.');
+    postPopupMessage('mineEntry', payload);
+  } catch (e) {
+    console.error('[Anki] mineEntry failed before native submit: ' + e.message);
+    postPopupMessage('popupError', 'mineEntry failed before native submit: ' + (e.message || e));
+    miningRequestPending = false;
+    updateButtonSlot(mineSlot, { state: 'error', enabled: true });
+    setTimeout(function () { updateButtonSlot(mineSlot, { state: 'default' }); }, 2000);
   }
+}
+
+function showAnkiNoteButton(entryIndex, noteID) {
+  var viewNoteSlot = getButtonSlot('viewNote', entryIndex);
+  if (!viewNoteSlot || !noteID) return;
+  updateButtonSlot(viewNoteSlot, {
+    noteID: noteID,
+    hidden: false,
+    enabled: true,
+  });
+}
+
+function openAnkiNoteAtIndex(entryIndex) {
+  var viewNoteSlot = getButtonSlot('viewNote', entryIndex);
+  var noteID = viewNoteSlot && viewNoteSlot.dataset.noteId;
+  if (!noteID) return;
+
+  updateButtonSlot(viewNoteSlot, { enabled: false });
+  postPopupMessage('openAnkiNote', {
+    entryIndex: entryIndex,
+    renderGeneration: Number(window.popupRenderGeneration || 0),
+    noteID: Number(noteID),
+  });
+}
+
+window.onOpenAnkiNoteComplete = function (entryIndex) {
+  updateButtonSlot(getButtonSlot('viewNote', entryIndex), { enabled: true });
 };
 
-window.onDuplicateCheck = function (isDuplicate) {
-  // Could update UI based on duplicate status
+async function prepareContextMiningAtIndex(entryIndex) {
+  if (!window.contextMiningAvailable || miningRequestPending) return;
+  var contextSlot = getButtonSlot('context', entryIndex);
+  if (!contextSlot) return;
+  updateButtonSlot(contextSlot, { state: 'pending', enabled: false });
+  try {
+    var payload = await buildMiningPayload(entryIndex);
+    if (!payload) throw new Error('Entry is no longer available.');
+    postPopupMessage('prepareContextMining', payload);
+  } catch (e) {
+    updateButtonSlot(contextSlot, { state: 'error', enabled: true });
+    setTimeout(function () { updateButtonSlot(contextSlot, { state: 'default' }); }, 2000);
+  }
+}
+
+window.onContextMiningPrepared = function (entryIndex) {
+  var slot = getButtonSlot('context', entryIndex);
+  updateButtonSlot(slot, { state: 'default', enabled: true });
 };
+
+function applyMiningResult(entryIndex, result) {
+  miningRequestPending = false;
+  var slot = getButtonSlot('mine', entryIndex);
+  if (!slot) return;
+  var status = result && result.status ? result.status : 'failed';
+  if (status === 'added' && result.noteID) {
+    showAnkiNoteButton(entryIndex, result.noteID);
+  }
+  if (status === 'added' || status === 'duplicate') {
+    updateButtonSlot(slot, { state: 'duplicate', enabled: !!window.allowDupes });
+  } else {
+    updateButtonSlot(slot, { state: 'error', enabled: true });
+    setTimeout(function () { updateButtonSlot(slot, { state: 'default' }); }, 2000);
+  }
+}
+
+window.onMineComplete = function (entryIndex, result) {
+  applyMiningResult(entryIndex, result);
+};
+
+window.onContextMineComplete = function (entryIndex, result) {
+  applyMiningResult(entryIndex, result);
+};
+
+window.onDuplicateCheck = function (entryIndex, isDuplicate) {
+  var slot = getButtonSlot('mine', entryIndex);
+  if (!slot || slot.dataset.state === 'pending') return;
+  updateButtonSlot(slot, {
+    state: isDuplicate ? 'duplicate' : 'default',
+    enabled: !(isDuplicate && !window.allowDupes),
+  });
+};
+
+function requestDuplicateCheck(entryIndex, expression) {
+  var slot = getButtonSlot('mine', entryIndex);
+  if (!slot || slot.dataset.duplicateCheckRequested === 'true') return;
+  slot.dataset.duplicateCheckRequested = 'true';
+  postPopupMessage('duplicateCheck', {
+    entryIndex: entryIndex,
+    renderGeneration: Number(window.popupRenderGeneration || 0),
+    expression: expression,
+  });
+}
+
+function requestRenderedDuplicateChecks(root) {
+  if (!root) return;
+  var slots = root.querySelectorAll('.button-slot[data-kind="mine"]');
+  for (var i = 0; i < slots.length; i++) {
+    var entryIndex = Number(slots[i].dataset.entryIndex);
+    var entry = window.lookupEntries && window.lookupEntries[entryIndex];
+    if (entry) requestDuplicateCheck(entryIndex, entry.expression || '');
+  }
+}
 
 // === Entry rendering ===
 
@@ -1293,31 +1428,19 @@ function createEntryHeader(entry, idx) {
   }
 
   if (window.useAnkiConnect) {
-    buttonsContainer.appendChild(createButtonSlot('mine', idx));
+    if (window.contextMiningAvailable) {
+      buttonsContainer.appendChild(createButtonSlot('context', idx));
+    }
+    var mineSlot = createButtonSlot('mine', idx, false);
+    buttonsContainer.appendChild(mineSlot);
+    var viewNoteSlot = createButtonSlot('viewNote', idx, false);
+    viewNoteSlot.hidden = true;
+    buttonsContainer.appendChild(viewNoteSlot);
   }
 
   header.appendChild(buttonsContainer);
   return header;
 }
-
-// === Button click handler ===
-
-(function () {
-  document.addEventListener('click', function (e) {
-    var slot = e.target.closest('.button-slot');
-    if (!slot) return;
-    e.stopPropagation();
-    if (slot.dataset.state === 'pending' || slot.dataset.enabled === 'false') return;
-    var kind = slot.dataset.kind;
-    if (kind === 'mine' && miningRequestPending) return;
-    var entryIndex = Number(slot.dataset.entryIndex);
-    if (kind === 'audio') {
-      playEntryAudio(entryIndex);
-    } else if (kind === 'mine') {
-      mineEntryAtIndex(entryIndex);
-    }
-  });
-})();
 
 function createGlossarySection(dictName, contents, isFirst, entryIdx) {
   var details = el('details', { className: 'glossary-group' });
@@ -1518,7 +1641,9 @@ function capturePopupRuntime() {
     embedMedia: window.embedMedia,
     allowDupes: window.allowDupes,
     needsAudio: window.needsAudio,
-    compactGlossariesAnki: window.compactGlossariesAnki
+    compactGlossariesAnki: window.compactGlossariesAnki,
+    contextMiningAvailable: window.contextMiningAvailable,
+    viewAnkiNoteLabel: window.viewAnkiNoteLabel
   };
 }
 
@@ -1546,6 +1671,8 @@ function applyPopupRuntime(runtime) {
   window.allowDupes = runtime.allowDupes;
   window.needsAudio = runtime.needsAudio;
   window.compactGlossariesAnki = runtime.compactGlossariesAnki;
+  window.contextMiningAvailable = runtime.contextMiningAvailable;
+  window.viewAnkiNoteLabel = runtime.viewAnkiNoteLabel;
 }
 
 function applyPopupDocumentStyle(runtime) {
@@ -1907,6 +2034,7 @@ window.renderPopup = function (pendingPayload) {
     var tags = createTags(entry);
     if (tags) entryDiv.appendChild(tags);
     container.appendChild(entryDiv);
+    if (firstFrameCommitted) requestDuplicateCheck(idx, entry.expression || '');
 
     var grouped = {};
     entry.glossaries.forEach(function (g) {
@@ -2001,6 +2129,11 @@ window.renderPopup = function (pendingPayload) {
         Array.from(stagingContainer.childNodes));
       container = liveContainer;
       firstFrameCommitted = true;
+      requestAnimationFrame(function () {
+        if (generation === (window.popupRenderGeneration || 0)) {
+          requestRenderedDuplicateChecks(liveContainer);
+        }
+      });
       applyConfiguredStyles();
       observeAllDictionarySections();
       layoutDictionaryColumns();

@@ -545,6 +545,16 @@ public class NovelReaderWebAssetTests
         popupCode.Should().Contain("NavigateBackAsync");
         popupCode.Should().Contain("NavigateForwardAsync");
         popupCode.Should().Contain("case \"navigationState\"");
+        popupCode.Should().Contain("_navigationStateCoordinator.CanGoBack");
+        popupCode.Should().Contain("_navigationStateCoordinator.CanGoForward");
+        popupCode.Should().Contain("UpdateActionBarVisibility();");
+        popupCode.Should().Contain("_controlsRow");
+        popupCode.Should().Contain("MinHeight = 36");
+        popupCode.Should().Contain("Height = 32");
+        popupCode.Should().Contain("Grid.SetColumn(_sasayakiControlsBar, 1)");
+        popupCode.Should().Contain("Grid.SetRow(_miningToast, 1)");
+        popupCode.Should().Contain("Canvas.SetZIndex(_miningToast, 1)");
+        popupCode.Should().NotContain("Grid.SetRow(_miningToast, 2)");
         overlayCode.Should().Contain("DictionaryPopupRedirectMode.InPlace");
         popupJs.Should().Contain("window.niratanRedirectResults");
         popupJs.Should().Contain("postNavigationState");
@@ -664,6 +674,37 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void DictionaryPopup_UsesNiratanOpacityTransitionsForPresentationAndDismissal()
+    {
+        var popupCode = File.ReadAllText(
+                Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryLookupPopup.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var overlayCode = File.ReadAllText(
+                Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        popupCode.Should().Contain(
+            "PopupEntranceFadeDuration = TimeSpan.FromMilliseconds(160)");
+        popupCode.Should().Contain(
+            "PopupExitFadeDuration = TimeSpan.FromMilliseconds(145)");
+        popupCode.Should().Contain(
+            "EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }");
+        popupCode.Should().Contain(
+            "_ = AnimateOpacityAsync(_readyOpacity, PopupEntranceFadeDuration);");
+        popupCode.Should().Contain(
+            "return AnimateOpacityAsync(0, PopupExitFadeDuration);");
+        popupCode.Should().Contain("CancelOpacityAnimation();");
+
+        overlayCode.Should().Contain("_rootHost.HideAnimatedAsync()");
+        overlayCode.Should().Contain("var animationCompleted = await hideTask;");
+        overlayCode.Should().Contain("dismissVersion != Volatile.Read(ref _dismissVersion)");
+        overlayCode.IndexOf("var animationCompleted = await hideTask;", StringComparison.Ordinal)
+            .Should().BeLessThan(
+                overlayCode.IndexOf("CollapseCanvasBounds();", overlayCode.IndexOf(
+                    "private async Task CompleteDismissAsync", StringComparison.Ordinal), StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void GlobalLookupPopupWindow_ReusesDictionaryPopupOverlayWithoutManualSearchUi()
     {
         var popupXamlPath = Path.Combine(ProjectRoot, "Views", "Dictionary", "GlobalLookupPopupWindow.xaml");
@@ -681,6 +722,8 @@ public class NovelReaderWebAssetTests
 
         popupXaml.Should().Contain("x:Class=\"Niratan.Views.Dictionary.GlobalLookupPopupWindow\"");
         popupXaml.Should().Contain("x:Name=\"DictionaryOverlayCanvas\"");
+        popupXaml.Should().Contain("x:Name=\"StatusSurface\"");
+        popupXaml.Should().Contain("x:Name=\"StatusTextBlock\"");
         popupXaml.Should().NotContain("<TextBox");
         popupXaml.Should().NotContain("LookupQueryBox");
         popupXaml.Should().NotContain("GlobalLookupSearchButton");
@@ -693,18 +736,94 @@ public class NovelReaderWebAssetTests
         popupCode.Should().Contain("ShowLookupAsync(");
         popupCode.Should().Contain("Niratan Lookup Popup");
         popupCode.Should().Contain("VirtualKey.Escape");
-        popupCode.Should().Contain("Activated +=");
-        popupCode.Should().Contain("WindowActivationState.Deactivated");
+        popupCode.Should().NotContain("Activated += OnActivated");
+        popupCode.Should().NotContain("WindowActivationState.Deactivated");
+        popupCode.Should().NotContain("ShowWindow(hwnd, SwShowNoActivate)");
+        popupCode.Should().Contain("HwndTopMost");
+        popupCode.Should().NotContain("SwpShowWindow");
+        popupCode.Should().NotContain("SetWindowsHookEx(");
+        serviceCode.Should().Contain("SetWindowsHookEx(");
+        serviceCode.Should().Contain("UnhookWindowsHookEx(");
+        serviceCode.Should().Contain("HandleGlobalMouseDown");
 
         serviceCode.Should().Contain("DictionaryPopupRequestService");
-        serviceCode.Should().Contain("CreateAsync(query, traceId: $\"global-popup-{Guid.NewGuid():N}\"");
+        serviceCode.Should().Contain("traceId: $\"global-popup-{Guid.NewGuid():N}\"");
         serviceCode.Should().Contain("GlobalLookupPopupWindow");
+        serviceCode.Should().Contain("No dictionary result found.");
+        serviceCode.Should().Contain("TimeSpan.FromSeconds(3)");
 
         appCode.Should().Contain("IGlobalLookupPopupService, GlobalLookupPopupService");
     }
 
     [Fact]
-    public void GlobalLookupPopupWindow_UsesBorderlessPopupSizedHostForNakedPopup()
+    public void GlobalLookupPopupWindow_ComposesOffscreenBeforeMoveOnlyReveal()
+    {
+        var code = File.ReadAllText(Path.Combine(
+                ProjectRoot,
+                "Views",
+                "Dictionary",
+                "GlobalLookupPopupWindow.xaml.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var serviceCode = File.ReadAllText(Path.Combine(
+                ProjectRoot,
+                "Services",
+                "Dictionary",
+                "GlobalLookupPopupService.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        var stagingStart = code.IndexOf("public void ActivateForStaging", StringComparison.Ordinal);
+        var stagingEnd = code.IndexOf("public void PrepareForStaging()", StringComparison.Ordinal);
+        var stagingBody = code[stagingStart..stagingEnd];
+        var stagingMove = stagingBody.IndexOf("AppWindow.MoveAndResize(stagingRect);", StringComparison.Ordinal);
+        var stagingActivate = stagingBody.IndexOf("Activate();", StringComparison.Ordinal);
+        var stagingFullRegion = stagingBody.IndexOf("ClearHostRegion();", StringComparison.Ordinal);
+        var stagingUncloak = stagingBody.IndexOf("SetHostCloaked(cloaked: false);", StringComparison.Ordinal);
+        var revealStart = code.IndexOf("public async Task RevealFinalSurfaceAsync", StringComparison.Ordinal);
+        var revealEnd = code.IndexOf(
+            "public PointInt32 GetPopupSurfaceScreenOrigin()",
+            revealStart,
+            StringComparison.Ordinal);
+        var revealBody = code[revealStart..revealEnd];
+        var finalComposition = revealBody.IndexOf(
+            "await WaitForFinalCompositionAsync(ct);",
+            StringComparison.Ordinal);
+        var finalMove = revealBody.LastIndexOf("SetWindowPos(", StringComparison.Ordinal);
+
+        code.Should().Contain("ExtendsContentIntoTitleBar = true;");
+        code.Should().Contain("OverlappedPresenter.CreateForContextMenu()");
+        stagingMove.Should().BeGreaterThan(0);
+        stagingActivate.Should().BeGreaterThan(stagingMove);
+        stagingFullRegion.Should().BeGreaterThan(stagingActivate);
+        stagingUncloak.Should().BeGreaterThan(stagingFullRegion);
+        code.Should().Contain("public async Task RevealFinalSurfaceAsync(");
+        code.Should().Contain("surfaceRect.X,");
+        code.Should().Contain("surfaceRect.Y,");
+        code.Should().Contain("stagingRect.Left,");
+        code.Should().Contain("stagingRect.Top,");
+        code.Should().Contain("var insets = ResolveClientInsets(hwnd);");
+        code.Should().Contain("var resolvedInsets = ResolveClientInsets(hwnd);");
+        code.Should().Contain("surfaceRect.X - insets.Left,");
+        code.Should().Contain("surfaceRect.Y - insets.Top,");
+        code.Should().Contain("width + insets.Horizontal,");
+        code.Should().Contain("height + insets.Vertical,");
+        code.Should().Contain("insets.Left,\n            insets.Top,");
+        code.Should().Contain("LogFinalWindowGeometry(hwnd, surfaceRect, insets);");
+        code.Should().Contain("await WaitForNextCompositionFrameAsync(ct);");
+        code.Should().Contain("DwmFlush()");
+        finalComposition.Should().BeGreaterThan(0);
+        finalMove.Should().BeGreaterThan(finalComposition);
+        revealBody[finalMove..].Should().Contain("SwpNoSize | SwpNoActivate");
+        revealBody.Should().NotContain("SetHostCloaked(cloaked: false);");
+        revealBody.Should().NotContain("ShowWindow(");
+        revealBody.Should().NotContain("SwpShowWindow");
+        serviceCode.Should().Contain("window.ActivateForStaging(stagingRect);");
+        serviceCode.Should().NotContain("window.AppWindow.MoveAndResize(stagingRect);");
+        serviceCode.Should().Contain("await window.RevealFinalSurfaceAsync(");
+        code.Should().Contain("private const int DwmwaCloak = 13;");
+    }
+
+    [Fact]
+    public void GlobalLookupPopupWindow_UsesOneBorderlessNativeWindowPerStackEntry()
     {
         var overlayCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs")
@@ -726,21 +845,32 @@ public class NovelReaderWebAssetTests
 
         overlayCode.Should().Contain("SetRootReadyOpacity(");
         overlayCode.Should().Contain("GetRootPopupBounds()");
-        overlayCode.Should().Contain("MoveRootPopupToOrigin()");
+        overlayCode.Should().Contain("ExternalChildRequested");
+        overlayCode.Should().Contain("UseExternalChildWindows()");
+        overlayCode.Should().Contain("if (_useExternalChildWindows)");
+        overlayCode.Should().Contain("parentHost.GetWebContentOffset()");
+        overlayCode.Should().Contain("GetReusableChildHost()");
+        overlayCode.Should().Contain("PositionChildHost(");
         popupCode.Should().Contain("SetRootReadyOpacity(1)");
         popupCode.Should().Contain("ApplyPopupSizedHostSurface(request.Theme)");
         popupCode.Should().Contain("UseCanvas(DictionaryOverlayCanvas)");
-        popupCode.Should().Contain("UseStandaloneWindowVisuals()");
+        popupCode.Should().Contain("UseNakedFloatingWindowVisuals()");
+        popupCode.Should().Contain("UseExternalChildWindows()");
+        popupCode.Should().Contain("UseImmediateOpacityTransitions()");
+        popupCode.Should().Contain("ChildPopupRequested");
+        popupCode.Should().Contain("PopupSurfaceClicked");
         popupCode.Should().Contain("overlay.ShowLookupAsync(");
-        popupCode.Should().Contain("anchorPoint");
+        popupCode.Should().Contain("anchorScreenBounds");
+        popupCode.Should().Contain("Math.Max(0.01, displayScale)");
+        popupCode.Should().Contain("anchorScreenBounds.X - workArea.X");
+        popupCode.Should().Contain("anchorScreenBounds.Y - workArea.Y");
         popupCode.Should().Contain("GetRootPopupBounds()");
-        popupCode.Should().Contain("MoveRootPopupToOrigin()");
         popupCode.Should().Contain("RasterizationScale");
-        popupCode.Should().NotContain("UseNakedFloatingWindowVisuals()");
+        popupCode.Should().NotContain("_popupOverlay.UseStandaloneWindowVisuals()");
         popupCode.Should().NotContain("ApplyHostSurface(request.Theme)");
         popupCode.Should().Contain("ExtendsContentIntoTitleBar = true");
-        popupCode.Should().Contain("_desktopAcrylicThinBackdrop = DictionaryPopupMaterial.TryApplyDesktopAcrylicThin(this, RootGrid)");
-        popupCode.Should().NotContain("SystemBackdrop = null");
+        popupCode.Should().Contain("OverlappedPresenter.CreateForContextMenu()");
+        popupCode.Should().Contain("SystemBackdrop = null");
         popupCode.Should().Contain("ApplyBorderlessHostChrome(");
         popupCode.Should().Contain("ApplyNativeBorderlessHostStyles(");
         popupCode.Should().Contain("ApplyDwmBorderlessChrome(");
@@ -752,8 +882,9 @@ public class NovelReaderWebAssetTests
         popupCode.Should().Contain("DwmwaWindowCornerPreference");
         popupCode.Should().Contain("DwmWindowCornerPreferenceDoNotRound");
         popupCode.Should().Contain("DwmwaBorderColor");
-        popupCode.Should().Contain("ToColorRef(hostSurfaceColor)");
+        popupCode.Should().Contain("DwmColorNone");
         popupCode.Should().Contain("GwlStyle");
+        popupCode.Should().Contain("WsExWindowEdge");
         popupCode.Should().Contain("WsBorder");
         popupCode.Should().Contain("WsDlgFrame");
         popupCode.Should().Contain("WsPopup");
@@ -763,28 +894,84 @@ public class NovelReaderWebAssetTests
         popupCode.Should().Contain("WsExNoActivate");
         popupCode.Should().Contain("PopupCornerRadiusDip = 8");
         popupCode.Should().Contain("CreateRoundRectRgn(");
+        popupCode.Should().Contain("CreateRectRgn(");
+        popupCode.Should().Contain("ApplyEmptyHostRegion(");
         popupCode.Should().Contain("SetWindowRgn(");
         popupCode.Should().Contain("SetWindowPos(");
         popupCode.Should().Contain("SwpFrameChanged");
-        popupCode.Should().NotContain("DwmColorNone");
-
-        serviceCode.Should().Contain("StagingSize = new(720, 560)");
-        serviceCode.Should().Contain("ResolveStagingRect(workArea, StagingSize)");
-        serviceCode.Should().Contain("window.ClearHostRegion()");
-        serviceCode.Should().Contain("window.AppWindow.MoveAndResize(stagingRect)");
-        serviceCode.Should().Contain("window.Activate()");
-        serviceCode.Should().Contain("ApplyBorderlessHostChrome()");
-        serviceCode.Should().Contain("cursorPoint.X - workArea.X");
-        serviceCode.Should().Contain("cursorPoint.Y - workArea.Y");
+        serviceCode.Should().NotContain("StagingSize = new(720, 560)");
+        serviceCode.Should().Contain("Math.Max(1, workArea.Width)");
+        serviceCode.Should().Contain("Math.Max(1, workArea.Height)");
+        serviceCode.Should().Contain("window.ActivateForStaging(stagingRect)");
+        serviceCode.Should().NotContain("window.AppWindow.MoveAndResize(stagingRect)");
+        serviceCode.Should().Contain("NormalizeAnchorRect(selection.ScreenBounds, cursorPoint)");
+        serviceCode.Should().Contain("PopupContentCommitted += OnPopupContentCommitted");
+        serviceCode.Should().Contain("List<PopupEntry> _popupStack");
+        serviceCode.Should().Contain("Queue<GlobalLookupPopupWindow> _standbyWindows");
+        serviceCode.Should().Contain("StandbyWindowCount = 2");
+        serviceCode.Should().Contain("window.PrewarmAsync(ThemeMode.System, ct)");
+        var acquireStart = serviceCode.IndexOf(
+            "private GlobalLookupPopupWindow AcquirePopupWindowCore()",
+            StringComparison.Ordinal);
+        acquireStart.Should().BeGreaterThanOrEqualTo(0);
+        var refillStart = serviceCode.IndexOf(
+            "private void ScheduleStandbyRefill()",
+            acquireStart,
+            StringComparison.Ordinal);
+        refillStart.Should().BeGreaterThan(acquireStart);
+        serviceCode[acquireStart..refillStart].Should().Contain("ScheduleStandbyRefill();");
+        serviceCode.Should().NotContain("ReturnWindowToStandbyCore(");
+        serviceCode.Should().Contain("entry.Window.Close()");
+        serviceCode.Should().Contain("new GlobalLookupPopupWindow()");
+        serviceCode.Should().Contain("PresentPopupCoreAsync(");
+        serviceCode.Should().Contain("OnChildPopupRequested(");
+        serviceCode.Should().Contain("CloseAfterIndexCore(");
+        serviceCode.Should().Contain("parentWindow.GetPopupSurfaceScreenOrigin()");
+        popupCode.Should().Contain("ResolveClientInsets(hwnd)");
+        popupCode.Should().Contain("ClientToScreen(hwnd, ref origin)");
         serviceCode.Should().Contain("window.GetRootPopupBounds()");
-        serviceCode.Should().Contain("window.RasterizationScale");
+        serviceCode.Should().NotContain("window.RasterizationScale");
+        serviceCode.Should().Contain("GetDpiForMonitor(");
+        serviceCode.Should().Contain("pending.DisplayScale");
         serviceCode.Should().Contain("ResolveFinalRect(");
-        serviceCode.Should().Contain("window.MoveRootPopupToOrigin()");
-        serviceCode.Should().Contain("window.AppWindow.MoveAndResize(finalRect)");
+        serviceCode.Should().NotContain("window.AppWindow.MoveAndResize(finalRect)");
+        serviceCode.Should().Contain("await window.RevealFinalSurfaceAsync(");
+        serviceCode.Should().Contain("window.MoveRootPopupToOriginAndResize(");
+        serviceCode.Should().NotContain("window.RevealPopupStack(");
         serviceCode.Should().NotContain("AppWindow.ResizeClient");
-        serviceCode.Should().Contain("window.ApplyRoundedHostRegion()");
+        popupCode.Should().Contain("WaitForFinalCompositionAsync(");
         serviceCode.Should().NotContain("GetDpiScaleForPoint(cursorPoint)");
-        serviceCode.Should().Contain("ReferenceEquals(window, _window)");
+        serviceCode.Should().Contain("ReferenceEquals(entry.Window, window)");
+        popupCode.Should().NotContain("CombineRgn(");
+        popupCode.Should().NotContain("ApplyVisibleHostRegion(");
+    }
+
+    [Fact]
+    public void ExternalChildWindows_AreEnabledOnlyForGlobalLookup()
+    {
+        var overlayCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs")
+        );
+        var globalPopupCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dictionary", "GlobalLookupPopupWindow.xaml.cs")
+        );
+        var readerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
+        );
+        var videoCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.xaml.cs")
+        );
+        var videoOverlayCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.SubtitleOverlay.cs")
+        );
+
+        overlayCode.Should().Contain("private bool _useExternalChildWindows;");
+        overlayCode.Replace("\r\n", "\n", StringComparison.Ordinal).Should().Contain(
+            "if (!_useExternalChildWindows)\n            await PrewarmChildHostPoolAsync");
+        globalPopupCode.Should().Contain("_popupOverlay.UseExternalChildWindows()");
+        readerCode.Should().NotContain("UseExternalChildWindows");
+        videoCode.Should().NotContain("UseExternalChildWindows");
+        videoOverlayCode.Should().NotContain("UseExternalChildWindows");
     }
 
     [Fact]
@@ -1820,6 +2007,9 @@ public class NovelReaderWebAssetTests
         var globalSettingsCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Models", "Settings", "GlobalLookupSettings.cs")
         );
+        var shortcutModelsCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Models", "Shortcuts", "ShortcutModels.cs")
+        );
         var navigationXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NavigationPage.xaml")
         );
@@ -1841,8 +2031,10 @@ public class NovelReaderWebAssetTests
 
         appSettingsCode.Should().Contain("GlobalLookupSettings GlobalLookup");
         globalSettingsCode.Should().Contain("bool Enabled { get; set; }");
-        globalSettingsCode.Should().Contain("DefaultHotKey = \"Ctrl+Alt+D\"");
+        globalSettingsCode.Should().NotContain("HotKey");
         globalSettingsCode.Should().NotContain("Enabled { get; set; } = true");
+        shortcutModelsCode.Should().Contain("LookupSelectedTextId = \"global.lookupSelectedText\"");
+        shortcutModelsCode.Should().Contain("KeyboardShortcutModifiers.Control | KeyboardShortcutModifiers.Alt");
 
         appCode.Should().Contain("IDictionaryPopupRequestService, DictionaryPopupRequestService");
         appCode.Should().Contain("GlobalLookupWindowViewModel");
@@ -1877,11 +2069,14 @@ public class NovelReaderWebAssetTests
         globalLookupServiceCode.Should().Contain("GlobalLookup] {StatusText}");
         globalLookupServiceCode.Should().Contain("Global lookup hotkey message received");
         globalLookupServiceCode.Should().Contain("Hotkey handler failed");
+        globalLookupServiceCode.Should().Contain("GlobalShortcutActions.LookupSelectedText");
+        globalLookupServiceCode.Should().Contain("ShortcutInputMapper.TryGetVirtualKey");
         globalLookupServiceCode.Should().Contain("class UIAutomationSelectedTextReader");
         globalLookupServiceCode.Should().Contain("s_readGate");
         globalLookupServiceCode.Should().Contain("AutomationElement.FocusedElement");
         globalLookupServiceCode.Should().Contain("TextPattern.Pattern");
         globalLookupServiceCode.Should().Contain("GetSelection()");
+        globalLookupServiceCode.Should().Contain("GetBoundingRectangles()");
         globalLookupServiceCode.Should().Contain("AutomationElement.FromHandle");
         globalLookupServiceCode.Should().Contain("FindAll(TreeScope.Descendants");
         globalLookupServiceCode.Should().Contain("IsTextPatternAvailableProperty");
@@ -1899,10 +2094,13 @@ public class NovelReaderWebAssetTests
             )
             .Should()
             .Contain("Global lookup popup requested")
-            .And.Contain("ResolveStagingRect(workArea, StagingSize)")
-            .And.Contain("window.AppWindow.MoveAndResize(finalRect)")
-            .And.Contain("cursorPoint.X - workArea.X")
-            .And.NotContain("GetDpiForMonitor");
+            .And.Contain("NormalizeAnchorRect(selection.ScreenBounds, cursorPoint)")
+            .And.Contain("List<PopupEntry> _popupStack")
+            .And.NotContain("window.AppWindow.MoveAndResize(finalRect)")
+            .And.Contain("await window.RevealFinalSurfaceAsync(")
+            .And.Contain("OnChildPopupRequested")
+            .And.Contain("PopupContentCommitted += OnPopupContentCommitted")
+            .And.Contain("GetDpiForMonitor");
         var globalLookupPopupWindowCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Dictionary", "GlobalLookupPopupWindow.xaml.cs")
         );
@@ -1910,19 +2108,20 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Views", "Dictionary", "GlobalLookupWindow.xaml.cs")
         );
         globalLookupPopupWindowCode.Should().Contain("ApplyPopupSizedHostSurface");
-        globalLookupPopupWindowCode.Should().Contain("_desktopAcrylicThinBackdrop = DictionaryPopupMaterial.TryApplyDesktopAcrylicThin(this, RootGrid)");
+        globalLookupPopupWindowCode.Should().Contain("SystemBackdrop = null");
         globalLookupPopupWindowCode.Should().Contain("DictionaryPopupMaterial.CreateTransparentBrush()");
         globalLookupPopupWindowCode.Should().Contain("DictionaryPopupMaterial.GetOpaqueSurfaceColor(themeMode)");
-        globalLookupPopupWindowCode.Should().Contain("_desktopAcrylicThinBackdrop?.SetTheme(themeMode)");
-        globalLookupPopupWindowCode.Should().Contain("UseStandaloneWindowVisuals");
+        globalLookupPopupWindowCode.Should().Contain("UseNakedFloatingWindowVisuals");
         globalLookupPopupWindowCode.Should().Contain("SetRootReadyOpacity(1)");
-        globalLookupPopupWindowCode.Should().NotContain("UseNakedFloatingWindowVisuals");
+        globalLookupPopupWindowCode.Should().NotContain("_popupOverlay.UseStandaloneWindowVisuals()");
         globalLookupPopupWindowCode.Should().Contain("ApplyNativeBorderlessHostStyles");
         globalLookupPopupWindowCode.Should().Contain("ApplyDwmBorderlessChrome");
         globalLookupPopupWindowCode.Should().Contain("ApplyRoundedHostRegion");
         globalLookupPopupWindowCode.Should().Contain("ClearHostRegion");
         globalLookupPopupWindowCode.Should().Contain("DwmSetWindowAttribute");
         globalLookupPopupWindowCode.Should().Contain("SetWindowRgn");
+        globalLookupPopupWindowCode.Should().NotContain("CombineRgn");
+        globalLookupPopupWindowCode.Should().Contain("UseExternalChildWindows");
         globalLookupPopupWindowCode.Should().NotContain("ApplyHostSurface(request.Theme)");
         globalLookupWindowCode.Should().Contain("_desktopAcrylicThinBackdrop = DictionaryPopupMaterial.TryApplyDesktopAcrylicThin(this, RootGrid)");
         globalLookupWindowCode.Should().Contain("RootGrid.Background = DictionaryPopupMaterial.CreateWindowFallbackBrush");
@@ -2117,7 +2316,9 @@ public class NovelReaderWebAssetTests
         overlayCode.Should().NotContain("centerX = screenWidth / 2");
         overlayCode.Should().Contain("displaySettings.PopupFullWidth");
         overlayCode.Should().Contain("PositionChildHost(");
-        overlayCode.Should().Contain("parentLeft + x");
+        overlayCode.Should().Contain("var anchor = ResolveChildAnchor(parentHost, request)");
+        overlayCode.Should().Contain("parentLeft + contentOffset.X + x");
+        overlayCode.Should().Contain("parentTop + contentOffset.Y + y");
         overlayCode.Should().NotContain("PositionHostAboveOrBelowParent");
         overlayCode.Should().Contain("GetHostBounds(parentHost)");
         overlayCode.Should().Contain("ClearChildrenAfter(host)");
@@ -2254,14 +2455,15 @@ public class NovelReaderWebAssetTests
 
         overlayCode.Should().Contain("HighlightPopupSelectionAsync(");
         overlayCode.Should().Contain("expectedParentGeneration");
-        overlayCode.Should().Contain("var anchorX = parentLeft + x;");
-        overlayCode.Should().Contain("var anchorY = parentTop + y;");
-        overlayCode.Should().Contain("var anchorWidth = request.Width.GetValueOrDefault(1);");
-        overlayCode.Should().Contain("var anchorHeight = request.Height.GetValueOrDefault(1);");
-        overlayCode.Should().Contain("anchorX,");
-        overlayCode.Should().Contain("anchorY,");
-        overlayCode.Should().Contain("anchorWidth,");
-        overlayCode.Should().Contain("anchorHeight,");
+        overlayCode.Should().Contain("var contentOffset = parentHost.GetWebContentOffset();");
+        overlayCode.Should().Contain("parentLeft + contentOffset.X + x");
+        overlayCode.Should().Contain("parentTop + contentOffset.Y + y");
+        overlayCode.Should().Contain("Math.Max(1, request.Width.GetValueOrDefault(1))");
+        overlayCode.Should().Contain("Math.Max(1, request.Height.GetValueOrDefault(1))");
+        overlayCode.Should().Contain("anchor.X,");
+        overlayCode.Should().Contain("anchor.Y,");
+        overlayCode.Should().Contain("anchor.Width,");
+        overlayCode.Should().Contain("anchor.Height,");
         overlayCode.Should().Contain("displaySettings: displaySettings");
         overlayCode.Should().NotContain("PositionHostAboveOrBelowParent(host, parentHost, parentLeft + x)");
         popupCode.Should().Contain(
@@ -2497,14 +2699,14 @@ public class NovelReaderWebAssetTests
         );
 
         popupJs.Should().Contain("if (slot.dataset.state === 'pending' || slot.dataset.enabled === 'false') return;");
-        popupJs.Should().Contain("if (mineSlot && mineSlot.dataset.state === 'pending') return;");
+        popupJs.Should().Contain("if (!mineSlot || mineSlot.dataset.state === 'pending') return;");
         popupJs.Should().Contain("let miningRequestPending = false;");
         popupJs.Should().Contain("if (miningRequestPending) return;");
         popupJs.Should().Contain("miningRequestPending = true;");
-        popupJs.Should().Contain("if (kind === 'mine' && miningRequestPending) return;");
-        popupJs.Should().Contain("finally {");
-        popupJs.Should().Contain("if (!submitted) miningRequestPending = false;");
-        popupJs.Replace("\r\n", "\n").Should().Contain("window.onMineComplete = function (success) {\n  miningRequestPending = false;");
+        popupJs.Should().Contain("if ((kind === 'mine' || kind === 'context') && miningRequestPending) return;");
+        popupJs.Should().Contain("catch (e) {");
+        popupJs.Should().Contain("miningRequestPending = false;");
+        popupJs.Replace("\r\n", "\n").Should().Contain("window.onMineComplete = function (entryIndex, result) {\n  applyMiningResult(entryIndex, result);");
     }
 
     [Fact]
@@ -4340,6 +4542,7 @@ public class NovelReaderWebAssetTests
         var miningContext = File.ReadAllText(
             Path.Combine(ProjectRoot, "Models", "Anki", "AnkiMiningPayload.cs")
         );
+        var selectionScript = File.ReadAllText(Path.Combine(ReaderRoot, "selection.js"));
 
         readerCode.Should().Contain("CreateReaderAnkiMiningContext");
         readerCode.Should().Contain("TryFindSasayakiMatchAtOffset");
@@ -4360,6 +4563,10 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("CoverPath = book?.CoverPath");
         readerCode.Should().Contain("audioSettings");
         readerCode.Should().Contain("ankiSettings");
+        readerCode.Should().Contain("MiningContextSelection.FromJson");
+        readerCode.Should().Contain("miningContext.ContextSelection = miningContextSelection");
+        selectionScript.Should().Contain("miningContextForSelection");
+        selectionScript.Should().Contain("miningContext: this.miningContextForSelection(hit.node, hit.offset)");
 
         miningContext.Should().Contain("SasayakiPopupControls");
         miningContext.Should().Contain("TogglePlaybackAsync");

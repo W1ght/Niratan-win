@@ -92,6 +92,29 @@ public class VideoSubtitleLookupAssetTests
     }
 
     [Fact]
+    public void VideoContextMiningDialog_IsHostedAboveTheNativeVideoHwnd()
+    {
+        var xaml = ReadProjectFile("Views", "Video", "VideoPlayerWindow.xaml");
+        var videoCode = ReadVideoPlayerWindowCode();
+        var popupCode = ReadProjectFile(
+            "Views", "Dictionary", "DictionaryLookupPopup.cs");
+        var overlayCode = ReadProjectFile(
+            "Views", "Dictionary", "DictionaryPopupOverlay.cs");
+
+        xaml.Should().Contain("x:Name=\"VideoModalOverlayHost\"");
+        xaml.Should().Contain("Canvas.ZIndex=\"1000\"");
+        videoCode.Should().Contain(
+            "_popupOverlay.UseInPlaceDialogHost(VideoModalOverlayHost)");
+        videoCode.Should().Contain("VideoModalOverlayHost.Children.Count > 0");
+        overlayCode.Should().Contain("UseInPlaceDialogHost(Panel? host)");
+        overlayCode.Should().Contain("host.SetInPlaceDialogHost(_inPlaceDialogHost)");
+        popupCode.Should().Contain("dialogHost.Children.Add(dialog)");
+        popupCode.Should().Contain(
+            "dialog.ShowAsync(ContentDialogPlacement.InPlace)");
+        popupCode.Should().Contain("dialogHost.Children.Remove(dialog)");
+    }
+
+    [Fact]
     public void VideoSubtitleLookup_PopupEmptySpacePassesThrough()
     {
         var xaml = File.ReadAllText(
@@ -444,14 +467,14 @@ public class VideoSubtitleLookupAssetTests
     }
 
     [Fact]
-    public void VideoPlayerWindow_MaximizesAndPreservesSourceAspectRatioWhenOpeningVideoForTesting()
+    public void VideoPlayerWindow_FitsToSourceAspectRatioWhenMediaLoads()
     {
         var windowCode = ReadVideoPlayerWindowCode();
         var mpvCode = File.ReadAllText(Path.Combine(ProjectRoot, "Services", "Video", "MpvPlaybackEngine.cs"));
 
-        windowCode.Should().Contain("MaximizeVideoWindowForTesting();");
-        windowCode.Should().Contain("OverlappedPresenter");
-        windowCode.Should().Contain("presenter.Maximize();");
+        windowCode.Should().Contain("SynchronizeVideoWindowAspectRatioAsync");
+        windowCode.Should().Contain("GetVideoDisplayInfoAsync");
+        windowCode.Should().Contain("FitWindowToVideoAspectRatio");
         mpvCode.Should().Contain("MpvNative.SetOptionStringChecked(_handle, \"panscan\", \"0.0\")");
         mpvCode.Should().NotContain("MpvNative.SetOptionStringChecked(_handle, \"panscan\", \"1.0\")");
         mpvCode.Should().Contain("MpvNative.SetOptionStringChecked(_handle, \"sub-visibility\", \"no\")");
@@ -559,8 +582,9 @@ public class VideoSubtitleLookupAssetTests
         xaml.Should().Contain("PointerPressed=\"BottomChromePopupRoot_PointerPressed\"");
         xaml.Should().Contain("DoubleTapped=\"BottomChromePopupRoot_DoubleTapped\"");
         xaml.Should().Contain("PointerWheelChanged=\"BottomChromePopupRoot_PointerWheelChanged\"");
-        code.Should().Contain("BottomChromePopupRoot.Width = VideoSurface.ActualWidth");
-        code.Should().Contain("BottomChromePopupRoot.Height = VideoSurface.ActualHeight");
+        code.Should().Contain("GetPixelAlignedVideoSurfaceBounds");
+        code.Should().Contain("BottomChromePopupRoot.Width = bounds.Width");
+        code.Should().Contain("BottomChromePopupRoot.Height = bounds.Height");
         code.Should().Contain("PositionVideoHost();");
         code.Should().Contain("RefreshVideoLayoutAfterInspectorChanged");
         code.Should().Contain("DispatcherQueue.TryEnqueue(() =>");
@@ -580,7 +604,8 @@ public class VideoSubtitleLookupAssetTests
         code.Should().Contain("ShowBottomChromeForPointerActivity();");
         code.Should().Contain("HideBottomChromeForPointerLeave();");
         code.Should().Contain("HideBottomChromeForInactivity();");
-        code.Should().Contain("BottomChrome.Visibility = Visibility.Collapsed;");
+        code.Should().Contain("if (BottomChrome.Visibility != visibility)");
+        code.Should().Contain("BottomChrome.Visibility = visibility;");
     }
 
     [Fact]
@@ -616,7 +641,9 @@ public class VideoSubtitleLookupAssetTests
         xaml.Should().Contain("Text=\"挖卡历史\"");
         xaml.Should().Contain("Text=\"字幕列表\"");
         xaml.Should().Contain("Text=\"章节\"");
-        xaml.Should().Contain("Click=\"LookupCurrentSubtitleButton_Click\"");
+        xaml.Should().NotContain("Click=\"LookupCurrentSubtitleButton_Click\"");
+        xaml.Should().NotContain("Content=\"查询当前字幕\"");
+        xaml.Should().Contain("ColumnDefinitions=\"72,*,Auto\"");
         xaml.Should().Contain("暂无挖卡历史。保存当前字幕后会显示在这里。");
         xaml.Should().NotContain("挖卡历史记录源接入后会显示在这里。");
         xaml.Should().Contain("x:Name=\"InspectorMiningHistoryContent\"");
@@ -629,7 +656,7 @@ public class VideoSubtitleLookupAssetTests
         code.Should().Contain("VideoInspectorTab.Video");
         code.Should().Contain("VideoInspectorTab.Audio");
         code.Should().Contain("VideoInspectorTab.Subtitles");
-        code.Should().Contain("LookupCurrentSubtitleButton_Click");
+        code.Should().NotContain("LookupCurrentSubtitleButton_Click");
         code.Should().Contain("InspectorTabButton_Unchecked");
     }
 
@@ -848,14 +875,14 @@ public class VideoSubtitleLookupAssetTests
     }
 
     [Fact]
-    public void VideoPlayerWindow_PausesPlaybackUntilRestoreSeekIsApplied()
+    public void VideoPlayerWindow_StartsPlaybackBeforeSidebarMetadataRestore()
     {
         var windowCode = ReadVideoPlayerWindowMainCode();
         var methodStart = windowCode.IndexOf(
             "private async Task OpenPendingVideoAsync",
             StringComparison.Ordinal);
         var methodEnd = windowCode.IndexOf(
-            "private async void LookupCurrentSubtitleButton_Click",
+            "private async void RecordMiningHistoryButton_Click",
             methodStart,
             StringComparison.Ordinal);
         var methodCode = windowCode[methodStart..methodEnd];
@@ -873,12 +900,14 @@ public class VideoSubtitleLookupAssetTests
             "await _playbackEngine.SetPausedAsync(false, ct);",
             StringComparison.Ordinal);
 
-        methodCode.Should().Contain("var restoreState = await LoadPlaybackStateAsync(video, ct);");
+        methodCode.Should().Contain("var restoreStateTask = LoadPlaybackStateAsync(video, ct);");
+        methodCode.Should().Contain("var restoreState = await restoreStateTask;");
         methodCode.Should().Contain("var restoreStartPosition = ViewModel.RememberPlaybackState");
         methodCode.Should().Contain("restoreState.ResolveRestorePosition(TimeSpan.Zero)");
         pauseBeforeOpen.Should().BeGreaterThanOrEqualTo(0);
         pauseBeforeOpen.Should().BeLessThan(openVideo);
-        resumeAfterRestore.Should().BeGreaterThan(restorePlayback);
+        resumeAfterRestore.Should().BeGreaterThan(openVideo);
+        restorePlayback.Should().BeGreaterThan(resumeAfterRestore);
     }
 
     [Fact]

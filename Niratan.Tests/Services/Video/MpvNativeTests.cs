@@ -38,6 +38,26 @@ public class MpvNativeTests
     }
 
     [Fact]
+    public void ShaderCommands_ClearThenAppendAbsolutePathsWithoutJoining()
+    {
+        var commands = MpvPlaybackEngine.BuildShaderChangeListCommands(
+            [@"C:\Users\Test User\shader one.glsl", @"D:\Anime4K\shader-two.glsl"]);
+
+        commands.Should().HaveCount(3);
+        commands[0].Should().Equal("change-list", "glsl-shaders", "clr", "");
+        commands[1].Should().Equal(
+            "change-list",
+            "glsl-shaders",
+            "append",
+            @"C:\Users\Test User\shader one.glsl");
+        commands[2].Should().Equal(
+            "change-list",
+            "glsl-shaders",
+            "append",
+            @"D:\Anime4K\shader-two.glsl");
+    }
+
+    [Fact]
     public void Create_CanInitializeBundledLibmpv()
     {
         var handle = MpvNative.Create();

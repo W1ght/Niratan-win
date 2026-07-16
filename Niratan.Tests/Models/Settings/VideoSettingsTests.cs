@@ -17,6 +17,7 @@ public sealed class VideoSettingsTests
         settings.HardwareDecodingEnabled.Should().BeTrue();
         settings.DeinterlacingEnabled.Should().BeFalse();
         settings.HdrEnhancementEnabled.Should().BeFalse();
+        settings.VideoShaderPreset.Should().Be(VideoShaderPreset.Off);
         settings.VideoBrightness.Should().Be(0);
         settings.VideoContrast.Should().Be(0);
         settings.VideoSaturation.Should().Be(0);

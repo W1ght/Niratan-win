@@ -155,7 +155,8 @@ public sealed class SubtitleParserService
     public async Task<VideoSubtitleDocument> ParseFileAsync(string subtitlePath, CancellationToken ct = default)
     {
         var text = await File.ReadAllTextAsync(subtitlePath, ct);
-        return Parse(text, Path.GetExtension(subtitlePath));
+        var extension = Path.GetExtension(subtitlePath);
+        return await Task.Run(() => Parse(text, extension), ct);
     }
 
     private static VideoSubtitleDocument ParseTextBlocks(string subtitleText, bool isWebVtt)

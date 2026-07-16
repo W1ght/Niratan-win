@@ -21,6 +21,7 @@ public sealed class VideoItemViewModel
     public string AutomationId => $"VideoItem_{Video.Id}";
 
     public string SubtitleStatus => string.IsNullOrWhiteSpace(Video.SubtitlePath)
+                                    && string.IsNullOrWhiteSpace(Video.RemoteSubtitleLanguage)
         ? ResourceStringHelper.GetString("VideoSubtitleStatusNone", "No subtitles")
         : ResourceStringHelper.GetString("VideoSubtitleStatusAvailable", "Subtitles");
 
@@ -42,15 +43,17 @@ public sealed class VideoItemViewModel
             ? ResourceStringHelper.GetString("VideoWatchStatusContinue", "Continue")
             : ResourceStringHelper.GetString("VideoWatchStatusUnwatched", "Unwatched");
 
-    public string FolderName => string.IsNullOrWhiteSpace(Video.SourceFolderPath)
-        ? ""
-        : Path.GetFileName(Video.SourceFolderPath);
+    public string FolderName => Video.IsRemote
+        ? ResourceStringHelper.GetString("YouTubeVideo", "YouTube Video")
+        : string.IsNullOrWhiteSpace(Video.SourceFolderPath)
+            ? ""
+            : Path.GetFileName(Video.SourceFolderPath);
 
     public IReadOnlyList<string> TagLabels => SplitTags(Video.Tags);
 
     public string? ArtworkPath => ExistingPath(Video.PosterPath) ?? ExistingPath(Video.ThumbnailPath);
 
-    public BitmapImage? ArtworkImage => LoadPoster(ArtworkPath);
+    public BitmapImage? ArtworkImage => LoadPoster(ArtworkPath, Video.RemoteThumbnailUrl);
 
     public bool HasArtwork => ArtworkImage != null;
 
@@ -130,14 +133,16 @@ public sealed class VideoItemViewModel
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-    private static BitmapImage? LoadPoster(string? posterPath)
+    private static BitmapImage? LoadPoster(string? posterPath, string? remoteThumbnailUrl)
     {
-        if (string.IsNullOrWhiteSpace(posterPath) || !File.Exists(posterPath))
-            return null;
-
         try
         {
-            return new BitmapImage(new Uri(posterPath));
+            if (!string.IsNullOrWhiteSpace(posterPath) && File.Exists(posterPath))
+                return new BitmapImage(new Uri(posterPath));
+            if (Uri.TryCreate(remoteThumbnailUrl, UriKind.Absolute, out var remoteUri)
+                && remoteUri.Scheme == Uri.UriSchemeHttps)
+                return new BitmapImage(remoteUri);
+            return null;
         }
         catch
         {

@@ -40,4 +40,19 @@ public class AnkiMediaMarkupTests
 
         rendered.Should().Be("[sound:niratan_sasayaki_clip.m4a]");
     }
+
+    [Fact]
+    public void Renderer_UsesUploadedCoverTagInsteadOfLocalPath()
+    {
+        var rendered = AnkiHandlebarRenderer.Render(
+            "{book-cover}",
+            new AnkiMiningPayload(),
+            new AnkiMiningContext
+            {
+                CoverPath = "D:\\Books\\Private\\cover.jpg",
+                CoverTag = "<img src=\"niratan_cover.jpg\">",
+            });
+
+        rendered.Should().Be("<img src=\"niratan_cover.jpg\">");
+    }
 }

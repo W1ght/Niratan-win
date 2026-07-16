@@ -121,6 +121,7 @@
                                         CommandParameter="{x:Bind}" />
                         <MenuFlyoutItem x:Uid="VideoLibraryRevealFileMenuItem"
                                         Text="Reveal file"
+                                        Visibility="{x:Bind Video.IsRemote, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}"
                                         Command="{Binding ViewModel.RevealFileCommand, ElementName=ThisPage}"
                                         CommandParameter="{x:Bind}" />
                         <MenuFlyoutItem x:Uid="VideoLibraryAddToNewCollectionMenuItem"
@@ -220,6 +221,7 @@
                                         CommandParameter="{x:Bind}" />
                         <MenuFlyoutItem x:Uid="VideoLibraryRevealFileMenuItem"
                                         Text="Reveal file"
+                                        Visibility="{x:Bind Video.IsRemote, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}"
                                         Command="{Binding ViewModel.RevealFileCommand, ElementName=ThisPage}"
                                         CommandParameter="{x:Bind}" />
                         <MenuFlyoutItem x:Uid="VideoLibraryAddToNewCollectionMenuItem"
@@ -481,6 +483,15 @@
                                 <FontIcon Glyph="&#xE8E5;" />
                             </AppBarButton.Icon>
                         </AppBarButton>
+                        <AppBarButton x:Name="AddYouTubeLinkButton"
+                                      x:Uid="AddYouTubeLinkButton"
+                                      AutomationProperties.AutomationId="AddYouTubeLinkButton"
+                                      Click="AddYouTubeLinkButton_Click"
+                                      Label="Add link">
+                            <AppBarButton.Icon>
+                                <FontIcon Glyph="&#xE71B;" />
+                            </AppBarButton.Icon>
+                        </AppBarButton>
                         <AppBarButton x:Name="CreateSmartCollectionButton"
                                       x:Uid="CreateSmartCollectionButton"
                                       AutomationProperties.AutomationId="CreateSmartCollectionButton"
@@ -628,5 +639,6 @@
                 </StackPanel>
             </StackPanel>
         </ContentDialog>
+
     </Grid>
 </Page>

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Serialization;
@@ -6,7 +7,7 @@ namespace Niratan.Models.Sasayaki;
 
 public sealed class SasayakiCue
 {
-    public int Id { get; set; }
+    public string Id { get; set; } = "";
     public double StartTime { get; set; }
     public double EndTime { get; set; }
     public string Text { get; set; } = "";
@@ -14,37 +15,36 @@ public sealed class SasayakiCue
 
 public sealed class SasayakiMatch
 {
-    public int CueIndex { get; set; }
+    public string Id { get; set; } = "";
+    public double StartTime { get; set; }
+    public double EndTime { get; set; }
+    public string Text { get; set; } = "";
     public int ChapterIndex { get; set; }
-    public int StartCodePoint { get; set; }
+    public int Start { get; set; }
     public int Length { get; set; }
 }
 
 public sealed class SasayakiMatchData
 {
-    public const int CurrentSchemaVersion = 3;
-
-    public int SchemaVersion { get; set; } = CurrentSchemaVersion;
-    public string BookId { get; set; } = "";
-    public string AudiobookPath { get; set; } = "";
-    public string SrtPath { get; set; } = "";
-    public List<SasayakiCue> Cues { get; set; } = [];
     public List<SasayakiMatch> Matches { get; set; } = [];
-    public int TotalChapters { get; set; }
-    public int UnmatchedCount { get; set; }
+    public int Unmatched { get; set; }
 
     [JsonIgnore]
-    public bool IsCurrentSchemaVersion => SchemaVersion == CurrentSchemaVersion;
+    public int TotalCueCount => Matches.Count + Math.Max(0, Unmatched);
 
     [JsonIgnore]
-    public bool IsValid => IsCurrentSchemaVersion && Cues.Count > 0 && Matches.Count > 0;
+    public bool IsValid => Matches.Count > 0;
 
     [JsonIgnore]
     public bool RequiresMatcherRefresh => Matches.Any(match =>
-        match.CueIndex >= 0
-        && match.CueIndex < Cues.Count
-        && Cues[match.CueIndex].Text.StartsWith('＊')
+        match.Text.StartsWith('＊')
         && match.Length < 5);
+}
+
+public sealed class SasayakiSourceData
+{
+    public string AudiobookPath { get; set; } = "";
+    public string SrtPath { get; set; } = "";
 }
 
 public sealed class SasayakiPlaybackData

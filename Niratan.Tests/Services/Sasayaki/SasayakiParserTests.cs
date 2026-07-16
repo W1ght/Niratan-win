@@ -22,6 +22,7 @@ public sealed class SasayakiParserTests
         var cues = parser.Parse(srt);
 
         cues.Should().HaveCount(2);
+        cues.Select(cue => cue.Id).Should().Equal("0", "1");
         cues[0].Text.Should().Be("最初の行");
         cues[1].StartTime.Should().Be(3.5);
     }

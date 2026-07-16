@@ -22,7 +22,7 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
 
     public DictionaryCollapseMode[] AvailableCollapseModes { get; } = Enum.GetValues<DictionaryCollapseMode>();
 
-    public ObservableCollection<InstalledDictionary> InstalledDictionaries { get; } = [];
+    public ObservableCollection<DictionarySettingsItemViewModel> InstalledDictionaries { get; } = [];
 
     [ObservableProperty]
     public partial DictionaryType SelectedDictionaryType { get; set; } = DictionaryType.Term;
@@ -208,7 +208,7 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
             {
                 InstalledDictionaries.Clear();
                 foreach (var dictionary in dicts)
-                    InstalledDictionaries.Add(dictionary);
+                    InstalledDictionaries.Add(new DictionarySettingsItemViewModel(dictionary));
 
                 IsDictionaryListEmpty = InstalledDictionaries.Count == 0;
                 DictionaryStatusText = IsDictionaryListEmpty
@@ -240,14 +240,22 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
 
     public async Task SetDictionaryEnabledAsync(string dictName, bool enabled)
     {
+        var dictionary = InstalledDictionaries.FirstOrDefault(item => item.Name == dictName);
+        if (dictionary == null)
+            return;
+
+        var previousValue = dictionary.IsEnabled;
+        if (!dictionary.TrySetEnabled(enabled))
+            return;
+
         try
         {
             await App.GetService<IDictionaryImportService>()
                 .SetDictionaryEnabledAsync(SelectedDictionaryType, dictName, enabled);
-            await RefreshDictionariesAsync();
         }
         catch (Exception ex)
         {
+            dictionary.IsEnabled = previousValue;
             Log.Error(ex, "[DictionarySettings] Failed to set dictionary enabled state");
             App.GetService<INotificationService>().ShowError(ex.Message, "Dictionary");
         }
@@ -336,5 +344,36 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
         {
             IsDictionaryOperationInProgress = false;
         }
+    }
+}
+
+public partial class DictionarySettingsItemViewModel : ObservableObject
+{
+    public string Name { get; }
+    public DictionaryType Type { get; }
+    public int Order { get; }
+    public string Revision { get; }
+    public string DisplayTitle { get; }
+
+    [ObservableProperty]
+    public partial bool IsEnabled { get; set; }
+
+    public DictionarySettingsItemViewModel(InstalledDictionary dictionary)
+    {
+        Name = dictionary.Name;
+        Type = dictionary.Type;
+        IsEnabled = dictionary.IsEnabled;
+        Order = dictionary.Order;
+        Revision = dictionary.Revision;
+        DisplayTitle = dictionary.DisplayTitle;
+    }
+
+    public bool TrySetEnabled(bool value)
+    {
+        if (IsEnabled == value)
+            return false;
+
+        IsEnabled = value;
+        return true;
     }
 }

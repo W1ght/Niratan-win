@@ -29,6 +29,31 @@ public class VideoPlayerViewModelChapterTests
         sut.ChapterRows[1].AutomationName.Should().Be("Part A, current chapter");
     }
 
+    [Fact]
+    public void UpdatePosition_DoesNotRebuildChapterRowsWithinSameChapter()
+    {
+        var sut = CreateSut();
+        sut.ReplaceChapters(
+        [
+            new VideoChapter(0, "Opening", TimeSpan.Zero),
+            new VideoChapter(1, "Part A", TimeSpan.FromSeconds(60)),
+            new VideoChapter(2, "Part B", TimeSpan.FromSeconds(120)),
+        ]);
+        sut.UpdatePosition(TimeSpan.FromSeconds(75), TimeSpan.FromSeconds(180));
+        var rows = sut.ChapterRows.ToArray();
+        var collectionChanges = 0;
+        sut.ChapterRows.CollectionChanged += (_, _) => collectionChanges++;
+
+        sut.UpdatePosition(TimeSpan.FromSeconds(76), TimeSpan.FromSeconds(180));
+
+        collectionChanges.Should().Be(0);
+        sut.ChapterRows.Should().Equal(rows);
+
+        sut.UpdatePosition(TimeSpan.FromSeconds(125), TimeSpan.FromSeconds(180));
+        collectionChanges.Should().BeGreaterThan(0);
+        sut.ChapterRows.Select(row => row.IsCurrent).Should().Equal(false, false, true);
+    }
+
     private static VideoPlayerViewModel CreateSut() =>
         new(
             new SubtitleParserService(),

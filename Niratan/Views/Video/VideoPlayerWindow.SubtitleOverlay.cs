@@ -561,13 +561,24 @@ public sealed partial class VideoPlayerWindow
             0,
             viewportRight + horizontalInset,
             0);
-        var subtitleHeight = SubtitlePanelBorder.ActualHeight > 0
-            ? SubtitlePanelBorder.ActualHeight
-            : ViewModel.SubtitlePanelHeight;
-        SubtitlePanelTransform.Y = viewportTop + VideoSubtitlePositionPolicy.OriginY(
-            viewportHeight,
-            subtitleHeight,
-            ViewModel.SubtitleVerticalPosition);
+        if (_subtitleVisibleBounds is { Width: > 0, Height: > 0 } visibleBounds)
+        {
+            SubtitlePanelTransform.Y = viewportTop + VideoSubtitlePositionPolicy.ContainerOriginY(
+                viewportHeight,
+                visibleBounds.Y,
+                visibleBounds.Height,
+                ViewModel.SubtitleVerticalPosition);
+        }
+        else
+        {
+            var subtitleHeight = SubtitlePanelBorder.ActualHeight > 0
+                ? SubtitlePanelBorder.ActualHeight
+                : ViewModel.SubtitlePanelHeight;
+            SubtitlePanelTransform.Y = viewportTop + VideoSubtitlePositionPolicy.OriginY(
+                viewportHeight,
+                subtitleHeight,
+                ViewModel.SubtitleVerticalPosition);
+        }
         var backgroundOpacity = ViewModel.SubtitleBackgroundDisabled
             ? 0
             : Math.Clamp(ViewModel.SubtitleBackgroundOpacity, 0, 1);
@@ -598,10 +609,33 @@ public sealed partial class VideoPlayerWindow
         if (ViewModel == null)
             return;
 
-        VideoSubtitleCanvasRenderer.Draw(
+        var visibleBounds = VideoSubtitleCanvasRenderer.Draw(
             args.DrawingSession,
             new Windows.Foundation.Size(sender.ActualWidth, sender.ActualHeight),
             CreateSubtitleCanvasRenderOptions());
+        if (visibleBounds.Width <= 0
+            || visibleBounds.Height <= 0
+            || AreClose(_subtitleVisibleBounds, visibleBounds))
+        {
+            return;
+        }
+
+        _subtitleVisibleBounds = visibleBounds;
+        DispatcherQueue.TryEnqueue(ApplySubtitleAppearance);
+    }
+
+    private static bool AreClose(
+        Windows.Foundation.Rect? current,
+        Windows.Foundation.Rect candidate)
+    {
+        if (current is not { } value)
+            return false;
+
+        const double tolerance = 0.25;
+        return Math.Abs(value.X - candidate.X) <= tolerance
+            && Math.Abs(value.Y - candidate.Y) <= tolerance
+            && Math.Abs(value.Width - candidate.Width) <= tolerance
+            && Math.Abs(value.Height - candidate.Height) <= tolerance;
     }
 
     private VideoSubtitleCanvasRenderOptions CreateSubtitleCanvasRenderOptions()

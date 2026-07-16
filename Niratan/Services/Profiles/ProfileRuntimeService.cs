@@ -88,6 +88,24 @@ public sealed class ProfileRuntimeService : IProfileRuntimeService, IDictionaryP
     public bool EnableUnconfiguredDictionariesForProfile(string profileId) =>
         string.Equals(profileId, ProfileConstants.DefaultJapaneseProfileId, StringComparison.Ordinal);
 
+    public async Task ReloadActiveProfileAsync(CancellationToken ct = default)
+    {
+        await _activationLock.WaitAsync(ct);
+        try
+        {
+            _activeResolution = _profiles.Resolve(ProfileContext.Global());
+            await _settingsStore.ReloadActiveAsync(ct);
+            var lookup = _services.GetService<IDictionaryLookupService>();
+            if (lookup is not null)
+                await lookup.SetActiveLanguageAsync(_activeResolution.Language.Id);
+            ProfileChanged?.Invoke(this, _activeResolution);
+        }
+        finally
+        {
+            _activationLock.Release();
+        }
+    }
+
     private async Task ActivateAsync(ProfileContext context, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();

@@ -19,6 +19,7 @@ internal static class MpvNative
     internal const int MpvEventIdNone = 0;
     internal const int MpvEventIdShutdown = 1;
     internal const int MpvEventIdEndFile = 7;
+    internal const int MpvEventIdFileLoaded = 8;
 
     private static readonly object ResolverLock = new();
     private static IntPtr s_libraryHandle;
@@ -158,6 +159,9 @@ internal static class MpvNative
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "mpv_terminate_destroy")]
     internal static extern void TerminateDestroy(IntPtr handle);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "mpv_wakeup")]
+    internal static extern void Wakeup(IntPtr handle);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "mpv_set_option_string")]
     internal static extern int SetOptionString(

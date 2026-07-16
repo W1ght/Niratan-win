@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using Niratan.Models;
 
 namespace Niratan.Services.Video;
 
@@ -15,7 +16,9 @@ public static class VideoMiningMediaNaming
 
     private static string StablePathHash(string videoPath)
     {
-        var normalized = Path.GetFullPath(videoPath).ToUpperInvariant();
+        var normalized = RemoteVideoIdentity.IsPersistenceKey(videoPath, YouTubeUrlParser.ProviderId)
+            ? videoPath.Trim().ToUpperInvariant()
+            : Path.GetFullPath(videoPath).ToUpperInvariant();
         var bytes = SHA1.HashData(Encoding.UTF8.GetBytes(normalized));
         return Convert.ToHexString(bytes)[..12].ToLowerInvariant();
     }

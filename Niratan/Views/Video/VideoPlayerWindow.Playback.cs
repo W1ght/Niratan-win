@@ -11,20 +11,32 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Windows.Graphics;
 using Windows.System;
 using Niratan.Helpers;
 using Niratan.Models;
+using Niratan.Models.Settings;
 using Niratan.Models.Shortcuts;
 using Niratan.Services.Video;
+using Niratan.ViewModels.Pages;
 
 namespace Niratan.Views.Video;
 
 public sealed partial class VideoPlayerWindow
 {
     private const uint WM_LBUTTONDBLCLK = 0x0203;
+    private const uint WM_SIZING = 0x0214;
     private const uint WM_SYSCOMMAND = 0x0112;
     private const uint SC_SIZE = 0xF000;
     private const double VideoResizeCornerGutter = 24;
+    private const double MinimumAspectConstrainedVideoWidth = 320;
+    private const double MinimumAspectConstrainedVideoHeight = 180;
+
+    private const int WMSZ_LEFT = 1;
+    private const int WMSZ_TOP = 3;
+    private const int WMSZ_TOPLEFT = 4;
+    private const int WMSZ_TOPRIGHT = 5;
+    private const int WMSZ_BOTTOMLEFT = 7;
 
     private enum VideoWindowResizeDirection
     {
@@ -46,26 +58,31 @@ public sealed partial class VideoPlayerWindow
         if (VideoSurface.ActualWidth <= 0 || VideoSurface.ActualHeight <= 0)
             return;
 
-        var point = VideoSurface.TransformToVisual(RootGrid)
-            .TransformPoint(new Windows.Foundation.Point(0, 0));
-        BottomChromePopupRoot.Width = VideoSurface.ActualWidth;
-        BottomChromePopupRoot.Height = VideoSurface.ActualHeight;
-        BottomChromePopup.HorizontalOffset = point.X;
-        BottomChromePopup.VerticalOffset = point.Y;
+        var bounds = GetPixelAlignedVideoSurfaceBounds(relativeTo: null);
+        BottomChromePopupRoot.Width = bounds.Width;
+        BottomChromePopupRoot.Height = bounds.Height;
+        BottomChromePopup.HorizontalOffset = bounds.X;
+        BottomChromePopup.VerticalOffset = bounds.Y;
         ApplySubtitleAppearance();
     }
 
-    private void MaximizeVideoWindowForTesting()
+    private Windows.Foundation.Rect GetPixelAlignedVideoSurfaceBounds(UIElement? relativeTo)
     {
-        if (_isFullScreen)
-            return;
+        var point = VideoSurface.TransformToVisual(relativeTo)
+            .TransformPoint(new Windows.Foundation.Point(0, 0));
+        var scale = RootGrid.XamlRoot?.RasterizationScale ?? 1;
+        if (!double.IsFinite(scale) || scale <= 0)
+            scale = 1;
 
-        if (AppWindow.Presenter is OverlappedPresenter presenter)
-            presenter.Maximize();
-
-        PositionBottomChromeOverlay();
-        PositionVideoHost();
+        return new Windows.Foundation.Rect(
+            AlignToPhysicalPixel(point.X, scale),
+            AlignToPhysicalPixel(point.Y, scale),
+            Math.Max(1 / scale, AlignToPhysicalPixel(VideoSurface.ActualWidth, scale)),
+            Math.Max(1 / scale, AlignToPhysicalPixel(VideoSurface.ActualHeight, scale)));
     }
+
+    private static double AlignToPhysicalPixel(double value, double scale) =>
+        Math.Round(value * scale) / scale;
 
     private async void PlayPauseButton_Click(object sender, RoutedEventArgs e)
     {
@@ -211,6 +228,74 @@ public sealed partial class VideoPlayerWindow
             return;
 
         await SetHDREnhancementAsync(HdrEnhancementToggle.IsOn);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WindowRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+
+        public readonly int Width => Right - Left;
+        public readonly int Height => Bottom - Top;
+    }
+
+    private async void Anime4KPresetComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (ViewModel == null)
+            return;
+
+        if (sender is ComboBox { SelectedItem: VideoShaderPresetOption option })
+            ViewModel.SelectedVideoShaderPresetOption = option;
+
+        if (!_isLoaded || ViewModel.IsVideoShaderDownloadInProgress)
+            return;
+
+        try
+        {
+            var ct = _remoteOperationCts?.Token ?? default;
+            if (ViewModel.TryActivateSelectedVideoShaderPreset())
+                await _playbackEngine.SetVideoShaderPresetAsync(ViewModel.VideoShaderPreset, ct);
+            else
+                await _playbackEngine.SetVideoShaderPresetAsync(VideoShaderPreset.Off, ct);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            ViewModel.ReportVideoShaderApplyFailure(ex.Message);
+        }
+    }
+
+    private void UpdateAnime4KDownloadControls()
+    {
+        Anime4KDownloadButton.Visibility = ViewModel.IsVideoShaderDownloadRequired
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        Anime4KDownloadProgressRing.Visibility = ViewModel.IsVideoShaderDownloadInProgress
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
+
+    private async void Anime4KDownloadButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var ct = _remoteOperationCts?.Token ?? default;
+            if (await ViewModel.PrepareSelectedVideoShaderPresetAsync(ct))
+                await _playbackEngine.SetVideoShaderPresetAsync(ViewModel.VideoShaderPreset, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // Closing or replacing the current video cancels pending shader work.
+        }
+        catch (Exception ex)
+        {
+            ViewModel.ReportVideoShaderApplyFailure(ex.Message);
+        }
     }
 
     private async void VideoEqualizerSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
@@ -442,6 +527,7 @@ public sealed partial class VideoPlayerWindow
     private async Task ApplyVideoEnhancementAsync(CancellationToken ct = default)
     {
         await _playbackEngine.SetHDREnhancementAsync(ViewModel.HdrEnhancementEnabled, ct);
+        await _playbackEngine.SetVideoShaderPresetAsync(ViewModel.VideoShaderPreset, ct);
         await _playbackEngine.SetVideoEqualizerAsync("brightness", ViewModel.VideoBrightness, ct);
         await _playbackEngine.SetVideoEqualizerAsync("contrast", ViewModel.VideoContrast, ct);
         await _playbackEngine.SetVideoEqualizerAsync("saturation", ViewModel.VideoSaturation, ct);
@@ -563,7 +649,10 @@ public sealed partial class VideoPlayerWindow
             ViewModel.SetAspectRatio(value);
             UpdateAspectRatioSelection();
             if (_isLoaded)
+            {
                 await _playbackEngine.SetAspectRatioAsync(ViewModel.AspectRatioValue);
+                await SynchronizeVideoWindowAspectRatioAsync();
+            }
 
             ViewModel.StatusText = $"Aspect ratio {ViewModel.AspectRatioText}";
         }
@@ -579,7 +668,10 @@ public sealed partial class VideoPlayerWindow
         {
             ViewModel.RotateClockwise();
             if (_isLoaded)
+            {
                 await _playbackEngine.SetVideoRotationAsync(ViewModel.VideoRotationDegrees);
+                await SynchronizeVideoWindowAspectRatioAsync();
+            }
 
             ViewModel.StatusText = $"Rotation {ViewModel.VideoRotationText}";
         }
@@ -690,7 +782,83 @@ public sealed partial class VideoPlayerWindow
         ViewModel.StatusText = _isFullScreen
             ? ResourceStringHelper.GetString("VideoPlayerStatusFullScreen", "Full screen")
             : ResourceStringHelper.GetString("VideoPlayerStatusWindowed", "Windowed");
+        if (!_isFullScreen)
+            DispatcherQueue.TryEnqueue(FitWindowToVideoAspectRatio);
         RootGrid.Focus(FocusState.Programmatic);
+    }
+
+    private async Task SynchronizeVideoWindowAspectRatioAsync(CancellationToken ct = default)
+    {
+        var displayInfo = await _playbackEngine.GetVideoDisplayInfoAsync(ct);
+        var aspectRatio = displayInfo?.AspectRatio;
+        if (aspectRatio is not > 0 || !double.IsFinite(aspectRatio.Value))
+            return;
+
+        _videoAspectRatio = aspectRatio;
+        FitWindowToVideoAspectRatio();
+    }
+
+    private void FitWindowToVideoAspectRatio()
+    {
+        if (_videoAspectRatio is not > 0
+            || _isFullScreen
+            || RootGrid.ActualWidth <= 0
+            || RootGrid.ActualHeight <= 0
+            || AppWindow.Presenter is OverlappedPresenter { State: not OverlappedPresenterState.Restored })
+        {
+            return;
+        }
+
+        var scale = GetDpiForWindow(_parentHwnd) / 96.0;
+        if (!double.IsFinite(scale) || scale <= 0)
+            return;
+
+        var currentBounds = new RectInt32(
+            AppWindow.Position.X,
+            AppWindow.Position.Y,
+            AppWindow.Size.Width,
+            AppWindow.Size.Height);
+        var workArea = DisplayArea.GetFromRect(currentBounds, DisplayAreaFallback.Nearest).WorkArea;
+        var clientWidthPixels = Math.Max(1, (int)Math.Round(RootGrid.ActualWidth * scale));
+        var clientHeightPixels = Math.Max(1, (int)Math.Round(RootGrid.ActualHeight * scale));
+        var decorationWidthPixels = Math.Max(AppWindow.Size.Width - clientWidthPixels, 0);
+        var decorationHeightPixels = Math.Max(AppWindow.Size.Height - clientHeightPixels, 0);
+        var maximumContentSize = new VideoLayoutSize(
+            Math.Max((workArea.Width - decorationWidthPixels) / scale, 1),
+            Math.Max((workArea.Height - decorationHeightPixels) / scale, 1));
+        var sidebarWidth = Math.Max(RootGrid.ActualWidth - VideoSurface.ActualWidth, 0);
+        var fittedContentSize = VideoWindowAspectLayout.FitContentSize(
+            new VideoLayoutSize(RootGrid.ActualWidth, RootGrid.ActualHeight),
+            _videoAspectRatio.Value,
+            sidebarWidth,
+            maximumContentSize);
+        if (!fittedContentSize.IsValid)
+            return;
+
+        var targetWidth = Math.Min(
+            Math.Max(1, (int)Math.Round(fittedContentSize.Width * scale) + decorationWidthPixels),
+            workArea.Width);
+        var targetHeight = Math.Min(
+            Math.Max(1, (int)Math.Round(fittedContentSize.Height * scale) + decorationHeightPixels),
+            workArea.Height);
+        var targetX = Math.Clamp(
+            AppWindow.Position.X,
+            workArea.X,
+            workArea.X + Math.Max(workArea.Width - targetWidth, 0));
+        var targetY = Math.Clamp(
+            AppWindow.Position.Y,
+            workArea.Y,
+            workArea.Y + Math.Max(workArea.Height - targetHeight, 0));
+
+        if (Math.Abs(AppWindow.Size.Width - targetWidth) <= 1
+            && Math.Abs(AppWindow.Size.Height - targetHeight) <= 1
+            && AppWindow.Position.X == targetX
+            && AppWindow.Position.Y == targetY)
+        {
+            return;
+        }
+
+        AppWindow.MoveAndResize(new RectInt32(targetX, targetY, targetWidth, targetHeight));
     }
 
     private async void OnPositionTimerTick(object? sender, object e)
@@ -703,7 +871,13 @@ public sealed partial class VideoPlayerWindow
         {
             var position = await _playbackEngine.GetPositionAsync();
             var duration = await _playbackEngine.GetDurationAsync();
-            UpdateSubtitleVideoViewport(await _playbackEngine.GetVideoViewportGeometryAsync());
+            var now = DateTimeOffset.UtcNow;
+            if (now - _lastVideoMetricsRefreshAt >= TimeSpan.FromSeconds(1))
+            {
+                _lastVideoMetricsRefreshAt = now;
+                UpdateSubtitleVideoViewport(
+                    await _playbackEngine.GetVideoViewportGeometryAsync());
+            }
             if (!_isScrubbing)
             {
                 ViewModel.UpdatePosition(position, duration);
@@ -816,6 +990,11 @@ public sealed partial class VideoPlayerWindow
                 }
 
                 return false;
+            case VideoSubtitleSelectionKind.RemoteLanguage:
+                return string.Equals(
+                    ViewModel.GetCurrentSubtitleSelection().RemoteLanguageCode,
+                    selection.RemoteLanguageCode,
+                    StringComparison.OrdinalIgnoreCase);
             default:
                 return false;
         }
@@ -978,6 +1157,9 @@ public sealed partial class VideoPlayerWindow
 
     private void BottomChromePopupRoot_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        if (VideoModalOverlayHost.Children.Count > 0)
+            return;
+
         if (TryBeginWindowResizeFromPopupPointer(e, BottomChromePopupRoot))
             return;
 
@@ -1031,6 +1213,7 @@ public sealed partial class VideoPlayerWindow
     private void HideBottomChromeForPointerLeave()
     {
         _bottomChromeAutoHideTimer.Stop();
+        _lastBottomChromeTimerRestartAt = DateTimeOffset.MinValue;
         _bottomChromeAutoHideState.HideForPointerLeave();
         ApplyBottomChromeVisibility();
     }
@@ -1038,26 +1221,29 @@ public sealed partial class VideoPlayerWindow
     private void HideBottomChromeForInactivity()
     {
         _bottomChromeAutoHideTimer.Stop();
+        _lastBottomChromeTimerRestartAt = DateTimeOffset.MinValue;
         _bottomChromeAutoHideState.HideForInactivity();
         ApplyBottomChromeVisibility();
     }
 
     private void RestartBottomChromeAutoHideTimer()
     {
+        var now = DateTimeOffset.UtcNow;
+        if (now - _lastBottomChromeTimerRestartAt < TimeSpan.FromMilliseconds(100))
+            return;
+
+        _lastBottomChromeTimerRestartAt = now;
         _bottomChromeAutoHideTimer.Stop();
         _bottomChromeAutoHideTimer.Start();
     }
 
     private void ApplyBottomChromeVisibility()
     {
-        if (_bottomChromeAutoHideState.IsVisible)
-        {
-            BottomChrome.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            BottomChrome.Visibility = Visibility.Collapsed;
-        }
+        var visibility = _bottomChromeAutoHideState.IsVisible
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        if (BottomChrome.Visibility != visibility)
+            BottomChrome.Visibility = visibility;
     }
 
     private void BottomChrome_PointerPressed(object sender, PointerRoutedEventArgs e)
@@ -1077,7 +1263,8 @@ public sealed partial class VideoPlayerWindow
         return IsDescendantOf(dependencyObject, BottomChrome)
             || IsDescendantOf(dependencyObject, SubtitlePanelBorder)
             || IsDescendantOf(dependencyObject, VideoDictionaryPanelChrome)
-            || IsDescendantOf(dependencyObject, PopupOverlayCanvas);
+            || IsDescendantOf(dependencyObject, PopupOverlayCanvas)
+            || IsDescendantOf(dependencyObject, VideoModalOverlayHost);
     }
 
     private bool TryDismissLookupPopupFromOutsidePointer(PointerRoutedEventArgs e)
@@ -1453,17 +1640,89 @@ public sealed partial class VideoPlayerWindow
         if (_videoHwnd == IntPtr.Zero || _parentHwnd == IntPtr.Zero)
             return;
 
-        var point = VideoSurface.TransformToVisual(RootGrid)
-            .TransformPoint(new Windows.Foundation.Point(0, 0));
+        var bounds = GetPixelAlignedVideoSurfaceBounds(RootGrid);
         var scale = GetDpiForWindow(_parentHwnd) / 96.0;
         SetWindowPos(
             _videoHwnd,
             IntPtr.Zero,
-            (int)Math.Round(point.X * scale),
-            (int)Math.Round(point.Y * scale),
-            Math.Max(1, (int)Math.Round(VideoSurface.ActualWidth * scale)),
-            Math.Max(1, (int)Math.Round(VideoSurface.ActualHeight * scale)),
+            (int)Math.Round(bounds.X * scale),
+            (int)Math.Round(bounds.Y * scale),
+            Math.Max(1, (int)Math.Round(bounds.Width * scale)),
+            Math.Max(1, (int)Math.Round(bounds.Height * scale)),
             SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+
+    private IntPtr VideoWindowSubclassProc(
+        IntPtr hWnd,
+        uint message,
+        UIntPtr wParam,
+        IntPtr lParam,
+        UIntPtr idSubclass,
+        UIntPtr refData)
+    {
+        if (message == WM_SIZING && TryConstrainVideoWindowSizing(wParam, lParam))
+            return new IntPtr(1);
+
+        return DefSubclassProc(hWnd, message, wParam, lParam);
+    }
+
+    private bool TryConstrainVideoWindowSizing(UIntPtr edgeValue, IntPtr proposedRectPointer)
+    {
+        if (proposedRectPointer == IntPtr.Zero
+            || _videoAspectRatio is not > 0
+            || _isFullScreen
+            || AppWindow.Presenter is OverlappedPresenter { State: not OverlappedPresenterState.Restored }
+            || !GetClientRect(_parentHwnd, out var clientRect))
+        {
+            return false;
+        }
+
+        var proposedRect = Marshal.PtrToStructure<WindowRect>(proposedRectPointer);
+        if (proposedRect.Width <= 0 || proposedRect.Height <= 0)
+            return false;
+
+        var decorationSize = new VideoLayoutSize(
+            Math.Max(AppWindow.Size.Width - clientRect.Width, 0),
+            Math.Max(AppWindow.Size.Height - clientRect.Height, 0));
+        var scale = GetDpiForWindow(_parentHwnd) / 96.0;
+        if (!double.IsFinite(scale) || scale <= 0)
+            return false;
+
+        var sidebarWidth = Math.Max(RootGrid.ActualWidth - VideoSurface.ActualWidth, 0) * scale;
+        var minimumVideoHeight = Math.Max(
+            MinimumAspectConstrainedVideoHeight * scale,
+            MinimumAspectConstrainedVideoWidth * scale / _videoAspectRatio.Value);
+        var minimumFrameSize = new VideoLayoutSize(
+            (minimumVideoHeight * _videoAspectRatio.Value) + sidebarWidth + decorationSize.Width,
+            minimumVideoHeight + decorationSize.Height);
+        var constrainedSize = VideoWindowAspectLayout.ConstrainFrameSize(
+            new VideoLayoutSize(AppWindow.Size.Width, AppWindow.Size.Height),
+            new VideoLayoutSize(proposedRect.Width, proposedRect.Height),
+            decorationSize,
+            _videoAspectRatio.Value,
+            sidebarWidth,
+            minimumFrameSize);
+        if (!constrainedSize.IsValid)
+            return false;
+
+        var width = Math.Max(1, (int)Math.Round(constrainedSize.Width));
+        var height = Math.Max(1, (int)Math.Round(constrainedSize.Height));
+        var edge = unchecked((int)edgeValue.ToUInt32());
+        var resizesLeft = edge is WMSZ_LEFT or WMSZ_TOPLEFT or WMSZ_BOTTOMLEFT;
+        var resizesTop = edge is WMSZ_TOP or WMSZ_TOPLEFT or WMSZ_TOPRIGHT;
+
+        if (resizesLeft)
+            proposedRect.Left = proposedRect.Right - width;
+        else
+            proposedRect.Right = proposedRect.Left + width;
+
+        if (resizesTop)
+            proposedRect.Top = proposedRect.Bottom - height;
+        else
+            proposedRect.Bottom = proposedRect.Top + height;
+
+        Marshal.StructureToPtr(proposedRect, proposedRectPointer, fDeleteOld: false);
+        return true;
     }
 
     private IntPtr VideoHostSubclassProc(
@@ -1524,6 +1783,10 @@ public sealed partial class VideoPlayerWindow
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetClientRect(IntPtr hWnd, out WindowRect rect);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr SendMessageW(

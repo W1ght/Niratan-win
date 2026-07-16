@@ -8,13 +8,15 @@ public enum VideoSubtitleSelectionKind
     ExternalFile,
     EmbeddedTrack,
     Off,
+    RemoteLanguage,
 }
 
 public sealed record VideoSubtitleSelection(
     VideoSubtitleSelectionKind Kind,
     string? ExternalPath = null,
     int? TrackId = null,
-    string? TrackName = null)
+    string? TrackName = null,
+    string? RemoteLanguageCode = null)
 {
     public static VideoSubtitleSelection None() => new(VideoSubtitleSelectionKind.None);
 
@@ -25,6 +27,9 @@ public sealed record VideoSubtitleSelection(
 
     public static VideoSubtitleSelection EmbeddedTrack(int trackId, string? trackName = null) =>
         new(VideoSubtitleSelectionKind.EmbeddedTrack, TrackId: trackId, TrackName: trackName);
+
+    public static VideoSubtitleSelection RemoteLanguage(string languageCode) =>
+        new(VideoSubtitleSelectionKind.RemoteLanguage, RemoteLanguageCode: languageCode);
 }
 
 public sealed record VideoPlaybackState(

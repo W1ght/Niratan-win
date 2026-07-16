@@ -1,6 +1,9 @@
 using Niratan.Models.Video;
+using Niratan.Services.Video;
 using Niratan.ViewModels.Components;
+using Niratan.ViewModels.Dialogs;
 using Niratan.ViewModels.Pages;
+using Niratan.Views.Dialogs;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
@@ -65,6 +68,21 @@ public sealed partial class VideoLibraryPage : Page
     {
         CreateSmartCollectionDialog.XamlRoot = XamlRoot;
         _ = CreateSmartCollectionDialog.ShowAsync();
+    }
+
+    private async void AddYouTubeLinkButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new YouTubeLinkDialog(
+            new YouTubeLinkDialogViewModel(App.GetService<IRemoteVideoResolver>()));
+        var source = await dialog.ShowAsync(XamlRoot);
+        if (source == null)
+            return;
+
+        var result = await ViewModel.AddResolvedYouTubeSourceAsync(source);
+        if (!result.IsSuccess)
+            return;
+
+        await ViewModel.OpenResolvedYouTubeAsync(result.Value!);
     }
 
     private void CreateSmartCollectionSecondaryButton_Click(object sender, RoutedEventArgs e)

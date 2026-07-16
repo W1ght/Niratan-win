@@ -127,7 +127,8 @@ public static class LapisPreset
                 continue;
 
             if (!merged.TryGetValue(field, out var existing)
-                || string.IsNullOrWhiteSpace(existing))
+                || string.IsNullOrWhiteSpace(existing)
+                || IsOppositePresetDefault(field, existing, template, preset))
             {
                 merged[field] = value;
             }
@@ -135,6 +136,33 @@ public static class LapisPreset
 
         return merged;
     }
+
+    private static bool IsOppositePresetDefault(
+        string field,
+        string existing,
+        FieldTemplate template,
+        AnkiFieldMappingPreset preset)
+    {
+        var oppositePreset = preset == AnkiFieldMappingPreset.Anime
+            ? AnkiFieldMappingPreset.Novel
+            : AnkiFieldMappingPreset.Anime;
+        if (!TryDefaultMapping(field, template, oppositePreset, out var oppositeValue)
+            || !string.Equals(oppositeValue, existing, System.StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return !string.Equals(
+            oppositeValue,
+            TryResolveCurrentDefault(field, template, preset),
+            System.StringComparison.Ordinal);
+    }
+
+    private static string TryResolveCurrentDefault(
+        string field,
+        FieldTemplate template,
+        AnkiFieldMappingPreset preset) =>
+        TryDefaultMapping(field, template, preset, out var value) ? value : "";
 
     public static Dictionary<string, string> ApplyDefaults(
         AnkiNoteType noteType,

@@ -39,7 +39,9 @@ public sealed class VideoMiningHistoryItem
     {
         var videoFileName = string.IsNullOrWhiteSpace(capture.VideoPath)
             ? ""
-            : Path.GetFileName(capture.VideoPath);
+            : RemoteVideoIdentity.IsPersistenceKey(capture.VideoPath, "youtube")
+                ? capture.VideoPath[(capture.VideoPath.LastIndexOf('/') + 1)..]
+                : Path.GetFileName(capture.VideoPath);
         return new VideoMiningHistoryItem
         {
             Id = string.IsNullOrWhiteSpace(id) ? Guid.NewGuid().ToString("N") : id,

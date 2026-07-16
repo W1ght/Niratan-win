@@ -19,7 +19,8 @@ public interface IProfileService
         string name,
         string languageId,
         string? profileId = null,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        string? copyFromProfileId = null);
 
     Task SetPrimaryProfileForLanguageAsync(
         string languageId,

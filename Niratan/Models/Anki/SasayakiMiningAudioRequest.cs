@@ -5,7 +5,8 @@ namespace Niratan.Models.Anki;
 
 public sealed record SasayakiMiningAudioRequest(
     bool CaptureAudioClip,
-    string? DirectMediaDirectory);
+    string? DirectMediaDirectory,
+    string? Sentence = null);
 
 public sealed record SasayakiMiningAudioResult(
     string? AudioClipPath = null,

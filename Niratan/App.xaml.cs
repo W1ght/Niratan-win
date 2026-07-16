@@ -16,6 +16,7 @@ using Niratan.Models.Novel;
 using Niratan.Services;
 using Niratan.Services.Anki;
 using Niratan.Services.Audio;
+using Niratan.Services.Backup;
 using Niratan.Services.Dictionary;
 using Niratan.Services.Logging;
 using Niratan.Services.Novels;
@@ -26,6 +27,7 @@ using Niratan.Services.Shortcuts;
 using Niratan.Services.Storage;
 using Niratan.Services.Sync;
 using Niratan.Services.UI;
+using Niratan.Services.Updates;
 using Niratan.Services.Video;
 using Niratan.ViewModels.Pages;
 using Niratan.ViewModels.Dialogs;
@@ -131,6 +133,8 @@ public partial class App : Application
         services.AddTransient<ShellPageViewModel>();
         services.AddTransient<NavigationPageViewModel>();
         services.AddTransient<SettingsPageViewModel>();
+        services.AddTransient<BackupSettingsPageViewModel>();
+        services.AddTransient<AboutSettingsPageViewModel>();
         services.AddTransient<DictionarySettingsPageViewModel>();
         services.AddTransient<ProfilesSettingsPageViewModel>();
         services.AddTransient<AudioSettingsPageViewModel>();
@@ -178,6 +182,8 @@ public partial class App : Application
         services.AddSingleton<INovelEpubImportService, NovelEpubImportService>();
         services.AddSingleton<INovelLibraryService, NovelLibraryService>();
         services.AddSingleton<IVideoLibraryService, VideoLibraryService>();
+        services.AddSingleton<IRemoteVideoResolver, YoutubeExplodeRemoteVideoResolver>();
+        services.AddSingleton<IAnime4KShaderService, Anime4KShaderService>();
         services.AddSingleton<IVideoMiningHistoryStore>(provider =>
             new VideoMiningHistoryStore(
                 provider.GetRequiredService<ISettingsService>().Current.VideoSettings.MiningHistoryLimit));
@@ -203,6 +209,7 @@ public partial class App : Application
         services.AddSingleton<ISasayakiSidecarService, SasayakiSidecarService>();
         services.AddSingleton<ISasayakiMatchService, SasayakiMatchService>();
         services.AddSingleton(new HttpClient());
+        services.AddSingleton<IAppUpdateService, GitHubAppUpdateService>();
         services.AddSingleton<GoogleDriveTokenClient>();
         services.AddSingleton<IGoogleDriveCredentialStore, WindowsCredentialGoogleDriveCredentialStore>();
         services.AddSingleton<IGoogleOAuthLoopbackReceiver, GoogleOAuthLoopbackReceiver>();
@@ -211,11 +218,14 @@ public partial class App : Application
         services.AddSingleton<IGoogleDriveSyncCache, GoogleDriveSyncCache>();
         services.AddSingleton<IGoogleDriveCoverCacheService, GoogleDriveCoverCacheService>();
         services.AddSingleton<ITtuBookDataConverter, TtuBookDataConverter>();
+        services.AddSingleton<ITtuBackupBookDataConverter, TtuBookDataConverter>();
         services.AddSingleton<ITtuBookImportService, TtuBookImportService>();
         services.AddSingleton<ITtuSyncService, TtuSyncService>();
         RegisterReaderAutoSyncCoordinator(services);
         services.AddSingleton<ITtuSyncRemoteStore, GoogleDriveTtuSyncRemoteStore>();
-        services.AddSingleton<IDictionaryLookupService, DictionaryLookupService>();
+        services.AddSingleton<DictionaryLookupService>();
+        services.AddSingleton<IDictionaryLookupService>(provider =>
+            provider.GetRequiredService<DictionaryLookupService>());
         services.AddSingleton<IDictionaryPopupRequestService, DictionaryPopupRequestService>();
         services.AddSingleton<IDictionaryImportService, DictionaryImportService>();
         services.AddSingleton<IGlobalLookupWindowService, GlobalLookupWindowService>();
@@ -230,6 +240,7 @@ public partial class App : Application
         services.AddSingleton<ILogReaderService, LogReaderService>();
         services.AddSingleton<IAudioService, AudioService>();
         services.AddSingleton<IAnkiService, AnkiService>();
+        services.AddSingleton<IBackupService, BackupService>();
         _services = services.BuildServiceProvider();
     }
 

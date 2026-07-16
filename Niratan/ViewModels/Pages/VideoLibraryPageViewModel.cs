@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Niratan.Helpers;
 using Niratan.Models;
+using Niratan.Models.Common;
 using Niratan.Models.Video;
 using Niratan.Services.UI;
 using Niratan.Services.Video;
@@ -146,6 +147,21 @@ public partial class VideoLibraryPageViewModel : ObservableObject
     {
         _cts.Cancel();
         UnsubscribeFromPlayerLibraryChanges();
+    }
+
+    public Task OpenResolvedYouTubeAsync(VideoPlaybackLaunchRequest request) =>
+        _playerWindowService.OpenAsync(request, _cts.Token);
+
+    public async Task<Result<VideoPlaybackLaunchRequest>> AddResolvedYouTubeSourceAsync(
+        ResolvedRemoteVideoSource source)
+    {
+        var added = await _videoLibraryService.AddRemoteVideoAsync(source, _cts.Token);
+        if (!added.IsSuccess)
+            return Result<VideoPlaybackLaunchRequest>.Failure(added.Error!, added.ErrorTitle!);
+
+        await LoadVideosAsync();
+        return Result<VideoPlaybackLaunchRequest>.Success(
+            new VideoPlaybackLaunchRequest(added.Value!, _allVideos.ToList(), source));
     }
 
     [RelayCommand]
@@ -320,6 +336,9 @@ public partial class VideoLibraryPageViewModel : ObservableObject
     [RelayCommand]
     private async Task RevealFileAsync(VideoItemViewModel item)
     {
+        if (item.Video.IsRemote)
+            return;
+
         var result = await _fileRevealService.RevealInFileExplorerAsync(item.Video.FilePath, _cts.Token);
         if (!result.IsSuccess && !result.IsCancelled)
         {
@@ -621,6 +640,7 @@ public partial class VideoLibraryPageViewModel : ObservableObject
     private static bool MatchesSearch(VideoItem video, string query) =>
         Contains(video.Title, query)
         || Contains(video.FilePath, query)
+        || Contains(video.OriginalUrl, query)
         || Contains(video.SourceFolderPath, query)
         || Contains(video.CollectionName, query)
         || SplitTags(video.Tags).Any(tag => Contains(tag, query));
@@ -714,6 +734,12 @@ public partial class VideoLibraryPageViewModel : ObservableObject
             SubtitleSelectionTrackId = video.SubtitleSelectionTrackId,
             SubtitleSelectionTrackName = video.SubtitleSelectionTrackName,
             ProfileId = video.ProfileId,
+            ProviderId = video.ProviderId,
+            RemoteId = video.RemoteId,
+            OriginalUrl = video.OriginalUrl,
+            CanonicalUrl = video.CanonicalUrl,
+            RemoteThumbnailUrl = video.RemoteThumbnailUrl,
+            RemoteSubtitleLanguage = video.RemoteSubtitleLanguage,
         };
 
     private bool IsCoveredByAnyCollection(VideoItem video) =>

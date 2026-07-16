@@ -15,6 +15,18 @@ public interface ITtuBookDataConverter
         CancellationToken ct = default);
 }
 
+public interface ITtuBackupBookDataConverter : ITtuBookDataConverter
+{
+    Task<string> ReadTitleAsync(
+        string ttuBookDataPath,
+        CancellationToken ct = default);
+
+    Task<string> ConvertFromEpubAsync(
+        NovelBook book,
+        string outputDirectory,
+        CancellationToken ct = default);
+}
+
 public interface ITtuBookImportService
 {
     Task<Result<NovelBook>> ImportRemoteBookAsync(

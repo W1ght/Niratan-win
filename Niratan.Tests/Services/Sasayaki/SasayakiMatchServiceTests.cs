@@ -39,6 +39,11 @@ public sealed class SasayakiMatchServiceTests
         loaded.Delay.Should().Be(0.35);
         loaded.Rate.Should().Be(1.25);
         loaded.AudioBookmark.Should().Be(42);
+
+        var source = await sidecar.LoadSourceAsync(temp.Path, ct);
+        source.Should().NotBeNull();
+        source!.AudiobookPath.Should().Be(Path.Combine(temp.Path, "audio.m4b"));
+        source.SrtPath.Should().Be(Path.Combine(temp.Path, "audio.srt"));
     }
 
     [Fact]
@@ -63,6 +68,10 @@ public sealed class SasayakiMatchServiceTests
         loaded.Delay.Should().Be(0);
         loaded.Rate.Should().Be(1);
         loaded.AudioBookmark.Should().Be(-1);
+
+        var match = await sidecar.LoadMatchAsync(temp.Path, ct);
+        match.Should().NotBeNull();
+        match!.Matches.Should().ContainSingle().Which.Text.Should().Be("星を読む");
     }
 
     private static async Task<SasayakiMatchService> CreateSutAsync(

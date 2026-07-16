@@ -41,8 +41,8 @@
         </StackPanel>
 
         <ScrollViewer Grid.Row="1">
-            <Grid Padding="0,0,16,16">
-                <StackPanel MaxWidth="1000"
+            <Grid Padding="16,0,16,16">
+                <StackPanel MaxWidth="1280"
                             HorizontalAlignment="Stretch"
                             Spacing="{StaticResource SettingsCardSpacing}">
                     <TextBlock x:Uid="AdvancedReaderSectionHeader"

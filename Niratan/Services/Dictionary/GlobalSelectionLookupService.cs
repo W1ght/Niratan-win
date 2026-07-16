@@ -7,10 +7,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Automation;
 using System.Windows.Automation.Text;
-using Niratan.Models.Settings;
+using Niratan.Models.Shortcuts;
 using Niratan.Services.Profiles;
 using Niratan.Services.Settings;
+using Niratan.Services.Shortcuts;
 using Serilog;
+using Windows.Graphics;
 using Windows.System;
 
 namespace Niratan.Services.Dictionary;
@@ -18,7 +20,7 @@ namespace Niratan.Services.Dictionary;
 public interface IGlobalLookupHotKeyRegistrar
 {
     Task RegisterAsync(
-        string hotKey,
+        KeyboardShortcutBinding hotKey,
         Func<CancellationToken, Task> handler,
         CancellationToken ct = default);
 
@@ -27,7 +29,7 @@ public interface IGlobalLookupHotKeyRegistrar
 
 public interface ISelectedTextReader
 {
-    Task<string?> TryReadSelectedTextAsync(CancellationToken ct = default);
+    Task<SelectedTextSnapshot?> TryReadSelectedTextAsync(CancellationToken ct = default);
 }
 
 public sealed class GlobalSelectionLookupService : IGlobalSelectionLookupService
@@ -37,6 +39,9 @@ public sealed class GlobalSelectionLookupService : IGlobalSelectionLookupService
     private readonly ISelectedTextReader _selectedTextReader;
     private readonly IGlobalLookupPopupService _popupService;
     private readonly IProfileRuntimeService? _profileRuntime;
+    private readonly IShortcutService? _shortcutService;
+    private readonly SemaphoreSlim _initializeGate = new(1, 1);
+    private KeyboardShortcutBinding _registeredHotKey;
     private string _statusText = "Global lookup disabled.";
 
     public GlobalSelectionLookupService(
@@ -44,13 +49,17 @@ public sealed class GlobalSelectionLookupService : IGlobalSelectionLookupService
         IGlobalLookupHotKeyRegistrar hotKeyRegistrar,
         ISelectedTextReader selectedTextReader,
         IGlobalLookupPopupService popupService,
-        IProfileRuntimeService? profileRuntime = null)
+        IProfileRuntimeService? profileRuntime = null,
+        IShortcutService? shortcutService = null)
     {
         _settingsService = settingsService;
         _hotKeyRegistrar = hotKeyRegistrar;
         _selectedTextReader = selectedTextReader;
         _popupService = popupService;
         _profileRuntime = profileRuntime;
+        _shortcutService = shortcutService;
+        if (_shortcutService is not null)
+            _shortcutService.ShortcutsChanged += OnShortcutsChanged;
     }
 
     public string StatusText => _statusText;
@@ -59,8 +68,23 @@ public sealed class GlobalSelectionLookupService : IGlobalSelectionLookupService
 
     public async Task InitializeAsync(CancellationToken ct = default)
     {
+        await _initializeGate.WaitAsync(ct);
+        try
+        {
+            await InitializeCoreAsync(ct);
+        }
+        finally
+        {
+            _initializeGate.Release();
+        }
+    }
+
+    private async Task InitializeCoreAsync(CancellationToken ct)
+    {
         var settings = _settingsService.Current.GlobalLookup;
+        var hotKey = ResolveHotKeyBinding();
         _hotKeyRegistrar.Unregister();
+        _registeredHotKey = default;
 
         if (!settings.Enabled)
         {
@@ -70,8 +94,17 @@ public sealed class GlobalSelectionLookupService : IGlobalSelectionLookupService
 
         try
         {
-            await _hotKeyRegistrar.RegisterAsync(settings.HotKey, TriggerLookupAsync, ct);
-            SetStatus($"Global lookup hotkey registered: {settings.HotKey}.");
+            await _hotKeyRegistrar.RegisterAsync(hotKey, TriggerLookupAsync, ct);
+            _registeredHotKey = hotKey;
+            try
+            {
+                await _popupService.PrewarmAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[GlobalLookup] Popup prewarm failed; lookup will initialize on demand.");
+            }
+            SetStatus($"Global lookup hotkey registered: {hotKey.Label}.");
         }
         catch (NotSupportedException)
         {
@@ -83,16 +116,30 @@ public sealed class GlobalSelectionLookupService : IGlobalSelectionLookupService
         }
     }
 
+    private KeyboardShortcutBinding ResolveHotKeyBinding() =>
+        _shortcutService?.GetBinding(GlobalShortcutActions.LookupSelectedText)
+        ?? GlobalShortcutActions.LookupSelectedText.DefaultBinding;
+
+    private async void OnShortcutsChanged(object? sender, EventArgs e)
+    {
+        if (!_settingsService.Current.GlobalLookup.Enabled)
+            return;
+
+        var current = ResolveHotKeyBinding();
+        if (_registeredHotKey.Matches(current))
+            return;
+
+        await InitializeAsync();
+    }
+
     public async Task TriggerLookupAsync(CancellationToken ct = default)
     {
         if (!_settingsService.Current.GlobalLookup.Enabled)
             return;
 
-        var selectedText = await _selectedTextReader.TryReadSelectedTextAsync(ct);
-        var query = string.IsNullOrWhiteSpace(selectedText)
-            ? null
-            : selectedText.Trim();
-        if (query is null)
+        var selection = await _selectedTextReader.TryReadSelectedTextAsync(ct);
+        var query = selection?.Text.Trim();
+        if (string.IsNullOrWhiteSpace(query))
         {
             Log.Information("[GlobalLookup] Hotkey ignored because selected text is empty.");
             return;
@@ -102,7 +149,9 @@ public sealed class GlobalSelectionLookupService : IGlobalSelectionLookupService
         if (_profileRuntime is not null)
             await _profileRuntime.ActivateGlobalAsync(ct);
 
-        await _popupService.ShowAsync(query, ct);
+        await _popupService.ShowAsync(
+            new SelectedTextSnapshot(query, selection?.ScreenBounds),
+            ct);
     }
 
     private void SetStatus(string statusText)
@@ -119,7 +168,7 @@ public sealed class GlobalSelectionLookupService : IGlobalSelectionLookupService
 public sealed class NoOpGlobalLookupHotKeyRegistrar : IGlobalLookupHotKeyRegistrar
 {
     public Task RegisterAsync(
-        string hotKey,
+        KeyboardShortcutBinding hotKey,
         Func<CancellationToken, Task> handler,
         CancellationToken ct = default) =>
         throw new NotSupportedException("Global lookup hotkey registration is not available in this build.");
@@ -136,6 +185,8 @@ public sealed class Win32GlobalLookupHotKeyRegistrar : IGlobalLookupHotKeyRegist
     private const uint WmHotKey = 0x0312;
     private const uint ModAlt = 0x0001;
     private const uint ModControl = 0x0002;
+    private const uint ModShift = 0x0004;
+    private const uint ModWindows = 0x0008;
     private const uint ModNoRepeat = 0x4000;
 
     private IntPtr _hwnd;
@@ -145,15 +196,15 @@ public sealed class Win32GlobalLookupHotKeyRegistrar : IGlobalLookupHotKeyRegist
     private bool _registered;
 
     public Task RegisterAsync(
-        string hotKey,
+        KeyboardShortcutBinding hotKey,
         Func<CancellationToken, Task> handler,
         CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
         Unregister();
 
-        if (!string.Equals(hotKey, GlobalLookupSettings.DefaultHotKey, StringComparison.OrdinalIgnoreCase))
-            throw new NotSupportedException($"Global lookup hotkey '{hotKey}' is not supported in this build.");
+        if (!ShortcutInputMapper.TryGetVirtualKey(hotKey, out var virtualKey, out _))
+            throw new NotSupportedException($"Global lookup hotkey '{hotKey.Label}' is not supported in this build.");
 
         var window = App.MainWindow
             ?? throw new InvalidOperationException("Main window is not ready for global lookup hotkey registration.");
@@ -168,7 +219,8 @@ public sealed class Win32GlobalLookupHotKeyRegistrar : IGlobalLookupHotKeyRegist
         if (_previousWndProc == IntPtr.Zero)
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to attach global lookup hotkey message hook.");
 
-        if (!RegisterHotKey(_hwnd, HotKeyId, ModControl | ModAlt | ModNoRepeat, (uint)VirtualKey.D))
+        var modifiers = ToWin32Modifiers(hotKey.Modifiers) | ModNoRepeat;
+        if (!RegisterHotKey(_hwnd, HotKeyId, modifiers, (uint)virtualKey))
         {
             var error = new Win32Exception(Marshal.GetLastWin32Error());
             RestoreWindowProc();
@@ -176,8 +228,22 @@ public sealed class Win32GlobalLookupHotKeyRegistrar : IGlobalLookupHotKeyRegist
         }
 
         _registered = true;
-        Log.Information("[GlobalLookup] Registered Win32 hotkey {HotKey} hwnd={Hwnd}", hotKey, _hwnd);
+        Log.Information("[GlobalLookup] Registered Win32 hotkey {HotKey} hwnd={Hwnd}", hotKey.Label, _hwnd);
         return Task.CompletedTask;
+    }
+
+    private static uint ToWin32Modifiers(KeyboardShortcutModifiers modifiers)
+    {
+        var result = 0u;
+        if (modifiers.HasFlag(KeyboardShortcutModifiers.Control))
+            result |= ModControl;
+        if (modifiers.HasFlag(KeyboardShortcutModifiers.Shift))
+            result |= ModShift;
+        if (modifiers.HasFlag(KeyboardShortcutModifiers.Alt))
+            result |= ModAlt;
+        if (modifiers.HasFlag(KeyboardShortcutModifiers.Windows))
+            result |= ModWindows;
+        return result;
     }
 
     public void Unregister()
@@ -265,8 +331,8 @@ public sealed class Win32GlobalLookupHotKeyRegistrar : IGlobalLookupHotKeyRegist
 
 public sealed class NoOpSelectedTextReader : ISelectedTextReader
 {
-    public Task<string?> TryReadSelectedTextAsync(CancellationToken ct = default) =>
-        Task.FromResult<string?>(null);
+    public Task<SelectedTextSnapshot?> TryReadSelectedTextAsync(CancellationToken ct = default) =>
+        Task.FromResult<SelectedTextSnapshot?>(null);
 }
 
 public sealed class CascadingSelectedTextReader : ISelectedTextReader
@@ -278,15 +344,15 @@ public sealed class CascadingSelectedTextReader : ISelectedTextReader
         _readers = readers;
     }
 
-    public async Task<string?> TryReadSelectedTextAsync(CancellationToken ct = default)
+    public async Task<SelectedTextSnapshot?> TryReadSelectedTextAsync(CancellationToken ct = default)
     {
         foreach (var reader in _readers)
         {
             try
             {
-                var text = await reader.TryReadSelectedTextAsync(ct);
-                if (!string.IsNullOrWhiteSpace(text))
-                    return text;
+                var selection = await reader.TryReadSelectedTextAsync(ct);
+                if (!string.IsNullOrWhiteSpace(selection?.Text))
+                    return selection;
             }
             catch (OperationCanceledException)
             {
@@ -311,7 +377,7 @@ public sealed class UIAutomationSelectedTextReader : ISelectedTextReader
     private static readonly Condition s_textPatternAvailableCondition =
         new PropertyCondition(AutomationElement.IsTextPatternAvailableProperty, true);
 
-    public async Task<string?> TryReadSelectedTextAsync(CancellationToken ct = default)
+    public async Task<SelectedTextSnapshot?> TryReadSelectedTextAsync(CancellationToken ct = default)
     {
         if (!s_readGate.Wait(0))
         {
@@ -365,11 +431,11 @@ public sealed class UIAutomationSelectedTextReader : ISelectedTextReader
         }
     }
 
-    private static string? ReadSelectedTextCore()
+    private static SelectedTextSnapshot? ReadSelectedTextCore()
     {
         var element = AutomationElement.FocusedElement;
         var selected = ReadSelectedTextFromElementAndParents(element);
-        if (!string.IsNullOrWhiteSpace(selected))
+        if (!string.IsNullOrWhiteSpace(selected?.Text))
             return selected;
 
         var foregroundWindow = GetForegroundWindow();
@@ -378,7 +444,7 @@ public sealed class UIAutomationSelectedTextReader : ISelectedTextReader
 
         var root = AutomationElement.FromHandle(foregroundWindow);
         selected = ReadSelectedTextFromElement(root);
-        if (!string.IsNullOrWhiteSpace(selected))
+        if (!string.IsNullOrWhiteSpace(selected?.Text))
             return selected;
 
         try
@@ -388,7 +454,7 @@ public sealed class UIAutomationSelectedTextReader : ISelectedTextReader
             for (var i = 0; i < count; i++)
             {
                 selected = ReadSelectedTextFromElement(matches[i]);
-                if (!string.IsNullOrWhiteSpace(selected))
+                if (!string.IsNullOrWhiteSpace(selected?.Text))
                     return selected;
             }
         }
@@ -400,12 +466,12 @@ public sealed class UIAutomationSelectedTextReader : ISelectedTextReader
         return null;
     }
 
-    private static string? ReadSelectedTextFromElementAndParents(AutomationElement? element)
+    private static SelectedTextSnapshot? ReadSelectedTextFromElementAndParents(AutomationElement? element)
     {
         for (var depth = 0; element is not null && depth < 6; depth++)
         {
             var selected = ReadSelectedTextFromElement(element);
-            if (!string.IsNullOrWhiteSpace(selected))
+            if (!string.IsNullOrWhiteSpace(selected?.Text))
                 return selected;
 
             try
@@ -421,14 +487,14 @@ public sealed class UIAutomationSelectedTextReader : ISelectedTextReader
         return null;
     }
 
-    private static string? ReadSelectedTextFromElement(AutomationElement? element)
+    private static SelectedTextSnapshot? ReadSelectedTextFromElement(AutomationElement? element)
     {
         try
         {
             if (element?.TryGetCurrentPattern(TextPattern.Pattern, out var patternObject) == true
                 && patternObject is TextPattern textPattern)
             {
-                return JoinSelectedText(textPattern.GetSelection());
+                return CreateSelectionSnapshot(textPattern.GetSelection());
             }
         }
         catch (Exception ex)
@@ -439,7 +505,7 @@ public sealed class UIAutomationSelectedTextReader : ISelectedTextReader
         return null;
     }
 
-    private static string? JoinSelectedText(TextPatternRange[] ranges)
+    private static SelectedTextSnapshot? CreateSelectionSnapshot(TextPatternRange[] ranges)
     {
         if (ranges.Length == 0)
             return null;
@@ -456,7 +522,66 @@ public sealed class UIAutomationSelectedTextReader : ISelectedTextReader
             builder.Append(text);
         }
 
-        return builder.Length > 0 ? builder.ToString() : null;
+        if (builder.Length == 0)
+            return null;
+
+        return new SelectedTextSnapshot(
+            builder.ToString(),
+            TryGetSelectionBounds(ranges));
+    }
+
+    private static RectInt32? TryGetSelectionBounds(TextPatternRange[] ranges)
+    {
+        double? left = null;
+        double? top = null;
+        double right = 0;
+        double bottom = 0;
+
+        foreach (var range in ranges)
+        {
+            System.Windows.Rect[] rectangles;
+            try
+            {
+                rectangles = range.GetBoundingRectangles();
+            }
+            catch
+            {
+                continue;
+            }
+
+            foreach (var rectangle in rectangles)
+            {
+                var x = rectangle.X;
+                var y = rectangle.Y;
+                var width = rectangle.Width;
+                var height = rectangle.Height;
+                if (!double.IsFinite(x)
+                    || !double.IsFinite(y)
+                    || !double.IsFinite(width)
+                    || !double.IsFinite(height)
+                    || width <= 0
+                    || height <= 0)
+                {
+                    continue;
+                }
+
+                left = left is null ? x : Math.Min(left.Value, x);
+                top = top is null ? y : Math.Min(top.Value, y);
+                right = Math.Max(right, x + width);
+                bottom = Math.Max(bottom, y + height);
+            }
+        }
+
+        if (left is null || top is null)
+            return null;
+
+        var roundedLeft = (int)Math.Floor(left.Value);
+        var roundedTop = (int)Math.Floor(top.Value);
+        return new RectInt32(
+            roundedLeft,
+            roundedTop,
+            Math.Max(1, (int)Math.Ceiling(right) - roundedLeft),
+            Math.Max(1, (int)Math.Ceiling(bottom) - roundedTop));
     }
 
     [DllImport("user32.dll")]
@@ -474,37 +599,38 @@ public sealed class Win32FocusedEditSelectedTextReader : ISelectedTextReader
     private const uint SendMessageTimeoutFlags = 0x0001 | 0x0002; // SMTO_BLOCK | SMTO_ABORTIFHUNG
     private const uint SendMessageTimeoutMilliseconds = 120;
 
-    public Task<string?> TryReadSelectedTextAsync(CancellationToken ct = default)
+    public Task<SelectedTextSnapshot?> TryReadSelectedTextAsync(CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
 
         var foregroundWindow = GetForegroundWindow();
         if (foregroundWindow == IntPtr.Zero)
-            return Task.FromResult<string?>(null);
+            return Task.FromResult<SelectedTextSnapshot?>(null);
 
         var threadId = GetWindowThreadProcessId(foregroundWindow, out _);
         if (threadId == 0)
-            return Task.FromResult<string?>(null);
+            return Task.FromResult<SelectedTextSnapshot?>(null);
 
         var info = new GUITHREADINFO { cbSize = GuiThreadInfoSize };
         if (!GetGUIThreadInfo(threadId, ref info) || info.hwndFocus == IntPtr.Zero)
-            return Task.FromResult<string?>(null);
+            return Task.FromResult<SelectedTextSnapshot?>(null);
 
         var className = GetWindowClassName(info.hwndFocus);
         if (!IsSupportedTextClass(className))
-            return Task.FromResult<string?>(null);
+            return Task.FromResult<SelectedTextSnapshot?>(null);
 
         if (!TryGetSelectionRange(info.hwndFocus, out var selectionStart, out var selectionEnd))
-            return Task.FromResult<string?>(null);
+            return Task.FromResult<SelectedTextSnapshot?>(null);
 
         if (selectionEnd <= selectionStart)
-            return Task.FromResult<string?>(null);
+            return Task.FromResult<SelectedTextSnapshot?>(null);
 
         var selectedLength = selectionEnd - selectionStart;
         if (className.Contains("RICHEDIT", StringComparison.OrdinalIgnoreCase)
             && TryReadRichEditSelectedText(info.hwndFocus, selectedLength, out var richEditSelection))
         {
-            return Task.FromResult<string?>(richEditSelection);
+            return Task.FromResult<SelectedTextSnapshot?>(
+                CreateSnapshot(richEditSelection!, info));
         }
 
         if (!TrySendMessageTimeout(
@@ -514,12 +640,12 @@ public sealed class Win32FocusedEditSelectedTextReader : ISelectedTextReader
                 IntPtr.Zero,
                 out var textLengthResult))
         {
-            return Task.FromResult<string?>(null);
+            return Task.FromResult<SelectedTextSnapshot?>(null);
         }
 
         var textLength = textLengthResult.ToInt32();
         if (textLength <= 0)
-            return Task.FromResult<string?>(null);
+            return Task.FromResult<SelectedTextSnapshot?>(null);
 
         var textBuilder = new StringBuilder(textLength + 1);
         if (SendMessageTimeout(
@@ -531,7 +657,7 @@ public sealed class Win32FocusedEditSelectedTextReader : ISelectedTextReader
                 SendMessageTimeoutMilliseconds,
                 out _) == IntPtr.Zero)
         {
-            return Task.FromResult<string?>(null);
+            return Task.FromResult<SelectedTextSnapshot?>(null);
         }
 
         var text = textBuilder.ToString();
@@ -539,10 +665,32 @@ public sealed class Win32FocusedEditSelectedTextReader : ISelectedTextReader
             || selectionStart >= text.Length
             || selectionEnd > text.Length)
         {
-            return Task.FromResult<string?>(null);
+            return Task.FromResult<SelectedTextSnapshot?>(null);
         }
 
-        return Task.FromResult<string?>(text[selectionStart..selectionEnd]);
+        return Task.FromResult<SelectedTextSnapshot?>(
+            CreateSnapshot(text[selectionStart..selectionEnd], info));
+    }
+
+    private static SelectedTextSnapshot CreateSnapshot(string text, GUITHREADINFO info) =>
+        new(text, TryGetCaretScreenBounds(info));
+
+    private static RectInt32? TryGetCaretScreenBounds(GUITHREADINFO info)
+    {
+        var hwnd = info.hwndCaret != IntPtr.Zero ? info.hwndCaret : info.hwndFocus;
+        if (hwnd == IntPtr.Zero)
+            return null;
+
+        var topLeft = new POINT(info.rcCaret.left, info.rcCaret.top);
+        var bottomRight = new POINT(info.rcCaret.right, info.rcCaret.bottom);
+        if (!ClientToScreen(hwnd, ref topLeft) || !ClientToScreen(hwnd, ref bottomRight))
+            return null;
+
+        return new RectInt32(
+            topLeft.X,
+            topLeft.Y,
+            Math.Max(1, bottomRight.X - topLeft.X),
+            Math.Max(1, bottomRight.Y - topLeft.Y));
     }
 
     private static bool TryReadRichEditSelectedText(
@@ -640,6 +788,9 @@ public sealed class Win32FocusedEditSelectedTextReader : ISelectedTextReader
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
 
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool ClientToScreen(IntPtr hWnd, ref POINT lpPoint);
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr SendMessageTimeout(
         IntPtr hWnd,
@@ -681,5 +832,18 @@ public sealed class Win32FocusedEditSelectedTextReader : ISelectedTextReader
         public int top;
         public int right;
         public int bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public POINT(int x, int y)
+        {
+            X = x;
+            Y = y;
+        }
+
+        public int X;
+        public int Y;
     }
 }

@@ -3,11 +3,15 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Niratan.Models;
+using Niratan.Models.Settings;
 
 namespace Niratan.Services.Video;
 
 public interface IVideoPlaybackEngine : IDisposable
 {
+    event EventHandler<VideoMediaLoadedEventArgs>? MediaLoaded;
+    event EventHandler<VideoMediaFailedEventArgs>? MediaFailed;
+
     Task InitializeAsync(IntPtr hostHwnd, CancellationToken ct = default);
 
     Task OpenAsync(
@@ -15,6 +19,8 @@ public interface IVideoPlaybackEngine : IDisposable
         string? subtitlePath = null,
         TimeSpan? startPosition = null,
         CancellationToken ct = default);
+
+    Task OpenAsync(VideoPlaybackRequest request, CancellationToken ct = default);
 
     Task SetPausedAsync(bool paused, CancellationToken ct = default);
 
@@ -42,6 +48,8 @@ public interface IVideoPlaybackEngine : IDisposable
 
     Task SetHDREnhancementAsync(bool enabled, CancellationToken ct = default);
 
+    Task SetVideoShaderPresetAsync(VideoShaderPreset preset, CancellationToken ct = default);
+
     Task SetVideoEqualizerAsync(string adjustment, double value, CancellationToken ct = default);
 
     Task<IReadOnlyList<VideoTrackInfo>> GetTracksAsync(CancellationToken ct = default);
@@ -57,6 +65,8 @@ public interface IVideoPlaybackEngine : IDisposable
     Task<TimeSpan> GetPositionAsync(CancellationToken ct = default);
 
     Task<TimeSpan> GetDurationAsync(CancellationToken ct = default);
+
+    Task<VideoDisplayInfo?> GetVideoDisplayInfoAsync(CancellationToken ct = default);
 
     Task<VideoViewportGeometry?> GetVideoViewportGeometryAsync(CancellationToken ct = default);
 

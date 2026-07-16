@@ -48,7 +48,7 @@ public sealed class SasayakiMatcherTests
         {
             new()
             {
-                Id = 1,
+                Id = "0",
                 StartTime = 0,
                 EndTime = 1,
                 Text = "本文",
@@ -57,12 +57,14 @@ public sealed class SasayakiMatcherTests
 
         var data = await new SasayakiMatcher().MatchAsync(
             book,
-            cues,
-            "book",
-            "audio.m4b",
-            "audio.srt");
+            cues);
 
-        data.Matches.Should().ContainSingle().Which.StartCodePoint.Should().Be(0);
+        var match = data.Matches.Should().ContainSingle().Which;
+        match.Id.Should().Be("0");
+        match.StartTime.Should().Be(0);
+        match.EndTime.Should().Be(1);
+        match.Text.Should().Be("本文");
+        match.Start.Should().Be(0);
     }
 
     [Fact]
@@ -81,16 +83,13 @@ public sealed class SasayakiMatcherTests
         var data = await new SasayakiMatcher().MatchAsync(
             CreateBook(chapterPath),
             [
-                new SasayakiCue { Id = 1, Text = "正しい始まり" },
-                new SasayakiCue { Id = 2, Text = "＊あ……" },
-                new SasayakiCue { Id = 3, Text = "次の正しい文章" },
-            ],
-            "book",
-            "audio.m4b",
-            "audio.srt");
+                new SasayakiCue { Id = "0", Text = "正しい始まり" },
+                new SasayakiCue { Id = "1", Text = "＊あ……" },
+                new SasayakiCue { Id = "2", Text = "次の正しい文章" },
+            ]);
 
-        data.Matches.Select(match => match.CueIndex).Should().Equal(0, 2);
-        data.UnmatchedCount.Should().Be(1);
+        data.Matches.Select(match => match.Id).Should().Equal("0", "2");
+        data.Unmatched.Should().Be(1);
         data.RequiresMatcherRefresh.Should().BeFalse();
     }
 
@@ -99,8 +98,7 @@ public sealed class SasayakiMatcherTests
     {
         var data = new SasayakiMatchData
         {
-            Cues = [new SasayakiCue { Id = 1, Text = "＊あ……" }],
-            Matches = [new SasayakiMatch { CueIndex = 0, Length = 1 }],
+            Matches = [new SasayakiMatch { Id = "0", Text = "＊あ……", Length = 1 }],
         };
 
         data.RequiresMatcherRefresh.Should().BeTrue();
@@ -120,15 +118,12 @@ public sealed class SasayakiMatcherTests
         var data = await new SasayakiMatcher().MatchAsync(
             CreateBook(contentsPath, bodyPath),
             [
-                new SasayakiCue { Id = 1, Text = "第七章" },
-                new SasayakiCue { Id = 2, Text = "青少年期" },
-                new SasayakiCue { Id = 3, Text = "中堅冒険者編" },
-                new SasayakiCue { Id = 4, Text = "プロローグ" },
-                new SasayakiCue { Id = 5, Text = "森が広がっていた。" },
-            ],
-            "book",
-            "audio.m4b",
-            "audio.srt");
+                new SasayakiCue { Id = "0", Text = "第七章" },
+                new SasayakiCue { Id = "1", Text = "青少年期" },
+                new SasayakiCue { Id = "2", Text = "中堅冒険者編" },
+                new SasayakiCue { Id = "3", Text = "プロローグ" },
+                new SasayakiCue { Id = "4", Text = "森が広がっていた。" },
+            ]);
 
         data.Matches.Should().HaveCount(5);
         data.Matches.Should().OnlyContain(match => match.ChapterIndex == 1);

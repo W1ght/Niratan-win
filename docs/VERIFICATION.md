@@ -235,6 +235,22 @@ dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter
 
 ---
 
+### 1.12 设置页备份验证
+
+```powershell
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~BackupServiceTests|FullyQualifiedName~TtuBookDataConverterTests"
+.\build-and-run.ps1
+```
+
+手动验证：
+
+1. 打开“设置 → 备份”，确认书籍、词典、ッツ Backup 三个分区和 Backup/Restore、Export/Import 操作均可用，处理中显示不可重复触发的进度遮罩。
+2. 备份书籍后导入或删除一本书，再恢复 `.hoshi`；返回书架确认当前收藏被备份内容完整覆盖，EPUB、封面、书签、统计、高亮和 Sasayaki sidecar 均可读。
+3. 在两个 Profile 中设置不同词典顺序、启用状态和折叠规则并备份词典；再修改集合和 Profile 配置后恢复，确认物理词典被覆盖、备份中的 Profile 配置恢复、只存在于当前环境的 Profile 仍保留，并立即可查词。
+4. 将带 `../`、绝对路径或 Unix symlink entry 的伪造 `.hoshi` 传给恢复，确认显示错误、应用目录外没有新文件，当前书籍/词典收藏未改变。
+5. 导出 ッツ ZIP，确认每本 EPUB 目录包含 `bookdata_1_6_*`，有数据时同时包含 `statistics_1_6_*`、`progress_1_6_*` 与封面；在 TTU Reader 或 Niratan 导入确认正文、CSS、图片和章节可读。
+6. 导入同一 ッツ ZIP：不存在的原始书名应新增，已存在的原始书名不得重复创建，只覆盖 `statistics.json` 与 `bookmark.json`；返回书架确认统计与阅读进度刷新。
+
 ## 2. Reader 修改后的强制验证
 
 每次修改以下文件后必须执行完整验证：
@@ -347,6 +363,20 @@ native/hoshidicts/src/lookup.cpp
    操作栏和全宽配置；关闭 child 后父弹窗仍可见。
 6. 开启全宽显示，确认每一层弹窗使用窗口可用宽度并靠底部显示，同时配置
    高度继续生效。
+7. 在记事本或浏览器选词触发全局查词，确认只显示圆角 popup 表面，顶边没有
+   宿主横条、标题栏或透明画布；在释义中继续点词后，每个 child 都是新的独立
+   原生 popup 窗口并可越出 root 的边界。逐层确认弹框水平中心跟随当前选区，
+   垂直只出现在选区正上或正下且保留间距；靠近屏幕边缘时只允许水平夹取或在
+   上下方向间切换，不得覆盖选区。点击父层空白只关闭其后的 child，点击所有
+   可见 popup 外部才关闭整栈。随后分别在小说和视频中做同样的嵌套查词，确认
+   仍使用原窗口内的 overlay 层级，不产生新的原生窗口。
+8. 应用启动后连续触发两次全局查词，再在释义中快速切换多个嵌套词。日志中
+   `overlay warmed` 应为 `0ms`，关闭/替换窗口应复用待用池，不应再次出现约
+   150–500ms 的 WebView2 初始化停顿；首屏 `contentReady` 仍须先于窗口 reveal。
+9. 在“设置 → 键盘快捷键 → 全局”修改“查询选中文本”，确认状态日志立即显示
+   新组合且旧组合不再触发；用新组合在记事本选词验证后点击重置，确认恢复
+   `Ctrl+Alt+D`。再设置一个被其他全局 action 或系统占用的组合，确认编辑器显示
+   冲突或注册失败状态，且应用不会保留两个全局 hotkey。
 
 ---
 
@@ -380,3 +410,50 @@ dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter
 5. URL 模板展开：确认 `{term}` → 单词 `{reading}` → 读音
 6. 嵌套弹窗内音频：子窗口播放子窗口的音频
 7. 本地音频（需 AnkiConnect）：`localhost:8765` 离线时能优雅降级
+
+---
+
+## 5. Video Anime4K 验证
+
+```powershell
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Anime4K|FullyQualifiedName~VideoEnhancement|FullyQualifiedName~MpvNative"
+.\build-and-run.ps1
+```
+
+手动验证：
+1. 打开视频侧边栏的“视频”页，在“视频增强”中选择已缓存的 `Anime4K Fast`，确认无需按钮即立即应用；选择尚未缓存的档位时只显示“下载”按钮，下载完成后自动应用。
+2. 临时断网后重试已下载档位，确认通过本地 SHA-256 校验直接完成；删除一个文件后断网，确认失败且不会启用不完整预设。
+3. 打开 1080p 动画，确认 `%APPDATA%\Niratan\VideoShaders\Anime4K\v4.0.1` 下六个文件存在，窗口缩放和全屏后画面持续渲染；重新打开视频后预设必须回到关闭且不加载着色器。
+4. 分别切换 Fast、High Quality 和关闭，检查 libmpv `glsl-shaders` 列表按预设顺序出现或清空；不得使用 `glsl-shaders-append` property。
+5. 检查高画质档 GPU 占用、掉帧、音画同步、HDR、硬解、截图和 Anki 视频媒体采集；性能不足时应能回到 Fast 或关闭。
+6. 打开带外部字幕的视频，确认视频源和必要播放属性就绪后立即出首帧；字幕、章节和轨道稍后补齐时界面仍可操作。
+7. 分别打开 16:9、4:3、竖屏和带旋转元数据的视频，确认窗口在 `file-loaded` 后按实际显示宽高适配当前显示器工作区；拖动任意窗口边缘或底部角落时，视频区域持续保持片源比例，全屏不受窗口比例约束。
+8. 在 100%、125%、150% DPI 下切换右侧视频面板并调整其宽度，确认原生视频画面、字幕层与底部控制栏左/右/下边界始终重合，没有一像素漂移、越过侧栏或悬空。
+7. 将字幕位置调到底部并显示字幕，移动鼠标唤出控制栏，确认侧边栏按钮、进度条和其余底部按钮都能点击；字幕未与控制栏重叠的区域仍可点选查词。
+
+---
+
+## 6. YouTube 视频验证（时间敏感）
+
+```powershell
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~YouTube|FullyQualifiedName~RemoteVideo"
+dotnet build -p:Platform=x64
+```
+
+使用参考链接 `https://www.youtube.com/watch?v=yrL6Qny0E5M`：
+
+1. 从资料库“添加链接”，确认实验性提示、输入校验、解析进度和取消；解析成功后先关闭对话框，再打开播放器。
+2. 确认最高只显示到 1080p、每个高度一个选项，分离音视频有声播放；切换画质后位置、播放/暂停、音量、速度、延迟、循环与字幕不变。
+3. 确认只列发布者字幕，自动生成日语字幕不出现；切换字幕后可查词、滚动 transcript 并在重启后恢复语言。
+4. 返回资料库确认远程标题、缩略图和“YouTube 视频”分类；“在文件资源管理器中显示”隐藏，删除只移除记录。
+5. 从资料库重开并确认进度恢复；验证截图和音频制卡，挖卡历史可通过稳定键重新打开远程条目。
+6. 断网或等待签名 URL 过期后重试，确认只进行一次强制刷新和一次 muxed 降级；最终错误本地化且不包含响应正文、签名 URL或 headers。
+7. 检查项目、发布目录和日志，确认不存在 `yt-dlp`、`youtube-dl`、`YoutubeExplode.Converter`、Deno、Node、helper 下载或子进程调用。
+
+### 6.1 Anki 媒体验证
+
+1. 在本地视频和 YouTube 视频中分别选择字幕词条制卡，字段映射同时启用 `{video-screenshot}` 与 `{video-audio-clip}`。
+2. 提交成功后立即检查 Anki 卡片及 `collection.media`：截图和 `.m4a` 必须已经存在且非空，不能稍后才出现。
+3. 临时让媒体目录只读或使用无有效音轨的片段，确认显示截图/音频采集错误且不提交引用缺失文件的卡片。
+4. 打开带封面的 EPUB，使用含 `{book-cover}` 的字段映射制卡；卡片字段必须为 Anki 媒体文件名的 `<img>`，不得包含应用私有目录或盘符路径。
+5. 对 `rules` 为 `v1`、`v5 adj-i` 和空字符串的词条分别制卡，确认弹窗不再因 `.some()` 报错。

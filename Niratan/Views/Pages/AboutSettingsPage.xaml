@@ -4,9 +4,14 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:converters="using:Niratan.Helpers.UI.Converters"
       xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
       xmlns:ui="using:CommunityToolkit.WinUI"
       mc:Ignorable="d">
+
+    <Page.Resources>
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </Page.Resources>
 
     <Grid RowDefinitions="Auto,*">
         <StackPanel Padding="20,14,36,16"
@@ -21,8 +26,8 @@
         </StackPanel>
 
         <ScrollViewer Grid.Row="1">
-            <Grid Padding="0,0,16,16">
-                <StackPanel MaxWidth="1000"
+            <Grid Padding="16,0,16,16">
+                <StackPanel MaxWidth="1280"
                             HorizontalAlignment="Stretch"
                             Spacing="4">
                     <toolkit:SettingsExpander x:Uid="SettingsAboutExpander"
@@ -47,6 +52,29 @@
                             </toolkit:SettingsCard>
                         </toolkit:SettingsExpander.Items>
                     </toolkit:SettingsExpander>
+
+                    <toolkit:SettingsCard x:Uid="AppUpdateCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="{x:Bind ViewModel.UpdateStatusText, Mode=OneWay}"
+                                          Header="Updates"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE895;}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <ProgressRing Width="20"
+                                          Height="20"
+                                          IsActive="{x:Bind ViewModel.IsCheckingForUpdates, Mode=OneWay}"
+                                          Visibility="{x:Bind ViewModel.IsCheckingForUpdates, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            <Button x:Uid="AppUpdateCheckButton"
+                                    AutomationProperties.AutomationId="AppUpdateCheckButton"
+                                    Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
+                                    Content="Check for updates" />
+                            <Button x:Uid="AppUpdateOpenButton"
+                                    AutomationProperties.AutomationId="AppUpdateOpenButton"
+                                    Command="{x:Bind ViewModel.OpenUpdateCommand}"
+                                    Content="View update"
+                                    Visibility="{x:Bind ViewModel.HasAvailableUpdate, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        </StackPanel>
+                    </toolkit:SettingsCard>
                 </StackPanel>
             </Grid>
         </ScrollViewer>

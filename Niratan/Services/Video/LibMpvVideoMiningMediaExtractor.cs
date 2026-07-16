@@ -1,15 +1,17 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Niratan.Models;
 using Serilog;
 
 namespace Niratan.Services.Video;
 
 internal sealed class LibMpvVideoMiningMediaExtractor : IVideoMiningMediaExtractor
 {
-    private const int MpvEventIdFileLoaded = 8;
+    private const int MpvEventIdPlaybackRestart = 21;
 
     public Task<string?> CaptureScreenshotAsync(
         string videoPath,
@@ -24,7 +26,15 @@ internal sealed class LibMpvVideoMiningMediaExtractor : IVideoMiningMediaExtract
         TimeSpan start,
         TimeSpan end,
         CancellationToken ct = default) =>
-        Task.Run(() => ExportAudioClip(videoPath, outputPath, start, end, ct), ct);
+        ExportAudioClipAsync(VideoMiningMediaSource.Local(videoPath), outputPath, start, end, ct);
+
+    public Task<string?> ExportAudioClipAsync(
+        VideoMiningMediaSource source,
+        string outputPath,
+        TimeSpan start,
+        TimeSpan end,
+        CancellationToken ct = default) =>
+        Task.Run(() => ExportAudioClip(source, outputPath, start, end, ct), ct);
 
     private static string? CaptureScreenshot(
         string videoPath,
@@ -47,10 +57,11 @@ internal sealed class LibMpvVideoMiningMediaExtractor : IVideoMiningMediaExtract
                 return null;
 
             MpvNative.SetOptionStringChecked(handle, "config", "no");
+            MpvNative.SetOptionStringChecked(handle, "vo", "null");
+            MpvNative.SetOptionStringChecked(handle, "screenshot-sw", "yes");
             MpvNative.SetOptionStringChecked(handle, "sid", "no");
             MpvNative.SetOptionStringChecked(handle, "audio", "no");
             MpvNative.SetOptionStringChecked(handle, "start", MpvNative.FormatSeconds(timestamp));
-            MpvNative.SetOptionStringChecked(handle, "pause", "yes");
 
             var status = MpvNative.Initialize(handle);
             if (status < 0)
@@ -75,7 +86,7 @@ internal sealed class LibMpvVideoMiningMediaExtractor : IVideoMiningMediaExtract
                     continue;
 
                 var mpvEvent = Marshal.PtrToStructure<MpvNative.MpvEvent>(eventPtr);
-                if (mpvEvent.EventId == MpvEventIdFileLoaded)
+                if (mpvEvent.EventId == MpvEventIdPlaybackRestart)
                 {
                     status = MpvNative.Command(handle, "screenshot-to-file", outputPath, "video");
                     if (status < 0)
@@ -116,13 +127,13 @@ internal sealed class LibMpvVideoMiningMediaExtractor : IVideoMiningMediaExtract
     }
 
     private static string? ExportAudioClip(
-        string videoPath,
+        VideoMiningMediaSource source,
         string outputPath,
         TimeSpan start,
         TimeSpan end,
         CancellationToken ct)
     {
-        if (end <= start || string.IsNullOrWhiteSpace(videoPath))
+        if (end <= start || string.IsNullOrWhiteSpace(source.Source))
             return null;
 
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
@@ -137,6 +148,14 @@ internal sealed class LibMpvVideoMiningMediaExtractor : IVideoMiningMediaExtract
                 return null;
 
             MpvNative.SetOptionStringChecked(handle, "config", "no");
+            MpvNative.SetOptionStringChecked(handle, "ytdl", "no");
+            if (source.HttpHeaders.Count > 0)
+            {
+                MpvNative.SetOptionStringChecked(
+                    handle,
+                    "http-header-fields",
+                    string.Join(',', source.HttpHeaders.Select(pair => $"{pair.Key}: {pair.Value}")));
+            }
             MpvNative.SetOptionStringChecked(handle, "vid", "no");
             MpvNative.SetOptionStringChecked(handle, "sid", "no");
             MpvNative.SetOptionStringChecked(handle, "audio-channels", "mono");
@@ -154,7 +173,7 @@ internal sealed class LibMpvVideoMiningMediaExtractor : IVideoMiningMediaExtract
                 return null;
             }
 
-            status = MpvNative.Command(handle, "loadfile", videoPath);
+            status = MpvNative.Command(handle, "loadfile", source.Source);
             if (status < 0)
             {
                 Log.Warning("[VideoMining] libmpv encoder could not load video: {Error}", MpvNative.ErrorString(status));

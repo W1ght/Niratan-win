@@ -147,6 +147,17 @@
   <data name="SettingsAboutVersionRun.Text" xml:space="preserve"><value>版本</value></data>
   <data name="SettingsProjectRepositoryLink.Content" xml:space="preserve"><value>项目仓库</value></data>
   <data name="SettingsSendFeedbackLink.Content" xml:space="preserve"><value>反馈问题</value></data>
+  <data name="AppUpdateCard.Header" xml:space="preserve"><value>更新</value></data>
+  <data name="AppUpdateCheckButton.Content" xml:space="preserve"><value>检查更新</value></data>
+  <data name="AppUpdateOpenButton.Content" xml:space="preserve"><value>获取更新</value></data>
+  <data name="AppUpdateBannerActionButton.Content" xml:space="preserve"><value>获取更新</value></data>
+  <data name="AppUpdateInitialStatus" xml:space="preserve"><value>检查 GitHub 上的最新版本。</value></data>
+  <data name="AppUpdateCheckingStatus" xml:space="preserve"><value>正在检查更新…</value></data>
+  <data name="AppUpdateAvailableStatus" xml:space="preserve"><value>新版本 {0} 已发布。</value></data>
+  <data name="AppUpdateCurrentStatus" xml:space="preserve"><value>当前已是最新版本（{0}）。</value></data>
+  <data name="AppUpdateFailedStatus" xml:space="preserve"><value>无法检查更新，请稍后再试。</value></data>
+  <data name="AppUpdateBannerTitle" xml:space="preserve"><value>发现新版本</value></data>
+  <data name="AppUpdateBannerMessage" xml:space="preserve"><value>Niratan {0} 已在 GitHub 发布。</value></data>
   <data name="NovelReaderChapterButton.AutomationProperties.Name" xml:space="preserve"><value>章节</value></data>
   <data name="NovelReaderSearchButton.AutomationProperties.Name" xml:space="preserve"><value>搜索</value></data>
   <data name="NovelReaderHighlightsButton.AutomationProperties.Name" xml:space="preserve"><value>高亮</value></data>
@@ -583,6 +594,33 @@
   <data name="SettingsSecondaryNavigationView.PaneTitle" xml:space="preserve"><value>设置</value></data>
   <data name="SettingsLibrarySectionHeader.Content" xml:space="preserve"><value>资料库</value></data>
   <data name="SettingsProfilesNavItem.Content" xml:space="preserve"><value>配置档案</value></data>
+  <data name="ProfilesSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>返回</value></data>
+  <data name="ProfilesSettingsPageTitle.Text" xml:space="preserve"><value>配置档案</value></data>
+  <data name="ProfilesActiveProfileCard.Header" xml:space="preserve"><value>当前配置档案</value></data>
+  <data name="ProfilesActiveProfileCard.Description" xml:space="preserve"><value>词典、阅读器外观和 Anki 制卡设置会跟随当前配置档案。</value></data>
+  <data name="ProfilesActiveProfileComboBox.AutomationProperties.Name" xml:space="preserve"><value>当前配置档案</value></data>
+  <data name="ProfilesNewProfileSectionHeader.Text" xml:space="preserve"><value>新建配置档案</value></data>
+  <data name="ProfilesCreateCard.Header" xml:space="preserve"><value>创建</value></data>
+  <data name="ProfilesNewProfileNameTextBox.PlaceholderText" xml:space="preserve"><value>名称</value></data>
+  <data name="ProfilesNewProfileNameTextBox.AutomationProperties.Name" xml:space="preserve"><value>配置档案名称</value></data>
+  <data name="ProfilesNewProfileLanguageComboBox.AutomationProperties.Name" xml:space="preserve"><value>配置档案语言</value></data>
+  <data name="ProfilesCreateProfileButton.AutomationProperties.Name" xml:space="preserve"><value>创建配置档案</value></data>
+  <data name="ProfilesCreateProfileButtonText.Text" xml:space="preserve"><value>创建</value></data>
+  <data name="ProfilesBookDefaultsSectionHeader.Text" xml:space="preserve"><value>书籍默认值</value></data>
+  <data name="ProfilesJapaneseBooksCard.Header" xml:space="preserve"><value>日语书籍</value></data>
+  <data name="ProfilesJapanesePrimaryProfileComboBox.AutomationProperties.Name" xml:space="preserve"><value>日语书籍的默认配置档案</value></data>
+  <data name="ProfilesEnglishBooksCard.Header" xml:space="preserve"><value>英语书籍</value></data>
+  <data name="ProfilesEnglishPrimaryProfileComboBox.AutomationProperties.Name" xml:space="preserve"><value>英语书籍的默认配置档案</value></data>
+  <data name="ProfilesLanguageJapanese" xml:space="preserve"><value>日语</value></data>
+  <data name="ProfilesLanguageEnglish" xml:space="preserve"><value>英语</value></data>
+  <data name="ProfilesDefaultJapaneseEpub" xml:space="preserve"><value>日语 EPUB</value></data>
+  <data name="ProfilesDefaultJapaneseVideo" xml:space="preserve"><value>日语视频</value></data>
+  <data name="ProfilesDefaultEnglishEpub" xml:space="preserve"><value>英语 EPUB</value></data>
+  <data name="ProfilesDefaultEnglishVideo" xml:space="preserve"><value>英语视频</value></data>
+  <data name="ProfilesDefaultProfileName" xml:space="preserve"><value>{0}配置档案</value></data>
+  <data name="ProfilesCreatedStatus" xml:space="preserve"><value>已创建“{0}”。</value></data>
+  <data name="ProfilesUsingStatus" xml:space="preserve"><value>正在使用“{0}”。</value></data>
+  <data name="ProfilesBookDefaultStatus" xml:space="preserve"><value>{0}书籍将使用“{1}”。</value></data>
   <data name="SettingsAppearanceNavItem.Content" xml:space="preserve"><value>外观</value></data>
   <data name="SettingsDictionariesNavItem.Content" xml:space="preserve"><value>词典</value></data>
   <data name="SettingsAnkiNavItem.Content" xml:space="preserve"><value>Anki</value></data>
@@ -636,6 +674,21 @@
   <data name="VideoDeinterlacingCard.Description" xml:space="preserve"><value>为隔行扫描源视频应用反交错处理</value></data>
   <data name="VideoHdrEnhancementCard.Header" xml:space="preserve"><value>HDR 增强</value></data>
   <data name="VideoHdrEnhancementCard.Description" xml:space="preserve"><value>启用面向 HDR 的视频增强默认值</value></data>
+  <data name="VideoAnime4KCard.Header" xml:space="preserve"><value>Anime4K 超分辨率</value></data>
+  <data name="VideoAnime4KCard.Description" xml:space="preserve"><value>在线下载并校验 Anime4K v4.0.1 着色器，通过 libmpv 实时应用；高画质档需要更强的 GPU。</value></data>
+  <data name="VideoAnime4KDownloadButton.Content" xml:space="preserve"><value>下载</value></data>
+  <data name="VideoPlayerAnime4KHeaderText.Text" xml:space="preserve"><value>Anime4K 超分辨率</value></data>
+  <data name="VideoPlayerAnime4KDescriptionText.Text" xml:space="preserve"><value>默认关闭，仅手动应用于当前视频；高画质档需要更强的 GPU。</value></data>
+  <data name="VideoShaderPresetOff" xml:space="preserve"><value>关闭</value></data>
+  <data name="VideoShaderPresetAnime4KFast" xml:space="preserve"><value>Anime4K 快速</value></data>
+  <data name="VideoShaderPresetAnime4KHighQuality" xml:space="preserve"><value>Anime4K 高画质</value></data>
+  <data name="VideoShaderDisabledStatus" xml:space="preserve"><value>当前视频已关闭 Anime4K。</value></data>
+  <data name="VideoShaderDownloadUnavailableStatus" xml:space="preserve"><value>Anime4K 下载服务当前不可用。</value></data>
+  <data name="VideoShaderDownloadingStatus" xml:space="preserve"><value>正在下载 Anime4K 着色器…</value></data>
+  <data name="VideoShaderDownloadRequiredStatus" xml:space="preserve"><value>该预设尚未下载，请先下载。</value></data>
+  <data name="VideoShaderDownloadProgressStatus" xml:space="preserve"><value>正在下载 {0}（{1}/{2}）</value></data>
+  <data name="VideoShaderDownloadFailedStatus" xml:space="preserve"><value>Anime4K 应用失败：{0}</value></data>
+  <data name="VideoShaderDownloadCompleteStatus" xml:space="preserve"><value>Anime4K 已应用到当前视频。</value></data>
   <data name="VideoEqualizerSectionHeader.Text" xml:space="preserve"><value>画面调节</value></data>
   <data name="VideoBrightnessCard.Header" xml:space="preserve"><value>亮度</value></data>
   <data name="VideoContrastCard.Header" xml:space="preserve"><value>对比度</value></data>
@@ -676,6 +729,7 @@
   <data name="KeyboardShortcutsConflictText" xml:space="preserve"><value>与“{0}”冲突</value></data>
   <data name="KeyboardShortcutsShadowedText" xml:space="preserve"><value>会被“{0}”覆盖</value></data>
   <data name="ShortcutCategoryGlobal" xml:space="preserve"><value>全局</value></data>
+  <data name="ShortcutActionGlobalLookupSelectedText" xml:space="preserve"><value>查询选中文本</value></data>
   <data name="ShortcutCategoryReader" xml:space="preserve"><value>阅读器</value></data>
   <data name="ShortcutCategoryDictionaryPopup" xml:space="preserve"><value>词典弹窗</value></data>
   <data name="ShortcutCategorySasayaki" xml:space="preserve"><value>Sasayaki</value></data>
@@ -862,4 +916,58 @@
   <data name="RemoteNovelDownloadQueued" xml:space="preserve"><value>等待下载</value></data>
   <data name="RemoteNovelDownloading" xml:space="preserve"><value>正在下载</value></data>
   <data name="RemoteNovelDownloadRetry" xml:space="preserve"><value>重试</value></data>
+  <data name="AddYouTubeLinkButton.Label" xml:space="preserve"><value>添加链接</value></data>
+  <data name="VideoPlayerOpenYouTubeLinkButton.Label" xml:space="preserve"><value>打开 YouTube 链接</value></data>
+  <data name="YouTubeQualityHeaderText.Text" xml:space="preserve"><value>YouTube 画质</value></data>
+  <data name="YouTubePublisherSubtitlesHeaderText.Text" xml:space="preserve"><value>发布者字幕</value></data>
+  <data name="YouTubeVideo" xml:space="preserve"><value>YouTube 视频</value></data>
+  <data name="YouTubeDialogTitle" xml:space="preserve"><value>添加 / 打开 YouTube 链接</value></data>
+  <data name="YouTubeDialogOpen" xml:space="preserve"><value>打开</value></data>
+  <data name="YouTubeDialogCancel" xml:space="preserve"><value>取消</value></data>
+  <data name="YouTubeDialogExperimentalTitle" xml:space="preserve"><value>实验性功能</value></data>
+  <data name="YouTubeDialogExperimentalMessage" xml:space="preserve"><value>YouTube 支持使用非官方接口，YouTube 变更后可能暂时失效。</value></data>
+  <data name="YouTubeDialogInputHeader" xml:space="preserve"><value>YouTube 视频链接</value></data>
+  <data name="YouTubeDialogResolving" xml:space="preserve"><value>正在解析视频、画质和发布者字幕…</value></data>
+  <data name="YouTubeInvalidUrl" xml:space="preserve"><value>请输入有效的 YouTube 视频链接。</value></data>
+  <data name="YouTubeRestricted" xml:space="preserve"><value>此视频需要 Niratan 当前不支持的访问权限。</value></data>
+  <data name="YouTubeNoPlayableStream" xml:space="preserve"><value>没有可用的 1080p 及以下兼容流。</value></data>
+  <data name="YouTubeResolveFailed" xml:space="preserve"><value>无法解析此 YouTube 视频，请稍后重试。</value></data>
+  <data name="YouTubePlaybackFailed" xml:space="preserve"><value>无法播放此 YouTube 视频，请稍后重试。</value></data>
+  <data name="YouTubeQualitySwitchFailed" xml:space="preserve"><value>无法切换 YouTube 画质。</value></data>
+  <data name="YouTubeSubtitleLoadFailed" xml:space="preserve"><value>无法加载此发布者字幕轨道。</value></data>
+  <data name="YouTubeSubtitleLoading" xml:space="preserve"><value>正在加载发布者字幕...</value></data>
+  <data name="DictionaryPopupViewAddedNoteInAnki" xml:space="preserve"><value>在 Anki 中查看已添加的笔记</value></data>
+  <data name="BackupSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>返回</value></data>
+  <data name="BackupSettingsPageTitle.Text" xml:space="preserve"><value>备份</value></data>
+  <data name="BackupBooksSectionHeader.Text" xml:space="preserve"><value>书籍</value></data>
+  <data name="BackupBooksCard.Header" xml:space="preserve"><value>书籍</value></data>
+  <data name="BackupBooksCard.Description" xml:space="preserve"><value>归档或恢复完整的本地书籍收藏</value></data>
+  <data name="BackupBooksButton.Content" xml:space="preserve"><value>备份</value></data>
+  <data name="RestoreBooksButton.Content" xml:space="preserve"><value>恢复</value></data>
+  <data name="BackupDictionariesSectionHeader.Text" xml:space="preserve"><value>词典</value></data>
+  <data name="BackupDictionariesCard.Header" xml:space="preserve"><value>词典</value></data>
+  <data name="BackupDictionariesCard.Description" xml:space="preserve"><value>包含词条、词频、音调和各配置文件的词典设置</value></data>
+  <data name="BackupDictionariesButton.Content" xml:space="preserve"><value>备份</value></data>
+  <data name="RestoreDictionariesButton.Content" xml:space="preserve"><value>恢复</value></data>
+  <data name="BackupDictionariesOverwriteText.Text" xml:space="preserve"><value>恢复将覆盖当前收藏。</value></data>
+  <data name="BackupTtuSectionHeader.Text" xml:space="preserve"><value>ッツ 备份</value></data>
+  <data name="BackupTtuCard.Header" xml:space="preserve"><value>ッツ 备份</value></data>
+  <data name="BackupTtuExportButton.Content" xml:space="preserve"><value>导出</value></data>
+  <data name="BackupTtuImportButton.Content" xml:space="preserve"><value>导入</value></data>
+  <data name="BackupTtuImportHelpText.Text" xml:space="preserve"><value>导入备份会添加新书，并覆盖已有书籍的统计数据和阅读进度。</value></data>
+  <data name="BackupHoshiFileType" xml:space="preserve"><value>Niratan 备份</value></data>
+  <data name="BackupTtuFileType" xml:space="preserve"><value>TTU 备份</value></data>
+  <data name="BackupStatusArchiving" xml:space="preserve"><value>正在归档...</value></data>
+  <data name="BackupStatusRestoring" xml:space="preserve"><value>正在恢复...</value></data>
+  <data name="BackupStatusExporting" xml:space="preserve"><value>正在导出...</value></data>
+  <data name="BackupStatusImporting" xml:space="preserve"><value>正在导入...</value></data>
+  <data name="BackupStatusExportingProgressFormat" xml:space="preserve"><value>正在导出 {0}</value></data>
+  <data name="BackupStatusImportingProgressFormat" xml:space="preserve"><value>正在导入 {0}</value></data>
+  <data name="BackupCreatedMessage" xml:space="preserve"><value>备份已创建。</value></data>
+  <data name="BackupRestoredMessage" xml:space="preserve"><value>备份已恢复。</value></data>
+  <data name="BackupTtuExportedMessage" xml:space="preserve"><value>TTU 备份已导出。</value></data>
+  <data name="BackupTtuImportedMessageFormat" xml:space="preserve"><value>TTU 备份已导入：新增 {0} 本，更新 {1} 本。</value></data>
+  <data name="BackupCompletedTitle" xml:space="preserve"><value>备份完成</value></data>
+  <data name="BackupRestoreCompletedTitle" xml:space="preserve"><value>恢复完成</value></data>
+  <data name="BackupErrorTitle" xml:space="preserve"><value>备份错误</value></data>
 </root>

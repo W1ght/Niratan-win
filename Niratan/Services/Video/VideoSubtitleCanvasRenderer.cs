@@ -31,18 +31,24 @@ public static class VideoSubtitleCanvasRenderer
     private const double HorizontalInset = 28;
     private const double MaximumTextWidth = 1680;
 
-    public static void Draw(
+    public static Rect Draw(
         CanvasDrawingSession drawingSession,
         Size size,
         VideoSubtitleCanvasRenderOptions options)
     {
         drawingSession.Clear(Colors.Transparent);
         if (string.IsNullOrEmpty(options.Text) || size.Width <= 0 || size.Height <= 0)
-            return;
+            return default;
 
         var layoutBounds = CalculateLayoutBounds(size);
         using var format = CreateTextFormat(options);
         using var layout = CreateTextLayout(drawingSession, layoutBounds, options.Text, format);
+        var drawBounds = layout.DrawBounds;
+        var visibleBounds = new Rect(
+            drawBounds.X + layoutBounds.X,
+            drawBounds.Y + layoutBounds.Y,
+            drawBounds.Width,
+            drawBounds.Height);
         using var composite = new CanvasCommandList(drawingSession);
         using (var compositeSession = composite.CreateDrawingSession())
         {
@@ -59,7 +65,7 @@ public static class VideoSubtitleCanvasRenderer
         if (maskBlurRadius <= 0)
         {
             drawingSession.DrawImage(composite);
-            return;
+            return visibleBounds;
         }
 
         using var maskBlur = new GaussianBlurEffect
@@ -69,6 +75,7 @@ public static class VideoSubtitleCanvasRenderer
             BorderMode = EffectBorderMode.Soft,
         };
         drawingSession.DrawImage(maskBlur);
+        return visibleBounds;
     }
 
     public static bool TryHitTestCharacter(

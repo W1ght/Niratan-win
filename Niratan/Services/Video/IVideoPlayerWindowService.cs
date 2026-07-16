@@ -24,4 +24,7 @@ public interface IVideoPlayerWindowService
     Task OpenAsync(VideoItem video, CancellationToken ct = default);
 
     Task OpenAsync(VideoItem video, IReadOnlyList<VideoItem> playlist, CancellationToken ct = default);
+
+    Task OpenAsync(VideoPlaybackLaunchRequest request, CancellationToken ct = default) =>
+        OpenAsync(request.Video, request.Playlist, ct);
 }

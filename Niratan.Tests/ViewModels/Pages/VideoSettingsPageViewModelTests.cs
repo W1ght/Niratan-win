@@ -160,4 +160,5 @@ public sealed class VideoSettingsPageViewModelTests
             .NotContain(name => name.Contains("ControlBar", StringComparison.OrdinalIgnoreCase));
         settingsService.Verify(service => service.SaveAsync(), Times.AtLeastOnce);
     }
+
 }

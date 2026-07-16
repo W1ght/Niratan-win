@@ -177,6 +177,23 @@ public sealed record ShortcutConflict(
     ShortcutAction Action,
     KeyboardShortcutBinding Binding);
 
+public static class GlobalShortcutActions
+{
+    public const string LookupSelectedTextId = "global.lookupSelectedText";
+
+    public static readonly ShortcutAction LookupSelectedText = new(
+        LookupSelectedTextId,
+        "Lookup Selected Text",
+        ShortcutResourceKey.ForActionId(LookupSelectedTextId),
+        ShortcutCategory.Global,
+        [ShortcutScope.Global],
+        new KeyboardShortcutBinding(
+            "d",
+            KeyboardShortcutModifiers.Control | KeyboardShortcutModifiers.Alt));
+
+    public static IReadOnlyList<ShortcutAction> All => [LookupSelectedText];
+}
+
 public static class VideoShortcutActions
 {
     public const string PlayPauseId = "video.playPause";
@@ -330,6 +347,7 @@ public sealed class ShortcutRegistry
 
     private static IReadOnlyList<ShortcutAction> BuildApplicationActions() =>
     [
+        .. GlobalShortcutActions.All,
         .. ReaderShortcutActions.All.Select(action => FromReaderAction(
             action,
             ShortcutCategory.Reader,

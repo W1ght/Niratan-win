@@ -32,6 +32,7 @@ internal class DatabaseMigrator
         new Migration_010(),
         new Migration_011(),
         new Migration_012(),
+        new Migration_013(),
     ];
 
     public DatabaseMigrator(ILogger<DatabaseMigrator> logger, string connectionString)

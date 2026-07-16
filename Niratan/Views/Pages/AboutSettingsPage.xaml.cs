@@ -5,11 +5,11 @@ namespace Niratan.Views.Pages;
 
 public sealed partial class AboutSettingsPage : Page
 {
-    public SettingsPageViewModel ViewModel { get; set; }
+    public AboutSettingsPageViewModel ViewModel { get; set; }
 
     public AboutSettingsPage()
     {
-        ViewModel = App.GetService<SettingsPageViewModel>();
+        ViewModel = App.GetService<AboutSettingsPageViewModel>();
         InitializeComponent();
         DataContext = ViewModel;
     }

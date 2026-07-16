@@ -16,6 +16,8 @@ public class VideoMiningHistoryUiContractTests
         xaml.Should().Contain("x:Name=\"MiningHistoryListView\"");
         xaml.Should().Contain("ItemsSource=\"{x:Bind ViewModel.MiningHistoryRows, Mode=OneWay}\"");
         xaml.Should().Contain("RecordMiningHistoryButton_Click");
+        xaml.Should().NotContain("VideoInspectorMiningLookupButton");
+        xaml.Should().NotContain("Content=\"查询当前字幕\"");
         xaml.Should().Contain("ClearMiningHistoryButton_Click");
         xaml.Should().Contain("CopyMiningHistoryButton_Click");
         xaml.Should().Contain("DeleteMiningHistoryButton_Click");

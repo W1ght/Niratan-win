@@ -23,7 +23,7 @@ public static class VideoSmartCollectionMatcher
             VideoSmartRuleField.FileName => MatchesText(
                 rule,
                 video.Title,
-                Path.GetFileNameWithoutExtension(video.FilePath)),
+                video.IsRemote ? video.RemoteId : Path.GetFileNameWithoutExtension(video.FilePath)),
             VideoSmartRuleField.ParentFolder => MatchesText(
                 rule,
                 Path.GetFileName(video.SourceFolderPath ?? string.Empty),

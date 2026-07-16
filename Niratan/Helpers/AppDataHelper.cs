@@ -16,6 +16,9 @@ public static class AppDataHelper
     private static readonly string _roamingAppDataPath =
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
 
+    private static readonly string _localAppDataPath =
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
     private static readonly string _appDataPath = Path.Combine(
         _roamingAppDataPath,
         CurrentAppDataDirectoryName
@@ -33,6 +36,11 @@ public static class AppDataHelper
     }
 
     public static string GetDataPath() => EnsureDirectory(Path.Combine(GetAppDataPath(), "Data"));
+
+    public static string GetTemporaryDataPath() => EnsureDirectory(Path.Combine(
+        _localAppDataPath,
+        CurrentAppDataDirectoryName,
+        "Temp"));
 
     public static string GetWebView2UserDataPath() =>
         EnsureDirectory(Path.Combine(GetAppDataPath(), "WebView2"));

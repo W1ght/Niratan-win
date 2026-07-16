@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Moq;
+using Niratan.Models.Settings;
 using Niratan.Services.Dictionary;
 using Niratan.Services.Video;
 using Niratan.ViewModels.Pages;
@@ -57,6 +58,105 @@ public class VideoPlayerViewModelVideoEnhancementTests
         Get<string>(sut, "VideoBrightnessText").Should().Be("0");
     }
 
+    [Fact]
+    public void ApplySettings_AlwaysStartsAnime4KOff()
+    {
+        var sut = CreateSut();
+
+        sut.ApplySettings(new VideoSettings
+        {
+            VideoShaderPreset = VideoShaderPreset.Anime4KHighQuality,
+        });
+
+        sut.VideoShaderPreset.Should().Be(VideoShaderPreset.Off);
+        sut.SelectedVideoShaderPresetOption!.Preset.Should().Be(VideoShaderPreset.Off);
+    }
+
+    [Fact]
+    public async Task PrepareShaderPreset_EnablesOnlyCurrentSessionAfterVerifiedDownload()
+    {
+        var shaderService = new Mock<IAnime4KShaderService>();
+        shaderService
+            .Setup(service => service.EnsurePresetAvailableAsync(
+                VideoShaderPreset.Anime4KFast,
+                It.IsAny<IProgress<Anime4KDownloadProgress>?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Anime4KInstallResult(true, 6, 6));
+        var sut = CreateSut(shaderService.Object);
+        sut.SelectedVideoShaderPresetOption = sut.AvailableVideoShaderPresets
+            .Single(option => option.Preset == VideoShaderPreset.Anime4KFast);
+
+        var prepared = await sut.PrepareSelectedVideoShaderPresetAsync(
+            TestContext.Current.CancellationToken);
+
+        prepared.Should().BeTrue();
+        sut.VideoShaderPreset.Should().Be(VideoShaderPreset.Anime4KFast);
+        sut.VideoShaderDownloadStatus.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task FailedShaderDownload_LeavesCurrentSessionOff()
+    {
+        var shaderService = new Mock<IAnime4KShaderService>();
+        shaderService
+            .Setup(service => service.EnsurePresetAvailableAsync(
+                VideoShaderPreset.Anime4KHighQuality,
+                It.IsAny<IProgress<Anime4KDownloadProgress>?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Anime4KInstallResult(false, 0, 6, "hash mismatch"));
+        var sut = CreateSut(shaderService.Object);
+        sut.SelectedVideoShaderPresetOption = sut.AvailableVideoShaderPresets
+            .Single(option => option.Preset == VideoShaderPreset.Anime4KHighQuality);
+
+        var prepared = await sut.PrepareSelectedVideoShaderPresetAsync(
+            TestContext.Current.CancellationToken);
+
+        prepared.Should().BeFalse();
+        sut.VideoShaderPreset.Should().Be(VideoShaderPreset.Off);
+        sut.VideoShaderDownloadStatus.Should().Contain("hash mismatch");
+    }
+
+    [Fact]
+    public void SelectInstalledShaderPreset_ActivatesImmediatelyWithoutDownload()
+    {
+        var shaderService = new Mock<IAnime4KShaderService>();
+        shaderService
+            .Setup(service => service.GetInstalledShaderPaths(VideoShaderPreset.Anime4KFast))
+            .Returns([@"C:\Shaders\fast.glsl"]);
+        var sut = CreateSut(shaderService.Object);
+        sut.SelectedVideoShaderPresetOption = sut.AvailableVideoShaderPresets
+            .Single(option => option.Preset == VideoShaderPreset.Anime4KFast);
+
+        var activated = sut.TryActivateSelectedVideoShaderPreset();
+
+        activated.Should().BeTrue();
+        sut.VideoShaderPreset.Should().Be(VideoShaderPreset.Anime4KFast);
+        sut.IsVideoShaderDownloadRequired.Should().BeFalse();
+        shaderService.Verify(service => service.EnsurePresetAvailableAsync(
+            It.IsAny<VideoShaderPreset>(),
+            It.IsAny<IProgress<Anime4KDownloadProgress>?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public void SelectMissingShaderPreset_RequiresDownloadAndKeepsShaderOff()
+    {
+        var shaderService = new Mock<IAnime4KShaderService>();
+        shaderService
+            .Setup(service => service.GetInstalledShaderPaths(VideoShaderPreset.Anime4KHighQuality))
+            .Returns([]);
+        var sut = CreateSut(shaderService.Object);
+        sut.SelectedVideoShaderPresetOption = sut.AvailableVideoShaderPresets
+            .Single(option => option.Preset == VideoShaderPreset.Anime4KHighQuality);
+
+        var activated = sut.TryActivateSelectedVideoShaderPreset();
+
+        activated.Should().BeFalse();
+        sut.VideoShaderPreset.Should().Be(VideoShaderPreset.Off);
+        sut.IsVideoShaderDownloadRequired.Should().BeTrue();
+        sut.CanDownloadVideoShaderPreset.Should().BeTrue();
+    }
+
     private static T Get<T>(object instance, string propertyName)
     {
         var property = instance.GetType().GetProperty(propertyName);
@@ -68,10 +168,12 @@ public class VideoPlayerViewModelVideoEnhancementTests
         return value.Should().BeAssignableTo<T>().Subject;
     }
 
-    private static VideoPlayerViewModel CreateSut()
+    private static VideoPlayerViewModel CreateSut(IAnime4KShaderService? shaderService = null)
     {
         return new VideoPlayerViewModel(
             new SubtitleParserService(),
-            Mock.Of<IDictionaryPopupRequestService>());
+            Mock.Of<IDictionaryPopupRequestService>(),
+            null,
+            shaderService);
     }
 }

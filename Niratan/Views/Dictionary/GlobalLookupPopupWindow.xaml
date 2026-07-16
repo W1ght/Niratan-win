@@ -6,6 +6,28 @@
     <Grid x:Name="RootGrid"
           Background="Transparent"
           KeyDown="RootGrid_KeyDown">
+        <Border x:Name="StatusSurface"
+                Width="360"
+                Height="92"
+                Padding="18"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Visibility="Collapsed">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <FontIcon VerticalAlignment="Center"
+                          Glyph="&#xEA39;"
+                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                          FontSize="20" />
+                <TextBlock x:Name="StatusTextBlock"
+                           Grid.Column="1"
+                           VerticalAlignment="Center"
+                           TextWrapping="Wrap" />
+            </Grid>
+        </Border>
         <Canvas x:Name="DictionaryOverlayCanvas"
                 Background="Transparent" />
     </Grid>

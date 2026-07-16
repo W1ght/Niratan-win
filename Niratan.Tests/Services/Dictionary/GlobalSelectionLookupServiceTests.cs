@@ -2,8 +2,11 @@ using System.Linq.Expressions;
 using FluentAssertions;
 using Niratan.Models.DTO;
 using Niratan.Models.Settings;
+using Niratan.Models.Shortcuts;
 using Niratan.Services.Dictionary;
 using Niratan.Services.Settings;
+using Niratan.Services.Shortcuts;
+using Windows.Graphics;
 
 namespace Niratan.Tests.Services.Dictionary;
 
@@ -31,6 +34,7 @@ public class GlobalSelectionLookupServiceTests
         hotKeys.UnregisterCount.Should().Be(1);
         sut.StatusText.Should().Be("Global lookup disabled.");
         reader.ReadCount.Should().Be(0);
+        popups.PrewarmCount.Should().Be(0);
         popups.ShownQueries.Should().BeEmpty();
     }
 
@@ -56,7 +60,31 @@ public class GlobalSelectionLookupServiceTests
         hotKeys.UnregisterCount.Should().Be(1);
         sut.StatusText.Should().Be("Global lookup hotkey registered: Ctrl+Alt+D.");
         reader.ReadCount.Should().Be(1);
+        popups.PrewarmCount.Should().Be(1);
         popups.ShownQueries.Should().Equal("星");
+    }
+
+    [Fact]
+    public async Task RegisteredTrigger_WhenSelectionHasScreenBounds_PreservesPopupAnchor()
+    {
+        var settings = new RecordingSettingsService
+        {
+            Current = new AppSettings
+            {
+                GlobalLookup = new GlobalLookupSettings { Enabled = true },
+            },
+        };
+        var hotKeys = new RecordingGlobalLookupHotKeyRegistrar();
+        var bounds = new RectInt32(1400, 320, 96, 28);
+        var reader = new RecordingSelectedTextReader { Text = "星", ScreenBounds = bounds };
+        var popups = new RecordingGlobalLookupPopupService();
+        var sut = new GlobalSelectionLookupService(settings, hotKeys, reader, popups);
+
+        await sut.InitializeAsync(TestContext.Current.CancellationToken);
+        await hotKeys.TriggerAsync();
+
+        popups.ShownSelections.Should().ContainSingle()
+            .Which.Should().Be(new SelectedTextSnapshot("星", bounds));
     }
 
     [Fact]
@@ -118,6 +146,40 @@ public class GlobalSelectionLookupServiceTests
     }
 
     [Fact]
+    public async Task ShortcutChange_WhenEnabled_ReRegistersConfiguredGlobalHotKey()
+    {
+        var settings = new RecordingSettingsService
+        {
+            Current = new AppSettings
+            {
+                GlobalLookup = new GlobalLookupSettings { Enabled = true },
+            },
+        };
+        var hotKeys = new RecordingGlobalLookupHotKeyRegistrar();
+        var shortcuts = new RecordingShortcutService(
+            new KeyboardShortcutBinding(
+                "F8",
+                KeyboardShortcutModifiers.Control | KeyboardShortcutModifiers.Shift));
+        var sut = new GlobalSelectionLookupService(
+            settings,
+            hotKeys,
+            new RecordingSelectedTextReader(),
+            new RecordingGlobalLookupPopupService(),
+            shortcutService: shortcuts);
+
+        await sut.InitializeAsync(TestContext.Current.CancellationToken);
+        shortcuts.SetBinding(
+            GlobalShortcutActions.LookupSelectedText,
+            new KeyboardShortcutBinding(
+                "j",
+                KeyboardShortcutModifiers.Control | KeyboardShortcutModifiers.Alt));
+        await hotKeys.WaitForRegistrationCountAsync(2, TestContext.Current.CancellationToken);
+
+        hotKeys.RegisteredHotKeys.Should().Equal("Ctrl+Shift+F8", "Ctrl+Alt+J");
+        sut.StatusText.Should().Be("Global lookup hotkey registered: Ctrl+Alt+J.");
+    }
+
+    [Fact]
     public async Task RegisteredTrigger_WithEmptySelection_DoesNotOpenPopupOrWindow()
     {
         var settings = new RecordingSettingsService
@@ -148,7 +210,7 @@ public class GlobalSelectionLookupServiceTests
 
         var text = await sut.TryReadSelectedTextAsync(TestContext.Current.CancellationToken);
 
-        text.Should().Be("original");
+        text?.Text.Should().Be("original");
         first.ReadCount.Should().Be(1);
         second.ReadCount.Should().Be(0);
     }
@@ -162,7 +224,7 @@ public class GlobalSelectionLookupServiceTests
 
         var text = await sut.TryReadSelectedTextAsync(TestContext.Current.CancellationToken);
 
-        text.Should().Be("fallback");
+        text?.Text.Should().Be("fallback");
         first.ReadCount.Should().Be(1);
         second.ReadCount.Should().Be(1);
     }
@@ -176,7 +238,7 @@ public class GlobalSelectionLookupServiceTests
 
         var text = await sut.TryReadSelectedTextAsync(TestContext.Current.CancellationToken);
 
-        text.Should().Be("fallback");
+        text?.Text.Should().Be("fallback");
         first.ReadCount.Should().Be(1);
         second.ReadCount.Should().Be(1);
     }
@@ -218,17 +280,23 @@ public class GlobalSelectionLookupServiceTests
         public int UnregisterCount { get; private set; }
 
         public Task RegisterAsync(
-            string hotKey,
+            KeyboardShortcutBinding hotKey,
             Func<CancellationToken, Task> handler,
             CancellationToken ct = default)
         {
-            RegisteredHotKeys.Add(hotKey);
+            RegisteredHotKeys.Add(hotKey.Label);
             _handler = handler;
             return Task.CompletedTask;
         }
 
         public Task TriggerAsync() =>
             _handler?.Invoke(TestContext.Current.CancellationToken) ?? Task.CompletedTask;
+
+        public async Task WaitForRegistrationCountAsync(int count, CancellationToken ct)
+        {
+            while (RegisteredHotKeys.Count < count)
+                await Task.Delay(10, ct);
+        }
 
         public void Unregister()
         {
@@ -239,7 +307,7 @@ public class GlobalSelectionLookupServiceTests
     private sealed class UnsupportedGlobalLookupHotKeyRegistrar : IGlobalLookupHotKeyRegistrar
     {
         public Task RegisterAsync(
-            string hotKey,
+            KeyboardShortcutBinding hotKey,
             Func<CancellationToken, Task> handler,
             CancellationToken ct = default) =>
             throw new NotSupportedException("not available");
@@ -249,15 +317,62 @@ public class GlobalSelectionLookupServiceTests
         }
     }
 
+    private sealed class RecordingShortcutService : IShortcutService
+    {
+        private KeyboardShortcutBinding _globalBinding;
+
+        public RecordingShortcutService(KeyboardShortcutBinding globalBinding)
+        {
+            _globalBinding = globalBinding;
+        }
+
+        public ShortcutRegistry Registry => ShortcutRegistry.Application;
+
+        public event EventHandler? ShortcutsChanged;
+
+        public KeyboardShortcutBinding GetBinding(ShortcutAction action) =>
+            action.Id == GlobalShortcutActions.LookupSelectedTextId
+                ? _globalBinding
+                : action.DefaultBinding;
+
+        public bool TryResolve(
+            ShortcutScope scope,
+            KeyboardShortcutBinding binding,
+            out ShortcutAction? action)
+        {
+            action = null;
+            return false;
+        }
+
+        public IReadOnlyList<ShortcutConflict> GetConflicts(
+            ShortcutAction action,
+            KeyboardShortcutBinding? proposedBinding = null) => [];
+
+        public void SetBinding(ShortcutAction action, KeyboardShortcutBinding binding)
+        {
+            if (action.Id == GlobalShortcutActions.LookupSelectedTextId)
+                _globalBinding = binding;
+            ShortcutsChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void ResetBinding(ShortcutAction action)
+        {
+            _globalBinding = action.DefaultBinding;
+            ShortcutsChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
     private sealed class RecordingSelectedTextReader : ISelectedTextReader
     {
         public string? Text { get; init; }
+        public RectInt32? ScreenBounds { get; init; }
         public int ReadCount { get; private set; }
 
-        public Task<string?> TryReadSelectedTextAsync(CancellationToken ct = default)
+        public Task<SelectedTextSnapshot?> TryReadSelectedTextAsync(CancellationToken ct = default)
         {
             ReadCount++;
-            return Task.FromResult(Text);
+            return Task.FromResult<SelectedTextSnapshot?>(
+                Text is null ? null : new SelectedTextSnapshot(Text, ScreenBounds));
         }
     }
 
@@ -265,7 +380,7 @@ public class GlobalSelectionLookupServiceTests
     {
         public int ReadCount { get; private set; }
 
-        public Task<string?> TryReadSelectedTextAsync(CancellationToken ct = default)
+        public Task<SelectedTextSnapshot?> TryReadSelectedTextAsync(CancellationToken ct = default)
         {
             ReadCount++;
             throw new InvalidOperationException("reader failed");
@@ -274,11 +389,20 @@ public class GlobalSelectionLookupServiceTests
 
     private sealed class RecordingGlobalLookupPopupService : IGlobalLookupPopupService
     {
+        public int PrewarmCount { get; private set; }
         public List<string> ShownQueries { get; } = [];
+        public List<SelectedTextSnapshot> ShownSelections { get; } = [];
 
-        public Task ShowAsync(string query, CancellationToken ct = default)
+        public Task PrewarmAsync(CancellationToken ct = default)
         {
-            ShownQueries.Add(query);
+            PrewarmCount++;
+            return Task.CompletedTask;
+        }
+
+        public Task ShowAsync(SelectedTextSnapshot selection, CancellationToken ct = default)
+        {
+            ShownQueries.Add(selection.Text);
+            ShownSelections.Add(selection);
             return Task.CompletedTask;
         }
     }

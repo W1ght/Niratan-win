@@ -27,6 +27,29 @@ public class VideoItem
     public int? SubtitleSelectionTrackId { get; set; }
     public string? SubtitleSelectionTrackName { get; set; }
     public string? ProfileId { get; set; }
+    public string? ProviderId { get; set; }
+    public string? RemoteId { get; set; }
+    public string? OriginalUrl { get; set; }
+    public string? CanonicalUrl { get; set; }
+    public string? RemoteThumbnailUrl { get; set; }
+    public string? RemoteSubtitleLanguage { get; set; }
+
+    public bool IsRemote => !string.IsNullOrWhiteSpace(ProviderId);
+
+    public RemoteVideoIdentity? GetRemoteIdentity() =>
+        !IsRemote
+        || string.IsNullOrWhiteSpace(RemoteId)
+        || string.IsNullOrWhiteSpace(OriginalUrl)
+        || string.IsNullOrWhiteSpace(CanonicalUrl)
+            ? null
+            : new RemoteVideoIdentity(
+                ProviderId!,
+                RemoteId,
+                OriginalUrl,
+                CanonicalUrl,
+                Title,
+                RemoteThumbnailUrl,
+                DurationSeconds > 0 ? TimeSpan.FromSeconds(DurationSeconds) : null);
 
     public VideoSubtitleSelection GetSubtitleSelection() =>
         SubtitleSelectionKind switch
@@ -37,6 +60,8 @@ public class VideoItem
                 VideoSubtitleSelection.EmbeddedTrack(
                     SubtitleSelectionTrackId.Value,
                     SubtitleSelectionTrackName),
+            VideoSubtitleSelectionKind.RemoteLanguage when !string.IsNullOrWhiteSpace(RemoteSubtitleLanguage) =>
+                VideoSubtitleSelection.RemoteLanguage(RemoteSubtitleLanguage),
             VideoSubtitleSelectionKind.Off => VideoSubtitleSelection.Off(),
             _ => VideoSubtitleSelection.None(),
         };
@@ -47,5 +72,6 @@ public class VideoItem
         SubtitleSelectionPath = selection.ExternalPath;
         SubtitleSelectionTrackId = selection.TrackId;
         SubtitleSelectionTrackName = selection.TrackName;
+        RemoteSubtitleLanguage = selection.RemoteLanguageCode;
     }
 }

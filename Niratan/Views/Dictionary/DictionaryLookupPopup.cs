@@ -15,6 +15,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.Web.WebView2.Core;
 using Niratan.Enums;
 using Niratan.Helpers;
@@ -24,6 +25,7 @@ using Niratan.Models.Settings;
 using Niratan.Services.Anki;
 using Niratan.Services.Audio;
 using Niratan.Services.Dictionary;
+using Niratan.Views.Dialogs;
 using Serilog;
 
 namespace Niratan.Views.Dictionary;
@@ -93,6 +95,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     public event EventHandler<DictionaryPopupShowDroppedEventArgs>? QueuedShowDropped;
 
     private readonly Grid _surfaceRoot;
+    private readonly Grid _controlsRow;
     private readonly SolidColorBrush _surfaceBrush;
     private readonly SolidColorBrush _outlineBrush;
     private readonly CommandBar _actionBar;
@@ -105,6 +108,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     private readonly AppBarButton _sasayakiPopupJumpCueButton;
     private readonly FontIcon _sasayakiPopupPlayPauseIcon;
     private readonly WebView2 _contentWebView;
+    private readonly InfoBar _miningToast;
     private readonly PopupHtmlGenerator _htmlGenerator;
     private readonly IDictionaryLookupService _lookupService;
     private readonly IAudioService _audioService;
@@ -115,6 +119,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     private readonly DictionaryPopupRecoveryCoordinator _recoveryCoordinator = new();
     private readonly SemaphoreSlim _webViewInitializationGate = new(1, 1);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<long, TaskCompletionSource<bool>> _shellReadyWaiters = new();
+    private readonly Dictionary<(long Generation, int EntryIndex), long> _openableAnkiNotes = [];
     private AnkiMiningContext _miningContext = new();
     private AnkiMiningContext _nextMiningContext = new();
     private SasayakiPopupControls? _sasayakiPopupControls;
@@ -126,6 +131,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     private bool _isCompletingContentReady;
     private bool _webViewReady;
     private bool _webViewEventsSubscribed;
+    private bool _actionBarPreference;
     private long _rendererEpochCounter;
     private long _rendererEpoch;
     private long _displayGeneration;
@@ -135,9 +141,19 @@ public sealed class DictionaryLookupPopup : IDisposable
     private string? _currentTraceId;
     private double _readyOpacity = 1;
     private double _popupCornerRadius = 8;
+    private bool _animateOpacityTransitions = true;
+    private Storyboard? _opacityStoryboard;
+    private EventHandler<object>? _opacityStoryboardCompletedHandler;
+    private TaskCompletionSource<bool>? _opacityAnimationCompletion;
+    private long _opacityAnimationGeneration;
 
     private const int MaxResolvedAudioUrlCacheEntries = 512;
     private const string AudioSourcePlaceholderPattern = "[^/?#&]+";
+    // Niratan uses SwiftUI .default.speed(2.2) for presentation and
+    // .default.speed(2.4) for dismissal. These durations preserve the same
+    // slightly-slower entrance and slightly-faster exit on WinUI.
+    private static readonly TimeSpan PopupEntranceFadeDuration = TimeSpan.FromMilliseconds(160);
+    private static readonly TimeSpan PopupExitFadeDuration = TimeSpan.FromMilliseconds(145);
     private static readonly TimeSpan PopupCommitTimeout = TimeSpan.FromSeconds(2);
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> s_resolvedAudioUrls = new(StringComparer.Ordinal);
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<Task<string?>>> s_audioResolutionTasks = new(StringComparer.Ordinal);
@@ -145,6 +161,9 @@ public sealed class DictionaryLookupPopup : IDisposable
     private static readonly LocalAudioSourceListResolver s_localAudioSourceListResolver = new();
     private CancellationTokenSource? _prefetchCts;
     private CancellationTokenSource? _deferredResultsCts;
+    private CancellationTokenSource? _miningToastCts;
+    private MiningContextSelectionDialog? _contextMiningDialog;
+    private Panel? _inPlaceDialogHost;
 
     public Border VisualRoot { get; }
     public bool IsWarmed => _warmCoordinator.IsWarm;
@@ -172,6 +191,17 @@ public sealed class DictionaryLookupPopup : IDisposable
             UseSystemFocusVisuals = false,
         };
 
+        _miningToast = new InfoBar
+        {
+            IsOpen = false,
+            IsClosable = false,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Top,
+            MaxWidth = 420,
+            Margin = new Thickness(12),
+        };
+        AutomationProperties.SetAutomationId(_miningToast, "AnkiMiningToast");
+
         _popupBackButton = CreateCommandButton(
             "DictionaryPopupBackButton",
             "DictionaryPopupBackButton.AutomationProperties.Name",
@@ -197,8 +227,10 @@ public sealed class DictionaryLookupPopup : IDisposable
         {
             DefaultLabelPosition = CommandBarDefaultLabelPosition.Collapsed,
             Background = new SolidColorBrush(Colors.Transparent),
-            Padding = new Thickness(8, 0, 8, 0),
-            MinHeight = 40,
+            Padding = new Thickness(8, 0, 0, 0),
+            MinHeight = 36,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
             Visibility = Visibility.Collapsed,
             IsDynamicOverflowEnabled = false,
             OverflowButtonVisibility = CommandBarOverflowButtonVisibility.Collapsed,
@@ -211,8 +243,6 @@ public sealed class DictionaryLookupPopup : IDisposable
                 "Popup actions"));
         _actionBar.PrimaryCommands.Add(_popupBackButton);
         _actionBar.PrimaryCommands.Add(_popupForwardButton);
-        _actionBar.PrimaryCommands.Add(new AppBarSeparator());
-        _actionBar.PrimaryCommands.Add(_popupCloseButton);
 
         _sasayakiPopupPlayPauseIcon = CreateCommandIcon("\uE768");
         _sasayakiPopupPlayPauseButton = CreateCommandButton(
@@ -238,8 +268,10 @@ public sealed class DictionaryLookupPopup : IDisposable
         {
             DefaultLabelPosition = CommandBarDefaultLabelPosition.Collapsed,
             Background = new SolidColorBrush(Colors.Transparent),
-            Padding = new Thickness(8, 0, 8, 0),
-            MinHeight = 40,
+            Padding = new Thickness(0),
+            MinHeight = 36,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
             Visibility = Visibility.Collapsed,
             IsDynamicOverflowEnabled = false,
             OverflowButtonVisibility = CommandBarOverflowButtonVisibility.Collapsed,
@@ -254,24 +286,50 @@ public sealed class DictionaryLookupPopup : IDisposable
         _sasayakiControlsBar.PrimaryCommands.Add(_sasayakiPopupReplayCueButton);
         _sasayakiControlsBar.PrimaryCommands.Add(_sasayakiPopupJumpCueButton);
 
-        _surfaceRoot = new Grid
+        _popupCloseButton.HorizontalAlignment = HorizontalAlignment.Right;
+        _popupCloseButton.VerticalAlignment = VerticalAlignment.Center;
+        _popupCloseButton.Margin = new Thickness(0, 0, 8, 0);
+        _popupCloseButton.Visibility = Visibility.Collapsed;
+
+        _controlsRow = new Grid
         {
-            RowDefinitions =
+            MinHeight = 36,
+            Visibility = Visibility.Collapsed,
+            ColumnDefinitions =
             {
-                new RowDefinition { Height = GridLength.Auto },
-                new RowDefinition { Height = GridLength.Auto },
-                new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                new ColumnDefinition { Width = GridLength.Auto },
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
             },
             Children =
             {
                 _actionBar,
                 _sasayakiControlsBar,
-                _contentWebView,
+                _popupCloseButton,
             },
         };
-        Grid.SetRow(_actionBar, 0);
-        Grid.SetRow(_sasayakiControlsBar, 1);
-        Grid.SetRow(_contentWebView, 2);
+        Grid.SetColumn(_actionBar, 0);
+        Grid.SetColumn(_sasayakiControlsBar, 1);
+        Grid.SetColumn(_popupCloseButton, 2);
+
+        _surfaceRoot = new Grid
+        {
+            RowDefinitions =
+            {
+                new RowDefinition { Height = GridLength.Auto },
+                new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
+            },
+            Children =
+            {
+                _controlsRow,
+                _contentWebView,
+                _miningToast,
+            },
+        };
+        Grid.SetRow(_controlsRow, 0);
+        Grid.SetRow(_contentWebView, 1);
+        Grid.SetRow(_miningToast, 1);
+        Canvas.SetZIndex(_miningToast, 1);
 
         VisualRoot = new Border
         {
@@ -307,6 +365,10 @@ public sealed class DictionaryLookupPopup : IDisposable
             Icon = icon,
             Label = name,
             IsCompact = true,
+            MinWidth = 44,
+            MinHeight = 32,
+            Height = 32,
+            Padding = new Thickness(0),
         };
         button.Click += clickHandler;
         AutomationProperties.SetAutomationId(button, automationId);
@@ -317,12 +379,28 @@ public sealed class DictionaryLookupPopup : IDisposable
 
     private void UpdateActionBarVisibility(DictionaryDisplaySettings displaySettings)
     {
-        var isVisible = displaySettings.PopupActionBar;
+        _actionBarPreference = displaySettings.PopupActionBar;
+        UpdateActionBarVisibility();
+    }
+
+    private void UpdateActionBarVisibility()
+    {
+        var isVisible = _actionBarPreference
+            || _navigationStateCoordinator.CanGoBack
+            || _navigationStateCoordinator.CanGoForward;
         _navigationStateCoordinator.SetVisibility(isVisible);
         _actionBar.Visibility = isVisible
             ? Visibility.Visible
             : Visibility.Collapsed;
+        _popupCloseButton.Visibility = _actionBar.Visibility;
+        UpdateControlsRowVisibility();
     }
+
+    private void UpdateControlsRowVisibility() =>
+        _controlsRow.Visibility = _actionBar.Visibility == Visibility.Visible
+            || _sasayakiControlsBar.Visibility == Visibility.Visible
+                ? Visibility.Visible
+                : Visibility.Collapsed;
 
     private void ResetActionBarNavigationState()
     {
@@ -363,10 +441,12 @@ public sealed class DictionaryLookupPopup : IDisposable
         if (controls == null)
         {
             _sasayakiControlsBar.Visibility = Visibility.Collapsed;
+            UpdateControlsRowVisibility();
             return;
         }
 
         _sasayakiControlsBar.Visibility = Visibility.Visible;
+        UpdateControlsRowVisibility();
         var canControl = controls.CanControl?.Invoke() ?? true;
         _sasayakiPopupPlayPauseButton.IsEnabled = canControl;
         _sasayakiPopupReplayCueButton.IsEnabled = canControl;
@@ -431,6 +511,14 @@ public sealed class DictionaryLookupPopup : IDisposable
     {
         _contentWebView.Margin = new Thickness(0);
         SetPopupCornerRadius(8);
+    }
+
+    public void UseImmediateOpacityTransitions()
+    {
+        _animateOpacityTransitions = false;
+        CancelOpacityAnimation();
+        if (VisualRoot.IsHitTestVisible)
+            VisualRoot.Opacity = _readyOpacity;
     }
 
     public Task WarmAsync(
@@ -499,11 +587,30 @@ public sealed class DictionaryLookupPopup : IDisposable
         _nextMiningContext = context ?? new AnkiMiningContext();
     }
 
+    public void SetInPlaceDialogHost(Panel? host)
+    {
+        _inPlaceDialogHost = host;
+    }
+
     public void SetReadyOpacity(double opacity)
     {
         _readyOpacity = Math.Clamp(opacity, 0, 1);
         if (VisualRoot.Opacity > 0)
             VisualRoot.Opacity = _readyOpacity;
+    }
+
+    public Windows.Foundation.Point GetWebContentOffset()
+    {
+        try
+        {
+            return _contentWebView
+                .TransformToVisual(VisualRoot)
+                .TransformPoint(new Windows.Foundation.Point(0, 0));
+        }
+        catch (InvalidOperationException)
+        {
+            return new Windows.Foundation.Point(0, 0);
+        }
     }
 
     private void SetPopupCornerRadius(double radius)
@@ -628,7 +735,8 @@ public sealed class DictionaryLookupPopup : IDisposable
                 request.AnkiSettings,
                 traceId: request.TraceId,
                 totalResultCount: request.Results.Count,
-                documentEpoch: _rendererEpoch);
+                documentEpoch: _rendererEpoch,
+                contextMiningAvailable: request.MiningContext.ContextSelection != null);
             var payloadBytes = Encoding.UTF8.GetByteCount(injectionScript);
             Log.Information(
                 "[LookupTrace] trace={TraceId} popup initial serialized in {Ms}ms bytes={Bytes} entries={EntryCount} total={TotalCount}",
@@ -705,7 +813,8 @@ public sealed class DictionaryLookupPopup : IDisposable
             expectedCommittedGeneration,
             normalizedAudioSettings,
             normalizedAnkiSettings,
-            traceId);
+            traceId,
+            contextMiningAvailable: _miningContext.ContextSelection != null);
         var appliedJson = await _contentWebView.CoreWebView2.ExecuteScriptAsync(injectionScript);
         cancellationToken.ThrowIfCancellationRequested();
         if (CommittedGeneration != expectedCommittedGeneration
@@ -831,6 +940,11 @@ public sealed class DictionaryLookupPopup : IDisposable
 
     public void Hide()
     {
+        _ = HideAnimatedAsync();
+    }
+
+    public Task<bool> HideAnimatedAsync()
+    {
         Log.Information("[Lifecycle] Popup hidden: wasGen={Gen}", _displayGeneration);
         CancelPrefetch();
         CancelDeferredResults();
@@ -846,13 +960,14 @@ public sealed class DictionaryLookupPopup : IDisposable
         _stagedNativeContext = null;
         _displayTransaction.Dismiss();
         _navigationStateCoordinator.Reset();
+        _openableAnkiNotes.Clear();
         ResetActionBarNavigationState();
         _displayGeneration++;
         _pendingContentGeneration = null;
         _pendingContentCancellationToken = default;
         _pendingContentStopwatch = null;
-        VisualRoot.Opacity = 0;
         VisualRoot.IsHitTestVisible = false;
+        return AnimateOpacityAsync(0, PopupExitFadeDuration);
     }
 
     public bool CancelPendingContent(long generation, string? traceId)
@@ -1408,6 +1523,14 @@ public sealed class DictionaryLookupPopup : IDisposable
                     HandleMineEntry(payload);
                     break;
 
+                case "prepareContextMining":
+                    HandlePrepareContextMining(payload);
+                    break;
+
+                case "openAnkiNote":
+                    HandleOpenAnkiNote(payload);
+                    break;
+
                 case "duplicateCheck":
                     HandleDuplicateCheck(payload);
                     break;
@@ -1509,6 +1632,7 @@ public sealed class DictionaryLookupPopup : IDisposable
 
         if (!preserveCommittedContent)
         {
+            CancelOpacityAnimation();
             VisualRoot.Visibility = Visibility.Visible;
             VisualRoot.Opacity = 0;
             VisualRoot.IsHitTestVisible = false;
@@ -1547,12 +1671,91 @@ public sealed class DictionaryLookupPopup : IDisposable
 
     private void ShowReadyContent()
     {
+        var shouldAnimateEntrance = !VisualRoot.IsHitTestVisible || VisualRoot.Opacity <= 0;
         _pendingContentGeneration = null;
         _pendingContentCancellationToken = default;
         _pendingContentStopwatch = null;
         VisualRoot.Visibility = Visibility.Visible;
-        VisualRoot.Opacity = _readyOpacity;
         VisualRoot.IsHitTestVisible = true;
+        if (!shouldAnimateEntrance)
+        {
+            CancelOpacityAnimation();
+            VisualRoot.Opacity = _readyOpacity;
+            return;
+        }
+
+        VisualRoot.Opacity = 0;
+        _ = AnimateOpacityAsync(_readyOpacity, PopupEntranceFadeDuration);
+    }
+
+    private Task<bool> AnimateOpacityAsync(double targetOpacity, TimeSpan duration)
+    {
+        if (!_animateOpacityTransitions)
+            duration = TimeSpan.Zero;
+
+        var fromOpacity = VisualRoot.Opacity;
+        CancelOpacityAnimation();
+        VisualRoot.Opacity = fromOpacity;
+        var animationGeneration = ++_opacityAnimationGeneration;
+        if (Math.Abs(fromOpacity - targetOpacity) < 0.001 || duration <= TimeSpan.Zero)
+        {
+            VisualRoot.Opacity = targetOpacity;
+            return Task.FromResult(true);
+        }
+
+        var completion = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var animation = new DoubleAnimation
+        {
+            From = fromOpacity,
+            To = targetOpacity,
+            Duration = new Duration(duration),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut },
+        };
+        Storyboard.SetTarget(animation, VisualRoot);
+        Storyboard.SetTargetProperty(animation, nameof(UIElement.Opacity));
+
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(animation);
+        EventHandler<object>? completedHandler = null;
+        completedHandler = (_, _) =>
+        {
+            storyboard.Completed -= completedHandler;
+            if (animationGeneration != _opacityAnimationGeneration)
+            {
+                completion.TrySetResult(false);
+                return;
+            }
+
+            storyboard.Stop();
+            VisualRoot.Opacity = targetOpacity;
+            _opacityStoryboard = null;
+            _opacityStoryboardCompletedHandler = null;
+            _opacityAnimationCompletion = null;
+            completion.TrySetResult(true);
+        };
+        storyboard.Completed += completedHandler;
+        _opacityStoryboard = storyboard;
+        _opacityStoryboardCompletedHandler = completedHandler;
+        _opacityAnimationCompletion = completion;
+        storyboard.Begin();
+        return completion.Task;
+    }
+
+    private void CancelOpacityAnimation()
+    {
+        _opacityAnimationGeneration++;
+        if (_opacityStoryboard is { } storyboard)
+        {
+            if (_opacityStoryboardCompletedHandler is { } completedHandler)
+                storyboard.Completed -= completedHandler;
+            storyboard.Stop();
+        }
+
+        _opacityStoryboard = null;
+        _opacityStoryboardCompletedHandler = null;
+        _opacityAnimationCompletion?.TrySetResult(false);
+        _opacityAnimationCompletion = null;
     }
 
     private Task ObservePopupCommitAsync(long generation)
@@ -1813,6 +2016,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         _ankiSettings = context.AnkiSettings;
         _miningContext = context.MiningContext;
         _sasayakiPopupControls = context.SasayakiControls;
+        _openableAnkiNotes.Clear();
         _stagedNativeContext = null;
         UpdateSasayakiPopupControls();
     }
@@ -1937,6 +2141,7 @@ public sealed class DictionaryLookupPopup : IDisposable
 
             _popupBackButton.IsEnabled = canGoBack;
             _popupForwardButton.IsEnabled = canGoForward;
+            UpdateActionBarVisibility();
         });
     }
 
@@ -2285,69 +2490,272 @@ public sealed class DictionaryLookupPopup : IDisposable
             return;
 
         var rawPayload = body.GetRawText();
+        var miningPayload = AnkiMiningPayload.FromJson(rawPayload);
+        var entryIndex = miningPayload.EntryIndex;
+        var renderGeneration = miningPayload.RenderGeneration;
         _ = _contentWebView.DispatcherQueue.TryEnqueue(async () =>
         {
             try
             {
                 Log.Information("[Lifecycle] Anki mine started");
-                var preflight = await _ankiService.PreflightMiningAsync(rawPayload, _miningContext);
-                if (!preflight.CanMine)
-                {
-                    await _contentWebView.CoreWebView2.ExecuteScriptAsync(
-                        "if (typeof window.onMineComplete === 'function') window.onMineComplete(false);");
-                    return;
-                }
-
-                await RequestVideoMiningMediaAsync(preflight);
-                await RequestSasayakiMiningMediaAsync(preflight);
-                var success = await _ankiService.MineEntryAsync(rawPayload, _miningContext);
-
-                var script = success
-                    ? "if (typeof window.onMineComplete === 'function') window.onMineComplete(true);"
-                    : "if (typeof window.onMineComplete === 'function') window.onMineComplete(false);";
-
-                await _contentWebView.CoreWebView2.ExecuteScriptAsync(script);
+                var result = await MineEntryCoreAsync(rawPayload, _miningContext);
+                ShowMiningToast(result);
+                await SendMiningResultToWebAsync(
+                    "onMineComplete", entryIndex, renderGeneration, result);
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "[DictPopup] MineEntry failed");
-                await _contentWebView.CoreWebView2.ExecuteScriptAsync(
-                    "if (typeof window.onMineComplete === 'function') window.onMineComplete(false);");
+                var result = AnkiMiningResult.Failed(ex.Message);
+                ShowMiningToast(result);
+                await SendMiningResultToWebAsync(
+                    "onMineComplete", entryIndex, renderGeneration, result);
             }
         });
     }
 
-    private async Task RequestVideoMiningMediaAsync(AnkiMiningPreflightResult preflight)
+    private void HandlePrepareContextMining(JsonElement payload)
     {
-        if (!preflight.MediaNeeds.NeedsVideoMedia || _miningContext.VideoMediaProvider == null)
+        if (!payload.TryGetProperty("body", out var body) || body.ValueKind != JsonValueKind.Object)
             return;
 
-        var result = await _miningContext.VideoMediaProvider(
+        var rawPayload = body.GetRawText();
+        var miningPayload = AnkiMiningPayload.FromJson(rawPayload);
+        _ = _contentWebView.DispatcherQueue.TryEnqueue(async () =>
+        {
+            try
+            {
+                var baseMiningContext = ResolveMiningContext(miningPayload.RenderGeneration);
+                if (baseMiningContext == null)
+                {
+                    await NotifyContextMiningPreparedAsync(miningPayload.EntryIndex);
+                    return;
+                }
+
+                await NotifyContextMiningPreparedAsync(miningPayload.EntryIndex);
+                var selection = baseMiningContext.ContextSelection;
+                var xamlRoot = VisualRoot.XamlRoot;
+                if (selection == null || xamlRoot == null)
+                {
+                    var unavailable = AnkiMiningResult.Failed("Sentence context is unavailable.");
+                    ShowMiningToast(unavailable);
+                    return;
+                }
+
+                if (_contextMiningDialog != null)
+                    return;
+
+                var dialog = new MiningContextSelectionDialog(
+                    selection,
+                    miningPayload.Matched.Length,
+                    async range =>
+                    {
+                        var selectedContext = MiningContextSelectionResolver.Apply(
+                            baseMiningContext,
+                            selection,
+                            range);
+                        var result = await MineEntryCoreAsync(rawPayload, selectedContext);
+                        ShowMiningToast(result);
+                        await SendMiningResultToWebAsync(
+                            "onContextMineComplete",
+                            miningPayload.EntryIndex,
+                            miningPayload.RenderGeneration,
+                            result);
+                        return result;
+                    })
+                {
+                    XamlRoot = xamlRoot,
+                };
+                _contextMiningDialog = dialog;
+                var dialogHost = _inPlaceDialogHost;
+                try
+                {
+                    if (dialogHost != null)
+                    {
+                        dialogHost.Children.Add(dialog);
+                        await dialog.ShowAsync(ContentDialogPlacement.InPlace);
+                    }
+                    else
+                    {
+                        await dialog.ShowAsync(ContentDialogPlacement.Popup);
+                    }
+                }
+                finally
+                {
+                    if (dialogHost?.Children.Contains(dialog) == true)
+                        dialogHost.Children.Remove(dialog);
+                    _contextMiningDialog = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[DictPopup] Context mining dialog failed to open");
+                ShowMiningToast(AnkiMiningResult.Failed("Unable to open sentence context."));
+                await NotifyContextMiningPreparedAsync(miningPayload.EntryIndex);
+            }
+        });
+    }
+
+    private AnkiMiningContext? ResolveMiningContext(long renderGeneration)
+    {
+        if (renderGeneration < 0 || CommittedGeneration == renderGeneration)
+            return _miningContext;
+
+        return _stagedNativeContext is { } staged
+            && staged.Generation == renderGeneration
+                ? staged.MiningContext
+                : null;
+    }
+
+    private Task NotifyContextMiningPreparedAsync(int entryIndex) =>
+        _contentWebView.CoreWebView2.ExecuteScriptAsync(
+            $"if (typeof window.onContextMiningPrepared === 'function') window.onContextMiningPrepared({entryIndex});")
+            .AsTask();
+
+    private async Task<AnkiMiningResult> MineEntryCoreAsync(
+        string rawPayload,
+        AnkiMiningContext miningContext)
+    {
+        try
+        {
+            var preflight = await _ankiService.PreflightMiningAsync(rawPayload, miningContext);
+            if (!preflight.CanMine)
+            {
+                return preflight.IsDuplicate
+                    ? AnkiMiningResult.Duplicate()
+                    : AnkiMiningResult.Failed(preflight.ErrorMessage ?? "Failed to add card.");
+            }
+
+            var videoMediaError = await RequestVideoMiningMediaAsync(preflight, miningContext);
+            if (!string.IsNullOrWhiteSpace(videoMediaError))
+                return AnkiMiningResult.Failed(videoMediaError);
+
+            var sasayakiMediaError = await RequestSasayakiMiningMediaAsync(preflight, miningContext);
+            if (!string.IsNullOrWhiteSpace(sasayakiMediaError))
+                return AnkiMiningResult.Failed(sasayakiMediaError);
+
+            var noteId = await _ankiService.MineEntryAsync(rawPayload, miningContext);
+            return noteId is long addedNoteId && addedNoteId > 0
+                ? AnkiMiningResult.Added(addedNoteId)
+                : AnkiMiningResult.Failed("Failed to add card.");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[DictPopup] Anki mining pipeline failed");
+            return AnkiMiningResult.Failed(ex.Message);
+        }
+    }
+
+    private async Task<string?> RequestVideoMiningMediaAsync(
+        AnkiMiningPreflightResult preflight,
+        AnkiMiningContext miningContext)
+    {
+        if (!preflight.MediaNeeds.NeedsVideoMedia || miningContext.VideoMediaProvider == null)
+            return null;
+
+        var cueStart = TimeSpan.TryParse(miningContext.VideoCueStart, out var parsedStart)
+            ? parsedStart
+            : (TimeSpan?)null;
+        var cueEnd = TimeSpan.TryParse(miningContext.VideoCueEnd, out var parsedEnd)
+            ? parsedEnd
+            : (TimeSpan?)null;
+
+        var result = await miningContext.VideoMediaProvider(
             new VideoMiningMediaRequest(
                 preflight.MediaNeeds.NeedsVideoScreenshot,
                 preflight.MediaNeeds.NeedsVideoAudioClip,
-                preflight.DirectMediaDirectory),
+                preflight.DirectMediaDirectory,
+                cueStart,
+                cueEnd),
             CancellationToken.None);
 
-        _miningContext.VideoScreenshotPath = result.ScreenshotPath;
-        _miningContext.VideoAudioClipPath = result.AudioClipPath;
-        _miningContext.VideoScreenshotTag = result.ScreenshotTag;
-        _miningContext.VideoAudioClipTag = result.AudioClipTag;
+        miningContext.VideoScreenshotPath = result.ScreenshotPath;
+        miningContext.VideoAudioClipPath = result.AudioClipPath;
+        miningContext.VideoScreenshotTag = result.ScreenshotTag;
+        miningContext.VideoAudioClipTag = result.AudioClipTag;
+        if (preflight.MediaNeeds.NeedsVideoScreenshot
+            && string.IsNullOrWhiteSpace(result.ScreenshotPath)
+            && string.IsNullOrWhiteSpace(result.ScreenshotTag))
+        {
+            return result.ScreenshotErrorMessage ?? "Unable to capture the video screenshot.";
+        }
+
+        if (preflight.MediaNeeds.NeedsVideoAudioClip
+            && string.IsNullOrWhiteSpace(result.AudioClipPath)
+            && string.IsNullOrWhiteSpace(result.AudioClipTag))
+        {
+            return result.AudioClipErrorMessage ?? "Unable to capture the subtitle audio clip.";
+        }
+
+        return null;
     }
 
-    private async Task RequestSasayakiMiningMediaAsync(AnkiMiningPreflightResult preflight)
+    private async Task<string?> RequestSasayakiMiningMediaAsync(
+        AnkiMiningPreflightResult preflight,
+        AnkiMiningContext miningContext)
     {
-        if (!preflight.MediaNeeds.NeedsSasayakiAudio || _miningContext.SasayakiAudioProvider == null)
-            return;
+        if (!preflight.MediaNeeds.NeedsSasayakiAudio || miningContext.SasayakiAudioProvider == null)
+            return null;
 
-        var result = await _miningContext.SasayakiAudioProvider(
+        var result = await miningContext.SasayakiAudioProvider(
             new SasayakiMiningAudioRequest(
                 preflight.MediaNeeds.NeedsSasayakiAudio,
-                preflight.DirectMediaDirectory),
+                preflight.DirectMediaDirectory,
+                miningContext.Sentence),
             CancellationToken.None);
 
-        _miningContext.SasayakiAudioPath = result.AudioClipPath;
-        _miningContext.SasayakiAudioTag = result.AudioClipTag;
+        miningContext.SasayakiAudioPath = result.AudioClipPath;
+        miningContext.SasayakiAudioTag = result.AudioClipTag;
+        return result.ErrorMessage;
+    }
+
+    private void HandleOpenAnkiNote(JsonElement payload)
+    {
+        if (!payload.TryGetProperty("body", out var body)
+            || body.ValueKind != JsonValueKind.Object
+            || !body.TryGetProperty("entryIndex", out var entryIndexElement)
+            || !entryIndexElement.TryGetInt32(out var entryIndex)
+            || entryIndex < 0
+            || !body.TryGetProperty("renderGeneration", out var generationElement)
+            || !generationElement.TryGetInt64(out var renderGeneration)
+            || renderGeneration < 0
+            || !body.TryGetProperty("noteID", out var noteIdElement)
+            || !noteIdElement.TryGetInt64(out var noteId)
+            || noteId <= 0)
+        {
+            Log.Warning("[DictPopup] Rejected malformed openAnkiNote message");
+            return;
+        }
+
+        _ = _contentWebView.DispatcherQueue.TryEnqueue(async () =>
+        {
+            var allowed = CommittedGeneration == renderGeneration
+                && _openableAnkiNotes.TryGetValue(
+                    (renderGeneration, entryIndex),
+                    out var allowedNoteId)
+                && allowedNoteId == noteId;
+            var opened = false;
+            if (allowed)
+            {
+                opened = await _ankiService.OpenNoteInAnkiAsync(noteId);
+                if (!opened)
+                    ShowMiningToast(AnkiMiningResult.Failed("Unable to open note in Anki."));
+            }
+            else
+            {
+                Log.Warning(
+                    "[DictPopup] Rejected stale or unrecognized Anki note request gen={Generation} entry={EntryIndex} noteId={NoteId}",
+                    renderGeneration,
+                    entryIndex,
+                    noteId);
+            }
+
+            if (CommittedGeneration != renderGeneration)
+                return;
+
+            await _contentWebView.CoreWebView2.ExecuteScriptAsync(
+                $"if (typeof window.onOpenAnkiNoteComplete === 'function') window.onOpenAnkiNoteComplete({entryIndex}, {(opened ? "true" : "false")});");
+        });
     }
 
     private void HandleDuplicateCheck(JsonElement payload)
@@ -2355,15 +2763,27 @@ public sealed class DictionaryLookupPopup : IDisposable
         if (!payload.TryGetProperty("body", out var body) || body.ValueKind != JsonValueKind.Object)
             return;
 
-        var rawPayload = body.GetRawText();
+        var expression = body.TryGetProperty("expression", out var expressionElement)
+            ? expressionElement.GetString() ?? ""
+            : "";
+        var entryIndex = body.TryGetProperty("entryIndex", out var entryIndexElement)
+            && entryIndexElement.TryGetInt32(out var parsedEntryIndex)
+                ? parsedEntryIndex
+                : -1;
+        var renderGeneration = body.TryGetProperty("renderGeneration", out var generationElement)
+            && generationElement.TryGetInt64(out var parsedGeneration)
+                ? parsedGeneration
+                : -1;
         _ = _contentWebView.DispatcherQueue.TryEnqueue(async () =>
         {
             try
             {
-                var isDuplicate = await _ankiService.DuplicateCheckAsync(rawPayload);
-                var script = isDuplicate
-                    ? "if (typeof window.onDuplicateCheck === 'function') window.onDuplicateCheck(true);"
-                    : "if (typeof window.onDuplicateCheck === 'function') window.onDuplicateCheck(false);";
+                var isDuplicate = await _ankiService.DuplicateCheckExpressionAsync(expression);
+                if (renderGeneration >= 0
+                    && CommittedGeneration != renderGeneration
+                    && _displayTransaction.CommitInFlightGeneration != renderGeneration)
+                    return;
+                var script = $"if (typeof window.onDuplicateCheck === 'function') window.onDuplicateCheck({entryIndex}, {(isDuplicate ? "true" : "false")});";
 
                 await _contentWebView.CoreWebView2.ExecuteScriptAsync(script);
             }
@@ -2374,8 +2794,69 @@ public sealed class DictionaryLookupPopup : IDisposable
         });
     }
 
+    private async Task SendMiningResultToWebAsync(
+        string callback,
+        int entryIndex,
+        long renderGeneration,
+        AnkiMiningResult result)
+    {
+        if (renderGeneration >= 0 && CommittedGeneration != renderGeneration)
+            return;
+
+        if (result is { Status: AnkiMiningStatus.Added, NoteId: > 0 })
+            _openableAnkiNotes[(renderGeneration, entryIndex)] = result.NoteId.Value;
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            status = result.WebStatus,
+            message = result.Message,
+            noteID = result.NoteId,
+        });
+        await _contentWebView.CoreWebView2.ExecuteScriptAsync(
+            $"if (typeof window.{callback} === 'function') window.{callback}({entryIndex}, {payload});");
+    }
+
+    private void ShowMiningToast(AnkiMiningResult result)
+    {
+        _miningToastCts?.Cancel();
+        _miningToastCts?.Dispose();
+        _miningToastCts = new CancellationTokenSource();
+        _miningToast.Title = result.Status switch
+        {
+            AnkiMiningStatus.Added => "Card Added",
+            AnkiMiningStatus.Duplicate => "Duplicate Found",
+            AnkiMiningStatus.Pending => "Sent to Anki",
+            _ => "Add Failed",
+        };
+        _miningToast.Message = result.Message;
+        _miningToast.Severity = result.Status switch
+        {
+            AnkiMiningStatus.Added => InfoBarSeverity.Success,
+            AnkiMiningStatus.Duplicate => InfoBarSeverity.Warning,
+            AnkiMiningStatus.Pending => InfoBarSeverity.Informational,
+            _ => InfoBarSeverity.Error,
+        };
+        _miningToast.IsOpen = true;
+        _ = HideMiningToastAsync(_miningToastCts.Token);
+    }
+
+    private async Task HideMiningToastAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(2200), cancellationToken);
+            _contentWebView.DispatcherQueue.TryEnqueue(() => _miningToast.IsOpen = false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
     public void Dispose()
     {
+        CancelOpacityAnimation();
+        _miningToastCts?.Cancel();
+        _miningToastCts?.Dispose();
         CancelPrefetch();
         CancelDeferredResults();
         if (_contentWebView.CoreWebView2 != null)

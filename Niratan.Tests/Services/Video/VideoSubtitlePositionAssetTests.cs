@@ -43,6 +43,8 @@ public sealed class VideoSubtitlePositionAssetTests
         var playerXaml = ReadProjectFile("Views", "Video", "VideoPlayerWindow.xaml");
 
         overlayCode.Should().Contain("VideoSubtitlePositionPolicy.OriginY(");
+        overlayCode.Should().Contain("VideoSubtitlePositionPolicy.ContainerOriginY(");
+        overlayCode.Should().Contain("_subtitleVisibleBounds");
         overlayCode.Should().Contain("geometry.TopMargin");
         overlayCode.Should().Contain("geometry.BottomMargin");
         overlayCode.Should().NotContain("SubtitlePanelTransform.Y = -ViewModel.SubtitleVerticalPosition");

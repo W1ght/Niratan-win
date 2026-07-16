@@ -61,6 +61,11 @@ public sealed class ProfileSettingsStore
         _activeProfileId = profileId;
     }
 
+    public Task ReloadActiveAsync(CancellationToken ct = default) =>
+        _activeProfileId is null
+            ? Task.CompletedTask
+            : LoadProfileOwnedSettingsAsync(_activeProfileId, ct);
+
     private async Task SaveProfileOwnedSettingsAsync(string profileId, CancellationToken ct)
     {
         var profileDir = _profiles.GetProfileDirectory(profileId);

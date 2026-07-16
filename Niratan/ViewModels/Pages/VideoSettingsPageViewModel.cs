@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Niratan.Helpers;
 using Niratan.Models.Settings;
@@ -215,6 +217,7 @@ public partial class VideoSettingsPageViewModel : ObservableObject
                 HardwareDecodingEnabled = HardwareDecodingEnabled,
                 DeinterlacingEnabled = DeinterlacingEnabled,
                 HdrEnhancementEnabled = HdrEnhancementEnabled,
+                VideoShaderPreset = VideoShaderPreset.Off,
                 VideoBrightness = VideoBrightness,
                 VideoContrast = VideoContrast,
                 VideoSaturation = VideoSaturation,
@@ -255,6 +258,7 @@ public partial class VideoSettingsPageViewModel : ObservableObject
     partial void OnHardwareDecodingEnabledChanged(bool value) => SaveSettings();
     partial void OnDeinterlacingEnabledChanged(bool value) => SaveSettings();
     partial void OnHdrEnhancementEnabledChanged(bool value) => SaveSettings();
+
     partial void OnVideoBrightnessChanged(double value)
     {
         VideoBrightnessText = FormatEqualizer(value);

@@ -132,7 +132,7 @@
                 </Border>
 
                 <Border x:Name="BottomChrome"
-                        Canvas.ZIndex="10"
+                        Canvas.ZIndex="30"
                         VerticalAlignment="Bottom"
                         MinHeight="104"
                         Padding="16,6,16,10"
@@ -280,6 +280,12 @@
                         </Grid>
                     </Grid>
                 </Border>
+
+                <Grid x:Name="VideoModalOverlayHost"
+                      AutomationProperties.AutomationId="VideoModalOverlayHost"
+                      Canvas.ZIndex="1000"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch" />
 
             </Grid>
         </Popup>
@@ -468,20 +474,11 @@
                                                        Text="暂无挖卡历史。保存当前字幕后会显示在这里。"
                                                        TextWrapping="Wrap"
                                                        Style="{StaticResource VideoInspectorSecondaryTextStyle}" />
-                                             <Grid ColumnDefinitions="*,*"
-                                                   ColumnSpacing="8">
-                                                 <Button x:Uid="VideoInspectorMiningLookupButton"
-                                                         Content="查询当前字幕"
-                                                         IsEnabled="{x:Bind ViewModel.HasCurrentSubtitle, Mode=OneWay}"
-                                                         HorizontalAlignment="Stretch"
-                                                         Click="LookupCurrentSubtitleButton_Click" />
-                                                 <Button x:Name="RecordMiningHistoryButton"
-                                                         Grid.Column="1"
-                                                         Content="保存字幕"
-                                                         IsEnabled="{x:Bind ViewModel.HasCurrentSubtitle, Mode=OneWay}"
-                                                         HorizontalAlignment="Stretch"
-                                                         Click="RecordMiningHistoryButton_Click" />
-                                             </Grid>
+                                             <Button x:Name="RecordMiningHistoryButton"
+                                                     Content="保存字幕"
+                                                     IsEnabled="{x:Bind ViewModel.HasCurrentSubtitle, Mode=OneWay}"
+                                                     HorizontalAlignment="Stretch"
+                                                     Click="RecordMiningHistoryButton_Click" />
                                              <ListView x:Name="MiningHistoryListView"
                                                        AutomationProperties.AutomationId="VideoInspectorMiningHistoryList"
                                                        ItemsSource="{x:Bind ViewModel.MiningHistoryRows, Mode=OneWay}"
@@ -611,6 +608,23 @@
                                 <StackPanel x:Name="InspectorVideoContent"
                                             Spacing="12"
                                             Visibility="Collapsed">
+                                    <Border Visibility="{x:Bind ViewModel.IsRemoteVideo, Mode=OneWay}"
+                                            Style="{StaticResource VideoInspectorCardStyle}">
+                                        <StackPanel Spacing="8">
+                                            <TextBlock x:Uid="YouTubeQualityHeaderText"
+                                                       Text="YouTube Quality"
+                                                       Style="{StaticResource VideoInspectorSectionTitleStyle}" />
+                                            <ComboBox x:Name="YouTubeQualityComboBox"
+                                                      AutomationProperties.AutomationId="YouTubeQualityComboBox"
+                                                      DisplayMemberPath="DisplayName"
+                                                      ItemsSource="{x:Bind ViewModel.RemoteQualityOptions, Mode=OneWay}"
+                                                      SelectedValue="{x:Bind ViewModel.SelectedRemoteQualityId, Mode=OneWay}"
+                                                      SelectedValuePath="Id"
+                                                      SelectionChanged="YouTubeQualityComboBox_SelectionChanged" />
+                                            <TextBlock Text="Experimental · maximum 1080p"
+                                                       Style="{StaticResource VideoInspectorSecondaryTextStyle}" />
+                                        </StackPanel>
+                                    </Border>
                                     <Border Style="{StaticResource VideoInspectorCardStyle}">
                                         <StackPanel Spacing="10">
                                             <Grid ColumnDefinitions="Auto,*"
@@ -717,12 +731,52 @@
                                                           MinWidth="0"
                                                           OffContent=""
                                                           OnContent=""
-                                                          IsOn="{x:Bind ViewModel.HdrEnhancementEnabled, Mode=OneWay}"
-                                                          Toggled="HdrEnhancementToggle_Toggled" />
+                                                           IsOn="{x:Bind ViewModel.HdrEnhancementEnabled, Mode=OneWay}"
+                                                           Toggled="HdrEnhancementToggle_Toggled" />
                                             <Border Height="1"
                                                     Background="#22111111"
                                                     Margin="0,2" />
-                                            <Grid ColumnDefinitions="Auto,*,Auto"
+                                            <StackPanel Spacing="7">
+                                                <TextBlock x:Uid="VideoPlayerAnime4KHeaderText"
+                                                           Text="Anime4K"
+                                                           Style="{StaticResource VideoInspectorPrimaryTextStyle}" />
+                                                <TextBlock x:Uid="VideoPlayerAnime4KDescriptionText"
+                                                           Text="Off by default. Enable it manually for the current video."
+                                                           TextWrapping="Wrap"
+                                                           Style="{StaticResource VideoInspectorSecondaryTextStyle}" />
+                                                <ComboBox x:Name="Anime4KPresetComboBox"
+                                                          AutomationProperties.AutomationId="VideoInspectorAnime4KPresetComboBox"
+                                                          DisplayMemberPath="Label"
+                                                          HorizontalAlignment="Stretch"
+                                                          IsEnabled="{x:Bind ViewModel.CanChangeVideoShaderPreset, Mode=OneWay}"
+                                                          ItemsSource="{x:Bind ViewModel.AvailableVideoShaderPresets, Mode=OneWay}"
+                                                          SelectedItem="{x:Bind ViewModel.SelectedVideoShaderPresetOption, Mode=TwoWay}"
+                                                          SelectionChanged="Anime4KPresetComboBox_SelectionChanged" />
+                                                <Grid ColumnDefinitions="*,Auto"
+                                                      ColumnSpacing="8">
+                                                    <Button x:Name="Anime4KDownloadButton"
+                                                            x:Uid="VideoAnime4KDownloadButton"
+                                                            AutomationProperties.AutomationId="VideoInspectorAnime4KDownloadButton"
+                                                            Content="Download"
+                                                            HorizontalAlignment="Stretch"
+                                                            IsEnabled="{x:Bind ViewModel.CanDownloadVideoShaderPreset, Mode=OneWay}"
+                                                            Visibility="Collapsed"
+                                                            Click="Anime4KDownloadButton_Click" />
+                                                    <ProgressRing x:Name="Anime4KDownloadProgressRing"
+                                                                  Grid.Column="1"
+                                                                  Width="20"
+                                                                  Height="20"
+                                                                  IsActive="{x:Bind ViewModel.IsVideoShaderDownloadInProgress, Mode=OneWay}"
+                                                                  Visibility="Collapsed" />
+                                                </Grid>
+                                                <TextBlock Text="{x:Bind ViewModel.VideoShaderDownloadStatus, Mode=OneWay}"
+                                                           TextWrapping="Wrap"
+                                                           Style="{StaticResource VideoInspectorSecondaryTextStyle}" />
+                                            </StackPanel>
+                                            <Border Height="1"
+                                                    Background="#22111111"
+                                                    Margin="0,2" />
+                                            <Grid ColumnDefinitions="72,*,Auto"
                                                   ColumnSpacing="8">
                                                 <TextBlock x:Uid="VideoInspectorBrightnessText"
                                                            Text="Brightness"
@@ -756,7 +810,7 @@
                                                     </Button>
                                                 </StackPanel>
                                             </Grid>
-                                            <Grid ColumnDefinitions="Auto,*,Auto"
+                                            <Grid ColumnDefinitions="72,*,Auto"
                                                   ColumnSpacing="8">
                                                 <TextBlock x:Uid="VideoInspectorContrastText"
                                                            Text="Contrast"
@@ -790,7 +844,7 @@
                                                     </Button>
                                                 </StackPanel>
                                             </Grid>
-                                            <Grid ColumnDefinitions="Auto,*,Auto"
+                                            <Grid ColumnDefinitions="72,*,Auto"
                                                   ColumnSpacing="8">
                                                 <TextBlock x:Uid="VideoInspectorSaturationText"
                                                            Text="Saturation"
@@ -824,7 +878,7 @@
                                                     </Button>
                                                 </StackPanel>
                                             </Grid>
-                                            <Grid ColumnDefinitions="Auto,*,Auto"
+                                            <Grid ColumnDefinitions="72,*,Auto"
                                                   ColumnSpacing="8">
                                                 <TextBlock x:Uid="VideoInspectorGammaText"
                                                            Text="Gamma"
@@ -858,7 +912,7 @@
                                                     </Button>
                                                 </StackPanel>
                                             </Grid>
-                                            <Grid ColumnDefinitions="Auto,*,Auto"
+                                            <Grid ColumnDefinitions="72,*,Auto"
                                                   ColumnSpacing="8">
                                                 <TextBlock x:Uid="VideoInspectorHueText"
                                                            Text="Hue"
@@ -1178,6 +1232,19 @@
 
                                 <StackPanel x:Name="InspectorSubtitlesContent"
                                             Spacing="12">
+                                    <Border Visibility="{x:Bind ViewModel.IsRemoteVideo, Mode=OneWay}"
+                                            Style="{StaticResource VideoInspectorCardStyle}">
+                                        <StackPanel Spacing="8">
+                                            <TextBlock x:Uid="YouTubePublisherSubtitlesHeaderText"
+                                                       Text="Publisher subtitles"
+                                                       Style="{StaticResource VideoInspectorSectionTitleStyle}" />
+                                            <ComboBox x:Name="YouTubeSubtitleComboBox"
+                                                      AutomationProperties.AutomationId="YouTubeSubtitleComboBox"
+                                                      DisplayMemberPath="DisplayName"
+                                                      ItemsSource="{x:Bind ViewModel.RemoteSubtitleOptions, Mode=OneWay}"
+                                                      SelectionChanged="YouTubeSubtitleComboBox_SelectionChanged" />
+                                        </StackPanel>
+                                    </Border>
                                     <Border Style="{StaticResource VideoInspectorCardStyle}">
                                         <StackPanel Spacing="8">
                                             <Grid ColumnDefinitions="Auto,*"

@@ -18,9 +18,6 @@ public sealed partial class SasayakiMatcher
     public async Task<SasayakiMatchData> MatchAsync(
         EpubBook book,
         List<SasayakiCue> cues,
-        string bookId,
-        string audiobookPath,
-        string srtPath,
         int searchWindow = SasayakiSettings.DefaultSearchWindow)
     {
         // Build global code point array and chapter ranges
@@ -30,13 +27,8 @@ public sealed partial class SasayakiMatcher
         {
             return new SasayakiMatchData
             {
-                BookId = bookId,
-                AudiobookPath = audiobookPath,
-                SrtPath = srtPath,
-                Cues = cues,
                 Matches = [],
-                TotalChapters = book.Chapters.Count,
-                UnmatchedCount = cues.Count,
+                Unmatched = cues.Count,
             };
         }
 
@@ -73,11 +65,20 @@ public sealed partial class SasayakiMatcher
             if (matchPos >= 0)
             {
                 var range = FindChapterRange(chapterRanges, matchPos);
+                if (range == null || matchPos + cueCodePoints.Length > range.StartCodePoint + range.Length)
+                {
+                    unmatched++;
+                    continue;
+                }
+
                 matches.Add(new SasayakiMatch
                 {
-                    CueIndex = i,
+                    Id = cue.Id,
+                    StartTime = cue.StartTime,
+                    EndTime = cue.EndTime,
+                    Text = cue.Text,
                     ChapterIndex = range.ChapterIndex,
-                    StartCodePoint = matchPos - range.StartCodePoint,
+                    Start = matchPos - range.StartCodePoint,
                     Length = cueCodePoints.Length,
                 });
                 cursor = matchPos + cueCodePoints.Length;
@@ -90,13 +91,8 @@ public sealed partial class SasayakiMatcher
 
         return new SasayakiMatchData
         {
-            BookId = bookId,
-            AudiobookPath = audiobookPath,
-            SrtPath = srtPath,
-            Cues = cues,
             Matches = matches,
-            TotalChapters = book.Chapters.Count,
-            UnmatchedCount = unmatched,
+            Unmatched = unmatched,
         };
     }
 
@@ -148,7 +144,7 @@ public sealed partial class SasayakiMatcher
         return -1;
     }
 
-    private static ChapterCodePointRange FindChapterRange(
+    private static ChapterCodePointRange? FindChapterRange(
         List<ChapterCodePointRange> ranges, int globalPosition)
     {
         foreach (var range in ranges)
@@ -158,8 +154,7 @@ public sealed partial class SasayakiMatcher
                 return range;
         }
 
-        // Fallback to last chapter
-        return ranges.Count > 0 ? ranges[^1] : new ChapterCodePointRange();
+        return null;
     }
 
     private static async Task<(int[] CodePoints, List<ChapterCodePointRange> Ranges)> BuildGlobalCodePointsAsync(

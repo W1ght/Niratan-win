@@ -24,7 +24,7 @@
     </UserControl.Resources>
 
     <ScrollViewer>
-        <Grid Padding="0,0,16,16">
+        <Grid Padding="16,0,16,16">
             <StackPanel MaxWidth="1280"
                         HorizontalAlignment="Stretch"
                         Spacing="{StaticResource SettingsCardSpacing}">

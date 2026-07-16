@@ -82,6 +82,49 @@ internal sealed class VideoLibraryService : IVideoLibraryService
             ct);
     }
 
+    public async Task<Result<VideoItem>> AddRemoteVideoAsync(
+        ResolvedRemoteVideoSource source,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (!source.Identity.ProviderId.Equals(YouTubeUrlParser.ProviderId, StringComparison.OrdinalIgnoreCase))
+            return Result<VideoItem>.Failure("This remote video provider is not supported.", "Add link failed");
+
+        return await ExecuteAsync(
+            async token =>
+            {
+                var identity = source.Identity;
+                var key = identity.PersistenceKey;
+                var video = new VideoItem
+                {
+                    Id = key,
+                    Title = identity.Title,
+                    FilePath = key,
+                    ImportedAt = DateTime.UtcNow,
+                    DurationSeconds = identity.Duration?.TotalSeconds ?? 0,
+                    SourceFolderPath = "YouTube Video",
+                    CollectionName = "YouTube Video",
+                    ProviderId = identity.ProviderId,
+                    RemoteId = identity.RemoteId,
+                    OriginalUrl = identity.OriginalUrl,
+                    CanonicalUrl = identity.CanonicalUrl,
+                    RemoteThumbnailUrl = identity.ThumbnailUrl,
+                    RemoteSubtitleLanguage = source.SelectedSubtitleLanguage,
+                    SubtitleSelectionKind = string.IsNullOrWhiteSpace(source.SelectedSubtitleLanguage)
+                        ? VideoSubtitleSelectionKind.None
+                        : VideoSubtitleSelectionKind.RemoteLanguage,
+                };
+                await _dataService.UpsertVideoAsync(video, token);
+                _logger.LogInformation(
+                    "Added remote video {ProviderId}/{RemoteId}",
+                    identity.ProviderId,
+                    identity.RemoteId);
+                return Result<VideoItem>.Success(video);
+            },
+            "Error saving YouTube video",
+            ct);
+    }
+
     public async Task<Result<VideoFolderScanResult>> ScanFolderAsync(
         string folderPath,
         CancellationToken ct = default)

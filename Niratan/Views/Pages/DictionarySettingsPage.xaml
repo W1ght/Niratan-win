@@ -7,7 +7,7 @@
       xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
       xmlns:ui="using:CommunityToolkit.WinUI"
       xmlns:helpers="using:Niratan.Helpers.UI.Converters"
-      xmlns:dictModels="using:Niratan.Models.Dictionary"
+      xmlns:pageViewModels="using:Niratan.ViewModels.Pages"
       mc:Ignorable="d">
 
     <Page.Resources>
@@ -42,8 +42,8 @@
         </StackPanel>
 
         <ScrollViewer Grid.Row="1">
-            <Grid Padding="0,0,16,16">
-                <StackPanel MaxWidth="1000" HorizontalAlignment="Stretch" Spacing="4">
+            <Grid Padding="16,0,16,16">
+                <StackPanel MaxWidth="1280" HorizontalAlignment="Stretch" Spacing="4">
                     <toolkit:SettingsCard x:Uid="DictionaryImportCard"
                                           HorizontalAlignment="Stretch"
                                           HorizontalContentAlignment="Stretch"
@@ -269,7 +269,6 @@
                               DragItemsCompleted="DictionaryList_DragItemsCompleted"
                               IsEnabled="{x:Bind ViewModel.IsDictionaryOperationInProgress, Mode=OneWay, Converter={StaticResource BoolNegationConverter}}"
                               ItemsSource="{x:Bind ViewModel.InstalledDictionaries, Mode=OneWay}"
-                              MaxHeight="620"
                               ReorderMode="Enabled"
                               SelectionMode="None"
                               Visibility="{x:Bind ViewModel.IsDictionaryListEmpty, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}">
@@ -281,7 +280,7 @@
                             </Style>
                         </ListView.ItemContainerStyle>
                         <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="dictModels:InstalledDictionary">
+                            <DataTemplate x:DataType="pageViewModels:DictionarySettingsItemViewModel">
                                 <Border MinHeight="76"
                                         Padding="16,10"
                                         Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"

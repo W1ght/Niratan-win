@@ -46,4 +46,16 @@ public static class VideoSubtitlePositionPolicy
         var availableTravel = Math.Max(viewportHeight - subtitleHeight, 0);
         return availableTravel * Normalize(position);
     }
+
+    public static double ContainerOriginY(
+        double viewportHeight,
+        double contentTop,
+        double contentHeight,
+        double position)
+    {
+        if (!double.IsFinite(contentTop))
+            return 0;
+
+        return OriginY(viewportHeight, contentHeight, position) - contentTop;
+    }
 }

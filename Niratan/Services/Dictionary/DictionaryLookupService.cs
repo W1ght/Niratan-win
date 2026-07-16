@@ -262,6 +262,28 @@ public sealed class DictionaryLookupService : IDictionaryLookupService, IDisposa
         }
     }
 
+    public async Task SuspendForCollectionReplacementAsync()
+    {
+        if (!_nativeAvailable)
+            return;
+
+        await DictionaryNativeExecutor.RunAsync(_rebuildLock, () =>
+        {
+            _cachedStyles = null;
+            _loadedDictDirs.Clear();
+            _displayNameByNativeName.Clear();
+            _nativeNameByDisplayName.Clear();
+            HoshiDictsNative.HoshiSessionRebuild(
+                _session,
+                [],
+                [],
+                [],
+                _activeLanguageId);
+            _indexReady = false;
+            return true;
+        }).ConfigureAwait(false);
+    }
+
     private async Task EnsureIndexAsync()
     {
         if (_indexReady) return;

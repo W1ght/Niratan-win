@@ -14,6 +14,9 @@ namespace Niratan.Tests.Services.Dictionary;
 [Collection(NativeDictionaryTestCollection.Name)]
 public class DictionaryLookupServiceTests
 {
+    private static readonly string ProjectRoot = Path.GetFullPath(
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "Niratan"));
+
     private static DictionaryLookupResult CreateLookupResult(string expression) =>
         new(
             Matched: expression,
@@ -257,6 +260,60 @@ public class DictionaryLookupServiceTests
         script.Should().Contain("if (!audioUrls[entryIndex] && (window.audioSources || []).length && window.needsAudio)");
         script.Should().Contain("audioUrls[entryIndex] = await fetchAudioUrl(expression, reading || expression");
         script.Should().Contain("var audio = audioUrls[entryIndex] || '';");
+    }
+
+    [Fact]
+    public void PopupScript_AcceptsSpaceSeparatedPartOfSpeechRulesDuringMining()
+    {
+        var script = File.ReadAllText(
+            Path.Combine(AppContext.BaseDirectory, "Web", "DictionaryPopup", "popup.js"));
+
+        script.Should().Contain("Array.isArray(rules)");
+        script.Should().Contain("String(rules || '').split(/\\s+/).filter(Boolean)");
+    }
+
+    [Fact]
+    public void PopupScript_AlignsDuplicateStateContextMiningAndResultCallbacks()
+    {
+        var script = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Web", "DictionaryPopup", "popup.js"));
+        var shellHtml = new PopupHtmlGenerator().GenerateShellHtml();
+
+        script.Should().Contain("el('button'");
+        script.Should().Contain("className: 'button-slot inline-action-button'");
+        script.Should().Contain("slot.onclick = function (event)");
+        script.Should().Contain("createButtonSlot('context', idx)");
+        script.Should().Contain("function inlineButtonIcon(kind, state)");
+        script.Should().Contain("M12 8v8m-4-4h8");
+        script.Should().Contain("requestRenderedDuplicateChecks(liveContainer)");
+        script.Should().Contain("postPopupMessage('duplicateCheck'");
+        script.Should().Contain("postPopupMessage('prepareContextMining'");
+        script.Should().Contain("status === 'added' || status === 'duplicate'");
+        script.Should().Contain("window.onMineComplete = function (entryIndex, result)");
+        script.Should().Contain("createButtonSlot('viewNote', idx, false)");
+        script.Should().Contain("showAnkiNoteButton(entryIndex, result.noteID)");
+        script.Should().Contain("postPopupMessage('openAnkiNote'");
+        script.Should().Contain("window.onOpenAnkiNoteComplete = function (entryIndex)");
+        shellHtml.Should().Contain("window.viewAnkiNoteLabel =");
+    }
+
+    [Fact]
+    public void PopupHost_BindsContextAndDuplicateChecksToTheCommittingGeneration()
+    {
+        var popup = File.ReadAllText(Path.Combine(
+            ProjectRoot,
+            "Views",
+            "Dictionary",
+            "DictionaryLookupPopup.cs"));
+
+        popup.Should().Contain("ResolveMiningContext(miningPayload.RenderGeneration)");
+        popup.Should().Contain("staged.Generation == renderGeneration");
+        popup.Should().Contain("_displayTransaction.CommitInFlightGeneration != renderGeneration");
+        popup.Should().Contain("dialog.ShowAsync(ContentDialogPlacement.InPlace)");
+        popup.Should().Contain("dialog.ShowAsync(ContentDialogPlacement.Popup)");
+        popup.Should().Contain("_openableAnkiNotes.TryGetValue");
+        popup.Should().Contain("allowedNoteId == noteId");
+        popup.Should().Contain("_ankiService.OpenNoteInAnkiAsync(noteId)");
+        popup.Should().Contain("noteID = result.NoteId");
     }
 
     [Fact]

@@ -20,16 +20,33 @@ public sealed partial class NavigationPage : Page
         DataContext = ViewModel;
 
         Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
     }
 
-    private void OnLoaded(object sender, RoutedEventArgs e)
+    private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         App.MainWindow?.SetTitleBar(AppTitleBar);
+        if (App.MainWindow is { } mainWindow)
+            mainWindow.Activated += MainWindow_Activated;
         App.GetService<INavigationService>().Initialize(ContentFrame);
         App.GetService<IDialogService>().Initialize(XamlRoot);
 
+        await ViewModel.ActivateGlobalProfileAsync();
+
         if (ContentFrame.Content == null)
             ViewModel.NavigateCommand.Execute(new NavigateMessage(typeof(NovelLibraryPage), null));
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        if (App.MainWindow is { } mainWindow)
+            mainWindow.Activated -= MainWindow_Activated;
+    }
+
+    private async void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
+    {
+        if (args.WindowActivationState != WindowActivationState.Deactivated)
+            await ViewModel.ActivateGlobalProfileAsync();
     }
 
     private void NavigationViewControl_ItemInvoked(
@@ -53,8 +70,9 @@ public sealed partial class NavigationPage : Page
         NavigationViewBackRequestedEventArgs args
     ) => ViewModel.BackCommand.Execute(null);
 
-    private void ContentFrame_Navigated(object sender, NavigationEventArgs e)
+    private async void ContentFrame_Navigated(object sender, NavigationEventArgs e)
     {
+        await ViewModel.ActivateGlobalProfileAsync();
         if (e.Content is NovelReaderPage readerPage)
         {
             App.MainWindow?.SetTitleBar(readerPage.ReaderTitleBarElement);

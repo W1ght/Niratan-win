@@ -45,13 +45,18 @@ public sealed class SasayakiMatchService : ISasayakiMatchService
         var matchData = await _matcher.MatchAsync(
             epubBook,
             cues,
-            book.Id,
-            audiobookPath,
-            srtPath,
             searchWindow);
         cancellationToken.ThrowIfCancellationRequested();
 
         await _sidecarService.SaveMatchAsync(bookRootPath, matchData, cancellationToken);
+        await _sidecarService.SaveSourceAsync(
+            bookRootPath,
+            new SasayakiSourceData
+            {
+                AudiobookPath = audiobookPath,
+                SrtPath = srtPath,
+            },
+            cancellationToken);
         return matchData;
     }
 }

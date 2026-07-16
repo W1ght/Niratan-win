@@ -49,6 +49,7 @@ public sealed class VideoSettings
     public bool HardwareDecodingEnabled { get; set; } = true;
     public bool DeinterlacingEnabled { get; set; }
     public bool HdrEnhancementEnabled { get; set; }
+    public VideoShaderPreset VideoShaderPreset { get; set; } = VideoShaderPreset.Off;
 
     public double VideoBrightness
     {

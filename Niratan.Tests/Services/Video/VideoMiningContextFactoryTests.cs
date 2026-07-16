@@ -80,4 +80,26 @@ public class VideoMiningContextFactoryTests
         audio.Should().EndWith("_000012000_000014500.m4a");
         screenshot.Should().NotBe(audio);
     }
+
+    [Fact]
+    public void CreateSelection_ProvidesTimedPreviousAndNextSubtitleChoices()
+    {
+        var cues = new[]
+        {
+            new VideoSubtitleCue(0, TimeSpan.Zero, TimeSpan.FromSeconds(1), "前。"),
+            new VideoSubtitleCue(1, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), "現在。"),
+            new VideoSubtitleCue(2, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(3), "次。"),
+        };
+
+        var result = VideoMiningContextFactory.CreateSelection(cues, cues[1], 2);
+
+        result.Should().NotBeNull();
+        result!.CurrentIndex.Should().Be(1);
+        result.Sentences.Should().HaveCount(3);
+        result.Sentences[1].TargetUtf16Location.Should().Be(2);
+        result.Sentences[1].MediaRange.Should().Be(
+            new Niratan.Models.Anki.MiningContextMediaRange(
+                TimeSpan.FromSeconds(1),
+                TimeSpan.FromSeconds(2)));
+    }
 }

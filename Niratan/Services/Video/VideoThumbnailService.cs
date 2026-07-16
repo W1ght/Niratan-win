@@ -59,6 +59,9 @@ internal sealed class VideoThumbnailService : IVideoThumbnailService
         if (string.IsNullOrWhiteSpace(video.FilePath))
             return null;
 
+        if (video.IsRemote)
+            return null;
+
         var cacheKey = CacheKey(video);
         var outputPath = Path.Combine(_cacheDirectory, $"{cacheKey}.png");
         var cachedPath = GetExistingGeneratedPath(outputPath);

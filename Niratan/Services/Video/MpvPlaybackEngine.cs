@@ -2,18 +2,31 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Niratan.Models;
+using Niratan.Models.Settings;
 
 namespace Niratan.Services.Video;
 
 internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
 {
+    private readonly IAnime4KShaderService _anime4KShaderService;
     private readonly object _syncRoot = new();
     private IntPtr _handle;
     private bool _disposed;
+
+    public MpvPlaybackEngine(IAnime4KShaderService anime4KShaderService)
+    {
+        _anime4KShaderService = anime4KShaderService;
+    }
+    private CancellationTokenSource? _eventLoopCts;
+    private Task? _eventLoopTask;
+
+    public event EventHandler<VideoMediaLoadedEventArgs>? MediaLoaded;
+    public event EventHandler<VideoMediaFailedEventArgs>? MediaFailed;
 
     public Task InitializeAsync(IntPtr hostHwnd, CancellationToken ct = default)
     {
@@ -21,6 +34,7 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
         if (hostHwnd == IntPtr.Zero)
             throw new ArgumentException("Video host window is not ready.", nameof(hostHwnd));
 
+        StopEventLoop();
         lock (_syncRoot)
         {
             ThrowIfDisposed();
@@ -52,6 +66,7 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
             MpvNative.SetOptionStringChecked(_handle, "force-window", "yes");
             MpvNative.SetOptionStringChecked(_handle, "panscan", "0.0");
             MpvNative.SetOptionStringChecked(_handle, "hwdec", "auto-safe");
+            MpvNative.SetOptionStringChecked(_handle, "ytdl", "no");
             MpvNative.SetOptionStringChecked(_handle, "wid", hostHwnd.ToInt64().ToString());
 
             var status = MpvNative.Initialize(_handle);
@@ -61,6 +76,8 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
                 DestroyHandle();
                 throw new InvalidOperationException($"Unable to initialize libmpv: {message}");
             }
+
+            StartEventLoop();
         }
 
         return Task.CompletedTask;
@@ -71,23 +88,32 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
         string? subtitlePath = null,
         TimeSpan? startPosition = null,
         CancellationToken ct = default)
+        => OpenAsync(VideoPlaybackRequest.Local(filePath, subtitlePath, startPosition), ct);
+
+    public Task OpenAsync(VideoPlaybackRequest request, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(request);
         ct.ThrowIfCancellationRequested();
-        if (string.IsNullOrWhiteSpace(filePath))
-            throw new ArgumentException("Video file path is required.", nameof(filePath));
+        if (string.IsNullOrWhiteSpace(request.PrimarySource))
+            throw new ArgumentException("Video source is required.", nameof(request));
 
         lock (_syncRoot)
         {
             ThrowIfDisposed();
             EnsureInitialized();
 
-            var status = MpvNative.Command(_handle, BuildLoadFileCommandArgs(filePath, startPosition));
+            var headers = string.Join(",", request.HttpHeaders.Select(pair => $"{pair.Key}: {pair.Value}"));
+            var headerStatus = MpvNative.SetPropertyString(_handle, "http-header-fields", headers);
+            if (headerStatus < 0)
+                throw new InvalidOperationException($"Unable to configure video request headers: {MpvNative.ErrorString(headerStatus)}");
+
+            var status = MpvNative.Command(_handle, BuildLoadRequestCommandArgs(request));
             if (status < 0)
                 throw new InvalidOperationException($"Unable to load video: {MpvNative.ErrorString(status)}");
 
-            if (!string.IsNullOrWhiteSpace(subtitlePath) && File.Exists(subtitlePath))
+            if (!string.IsNullOrWhiteSpace(request.SubtitlePath) && File.Exists(request.SubtitlePath))
             {
-                status = MpvNative.Command(_handle, "sub-add", subtitlePath, "select");
+                status = MpvNative.Command(_handle, "sub-add", request.SubtitlePath, "select");
                 if (status >= 0)
                 {
                     var hidden = 0;
@@ -356,6 +382,44 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
         return Task.CompletedTask;
     }
 
+    public Task SetVideoShaderPresetAsync(
+        VideoShaderPreset preset,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        var paths = _anime4KShaderService.GetInstalledShaderPaths(preset);
+        lock (_syncRoot)
+        {
+            ThrowIfDisposed();
+            if (_handle == IntPtr.Zero)
+                return Task.CompletedTask;
+
+            foreach (var command in BuildShaderChangeListCommands(paths))
+            {
+                var status = MpvNative.Command(_handle, command);
+                if (status < 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Unable to update video shaders: {MpvNative.ErrorString(status)}");
+                }
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    internal static IReadOnlyList<string[]> BuildShaderChangeListCommands(
+        IReadOnlyList<string> absolutePaths)
+    {
+        var commands = new List<string[]>(absolutePaths.Count + 1)
+        {
+            new[] { "change-list", "glsl-shaders", "clr", "" },
+        };
+        commands.AddRange(absolutePaths.Select(path =>
+            new[] { "change-list", "glsl-shaders", "append", path }));
+        return commands;
+    }
+
     public Task SetVideoEqualizerAsync(string adjustment, double value, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
@@ -381,6 +445,108 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
         return Task.CompletedTask;
     }
 
+    internal static string[] BuildLoadRequestCommandArgs(VideoPlaybackRequest request)
+    {
+        var options = new List<string>();
+        if (request.StartPosition.HasValue && request.StartPosition.Value > TimeSpan.Zero)
+        {
+            options.Add($"start={MpvNative.FormatSeconds(request.StartPosition.Value)}");
+            options.Add("pause=yes");
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.ExternalAudioSource))
+            options.Add($"audio-file={EscapeMpvOption(request.ExternalAudioSource)}");
+
+        return options.Count == 0
+            ? ["loadfile", request.PrimarySource, "replace"]
+            : ["loadfile", request.PrimarySource, "replace", "-1", string.Join(',', options)];
+    }
+
+    private static string EscapeMpvOption(string value) =>
+        value.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace(",", "\\,", StringComparison.Ordinal);
+
+    private void StartEventLoop()
+    {
+        _eventLoopCts?.Cancel();
+        _eventLoopCts?.Dispose();
+        _eventLoopCts = new CancellationTokenSource();
+        var token = _eventLoopCts.Token;
+        _eventLoopTask = Task.Run(() => RunEventLoop(token), token);
+    }
+
+    private void RunEventLoop(CancellationToken token)
+    {
+        IntPtr handle;
+        lock (_syncRoot)
+        {
+            handle = _handle;
+        }
+
+        while (!token.IsCancellationRequested)
+        {
+            var eventPointer = MpvNative.WaitEvent(handle, -1);
+            if (eventPointer == IntPtr.Zero)
+                continue;
+
+            var mpvEvent = Marshal.PtrToStructure<MpvNative.MpvEvent>(eventPointer);
+            if (mpvEvent.EventId == MpvNative.MpvEventIdNone)
+                continue;
+
+            if (mpvEvent.EventId == MpvNative.MpvEventIdFileLoaded)
+            {
+                MediaLoaded?.Invoke(this, new VideoMediaLoadedEventArgs());
+            }
+            else if (mpvEvent.EventId == MpvNative.MpvEventIdEndFile && mpvEvent.Data != IntPtr.Zero)
+            {
+                var endFile = Marshal.PtrToStructure<MpvNative.MpvEventEndFile>(mpvEvent.Data);
+                if (endFile.Error < 0)
+                {
+                    MediaFailed?.Invoke(
+                        this,
+                        new VideoMediaFailedEventArgs("Unable to load the remote video source."));
+                }
+            }
+            else if (mpvEvent.EventId == MpvNative.MpvEventIdShutdown)
+            {
+                return;
+            }
+        }
+    }
+
+    private void StopEventLoop()
+    {
+        var cts = _eventLoopCts;
+        var task = _eventLoopTask;
+        if (cts == null && task == null)
+            return;
+
+        cts?.Cancel();
+        IntPtr handle;
+        lock (_syncRoot)
+        {
+            handle = _handle;
+        }
+
+        if (handle != IntPtr.Zero)
+            MpvNative.Wakeup(handle);
+
+        if (task != null && task.Id != Task.CurrentId)
+        {
+            try
+            {
+                task.GetAwaiter().GetResult();
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        cts?.Dispose();
+        _eventLoopCts = null;
+        _eventLoopTask = null;
+    }
+
     public Task<VideoViewportGeometry?> GetVideoViewportGeometryAsync(CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
@@ -399,6 +565,23 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
                 TryGetDoubleProperty("osd-dimensions/mr") ?? 0);
 
             return Task.FromResult<VideoViewportGeometry?>(geometry.IsValid ? geometry : null);
+        }
+    }
+
+    public Task<VideoDisplayInfo?> GetVideoDisplayInfoAsync(CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_syncRoot)
+        {
+            ThrowIfDisposed();
+            if (_handle == IntPtr.Zero)
+                return Task.FromResult<VideoDisplayInfo?>(null);
+
+            var displayInfo = new VideoDisplayInfo(
+                TryGetIntProperty("dwidth") ?? TryGetIntProperty("video-out-params/dw") ?? 0,
+                TryGetIntProperty("dheight") ?? TryGetIntProperty("video-out-params/dh") ?? 0,
+                TryGetIntProperty("video-params/rotate") ?? 0);
+            return Task.FromResult<VideoDisplayInfo?>(displayInfo.IsValid ? displayInfo : null);
         }
     }
 
@@ -616,17 +799,21 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
         for (var i = 0; i < 20; i++)
         {
             ct.ThrowIfCancellationRequested();
-            if (File.Exists(outputPath))
+            if (HasOutput(outputPath))
                 return outputPath;
 
             await Task.Delay(50, ct);
         }
 
-        return File.Exists(outputPath) ? outputPath : null;
+        return HasOutput(outputPath) ? outputPath : null;
     }
+
+    private static bool HasOutput(string outputPath) =>
+        File.Exists(outputPath) && new FileInfo(outputPath).Length > 0;
 
     public void Dispose()
     {
+        StopEventLoop();
         lock (_syncRoot)
         {
             if (_disposed)
@@ -635,6 +822,7 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
             DestroyHandle();
             _disposed = true;
         }
+
     }
 
     private TimeSpan GetDoubleTimeProperty(string name)

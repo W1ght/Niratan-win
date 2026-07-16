@@ -19,6 +19,42 @@ public sealed class LookupPageShellContractTests
         File.ReadAllText(Path.Combine([ProjectRoot, .. parts]));
 
     [Fact]
+    public void ProfilesSettingsPage_UsesLocalizedActiveProfileComboBoxWithoutInstalledSection()
+    {
+        var profilesXaml = ReadProjectFile("Views", "Pages", "ProfilesSettingsPage.xaml");
+        var chineseResources = ReadProjectFile("Strings", "zh-CN", "Resources.resw");
+
+        XDocument.Parse(profilesXaml);
+        XDocument.Parse(chineseResources);
+        profilesXaml.Should().Contain("Header=\"Active Profile\"");
+        profilesXaml.Should().Contain("AutomationProperties.AutomationId=\"GlobalActiveProfileComboBox\"");
+        profilesXaml.Should().Contain("x:Uid=\"ProfilesActiveProfileCard\"");
+        profilesXaml.Should().Contain("x:Uid=\"ProfilesSettingsPageTitle\"");
+        profilesXaml.Should().Contain("Dictionary, Reader appearance and Anki mining settings follow the active profile.");
+        profilesXaml.Should().NotContain("Text=\"Installed\"");
+        profilesXaml.Should().NotContain("AutomationProperties.AutomationId=\"ProfilesListView\"");
+        chineseResources.Should().Contain("name=\"ProfilesActiveProfileCard.Header\"");
+        chineseResources.Should().Contain("<value>当前配置档案</value>");
+        chineseResources.Should().Contain("name=\"ProfilesLanguageJapanese\"");
+        chineseResources.Should().Contain("name=\"ProfilesLanguageEnglish\"");
+    }
+
+    [Fact]
+    public void LookupSurfaces_ReactivateTheirNiratanProfileContextWhenFocused()
+    {
+        var navigationCode = ReadProjectFile("Views", "Pages", "NavigationPage.xaml.cs");
+        var readerCode = ReadProjectFile("Views", "Pages", "NovelReaderPage.xaml.cs");
+        var videoService = ReadProjectFile("Services", "Video", "VideoPlayerWindowService.cs");
+
+        navigationCode.Should().Contain("mainWindow.Activated += MainWindow_Activated");
+        navigationCode.Should().Contain("ViewModel.ActivateGlobalProfileAsync()");
+        readerCode.Should().Contain("mainWindow.Activated += MainWindow_Activated");
+        readerCode.Should().Contain("ViewModel.ActivateCurrentProfileAsync()");
+        videoService.Should().Contain("_window.Activated += OnWindowActivated");
+        videoService.Should().Contain("_profileRuntime.ActivateForVideoAsync(video)");
+    }
+
+    [Fact]
     public void NavigationPage_DoesNotExposeManualLookupWindowCommandInTitleBar()
     {
         var navigationXaml = ReadProjectFile("Views", "Pages", "NavigationPage.xaml");

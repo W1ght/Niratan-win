@@ -241,9 +241,18 @@ public class NovelLibraryPageViewModelTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SasayakiMatchData
             {
-                BookId = book.Id,
-                Cues = [new SasayakiCue { Id = 1, Text = "星", StartTime = 0, EndTime = 1 }],
-                Matches = [new SasayakiMatch { CueIndex = 0, ChapterIndex = 0, Length = 1 }],
+                Matches =
+                [
+                    new SasayakiMatch
+                    {
+                        Id = "0",
+                        Text = "星",
+                        StartTime = 0,
+                        EndTime = 1,
+                        ChapterIndex = 0,
+                        Length = 1,
+                    },
+                ],
             });
         var sut = CreateSut(
             dialogService: dialog.Object,

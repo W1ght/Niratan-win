@@ -7,6 +7,17 @@ namespace Niratan.Tests.Helpers;
 public sealed class AppDataHelperTests
 {
     [Fact]
+    public void GetTemporaryDataPath_UsesLocalAppDataWithoutPackagedApplicationData()
+    {
+        var path = AppDataHelper.GetTemporaryDataPath();
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        Directory.Exists(path).Should().BeTrue();
+        path.StartsWith(localAppData, StringComparison.OrdinalIgnoreCase).Should().BeTrue();
+        path.Should().EndWith(Path.Combine("Niratan", "Temp"));
+    }
+
+    [Fact]
     public void MigrateLegacyAppData_MovesDirectoryAndRenamesDatabase()
     {
         using var temp = new TempDirectory();

@@ -23,21 +23,56 @@ public sealed class GlobalLookupPopupWindowPlacementTests
     public void ResolveFinalRect_WhenSpaceAllows_OffsetsFromCursor()
     {
         var rect = GlobalLookupPopupWindowPlacement.ResolveFinalRect(
-            new PointInt32(200, 300),
+            new RectInt32(180, 280, 40, 20),
             new RectInt32(0, 0, 1000, 800),
             new SizeInt32(400, 240));
 
-        rect.Should().Be(new RectInt32(216, 316, 400, 240));
+        rect.Should().Be(new RectInt32(0, 312, 400, 240));
     }
 
     [Fact]
     public void ResolveFinalRect_WhenNearBottomRight_FlipsInsideWorkArea()
     {
         var rect = GlobalLookupPopupWindowPlacement.ResolveFinalRect(
-            new PointInt32(950, 760),
+            new RectInt32(930, 750, 40, 20),
             new RectInt32(0, 0, 1000, 800),
             new SizeInt32(400, 240));
 
-        rect.Should().Be(new RectInt32(534, 504, 400, 240));
+        rect.Should().Be(new RectInt32(600, 498, 400, 240));
     }
+
+    [Fact]
+    public void ResolveFinalRect_WhenNeitherSideFits_UsesLargerSideAndClipsHeight()
+    {
+        var rect = GlobalLookupPopupWindowPlacement.ResolveFinalRect(
+            new RectInt32(450, 390, 100, 20),
+            new RectInt32(0, 0, 1000, 800),
+            new SizeInt32(500, 600));
+
+        rect.Should().Be(new RectInt32(250, 422, 500, 378));
+    }
+
+    [Theory]
+    [InlineData(450, 390, 100, 20, 500, 300)]
+    [InlineData(120, 80, 30, 24, 280, 180)]
+    [InlineData(850, 680, 60, 24, 360, 220)]
+    public void ResolveFinalRect_AlwaysPlacesPopupStrictlyAboveOrBelowSelection(
+        int anchorX,
+        int anchorY,
+        int anchorWidth,
+        int anchorHeight,
+        int popupWidth,
+        int popupHeight)
+    {
+        var anchor = new RectInt32(anchorX, anchorY, anchorWidth, anchorHeight);
+        var rect = GlobalLookupPopupWindowPlacement.ResolveFinalRect(
+            anchor,
+            new RectInt32(0, 0, 1000, 800),
+            new SizeInt32(popupWidth, popupHeight));
+
+        var isAbove = rect.Y + rect.Height <= anchor.Y - GlobalLookupPopupWindowPlacement.PopupGap;
+        var isBelow = rect.Y >= anchor.Y + anchor.Height + GlobalLookupPopupWindowPlacement.PopupGap;
+        (isAbove || isBelow).Should().BeTrue();
+    }
+
 }

@@ -141,7 +141,7 @@
                                 x:Uid="SettingsBackupNavItem"
                                 AutomationProperties.AutomationId="SettingsBackupNavItem"
                                 Content="Backup"
-                                IsEnabled="False">
+                                Tag="Niratan.Views.Pages.BackupSettingsPage">
                 <NavigationViewItem.Icon>
                     <FontIcon Glyph="&#xE838;" />
                 </NavigationViewItem.Icon>

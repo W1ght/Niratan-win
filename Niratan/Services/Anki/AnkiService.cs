@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -20,6 +21,7 @@ public sealed class AnkiService : IAnkiService, IDisposable
     private AnkiConnectClient? _client;
     private AnkiSettings _settings;
     private string? _cachedWritableMediaDirectory;
+    private readonly ConcurrentDictionary<string, byte> _savedExpressions = new(StringComparer.Ordinal);
 
     public AnkiSettings Settings => _settings;
 
@@ -84,13 +86,13 @@ public sealed class AnkiService : IAnkiService, IDisposable
         try
         {
             if (!_settings.IsConfigured)
-                return AnkiMiningPreflightResult.Failure("Anki is not configured.");
+                return AnkiMiningPreflightResult.Failure("Configure Anki deck and model first.");
 
             var payload = AnkiMiningPayload.FromJson(rawPayloadJson);
             var deck = ResolveDeck();
             var noteType = ResolveNoteType();
             if (deck == null || noteType == null)
-                return AnkiMiningPreflightResult.Failure("Anki deck or note type is not configured.");
+                return AnkiMiningPreflightResult.Failure("Configure Anki deck and model first.");
 
             var renderedFields = RenderFieldsForDuplicateCheck(noteType, payload, context);
             if (renderedFields.Count == 0)
@@ -98,8 +100,7 @@ public sealed class AnkiService : IAnkiService, IDisposable
 
             if (!_settings.AllowDupes)
             {
-                var canAdd = await GetClient().CanAddNotesAsync(deck, noteType, renderedFields, _settings);
-                if (!canAdd)
+                if (await DuplicateCheckExpressionAsync(payload.Expression))
                     return AnkiMiningPreflightResult.Duplicate();
             }
 
@@ -119,7 +120,7 @@ public sealed class AnkiService : IAnkiService, IDisposable
         }
     }
 
-    public async Task<bool> MineEntryAsync(string rawPayloadJson, AnkiMiningContext context)
+    public async Task<long?> MineEntryAsync(string rawPayloadJson, AnkiMiningContext context)
     {
         var totalSw = System.Diagnostics.Stopwatch.StartNew();
         try
@@ -127,7 +128,7 @@ public sealed class AnkiService : IAnkiService, IDisposable
             if (!_settings.IsConfigured)
             {
                 Log.Warning("[Anki] Not configured");
-                return false;
+                return null;
             }
 
             var payload = AnkiMiningPayload.FromJson(rawPayloadJson);
@@ -138,7 +139,7 @@ public sealed class AnkiService : IAnkiService, IDisposable
             {
                 Log.Warning("[Anki] Deck not found (id={DeckId}, name={DeckName})",
                     _settings.SelectedDeckId, _settings.SelectedDeckName);
-                return false;
+                return null;
             }
 
             // Resolve note type
@@ -147,7 +148,7 @@ public sealed class AnkiService : IAnkiService, IDisposable
             {
                 Log.Warning("[Anki] Note type not found (id={NoteTypeId}, name={NoteTypeName})",
                     _settings.SelectedNoteTypeId, _settings.SelectedNoteTypeName);
-                return false;
+                return null;
             }
 
             var client = GetClient();
@@ -175,6 +176,7 @@ public sealed class AnkiService : IAnkiService, IDisposable
             var uploads = new List<(string filename, byte[] data)>();
             // Track which upload indices correspond to what
             int? audioUploadIdx = null;
+            int? coverUploadIdx = null;
             int? sasayakiAudioUploadIdx = null;
             int? videoScreenshotUploadIdx = null;
             int? videoAudioClipUploadIdx = null;
@@ -185,6 +187,7 @@ public sealed class AnkiService : IAnkiService, IDisposable
                 try
                 {
                     var bytes = await File.ReadAllBytesAsync(context.CoverPath);
+                    coverUploadIdx = uploads.Count;
                     uploads.Add((Path.GetFileName(context.CoverPath), bytes));
                 }
                 catch (Exception ex)
@@ -283,6 +286,13 @@ public sealed class AnkiService : IAnkiService, IDisposable
             Log.Information("[Anki] mediaUpload completed in {ElapsedMs}ms uploadCount={UploadCount}",
                 mediaUploadSw.ElapsedMilliseconds, uploads.Count);
 
+            if (coverUploadIdx is int coverIdx
+                && coverIdx < storedNames.Count
+                && !string.IsNullOrWhiteSpace(storedNames[coverIdx]))
+            {
+                context.CoverTag = AnkiMediaMarkup.ForFieldPlaceholder(storedNames[coverIdx]);
+            }
+
             if (videoScreenshotUploadIdx is int screenshotIdx && screenshotIdx < storedNames.Count)
                 context.VideoScreenshotTag = AnkiMediaMarkup.ForFieldPlaceholder(storedNames[screenshotIdx]);
 
@@ -340,50 +350,73 @@ public sealed class AnkiService : IAnkiService, IDisposable
             if (renderedFields.Count == 0)
             {
                 Log.Warning("[Anki] No fields rendered");
-                return false;
+                return null;
             }
 
             // --- Phase 6: Add note (+ optional sync) ---
             var addNoteSw = System.Diagnostics.Stopwatch.StartNew();
-            var success = await client.AddNoteWithOptionalSyncAsync(
+            var noteId = await client.AddNoteWithOptionalSyncAsync(
                 deck, noteType, renderedFields, _settings, _settings.AnkiConnectForceSync);
             addNoteSw.Stop();
-            Log.Information("[Anki] addNote completed in {ElapsedMs}ms success={Success}",
-                addNoteSw.ElapsedMilliseconds, success);
+            Log.Information("[Anki] addNote completed in {ElapsedMs}ms success={Success} noteId={NoteId}",
+                addNoteSw.ElapsedMilliseconds, noteId.HasValue, noteId);
 
-            Log.Information("[Anki] Mine completed: expression={Expression}, success={Success}, total={TotalMs}ms, audioResolveDownload={AudioMs}ms, mediaRead={MediaReadMs}ms, mediaUpload={MediaUploadMs}ms, addNote={AddNoteMs}ms, batchCount={BatchCount}",
-                payload.Expression, success, totalSw.ElapsedMilliseconds, audioSw.ElapsedMilliseconds, mediaReadSw.ElapsedMilliseconds, mediaUploadSw.ElapsedMilliseconds, addNoteSw.ElapsedMilliseconds, uploads.Count);
-            return success;
+            Log.Information("[Anki] Mine completed: expression={Expression}, success={Success}, noteId={NoteId}, total={TotalMs}ms, audioResolveDownload={AudioMs}ms, mediaRead={MediaReadMs}ms, mediaUpload={MediaUploadMs}ms, addNote={AddNoteMs}ms, batchCount={BatchCount}",
+                payload.Expression, noteId.HasValue, noteId, totalSw.ElapsedMilliseconds, audioSw.ElapsedMilliseconds, mediaReadSw.ElapsedMilliseconds, mediaUploadSw.ElapsedMilliseconds, addNoteSw.ElapsedMilliseconds, uploads.Count);
+            if (noteId.HasValue && !string.IsNullOrWhiteSpace(payload.Expression))
+                _savedExpressions[payload.Expression] = 0;
+            return noteId;
         }
         catch (Exception ex)
         {
             Log.Error(ex, "[Anki] MineEntryAsync failed after {ElapsedMs}ms", totalSw.ElapsedMilliseconds);
-            return false;
+            return null;
         }
     }
+
+    public Task<bool> OpenNoteInAnkiAsync(long noteId) =>
+        GetClient().OpenNoteInAnkiAsync(noteId);
 
     public async Task<bool> DuplicateCheckAsync(string rawPayloadJson)
     {
         try
         {
-            if (!_settings.IsConfigured)
-                return false;
-
             var payload = AnkiMiningPayload.FromJson(rawPayloadJson);
-            var deck = ResolveDeck();
-            var noteType = ResolveNoteType();
-            if (deck == null || noteType == null)
-                return false;
-
-            var renderedFields = RenderFieldsForDuplicateCheck(noteType, payload, new AnkiMiningContext());
-
-            var canAdd = await GetClient().CanAddNotesAsync(deck, noteType, renderedFields, _settings);
-            return !canAdd; // Return true if duplicate exists
+            return await DuplicateCheckExpressionAsync(payload.Expression);
         }
         catch (Exception ex)
         {
             Log.Error(ex, "[Anki] DuplicateCheckAsync failed");
             return false;
+        }
+    }
+
+    public async Task<bool> DuplicateCheckExpressionAsync(string expression)
+    {
+        try
+        {
+            if (!_settings.IsConfigured || string.IsNullOrWhiteSpace(expression))
+                return !string.IsNullOrWhiteSpace(expression) && _savedExpressions.ContainsKey(expression);
+
+            var deck = ResolveDeck();
+            var noteType = ResolveNoteType();
+            var firstField = noteType?.Fields.FirstOrDefault();
+            if (deck == null || noteType == null || string.IsNullOrWhiteSpace(firstField))
+                return _savedExpressions.ContainsKey(expression);
+
+            var fields = new Dictionary<string, string>
+            {
+                [firstField] = expression,
+            };
+            var canAdd = await GetClient().CanAddNotesAsync(deck, noteType, fields, _settings);
+            if (!canAdd)
+                _savedExpressions[expression] = 0;
+            return !canAdd;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[Anki] DuplicateCheckExpressionAsync failed");
+            return _savedExpressions.ContainsKey(expression);
         }
     }
 

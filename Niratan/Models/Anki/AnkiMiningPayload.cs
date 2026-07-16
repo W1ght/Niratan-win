@@ -20,6 +20,12 @@ public sealed class DictionaryMedia
 
 public sealed class AnkiMiningPayload
 {
+    [JsonPropertyName("entryIndex")]
+    public int EntryIndex { get; set; } = -1;
+
+    [JsonPropertyName("renderGeneration")]
+    public long RenderGeneration { get; set; } = -1;
+
     [JsonPropertyName("expression")]
     public string Expression { get; set; } = "";
 
@@ -115,6 +121,7 @@ public sealed class AnkiMiningContext
     public string Sentence { get; set; } = "";
     public string? DocumentTitle { get; set; }
     public string? CoverPath { get; set; }
+    public string? CoverTag { get; set; }
     public string? SasayakiAudioPath { get; set; }
     public string? SasayakiAudioTag { get; set; }
     public int? SentenceOffset { get; set; }
@@ -138,6 +145,9 @@ public sealed class AnkiMiningContext
 
     [JsonIgnore]
     public SasayakiPopupControls? SasayakiPopupControls { get; set; }
+
+    [JsonIgnore]
+    public MiningContextSelection? ContextSelection { get; set; }
 }
 
 public sealed record SasayakiPopupControls(

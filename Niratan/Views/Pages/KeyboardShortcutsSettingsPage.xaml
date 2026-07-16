@@ -35,11 +35,12 @@
             </StackPanel>
         </StackPanel>
 
-        <ListView Grid.Row="1"
-                  Margin="20,0,16,16"
-                  AutomationProperties.AutomationId="KeyboardShortcutsList"
-                  ItemsSource="{x:Bind ViewModel.Rows, Mode=OneWay}"
-                  SelectionMode="None">
+        <Grid Grid.Row="1" Padding="16,0,16,16">
+            <ListView MaxWidth="1280"
+                      HorizontalAlignment="Stretch"
+                      AutomationProperties.AutomationId="KeyboardShortcutsList"
+                      ItemsSource="{x:Bind ViewModel.Rows, Mode=OneWay}"
+                      SelectionMode="None">
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="vm:ShortcutRowViewModel">
                     <Grid ColumnDefinitions="*,Auto,Auto"
@@ -74,6 +75,7 @@
                     </Grid>
                 </DataTemplate>
             </ListView.ItemTemplate>
-        </ListView>
+            </ListView>
+        </Grid>
     </Grid>
 </Page>

@@ -634,7 +634,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
                 _settingsService.Current.SasayakiSettings.SearchWindowSize,
                 _pageCts.Token);
             _notificationService.ShowSuccess(
-                $"{match.Matches.Count}/{match.Cues.Count} cues matched.",
+                $"{match.Matches.Count}/{match.TotalCueCount} cues matched.",
                 "Sasayaki matched");
         }
         catch (OperationCanceledException)

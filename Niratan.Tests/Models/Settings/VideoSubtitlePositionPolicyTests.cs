@@ -36,6 +36,21 @@ public sealed class VideoSubtitlePositionPolicyTests
     }
 
     [Theory]
+    [InlineData(0, -70)]
+    [InlineData(0.5, 400)]
+    [InlineData(1, 870)]
+    public void ContainerOriginY_AlignsVisibleContentRatherThanReservedPanel(
+        double position,
+        double expected)
+    {
+        VideoSubtitlePositionPolicy.ContainerOriginY(
+            viewportHeight: 1000,
+            contentTop: 70,
+            contentHeight: 60,
+            position).Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData(-400, 1)]
     [InlineData(-200, 1)]
     [InlineData(-100, 0.95)]

@@ -44,4 +44,55 @@ public class AnkiFieldMappingResolverTests
         mappings["MiscInfo"].Should().Be("{video-file-name} ({video-timestamp})");
         mappings["IsWordAndSentenceCard"].Should().Be("x");
     }
+
+    [Fact]
+    public void ResolveForMining_SwapsSavedNovelDefaultsForVideoMediaWithoutOverwritingCustomFields()
+    {
+        var noteType = new AnkiNoteType
+        {
+            Name = "Lapis",
+            Fields = ["Expression", "SentenceAudio", "Picture", "MiscInfo"],
+        };
+        var context = new AnkiMiningContext { VideoFileName = "episode-01.mkv" };
+
+        var mappings = AnkiFieldMappingResolver.ResolveForMining(
+            noteType,
+            new Dictionary<string, string>
+            {
+                ["Expression"] = "{custom-expression}",
+                ["SentenceAudio"] = "{sasayaki-audio}",
+                ["Picture"] = "{book-cover}",
+                ["MiscInfo"] = "{document-title}",
+            },
+            context);
+
+        mappings["Expression"].Should().Be("{custom-expression}");
+        mappings["SentenceAudio"].Should().Be("{video-audio-clip}");
+        mappings["Picture"].Should().Be("{video-screenshot}");
+        mappings["MiscInfo"].Should().Be("{video-file-name} ({video-timestamp})");
+    }
+
+    [Fact]
+    public void ResolveForMining_SwapsSavedAnimeDefaultsBackForNovelMedia()
+    {
+        var noteType = new AnkiNoteType
+        {
+            Name = "Lapis",
+            Fields = ["SentenceAudio", "Picture", "MiscInfo"],
+        };
+
+        var mappings = AnkiFieldMappingResolver.ResolveForMining(
+            noteType,
+            new Dictionary<string, string>
+            {
+                ["SentenceAudio"] = "{video-audio-clip}",
+                ["Picture"] = "{video-screenshot}",
+                ["MiscInfo"] = "{video-file-name} ({video-timestamp})",
+            },
+            new AnkiMiningContext { CoverPath = "D:\\Books\\cover.jpg" });
+
+        mappings["SentenceAudio"].Should().Be("{sasayaki-audio}");
+        mappings["Picture"].Should().Be("{book-cover}");
+        mappings["MiscInfo"].Should().Be("{document-title}");
+    }
 }

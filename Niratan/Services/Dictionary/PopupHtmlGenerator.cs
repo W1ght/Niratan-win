@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using Microsoft.UI.Xaml;
 using Niratan.Enums;
+using Niratan.Helpers;
 using Niratan.Models.Dictionary;
 using Niratan.Models.Settings;
 
@@ -112,6 +113,8 @@ window.embedMedia = {BoolToJs(ankiSettings?.PopupSettings.EmbedMedia ?? false)};
 window.allowDupes = {BoolToJs(ankiSettings?.PopupSettings.AllowDupes ?? false)};
 window.needsAudio = {BoolToJs(ankiSettings?.PopupSettings.NeedsAudio ?? false)};
 window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlossaries ?? false)};
+window.contextMiningAvailable = false;
+window.viewAnkiNoteLabel = {JsonSerializer.Serialize(ViewAnkiNoteLabel)};
 </script>
 <script>
 // Minimal niratanSelection shim for popup.js
@@ -303,7 +306,8 @@ window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlos
         AnkiSettings? ankiSettings = null,
         string? traceId = null,
         int? totalResultCount = null,
-        long documentEpoch = 0) =>
+        long documentEpoch = 0,
+        bool contextMiningAvailable = false) =>
         GenerateResultsInjectionScript(
             results,
             styles,
@@ -315,6 +319,7 @@ window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlos
             traceId,
             totalResultCount,
             documentEpoch,
+            contextMiningAvailable,
             stageRender: true);
 
     public string GenerateRedirectInjectionScript(
@@ -325,7 +330,8 @@ window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlos
         long renderGeneration,
         AudioSettings? audioSettings = null,
         AnkiSettings? ankiSettings = null,
-        string? traceId = null) =>
+        string? traceId = null,
+        bool contextMiningAvailable = false) =>
         GenerateResultsInjectionScript(
             results,
             styles,
@@ -337,6 +343,7 @@ window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlos
             traceId,
             results.Count,
             documentEpoch: 0,
+            contextMiningAvailable: contextMiningAvailable,
             stageRender: false);
 
     private string GenerateResultsInjectionScript(
@@ -350,6 +357,7 @@ window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlos
         string? traceId,
         int? totalResultCount,
         long documentEpoch,
+        bool contextMiningAvailable,
         bool stageRender)
     {
         var settings = displaySettings ?? new DictionaryDisplaySettings();
@@ -387,7 +395,9 @@ window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlos
         embedMedia: {BoolToJs(ankiSettings?.PopupSettings.EmbedMedia ?? false)},
         allowDupes: {BoolToJs(ankiSettings?.PopupSettings.AllowDupes ?? false)},
         needsAudio: {BoolToJs(ankiSettings?.PopupSettings.NeedsAudio ?? false)},
-        compactGlossariesAnki: {BoolToJs(ankiSettings?.PopupSettings.CompactGlossaries ?? false)}
+        compactGlossariesAnki: {BoolToJs(ankiSettings?.PopupSettings.CompactGlossaries ?? false)},
+        contextMiningAvailable: {BoolToJs(contextMiningAvailable)},
+        viewAnkiNoteLabel: {JsonSerializer.Serialize(ViewAnkiNoteLabel)}
     }}";
 
         if (stageRender)
@@ -433,6 +443,8 @@ window.embedMedia = {BoolToJs(ankiSettings?.PopupSettings.EmbedMedia ?? false)};
 window.allowDupes = {BoolToJs(ankiSettings?.PopupSettings.AllowDupes ?? false)};
 window.needsAudio = {BoolToJs(ankiSettings?.PopupSettings.NeedsAudio ?? false)};
 window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlossaries ?? false)};
+window.contextMiningAvailable = {BoolToJs(contextMiningAvailable)};
+window.viewAnkiNoteLabel = {JsonSerializer.Serialize(ViewAnkiNoteLabel)};
 return window.niratanRedirectResults?.({entriesJson}, {finalResultCount}, {renderGeneration}) === true;
 }})()";
     }
@@ -455,6 +467,10 @@ return window.niratanRedirectResults?.({entriesJson}, {finalResultCount}, {rende
     }
 
     private static string BoolToJs(bool value) => value ? "true" : "false";
+
+    private static string ViewAnkiNoteLabel => ResourceStringHelper.GetString(
+        "DictionaryPopupViewAddedNoteInAnki",
+        "View added note in Anki");
 
     private static string SerializeCollapsedDictionaries(HashSet<string> collapsed)
     {

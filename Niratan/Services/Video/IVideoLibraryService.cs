@@ -19,6 +19,11 @@ public interface IVideoLibraryService
 
     Task<Result<VideoItem>> ImportVideoAsync(string filePath, CancellationToken ct = default);
 
+    Task<Result<VideoItem>> AddRemoteVideoAsync(
+        ResolvedRemoteVideoSource source,
+        CancellationToken ct = default) =>
+        Task.FromResult(Result<VideoItem>.Failure("Remote videos are not available.", "Add link failed"));
+
     Task<Result<VideoFolderScanResult>> ScanFolderAsync(
         string folderPath,
         CancellationToken ct = default);

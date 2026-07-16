@@ -54,6 +54,7 @@ public sealed partial class VideoPlayerWindow : Window
     private const double DefaultSubtitleFontSize = 36;
     private const int DefaultSubtitleFontWeight = 700;
     private static readonly UIntPtr VideoHostSubclassId = new(1);
+    private static readonly UIntPtr VideoWindowSubclassId = new(2);
 
     private delegate IntPtr SubclassProc(
         IntPtr hWnd,
@@ -85,9 +86,17 @@ public sealed partial class VideoPlayerWindow : Window
     private readonly VideoBottomChromeAutoHideState _bottomChromeAutoHideState = new();
     private readonly HashSet<VideoTranscriptRow> _subscribedTranscriptRows = [];
     private readonly SubclassProc _videoHostSubclassProc;
+    private readonly SubclassProc _videoWindowSubclassProc;
     private DictionaryPopupOverlay? _popupOverlay;
     private VideoItem? _pendingVideo;
     private IReadOnlyList<VideoItem>? _pendingPlaylist;
+    private ResolvedRemoteVideoSource? _pendingRemoteSource;
+    private readonly RemoteVideoPlaybackSession _remotePlaybackSession;
+    private CancellationTokenSource? _remoteOperationCts;
+    private CancellationTokenSource? _remoteSubtitleOperationCts;
+    private long _remoteSubtitleSelectionVersion;
+    private int _remoteRecoveryStage;
+    private bool _isRecoveringRemotePlayback;
     private IntPtr _parentHwnd;
     private IntPtr _videoHwnd;
     private bool _isLoaded;
@@ -106,15 +115,20 @@ public sealed partial class VideoPlayerWindow : Window
     private bool _isUpdatingHdrEnhancement;
     private bool _isUpdatingVideoEqualizer;
     private bool _isUpdatingAspectRatio;
+    private DateTimeOffset _lastVideoMetricsRefreshAt = DateTimeOffset.MinValue;
+    private double? _videoAspectRatio;
+    private DateTimeOffset _lastBottomChromeTimerRestartAt = DateTimeOffset.MinValue;
     private bool _isUpdatingSubtitleAppearance;
     private bool _isUpdatingVideoTrackSelection;
     private bool _isUpdatingAudioTrackSelection;
     private bool _isUpdatingSubtitleTrackSelection;
+    private bool _isUpdatingRemoteSubtitleSelection;
     private bool _isSubtitlePointerOver;
     private bool _isLookupPopupVisible;
     private bool _isSubtitleWebViewInitialized;
     private bool _isSubtitleWebViewReady;
     private VideoViewportGeometry? _subtitleVideoViewport;
+    private Windows.Foundation.Rect? _subtitleVisibleBounds;
     private int _subtitleSelectionStart = -1;
     private int _subtitleSelectionLength;
     private int _lastSubtitleHoverCharacterIndex = -1;
@@ -138,6 +152,9 @@ public sealed partial class VideoPlayerWindow : Window
         InspectorSubtitleListContent.SetABLoopStartRequested += InspectorSubtitleListContent_SetABLoopStartRequested;
         InspectorSubtitleListContent.SetABLoopEndRequested += InspectorSubtitleListContent_SetABLoopEndRequested;
         _playbackEngine = App.GetService<IVideoPlaybackEngine>();
+        _remotePlaybackSession = new RemoteVideoPlaybackSession(App.GetService<IRemoteVideoResolver>());
+        _playbackEngine.MediaLoaded += PlaybackEngine_MediaLoaded;
+        _playbackEngine.MediaFailed += PlaybackEngine_MediaFailed;
         _videoLibraryService = App.GetService<IVideoLibraryService>();
         _miningHistoryStore = App.GetService<IVideoMiningHistoryStore>();
         _mediaExtractor = App.GetService<IVideoMiningMediaExtractor>();
@@ -145,6 +162,7 @@ public sealed partial class VideoPlayerWindow : Window
         _shortcutService = App.GetService<IShortcutService>();
         _subtitleTranscriptLoadCoordinator = new VideoSubtitleTranscriptLoadCoordinator(_subtitleTranscriptExtractor);
         _videoHostSubclassProc = VideoHostSubclassProc;
+        _videoWindowSubclassProc = VideoWindowSubclassProc;
         ViewModel.PropertyChanged += ViewModel_PropertyChanged;
         ViewModel.TranscriptVisibleRows.CollectionChanged += TranscriptVisibleRows_CollectionChanged;
         ProgressSlider.Minimum = 0;
@@ -203,13 +221,31 @@ public sealed partial class VideoPlayerWindow : Window
         OpenVideoAsync(video, [video], ct);
 
     public async Task OpenVideoAsync(VideoItem video, IReadOnlyList<VideoItem> playlist, CancellationToken ct = default)
+        => await OpenVideoAsync(new VideoPlaybackLaunchRequest(video, playlist), ct);
+
+    public async Task OpenVideoAsync(VideoPlaybackLaunchRequest request, CancellationToken ct = default)
     {
-        _pendingVideo = video;
-        _pendingPlaylist = playlist.Count > 0 ? playlist.ToList() : [video];
+        _remoteOperationCts?.Cancel();
+        _remoteOperationCts?.Dispose();
+        _remoteOperationCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _remotePlaybackSession.Invalidate();
+        _remoteRecoveryStage = 0;
+        _pendingVideo = request.Video;
+        _pendingPlaylist = request.Playlist.Count > 0 ? request.Playlist.ToList() : [request.Video];
+        _pendingRemoteSource = request.ResolvedRemoteSource;
         if (!_isLoaded)
             return;
 
-        await OpenPendingVideoAsync(ct);
+        var operationToken = _remoteOperationCts.Token;
+        try
+        {
+            await OpenPendingVideoAsync(operationToken);
+        }
+        catch (OperationCanceledException) when (operationToken.IsCancellationRequested)
+        {
+            // Opening is generation-scoped. Replacing the source or closing the
+            // window cancels the old generation and must not reach WinUI as a crash.
+        }
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -217,8 +253,8 @@ public sealed partial class VideoPlayerWindow : Window
         try
         {
             _parentHwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            SetWindowSubclass(_parentHwnd, _videoWindowSubclassProc, VideoWindowSubclassId, UIntPtr.Zero);
             OpenBottomChromeOverlay();
-            await InitializeSubtitleWebViewAsync();
             _videoHwnd = CreateWindowExW(
                 0,
                 "STATIC",
@@ -238,19 +274,11 @@ public sealed partial class VideoPlayerWindow : Window
             await _playbackEngine.InitializeAsync(_videoHwnd);
             await _playbackEngine.SetHardwareDecodingAsync(ViewModel.HardwareDecodingEnabled);
             await _playbackEngine.SetDeinterlaceAsync(ViewModel.DeinterlaceEnabled);
-            await ApplyVideoEnhancementAsync();
-            await _playbackEngine.SetPlaybackSpeedAsync(ViewModel.PlaybackSpeed);
-            await _playbackEngine.SetAudioDelayAsync(TimeSpan.FromSeconds(ViewModel.AudioDelaySeconds));
-            await _playbackEngine.SetSubtitleDelayAsync(TimeSpan.FromMilliseconds(ViewModel.SubtitleDelayMilliseconds));
-            await _playbackEngine.SetFileLoopEnabledAsync(ViewModel.LoopFileEnabled);
-            await _playbackEngine.SetABLoopAsync(ViewModel.ABLoop);
-            await _playbackEngine.SetAspectRatioAsync(ViewModel.AspectRatioValue);
-            await _playbackEngine.SetVideoRotationAsync(ViewModel.VideoRotationDegrees);
             await _playbackEngine.SetVolumeAsync(ViewModel.Volume);
             _isLoaded = true;
             _positionTimer.Start();
             RootGrid.Focus(FocusState.Programmatic);
-            await OpenPendingVideoAsync();
+            await OpenPendingVideoAsync(_remoteOperationCts?.Token ?? default);
         }
         catch (Exception ex)
         {
@@ -265,28 +293,66 @@ public sealed partial class VideoPlayerWindow : Window
 
         var video = _pendingVideo;
         var playlist = _pendingPlaylist ?? [video];
+        var preResolvedRemoteSource = _pendingRemoteSource;
         _pendingVideo = null;
         _pendingPlaylist = null;
+        _pendingRemoteSource = null;
+        _videoAspectRatio = null;
         await SaveCurrentVideoProgressAsync(ct);
         _isOpeningVideo = true;
         _protectedRestoreFloor = null;
         try
         {
-            var restoreState = await LoadPlaybackStateAsync(video, ct);
+            var restoreStateTask = LoadPlaybackStateAsync(video, ct);
+            var loadVideoTask = ViewModel.LoadVideoAsync(video, ct);
+            var restoreState = await restoreStateTask;
             var restoreStartPosition = ViewModel.RememberPlaybackState
                 ? restoreState.ResolveRestorePosition(TimeSpan.Zero)
                 : null;
+            if (restoreStartPosition is null or { Ticks: 0 })
+                restoreStartPosition = preResolvedRemoteSource?.RequestedStartPosition;
             if (restoreStartPosition != null)
                 _protectedRestoreFloor = VideoProgressSaveGuard.CreateProtectedRestoreFloor(restoreStartPosition.Value);
 
-            await ViewModel.LoadVideoAsync(video, ct);
-            MaximizeVideoWindowForTesting();
+            VideoPlaybackRequest playbackRequest;
+            var hasInteractiveSubtitle = !string.IsNullOrWhiteSpace(video.SubtitlePath);
+            RemoteVideoSubtitleOption? remoteSubtitleToLoad = null;
+            if (video.IsRemote)
+            {
+                var remoteSource = await _remotePlaybackSession.InitializeAsync(video, preResolvedRemoteSource, ct);
+                ViewModel.ConfigureRemoteSource(remoteSource);
+                SyncYouTubeSubtitleComboBoxSelection();
+                playbackRequest = _remotePlaybackSession.CreatePlaybackRequest(restoreStartPosition);
+                var savedRemoteLanguage = restoreState.SubtitleSelection.Kind == VideoSubtitleSelectionKind.RemoteLanguage
+                    ? restoreState.SubtitleSelection.RemoteLanguageCode
+                    : video.RemoteSubtitleLanguage;
+                var subtitle = remoteSource.PreferredSubtitle([savedRemoteLanguage]);
+                if (subtitle != null && restoreState.SubtitleSelection.Kind != VideoSubtitleSelectionKind.Off)
+                {
+                    remoteSubtitleToLoad = subtitle;
+                }
+            }
+            else
+            {
+                playbackRequest = VideoPlaybackRequest.Local(video.FilePath, video.SubtitlePath, restoreStartPosition);
+            }
+
             ViewModel.ReplaceEpisodes(playlist, video);
-            await _videoLibraryService.MarkOpenedAsync(video.Id, ct);
             _isAutoPlayingNextEpisode = false;
             _lastProgressSaveAt = DateTimeOffset.UtcNow;
             await _playbackEngine.SetPausedAsync(true, ct);
-            await _playbackEngine.OpenAsync(video.FilePath, video.SubtitlePath, restoreStartPosition, ct);
+            if (video.IsRemote)
+                await _playbackEngine.OpenAsync(playbackRequest, ct);
+            else
+                await _playbackEngine.OpenAsync(video.FilePath, video.SubtitlePath, restoreStartPosition, ct);
+
+            // loadfile is asynchronous. Unpause immediately so decoding can begin
+            // while the remaining per-video properties and sidebar data are applied.
+            await _playbackEngine.SetPausedAsync(false, ct);
+            _isPaused = false;
+            _isLookupPopupVisible = false;
+            PlayPauseIcon.Glyph = "\uE769";
+
             await _playbackEngine.SetPlaybackSpeedAsync(ViewModel.PlaybackSpeed, ct);
             await _playbackEngine.SetAudioDelayAsync(TimeSpan.FromSeconds(ViewModel.AudioDelaySeconds), ct);
             await _playbackEngine.SetSubtitleDelayAsync(TimeSpan.FromMilliseconds(ViewModel.SubtitleDelayMilliseconds), ct);
@@ -295,18 +361,29 @@ public sealed partial class VideoPlayerWindow : Window
             await _playbackEngine.SetAspectRatioAsync(ViewModel.AspectRatioValue, ct);
             await _playbackEngine.SetVideoRotationAsync(ViewModel.VideoRotationDegrees, ct);
             await ApplyVideoEnhancementAsync(ct);
+
+            await loadVideoTask;
+            if (remoteSubtitleToLoad != null)
+            {
+                hasInteractiveSubtitle = await LoadRemoteSubtitleOptionAsync(
+                    remoteSubtitleToLoad,
+                    persistSelection: false,
+                    ct);
+            }
+
+            await _videoLibraryService.MarkOpenedAsync(video.Id, ct);
             await RefreshChaptersAsync(ct);
-            await RefreshMediaTracksAsync(string.IsNullOrWhiteSpace(video.SubtitlePath), ct);
+            await RefreshMediaTracksAsync(!hasInteractiveSubtitle, ct);
             var restoredSubtitle = await RestorePlaybackStateIfNeededAsync(restoreState, restoreStartPosition, ct);
             if (!restoredSubtitle && string.IsNullOrWhiteSpace(video.SubtitlePath))
                 await SelectInitialEmbeddedSubtitleTrackAsync(ct);
 
-            await _playbackEngine.SetPausedAsync(false, ct);
-            _isPaused = false;
-            _isLookupPopupVisible = false;
-            PlayPauseIcon.Glyph = "\uE769";
             ApplySubtitleAppearance();
             UpdateSubtitleControlAvailability();
+        }
+        catch (RemoteVideoResolverException ex)
+        {
+            ViewModel.StatusText = MapRemoteVideoError(ex.Error);
         }
         finally
         {
@@ -314,10 +391,252 @@ public sealed partial class VideoPlayerWindow : Window
         }
     }
 
-    private async void LookupCurrentSubtitleButton_Click(object sender, RoutedEventArgs e)
+    private void PlaybackEngine_MediaFailed(object? sender, VideoMediaFailedEventArgs e)
     {
-        await StartSubtitleLookupAsync();
+        if (ViewModel.CurrentVideo?.IsRemote != true)
+            return;
+
+        DispatcherQueue.TryEnqueue(async () => await RecoverRemotePlaybackAsync());
     }
+
+    private void PlaybackEngine_MediaLoaded(object? sender, VideoMediaLoadedEventArgs e)
+    {
+        DispatcherQueue.TryEnqueue(async () =>
+        {
+            try
+            {
+                await SynchronizeVideoWindowAspectRatioAsync();
+
+                // WebView2 is not needed to produce the first frame. Initialize the
+                // subtitle document after mpv reports the file loaded so it cannot
+                // extend the video host's startup critical path.
+                await InitializeSubtitleWebViewAsync();
+
+                if (ViewModel.CurrentVideo?.IsRemote == true
+                    && _remotePlaybackSession.Source?.AudioStream != null
+                    && _remoteOperationCts != null)
+                {
+                    await Task.Delay(200, _remoteOperationCts.Token);
+                    var tracks = await _playbackEngine.GetTracksAsync(_remoteOperationCts.Token);
+                    if (!tracks.Any(track => track.Type == VideoTrackType.Audio))
+                        await RecoverRemotePlaybackAsync();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[Video] Deferred media-loaded initialization failed");
+            }
+        });
+    }
+
+    private async Task RecoverRemotePlaybackAsync()
+    {
+        if (_isOpeningVideo
+            || _isRecoveringRemotePlayback
+            || ViewModel.CurrentVideo?.IsRemote != true
+            || _remoteOperationCts == null)
+            return;
+
+        _isRecoveringRemotePlayback = true;
+        var ct = _remoteOperationCts.Token;
+        try
+        {
+            var position = await _playbackEngine.GetPositionAsync(ct);
+            var paused = _isPaused;
+            if (_remoteRecoveryStage == 0)
+            {
+                _remoteRecoveryStage = 1;
+                var refreshed = await _remotePlaybackSession.RefreshAsync(
+                    _remotePlaybackSession.Source?.SelectedHeight,
+                    ct);
+                ViewModel.ConfigureRemoteSource(refreshed);
+                SyncYouTubeSubtitleComboBoxSelection();
+            }
+            else if (_remoteRecoveryStage == 1 && _remotePlaybackSession.SelectMuxedFallback())
+            {
+                _remoteRecoveryStage = 2;
+            }
+            else
+            {
+                ViewModel.StatusText = ResourceStringHelper.GetString(
+                    "YouTubePlaybackFailed",
+                    "This YouTube video could not be played. Try again later.");
+                return;
+            }
+
+            await _playbackEngine.OpenAsync(_remotePlaybackSession.CreatePlaybackRequest(position), ct);
+            await _playbackEngine.SetPlaybackSpeedAsync(ViewModel.PlaybackSpeed, ct);
+            await _playbackEngine.SetVolumeAsync(ViewModel.Volume, ct);
+            await _playbackEngine.SetAudioDelayAsync(TimeSpan.FromSeconds(ViewModel.AudioDelaySeconds), ct);
+            await _playbackEngine.SetSubtitleDelayAsync(TimeSpan.FromMilliseconds(ViewModel.SubtitleDelayMilliseconds), ct);
+            await _playbackEngine.SetFileLoopEnabledAsync(ViewModel.LoopFileEnabled, ct);
+            await _playbackEngine.SetABLoopAsync(ViewModel.ABLoop, ct);
+            await _playbackEngine.SetPausedAsync(paused, ct);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (RemoteVideoResolverException ex)
+        {
+            ViewModel.StatusText = MapRemoteVideoError(ex.Error);
+        }
+        catch
+        {
+            ViewModel.StatusText = ResourceStringHelper.GetString(
+                "YouTubePlaybackFailed",
+                "This YouTube video could not be played. Try again later.");
+        }
+        finally
+        {
+            _isRecoveringRemotePlayback = false;
+        }
+    }
+
+    private async void YouTubeQualityComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isOpeningVideo
+            || (sender as ComboBox)?.SelectedItem is not RemoteVideoQualityOption option
+            || option.Id == ViewModel.SelectedRemoteQualityId
+            || !_remotePlaybackSession.SelectQuality(option.Id)
+            || _remoteOperationCts == null)
+        {
+            return;
+        }
+
+        var ct = _remoteOperationCts.Token;
+        try
+        {
+            var position = await _playbackEngine.GetPositionAsync(ct);
+            var paused = _isPaused;
+            await _playbackEngine.SetPausedAsync(true, ct);
+            await _playbackEngine.OpenAsync(_remotePlaybackSession.CreatePlaybackRequest(position), ct);
+            await _playbackEngine.SetPlaybackSpeedAsync(ViewModel.PlaybackSpeed, ct);
+            await _playbackEngine.SetVolumeAsync(ViewModel.Volume, ct);
+            await _playbackEngine.SetAudioDelayAsync(TimeSpan.FromSeconds(ViewModel.AudioDelaySeconds), ct);
+            await _playbackEngine.SetSubtitleDelayAsync(TimeSpan.FromMilliseconds(ViewModel.SubtitleDelayMilliseconds), ct);
+            await _playbackEngine.SetFileLoopEnabledAsync(ViewModel.LoopFileEnabled, ct);
+            await _playbackEngine.SetABLoopAsync(ViewModel.ABLoop, ct);
+            await _playbackEngine.SetAspectRatioAsync(ViewModel.AspectRatioValue, ct);
+            await _playbackEngine.SetVideoRotationAsync(ViewModel.VideoRotationDegrees, ct);
+            await ApplyVideoEnhancementAsync(ct);
+            await _playbackEngine.SetPausedAsync(paused, ct);
+            ViewModel.SelectedRemoteQualityId = option.Id;
+            ViewModel.StatusText = $"YouTube quality: {option.DisplayName}";
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch
+        {
+            ViewModel.StatusText = ResourceStringHelper.GetString(
+                "YouTubeQualitySwitchFailed",
+                "Could not switch YouTube quality.");
+        }
+    }
+
+    private async void YouTubeSubtitleComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isOpeningVideo
+            || _isUpdatingRemoteSubtitleSelection
+            || (sender as ComboBox)?.SelectedItem is not RemoteVideoSubtitleOption option
+            || option.Id == ViewModel.SelectedRemoteSubtitleId
+            || _remoteOperationCts == null)
+        {
+            return;
+        }
+
+        await LoadRemoteSubtitleOptionAsync(option, persistSelection: true, _remoteOperationCts.Token);
+    }
+
+    private void SyncYouTubeSubtitleComboBoxSelection()
+    {
+        _isUpdatingRemoteSubtitleSelection = true;
+        try
+        {
+            YouTubeSubtitleComboBox.SelectedItem = ViewModel.RemoteSubtitleOptions.FirstOrDefault(option =>
+                option.Id == ViewModel.SelectedRemoteSubtitleId);
+        }
+        finally
+        {
+            _isUpdatingRemoteSubtitleSelection = false;
+        }
+    }
+
+    private async Task<bool> LoadRemoteSubtitleOptionAsync(
+        RemoteVideoSubtitleOption option,
+        bool persistSelection,
+        CancellationToken parentToken)
+    {
+        _remoteSubtitleOperationCts?.Cancel();
+        _remoteSubtitleOperationCts?.Dispose();
+        _remoteSubtitleOperationCts = CancellationTokenSource.CreateLinkedTokenSource(parentToken);
+        var ct = _remoteSubtitleOperationCts.Token;
+        var version = Interlocked.Increment(ref _remoteSubtitleSelectionVersion);
+        ViewModel.StatusText = ResourceStringHelper.GetString(
+            "YouTubeSubtitleLoading",
+            "Loading publisher subtitles...");
+        Log.Information(
+            "[YouTubeSubtitle] Loading publisher track {Language} ({TrackId})",
+            option.Language,
+            option.Id);
+        try
+        {
+            var directory = Path.Combine(
+                AppDataHelper.GetTemporaryDataPath(),
+                "remote-video-subtitles");
+            var path = await _remotePlaybackSession.DownloadSubtitleAsync(option, directory, ct);
+            ct.ThrowIfCancellationRequested();
+            if (version != Interlocked.Read(ref _remoteSubtitleSelectionVersion))
+                return false;
+
+            await ViewModel.LoadRemoteSubtitleAsync(path, option, ct);
+            ct.ThrowIfCancellationRequested();
+            if (version != Interlocked.Read(ref _remoteSubtitleSelectionVersion))
+                return false;
+
+            ApplySubtitleAppearance();
+            SyncYouTubeSubtitleComboBoxSelection();
+            if (persistSelection)
+                await SaveCurrentVideoProgressAsync(ct);
+            Log.Information(
+                "[YouTubeSubtitle] Loaded publisher track {Language} ({TrackId})",
+                option.Language,
+                option.Id);
+            return true;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            if (version == Interlocked.Read(ref _remoteSubtitleSelectionVersion))
+            {
+                ViewModel.StatusText = ResourceStringHelper.GetString(
+                    "YouTubeSubtitleLoadFailed",
+                    "Could not load this publisher subtitle track.");
+                SyncYouTubeSubtitleComboBoxSelection();
+                Log.Warning(
+                    ex,
+                    "[YouTubeSubtitle] Failed publisher track {Language} ({TrackId})",
+                    option.Language,
+                    option.Id);
+            }
+
+            return false;
+        }
+    }
+
+    private static string MapRemoteVideoError(RemoteVideoResolverError error) => error switch
+    {
+        RemoteVideoResolverError.UnsupportedUrl => ResourceStringHelper.GetString("YouTubeInvalidUrl", "Enter a valid YouTube video link."),
+        RemoteVideoResolverError.SignInRequired or RemoteVideoResolverError.RegionRestricted or RemoteVideoResolverError.ContentUnavailable => ResourceStringHelper.GetString("YouTubeRestricted", "This video requires access that Niratan does not support."),
+        RemoteVideoResolverError.NoPlayableStream => ResourceStringHelper.GetString("YouTubeNoPlayableStream", "No compatible stream up to 1080p is available."),
+        _ => ResourceStringHelper.GetString("YouTubeResolveFailed", "The YouTube video could not be resolved. Try again later."),
+    };
 
     private async void RecordMiningHistoryButton_Click(object sender, RoutedEventArgs e)
     {
@@ -360,7 +679,8 @@ public sealed partial class VideoPlayerWindow : Window
             return;
         }
 
-        if (!File.Exists(item.VideoPath))
+        var isRemoteHistoryItem = YouTubeUrlParser.IsRemoteKey(item.VideoPath);
+        if (!isRemoteHistoryItem && !File.Exists(item.VideoPath))
         {
             ViewModel.StatusText = "The saved video file is no longer available";
             return;
@@ -369,14 +689,28 @@ public sealed partial class VideoPlayerWindow : Window
         var currentPath = ViewModel.CurrentVideo?.FilePath;
         if (!string.Equals(NormalizeVideoPath(currentPath ?? ""), NormalizeVideoPath(item.VideoPath), StringComparison.OrdinalIgnoreCase))
         {
-            await OpenVideoAsync(new VideoItem
+            if (isRemoteHistoryItem)
             {
-                Id = item.Id,
-                Title = Path.GetFileNameWithoutExtension(item.VideoPath),
-                FilePath = item.VideoPath,
-                SubtitlePath = item.SubtitleSourcePath,
-                ImportedAt = item.CreatedAt,
-            });
+                var stored = await _videoLibraryService.GetVideoAsync(item.VideoPath);
+                if (!stored.IsSuccess || stored.Value == null)
+                {
+                    ViewModel.StatusText = "Add the YouTube video to the library before reopening this history item";
+                    return;
+                }
+
+                await OpenVideoAsync(stored.Value);
+            }
+            else
+            {
+                await OpenVideoAsync(new VideoItem
+                {
+                    Id = item.Id,
+                    Title = Path.GetFileNameWithoutExtension(item.VideoPath),
+                    FilePath = item.VideoPath,
+                    SubtitlePath = item.SubtitleSourcePath,
+                    ImportedAt = item.CreatedAt,
+                });
+            }
         }
 
         if (item.SubtitleSelectionKind == VideoSubtitleSelectionKind.ExternalFile
@@ -464,6 +798,7 @@ public sealed partial class VideoPlayerWindow : Window
         switch (e.PropertyName)
         {
             case nameof(VideoPlayerViewModel.CurrentSubtitleText):
+                _subtitleVisibleBounds = null;
                 ClearSubtitleCanvasSelection();
                 ApplySubtitleAppearance();
                 break;
@@ -482,6 +817,10 @@ public sealed partial class VideoPlayerWindow : Window
             case nameof(VideoPlayerViewModel.SubtitleMaskBlurRadius):
             case nameof(VideoPlayerViewModel.SubtitleMaskHiddenOpacity):
                 ApplySubtitleAppearance();
+                break;
+            case nameof(VideoPlayerViewModel.IsVideoShaderDownloadRequired):
+            case nameof(VideoPlayerViewModel.IsVideoShaderDownloadInProgress):
+                UpdateAnime4KDownloadControls();
                 break;
         }
     }
@@ -754,9 +1093,11 @@ public sealed partial class VideoPlayerWindow : Window
         var videoPath = ViewModel.CurrentVideo.FilePath;
         var position = ViewModel.CurrentPosition;
         var cue = ViewModel.CurrentCue;
-        var audioRange = cue == null
-            ? null
-            : ResolveVideoAudioClipRange(cue.Start, cue.End);
+        var requestedCueStart = request.CueStart ?? cue?.Start;
+        var requestedCueEnd = request.CueEnd ?? cue?.End;
+        var audioRange = requestedCueStart.HasValue && requestedCueEnd.HasValue
+            ? ResolveVideoAudioClipRange(requestedCueStart.Value, requestedCueEnd.Value)
+            : null;
         if (!string.IsNullOrWhiteSpace(request.DirectMediaDirectory))
         {
             var screenshotFilename = request.CaptureScreenshot
@@ -767,18 +1108,19 @@ public sealed partial class VideoPlayerWindow : Window
                 : null;
             if (screenshotFilename != null || audioFilename != null)
             {
-                _ = GenerateDirectVideoMiningMediaAsync(
+                return await GenerateDirectVideoMiningMediaAsync(
                     request.DirectMediaDirectory,
                     screenshotFilename,
                     audioFilename,
                     videoPath,
                     position,
-                    audioRange);
+                    audioRange,
+                    request.CaptureScreenshot,
+                    request.CaptureAudioClip,
+                    ct);
             }
 
             return new VideoMiningMediaResult(
-                ScreenshotTag: screenshotFilename == null ? null : AnkiMediaMarkup.ForFieldPlaceholder(screenshotFilename),
-                AudioClipTag: audioFilename == null ? null : AnkiMediaMarkup.ForFieldPlaceholder(audioFilename),
                 AudioClipErrorMessage: request.CaptureAudioClip && audioRange == null
                     ? "Unable to capture the subtitle audio clip."
                     : null);
@@ -820,24 +1162,38 @@ public sealed partial class VideoPlayerWindow : Window
                     mediaDir,
                     VideoMiningMediaNaming.CreateAudioClipFilename(videoPath, audioRange.Value.Start, audioRange.Value.End));
                 audioClipPath = await _mediaExtractor.ExportAudioClipAsync(
-                    videoPath,
+                    ResolveMiningMediaSource(videoPath),
                     target,
                     audioRange.Value.Start,
-                    audioRange.Value.End);
+                    audioRange.Value.End,
+                    ct);
             }
         }
 
-        return new VideoMiningMediaResult(screenshotPath, audioClipPath, AudioClipErrorMessage: audioClipErrorMessage);
+        return new VideoMiningMediaResult(
+            screenshotPath,
+            audioClipPath,
+            AudioClipErrorMessage: audioClipErrorMessage,
+            ScreenshotErrorMessage: request.CaptureScreenshot && !HasOutput(screenshotPath)
+                ? "Unable to capture the video screenshot."
+                : null);
     }
 
-    private async Task GenerateDirectVideoMiningMediaAsync(
+    private async Task<VideoMiningMediaResult> GenerateDirectVideoMiningMediaAsync(
         string mediaDirectory,
         string? screenshotFilename,
         string? audioFilename,
         string videoPath,
         TimeSpan position,
-        (TimeSpan Start, TimeSpan End)? audioRange)
+        (TimeSpan Start, TimeSpan End)? audioRange,
+        bool captureScreenshot,
+        bool captureAudioClip,
+        CancellationToken ct)
     {
+        string? screenshotTag = null;
+        string? audioTag = null;
+        string? screenshotError = null;
+        string? audioError = null;
         try
         {
             Directory.CreateDirectory(mediaDirectory);
@@ -847,26 +1203,67 @@ public sealed partial class VideoPlayerWindow : Window
             if (screenshotFilename != null)
             {
                 var temp = Path.Combine(tempDir, $".{Guid.NewGuid():N}-{screenshotFilename}");
-                var captured = await _playbackEngine.CaptureScreenshotAsync(temp);
-                if (!string.IsNullOrWhiteSpace(captured) && File.Exists(captured))
-                    ReplaceFile(captured, Path.Combine(mediaDirectory, screenshotFilename));
+                var captured = await _playbackEngine.CaptureScreenshotAsync(temp, ct);
+                var destination = Path.Combine(mediaDirectory, screenshotFilename);
+                if (HasOutput(captured))
+                {
+                    ReplaceFile(captured!, destination);
+                    if (HasOutput(destination))
+                        screenshotTag = AnkiMediaMarkup.ForFieldPlaceholder(screenshotFilename);
+                }
+
+                if (screenshotTag == null)
+                    screenshotError = "Unable to capture the video screenshot.";
+            }
+            else if (captureScreenshot)
+            {
+                screenshotError = "Unable to capture the video screenshot.";
             }
 
             if (audioFilename != null && audioRange != null)
             {
                 var temp = Path.Combine(tempDir, $".{Guid.NewGuid():N}-{audioFilename}");
                 var exported = await _mediaExtractor.ExportAudioClipAsync(
-                    videoPath,
+                    ResolveMiningMediaSource(videoPath),
                     temp,
                     audioRange.Value.Start,
-                    audioRange.Value.End);
-                if (!string.IsNullOrWhiteSpace(exported) && File.Exists(exported))
-                    ReplaceFile(exported, Path.Combine(mediaDirectory, audioFilename));
+                    audioRange.Value.End,
+                    ct);
+                var destination = Path.Combine(mediaDirectory, audioFilename);
+                if (HasOutput(exported))
+                {
+                    ReplaceFile(exported!, destination);
+                    if (HasOutput(destination))
+                        audioTag = AnkiMediaMarkup.ForFieldPlaceholder(audioFilename);
+                }
+
+                if (audioTag == null)
+                    audioError = "Unable to capture the subtitle audio clip.";
+            }
+            else if (captureAudioClip)
+            {
+                audioError = "Unable to capture the subtitle audio clip.";
             }
         }
-        catch
+        catch (OperationCanceledException)
         {
+            throw;
         }
+
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "[VideoMining] Failed to generate direct mining media");
+            if (captureScreenshot && screenshotTag == null)
+                screenshotError = "Unable to capture the video screenshot.";
+            if (captureAudioClip && audioTag == null)
+                audioError = "Unable to capture the subtitle audio clip.";
+        }
+
+        return new VideoMiningMediaResult(
+            ScreenshotTag: screenshotTag,
+            AudioClipTag: audioTag,
+            AudioClipErrorMessage: audioError,
+            ScreenshotErrorMessage: screenshotError);
     }
 
     private (TimeSpan Start, TimeSpan End)? ResolveVideoAudioClipRange(TimeSpan cueStart, TimeSpan cueEnd)
@@ -885,6 +1282,15 @@ public sealed partial class VideoPlayerWindow : Window
         return (start, end);
     }
 
+    private VideoMiningMediaSource ResolveMiningMediaSource(string localFallback)
+    {
+        var remote = _remotePlaybackSession.Source;
+        if (ViewModel.CurrentVideo?.IsRemote == true && remote != null)
+            return VideoMiningMediaSource.Remote(remote.AudioStream ?? remote.MiningStream);
+
+        return VideoMiningMediaSource.Local(localFallback);
+    }
+
     private static void ReplaceFile(string sourcePath, string destinationPath)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
@@ -893,6 +1299,11 @@ public sealed partial class VideoPlayerWindow : Window
         File.Copy(sourcePath, destinationPath, overwrite: true);
         File.Delete(sourcePath);
     }
+
+    private static bool HasOutput(string? path) =>
+        !string.IsNullOrWhiteSpace(path)
+        && File.Exists(path)
+        && new FileInfo(path).Length > 0;
 
     private DictionaryPopupOverlay EnsurePopupOverlay()
     {
@@ -907,6 +1318,7 @@ public sealed partial class VideoPlayerWindow : Window
         _popupOverlay.UseCanvas(
             PopupOverlayCanvas,
             DictionaryPopupCanvasInputMode.VisibleHostsOnly);
+        _popupOverlay.UseInPlaceDialogHost(VideoModalOverlayHost);
         return _popupOverlay;
     }
 
@@ -930,6 +1342,20 @@ public sealed partial class VideoPlayerWindow : Window
         }
         finally
         {
+            _remoteOperationCts?.Cancel();
+            _remoteOperationCts?.Dispose();
+            _remoteOperationCts = null;
+            _remoteSubtitleOperationCts?.Cancel();
+            _remoteSubtitleOperationCts?.Dispose();
+            _remoteSubtitleOperationCts = null;
+            _remotePlaybackSession.Invalidate();
+            _playbackEngine.MediaLoaded -= PlaybackEngine_MediaLoaded;
+            _playbackEngine.MediaFailed -= PlaybackEngine_MediaFailed;
+            if (_parentHwnd != IntPtr.Zero)
+            {
+                RemoveWindowSubclass(_parentHwnd, _videoWindowSubclassProc, VideoWindowSubclassId);
+                _parentHwnd = IntPtr.Zero;
+            }
             CancelEmbeddedTranscriptLoad();
             InspectorSubtitleListContent.TranscriptSelected -= InspectorSubtitleListContent_TranscriptSelected;
             InspectorSubtitleListContent.SetABLoopStartRequested -= InspectorSubtitleListContent_SetABLoopStartRequested;

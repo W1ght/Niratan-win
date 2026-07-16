@@ -16,6 +16,24 @@
     <Grid>
         <Frame x:Name="ShellFrame" SourcePageType="local:NavigationPage" />
 
+        <InfoBar Margin="20,44,20,0"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Top"
+                 MaxWidth="720"
+                 AutomationProperties.AutomationId="AppUpdateInfoBar"
+                 IsClosable="True"
+                 IsOpen="{x:Bind ViewModel.IsUpdateBannerOpen, Mode=TwoWay}"
+                 Message="{x:Bind ViewModel.UpdateBannerMessage, Mode=OneWay}"
+                 Severity="Informational"
+                 Title="{x:Bind ViewModel.UpdateBannerTitle, Mode=OneWay}">
+            <InfoBar.ActionButton>
+                <Button x:Uid="AppUpdateBannerActionButton"
+                        AutomationProperties.AutomationId="AppUpdateBannerActionButton"
+                        Command="{x:Bind ViewModel.OpenAvailableUpdateCommand}"
+                        Content="View update" />
+            </InfoBar.ActionButton>
+        </InfoBar>
+
         <ItemsControl Width="360"
                       Margin="0,0,0,20"
                       HorizontalAlignment="Center"

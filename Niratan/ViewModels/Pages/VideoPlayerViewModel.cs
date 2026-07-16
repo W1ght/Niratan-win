@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Niratan.Helpers;
 using Niratan.Models;
 using Niratan.Models.Anki;
 using Niratan.Models.Dictionary;
@@ -17,11 +18,14 @@ using Niratan.Services.Video;
 
 namespace Niratan.ViewModels.Pages;
 
+public sealed record VideoShaderPresetOption(VideoShaderPreset Preset, string Label);
+
 public partial class VideoPlayerViewModel : ObservableObject
 {
     private readonly SubtitleParserService _subtitleParserService;
     private readonly IDictionaryPopupRequestService _popupRequestService;
     private readonly ISettingsService? _settingsService;
+    private readonly IAnime4KShaderService? _anime4KShaderService;
     private readonly object _subtitleAppearanceSaveLock = new();
     private bool _isApplyingSettings;
     private bool _isSubtitleAppearanceSaveQueued;
@@ -33,11 +37,14 @@ public partial class VideoPlayerViewModel : ObservableObject
     private IReadOnlyList<VideoSubtitleCue> _currentEmbeddedTranscriptCues = [];
     private int? _lastSelectedSubtitleTrackId;
     private string? _primarySubtitlePath;
+    private string? _remoteSubtitleLanguage;
     private bool _subtitleSelectionOff;
     private bool _hasCompleteEmbeddedTranscript;
     private readonly VideoTranscriptWindow _transcriptWindow = new();
     private int _lastTranscriptCurrentIndex = -1;
     private IReadOnlyList<VideoChapter> _chapters = [];
+    private int? _currentChapterId;
+    private bool _chapterRowsInitialized;
 
     [ObservableProperty]
     public partial string Title { get; set; } = "Video";
@@ -86,6 +93,22 @@ public partial class VideoPlayerViewModel : ObservableObject
 
     [ObservableProperty]
     public partial bool HasVideoTracks { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsRemoteVideo { get; set; }
+
+    [ObservableProperty]
+    public partial string RemoteVideoProviderLabel { get; set; } = "";
+
+    public ObservableCollection<RemoteVideoQualityOption> RemoteQualityOptions { get; } = [];
+
+    public ObservableCollection<RemoteVideoSubtitleOption> RemoteSubtitleOptions { get; } = [];
+
+    [ObservableProperty]
+    public partial string? SelectedRemoteQualityId { get; set; }
+
+    [ObservableProperty]
+    public partial string? SelectedRemoteSubtitleId { get; set; }
 
     [ObservableProperty]
     public partial bool HasTranscriptRows { get; set; }
@@ -219,6 +242,33 @@ public partial class VideoPlayerViewModel : ObservableObject
     public partial bool HdrEnhancementEnabled { get; set; }
 
     [ObservableProperty]
+    public partial VideoShaderPreset VideoShaderPreset { get; set; }
+
+    public IReadOnlyList<VideoShaderPresetOption> AvailableVideoShaderPresets { get; } =
+    [
+        new(VideoShaderPreset.Off, ResourceStringHelper.GetString("VideoShaderPresetOff", "Off")),
+        new(VideoShaderPreset.Anime4KFast, ResourceStringHelper.GetString("VideoShaderPresetAnime4KFast", "Anime4K Fast")),
+        new(VideoShaderPreset.Anime4KHighQuality, ResourceStringHelper.GetString("VideoShaderPresetAnime4KHighQuality", "Anime4K High Quality")),
+    ];
+
+    [ObservableProperty]
+    public partial VideoShaderPresetOption? SelectedVideoShaderPresetOption { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsVideoShaderDownloadInProgress { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsVideoShaderDownloadRequired { get; set; }
+
+    [ObservableProperty]
+    public partial string VideoShaderDownloadStatus { get; set; } = "";
+
+    public bool CanChangeVideoShaderPreset => !IsVideoShaderDownloadInProgress;
+
+    public bool CanDownloadVideoShaderPreset =>
+        IsVideoShaderDownloadRequired && !IsVideoShaderDownloadInProgress;
+
+    [ObservableProperty]
     public partial double VideoBrightness { get; set; }
 
     [ObservableProperty]
@@ -303,11 +353,13 @@ public partial class VideoPlayerViewModel : ObservableObject
     public VideoPlayerViewModel(
         SubtitleParserService subtitleParserService,
         IDictionaryPopupRequestService popupRequestService,
-        ISettingsService? settingsService = null)
+        ISettingsService? settingsService = null,
+        IAnime4KShaderService? anime4KShaderService = null)
     {
         _subtitleParserService = subtitleParserService;
         _popupRequestService = popupRequestService;
         _settingsService = settingsService;
+        _anime4KShaderService = anime4KShaderService;
         if (_settingsService is not null && settingsService is not null)
         {
             _isApplyingSettings = true;
@@ -320,10 +372,13 @@ public partial class VideoPlayerViewModel : ObservableObject
                 _isApplyingSettings = false;
             }
         }
+
+        ResetVideoShaderSession();
     }
 
     public async Task LoadVideoAsync(VideoItem video, CancellationToken ct = default)
     {
+        ResetVideoShaderSession();
         CurrentVideo = video;
         Title = video.Title;
         ReplaceEpisodes([video], video);
@@ -343,6 +398,7 @@ public partial class VideoPlayerViewModel : ObservableObject
         _currentEmbeddedTranscriptCues = [];
         PrimarySubtitleName = "";
         _primarySubtitlePath = null;
+        _remoteSubtitleLanguage = null;
         EmbeddedSubtitleName = "";
         SelectedSubtitleTrackId = null;
         SelectedAudioTrackId = null;
@@ -354,6 +410,7 @@ public partial class VideoPlayerViewModel : ObservableObject
         ClearABLoop();
         ReplaceTranscriptRows([]);
         ReplaceChapters([]);
+        ConfigureRemoteSource(null);
 
         if (!string.IsNullOrWhiteSpace(video.SubtitlePath) && File.Exists(video.SubtitlePath))
         {
@@ -388,6 +445,44 @@ public partial class VideoPlayerViewModel : ObservableObject
         }
     }
 
+    public void ConfigureRemoteSource(ResolvedRemoteVideoSource? source)
+    {
+        RemoteQualityOptions.Clear();
+        RemoteSubtitleOptions.Clear();
+        IsRemoteVideo = source != null;
+        RemoteVideoProviderLabel = source == null ? "" : "YouTube · Experimental";
+        if (source == null)
+        {
+            SelectedRemoteQualityId = null;
+            SelectedRemoteSubtitleId = null;
+            return;
+        }
+
+        foreach (var option in source.QualityOptions)
+            RemoteQualityOptions.Add(option);
+        foreach (var option in source.SubtitleOptions)
+            RemoteSubtitleOptions.Add(option);
+
+        SelectedRemoteQualityId = source.QualityOptions.FirstOrDefault(option =>
+            option.Height == source.SelectedHeight)?.Id;
+        // The combo box represents the subtitle that is actually parsed and active,
+        // not merely the resolver's preferred candidate. The latter may still be
+        // downloading or may fail to parse.
+        SelectedRemoteSubtitleId = source.SubtitleOptions.FirstOrDefault(option =>
+            option.Language.Equals(_remoteSubtitleLanguage, StringComparison.OrdinalIgnoreCase))?.Id;
+    }
+
+    public async Task LoadRemoteSubtitleAsync(
+        string subtitlePath,
+        RemoteVideoSubtitleOption option,
+        CancellationToken ct = default)
+    {
+        await LoadSubtitleAsync(subtitlePath, ct);
+        _remoteSubtitleLanguage = option.Language;
+        SelectedRemoteSubtitleId = option.Id;
+        PrimarySubtitleName = option.Name;
+    }
+
     public void ReplaceEpisodes(IEnumerable<VideoItem> episodes, VideoItem current)
     {
         var rows = NormalizeEpisodes(episodes, current)
@@ -408,6 +503,7 @@ public partial class VideoPlayerViewModel : ObservableObject
             .ThenBy(chapter => chapter.Id)
             .ToList();
         HasChapters = _chapters.Count > 0;
+        _chapterRowsInitialized = false;
         RefreshChapterRows(CurrentPosition);
     }
 
@@ -437,6 +533,7 @@ public partial class VideoPlayerViewModel : ObservableObject
         _currentExternalCues = [];
         _currentEmbeddedTranscriptCues = [];
         _primarySubtitlePath = subtitlePath;
+        _remoteSubtitleLanguage = null;
         PrimarySubtitleName = Path.GetFileName(subtitlePath);
         EmbeddedSubtitleName = "";
         SelectedSubtitleTrackId = null;
@@ -456,6 +553,7 @@ public partial class VideoPlayerViewModel : ObservableObject
         _currentExternalCues = [];
         _currentEmbeddedTranscriptCues = [];
         _primarySubtitlePath = null;
+        _remoteSubtitleLanguage = null;
         PrimarySubtitleName = "";
         EmbeddedSubtitleName = "";
         SelectedSubtitleTrackId = null;
@@ -750,16 +848,26 @@ public partial class VideoPlayerViewModel : ObservableObject
 
     private void RefreshChapterRows(TimeSpan position)
     {
-        ChapterRows.Clear();
-        if (_chapters.Count == 0)
-            return;
+        int? currentId = null;
+        for (var index = _chapters.Count - 1; index >= 0; index--)
+        {
+            if (_chapters[index].StartTime <= position)
+            {
+                currentId = _chapters[index].Id;
+                break;
+            }
+        }
 
-        var currentId = _chapters
-            .Where(chapter => chapter.StartTime <= position)
-            .OrderByDescending(chapter => chapter.StartTime)
-            .ThenByDescending(chapter => chapter.Id)
-            .FirstOrDefault()
-            ?.Id;
+        if (_chapterRowsInitialized
+            && _currentChapterId == currentId
+            && ChapterRows.Count == _chapters.Count)
+        {
+            return;
+        }
+
+        _chapterRowsInitialized = true;
+        _currentChapterId = currentId;
+        ChapterRows.Clear();
         foreach (var chapter in _chapters)
             ChapterRows.Add(new VideoChapterRow(chapter, chapter.Id == currentId));
     }
@@ -993,6 +1101,9 @@ public partial class VideoPlayerViewModel : ObservableObject
         if (_subtitleSelectionOff)
             return VideoSubtitleSelection.Off();
 
+        if (!string.IsNullOrWhiteSpace(_remoteSubtitleLanguage))
+            return VideoSubtitleSelection.RemoteLanguage(_remoteSubtitleLanguage);
+
         if (!string.IsNullOrWhiteSpace(_primarySubtitlePath))
             return VideoSubtitleSelection.ExternalFile(_primarySubtitlePath);
 
@@ -1115,6 +1226,7 @@ public partial class VideoPlayerViewModel : ObservableObject
         HardwareDecodingEnabled = settings.HardwareDecodingEnabled;
         DeinterlaceEnabled = settings.DeinterlacingEnabled;
         HdrEnhancementEnabled = settings.HdrEnhancementEnabled;
+        VideoShaderPreset = VideoShaderPreset.Off;
         SetVideoEqualizer("brightness", settings.VideoBrightness);
         SetVideoEqualizer("contrast", settings.VideoContrast);
         SetVideoEqualizer("saturation", settings.VideoSaturation);
@@ -1263,6 +1375,155 @@ public partial class VideoPlayerViewModel : ObservableObject
         SetSubtitleMaskMode("Blur");
         SetSubtitleMaskBlurRadius(10);
         SubtitleMaskHiddenOpacity = 0;
+    }
+
+    partial void OnSelectedVideoShaderPresetOptionChanged(VideoShaderPresetOption? value)
+    {
+        OnPropertyChanged(nameof(CanDownloadVideoShaderPreset));
+    }
+
+    partial void OnIsVideoShaderDownloadInProgressChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanChangeVideoShaderPreset));
+        OnPropertyChanged(nameof(CanDownloadVideoShaderPreset));
+    }
+
+    partial void OnIsVideoShaderDownloadRequiredChanged(bool value) =>
+        OnPropertyChanged(nameof(CanDownloadVideoShaderPreset));
+
+    public bool TryActivateSelectedVideoShaderPreset()
+    {
+        var option = SelectedVideoShaderPresetOption;
+        if (option == null || IsVideoShaderDownloadInProgress)
+            return false;
+
+        if (option.Preset == VideoShaderPreset.Off)
+        {
+            VideoShaderPreset = VideoShaderPreset.Off;
+            IsVideoShaderDownloadRequired = false;
+            VideoShaderDownloadStatus = ResourceStringHelper.GetString(
+                "VideoShaderDisabledStatus",
+                "Anime4K is off for the current video.");
+            return true;
+        }
+
+        if (_anime4KShaderService == null)
+        {
+            IsVideoShaderDownloadRequired = false;
+            ReportVideoShaderApplyFailure(ResourceStringHelper.GetString(
+                "VideoShaderDownloadUnavailableStatus",
+                "The Anime4K download service is unavailable."));
+            return false;
+        }
+
+        if (_anime4KShaderService.GetInstalledShaderPaths(option.Preset).Count > 0)
+        {
+            VideoShaderPreset = option.Preset;
+            IsVideoShaderDownloadRequired = false;
+            VideoShaderDownloadStatus = ResourceStringHelper.GetString(
+                "VideoShaderDownloadCompleteStatus",
+                "Anime4K is active for the current video.");
+            return true;
+        }
+
+        VideoShaderPreset = VideoShaderPreset.Off;
+        IsVideoShaderDownloadRequired = true;
+        VideoShaderDownloadStatus = ResourceStringHelper.GetString(
+            "VideoShaderDownloadRequiredStatus",
+            "This preset is not downloaded yet.");
+        return false;
+    }
+
+    public async Task<bool> PrepareSelectedVideoShaderPresetAsync(CancellationToken ct = default)
+    {
+        var option = SelectedVideoShaderPresetOption;
+        if (option == null || IsVideoShaderDownloadInProgress)
+            return false;
+
+        if (option.Preset == VideoShaderPreset.Off)
+        {
+            VideoShaderPreset = VideoShaderPreset.Off;
+            IsVideoShaderDownloadRequired = false;
+            VideoShaderDownloadStatus = ResourceStringHelper.GetString(
+                "VideoShaderDisabledStatus",
+                "Anime4K is off for the current video.");
+            return true;
+        }
+
+        if (_anime4KShaderService == null)
+        {
+            ReportVideoShaderApplyFailure(ResourceStringHelper.GetString(
+                "VideoShaderDownloadUnavailableStatus",
+                "The Anime4K download service is unavailable."));
+            return false;
+        }
+
+        IsVideoShaderDownloadInProgress = true;
+        VideoShaderDownloadStatus = ResourceStringHelper.GetString(
+            "VideoShaderDownloadingStatus",
+            "Downloading Anime4K shaders...");
+        try
+        {
+            var progress = new Progress<Anime4KDownloadProgress>(value =>
+            {
+                VideoShaderDownloadStatus = string.Format(
+                    ResourceStringHelper.GetString(
+                        "VideoShaderDownloadProgressStatus",
+                        "Downloading {0} ({1}/{2})"),
+                    value.FileName,
+                    value.CompletedFiles,
+                    value.TotalFiles);
+            });
+            var result = await _anime4KShaderService.EnsurePresetAvailableAsync(
+                option.Preset,
+                progress,
+                ct);
+            if (!result.Success)
+            {
+                IsVideoShaderDownloadRequired = true;
+                ReportVideoShaderApplyFailure(result.ErrorMessage ?? "Unknown error");
+                return false;
+            }
+
+            VideoShaderPreset = option.Preset;
+            IsVideoShaderDownloadRequired = false;
+            VideoShaderDownloadStatus = ResourceStringHelper.GetString(
+                "VideoShaderDownloadCompleteStatus",
+                "Anime4K is active for the current video.");
+            return true;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            IsVideoShaderDownloadRequired = option.Preset != VideoShaderPreset.Off;
+            ReportVideoShaderApplyFailure(ex.Message);
+            return false;
+        }
+        finally
+        {
+            IsVideoShaderDownloadInProgress = false;
+        }
+    }
+
+    public void ReportVideoShaderApplyFailure(string error)
+    {
+        VideoShaderPreset = VideoShaderPreset.Off;
+        VideoShaderDownloadStatus = string.Format(
+            ResourceStringHelper.GetString(
+                "VideoShaderDownloadFailedStatus",
+                "Anime4K failed: {0}"),
+            error);
+    }
+
+    private void ResetVideoShaderSession()
+    {
+        VideoShaderPreset = VideoShaderPreset.Off;
+        SelectedVideoShaderPresetOption = AvailableVideoShaderPresets[0];
+        IsVideoShaderDownloadRequired = false;
+        VideoShaderDownloadStatus = "";
     }
 
     private void SaveSubtitleAppearance()
@@ -1590,6 +1851,15 @@ public partial class VideoPlayerViewModel : ObservableObject
             cueContext,
             null,
             null,
+            sentenceOffset);
+        var selectionCues = _subtitleDocument.Cues.Count > 0
+            ? _subtitleDocument.Cues
+            : TranscriptRows
+                .Select(row => new VideoSubtitleCue(row.Index, row.Start, row.End, row.Text))
+                .ToArray();
+        context.ContextSelection = VideoMiningContextFactory.CreateSelection(
+            selectionCues,
+            cueContext.Cue,
             sentenceOffset);
         context.VideoMediaProvider = mediaProvider;
 

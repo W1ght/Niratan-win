@@ -1,5 +1,123 @@
 # Changelog
 
+## Popup 内链跳转后缺少历史操作栏且顶部留白过大
+
+**原因**：Windows 弹窗只按“显示操作栏”设置决定后退/前进控件是否可见，内部链接虽然已写入 WebView 历史栈，却不会在关闭常驻操作栏时显出导航入口。操作栏、Sasayaki 控件和关闭状态的制卡提示还各占一行，导致内容顶部被多次留白。
+
+**解决**：对齐 Niratan，在内部链接产生后退或前进历史时自动显示后退、前进和关闭控件；有 Sasayaki 音频时将它们与播放控件合并到同一条 36px 紧凑栏。关闭状态的制卡提示改为覆盖内容，不再参与纵向布局。
+
+---
+
+## 设置页备份入口禁用且无法迁移收藏
+
+**原因**：Windows 设置导航只有禁用的 Backup 占位，没有 Niratan 的书籍/词典 `.hoshi` 备份恢复，也缺少 ッツ Backup 兼容导入导出；直接替换词典目录还会与 hoshidicts 当前 session 的文件句柄和 Profile 独立配置冲突。
+
+**解决**：新增原生 Backup 设置页与 `BackupService`，对齐书籍、词典、ッツ Backup 三个分区、文件命名、覆盖语义和进度提示。书籍与词典 `.hoshi` 使用安全解包、同卷 replacement 和失败回滚；词典归档携带 `.hoshi-profiles`，恢复时覆盖收藏、合并 Profile 并立即重建 native query。补齐 EPUB → TTU `bookdata` 转换和 TTU ZIP 导入，已有原始书名只覆盖统计与阅读进度，新书正常加入收藏。
+
+---
+
+## 视频管理生成缩略图时弹出 mpv 窗口
+
+**原因**：后台缩略图提取器初始化独立 libmpv 实例时没有指定无窗口视频输出，libmpv 会为解码后的画面自动创建原生播放窗口。
+
+**解决**：缩略图实例固定使用 `vo=null`，并启用 `screenshot-sw=yes` 通过软件转换保存解码帧；视频管理可继续生成和缓存缩略图，同时不再创建可见 mpv 窗口。
+
+---
+
+## Sasayaki 配准文件无法直接在 Niratan 与 Hoshi 客户端间复用
+
+**原因**：Windows 端曾把书籍 ID、本机音频/SRT 绝对路径、完整 cue 表和 `cueIndex` 写进自有 schema v3；Niratan 与 Hoshi 使用的则是每条 match 自包含音频时间、文本和 EPUB 字符范围的 `matches + unmatched` 结构，服务端无法把同一配准文件原样下发给各客户端。
+
+**解决**：Windows 的 `sasayaki_match.json` 改为 Niratan/Hoshi portable 结构，本机路径拆到 `sasayaki_source.json`，播放状态继续独立保存在 `sasayaki_playback.json`。匹配器、Reader 导航、高亮和音频截取统一直接消费 portable match；读取旧 Windows v3 时自动合并 cue 数据、迁移来源路径并保留播放进度。
+
+---
+
+## 查词制卡后无法在 Anki 中定位新笔记
+
+**原因**：Windows 端将 AnkiConnect `addNote` 的返回值压缩为布尔成功状态，弹窗拿不到新增 note ID，因此无法提供 Niratan 词条内的 Anki 跳转操作。
+
+**解决**：保留 `addNote` 返回的 note ID；制卡成功后在对应词条显示放大镜按钮，点击通过受校验的 WebView2 消息调用 AnkiConnect `guiBrowse` 并以 `nid:<ID>` 精确打开新笔记。普通制卡与选择上下文制卡共用该行为，Reader、词典页、视频和全局查词弹窗同步生效。
+
+---
+
+## 视频窗口打开慢、控制栏偏移且窗口比例不跟随片源
+
+**原因**：视频窗口初始化时先等待字幕 WebView2，再创建 libmpv 宿主；libmpv 事件线程还在持有播放器全局锁时最多等待 50ms，使连续属性命令累积延迟。打开路径残留测试用强制最大化，窗口也没有读取 mpv 的显示宽高和旋转信息。原生视频子窗口与顶层控制栏 Popup 分别按不同坐标和 DPI 规则定位，侧栏或缩放变化后边界可能错开。
+
+**解决**：先创建并启动 libmpv，源提交后立即解除暂停，字幕 WebView2 延后到 `file-loaded` 后初始化；事件循环改为 mpv `wakeup` 驱动且不再持锁等待。窗口读取 `dwidth` / `dheight` 与视频旋转，按 Niratan 的视频区加侧栏模型自动适配工作区，并在 Win32 `WM_SIZING` 中保持片源显示比例。控制栏 Popup 和原生视频宿主统一使用按当前 XamlRoot DPI 对齐的 VideoSurface 边界，打开、侧栏切换和窗口缩放时保持同宽同高、底边一致。
+
+---
+
+## Anki 视频媒体与 EPUB 封面缺失
+
+**原因**：视频和 YouTube 制卡直写 Anki 媒体目录时使用后台 fire-and-forget；卡片字段先得到标签，截图和音频文件尚未生成，失败异常也被吞掉。截图失败未参与制卡前校验。已保存的小说字段默认值还会覆盖视频预设的截图和音频占位符。EPUB 封面虽然上传到 Anki，但未记录上传后的文件名，`{book-cover}` 最终渲染成应用私有目录的本地路径。词典弹窗还把空格分隔的 Yomitan 词性规则字符串当数组调用 `.some()`，部分词条会在进入原生制卡链路前失败。AnkiConnect 关闭空闲 keep-alive 连接时，复用连接上的首次预检也可能被误报为不可用。
+
+**解决**：直写视频媒体改为等待截图和音频全部完成，验证目标文件非空后才返回 Anki 标签；取消继续传播，任一必需媒体失败都会显示错误并阻止提交。独立 libmpv 截图改为等待 `playback-restart` 首帧可用事件，不再在 `file-loaded` 时过早执行。字段自动填充会把“另一内容类型的原始默认值”切换为当前预设，同时保留真正的用户自定义映射。新增 `CoverTag`，封面上传成功后转换为 `<img src="...">`，模板不再使用或暴露本地路径。`popup.js` 同时兼容规则数组和空格分隔字符串，避免音调分类阻断制卡。AnkiConnect 仅在本地传输异常时用新请求体重试一次，不重试应用级错误或重复提交。
+
+---
+
+## 字幕出现时侧边栏按钮失效且视频首帧过慢
+
+**原因**：透明字幕选择画布的层级高于底部控制栏，字幕移动到底部后会拦截侧边栏按钮的点击。打开视频时又在解除暂停前等待外部字幕解析、章节读取和最多 1.8 秒的字幕轨道轮询，导致有字幕的视频尤其明显地延迟出画面。
+
+**解决**：将底部控制栏提升到字幕选择层之上，保留字幕区域内的点选查词，同时保证重叠区域的播放器按钮优先接收输入。外部字幕解析移到线程池；视频源和必要播放属性就绪后立即开始渲染，章节、轨道、交互字幕和侧边栏数据在首帧之后异步补齐。
+
+---
+
+## 播放器控制栏入口冗余且操作卡顿
+
+**原因**：播放器底部额外放置“打开 YouTube 链接”按钮，与视频库的添加入口重复且链环图标语义不清。播放计时器还会每 200ms 清空并重建全部章节行、执行六次 viewport 属性读取；鼠标在视频表面移动时也会为每个事件重启自动隐藏计时器，持续制造 UI 线程布局和集合通知。
+
+**解决**：删除播放器控制栏的 YouTube 入口，只保留视频库添加入口。章节行只在章节实际切换时重建，viewport 指标降频到每秒刷新一次，控制栏自动隐藏计时器按 100ms 合并鼠标移动事件，并避免重复写入相同 `Visibility`。
+
+---
+
+## 对齐 Niratan 的实验性 YouTube 播放
+
+**原因**：Windows 视频模块只能导入本地文件，缺少 Niratan 的 YouTube 添加/直接打开、画质、发布者字幕、进度恢复和制卡链路；官方 IFrame/Data API 又无法提供 libmpv 所需的可选择流和现有交互式字幕能力。初版发布者字幕还在未打包 WinUI 进程中调用了仅打包应用可用的 `ApplicationData.Current.TemporaryFolder`，导致所有语言在选中后、实际下载前就失败。
+
+**解决**：固定引入纯 .NET `YoutubeExplode 6.6.0`，通过严格 URL 白名单解析匿名公开视频，在内存中缓存最高 1080p 的分离/合并流与发布者字幕。扩展 libmpv typed request、远程播放器会话、失败刷新和 muxed 降级，复用现有字幕查词、截图、transcript 与音频制卡；新增稳定远程身份和 Migration 013，使资料库、进度及字幕语言可恢复。YouTube `t` / `start` 时间参数会转换为初始播放位置，同时修复解析对话框、播放器切换来源和发布者字幕快速切换时的取消竞态；字幕下拉框只标记已下载且成功解析的活动轨道，失败或过期操作不会再留下虚假的选中状态。字幕文件改存到 `%LOCALAPPDATA%\Niratan\Temp` 的应用管理目录，不依赖包身份；语言选择由成功加载后的状态显式回写，避免单向绑定覆盖用户刚选中的项目。功能明确标注非官方接口的实验性与易失性，全链路不使用 yt-dlp、youtube-dl、Deno、Node、下载型 helper 或子进程。
+
+---
+
+## Windows 视频新增可选 Anime4K 在线超分
+
+**原因**：Windows 视频播放器已有 libmpv GPU 渲染链路，但没有可选的实时动画超分；直接把 `glsl-shaders-append` 当 property 写入还会被 libmpv 拒绝，形成界面已开启但实际未加载的静默失败。
+
+**解决**：在播放器侧边栏“视频增强”中新增 Anime4K Fast / High Quality 会话预设，从固定 `v4.0.1` revision 在线下载，使用 GitHub Raw 与 jsDelivr 回退源并逐文件校验固定 SHA-256，成功后原子落盘到应用私有目录。每次打开视频均默认关闭；选择已缓存预设时立即应用，只有文件尚未下载时才显示“下载”按钮，完成后自动应用。播放侧通过 `change-list glsl-shaders clr/append` 按官方顺序应用，下载失败或文件缺失时保持关闭。该功能是明确记录的 Windows 平台可选偏差，不改变 Niratan 默认画质行为。
+
+---
+
+## 全局查词偏离高亮选区、宿主边缘外露且子 popup 被裁切
+
+**原因**：Windows 端只把热键触发时的鼠标位置传给 popup，丢弃了 UI Automation 能提供的选区屏幕矩形；离屏测量窗口又固定为 720×560 物理像素，并在 WebView `contentReady` 提交前同步读取 popup bounds，导致键盘触发、多显示器和高 DPI 场景定位漂移，首次弹窗还可能留在离屏 staging。后来虽将宿主缩成根 popup 的精确尺寸，但嵌套 popup 仍由同一个 Canvas 创建，因此所有子层都会被根 HWND 裁切；窗口 backdrop/非客户区也会在根 popup 顶边漏出细横条。窗口同时使用 `WS_EX_NOACTIVATE` 和失活即关闭策略，内容即使完成渲染也可能在最终显示前被 Deactivated 事件关闭；无词条时则静默退出。
+
+**解决**：对齐 Niratan `SelectionSnapshot`，全局查词优先传递 UI Automation 选区矩形，Win32 文本框回退传递 caret 屏幕矩形，最后才使用鼠标点；按目标显示器 DPI 和工作区计算横排上下定位。全局查词的根/子 popup 改为每层一个独立原生 tool-window HWND；child 的本地选区矩形先补入 WebView 在父 popup 内的实际原点，再换算为屏幕坐标。每层水平以选区中心对齐并做工作区夹取，垂直只允许保留固定间距放在选区正上或正下，随后按真实内容尺寸做精确圆角裁切，因此可真正越出父窗口边界，顶边横条、透明画布、锚点覆盖和共享宿主裁切均不会出现。热键注册时预热两个空窗口，关闭或替换的 popup 会返回池中复用其 HWND 和 WebView2，快速连续查词不再反复冷启动。中央栈协调器对齐 Niratan：点击父层只关闭其后的子层，点击全部 popup 之外清空整栈。外部子窗口模式仅在全局查词启用，小说和视频仍保留原有窗口内嵌套查词。窗口继续使用 no-activate/topmost、`DWMWA_COLOR_NONE`；无词条时显示精确裁切的 3 秒状态浮层。
+
+## 全局查词快捷键无法在统一编辑器中修改
+
+**原因**：Windows 快捷键注册表漏掉了 Niratan 的 `global.lookupSelectedText` action，全局查词设置又单独保存字符串，并且 Win32 registrar 只接受写死的 `Ctrl+Alt+D`。
+
+**解决**：将“查询选中文本”加入统一“键盘快捷键”的全局类别，以 `ShortcutConfiguration` 作为唯一 binding 来源；默认仍为 `Ctrl+Alt+D`。Win32 registrar 现在支持编辑器可表达的 Ctrl/Shift/Alt/Win 与字母、数字、功能键等组合，binding 修改或重置后立即注销并重新注册，无需重启应用；全局查词开关仍独立保存在功能设置中。
+
+---
+
+## Profile 设置页与 Niratan 结构不一致
+
+**原因**：Windows Profile 页同时提供 Active Profile 下拉框和重复的 “Installed” profile 列表，新建 profile 只创建空目录，不会像 Niratan 一样继承当前 profile 的词典顺序/开关、阅读外观和 Anki 配置。字典设置页又不突出当前激活 profile，导致用户在视频 profile 中全开词典后，全局查词仍按另一个 global profile 查询。
+
+**解决**：移除自创的 “Installed” profile 分区，在 Active Profile 卡片中直接列出并切换全部 profile，并补齐中英文界面、内置 profile 名称、语言名称和状态提示；说明文字对齐 Niratan 的 profile 所有权边界。新建 profile 复制当前 profile 的 `dictionary-settings.json`、`reader-settings.json`、`anki-settings.json` 和 `dictionaries/dictionary-config.json`，随后再激活新 profile。主导航、Reader 与视频窗口在重新成为活动窗口时按各自上下文重新激活 profile，确保设置页编辑 global profile，Reader/视频查词恢复其内容 profile。
+
+---
+
+## 小说制卡状态错误且小说、视频无法选择上下文
+
+**原因**：Windows 弹窗将 Anki 预检、重复和写入结果压缩为单一 `bool`，首次渲染也不检查词条是否已存在；小说只传当前句，视频媒体采集固定使用当前字幕 cue，因此无法像 Niratan 一样在制卡前扩展前后句。
+
+**解决**：按 Niratan 区分成功、重复、失败结果并显示对应弹窗提示，词条渲染时异步刷新已制卡/未制卡按钮状态；新增小说正文句子和视频字幕 cue 的上下文选择入口，确认后重算句子偏移、相邻字幕、视频起止时间以及音频采集范围，并复用原有 AnkiConnect 与媒体管线。按钮改为与 Niratan 一致的原生内联点击语义和 `plus.square` / `rectangle.stack.badge.plus` 图标，并按 render generation 从已提交或正在提交的上下文取值，避免 popup 首帧可点击时上下文仍为空、重复检查回调被误判为过期而造成面板不显示或按钮永久禁用。视频端把选择器挂入 `BottomChromePopup` 内的模态宿主并使用 in-place placement，绕开 libmpv 子窗口的 HWND airspace，保证上下文面板始终覆盖在视频上方。
+
+---
+
 ## 进入和退出小说会停在 Reader 页面
 
 **原因**：进入 Reader 时在本地 EPUB 初始化前等待 Google Drive 自动导入，退出时又在发送书架导航消息前等待书签、统计和远端导出全部刷新；网络请求因此直接位于两个可见导航路径上。Sasayaki 本地加载与后台导入并行时还可能让旧播放位置晚于远端位置应用。
@@ -355,11 +473,13 @@
 **原因**：
 - Windows 侧横排定位曾把 popup height 当成 screen height 传入 `SpaceBelow`。
 - 嵌套弹窗曾固定按父弹窗偏移量摆放，没有使用弹窗内当前选区 rect。
+- `lookupRedirect` 的选区 rect 使用正文 WebView 局部坐标；应用内子弹窗曾漏加正文相对父 popup 的顶部偏移，导致上弹和下弹都整体偏上。
 - 子弹窗滚动时直接清理全部子弹窗，和 Android `closeChildPopupsForScrolledParent` 的栈行为不一致。
 
 **解决**：
 - `DictionaryPopupOverlay.ShowBelow` 改为使用真实 `screenHeight`，按 Android 规则 `spaceBelow >= popupHeight` 判断。
 - `lookupRedirect` payload 携带弹窗内选区 rect，C# 侧换算后用同一套 Android-style `PositionHost` 定位。
+- 应用内与全局独立子窗口统一通过 `父 popup Canvas 位置 + 正文 WebView 偏移 + 选区 rect` 解析锚点，不再使用两套坐标原点。
 - 子弹窗滚动改为 `ClearChildrenAfter(parent)`。
 
 ---

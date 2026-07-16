@@ -243,7 +243,7 @@ public sealed class AnkiConnectClient : IDisposable
         return new MultiActionResult(result.Clone(), errorMessage);
     }
 
-    public async Task<bool> AddNoteWithOptionalSyncAsync(
+    public async Task<long?> AddNoteWithOptionalSyncAsync(
         AnkiDeck deck,
         AnkiNoteType noteType,
         Dictionary<string, string> fields,
@@ -264,17 +264,42 @@ public sealed class AnkiConnectClient : IDisposable
             if (!string.IsNullOrEmpty(addResult.Error))
             {
                 Log.Warning("[AnkiConnect] addNote failed in batch: {Error}", addResult.Error);
-                return false;
+                return null;
+            }
+
+            if (addResult.Result.ValueKind != JsonValueKind.Number
+                || !addResult.Result.TryGetInt64(out var noteId)
+                || noteId <= 0)
+            {
+                Log.Warning("[AnkiConnect] addNote did not return a valid note ID");
+                return null;
             }
 
             if (sync && results.Count > 1 && !string.IsNullOrEmpty(results[1].Error))
                 Log.Warning("[AnkiConnect] sync failed after addNote succeeded: {Error}", results[1].Error);
 
-            return true;
+            return noteId;
         }
         catch (AnkiConnectException ex)
         {
             Log.Warning(ex, "[AnkiConnect] addNote+sync batch failed");
+            return null;
+        }
+    }
+
+    public async Task<bool> OpenNoteInAnkiAsync(long noteId)
+    {
+        if (noteId <= 0)
+            return false;
+
+        try
+        {
+            await RequestAsync("guiBrowse", new { query = $"nid:{noteId}" });
+            return true;
+        }
+        catch (AnkiConnectException ex)
+        {
+            Log.Warning(ex, "[AnkiConnect] guiBrowse failed for note {NoteId}", noteId);
             return false;
         }
     }
@@ -362,12 +387,27 @@ public sealed class AnkiConnectClient : IDisposable
             requestBody["params"] = parameters;
 
         var json = JsonSerializer.Serialize(requestBody);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
-
         HttpResponseMessage response;
         try
         {
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
             response = await _http.PostAsync(_endpoint, content);
+        }
+        catch (HttpRequestException)
+        {
+            // AnkiConnect may close an idle HTTP/1.1 keep-alive connection without
+            // the pooled client learning about it until the next request. Retry that
+            // single transport failure with a fresh request body; application-level
+            // errors are never retried.
+            try
+            {
+                using var retryContent = new StringContent(json, Encoding.UTF8, "application/json");
+                response = await _http.PostAsync(_endpoint, retryContent);
+            }
+            catch (Exception ex)
+            {
+                throw new AnkiConnectException($"Failed to connect to AnkiConnect at {_endpoint}: {ex.Message}", ex);
+            }
         }
         catch (Exception ex)
         {

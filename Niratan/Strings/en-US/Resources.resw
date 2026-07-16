@@ -147,6 +147,17 @@
   <data name="SettingsAboutVersionRun.Text" xml:space="preserve"><value>Version</value></data>
   <data name="SettingsProjectRepositoryLink.Content" xml:space="preserve"><value>Project Repository</value></data>
   <data name="SettingsSendFeedbackLink.Content" xml:space="preserve"><value>Send Feedback</value></data>
+  <data name="AppUpdateCard.Header" xml:space="preserve"><value>Updates</value></data>
+  <data name="AppUpdateCheckButton.Content" xml:space="preserve"><value>Check for updates</value></data>
+  <data name="AppUpdateOpenButton.Content" xml:space="preserve"><value>View update</value></data>
+  <data name="AppUpdateBannerActionButton.Content" xml:space="preserve"><value>View update</value></data>
+  <data name="AppUpdateInitialStatus" xml:space="preserve"><value>Check GitHub for the latest release.</value></data>
+  <data name="AppUpdateCheckingStatus" xml:space="preserve"><value>Checking for updates…</value></data>
+  <data name="AppUpdateAvailableStatus" xml:space="preserve"><value>Version {0} is available.</value></data>
+  <data name="AppUpdateCurrentStatus" xml:space="preserve"><value>You're up to date (version {0}).</value></data>
+  <data name="AppUpdateFailedStatus" xml:space="preserve"><value>Unable to check for updates. Please try again later.</value></data>
+  <data name="AppUpdateBannerTitle" xml:space="preserve"><value>Update available</value></data>
+  <data name="AppUpdateBannerMessage" xml:space="preserve"><value>Niratan {0} is available on GitHub.</value></data>
   <data name="NovelReaderChapterButton.AutomationProperties.Name" xml:space="preserve"><value>Chapters</value></data>
   <data name="NovelReaderSearchButton.AutomationProperties.Name" xml:space="preserve"><value>Search</value></data>
   <data name="NovelReaderHighlightsButton.AutomationProperties.Name" xml:space="preserve"><value>Highlights</value></data>
@@ -583,6 +594,33 @@
   <data name="SettingsSecondaryNavigationView.PaneTitle" xml:space="preserve"><value>Settings</value></data>
   <data name="SettingsLibrarySectionHeader.Content" xml:space="preserve"><value>Library</value></data>
   <data name="SettingsProfilesNavItem.Content" xml:space="preserve"><value>Profiles</value></data>
+  <data name="ProfilesSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>Back</value></data>
+  <data name="ProfilesSettingsPageTitle.Text" xml:space="preserve"><value>Profiles</value></data>
+  <data name="ProfilesActiveProfileCard.Header" xml:space="preserve"><value>Active Profile</value></data>
+  <data name="ProfilesActiveProfileCard.Description" xml:space="preserve"><value>Dictionary, Reader appearance and Anki mining settings follow the active profile.</value></data>
+  <data name="ProfilesActiveProfileComboBox.AutomationProperties.Name" xml:space="preserve"><value>Active profile</value></data>
+  <data name="ProfilesNewProfileSectionHeader.Text" xml:space="preserve"><value>New Profile</value></data>
+  <data name="ProfilesCreateCard.Header" xml:space="preserve"><value>Create</value></data>
+  <data name="ProfilesNewProfileNameTextBox.PlaceholderText" xml:space="preserve"><value>Name</value></data>
+  <data name="ProfilesNewProfileNameTextBox.AutomationProperties.Name" xml:space="preserve"><value>Profile name</value></data>
+  <data name="ProfilesNewProfileLanguageComboBox.AutomationProperties.Name" xml:space="preserve"><value>Profile language</value></data>
+  <data name="ProfilesCreateProfileButton.AutomationProperties.Name" xml:space="preserve"><value>Create profile</value></data>
+  <data name="ProfilesCreateProfileButtonText.Text" xml:space="preserve"><value>Create</value></data>
+  <data name="ProfilesBookDefaultsSectionHeader.Text" xml:space="preserve"><value>Book Defaults</value></data>
+  <data name="ProfilesJapaneseBooksCard.Header" xml:space="preserve"><value>Japanese Books</value></data>
+  <data name="ProfilesJapanesePrimaryProfileComboBox.AutomationProperties.Name" xml:space="preserve"><value>Default profile for Japanese books</value></data>
+  <data name="ProfilesEnglishBooksCard.Header" xml:space="preserve"><value>English Books</value></data>
+  <data name="ProfilesEnglishPrimaryProfileComboBox.AutomationProperties.Name" xml:space="preserve"><value>Default profile for English books</value></data>
+  <data name="ProfilesLanguageJapanese" xml:space="preserve"><value>Japanese</value></data>
+  <data name="ProfilesLanguageEnglish" xml:space="preserve"><value>English</value></data>
+  <data name="ProfilesDefaultJapaneseEpub" xml:space="preserve"><value>Japanese EPUB</value></data>
+  <data name="ProfilesDefaultJapaneseVideo" xml:space="preserve"><value>Japanese Video</value></data>
+  <data name="ProfilesDefaultEnglishEpub" xml:space="preserve"><value>English EPUB</value></data>
+  <data name="ProfilesDefaultEnglishVideo" xml:space="preserve"><value>English Video</value></data>
+  <data name="ProfilesDefaultProfileName" xml:space="preserve"><value>{0} Profile</value></data>
+  <data name="ProfilesCreatedStatus" xml:space="preserve"><value>Created {0}.</value></data>
+  <data name="ProfilesUsingStatus" xml:space="preserve"><value>Using {0}.</value></data>
+  <data name="ProfilesBookDefaultStatus" xml:space="preserve"><value>{0} books will use {1}.</value></data>
   <data name="SettingsAppearanceNavItem.Content" xml:space="preserve"><value>Appearance</value></data>
   <data name="SettingsDictionariesNavItem.Content" xml:space="preserve"><value>Dictionaries</value></data>
   <data name="SettingsAnkiNavItem.Content" xml:space="preserve"><value>Anki</value></data>
@@ -636,6 +674,21 @@
   <data name="VideoDeinterlacingCard.Description" xml:space="preserve"><value>Apply deinterlacing for interlaced source video</value></data>
   <data name="VideoHdrEnhancementCard.Header" xml:space="preserve"><value>HDR Enhancement</value></data>
   <data name="VideoHdrEnhancementCard.Description" xml:space="preserve"><value>Enable HDR-oriented video enhancement defaults</value></data>
+  <data name="VideoAnime4KCard.Header" xml:space="preserve"><value>Anime4K Upscaling</value></data>
+  <data name="VideoAnime4KCard.Description" xml:space="preserve"><value>Download verified Anime4K v4.0.1 shaders and apply them through libmpv. Higher quality requires a stronger GPU.</value></data>
+  <data name="VideoAnime4KDownloadButton.Content" xml:space="preserve"><value>Download</value></data>
+  <data name="VideoPlayerAnime4KHeaderText.Text" xml:space="preserve"><value>Anime4K upscaling</value></data>
+  <data name="VideoPlayerAnime4KDescriptionText.Text" xml:space="preserve"><value>Off by default. Enable it manually for the current video; high quality requires a stronger GPU.</value></data>
+  <data name="VideoShaderPresetOff" xml:space="preserve"><value>Off</value></data>
+  <data name="VideoShaderPresetAnime4KFast" xml:space="preserve"><value>Anime4K Fast</value></data>
+  <data name="VideoShaderPresetAnime4KHighQuality" xml:space="preserve"><value>Anime4K High Quality</value></data>
+  <data name="VideoShaderDisabledStatus" xml:space="preserve"><value>Anime4K is off for the current video.</value></data>
+  <data name="VideoShaderDownloadUnavailableStatus" xml:space="preserve"><value>The Anime4K download service is unavailable.</value></data>
+  <data name="VideoShaderDownloadingStatus" xml:space="preserve"><value>Downloading Anime4K shaders...</value></data>
+  <data name="VideoShaderDownloadRequiredStatus" xml:space="preserve"><value>This preset is not downloaded yet.</value></data>
+  <data name="VideoShaderDownloadProgressStatus" xml:space="preserve"><value>Downloading {0} ({1}/{2})</value></data>
+  <data name="VideoShaderDownloadFailedStatus" xml:space="preserve"><value>Anime4K failed: {0}</value></data>
+  <data name="VideoShaderDownloadCompleteStatus" xml:space="preserve"><value>Anime4K is active for the current video.</value></data>
   <data name="VideoEqualizerSectionHeader.Text" xml:space="preserve"><value>Equalizer</value></data>
   <data name="VideoBrightnessCard.Header" xml:space="preserve"><value>Brightness</value></data>
   <data name="VideoContrastCard.Header" xml:space="preserve"><value>Contrast</value></data>
@@ -676,6 +729,7 @@
   <data name="KeyboardShortcutsConflictText" xml:space="preserve"><value>Conflicts with {0}</value></data>
   <data name="KeyboardShortcutsShadowedText" xml:space="preserve"><value>Shadowed by {0}</value></data>
   <data name="ShortcutCategoryGlobal" xml:space="preserve"><value>Global</value></data>
+  <data name="ShortcutActionGlobalLookupSelectedText" xml:space="preserve"><value>Lookup Selected Text</value></data>
   <data name="ShortcutCategoryReader" xml:space="preserve"><value>Reader</value></data>
   <data name="ShortcutCategoryDictionaryPopup" xml:space="preserve"><value>Dictionary Popup</value></data>
   <data name="ShortcutCategorySasayaki" xml:space="preserve"><value>Sasayaki</value></data>
@@ -862,4 +916,58 @@
   <data name="RemoteNovelDownloadQueued" xml:space="preserve"><value>Queued</value></data>
   <data name="RemoteNovelDownloading" xml:space="preserve"><value>Downloading</value></data>
   <data name="RemoteNovelDownloadRetry" xml:space="preserve"><value>Retry</value></data>
+  <data name="AddYouTubeLinkButton.Label" xml:space="preserve"><value>Add link</value></data>
+  <data name="VideoPlayerOpenYouTubeLinkButton.Label" xml:space="preserve"><value>Open YouTube link</value></data>
+  <data name="YouTubeQualityHeaderText.Text" xml:space="preserve"><value>YouTube Quality</value></data>
+  <data name="YouTubePublisherSubtitlesHeaderText.Text" xml:space="preserve"><value>Publisher subtitles</value></data>
+  <data name="YouTubeVideo" xml:space="preserve"><value>YouTube Video</value></data>
+  <data name="YouTubeDialogTitle" xml:space="preserve"><value>Add / open YouTube link</value></data>
+  <data name="YouTubeDialogOpen" xml:space="preserve"><value>Open</value></data>
+  <data name="YouTubeDialogCancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="YouTubeDialogExperimentalTitle" xml:space="preserve"><value>Experimental</value></data>
+  <data name="YouTubeDialogExperimentalMessage" xml:space="preserve"><value>YouTube support uses an unofficial interface and may stop working when YouTube changes.</value></data>
+  <data name="YouTubeDialogInputHeader" xml:space="preserve"><value>YouTube video link</value></data>
+  <data name="YouTubeDialogResolving" xml:space="preserve"><value>Resolving video, qualities, and publisher subtitles...</value></data>
+  <data name="YouTubeInvalidUrl" xml:space="preserve"><value>Enter a valid YouTube video link.</value></data>
+  <data name="YouTubeRestricted" xml:space="preserve"><value>This video requires access that Niratan does not support.</value></data>
+  <data name="YouTubeNoPlayableStream" xml:space="preserve"><value>No compatible stream up to 1080p is available.</value></data>
+  <data name="YouTubeResolveFailed" xml:space="preserve"><value>The YouTube video could not be resolved. Try again later.</value></data>
+  <data name="YouTubePlaybackFailed" xml:space="preserve"><value>This YouTube video could not be played. Try again later.</value></data>
+  <data name="YouTubeQualitySwitchFailed" xml:space="preserve"><value>Could not switch YouTube quality.</value></data>
+  <data name="YouTubeSubtitleLoadFailed" xml:space="preserve"><value>Could not load this publisher subtitle track.</value></data>
+  <data name="YouTubeSubtitleLoading" xml:space="preserve"><value>Loading publisher subtitles...</value></data>
+  <data name="DictionaryPopupViewAddedNoteInAnki" xml:space="preserve"><value>View added note in Anki</value></data>
+  <data name="BackupSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>Back</value></data>
+  <data name="BackupSettingsPageTitle.Text" xml:space="preserve"><value>Backup</value></data>
+  <data name="BackupBooksSectionHeader.Text" xml:space="preserve"><value>Books</value></data>
+  <data name="BackupBooksCard.Header" xml:space="preserve"><value>Books</value></data>
+  <data name="BackupBooksCard.Description" xml:space="preserve"><value>Archive or restore the complete local book collection</value></data>
+  <data name="BackupBooksButton.Content" xml:space="preserve"><value>Backup</value></data>
+  <data name="RestoreBooksButton.Content" xml:space="preserve"><value>Restore</value></data>
+  <data name="BackupDictionariesSectionHeader.Text" xml:space="preserve"><value>Dictionaries</value></data>
+  <data name="BackupDictionariesCard.Header" xml:space="preserve"><value>Dictionaries</value></data>
+  <data name="BackupDictionariesCard.Description" xml:space="preserve"><value>Includes term, frequency, pitch and Profile dictionary settings</value></data>
+  <data name="BackupDictionariesButton.Content" xml:space="preserve"><value>Backup</value></data>
+  <data name="RestoreDictionariesButton.Content" xml:space="preserve"><value>Restore</value></data>
+  <data name="BackupDictionariesOverwriteText.Text" xml:space="preserve"><value>Restoring will overwrite the current collection.</value></data>
+  <data name="BackupTtuSectionHeader.Text" xml:space="preserve"><value>ッツ Backup</value></data>
+  <data name="BackupTtuCard.Header" xml:space="preserve"><value>ッツ Backup</value></data>
+  <data name="BackupTtuExportButton.Content" xml:space="preserve"><value>Export</value></data>
+  <data name="BackupTtuImportButton.Content" xml:space="preserve"><value>Import</value></data>
+  <data name="BackupTtuImportHelpText.Text" xml:space="preserve"><value>Importing a backup adds new books and overwrites the statistics and reading progress of books already present.</value></data>
+  <data name="BackupHoshiFileType" xml:space="preserve"><value>Niratan backup</value></data>
+  <data name="BackupTtuFileType" xml:space="preserve"><value>TTU backup</value></data>
+  <data name="BackupStatusArchiving" xml:space="preserve"><value>Archiving...</value></data>
+  <data name="BackupStatusRestoring" xml:space="preserve"><value>Restoring...</value></data>
+  <data name="BackupStatusExporting" xml:space="preserve"><value>Exporting...</value></data>
+  <data name="BackupStatusImporting" xml:space="preserve"><value>Importing...</value></data>
+  <data name="BackupStatusExportingProgressFormat" xml:space="preserve"><value>Exporting {0}</value></data>
+  <data name="BackupStatusImportingProgressFormat" xml:space="preserve"><value>Importing {0}</value></data>
+  <data name="BackupCreatedMessage" xml:space="preserve"><value>Backup created.</value></data>
+  <data name="BackupRestoredMessage" xml:space="preserve"><value>Backup restored.</value></data>
+  <data name="BackupTtuExportedMessage" xml:space="preserve"><value>TTU backup exported.</value></data>
+  <data name="BackupTtuImportedMessageFormat" xml:space="preserve"><value>TTU backup imported: {0} added, {1} updated.</value></data>
+  <data name="BackupCompletedTitle" xml:space="preserve"><value>Backup complete</value></data>
+  <data name="BackupRestoreCompletedTitle" xml:space="preserve"><value>Restore complete</value></data>
+  <data name="BackupErrorTitle" xml:space="preserve"><value>Backup error</value></data>
 </root>

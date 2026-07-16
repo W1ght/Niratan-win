@@ -6,7 +6,7 @@ namespace Niratan.Tests.Models.Shortcuts;
 public sealed class ShortcutRegistryTests
 {
     [Fact]
-    public void ApplicationRegistry_DefinesUniqueReaderSasayakiAndVideoActions()
+    public void ApplicationRegistry_DefinesUniqueGlobalReaderSasayakiAndVideoActions()
     {
         var registry = ShortcutRegistry.Application;
 
@@ -15,6 +15,11 @@ public sealed class ShortcutRegistryTests
             .OnlyHaveUniqueItems();
         registry.Action(VideoShortcutActions.PlayPauseId).Should().NotBeNull();
         registry.Action(VideoShortcutActions.LookupSubtitleId)!.DefaultBinding.Label.Should().Be("F2");
+        registry.Action(GlobalShortcutActions.LookupSelectedTextId)
+            .Should().Be(GlobalShortcutActions.LookupSelectedText);
+        registry.ActionsIn(ShortcutCategory.Global)
+            .Should().ContainSingle()
+            .Which.DefaultBinding.Label.Should().Be("Ctrl+Alt+D");
         registry.ActionsIn(ShortcutCategory.Video)
             .Select(action => action.Id)
             .Should()

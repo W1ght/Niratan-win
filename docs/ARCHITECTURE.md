@@ -262,6 +262,9 @@ NovelReaderPage
 - `popup.js` 的 `lookupRedirect` 是嵌套查词入口。
 - 弹窗定位接收 writing mode 信息：竖排优先左右，横排优先上下。
 - 弹窗定位对齐 Niratan `PopupLayout`：横排只在选区下方空间足够时放下方。
+- 全局查词对齐 Niratan `SelectionSnapshot`：优先使用 UI Automation 的选区屏幕矩形，Win32 编辑控件回退使用 caret 矩形，均不可用时才使用鼠标位置。
+- 全局查词快捷键由统一 `ShortcutRegistry` 的 `global.lookupSelectedText` action 管理，默认 `Ctrl+Alt+D`；`GlobalLookupSettings` 只保存启用状态，不再保存第二份快捷键字符串。快捷键编辑器写入 `ShortcutConfiguration` 后，运行中的全局协调器监听 `ShortcutsChanged`，仅在该 binding 实际变化时注销并重新注册 Win32 hotkey；不支持、被系统占用或注册失败会更新全局查词状态。
+- 全局查词按 Niratan `QuickLookupPanelController` 为 popup 栈中的每一层创建一个独立、精确裁切的原生 tool-window HWND。child 的 WebView 选区矩形先加上 WebView 在父 popup 内的真实可视原点，再由父 popup 本地坐标转换为父窗口屏幕坐标；每层按目标显示器 DPI 和工作区独立布局，水平以选区中心对齐并夹取到工作区，垂直只允许以固定间距出现在选区正下方或正上方，因此可以自然越出父窗口边界而不覆盖锚点。每个 HWND 只暴露当前圆角 popup 表面，不出现标题栏、DWM 边框、宿主背景或透明画布余量。全局服务在热键注册时预热两个空窗口，并将关闭的根/子窗口连同已初始化的 WebView2 返回待用池复用，避免连续查词重新支付 WebView2 冷启动成本。点击父层只关闭其后的 child，点击所有 popup 外部清空整栈；窗口保持 non-activating/topmost，不因 Deactivated 自动关闭。该外部子窗口模式默认关闭且只由全局查词宿主启用，小说和视频继续使用原有 `DictionaryPopupOverlay` 内部 Canvas 嵌套。无结果时显示精确裁切的 3 秒状态浮层。
 
 ### 4.4 变形还原
 
@@ -279,6 +282,7 @@ NovelReaderPage
 - 功能：测试连接、deck 列表、note type 列表、字段列表、创建 note、重复卡检查。
 - Anki 逻辑不写在 ViewModel 里。
 - 调用链：`ReaderViewModel → IAnkiService → AnkiConnectClient`
+- EPUB 封面、视频截图和音频片段必须在字段渲染前完成并验证非空；上传型媒体使用 Anki 返回的稳定文件名生成标签，禁止把应用私有本地路径写入卡片字段。直写 `collection.media` 的视频媒体也必须等待原子替换完成后才允许提交卡片。
 
 模板变量：
 ```
@@ -303,6 +307,9 @@ AppData/Roaming/Niratan/Novels/
     bookinfo.json
     statistics.json
     highlights.json
+    sasayaki_match.json
+    sasayaki_source.json
+    sasayaki_playback.json
     <book-id>.epub
     ...受控解包资源
 ```
@@ -310,6 +317,9 @@ AppData/Roaming/Niratan/Novels/
 - `metadata.json` 是书名、作者、相对 EPUB/封面路径、导入与最近打开时间的真源。
 - `bookmark.json` 保存章节、逻辑进度和字符位置；Reader 每次保存只写一次 canonical bookmark。
 - `bookinfo.json`、`statistics.json`、`highlights.json` 按 Niratan sidecar 语义独立演进。
+- `sasayaki_match.json` 是跨端配准真源，严格使用 Niratan/Hoshi 的 `matches + unmatched` 结构；每条 match 自带 `id`、音频时间、文本、章节和字符范围，不保存 Windows 路径或冗余 cue 表。
+- `sasayaki_source.json` 只保存 Windows 本地音频/SRT 路径，`sasayaki_playback.json` 独立保存播放位置、延迟、速率和本地 cue 索引；下载或跨端交换配准文件时不携带本机绝对路径。
+- 旧 Windows schema v3 在读取时合并 `cues` 与 `matches`，生成 portable match，并把路径拆入 source sidecar；原播放位置在迁移和重新配准时保留。
 - `book_order.json` 保存全局/未归档顺序；`shelves.json` 保存自定义书架及书架内顺序。
 - 所有路径必须限制在对应书籍目录内；所有 JSON 写入使用同目录临时文件和原子替换。
 - JSON 缺失与损坏必须区分。损坏文件保留原件、显示非阻断警告，并禁止归一化流程覆盖它。
@@ -325,15 +335,31 @@ NovelLibraryPage / NovelReaderPage
 
 ViewModel 不访问文件或 SQLite。`NovelShelfService` 串行化所有创建、重命名、删除、移动和排序操作；每次成功写入后返回完整 `NovelShelfState`，ViewModel 再重建 Reading、自定义书架和 Unshelved 投影。Google Drive 远端书籍保持独立 rail，不混入本地书架文件。
 
-### 6.3 SQLite 边界与旧数据迁移
+Profile 行为对齐 Niratan：global lookup 使用 global active profile，书籍优先显式 profile、其次按内容语言选择 primary profile，视频使用视频项的显式 profile。主导航、Reader 和视频窗口在重新成为活动窗口时必须重新激活各自上下文，避免共享 native 查询 session 保留另一个窗口最后使用的 profile。Profile 拥有词典配置、词典展示设置、阅读外观和 Anki mining 设置；新建 profile 必须从当前 active profile 复制这些文件。Windows 设置页在 Active Profile 卡片内列出并切换全部 profile，不引入额外的 “Installed profiles” 概念。
+
+### 6.3 备份与恢复
+
+设置页备份行为以 Niratan `BackupView` 为准，由 `BackupService` 负责文件 IO，ViewModel 只负责命令、进度和文件选择：
+
+- 书籍和词典分别导出无父目录的 `.hoshi` ZIP；文件名使用 `Books_yyyy-MM-dd_HH-mm-ss.hoshi` 与 `Dictionaries_yyyy-MM-dd_HH-mm-ss.hoshi`。
+- 书籍恢复覆盖整个 `Data/Novels` 收藏。词典恢复覆盖物理 `dictionaries` 收藏，同时通过 `.hoshi-profiles` 合并 Profile 索引，并覆盖备份中同 ID Profile 的 `dictionary-settings.json` 与 `dictionaries/dictionary-config.json`。
+- `.hoshi` 恢复先在受控临时目录解包，拒绝绝对路径、zip slip 和符号链接；目标目录在同卷准备 replacement，再以 `current → previous`、`replacement → current` 交换，失败时回滚。
+- 词典目录替换前先清空 hoshidicts session，提交后重新加载 Profile 设置并重建 native query，避免 Windows 文件句柄阻止替换或继续引用旧集合。
+- ッツ Backup ZIP 保持 Niratan 的顶层“每书一目录”布局；导出包含 `bookdata_1_6_*`、封面、`statistics_1_6_*` 与 `progress_1_6_*`，导入按原始书名添加新书，并覆盖已有书籍的统计和进度。
+
+Windows 使用系统文件选择器直接写入用户选择的目标路径，不经过 SwiftUI `fileMover`；这是平台 API 差异，归档内容、命名与完成后的用户可见结果保持一致。
+
+### 6.4 SQLite 边界与旧数据迁移
 
 - `IVideoDataService` / `VideoDataService` 是主 App SQLite 的唯一业务入口，数据库迁移只创建视频相关表。
+- Windows 视频可选 Anime4K 由 `IAnime4KShaderService` 管理：固定下载 Anime4K `v4.0.1` GLSL，使用 SHA-256 校验并原子写入 `%APPDATA%\Niratan\VideoShaders`；`MpvPlaybackEngine` 只接收强类型预设并通过 `change-list glsl-shaders` 应用，不接受任意 URL、路径或 mpv 配置。入口位于播放器侧边栏“视频增强”，预设仅属于当前播放会话，每次打开视频都强制恢复 `Off`，避免高 GPU 负载被自动继承；这是相对 Niratan macOS 默认画质链路的显式 Windows 可选偏差。
+- 视频打开采用首帧优先路径：来源和必要播放属性应用后立即解除暂停；外部字幕 CPU 解析在线程池执行，章节、轨道轮询、交互字幕与侧边栏投影不得阻塞首帧。底部控制栏层级必须高于透明字幕选择画布，重叠区域由控制栏优先接收输入。
 - 旧 `NovelBooks`、`NovelReadingProgress`、`NovelReaderSettings` 仅由 `NovelStorageMigrationService` 在启动时读取。
 - 迁移顺序固定为：备份数据库 → 导出 sidecar → 重扫并校验 manifest → 同一事务退役旧小说表 → 最后原子写完成 manifest。
 - 任何导出或校验失败都 fail closed：保留旧表与备份，小说写入切为只读，原始文件不删除。
 - 如果进程在退役旧表后、写 manifest 前中断，下次启动校验文件目录后补写 manifest，不重建小说 SQLite 表。
 
-### 6.4 Niratan 统计 Dashboard
+### 6.5 Niratan 统计 Dashboard
 
 ```text
 metadata.json + bookinfo.json + statistics.json + shelves.json
@@ -437,3 +463,16 @@ JavaScript：
 | 低 | 书架 CRUD | 标准 CRUD 操作 |
 | 低 | 设置 UI | 简单数据绑定 |
 | 低 | 基础 AnkiConnect 调用 | HTTP API 调用 |
+
+---
+
+## 11. YouTube 远程视频（实验性）
+
+- 产品行为对齐 Niratan，Windows 端使用固定版本 `YoutubeExplode 6.6.0` 在进程内解析元数据、匿名公开流与发布者字幕；该非官方接口具有易失性，UI 必须明确标注“实验性”。
+- 不使用 YouTube IFrame/Data API 作为播放链路，因为它们不能同时满足主动画质选择、libmpv 分离流播放、字幕查词与音频制卡；禁止引入 yt-dlp、youtube-dl、Deno、Node、converter/helper 下载或子进程。
+- `IRemoteVideoResolver` 是唯一接触 YoutubeExplode 类型的适配边界。其他层只使用 `RemoteVideoIdentity`、`ResolvedRemoteVideoSource`、`VideoPlaybackRequest` 等自有强类型模型。
+- 签名流 URL、字幕 URL、请求 headers 和过期时间只驻留内存；SQLite 仅保存 `remote://youtube/{videoId}` 稳定键、原始/规范 URL、远程身份、缩略图 URL与字幕语言。日志只记录 provider/id，不记录签名 URL。
+- 解析缓存以稳定键索引，优先使用流 URL 的 `expire`，提前 5 分钟失效；无过期参数时使用 4 小时 TTL。首次播放失败强制刷新一次，随后仅允许一次 muxed fallback。
+- 匿名 v1 只支持公开、非直播、非播放列表视频，最高 1080p。画质切换重开流但恢复位置、暂停、音量、速度、延迟、循环、宽高比、旋转与字幕覆盖层。
+- 发布者字幕过滤自动生成轨道，下载到应用临时目录并继续走现有 SRT 解析、透明字幕覆盖层、查词和 transcript；不交给 mpv 渲染，也不持久化临时路径。
+- 远程挖卡截图复用当前 libmpv 实例；音频导出使用当前解析的音频流或 muxed fallback。挖卡历史保存稳定媒体键，重开时经资料库重新解析，不对远程键调用 `File.Exists`。

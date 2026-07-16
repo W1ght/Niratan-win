@@ -195,6 +195,11 @@ public partial class NovelReaderPageViewModel : ObservableObject
         OnPropertyChanged(nameof(ReaderTitle));
     }
 
+    public Task ActivateCurrentProfileAsync(CancellationToken ct = default) =>
+        CurrentBook is null
+            ? Task.CompletedTask
+            : _profileRuntime.ActivateForBookAsync(CurrentBook, ct);
+
     public async Task<bool> SyncOnOpenAsync(CancellationToken ct = default)
     {
         var book = CurrentBook;

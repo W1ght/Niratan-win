@@ -59,6 +59,7 @@ public sealed partial class VideoPlayerWindow
 
         InspectorPanel.Width = nextWidth;
         RootGrid.UpdateLayout();
+        FitWindowToVideoAspectRatio();
         PositionBottomChromeOverlay();
         PositionVideoHost();
     }
@@ -145,11 +146,13 @@ public sealed partial class VideoPlayerWindow
     private void RefreshVideoLayoutAfterInspectorChanged()
     {
         RootGrid.UpdateLayout();
+        FitWindowToVideoAspectRatio();
         PositionBottomChromeOverlay();
         PositionVideoHost();
         DispatcherQueue.TryEnqueue(() =>
         {
             RootGrid.UpdateLayout();
+            FitWindowToVideoAspectRatio();
             PositionBottomChromeOverlay();
             PositionVideoHost();
         });

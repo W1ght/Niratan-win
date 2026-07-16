@@ -65,6 +65,42 @@ public sealed class ProfileServiceTests
     }
 
     [Fact]
+    public async Task CreateProfile_CopiesActiveProfileOwnedSettingsLikeNiratan()
+    {
+        using var temp = new TemporaryProfileRoot();
+        var service = await ProfileService.CreateForTestsAsync(temp.Root);
+        var ct = TestContext.Current.CancellationToken;
+        var sourceDirectory = service.GetProfileDirectory(ProfileConstants.DefaultJapaneseProfileId);
+        Directory.CreateDirectory(Path.Combine(sourceDirectory, "dictionaries"));
+        await File.WriteAllTextAsync(
+            Path.Combine(sourceDirectory, "reader-settings.json"),
+            "reader",
+            ct);
+        await File.WriteAllTextAsync(
+            Path.Combine(sourceDirectory, "dictionaries", "dictionary-config.json"),
+            "dictionary",
+            ct);
+
+        var created = await service.CreateProfileAsync(
+            "Copy",
+            "ja",
+            ct: ct,
+            copyFromProfileId: ProfileConstants.DefaultJapaneseProfileId);
+
+        var destinationDirectory = service.GetProfileDirectory(created.Id);
+        (await File.ReadAllTextAsync(
+                Path.Combine(destinationDirectory, "reader-settings.json"),
+                ct))
+            .Should()
+            .Be("reader");
+        (await File.ReadAllTextAsync(
+                Path.Combine(destinationDirectory, "dictionaries", "dictionary-config.json"),
+                ct))
+            .Should()
+            .Be("dictionary");
+    }
+
+    [Fact]
     public void EnglishDisplayUnits_AreApproximateWords()
     {
         ContentLanguageProfile.English.DisplayUnitsFromRawCharacters(11).Should().Be(3);

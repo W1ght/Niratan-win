@@ -59,12 +59,12 @@ public partial class SasayakiViewModel : ObservableObject
 
     public void UpdateMatchStats(SasayakiMatchData data)
     {
-        TotalCues = data.Cues.Count;
+        TotalCues = data.TotalCueCount;
         MatchedCues = data.Matches.Count;
-        UnmatchedCues = data.UnmatchedCount;
+        UnmatchedCues = data.Unmatched;
         HasMatchData = data.IsValid;
         SasayakiStatusText = data.IsValid
-            ? $"{data.Matches.Count}/{data.Cues.Count} cues matched"
+            ? $"{data.Matches.Count}/{data.TotalCueCount} cues matched"
             : "No cues matched";
     }
 
@@ -78,12 +78,12 @@ public partial class SasayakiViewModel : ObservableObject
         DurationText = FormatTime(duration);
     }
 
-    public void UpdateCurrentCue(SasayakiCue? cue)
+    public void UpdateCurrentCue(SasayakiMatch? cue, int cueIndex)
     {
         if (cue != null)
         {
             CurrentCueText = cue.Text;
-            CurrentCueIndex = cue.Id > 0 ? cue.Id - 1 : 0;
+            CurrentCueIndex = cueIndex;
         }
         else
         {

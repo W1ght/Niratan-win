@@ -87,14 +87,14 @@ public class AnkiConnectClientTests
         var deck = new AnkiDeck { Name = "Mining", Id = 1 };
         var noteType = new AnkiNoteType { Name = "Basic", Id = 2 };
 
-        var success = await client.AddNoteWithOptionalSyncAsync(
+        var noteId = await client.AddNoteWithOptionalSyncAsync(
             deck,
             noteType,
             new Dictionary<string, string> { ["Front"] = "星" },
             new AnkiSettings(),
             sync: true);
 
-        success.Should().BeTrue();
+        noteId.Should().Be(123456789);
     }
 
     [Fact]
@@ -113,14 +113,65 @@ public class AnkiConnectClientTests
         var deck = new AnkiDeck { Name = "Mining", Id = 1 };
         var noteType = new AnkiNoteType { Name = "Basic", Id = 2 };
 
-        var success = await client.AddNoteWithOptionalSyncAsync(
+        var noteId = await client.AddNoteWithOptionalSyncAsync(
             deck,
             noteType,
             new Dictionary<string, string> { ["Front"] = "星" },
             new AnkiSettings(),
             sync: false);
 
-        success.Should().BeTrue();
+        noteId.Should().Be(123456789);
+    }
+
+    [Fact]
+    public async Task AddNoteWithOptionalSyncAsync_WhenAddNoteReturnsNoId_Fails()
+    {
+        using var client = new AnkiConnectClient(
+            "http://anki.test",
+            new JsonHttpMessageHandler("""
+            {
+              "result": [
+                { "result": null, "error": null }
+              ],
+              "error": null
+            }
+            """));
+        var deck = new AnkiDeck { Name = "Mining", Id = 1 };
+        var noteType = new AnkiNoteType { Name = "Basic", Id = 2 };
+
+        var noteId = await client.AddNoteWithOptionalSyncAsync(
+            deck,
+            noteType,
+            new Dictionary<string, string> { ["Front"] = "星" },
+            new AnkiSettings(),
+            sync: false);
+
+        noteId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task OpenNoteInAnkiAsync_BrowsesTheExactAddedNote()
+    {
+        var handler = new RecordingAnkiConnectHandler();
+        using var client = new AnkiConnectClient("http://anki.test", handler);
+
+        var opened = await client.OpenNoteInAnkiAsync(123456789);
+
+        opened.Should().BeTrue();
+        handler.Action.Should().Be("guiBrowse");
+        handler.Query.Should().Be("nid:123456789");
+    }
+
+    [Fact]
+    public async Task IsAvailableAsync_RetriesOneStaleKeepAliveTransportFailure()
+    {
+        var handler = new StaleKeepAliveHttpMessageHandler();
+        using var client = new AnkiConnectClient("http://anki.test", handler);
+
+        var available = await client.IsAvailableAsync();
+
+        available.Should().BeTrue();
+        handler.RequestCount.Should().Be(2);
     }
 
     private sealed class JsonHttpMessageHandler(string responseJson) : HttpMessageHandler
@@ -133,6 +184,55 @@ public class AnkiConnectClientTests
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(responseJson, System.Text.Encoding.UTF8, "application/json"),
+            };
+        }
+    }
+
+    private sealed class StaleKeepAliveHttpMessageHandler : HttpMessageHandler
+    {
+        public int RequestCount { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            RequestCount++;
+            if (RequestCount == 1)
+                throw new HttpRequestException("The pooled connection was closed by AnkiConnect.");
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"result":6,"error":null}""",
+                    System.Text.Encoding.UTF8,
+                    "application/json"),
+            });
+        }
+    }
+
+    private sealed class RecordingAnkiConnectHandler : HttpMessageHandler
+    {
+        public string? Action { get; private set; }
+        public string? Query { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            var body = await request.Content!.ReadAsStringAsync(cancellationToken);
+            using var document = JsonDocument.Parse(body);
+            Action = document.RootElement.GetProperty("action").GetString();
+            Query = document.RootElement
+                .GetProperty("params")
+                .GetProperty("query")
+                .GetString();
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"result":[],"error":null}""",
+                    System.Text.Encoding.UTF8,
+                    "application/json"),
             };
         }
     }
