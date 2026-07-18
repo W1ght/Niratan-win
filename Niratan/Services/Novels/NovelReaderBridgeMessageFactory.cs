@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Niratan.Models.DTO;
@@ -132,9 +133,23 @@ public static class NovelReaderBridgeMessageFactory
                 startCodePoint,
                 length,
                 autoScroll,
-                textColor,
-                backgroundColor));
+                ConvertArgbHexToCssColor(textColor),
+                ConvertArgbHexToCssColor(backgroundColor)));
         return JsonSerializer.Serialize(message, JsonOptions);
+    }
+
+    private static string ConvertArgbHexToCssColor(string color)
+    {
+        var value = color.Trim();
+        if (value.Length != 9 || value[0] != '#')
+            return value;
+
+        if (!uint.TryParse(value.AsSpan(1), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out _))
+            return value;
+
+        // WinUI persists colors as #AARRGGBB, while CSS parses eight-digit hex
+        // colors as #RRGGBBAA. Reorder the channels at the native/WebView boundary.
+        return $"#{value[3..]}{value[1..3]}";
     }
 
     public static string CreateClearSasayakiHighlightMessage()

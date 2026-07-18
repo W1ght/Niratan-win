@@ -163,6 +163,19 @@ public class AnkiConnectClientTests
     }
 
     [Fact]
+    public async Task OpenNotesInAnkiAsync_BrowsesAllDistinctExistingNotes()
+    {
+        var handler = new RecordingAnkiConnectHandler();
+        using var client = new AnkiConnectClient("http://anki.test", handler);
+
+        var opened = await client.OpenNotesInAnkiAsync([123, 456, 123, 0]);
+
+        opened.Should().BeTrue();
+        handler.Action.Should().Be("guiBrowse");
+        handler.Query.Should().Be("nid:123,456");
+    }
+
+    [Fact]
     public async Task IsAvailableAsync_RetriesOneStaleKeepAliveTransportFailure()
     {
         var handler = new StaleKeepAliveHttpMessageHandler();

@@ -124,8 +124,7 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
                         var typeDir = GetDictionaryTypeStorageDir(dictDir, type);
                         Directory.CreateDirectory(typeDir);
                         var targetDir = Path.Combine(typeDir, dictName);
-                        if (!Directory.Exists(targetDir))
-                            CopyDirectory(importedDir, targetDir);
+                        ReplaceDirectoryFromStaging(importedDir, targetDir, importId);
                         EnableImportedDictionaryInActiveConfig(type, dictName);
                     }
 
@@ -203,6 +202,58 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
                 await _lookupService.RebuildQueryAsync();
 
             return deleted;
+        }
+        finally
+        {
+            _fsLock.Release();
+        }
+    }
+
+    public async Task MigrateDictionaryNameAsync(
+        DictionaryType type,
+        string oldName,
+        string newName)
+    {
+        if (string.IsNullOrWhiteSpace(oldName)
+            || string.IsNullOrWhiteSpace(newName)
+            || string.Equals(oldName, newName, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        await _fsLock.WaitAsync();
+        try
+        {
+            foreach (var configRoot in GetConfigRootsForCleanup())
+            {
+                var config = DictionaryConfigurationStore.Load(configRoot);
+                var entries = DictionaryConfigurationStore.GetEntries(config, type).ToList();
+                var oldEntry = entries.FirstOrDefault(entry =>
+                    string.Equals(entry.FileName, oldName, StringComparison.Ordinal));
+                if (oldEntry is null)
+                    continue;
+
+                entries.RemoveAll(entry =>
+                    string.Equals(entry.FileName, oldName, StringComparison.Ordinal)
+                    || string.Equals(entry.FileName, newName, StringComparison.Ordinal));
+                entries.Add(oldEntry with { FileName = newName });
+                entries = entries
+                    .OrderBy(entry => entry.Order)
+                    .Select((entry, order) => entry with { Order = order })
+                    .ToList();
+                DictionaryConfigurationStore.Save(
+                    configRoot,
+                    DictionaryConfigurationStore.WithEntries(config, type, entries));
+            }
+
+            var oldDirectory = Path.Combine(
+                GetDictionaryTypeStorageDir(_dictionaryStorageDir, type),
+                oldName);
+            if (Directory.Exists(oldDirectory))
+                Directory.Delete(oldDirectory, recursive: true);
+
+            NormalizeActiveConfig(_dictionaryStorageDir);
+            await _lookupService.RebuildQueryAsync();
         }
         finally
         {
@@ -524,7 +575,8 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
             installedByType[type].AddRange(Directory
                 .EnumerateDirectories(typeDir)
                 .Select(Path.GetFileName)
-                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Where(name => !string.IsNullOrWhiteSpace(name)
+                               && !name.StartsWith(".", StringComparison.Ordinal))
                 .Select(name => name!));
         }
 
@@ -546,6 +598,8 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
     {
         var revision = "";
         var displayTitle = entry.FileName;
+        var indexUrl = "";
+        var downloadUrl = "";
         var indexPath = Path.Combine(GetDictionaryTypeStorageDir(dictDir, type), entry.FileName, "index.json");
         if (File.Exists(indexPath))
         {
@@ -558,6 +612,12 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
                 displayTitle = doc.RootElement.TryGetProperty("title", out var titleElement)
                     ? titleElement.GetString() ?? entry.FileName
                     : entry.FileName;
+                indexUrl = doc.RootElement.TryGetProperty("indexUrl", out var indexUrlElement)
+                    ? indexUrlElement.GetString() ?? ""
+                    : "";
+                downloadUrl = doc.RootElement.TryGetProperty("downloadUrl", out var downloadUrlElement)
+                    ? downloadUrlElement.GetString() ?? ""
+                    : "";
             }
             catch
             {
@@ -565,7 +625,15 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
             }
         }
 
-        return new InstalledDictionary(entry.FileName, type, entry.IsEnabled, entry.Order, revision, displayTitle);
+        return new InstalledDictionary(
+            entry.FileName,
+            type,
+            entry.IsEnabled,
+            entry.Order,
+            revision,
+            displayTitle,
+            indexUrl,
+            downloadUrl);
     }
 
     private static string? ResolveImportedDictionaryDirectory(string stagingRoot, string title)
@@ -752,6 +820,45 @@ public sealed class DictionaryImportService : IDictionaryImportService, IDisposa
             var targetFile = Path.Combine(targetDir, relative);
             Directory.CreateDirectory(Path.GetDirectoryName(targetFile)!);
             File.Copy(file, targetFile, overwrite: false);
+        }
+    }
+
+    private static void ReplaceDirectoryFromStaging(
+        string sourceDir,
+        string targetDir,
+        string operationId)
+    {
+        var parentDir = Path.GetDirectoryName(targetDir)
+                        ?? throw new InvalidOperationException("Dictionary target has no parent directory.");
+        var incomingDir = Path.Combine(parentDir, $".dictionary-replace-{operationId}-incoming");
+        var backupDir = Path.Combine(parentDir, $".dictionary-replace-{operationId}-backup");
+
+        if (Directory.Exists(incomingDir))
+            Directory.Delete(incomingDir, recursive: true);
+        if (Directory.Exists(backupDir))
+            Directory.Delete(backupDir, recursive: true);
+
+        CopyDirectory(sourceDir, incomingDir);
+        try
+        {
+            if (Directory.Exists(targetDir))
+                Directory.Move(targetDir, backupDir);
+
+            Directory.Move(incomingDir, targetDir);
+        }
+        catch
+        {
+            if (!Directory.Exists(targetDir) && Directory.Exists(backupDir))
+                Directory.Move(backupDir, targetDir);
+            if (Directory.Exists(incomingDir))
+                Directory.Delete(incomingDir, recursive: true);
+            throw;
+        }
+
+        if (Directory.Exists(backupDir))
+        {
+            try { Directory.Delete(backupDir, recursive: true); }
+            catch { /* replacement succeeded; abandoned backups are recoverable */ }
         }
     }
 

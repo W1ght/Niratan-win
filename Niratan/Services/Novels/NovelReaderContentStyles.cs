@@ -138,6 +138,19 @@ public static class NovelReaderContentStyles
             img, svg, video, canvas, table, pre, code {
                 max-width: 100% !important;
             }
+            .niratan-blur-wrapper {
+                display: table;
+                margin: auto;
+                line-height: 0;
+                overflow: hidden;
+                cursor: pointer;
+            }
+            img.block-img.niratan-blurred,
+            svg.niratan-blurred {
+                filter: blur(24px) !important;
+                clip-path: inset(0);
+                cursor: pointer;
+            }
             img.block-img {
                 max-width: var(--niratan-image-max-width, {{imageMaxWidth}}) !important;
                 max-height: var(--niratan-image-max-height, {{imageMaxHeight}}) !important;

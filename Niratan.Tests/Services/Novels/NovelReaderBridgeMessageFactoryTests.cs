@@ -197,6 +197,23 @@ public class NovelReaderBridgeMessageFactoryTests
     }
 
     [Fact]
+    public void CreateSasayakiHighlightMessage_ConvertsWinUiArgbColorsToCssRgbaHex()
+    {
+        using var document = JsonDocument.Parse(
+            NovelReaderBridgeMessageFactory.CreateSasayakiHighlightMessage(
+                generation: 7,
+                startCodePoint: 12,
+                length: 4,
+                autoScroll: true,
+                textColor: "#FF112233",
+                backgroundColor: "#6652C7FA"));
+
+        var payload = document.RootElement.GetProperty("payload");
+        payload.GetProperty("textColor").GetString().Should().Be("#112233FF");
+        payload.GetProperty("backgroundColor").GetString().Should().Be("#52C7FA66");
+    }
+
+    [Fact]
     public void CreateClearSasayakiHighlightMessage_SerializesTypedCommand()
     {
         using var document = JsonDocument.Parse(

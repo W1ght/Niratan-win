@@ -39,4 +39,16 @@ public sealed class NovelReaderSasayakiAssetTests
         code.Should().Contain("ApplyPendingSeek(sender)");
         code.Should().Contain("_seekLanding.TryAcceptPosition(position)");
     }
+
+    [Fact]
+    public void LookupPopupDismissal_ResumesOnlyPlaybackPausedByLookup()
+    {
+        var code = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+
+        code.Should().Contain("ResumeSasayakiAfterLookup();");
+        code.Should().Contain("_sasayakiLookupPlayback.TryPauseForLookup(");
+        code.Should().Contain("_sasayakiLookupPlayback.TryResumeAfterDismiss(");
+        code.Should().Contain("_sasayakiLookupPlayback.CancelAutoResume();");
+    }
 }

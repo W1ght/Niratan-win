@@ -30,8 +30,7 @@ public class LapisPresetTests
                 ["Expression"] = "{custom-expression}",
                 ["MainDefinition"] = "   ",
                 ["RemovedField"] = "{removed}",
-            },
-            AnkiFieldMappingPreset.Novel);
+            });
 
         mappings["Expression"].Should().Be("{custom-expression}");
         mappings["MainDefinition"].Should().Be("{glossary-first}");
@@ -42,7 +41,7 @@ public class LapisPresetTests
     }
 
     [Fact]
-    public void ApplyDefaults_RestoresNovelLapisMappingsAndClearsDefinitionPicture()
+    public void ApplyDefaults_RestoresUnifiedLapisMappingsAndClearsDefinitionPicture()
     {
         var noteType = new AnkiNoteType
         {
@@ -69,8 +68,7 @@ public class LapisPresetTests
                 ["DefinitionPicture"] = "{glossary}",
                 ["ExtraField"] = "{custom-extra}",
                 ["UnavailableField"] = "{removed}",
-            },
-            AnkiFieldMappingPreset.Novel);
+            });
 
         mappings["Expression"].Should().Be("{expression}");
         mappings["Sentence"].Should().Be("{sentence}");
@@ -82,7 +80,7 @@ public class LapisPresetTests
     }
 
     [Fact]
-    public void ApplyDefaults_RestoresAnimeLapisMediaMappings()
+    public void ApplyDefaults_UsesContextNeutralMediaMappings()
     {
         var noteType = new AnkiNoteType
         {
@@ -105,13 +103,12 @@ public class LapisPresetTests
                 ["SentenceAudio"] = "{sasayaki-audio}",
                 ["Picture"] = "{book-cover}",
                 ["ExtraField"] = "{custom-extra}",
-            },
-            AnkiFieldMappingPreset.Anime);
+            });
 
         mappings["Expression"].Should().Be("{expression}");
-        mappings["SentenceAudio"].Should().Be("{video-audio-clip}");
-        mappings["Picture"].Should().Be("{video-screenshot}");
-        mappings["MiscInfo"].Should().Be("{video-file-name} ({video-timestamp})");
+        mappings["SentenceAudio"].Should().Be("{sasayaki-audio}");
+        mappings["Picture"].Should().Be("{book-cover}");
+        mappings["MiscInfo"].Should().Be("{document-title}");
         mappings["ExtraField"].Should().Be("{custom-extra}");
     }
 
@@ -127,7 +124,7 @@ public class LapisPresetTests
         LapisPreset.HasDefaults(noteType).Should().BeFalse();
 
         var existing = new Dictionary<string, string> { ["Front"] = "{expression}" };
-        LapisPreset.AutofillDefaults(noteType, existing, AnkiFieldMappingPreset.Novel)
+        LapisPreset.AutofillDefaults(noteType, existing)
             .Should()
             .Equal(existing);
     }

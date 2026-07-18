@@ -29,11 +29,6 @@
                                         AutomationProperties.AutomationId="NovelBookMarkReadMenuItem"
                                         Tag="{x:Bind}"
                                         Click="MarkReadNovelMenuItem_Click" />
-                        <MenuFlyoutItem x:Uid="NovelBookMatchSasayakiMenuItem"
-                                        Text="Match Sasayaki"
-                                        AutomationProperties.AutomationId="NovelBookMatchSasayakiMenuItem"
-                                        Command="{Binding ViewModel.MatchSasayakiCommand, ElementName=ThisPage}"
-                                        CommandParameter="{x:Bind}" />
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem x:Uid="NovelBookExportMenuItem"
                                         Text="Export EPUB…"
@@ -94,6 +89,44 @@
                     </MenuFlyout>
                 </controls:NovelBookCard.CardContextFlyout>
             </controls:NovelBookCard>
+        </DataTemplate>
+
+        <DataTemplate x:Key="CompactNovelBookTemplate" x:DataType="vmc:NovelBookItemViewModel">
+            <Border Width="80"
+                    Height="112"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    CornerRadius="6">
+                <Grid>
+                    <Image Source="{x:Bind CoverImage, Mode=OneTime}"
+                           Stretch="UniformToFill"
+                           Visibility="{x:Bind HasCover, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneTime}" />
+                    <FontIcon HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              FontSize="30"
+                              Glyph="&#xE8B9;"
+                              Opacity="0.3"
+                              Visibility="{x:Bind HasCover, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert, Mode=OneTime}" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="CompactRemoteNovelBookTemplate" x:DataType="vmc:RemoteNovelBookItemViewModel">
+            <Border Width="80"
+                    Height="112"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    CornerRadius="6">
+                <Grid>
+                    <Image Source="{x:Bind CoverImage, Mode=OneWay}"
+                           Stretch="UniformToFill"
+                           Visibility="{x:Bind HasCover, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                    <FontIcon HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              FontSize="30"
+                              Glyph="&#xEBD3;"
+                              Opacity="0.36"
+                              Visibility="{x:Bind HasCover, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert, Mode=OneWay}" />
+                </Grid>
+            </Border>
         </DataTemplate>
 
     </Page.Resources>
@@ -195,31 +228,103 @@
                             <DataTemplate x:DataType="vmc:NovelShelfSectionViewModel">
                                 <StackPanel Margin="0,0,0,18"
                                             Spacing="8">
-                                    <TextBlock Text="{x:Bind DisplayName}"
-                                               Style="{StaticResource SubtitleTextBlockStyle}" />
-                                    <ItemsRepeater ItemTemplate="{StaticResource NovelBookTemplate}"
-                                                   ItemsSource="{x:Bind Books}"
-                                                   Visibility="{x:Bind ShowsLocalBooks, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                        <ItemsRepeater.Layout>
-                                            <UniformGridLayout MinItemWidth="180"
-                                                               MinItemHeight="326"
-                                                               MinColumnSpacing="12"
-                                                               MinRowSpacing="16"
-                                                               ItemsJustification="Start" />
-                                        </ItemsRepeater.Layout>
-                                    </ItemsRepeater>
-                                    <ItemsRepeater ItemTemplate="{StaticResource RemoteNovelBookTemplate}"
-                                                   ItemsSource="{x:Bind RemoteBooks}"
-                                                   AutomationProperties.AutomationId="RemoteNovelBookItemsControl"
-                                                   Visibility="{x:Bind ShowsRemoteBooks, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                        <ItemsRepeater.Layout>
-                                            <UniformGridLayout MinItemWidth="180"
-                                                               MinItemHeight="326"
-                                                               MinColumnSpacing="12"
-                                                               MinRowSpacing="16"
-                                                               ItemsJustification="Start" />
-                                        </ItemsRepeater.Layout>
-                                    </ItemsRepeater>
+                                    <Grid>
+                                        <Button Padding="0"
+                                                HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Stretch"
+                                                AutomationProperties.Name="{x:Bind DisplayName}"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Command="{x:Bind ToggleCollapseCommand}"
+                                                Visibility="{x:Bind CanCollapse, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneTime}">
+                                            <StackPanel Orientation="Horizontal"
+                                                        Spacing="8">
+                                                <TextBlock VerticalAlignment="Center"
+                                                           Text="{x:Bind DisplayName}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Style="{StaticResource SubtitleTextBlockStyle}" />
+                                                <TextBlock VerticalAlignment="Center"
+                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                           Text="{x:Bind BookCount, Mode=OneTime}" />
+                                                <FontIcon VerticalAlignment="Center"
+                                                          FontSize="14"
+                                                          Glyph="{x:Bind CollapseGlyph, Mode=OneWay}" />
+                                            </StackPanel>
+                                        </Button>
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="8"
+                                                    Visibility="{x:Bind CanCollapse, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert, Mode=OneTime}">
+                                            <TextBlock VerticalAlignment="Center"
+                                                       Text="{x:Bind DisplayName}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Style="{StaticResource SubtitleTextBlockStyle}" />
+                                            <TextBlock VerticalAlignment="Center"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       Text="{x:Bind BookCount, Mode=OneTime}" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <Button Height="112"
+                                            Padding="0"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Stretch"
+                                            AutomationProperties.Name="{x:Bind DisplayName}"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Command="{x:Bind ExpandCommand}"
+                                            Visibility="{x:Bind ShowsCollapsedPreview, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                                        <ScrollViewer Height="112"
+                                                      HorizontalScrollBarVisibility="Hidden"
+                                                      HorizontalScrollMode="Disabled"
+                                                      IsHitTestVisible="False"
+                                                      VerticalScrollBarVisibility="Hidden"
+                                                      VerticalScrollMode="Disabled">
+                                            <Grid Height="112">
+                                                <ItemsRepeater ItemTemplate="{StaticResource CompactNovelBookTemplate}"
+                                                               ItemsSource="{x:Bind Books}"
+                                                               Visibility="{x:Bind ShowsLocalBooks, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneTime}">
+                                                    <ItemsRepeater.Layout>
+                                                        <StackLayout Orientation="Horizontal"
+                                                                     Spacing="12" />
+                                                    </ItemsRepeater.Layout>
+                                                </ItemsRepeater>
+                                                <ItemsRepeater ItemTemplate="{StaticResource CompactRemoteNovelBookTemplate}"
+                                                               ItemsSource="{x:Bind RemoteBooks}"
+                                                               Visibility="{x:Bind ShowsRemoteBooks, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneTime}">
+                                                    <ItemsRepeater.Layout>
+                                                        <StackLayout Orientation="Horizontal"
+                                                                     Spacing="12" />
+                                                    </ItemsRepeater.Layout>
+                                                </ItemsRepeater>
+                                            </Grid>
+                                        </ScrollViewer>
+                                    </Button>
+
+                                    <Grid Visibility="{x:Bind ShowsFullContent, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                                        <ItemsRepeater ItemTemplate="{StaticResource NovelBookTemplate}"
+                                                       ItemsSource="{x:Bind Books}"
+                                                       Visibility="{x:Bind ShowsLocalBooks, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneTime}">
+                                            <ItemsRepeater.Layout>
+                                                <UniformGridLayout MinItemWidth="180"
+                                                                   MinItemHeight="326"
+                                                                   MinColumnSpacing="12"
+                                                                   MinRowSpacing="16"
+                                                                   ItemsJustification="Start" />
+                                            </ItemsRepeater.Layout>
+                                        </ItemsRepeater>
+                                        <ItemsRepeater ItemTemplate="{StaticResource RemoteNovelBookTemplate}"
+                                                       ItemsSource="{x:Bind RemoteBooks}"
+                                                       AutomationProperties.AutomationId="RemoteNovelBookItemsControl"
+                                                       Visibility="{x:Bind ShowsRemoteBooks, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneTime}">
+                                            <ItemsRepeater.Layout>
+                                                <UniformGridLayout MinItemWidth="180"
+                                                                   MinItemHeight="326"
+                                                                   MinColumnSpacing="12"
+                                                                   MinRowSpacing="16"
+                                                                   ItemsJustification="Start" />
+                                            </ItemsRepeater.Layout>
+                                        </ItemsRepeater>
+                                    </Grid>
                                 </StackPanel>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>

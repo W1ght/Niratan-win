@@ -56,6 +56,11 @@ public sealed partial class AdvancedSettingsPage : Page
         NavigateSettingsSubpage(typeof(KeyboardShortcutsSettingsPage));
     }
 
+    private void GameControllerSettings_Click(object sender, RoutedEventArgs e)
+    {
+        NavigateSettingsSubpage(typeof(GameControllerSettingsPage));
+    }
+
     private void SyncSettings_Click(object sender, RoutedEventArgs e)
     {
         NavigateSettingsSubpage(typeof(TtuSyncSettingsPage));

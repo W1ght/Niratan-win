@@ -27,6 +27,35 @@ public sealed class NovelLibraryPageAssetTests
     }
 
     [Fact]
+    public void ShelfSections_ExposeNiratanAlignedCollapsedCoverPreview()
+    {
+        var xaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelLibraryPage.xaml"));
+
+        xaml.Should().Contain("Command=\"{x:Bind ToggleCollapseCommand}\"");
+        xaml.Should().Contain("Command=\"{x:Bind ExpandCommand}\"");
+        xaml.Should().Contain("CompactNovelBookTemplate");
+        xaml.Should().Contain("Width=\"80\"");
+        xaml.Should().Contain("Height=\"112\"");
+        xaml.Should().Contain(
+            "Visibility=\"{x:Bind ShowsCollapsedPreview, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}\"");
+    }
+
+    [Fact]
+    public void ShelfManagementDialog_UsesCompactGroupedLayout()
+    {
+        var xaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Dialogs", "NovelShelfManagementDialog.xaml"));
+
+        xaml.Should().Contain("RowDefinitions=\"Auto,Auto,Auto\"");
+        xaml.Should().NotContain("RowDefinitions=\"Auto,*,Auto\"");
+        xaml.Should().Contain("MaxHeight=\"240\"");
+        xaml.Should().Contain("x:Uid=\"NovelShelfListHeader\"");
+        xaml.Should().Contain("Symbol=\"Folder\"");
+        xaml.Should().Contain("VerticalAlignment=\"Bottom\"");
+    }
+
+    [Fact]
     public void RemoteNovelBookTemplate_ExposesExplicitDeleteAction()
     {
         var xaml = File.ReadAllText(

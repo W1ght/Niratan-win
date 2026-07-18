@@ -1,4 +1,5 @@
 using FluentAssertions;
+using System.Xml.Linq;
 
 namespace Niratan.Tests.Views.Pages;
 
@@ -59,6 +60,22 @@ public class VideoLibraryPageAssetTests
         xaml.Should().Contain("Command=\"{Binding ViewModel.ClearProgressCommand, ElementName=ThisPage}\"");
         xaml.Should().Contain("Command=\"{Binding ViewModel.RevealFileCommand, ElementName=ThisPage}\"");
         xaml.Should().Contain("Command=\"{Binding ViewModel.AddToNewCollectionCommand, ElementName=ThisPage}\"");
+    }
+
+    [Fact]
+    public void VideoLibraryPage_UsesCompactFixedWidthFilterCards()
+    {
+        var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml"));
+        var document = XDocument.Parse(xaml);
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        AssertFilterTemplateWidth(document, x, "FolderFilterTemplate", "220");
+        AssertFilterTemplateWidth(document, x, "CollectionFilterTemplate", "220");
+        AssertFilterTemplateWidth(document, x, "TagFilterTemplate", "180");
+
+        AssertFilterPanelWidth(document, x, "VideoLibraryFolderFilters", "228");
+        AssertFilterPanelWidth(document, x, "VideoLibraryCollectionFilters", "228");
+        AssertFilterPanelWidth(document, x, "VideoLibraryTagFilters", "188");
     }
 
     [Fact]
@@ -195,5 +212,37 @@ public class VideoLibraryPageAssetTests
         var source = File.ReadAllText(Path.Combine(ProjectRoot, "Services", "Video", "VideoPlayerWindowService.cs"));
 
         source.Should().NotContain("PlaybackStateSaved -= OnWindowPlaybackStateSaved");
+    }
+
+    private static void AssertFilterTemplateWidth(
+        XDocument document,
+        XNamespace x,
+        string templateKey,
+        string expectedWidth)
+    {
+        var template = document.Descendants()
+            .Single(element =>
+                element.Name.LocalName == "DataTemplate"
+                && (string?)element.Attribute(x + "Key") == templateKey);
+        var button = template.Elements().Single(element => element.Name.LocalName == "Button");
+
+        button.Attribute("Width")?.Value.Should().Be(expectedWidth);
+        button.Attribute("MinWidth").Should().BeNull();
+    }
+
+    private static void AssertFilterPanelWidth(
+        XDocument document,
+        XNamespace x,
+        string itemsControlName,
+        string expectedWidth)
+    {
+        var itemsControl = document.Descendants()
+            .Single(element =>
+                element.Name.LocalName == "ItemsControl"
+                && (string?)element.Attribute(x + "Name") == itemsControlName);
+        var itemsWrapGrid = itemsControl.Descendants()
+            .Single(element => element.Name.LocalName == "ItemsWrapGrid");
+
+        itemsWrapGrid.Attribute("ItemWidth")?.Value.Should().Be(expectedWidth);
     }
 }

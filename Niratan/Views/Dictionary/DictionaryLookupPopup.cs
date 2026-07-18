@@ -119,7 +119,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     private readonly DictionaryPopupRecoveryCoordinator _recoveryCoordinator = new();
     private readonly SemaphoreSlim _webViewInitializationGate = new(1, 1);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<long, TaskCompletionSource<bool>> _shellReadyWaiters = new();
-    private readonly Dictionary<(long Generation, int EntryIndex), long> _openableAnkiNotes = [];
+    private readonly Dictionary<(long Generation, int EntryIndex), long[]> _openableAnkiNotes = [];
     private AnkiMiningContext _miningContext = new();
     private AnkiMiningContext _nextMiningContext = new();
     private SasayakiPopupControls? _sasayakiPopupControls;
@@ -2719,11 +2719,22 @@ public sealed class DictionaryLookupPopup : IDisposable
             || !body.TryGetProperty("renderGeneration", out var generationElement)
             || !generationElement.TryGetInt64(out var renderGeneration)
             || renderGeneration < 0
-            || !body.TryGetProperty("noteID", out var noteIdElement)
-            || !noteIdElement.TryGetInt64(out var noteId)
-            || noteId <= 0)
+            || !body.TryGetProperty("noteIDs", out var noteIdsElement)
+            || noteIdsElement.ValueKind != JsonValueKind.Array)
         {
             Log.Warning("[DictPopup] Rejected malformed openAnkiNote message");
+            return;
+        }
+
+        var noteIds = noteIdsElement
+            .EnumerateArray()
+            .Select(element => element.TryGetInt64(out var noteId) ? noteId : 0)
+            .Where(noteId => noteId > 0)
+            .Distinct()
+            .ToArray();
+        if (noteIds.Length == 0)
+        {
+            Log.Warning("[DictPopup] Rejected empty openAnkiNote request");
             return;
         }
 
@@ -2732,22 +2743,22 @@ public sealed class DictionaryLookupPopup : IDisposable
             var allowed = CommittedGeneration == renderGeneration
                 && _openableAnkiNotes.TryGetValue(
                     (renderGeneration, entryIndex),
-                    out var allowedNoteId)
-                && allowedNoteId == noteId;
+                    out var allowedNoteIds)
+                && allowedNoteIds.SequenceEqual(noteIds);
             var opened = false;
             if (allowed)
             {
-                opened = await _ankiService.OpenNoteInAnkiAsync(noteId);
+                opened = await _ankiService.OpenNotesInAnkiAsync(noteIds);
                 if (!opened)
                     ShowMiningToast(AnkiMiningResult.Failed("Unable to open note in Anki."));
             }
             else
             {
                 Log.Warning(
-                    "[DictPopup] Rejected stale or unrecognized Anki note request gen={Generation} entry={EntryIndex} noteId={NoteId}",
+                    "[DictPopup] Rejected stale or unrecognized Anki note request gen={Generation} entry={EntryIndex} noteIds={NoteIds}",
                     renderGeneration,
                     entryIndex,
-                    noteId);
+                    string.Join(',', noteIds));
             }
 
             if (CommittedGeneration != renderGeneration)
@@ -2774,24 +2785,51 @@ public sealed class DictionaryLookupPopup : IDisposable
             && generationElement.TryGetInt64(out var parsedGeneration)
                 ? parsedGeneration
                 : -1;
-        _ = _contentWebView.DispatcherQueue.TryEnqueue(async () =>
-        {
-            try
-            {
-                var isDuplicate = await _ankiService.DuplicateCheckExpressionAsync(expression);
-                if (renderGeneration >= 0
-                    && CommittedGeneration != renderGeneration
-                    && _displayTransaction.CommitInFlightGeneration != renderGeneration)
-                    return;
-                var script = $"if (typeof window.onDuplicateCheck === 'function') window.onDuplicateCheck({entryIndex}, {(isDuplicate ? "true" : "false")});";
+        _ = HandleDuplicateCheckAsync(expression, entryIndex, renderGeneration);
+    }
 
-                await _contentWebView.CoreWebView2.ExecuteScriptAsync(script);
-            }
-            catch (Exception ex)
+    private async Task HandleDuplicateCheckAsync(
+        string expression,
+        int entryIndex,
+        long renderGeneration)
+    {
+        try
+        {
+            var lookup = await _ankiService.DuplicateLookupExpressionAsync(expression);
+            if (renderGeneration >= 0
+                && CommittedGeneration != renderGeneration
+                && _displayTransaction.CommitInFlightGeneration != renderGeneration)
+                return;
+
+            var noteIds = lookup.NoteIds
+                .Where(noteId => noteId > 0)
+                .Distinct()
+                .ToArray();
+            var key = (renderGeneration, entryIndex);
+            if (lookup.IsDuplicate && noteIds.Length > 0)
+                _openableAnkiNotes[key] = noteIds;
+            else
+                _openableAnkiNotes.Remove(key);
+
+            var result = JsonSerializer.Serialize(new
             {
-                Log.Error(ex, "[DictPopup] DuplicateCheck failed");
-            }
-        });
+                isDuplicate = lookup.IsDuplicate,
+                noteIDs = noteIds,
+            });
+            await _contentWebView.CoreWebView2.ExecuteScriptAsync(
+                $"if (typeof window.onDuplicateCheck === 'function') window.onDuplicateCheck({entryIndex}, {result});");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[DictPopup] DuplicateCheck failed");
+            if (renderGeneration >= 0
+                && CommittedGeneration != renderGeneration
+                && _displayTransaction.CommitInFlightGeneration != renderGeneration)
+                return;
+
+            await _contentWebView.CoreWebView2.ExecuteScriptAsync(
+                $"if (typeof window.onDuplicateCheck === 'function') window.onDuplicateCheck({entryIndex}, {{isDuplicate:false,noteIDs:[]}});");
+        }
     }
 
     private async Task SendMiningResultToWebAsync(
@@ -2804,7 +2842,7 @@ public sealed class DictionaryLookupPopup : IDisposable
             return;
 
         if (result is { Status: AnkiMiningStatus.Added, NoteId: > 0 })
-            _openableAnkiNotes[(renderGeneration, entryIndex)] = result.NoteId.Value;
+            _openableAnkiNotes[(renderGeneration, entryIndex)] = [result.NoteId.Value];
 
         var payload = JsonSerializer.Serialize(new
         {

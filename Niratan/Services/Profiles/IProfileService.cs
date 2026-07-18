@@ -22,6 +22,13 @@ public interface IProfileService
         CancellationToken ct = default,
         string? copyFromProfileId = null);
 
+    Task RenameProfileAsync(
+        string profileId,
+        string name,
+        CancellationToken ct = default);
+
+    Task DeleteProfileAsync(string profileId, CancellationToken ct = default);
+
     Task SetPrimaryProfileForLanguageAsync(
         string languageId,
         string profileId,

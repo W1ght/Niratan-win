@@ -5,6 +5,8 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using Niratan.Messages;
 using Niratan.Services.UI;
+using Niratan.Services.Dictionary;
+using Niratan.Services.Settings;
 using Niratan.ViewModels.Pages;
 
 namespace Niratan.Views.Pages;
@@ -20,33 +22,24 @@ public sealed partial class NavigationPage : Page
         DataContext = ViewModel;
 
         Loaded += OnLoaded;
-        Unloaded += OnUnloaded;
     }
 
-    private async void OnLoaded(object sender, RoutedEventArgs e)
+    private void OnLoaded(object sender, RoutedEventArgs e)
     {
         App.MainWindow?.SetTitleBar(AppTitleBar);
-        if (App.MainWindow is { } mainWindow)
-            mainWindow.Activated += MainWindow_Activated;
         App.GetService<INavigationService>().Initialize(ContentFrame);
         App.GetService<IDialogService>().Initialize(XamlRoot);
 
-        await ViewModel.ActivateGlobalProfileAsync();
-
         if (ContentFrame.Content == null)
-            ViewModel.NavigateCommand.Execute(new NavigateMessage(typeof(NovelLibraryPage), null));
-    }
+        {
+            var defaultPage = App.GetService<ISettingsService>()
+                .Current.DictionaryDisplaySettings.DictionaryTabDefault
+                ? typeof(NovelLookupPage)
+                : typeof(NovelLibraryPage);
+            ViewModel.NavigateCommand.Execute(new NavigateMessage(defaultPage, null));
+        }
 
-    private void OnUnloaded(object sender, RoutedEventArgs e)
-    {
-        if (App.MainWindow is { } mainWindow)
-            mainWindow.Activated -= MainWindow_Activated;
-    }
-
-    private async void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
-    {
-        if (args.WindowActivationState != WindowActivationState.Deactivated)
-            await ViewModel.ActivateGlobalProfileAsync();
+        _ = App.GetService<IDictionaryCatalogService>().TryAutoUpdateAsync();
     }
 
     private void NavigationViewControl_ItemInvoked(
@@ -70,9 +63,8 @@ public sealed partial class NavigationPage : Page
         NavigationViewBackRequestedEventArgs args
     ) => ViewModel.BackCommand.Execute(null);
 
-    private async void ContentFrame_Navigated(object sender, NavigationEventArgs e)
+    private void ContentFrame_Navigated(object sender, NavigationEventArgs e)
     {
-        await ViewModel.ActivateGlobalProfileAsync();
         if (e.Content is NovelReaderPage readerPage)
         {
             App.MainWindow?.SetTitleBar(readerPage.ReaderTitleBarElement);

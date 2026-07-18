@@ -139,26 +139,15 @@
                                           Description="Restore known safe mappings for supported note types"
                                           Header="Field Presets"
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE8A5;}">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button AutomationProperties.AutomationId="ApplyNovelDefaultsButton"
-                                    Command="{x:Bind ViewModel.ApplyNovelDefaultsCommand}"
-                                    IsEnabled="{x:Bind ViewModel.HasFieldMappingDefaults, Mode=OneWay}">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon FontSize="12" Glyph="&#xE8A5;" />
-                                    <TextBlock x:Uid="AnkiApplyNovelDefaultsButtonText"
-                                               Text="Apply Novel Defaults" />
-                                </StackPanel>
-                            </Button>
-                            <Button AutomationProperties.AutomationId="ApplyAnimeDefaultsButton"
-                                    Command="{x:Bind ViewModel.ApplyAnimeDefaultsCommand}"
-                                    IsEnabled="{x:Bind ViewModel.HasFieldMappingDefaults, Mode=OneWay}">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon FontSize="12" Glyph="&#xE8B9;" />
-                                    <TextBlock x:Uid="AnkiApplyAnimeDefaultsButtonText"
-                                               Text="Apply Anime Defaults" />
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
+                        <Button AutomationProperties.AutomationId="ApplyDefaultsButton"
+                                Command="{x:Bind ViewModel.ApplyDefaultsCommand}"
+                                IsEnabled="{x:Bind ViewModel.HasFieldMappingDefaults, Mode=OneWay}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon FontSize="12" Glyph="&#xE8A5;" />
+                                <TextBlock x:Uid="AnkiApplyDefaultsButtonText"
+                                           Text="Apply Defaults" />
+                            </StackPanel>
+                        </Button>
                     </toolkit:SettingsCard>
 
                     <ItemsRepeater ItemsSource="{x:Bind ViewModel.FieldMappings}">

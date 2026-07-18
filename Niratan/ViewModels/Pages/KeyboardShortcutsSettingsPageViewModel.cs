@@ -12,6 +12,7 @@ public partial class KeyboardShortcutsSettingsPageViewModel : ObservableObject
 {
     private readonly IShortcutService _shortcutService;
 
+    public ObservableCollection<ShortcutSectionViewModel> Sections { get; } = [];
     public ObservableCollection<ShortcutRowViewModel> Rows { get; } = [];
 
     [ObservableProperty]
@@ -73,12 +74,22 @@ public partial class KeyboardShortcutsSettingsPageViewModel : ObservableObject
 
     private void BuildRows()
     {
+        Sections.Clear();
         Rows.Clear();
-        foreach (var action in _shortcutService.Registry.Actions)
+        foreach (var category in ShortcutCategoryOrder.All)
         {
-            var row = new ShortcutRowViewModel(action);
-            UpdateRow(row);
-            Rows.Add(row);
+            var sectionRows = _shortcutService.Registry.ActionsIn(category)
+                .Select(action =>
+                {
+                    var row = new ShortcutRowViewModel(action);
+                    UpdateRow(row);
+                    Rows.Add(row);
+                    return row;
+                })
+                .ToList();
+
+            if (sectionRows.Count > 0)
+                Sections.Add(new ShortcutSectionViewModel(category, sectionRows));
         }
     }
 
@@ -96,32 +107,40 @@ public partial class KeyboardShortcutsSettingsPageViewModel : ObservableObject
     }
 }
 
+public sealed class ShortcutSectionViewModel
+{
+    public ShortcutSectionViewModel(
+        ShortcutCategory category,
+        IReadOnlyList<ShortcutRowViewModel> rows)
+    {
+        Category = category;
+        Title = ShortcutCategoryTitle.For(category);
+        Rows = rows;
+    }
+
+    public ShortcutCategory Category { get; }
+    public string Title { get; }
+    public IReadOnlyList<ShortcutRowViewModel> Rows { get; }
+}
+
 public partial class ShortcutRowViewModel : ObservableObject
 {
     public ShortcutRowViewModel(ShortcutAction action)
     {
         Action = action;
         Title = ResourceStringHelper.GetString(action.TitleResourceKey, action.Title);
-        CategoryTitle = action.Category switch
-        {
-            ShortcutCategory.Global => ResourceStringHelper.GetString("ShortcutCategoryGlobal", "Global"),
-            ShortcutCategory.Reader => ResourceStringHelper.GetString("ShortcutCategoryReader", "Reader"),
-            ShortcutCategory.DictionaryPopup => ResourceStringHelper.GetString(
-                "ShortcutCategoryDictionaryPopup",
-                "Dictionary Popup"),
-            ShortcutCategory.Sasayaki => ResourceStringHelper.GetString("ShortcutCategorySasayaki", "Sasayaki"),
-            ShortcutCategory.Video => ResourceStringHelper.GetString("ShortcutCategoryVideo", "Video"),
-            _ => action.Category.ToString(),
-        };
-        DefaultShortcutLabel = action.DefaultBinding.Label;
+        DefaultShortcutText = ResourceStringHelper.FormatString(
+            "KeyboardShortcutsDefaultText",
+            "Default Shortcut: {0}",
+            action.DefaultBinding.Label);
     }
 
     public ShortcutAction Action { get; }
     public string Title { get; }
-    public string CategoryTitle { get; }
-    public string DefaultShortcutLabel { get; }
+    public string DefaultShortcutText { get; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShortcutButtonLabel))]
     public partial string CurrentShortcutLabel { get; set; } = "";
 
     [ObservableProperty]
@@ -131,13 +150,26 @@ public partial class ShortcutRowViewModel : ObservableObject
     public partial bool HasConflict { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShortcutButtonLabel))]
     public partial bool IsRecording { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanReset))]
+    public partial bool IsDefault { get; set; }
+
+    public bool CanReset => !IsDefault;
+
+    public string ShortcutButtonLabel =>
+        IsRecording
+            ? ResourceStringHelper.GetString("KeyboardShortcutsPressKeysText", "Press keys...")
+            : CurrentShortcutLabel;
 
     public void Update(KeyboardShortcutBinding binding, IReadOnlyList<ShortcutConflict> conflicts)
     {
         CurrentShortcutLabel = string.IsNullOrWhiteSpace(binding.Label)
             ? ResourceStringHelper.GetString("KeyboardShortcutsUnassignedText", "Unassigned")
             : binding.Label;
+        IsDefault = binding.Matches(Action.DefaultBinding);
         HasConflict = conflicts.Any(conflict => conflict.Kind == ShortcutConflictKind.Conflict);
         ConflictText = FormatConflict(conflicts);
     }
@@ -164,4 +196,32 @@ public partial class ShortcutRowViewModel : ObservableObject
 
         return "";
     }
+}
+
+internal static class ShortcutCategoryOrder
+{
+    public static IReadOnlyList<ShortcutCategory> All { get; } =
+    [
+        ShortcutCategory.Global,
+        ShortcutCategory.Reader,
+        ShortcutCategory.DictionaryPopup,
+        ShortcutCategory.Sasayaki,
+        ShortcutCategory.Video,
+    ];
+}
+
+internal static class ShortcutCategoryTitle
+{
+    public static string For(ShortcutCategory category) =>
+        category switch
+        {
+            ShortcutCategory.Global => ResourceStringHelper.GetString("ShortcutCategoryGlobal", "Global"),
+            ShortcutCategory.Reader => ResourceStringHelper.GetString("ShortcutCategoryReader", "Reader"),
+            ShortcutCategory.DictionaryPopup => ResourceStringHelper.GetString(
+                "ShortcutCategoryDictionaryPopup",
+                "Dictionary / Popup"),
+            ShortcutCategory.Sasayaki => ResourceStringHelper.GetString("ShortcutCategorySasayaki", "Sasayaki"),
+            ShortcutCategory.Video => ResourceStringHelper.GetString("ShortcutCategoryVideo", "Video"),
+            _ => category.ToString(),
+        };
 }

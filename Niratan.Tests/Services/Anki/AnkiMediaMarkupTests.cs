@@ -55,4 +55,20 @@ public class AnkiMediaMarkupTests
 
         rendered.Should().Be("<img src=\"niratan_cover.jpg\">");
     }
+
+    [Fact]
+    public void Renderer_ResolvesUnifiedMediaPlaceholdersFromVideoContext()
+    {
+        var context = new AnkiMiningContext
+        {
+            VideoFileName = "episode.mkv",
+            VideoScreenshotTag = "<img src=\"frame.webp\">",
+            VideoAudioClipTag = "[sound:clip.m4a]",
+        };
+
+        AnkiHandlebarRenderer.Render("{book-cover}", new AnkiMiningPayload(), context)
+            .Should().Be("<img src=\"frame.webp\">");
+        AnkiHandlebarRenderer.Render("{sasayaki-audio}", new AnkiMiningPayload(), context)
+            .Should().Be("[sound:clip.m4a]");
+    }
 }

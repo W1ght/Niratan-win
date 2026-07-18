@@ -12,4 +12,5 @@ public interface IDictionaryImportService
     Task<List<InstalledDictionary>> GetInstalledDictionariesAsync(DictionaryType? type = null);
     Task SaveDictionaryOrderAsync(DictionaryType type, IReadOnlyList<string> orderedNames);
     Task SetDictionaryEnabledAsync(DictionaryType type, string dictName, bool enabled);
+    Task MigrateDictionaryNameAsync(DictionaryType type, string oldName, string newName);
 }

@@ -202,17 +202,11 @@ public partial class NovelReaderPageViewModel : ObservableObject
 
         if (CurrentBook != null)
         {
-            await _profileRuntime.ActivateForBookAsync(CurrentBook, ct);
             await _novelLibraryService.MarkOpenedAsync(CurrentBook.Id, ct);
         }
 
         OnPropertyChanged(nameof(ReaderTitle));
     }
-
-    public Task ActivateCurrentProfileAsync(CancellationToken ct = default) =>
-        CurrentBook is null
-            ? Task.CompletedTask
-            : _profileRuntime.ActivateForBookAsync(CurrentBook, ct);
 
     public async Task<bool> SyncOnOpenAsync(CancellationToken ct = default)
     {
@@ -831,6 +825,8 @@ public partial class NovelReaderPageViewModel : ObservableObject
         }
     }
 
+    public void RefreshGalleryBlurState() => RefreshGalleryReadState();
+
     public string? GetCurrentChapterHighlightsJson()
         => GetChapterHighlightsJson(CurrentChapterIndex);
 
@@ -867,6 +863,47 @@ public partial class NovelReaderPageViewModel : ObservableObject
             .OrderBy(item => item.Highlight.Character)
             .ThenBy(item => item.Highlight.CreatedAt)
             .ToList();
+    }
+
+    public async Task<ReaderHighlight?> AddHighlightAsync(
+        Guid id,
+        int chapterIndex,
+        ReaderHighlightSelection selection,
+        ReaderHighlightColor color,
+        DateTimeOffset createdAt,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(selection);
+        if (string.IsNullOrWhiteSpace(CurrentBook?.ExtractedPath)
+            || chapterIndex < 0
+            || chapterIndex >= _chapterCharacterCounts.Count
+            || selection.Start < 0
+            || selection.Start >= _chapterCharacterCounts[chapterIndex]
+            || selection.Offset < 0
+            || string.IsNullOrEmpty(selection.Text))
+        {
+            return null;
+        }
+
+        var highlight = _readerHighlightService.CreateFromChapterSelection(
+            id,
+            chapterIndex,
+            selection.Start,
+            selection.Offset,
+            selection.Text,
+            color,
+            createdAt,
+            _chapterCharacterCounts);
+        var updated = Highlights
+            .Where(existing => existing.Id != id)
+            .Append(highlight)
+            .OrderBy(existing => existing.Character)
+            .ThenBy(existing => existing.CreatedAt)
+            .ToList();
+
+        await _readerHighlightService.SaveAsync(CurrentBook.ExtractedPath, updated, ct);
+        Highlights = updated;
+        return highlight;
     }
 
     public async Task<bool> DeleteHighlightAsync(Guid id, CancellationToken ct = default)

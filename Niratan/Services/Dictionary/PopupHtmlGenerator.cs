@@ -92,6 +92,7 @@ window.compactGlossaries = {BoolToJs(settings.CompactGlossaries)};
 window.compactPitchAccents = {BoolToJs(settings.CompactPitchAccents)};
 window.harmonicFrequency = {BoolToJs(settings.HarmonicFrequency)};
 window.deduplicatePitchAccents = {BoolToJs(settings.DeduplicatePitchAccents)};
+window.twoColumnLayout = {BoolToJs(settings.TwoColumnLayout)};
 window.expandFirstDictionary = {BoolToJs(settings.ExpandFirstDictionary)};
 window.collapseMode = '{settings.CollapseModeText}';
 window.collapsedDictionaries = {collapsedDictionariesJson};
@@ -99,6 +100,7 @@ window.showExpressionTags = {BoolToJs(settings.ShowExpressionTags)};
 window.scanNonJapaneseText = {BoolToJs(settings.ScanNonJapaneseText)};
 window.maxResults = {settings.MaxResults};
 window.scanLength = {settings.ScanLength};
+window.desktopLookupHoverDelayMs = {settings.NormalizedDesktopLookupHoverDelayMs};
 window.popupRenderGeneration = {renderGeneration};
 window.niratanPopupDocumentEpoch = {documentEpoch};
 window.lookupTraceId = '';
@@ -379,6 +381,7 @@ window.viewAnkiNoteLabel = {JsonSerializer.Serialize(ViewAnkiNoteLabel)};
         compactPitchAccents: {BoolToJs(settings.CompactPitchAccents)},
         harmonicFrequency: {BoolToJs(settings.HarmonicFrequency)},
         deduplicatePitchAccents: {BoolToJs(settings.DeduplicatePitchAccents)},
+        twoColumnLayout: {BoolToJs(settings.TwoColumnLayout)},
         expandFirstDictionary: {BoolToJs(settings.ExpandFirstDictionary)},
         collapseMode: '{settings.CollapseModeText}',
         collapsedDictionaries: {collapsedDictionariesJson},
@@ -386,6 +389,7 @@ window.viewAnkiNoteLabel = {JsonSerializer.Serialize(ViewAnkiNoteLabel)};
         scanNonJapaneseText: {BoolToJs(settings.ScanNonJapaneseText)},
         maxResults: {settings.MaxResults},
         scanLength: {settings.ScanLength},
+        desktopLookupHoverDelayMs: {settings.NormalizedDesktopLookupHoverDelayMs},
         customCSS: {JsonSerializer.Serialize(customCss)},
         lookupTraceId: {JsonSerializer.Serialize(traceId ?? "")},
         audioSources: {SerializeAudioSources(audioSettings)},
@@ -425,6 +429,7 @@ window.compactGlossaries = {BoolToJs(settings.CompactGlossaries)};
 window.compactPitchAccents = {BoolToJs(settings.CompactPitchAccents)};
 window.harmonicFrequency = {BoolToJs(settings.HarmonicFrequency)};
 window.deduplicatePitchAccents = {BoolToJs(settings.DeduplicatePitchAccents)};
+window.twoColumnLayout = {BoolToJs(settings.TwoColumnLayout)};
 window.expandFirstDictionary = {BoolToJs(settings.ExpandFirstDictionary)};
 window.collapseMode = '{settings.CollapseModeText}';
 window.collapsedDictionaries = {collapsedDictionariesJson};
@@ -432,6 +437,7 @@ window.showExpressionTags = {BoolToJs(settings.ShowExpressionTags)};
 window.scanNonJapaneseText = {BoolToJs(settings.ScanNonJapaneseText)};
 window.maxResults = {settings.MaxResults};
 window.scanLength = {settings.ScanLength};
+window.desktopLookupHoverDelayMs = {settings.NormalizedDesktopLookupHoverDelayMs};
 window.customCSS = {JsonSerializer.Serialize(customCss)};
 window.lookupTraceId = {JsonSerializer.Serialize(traceId ?? "")};
 window.audioSources = {SerializeAudioSources(audioSettings)};

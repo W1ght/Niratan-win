@@ -43,8 +43,7 @@
   <data name="AnkiFieldMappingsSectionHeader.Text" xml:space="preserve"><value>Field Mappings</value></data>
   <data name="AnkiFieldMappingDefaultsCard.Header" xml:space="preserve"><value>Field Presets</value></data>
   <data name="AnkiFieldMappingDefaultsCard.Description" xml:space="preserve"><value>Restore known safe mappings for supported note types</value></data>
-  <data name="AnkiApplyNovelDefaultsButtonText.Text" xml:space="preserve"><value>Apply Novel Defaults</value></data>
-  <data name="AnkiApplyAnimeDefaultsButtonText.Text" xml:space="preserve"><value>Apply Anime Defaults</value></data>
+  <data name="AnkiApplyDefaultsButtonText.Text" xml:space="preserve"><value>Apply Defaults</value></data>
   <data name="AnkiFieldMappingComboBox.PlaceholderText" xml:space="preserve"><value>Select handlebar...</value></data>
   <data name="AnkiFieldMappingsHelpText.Text" xml:space="preserve"><value>Supported note types are automatically filled with missing safe field mappings.</value></data>
   <data name="AnkiTagsSectionHeader.Text" xml:space="preserve"><value>Tags</value></data>
@@ -467,6 +466,13 @@
   <data name="ReaderHighlightsPanelTitle.Text" xml:space="preserve"><value>Highlights</value></data>
   <data name="ReaderHighlightsEmptyText.Text" xml:space="preserve"><value>No highlights</value></data>
   <data name="ReaderHighlightDeleteMenuItem.Text" xml:space="preserve"><value>Delete</value></data>
+  <data name="ReaderHighlightContextMenuLabel" xml:space="preserve"><value>Highlights</value></data>
+  <data name="ReaderHighlightColorYellow" xml:space="preserve"><value>Yellow</value></data>
+  <data name="ReaderHighlightColorGreen" xml:space="preserve"><value>Green</value></data>
+  <data name="ReaderHighlightColorBlue" xml:space="preserve"><value>Blue</value></data>
+  <data name="ReaderHighlightColorPink" xml:space="preserve"><value>Pink</value></data>
+  <data name="ReaderHighlightColorPurple" xml:space="preserve"><value>Purple</value></data>
+  <data name="ReaderHighlightCreateFailed" xml:space="preserve"><value>Could not create the highlight.</value></data>
   <data name="NovelReaderCharacterJumpNumberBox.PlaceholderText" xml:space="preserve"><value>Character count</value></data>
   <data name="NovelReaderCharacterJumpButton.AutomationProperties.Name" xml:space="preserve"><value>Jump to character count</value></data>
   <data name="NovelReaderCharacterJumpButtonText.Text" xml:space="preserve"><value>Go</value></data>
@@ -485,6 +491,8 @@
   <data name="ReaderStatisticsApproximateWordsLabel.Text" xml:space="preserve"><value>Approximate Words Read</value></data>
   <data name="ReaderStatisticsSpeedLabel.Text" xml:space="preserve"><value>Reading Speed</value></data>
   <data name="ReaderStatisticsTimeLabel.Text" xml:space="preserve"><value>Reading Time</value></data>
+  <data name="ReaderLyricsStatisticsSummaryFormat" xml:space="preserve"><value>Reading Speed: {0}   Reading Progress: {1}   Reading Time: {2}</value></data>
+  <data name="ReaderLyricsProgressSummaryFormat" xml:space="preserve"><value>Reading Progress: {0}</value></data>
   <data name="ReaderStatisticsBookRemainingLabel.Text" xml:space="preserve"><value>Time to finish Book</value></data>
   <data name="ReaderStatisticsChapterRemainingLabel.Text" xml:space="preserve"><value>Time to finish Chapter</value></data>
   <data name="SettingsStatisticsCard.Header" xml:space="preserve"><value>Statistics</value></data>
@@ -503,7 +511,18 @@
   <data name="StatisticsEnableSyncToggle.Description" xml:space="preserve"><value>Enable statistics sync metadata</value></data>
   <data name="StatisticsSyncModeComboBox.Header" xml:space="preserve"><value>Sync Behavior</value></data>
   <data name="StatisticsSyncModeComboBox.Description" xml:space="preserve"><value>Merge individual rows or replace statistics during sync</value></data>
-  <data name="NovelBookMatchSasayakiMenuItem.Text" xml:space="preserve"><value>Match Sasayaki</value></data>
+  <data name="SasayakiMatchAudiobookTitle.Text" xml:space="preserve"><value>Audiobook</value></data>
+  <data name="SasayakiMatchOpenAudiobookButton.Content" xml:space="preserve"><value>Open</value></data>
+  <data name="SasayakiMatchSubtitleTitle.Text" xml:space="preserve"><value>Subtitle Match</value></data>
+  <data name="SasayakiMatchFileLabel.Text" xml:space="preserve"><value>File</value></data>
+  <data name="SasayakiMatchOpenSubtitleButton.Content" xml:space="preserve"><value>Open</value></data>
+  <data name="SasayakiMatchSearchWindowLabel.Text" xml:space="preserve"><value>Search Window</value></data>
+  <data name="SasayakiMatchNoAudiobookSelected" xml:space="preserve"><value>No audiobook selected</value></data>
+  <data name="SasayakiMatchNoFileSelected" xml:space="preserve"><value>No file selected</value></data>
+  <data name="SasayakiMatchNoSubtitleMatch" xml:space="preserve"><value>No subtitle match</value></data>
+  <data name="SasayakiMatchSummary" xml:space="preserve"><value>{0}/{1} cues matched ({2:F1}%)</value></data>
+  <data name="SasayakiMatchMatching" xml:space="preserve"><value>Matching…</value></data>
+  <data name="SasayakiMatchAction" xml:space="preserve"><value>Match</value></data>
   <data name="NovelReaderSasayakiButton.AutomationProperties.Name" xml:space="preserve"><value>Sasayaki</value></data>
   <data name="SasayakiLoadAudioMenuItem.Text" xml:space="preserve"><value>Load Audio</value></data>
   <data name="SasayakiSkipBackMenuItem.Text" xml:space="preserve"><value>Skip Back 15 Seconds</value></data>
@@ -519,8 +538,12 @@
   <data name="NovelReaderSasayakiPlaybackSectionHeader.Text" xml:space="preserve"><value>Playback</value></data>
   <data name="NovelReaderSasayakiSettingsSectionHeader.Text" xml:space="preserve"><value>Settings</value></data>
   <data name="NovelReaderSasayakiThemeSectionHeader.Text" xml:space="preserve"><value>Theme</value></data>
-  <data name="NovelReaderSasayakiPanelLoadAudioButton.AutomationProperties.Name" xml:space="preserve"><value>Load Audio</value></data>
-  <data name="NovelReaderSasayakiPanelLoadAudioText.Text" xml:space="preserve"><value>Load Audio</value></data>
+  <data name="NovelReaderSasayakiResourcesTab.Content" xml:space="preserve"><value>Resources</value></data>
+  <data name="NovelReaderSasayakiChaptersTab.Content" xml:space="preserve"><value>Chapters</value></data>
+  <data name="NovelReaderSasayakiSettingsTab.Content" xml:space="preserve"><value>Settings</value></data>
+  <data name="NovelReaderSasayakiNoChaptersText.Text" xml:space="preserve"><value>No chapters are available. Match a subtitle file to build the audiobook chapter timeline.</value></data>
+  <data name="NovelReaderSasayakiCurrentChapterText.Text" xml:space="preserve"><value>Current chapter</value></data>
+  <data name="NovelReaderSasayakiChapterFallback" xml:space="preserve"><value>Chapter {0}</value></data>
   <data name="NovelReaderSasayakiPanelSkipBackButton.AutomationProperties.Name" xml:space="preserve"><value>Skip Back 15 Seconds</value></data>
   <data name="NovelReaderSasayakiPanelPreviousCueButton.AutomationProperties.Name" xml:space="preserve"><value>Previous Cue</value></data>
   <data name="NovelReaderSasayakiPanelPlayPauseButton.AutomationProperties.Name" xml:space="preserve"><value>Play/Pause</value></data>
@@ -531,10 +554,15 @@
   <data name="NovelReaderSasayakiShowToggleSwitch.Header" xml:space="preserve"><value>Show Sasayaki</value></data>
   <data name="NovelReaderSasayakiAutoScrollToggleSwitch.Header" xml:space="preserve"><value>Auto-Scroll</value></data>
   <data name="NovelReaderSasayakiAutoPauseToggleSwitch.Header" xml:space="preserve"><value>Auto-Pause</value></data>
-  <data name="NovelReaderSasayakiLightTextColorLabel.Text" xml:space="preserve"><value>Light Text</value></data>
-  <data name="NovelReaderSasayakiLightBackgroundColorLabel.Text" xml:space="preserve"><value>Light Background</value></data>
-  <data name="NovelReaderSasayakiDarkTextColorLabel.Text" xml:space="preserve"><value>Dark Text</value></data>
-  <data name="NovelReaderSasayakiDarkBackgroundColorLabel.Text" xml:space="preserve"><value>Dark Background</value></data>
+  <data name="NovelReaderSasayakiShowToggleLabel.Text" xml:space="preserve"><value>Show Sasayaki</value></data>
+  <data name="NovelReaderSasayakiAutoScrollToggleLabel.Text" xml:space="preserve"><value>Auto-Scroll</value></data>
+  <data name="NovelReaderSasayakiAutoPauseToggleLabel.Text" xml:space="preserve"><value>Auto-Pause on Lookup</value></data>
+  <data name="NovelReaderSasayakiLightThemeGroupHeader.Text" xml:space="preserve"><value>Light Theme</value></data>
+  <data name="NovelReaderSasayakiDarkThemeGroupHeader.Text" xml:space="preserve"><value>Dark Theme</value></data>
+  <data name="NovelReaderSasayakiLightTextColorLabel.Text" xml:space="preserve"><value>Text Color</value></data>
+  <data name="NovelReaderSasayakiLightBackgroundColorLabel.Text" xml:space="preserve"><value>Background Color</value></data>
+  <data name="NovelReaderSasayakiDarkTextColorLabel.Text" xml:space="preserve"><value>Text Color</value></data>
+  <data name="NovelReaderSasayakiDarkBackgroundColorLabel.Text" xml:space="preserve"><value>Background Color</value></data>
   <data name="NovelReaderPopupSasayakiControls.AutomationProperties.Name" xml:space="preserve"><value>Sasayaki controls</value></data>
   <data name="DictionaryPopupActionBar.AutomationProperties.Name" xml:space="preserve"><value>Popup actions</value></data>
   <data name="DictionaryPopupBackButton.AutomationProperties.Name" xml:space="preserve"><value>Back</value></data>
@@ -597,6 +625,27 @@
   <data name="ProfilesSettingsPageTitle.Text" xml:space="preserve"><value>Profiles</value></data>
   <data name="ProfilesActiveProfileCard.Header" xml:space="preserve"><value>Active Profile</value></data>
   <data name="ProfilesActiveProfileCard.Description" xml:space="preserve"><value>Dictionary, Reader appearance and Anki mining settings follow the active profile.</value></data>
+  <data name="ProfilesRenameMenuItem.Text" xml:space="preserve"><value>Rename</value></data>
+  <data name="ProfilesDeleteMenuItem.Text" xml:space="preserve"><value>Delete</value></data>
+  <data name="ProfilesBuiltInText.Text" xml:space="preserve"><value>Built-in</value></data>
+  <data name="ProfilesNewProfileCard.Header" xml:space="preserve"><value>New Profile</value></data>
+  <data name="ProfilesBeginCreateProfileButton.Content" xml:space="preserve"><value>Create Profile</value></data>
+  <data name="ProfilesCreateEditorCard.Header" xml:space="preserve"><value>New Profile</value></data>
+  <data name="ProfilesNewProfileNameTextBox.Header" xml:space="preserve"><value>Profile Name</value></data>
+  <data name="ProfilesNewProfileLanguageComboBox.Header" xml:space="preserve"><value>Language</value></data>
+  <data name="ProfilesCancelCreateButton.Content" xml:space="preserve"><value>Cancel</value></data>
+  <data name="ProfilesCreateProfileButton.Content" xml:space="preserve"><value>Create</value></data>
+  <data name="ProfilesRenameEditorCard.Header" xml:space="preserve"><value>Rename Profile</value></data>
+  <data name="ProfilesRenameProfileNameTextBox.Header" xml:space="preserve"><value>Profile Name</value></data>
+  <data name="ProfilesRenameProfileLanguageTextBox.Header" xml:space="preserve"><value>Language</value></data>
+  <data name="ProfilesCancelRenameButton.Content" xml:space="preserve"><value>Cancel</value></data>
+  <data name="ProfilesRenameProfileButton.Content" xml:space="preserve"><value>Save</value></data>
+  <data name="ProfilesDefaultJapanese" xml:space="preserve"><value>Japanese</value></data>
+  <data name="ProfilesBlankNameError" xml:space="preserve"><value>Profile name cannot be empty.</value></data>
+  <data name="ProfilesDeleteConfirmationTitle" xml:space="preserve"><value>Delete “{0}”?</value></data>
+  <data name="ProfilesDeleteConfirmationMessage" xml:space="preserve"><value>This Profile and its settings will be removed.</value></data>
+  <data name="ProfilesDeleteButton" xml:space="preserve"><value>Delete</value></data>
+  <data name="ProfilesCancelButton" xml:space="preserve"><value>Cancel</value></data>
   <data name="ProfilesActiveProfileComboBox.AutomationProperties.Name" xml:space="preserve"><value>Active profile</value></data>
   <data name="ProfilesNewProfileSectionHeader.Text" xml:space="preserve"><value>New Profile</value></data>
   <data name="ProfilesCreateCard.Header" xml:space="preserve"><value>Create</value></data>
@@ -632,6 +681,25 @@
   <data name="SettingsShortcutsControlsSectionHeader.Content" xml:space="preserve"><value>Shortcuts &amp; Controls</value></data>
   <data name="SettingsKeyboardShortcutsNavItem.Content" xml:space="preserve"><value>Keyboard Shortcuts</value></data>
   <data name="SettingsGameControllerNavItem.Content" xml:space="preserve"><value>Game Controller</value></data>
+  <data name="GameControllerSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>Back</value></data>
+  <data name="GameControllerPageTitle.Text" xml:space="preserve"><value>Game Controller</value></data>
+  <data name="GameControllerControllerSectionHeader.Text" xml:space="preserve"><value>Controller</value></data>
+  <data name="GameControllerConnectionCard.Header" xml:space="preserve"><value>Controller</value></data>
+  <data name="GameControllerConnectionCard.Description" xml:space="preserve"><value>Connected controller</value></data>
+  <data name="GameControllerRecordingCard.Header" xml:space="preserve"><value>Waiting for controller input...</value></data>
+  <data name="GameControllerCancelRecordingButton.Content" xml:space="preserve"><value>Cancel</value></data>
+  <data name="GameControllerInstructionText.Text" xml:space="preserve"><value>Choose an action, then press a button or direction on an Xbox, PlayStation, Switch, or compatible controller.</value></data>
+  <data name="GameControllerDefaultsSectionHeader.Text" xml:space="preserve"><value>Defaults</value></data>
+  <data name="GameControllerResetDefaultsCard.Header" xml:space="preserve"><value>Default Mappings</value></data>
+  <data name="GameControllerResetDefaultsCard.Description" xml:space="preserve"><value>Restore Niratan's controller bindings</value></data>
+  <data name="GameControllerResetDefaultsButton.Content" xml:space="preserve"><value>Reset Defaults</value></data>
+  <data name="GameControllerSectionReading" xml:space="preserve"><value>Reading</value></data>
+  <data name="GameControllerSectionSasayaki" xml:space="preserve"><value>Sasayaki</value></data>
+  <data name="GameControllerSectionStatistics" xml:space="preserve"><value>Statistics</value></data>
+  <data name="GameControllerNotConnected" xml:space="preserve"><value>Not Connected</value></data>
+  <data name="GameControllerConnectedFallback" xml:space="preserve"><value>Compatible controller</value></data>
+  <data name="GameControllerWaitingForInputFormat" xml:space="preserve"><value>Waiting for controller input for {0}...</value></data>
+  <data name="GameControllerPressInput" xml:space="preserve"><value>Press controller...</value></data>
   <data name="SettingsSyncDataSectionHeader.Content" xml:space="preserve"><value>Sync &amp; Data</value></data>
   <data name="SettingsSyncNavItem.Content" xml:space="preserve"><value>ッツ Sync</value></data>
   <data name="SettingsBackupNavItem.Content" xml:space="preserve"><value>Backup</value></data>
@@ -724,13 +792,15 @@
   <data name="KeyboardShortcutsPageTitle.Text" xml:space="preserve"><value>Keyboard Shortcuts</value></data>
   <data name="KeyboardShortcutResetButton.Content" xml:space="preserve"><value>Reset</value></data>
   <data name="KeyboardShortcutsRecordingHint" xml:space="preserve"><value>Press a shortcut for {0}. Esc cancels.</value></data>
+  <data name="KeyboardShortcutsDefaultText" xml:space="preserve"><value>Default Shortcut: {0}</value></data>
+  <data name="KeyboardShortcutsPressKeysText" xml:space="preserve"><value>Press keys...</value></data>
   <data name="KeyboardShortcutsUnassignedText" xml:space="preserve"><value>Unassigned</value></data>
   <data name="KeyboardShortcutsConflictText" xml:space="preserve"><value>Conflicts with {0}</value></data>
   <data name="KeyboardShortcutsShadowedText" xml:space="preserve"><value>Shadowed by {0}</value></data>
   <data name="ShortcutCategoryGlobal" xml:space="preserve"><value>Global</value></data>
   <data name="ShortcutActionGlobalLookupSelectedText" xml:space="preserve"><value>Lookup Selected Text</value></data>
   <data name="ShortcutCategoryReader" xml:space="preserve"><value>Reader</value></data>
-  <data name="ShortcutCategoryDictionaryPopup" xml:space="preserve"><value>Dictionary Popup</value></data>
+  <data name="ShortcutCategoryDictionaryPopup" xml:space="preserve"><value>Dictionary / Popup</value></data>
   <data name="ShortcutCategorySasayaki" xml:space="preserve"><value>Sasayaki</value></data>
   <data name="ShortcutCategoryVideo" xml:space="preserve"><value>Video</value></data>
   <data name="ShortcutActionReaderPreviousPage" xml:space="preserve"><value>Previous Page</value></data>
@@ -821,6 +891,7 @@
   <data name="NovelShelfManagementDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
   <data name="NovelShelfNameBox.Header" xml:space="preserve"><value>New shelf</value></data>
   <data name="NovelShelfNameBox.PlaceholderText" xml:space="preserve"><value>Shelf name</value></data>
+  <data name="NovelShelfListHeader.Text" xml:space="preserve"><value>Shelves</value></data>
   <data name="NovelShelfRenameBox.Header" xml:space="preserve"><value>Selected shelf</value></data>
   <data name="NovelShelfCreateButton.Content" xml:space="preserve"><value>Create</value></data>
   <data name="NovelShelfRenameButton.Content" xml:space="preserve"><value>Rename</value></data>
@@ -977,6 +1048,10 @@
   <data name="ReaderGalleryEmptyText.Text" xml:space="preserve"><value>No images</value></data>
   <data name="ReaderGalleryUnreadBadgeText.Text" xml:space="preserve"><value>Unread</value></data>
   <data name="ReaderImageViewerCloseButton.AutomationProperties.Name" xml:space="preserve"><value>Close image</value></data>
+  <data name="ReaderImageViewerPreviousButton.AutomationProperties.Name" xml:space="preserve"><value>Previous image</value></data>
+  <data name="ReaderImageViewerNextButton.AutomationProperties.Name" xml:space="preserve"><value>Next image</value></data>
+  <data name="ReaderBlurImagesCard.Header" xml:space="preserve"><value>Blur Images</value></data>
+  <data name="ReaderBlurImagesCard.Description" xml:space="preserve"><value>Blur illustrations while reading until they are clicked</value></data>
   <data name="NovelReaderLyricsModeMenuItem.Text" xml:space="preserve"><value>Lyrics Mode</value></data>
   <data name="NovelReaderLyricsModeButton.AutomationProperties.Name" xml:space="preserve"><value>Open Lyrics Mode</value></data>
   <data name="NovelReaderLyricsExitButton.AutomationProperties.Name" xml:space="preserve"><value>Exit Lyrics Mode</value></data>
@@ -987,4 +1062,47 @@
   <data name="NovelReaderVerticalLyricsToggle.AutomationProperties.Name" xml:space="preserve"><value>Vertical Lyrics Mode</value></data>
   <data name="NovelReaderLyricsStatisticsButton.AutomationProperties.Name" xml:space="preserve"><value>Toggle reading timer</value></data>
   <data name="NovelReaderLyricsNoMatch" xml:space="preserve"><value>No lyrics match</value></data>
+  <data name="DictionaryRecommendedCard.Header" xml:space="preserve"><value>Recommended Dictionaries</value></data>
+  <data name="DictionaryRecommendedCard.Description" xml:space="preserve"><value>Download the dictionaries recommended by Niratan for the active profile language</value></data>
+  <data name="DictionaryRecommendedDownloadText.Text" xml:space="preserve"><value>Download…</value></data>
+  <data name="DictionaryUpdatesSectionHeader.Text" xml:space="preserve"><value>Updates</value></data>
+  <data name="DictionaryAutoUpdateCard.Header" xml:space="preserve"><value>Update Automatically</value></data>
+  <data name="DictionaryUpdateIntervalCard.Header" xml:space="preserve"><value>Interval</value></data>
+  <data name="DictionaryLastUpdateCard.Header" xml:space="preserve"><value>Last Update</value></data>
+  <data name="DictionaryUpdateDictionariesCard.Header" xml:space="preserve"><value>Update Dictionaries</value></data>
+  <data name="DictionaryUpdateDictionariesCard.Description" xml:space="preserve"><value>Check installed dictionaries that publish an update index</value></data>
+  <data name="DictionaryCheckUpdatesText.Text" xml:space="preserve"><value>Check for updates…</value></data>
+  <data name="DictionarySettingsSectionHeader.Text" xml:space="preserve"><value>Settings</value></data>
+  <data name="DictionaryDefaultTabCard.Header" xml:space="preserve"><value>Default to Dictionary Tab</value></data>
+  <data name="DictionaryDefaultTabCard.Description" xml:space="preserve"><value>Open Lookup instead of the novel library when Niratan starts</value></data>
+  <data name="DictionaryCustomCssCard.Header" xml:space="preserve"><value>Custom CSS</value></data>
+  <data name="DictionaryCustomCssCard.Description" xml:space="preserve"><value>Edit CSS applied after dictionary-provided styles</value></data>
+  <data name="DictionaryCustomCssEditText.Text" xml:space="preserve"><value>Edit…</value></data>
+  <data name="DictionaryCollapsedDictionariesCard.Header" xml:space="preserve"><value>Collapsed Dictionaries</value></data>
+  <data name="DictionaryConfigureCollapsedText.Text" xml:space="preserve"><value>Configure…</value></data>
+  <data name="DictionaryTwoColumnCard.Header" xml:space="preserve"><value>Two-Column Layout</value></data>
+  <data name="DictionaryTwoColumnCard.Description" xml:space="preserve"><value>Arrange dictionary cards in two columns on wide popup surfaces</value></data>
+  <data name="DictionaryDesktopHoverDelayCard.Header" xml:space="preserve"><value>Desktop Hover Delay</value></data>
+  <data name="DictionaryDesktopHoverDelayCard.Description" xml:space="preserve"><value>Delay before Shift-hover lookup in Reader, Popup, and video subtitles</value></data>
+  <data name="RecommendedDictionariesDialog.Title" xml:space="preserve"><value>Download Dictionaries</value></data>
+  <data name="RecommendedDictionariesDialog.PrimaryButtonText" xml:space="preserve"><value>Download</value></data>
+  <data name="RecommendedDictionariesDialog.CloseButtonText" xml:space="preserve"><value>Cancel</value></data>
+  <data name="DictionaryUpdatesDialog.Title" xml:space="preserve"><value>Update Dictionaries</value></data>
+  <data name="DictionaryUpdatesDialog.PrimaryButtonText" xml:space="preserve"><value>Update</value></data>
+  <data name="DictionaryUpdatesDialog.CloseButtonText" xml:space="preserve"><value>Cancel</value></data>
+  <data name="CollapsedDictionariesDialog.Title" xml:space="preserve"><value>Collapse Dictionaries</value></data>
+  <data name="CollapsedDictionariesDialog.PrimaryButtonText" xml:space="preserve"><value>Save</value></data>
+  <data name="CollapsedDictionariesDialog.CloseButtonText" xml:space="preserve"><value>Cancel</value></data>
+  <data name="CollapsedDictionariesDialogDescription.Text" xml:space="preserve"><value>Choose which term dictionaries start collapsed in lookup results.</value></data>
+  <data name="DictionaryCustomCssDialogTitle" xml:space="preserve"><value>Custom CSS</value></data>
+  <data name="DictionaryCustomCssDialogSave" xml:space="preserve"><value>Save</value></data>
+  <data name="DictionaryCustomCssDialogReset" xml:space="preserve"><value>Reset</value></data>
+  <data name="DictionaryCustomCssDialogCancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="DictionaryUpdateIntervalDaily.Content" xml:space="preserve"><value>Daily</value></data>
+  <data name="DictionaryUpdateIntervalWeekly.Content" xml:space="preserve"><value>Weekly</value></data>
+  <data name="DictionaryUpdateIntervalMonthly.Content" xml:space="preserve"><value>Monthly</value></data>
+  <data name="DictionaryNever" xml:space="preserve"><value>Never</value></data>
+  <data name="DictionaryTypeTermLabel" xml:space="preserve"><value>Term</value></data>
+  <data name="DictionaryTypeFrequencyLabel" xml:space="preserve"><value>Frequency</value></data>
+  <data name="DictionaryTypePitchLabel" xml:space="preserve"><value>Pitch</value></data>
 </root>

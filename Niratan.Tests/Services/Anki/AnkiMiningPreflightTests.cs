@@ -54,6 +54,30 @@ public class AnkiMiningPreflightTests
     }
 
     [Fact]
+    public void ResolveMediaNeedsForMining_MapsUnifiedDefaultsToVideoMedia()
+    {
+        var noteType = new AnkiNoteType
+        {
+            Id = 1,
+            Name = "Lapis",
+            Fields = ["Picture", "SentenceAudio"],
+        };
+
+        var needs = AnkiFieldMappingResolver.ResolveMediaNeedsForMining(
+            noteType,
+            new Dictionary<string, string>
+            {
+                ["Picture"] = "{book-cover}",
+                ["SentenceAudio"] = "{sasayaki-audio}",
+            },
+            new AnkiMiningContext { VideoFileName = "Episode.mkv" });
+
+        needs.NeedsVideoScreenshot.Should().BeTrue();
+        needs.NeedsVideoAudioClip.Should().BeTrue();
+        needs.NeedsSasayakiAudio.Should().BeFalse();
+    }
+
+    [Fact]
     public void ResolveMediaNeedsForMining_RequestsSasayakiAudioForNovelSentenceAudioMapping()
     {
         var noteType = new AnkiNoteType

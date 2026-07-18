@@ -23,6 +23,7 @@ public class ReaderSettings
     public int VerticalPadding { get; set; } = 0;
     public bool AvoidPageBreak { get; set; } = false;
     public bool JustifyText { get; set; } = false;
+    public bool BlurImages { get; set; } = false;
     public bool LayoutAdvanced { get; set; } = false;
     public double LineHeight { get; set; } = 1.65;
     public double CharacterSpacing { get; set; } = 0.0;
@@ -32,9 +33,9 @@ public class ReaderSettings
     public bool ShowCharacters { get; set; } = true;
     public bool ShowPercentage { get; set; } = true;
     public bool ShowProgressTop { get; set; } = true;
-    public bool ShowStatisticsToggle { get; set; } = false;
-    public bool ShowReadingSpeed { get; set; } = false;
-    public bool ShowReadingTime { get; set; } = false;
+    public bool ShowStatisticsToggle { get; set; } = true;
+    public bool ShowReadingSpeed { get; set; } = true;
+    public bool ShowReadingTime { get; set; } = true;
     public bool BlurUnreadGalleryImages { get; set; } = true;
 
     // --- Computed CSS properties ---

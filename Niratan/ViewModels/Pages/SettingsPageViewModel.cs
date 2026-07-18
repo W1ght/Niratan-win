@@ -79,6 +79,9 @@ public partial class SettingsPageViewModel : ObservableObject
     public partial bool JustifyText { get; set; }
 
     [ObservableProperty]
+    public partial bool BlurImages { get; set; }
+
+    [ObservableProperty]
     public partial bool LayoutAdvanced { get; set; }
 
     [ObservableProperty]
@@ -217,6 +220,7 @@ public partial class SettingsPageViewModel : ObservableObject
         VerticalPadding = s.VerticalPadding;
         AvoidPageBreak = s.AvoidPageBreak;
         JustifyText = s.JustifyText;
+        BlurImages = s.BlurImages;
         LayoutAdvanced = s.LayoutAdvanced;
         LineHeight = s.LineHeight;
         CharacterSpacing = s.CharacterSpacing;
@@ -280,6 +284,7 @@ public partial class SettingsPageViewModel : ObservableObject
     partial void OnVerticalPaddingChanged(int value) => ApplyReaderSetting(s => s.VerticalPadding, value);
     partial void OnAvoidPageBreakChanged(bool value) => ApplyReaderSetting(s => s.AvoidPageBreak, value);
     partial void OnJustifyTextChanged(bool value) => ApplyReaderSetting(s => s.JustifyText, value);
+    partial void OnBlurImagesChanged(bool value) => ApplyReaderSetting(s => s.BlurImages, value);
 
     partial void OnLayoutAdvancedChanged(bool value)
     {

@@ -120,7 +120,7 @@
                                 x:Uid="SettingsGameControllerNavItem"
                                 AutomationProperties.AutomationId="SettingsGameControllerNavItem"
                                 Content="Game Controller"
-                                IsEnabled="False">
+                                Tag="Niratan.Views.Pages.GameControllerSettingsPage">
                 <NavigationViewItem.Icon>
                     <FontIcon Glyph="&#xE7FC;" />
                 </NavigationViewItem.Icon>

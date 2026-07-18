@@ -15,7 +15,9 @@ public sealed record InstalledDictionary(
     bool IsEnabled = true,
     int Order = 0,
     string Revision = "",
-    string DisplayTitle = ""
+    string DisplayTitle = "",
+    string IndexUrl = "",
+    string DownloadUrl = ""
 );
 
 public sealed record DictionaryConfig(

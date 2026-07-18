@@ -66,13 +66,13 @@ public sealed class ProfileRuntimeService : IProfileRuntimeService, IDictionaryP
     public Task ActivateForBookAsync(NovelBook book, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(book);
-        return ActivateAsync(ProfileContext.Book(book.ProfileId, book.Language), ct);
+        return ActivateAsync(ProfileContext.Global(), ct);
     }
 
     public Task ActivateForVideoAsync(VideoItem video, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(video);
-        return ActivateAsync(ProfileContext.Video(video.ProfileId), ct);
+        return ActivateAsync(ProfileContext.Global(), ct);
     }
 
     public Task SaveActiveSettingsAsync(CancellationToken ct = default) =>

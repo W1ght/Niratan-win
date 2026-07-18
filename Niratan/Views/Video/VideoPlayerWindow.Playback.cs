@@ -1522,7 +1522,7 @@ public sealed partial class VideoPlayerWindow
             && _lastSubtitlePointerPoint is { } subtitlePoint)
         {
             e.Handled = true;
-            await LookupSubtitleAtCanvasPointAsync(subtitlePoint, isHoverLookup: true);
+            ScheduleSubtitleHoverLookup(subtitlePoint);
             return;
         }
 

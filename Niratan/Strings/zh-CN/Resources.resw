@@ -43,8 +43,7 @@
   <data name="AnkiFieldMappingsSectionHeader.Text" xml:space="preserve"><value>字段映射</value></data>
   <data name="AnkiFieldMappingDefaultsCard.Header" xml:space="preserve"><value>字段预设</value></data>
   <data name="AnkiFieldMappingDefaultsCard.Description" xml:space="preserve"><value>为支持的笔记类型恢复安全的默认字段映射</value></data>
-  <data name="AnkiApplyNovelDefaultsButtonText.Text" xml:space="preserve"><value>应用小说预设</value></data>
-  <data name="AnkiApplyAnimeDefaultsButtonText.Text" xml:space="preserve"><value>应用动画预设</value></data>
+  <data name="AnkiApplyDefaultsButtonText.Text" xml:space="preserve"><value>应用默认值</value></data>
   <data name="AnkiFieldMappingComboBox.PlaceholderText" xml:space="preserve"><value>选择占位符...</value></data>
   <data name="AnkiFieldMappingsHelpText.Text" xml:space="preserve"><value>支持的笔记类型会自动补齐缺失的安全字段映射。</value></data>
   <data name="AnkiTagsSectionHeader.Text" xml:space="preserve"><value>标签</value></data>
@@ -467,6 +466,13 @@
   <data name="ReaderHighlightsPanelTitle.Text" xml:space="preserve"><value>高亮</value></data>
   <data name="ReaderHighlightsEmptyText.Text" xml:space="preserve"><value>暂无高亮</value></data>
   <data name="ReaderHighlightDeleteMenuItem.Text" xml:space="preserve"><value>删除</value></data>
+  <data name="ReaderHighlightContextMenuLabel" xml:space="preserve"><value>标注</value></data>
+  <data name="ReaderHighlightColorYellow" xml:space="preserve"><value>黄色</value></data>
+  <data name="ReaderHighlightColorGreen" xml:space="preserve"><value>绿色</value></data>
+  <data name="ReaderHighlightColorBlue" xml:space="preserve"><value>蓝色</value></data>
+  <data name="ReaderHighlightColorPink" xml:space="preserve"><value>粉色</value></data>
+  <data name="ReaderHighlightColorPurple" xml:space="preserve"><value>紫色</value></data>
+  <data name="ReaderHighlightCreateFailed" xml:space="preserve"><value>无法创建标注。</value></data>
   <data name="NovelReaderCharacterJumpNumberBox.PlaceholderText" xml:space="preserve"><value>字符数</value></data>
   <data name="NovelReaderCharacterJumpButton.AutomationProperties.Name" xml:space="preserve"><value>跳转到字符数</value></data>
   <data name="NovelReaderCharacterJumpButtonText.Text" xml:space="preserve"><value>前往</value></data>
@@ -485,6 +491,8 @@
   <data name="ReaderStatisticsApproximateWordsLabel.Text" xml:space="preserve"><value>已读近似词数</value></data>
   <data name="ReaderStatisticsSpeedLabel.Text" xml:space="preserve"><value>阅读速度</value></data>
   <data name="ReaderStatisticsTimeLabel.Text" xml:space="preserve"><value>阅读时间</value></data>
+  <data name="ReaderLyricsStatisticsSummaryFormat" xml:space="preserve"><value>阅读速度：{0}   阅读进度：{1}   阅读时间：{2}</value></data>
+  <data name="ReaderLyricsProgressSummaryFormat" xml:space="preserve"><value>阅读进度：{0}</value></data>
   <data name="ReaderStatisticsBookRemainingLabel.Text" xml:space="preserve"><value>读完整本预计时间</value></data>
   <data name="ReaderStatisticsChapterRemainingLabel.Text" xml:space="preserve"><value>读完本章预计时间</value></data>
   <data name="SettingsStatisticsCard.Header" xml:space="preserve"><value>统计</value></data>
@@ -503,7 +511,18 @@
   <data name="StatisticsEnableSyncToggle.Description" xml:space="preserve"><value>启用统计同步元数据</value></data>
   <data name="StatisticsSyncModeComboBox.Header" xml:space="preserve"><value>同步行为</value></data>
   <data name="StatisticsSyncModeComboBox.Description" xml:space="preserve"><value>同步时逐条合并或整体替换统计</value></data>
-  <data name="NovelBookMatchSasayakiMenuItem.Text" xml:space="preserve"><value>匹配 Sasayaki</value></data>
+  <data name="SasayakiMatchAudiobookTitle.Text" xml:space="preserve"><value>有声书</value></data>
+  <data name="SasayakiMatchOpenAudiobookButton.Content" xml:space="preserve"><value>打开</value></data>
+  <data name="SasayakiMatchSubtitleTitle.Text" xml:space="preserve"><value>字幕匹配</value></data>
+  <data name="SasayakiMatchFileLabel.Text" xml:space="preserve"><value>文件</value></data>
+  <data name="SasayakiMatchOpenSubtitleButton.Content" xml:space="preserve"><value>打开</value></data>
+  <data name="SasayakiMatchSearchWindowLabel.Text" xml:space="preserve"><value>搜索窗口</value></data>
+  <data name="SasayakiMatchNoAudiobookSelected" xml:space="preserve"><value>未选择有声书</value></data>
+  <data name="SasayakiMatchNoFileSelected" xml:space="preserve"><value>未选择文件</value></data>
+  <data name="SasayakiMatchNoSubtitleMatch" xml:space="preserve"><value>暂无字幕匹配</value></data>
+  <data name="SasayakiMatchSummary" xml:space="preserve"><value>已匹配 {0}/{1} 条（{2:F1}%）</value></data>
+  <data name="SasayakiMatchMatching" xml:space="preserve"><value>正在匹配…</value></data>
+  <data name="SasayakiMatchAction" xml:space="preserve"><value>匹配</value></data>
   <data name="NovelReaderSasayakiButton.AutomationProperties.Name" xml:space="preserve"><value>Sasayaki</value></data>
   <data name="SasayakiLoadAudioMenuItem.Text" xml:space="preserve"><value>加载音频</value></data>
   <data name="SasayakiSkipBackMenuItem.Text" xml:space="preserve"><value>后退 15 秒</value></data>
@@ -519,8 +538,12 @@
   <data name="NovelReaderSasayakiPlaybackSectionHeader.Text" xml:space="preserve"><value>播放</value></data>
   <data name="NovelReaderSasayakiSettingsSectionHeader.Text" xml:space="preserve"><value>设置</value></data>
   <data name="NovelReaderSasayakiThemeSectionHeader.Text" xml:space="preserve"><value>主题</value></data>
-  <data name="NovelReaderSasayakiPanelLoadAudioButton.AutomationProperties.Name" xml:space="preserve"><value>加载音频</value></data>
-  <data name="NovelReaderSasayakiPanelLoadAudioText.Text" xml:space="preserve"><value>加载音频</value></data>
+  <data name="NovelReaderSasayakiResourcesTab.Content" xml:space="preserve"><value>资源</value></data>
+  <data name="NovelReaderSasayakiChaptersTab.Content" xml:space="preserve"><value>章节</value></data>
+  <data name="NovelReaderSasayakiSettingsTab.Content" xml:space="preserve"><value>设置</value></data>
+  <data name="NovelReaderSasayakiNoChaptersText.Text" xml:space="preserve"><value>暂无章节。匹配字幕文件后会生成有声书章节时间轴。</value></data>
+  <data name="NovelReaderSasayakiCurrentChapterText.Text" xml:space="preserve"><value>当前章节</value></data>
+  <data name="NovelReaderSasayakiChapterFallback" xml:space="preserve"><value>第 {0} 章</value></data>
   <data name="NovelReaderSasayakiPanelSkipBackButton.AutomationProperties.Name" xml:space="preserve"><value>后退 15 秒</value></data>
   <data name="NovelReaderSasayakiPanelPreviousCueButton.AutomationProperties.Name" xml:space="preserve"><value>上一句</value></data>
   <data name="NovelReaderSasayakiPanelPlayPauseButton.AutomationProperties.Name" xml:space="preserve"><value>播放/暂停</value></data>
@@ -531,10 +554,15 @@
   <data name="NovelReaderSasayakiShowToggleSwitch.Header" xml:space="preserve"><value>显示 Sasayaki</value></data>
   <data name="NovelReaderSasayakiAutoScrollToggleSwitch.Header" xml:space="preserve"><value>自动滚动</value></data>
   <data name="NovelReaderSasayakiAutoPauseToggleSwitch.Header" xml:space="preserve"><value>自动暂停</value></data>
-  <data name="NovelReaderSasayakiLightTextColorLabel.Text" xml:space="preserve"><value>浅色文本</value></data>
-  <data name="NovelReaderSasayakiLightBackgroundColorLabel.Text" xml:space="preserve"><value>浅色背景</value></data>
-  <data name="NovelReaderSasayakiDarkTextColorLabel.Text" xml:space="preserve"><value>深色文本</value></data>
-  <data name="NovelReaderSasayakiDarkBackgroundColorLabel.Text" xml:space="preserve"><value>深色背景</value></data>
+  <data name="NovelReaderSasayakiShowToggleLabel.Text" xml:space="preserve"><value>显示 Sasayaki</value></data>
+  <data name="NovelReaderSasayakiAutoScrollToggleLabel.Text" xml:space="preserve"><value>自动滚动</value></data>
+  <data name="NovelReaderSasayakiAutoPauseToggleLabel.Text" xml:space="preserve"><value>查词时自动暂停</value></data>
+  <data name="NovelReaderSasayakiLightThemeGroupHeader.Text" xml:space="preserve"><value>浅色主题</value></data>
+  <data name="NovelReaderSasayakiDarkThemeGroupHeader.Text" xml:space="preserve"><value>深色主题</value></data>
+  <data name="NovelReaderSasayakiLightTextColorLabel.Text" xml:space="preserve"><value>文本颜色</value></data>
+  <data name="NovelReaderSasayakiLightBackgroundColorLabel.Text" xml:space="preserve"><value>背景颜色</value></data>
+  <data name="NovelReaderSasayakiDarkTextColorLabel.Text" xml:space="preserve"><value>文本颜色</value></data>
+  <data name="NovelReaderSasayakiDarkBackgroundColorLabel.Text" xml:space="preserve"><value>背景颜色</value></data>
   <data name="NovelReaderPopupSasayakiControls.AutomationProperties.Name" xml:space="preserve"><value>Sasayaki 控件</value></data>
   <data name="DictionaryPopupActionBar.AutomationProperties.Name" xml:space="preserve"><value>弹窗操作</value></data>
   <data name="DictionaryPopupBackButton.AutomationProperties.Name" xml:space="preserve"><value>后退</value></data>
@@ -597,6 +625,27 @@
   <data name="ProfilesSettingsPageTitle.Text" xml:space="preserve"><value>配置档案</value></data>
   <data name="ProfilesActiveProfileCard.Header" xml:space="preserve"><value>当前配置档案</value></data>
   <data name="ProfilesActiveProfileCard.Description" xml:space="preserve"><value>词典、阅读器外观和 Anki 制卡设置会跟随当前配置档案。</value></data>
+  <data name="ProfilesRenameMenuItem.Text" xml:space="preserve"><value>重命名</value></data>
+  <data name="ProfilesDeleteMenuItem.Text" xml:space="preserve"><value>删除</value></data>
+  <data name="ProfilesBuiltInText.Text" xml:space="preserve"><value>内置</value></data>
+  <data name="ProfilesNewProfileCard.Header" xml:space="preserve"><value>新建配置档案</value></data>
+  <data name="ProfilesBeginCreateProfileButton.Content" xml:space="preserve"><value>创建配置档案</value></data>
+  <data name="ProfilesCreateEditorCard.Header" xml:space="preserve"><value>新建配置档案</value></data>
+  <data name="ProfilesNewProfileNameTextBox.Header" xml:space="preserve"><value>配置档案名称</value></data>
+  <data name="ProfilesNewProfileLanguageComboBox.Header" xml:space="preserve"><value>语言</value></data>
+  <data name="ProfilesCancelCreateButton.Content" xml:space="preserve"><value>取消</value></data>
+  <data name="ProfilesCreateProfileButton.Content" xml:space="preserve"><value>创建</value></data>
+  <data name="ProfilesRenameEditorCard.Header" xml:space="preserve"><value>重命名配置档案</value></data>
+  <data name="ProfilesRenameProfileNameTextBox.Header" xml:space="preserve"><value>配置档案名称</value></data>
+  <data name="ProfilesRenameProfileLanguageTextBox.Header" xml:space="preserve"><value>语言</value></data>
+  <data name="ProfilesCancelRenameButton.Content" xml:space="preserve"><value>取消</value></data>
+  <data name="ProfilesRenameProfileButton.Content" xml:space="preserve"><value>保存</value></data>
+  <data name="ProfilesDefaultJapanese" xml:space="preserve"><value>日语</value></data>
+  <data name="ProfilesBlankNameError" xml:space="preserve"><value>配置档案名称不能为空。</value></data>
+  <data name="ProfilesDeleteConfirmationTitle" xml:space="preserve"><value>删除“{0}”？</value></data>
+  <data name="ProfilesDeleteConfirmationMessage" xml:space="preserve"><value>此配置档案及其设置将被删除。</value></data>
+  <data name="ProfilesDeleteButton" xml:space="preserve"><value>删除</value></data>
+  <data name="ProfilesCancelButton" xml:space="preserve"><value>取消</value></data>
   <data name="ProfilesActiveProfileComboBox.AutomationProperties.Name" xml:space="preserve"><value>当前配置档案</value></data>
   <data name="ProfilesNewProfileSectionHeader.Text" xml:space="preserve"><value>新建配置档案</value></data>
   <data name="ProfilesCreateCard.Header" xml:space="preserve"><value>创建</value></data>
@@ -632,6 +681,25 @@
   <data name="SettingsShortcutsControlsSectionHeader.Content" xml:space="preserve"><value>快捷键与控制</value></data>
   <data name="SettingsKeyboardShortcutsNavItem.Content" xml:space="preserve"><value>键盘快捷键</value></data>
   <data name="SettingsGameControllerNavItem.Content" xml:space="preserve"><value>游戏手柄</value></data>
+  <data name="GameControllerSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>返回</value></data>
+  <data name="GameControllerPageTitle.Text" xml:space="preserve"><value>游戏手柄</value></data>
+  <data name="GameControllerControllerSectionHeader.Text" xml:space="preserve"><value>手柄</value></data>
+  <data name="GameControllerConnectionCard.Header" xml:space="preserve"><value>手柄</value></data>
+  <data name="GameControllerConnectionCard.Description" xml:space="preserve"><value>当前连接的手柄</value></data>
+  <data name="GameControllerRecordingCard.Header" xml:space="preserve"><value>正在等待手柄输入…</value></data>
+  <data name="GameControllerCancelRecordingButton.Content" xml:space="preserve"><value>取消</value></data>
+  <data name="GameControllerInstructionText.Text" xml:space="preserve"><value>选择一个操作，然后按下 Xbox、PlayStation、Switch 或兼容手柄上的按键或方向。</value></data>
+  <data name="GameControllerDefaultsSectionHeader.Text" xml:space="preserve"><value>默认值</value></data>
+  <data name="GameControllerResetDefaultsCard.Header" xml:space="preserve"><value>默认映射</value></data>
+  <data name="GameControllerResetDefaultsCard.Description" xml:space="preserve"><value>恢复 Niratan 的手柄按键绑定</value></data>
+  <data name="GameControllerResetDefaultsButton.Content" xml:space="preserve"><value>恢复默认值</value></data>
+  <data name="GameControllerSectionReading" xml:space="preserve"><value>阅读</value></data>
+  <data name="GameControllerSectionSasayaki" xml:space="preserve"><value>Sasayaki</value></data>
+  <data name="GameControllerSectionStatistics" xml:space="preserve"><value>统计</value></data>
+  <data name="GameControllerNotConnected" xml:space="preserve"><value>未连接</value></data>
+  <data name="GameControllerConnectedFallback" xml:space="preserve"><value>兼容手柄</value></data>
+  <data name="GameControllerWaitingForInputFormat" xml:space="preserve"><value>正在等待“{0}”的手柄输入…</value></data>
+  <data name="GameControllerPressInput" xml:space="preserve"><value>请按下手柄按键…</value></data>
   <data name="SettingsSyncDataSectionHeader.Content" xml:space="preserve"><value>同步与数据</value></data>
   <data name="SettingsSyncNavItem.Content" xml:space="preserve"><value>ッツ Sync</value></data>
   <data name="SettingsBackupNavItem.Content" xml:space="preserve"><value>备份</value></data>
@@ -724,13 +792,15 @@
   <data name="KeyboardShortcutsPageTitle.Text" xml:space="preserve"><value>键盘快捷键</value></data>
   <data name="KeyboardShortcutResetButton.Content" xml:space="preserve"><value>重置</value></data>
   <data name="KeyboardShortcutsRecordingHint" xml:space="preserve"><value>请按下“{0}”的新快捷键。Esc 取消。</value></data>
+  <data name="KeyboardShortcutsDefaultText" xml:space="preserve"><value>默认快捷键：{0}</value></data>
+  <data name="KeyboardShortcutsPressKeysText" xml:space="preserve"><value>请按键…</value></data>
   <data name="KeyboardShortcutsUnassignedText" xml:space="preserve"><value>未分配</value></data>
   <data name="KeyboardShortcutsConflictText" xml:space="preserve"><value>与“{0}”冲突</value></data>
   <data name="KeyboardShortcutsShadowedText" xml:space="preserve"><value>会被“{0}”覆盖</value></data>
   <data name="ShortcutCategoryGlobal" xml:space="preserve"><value>全局</value></data>
   <data name="ShortcutActionGlobalLookupSelectedText" xml:space="preserve"><value>查询选中文本</value></data>
   <data name="ShortcutCategoryReader" xml:space="preserve"><value>阅读器</value></data>
-  <data name="ShortcutCategoryDictionaryPopup" xml:space="preserve"><value>词典弹窗</value></data>
+  <data name="ShortcutCategoryDictionaryPopup" xml:space="preserve"><value>词典 / 弹窗</value></data>
   <data name="ShortcutCategorySasayaki" xml:space="preserve"><value>Sasayaki</value></data>
   <data name="ShortcutCategoryVideo" xml:space="preserve"><value>视频</value></data>
   <data name="ShortcutActionReaderPreviousPage" xml:space="preserve"><value>上一页</value></data>
@@ -821,6 +891,7 @@
   <data name="NovelShelfManagementDialog.CloseButtonText" xml:space="preserve"><value>关闭</value></data>
   <data name="NovelShelfNameBox.Header" xml:space="preserve"><value>新建书架</value></data>
   <data name="NovelShelfNameBox.PlaceholderText" xml:space="preserve"><value>书架名称</value></data>
+  <data name="NovelShelfListHeader.Text" xml:space="preserve"><value>书架</value></data>
   <data name="NovelShelfRenameBox.Header" xml:space="preserve"><value>所选书架</value></data>
   <data name="NovelShelfCreateButton.Content" xml:space="preserve"><value>创建</value></data>
   <data name="NovelShelfRenameButton.Content" xml:space="preserve"><value>重命名</value></data>
@@ -977,6 +1048,10 @@
   <data name="ReaderGalleryEmptyText.Text" xml:space="preserve"><value>没有图片</value></data>
   <data name="ReaderGalleryUnreadBadgeText.Text" xml:space="preserve"><value>未阅读</value></data>
   <data name="ReaderImageViewerCloseButton.AutomationProperties.Name" xml:space="preserve"><value>关闭图片</value></data>
+  <data name="ReaderImageViewerPreviousButton.AutomationProperties.Name" xml:space="preserve"><value>上一张图片</value></data>
+  <data name="ReaderImageViewerNextButton.AutomationProperties.Name" xml:space="preserve"><value>下一张图片</value></data>
+  <data name="ReaderBlurImagesCard.Header" xml:space="preserve"><value>模糊图片</value></data>
+  <data name="ReaderBlurImagesCard.Description" xml:space="preserve"><value>阅读时模糊插画，点击后显示原图</value></data>
   <data name="NovelReaderLyricsModeMenuItem.Text" xml:space="preserve"><value>歌词模式</value></data>
   <data name="NovelReaderLyricsModeButton.AutomationProperties.Name" xml:space="preserve"><value>打开歌词模式</value></data>
   <data name="NovelReaderLyricsExitButton.AutomationProperties.Name" xml:space="preserve"><value>退出歌词模式</value></data>
@@ -987,4 +1062,47 @@
   <data name="NovelReaderVerticalLyricsToggle.AutomationProperties.Name" xml:space="preserve"><value>竖排歌词模式</value></data>
   <data name="NovelReaderLyricsStatisticsButton.AutomationProperties.Name" xml:space="preserve"><value>切换阅读计时</value></data>
   <data name="NovelReaderLyricsNoMatch" xml:space="preserve"><value>没有匹配的歌词</value></data>
+  <data name="DictionaryRecommendedCard.Header" xml:space="preserve"><value>推荐词典</value></data>
+  <data name="DictionaryRecommendedCard.Description" xml:space="preserve"><value>下载 Niratan 为当前配置语言推荐的词典</value></data>
+  <data name="DictionaryRecommendedDownloadText.Text" xml:space="preserve"><value>下载…</value></data>
+  <data name="DictionaryUpdatesSectionHeader.Text" xml:space="preserve"><value>更新</value></data>
+  <data name="DictionaryAutoUpdateCard.Header" xml:space="preserve"><value>自动更新</value></data>
+  <data name="DictionaryUpdateIntervalCard.Header" xml:space="preserve"><value>间隔</value></data>
+  <data name="DictionaryLastUpdateCard.Header" xml:space="preserve"><value>上次更新</value></data>
+  <data name="DictionaryUpdateDictionariesCard.Header" xml:space="preserve"><value>更新词典</value></data>
+  <data name="DictionaryUpdateDictionariesCard.Description" xml:space="preserve"><value>检查提供更新索引的已安装词典</value></data>
+  <data name="DictionaryCheckUpdatesText.Text" xml:space="preserve"><value>检查更新…</value></data>
+  <data name="DictionarySettingsSectionHeader.Text" xml:space="preserve"><value>设置</value></data>
+  <data name="DictionaryDefaultTabCard.Header" xml:space="preserve"><value>默认打开查词页</value></data>
+  <data name="DictionaryDefaultTabCard.Description" xml:space="preserve"><value>Niratan 启动时打开查词页，而不是小说书库</value></data>
+  <data name="DictionaryCustomCssCard.Header" xml:space="preserve"><value>自定义 CSS</value></data>
+  <data name="DictionaryCustomCssCard.Description" xml:space="preserve"><value>编辑在词典样式之后应用的 CSS</value></data>
+  <data name="DictionaryCustomCssEditText.Text" xml:space="preserve"><value>编辑…</value></data>
+  <data name="DictionaryCollapsedDictionariesCard.Header" xml:space="preserve"><value>折叠的词典</value></data>
+  <data name="DictionaryConfigureCollapsedText.Text" xml:space="preserve"><value>配置…</value></data>
+  <data name="DictionaryTwoColumnCard.Header" xml:space="preserve"><value>双栏布局</value></data>
+  <data name="DictionaryTwoColumnCard.Description" xml:space="preserve"><value>在较宽的弹窗中将词典卡片排列为两栏</value></data>
+  <data name="DictionaryDesktopHoverDelayCard.Header" xml:space="preserve"><value>桌面悬停延迟</value></data>
+  <data name="DictionaryDesktopHoverDelayCard.Description" xml:space="preserve"><value>阅读器、词典弹窗和视频字幕中按住 Shift 悬停查词前的延迟</value></data>
+  <data name="RecommendedDictionariesDialog.Title" xml:space="preserve"><value>下载词典</value></data>
+  <data name="RecommendedDictionariesDialog.PrimaryButtonText" xml:space="preserve"><value>下载</value></data>
+  <data name="RecommendedDictionariesDialog.CloseButtonText" xml:space="preserve"><value>取消</value></data>
+  <data name="DictionaryUpdatesDialog.Title" xml:space="preserve"><value>更新词典</value></data>
+  <data name="DictionaryUpdatesDialog.PrimaryButtonText" xml:space="preserve"><value>更新</value></data>
+  <data name="DictionaryUpdatesDialog.CloseButtonText" xml:space="preserve"><value>取消</value></data>
+  <data name="CollapsedDictionariesDialog.Title" xml:space="preserve"><value>折叠词典</value></data>
+  <data name="CollapsedDictionariesDialog.PrimaryButtonText" xml:space="preserve"><value>保存</value></data>
+  <data name="CollapsedDictionariesDialog.CloseButtonText" xml:space="preserve"><value>取消</value></data>
+  <data name="CollapsedDictionariesDialogDescription.Text" xml:space="preserve"><value>选择在查词结果中默认折叠的词条词典。</value></data>
+  <data name="DictionaryCustomCssDialogTitle" xml:space="preserve"><value>自定义 CSS</value></data>
+  <data name="DictionaryCustomCssDialogSave" xml:space="preserve"><value>保存</value></data>
+  <data name="DictionaryCustomCssDialogReset" xml:space="preserve"><value>重置</value></data>
+  <data name="DictionaryCustomCssDialogCancel" xml:space="preserve"><value>取消</value></data>
+  <data name="DictionaryUpdateIntervalDaily.Content" xml:space="preserve"><value>每天</value></data>
+  <data name="DictionaryUpdateIntervalWeekly.Content" xml:space="preserve"><value>每周</value></data>
+  <data name="DictionaryUpdateIntervalMonthly.Content" xml:space="preserve"><value>每月</value></data>
+  <data name="DictionaryNever" xml:space="preserve"><value>从未</value></data>
+  <data name="DictionaryTypeTermLabel" xml:space="preserve"><value>词条</value></data>
+  <data name="DictionaryTypeFrequencyLabel" xml:space="preserve"><value>词频</value></data>
+  <data name="DictionaryTypePitchLabel" xml:space="preserve"><value>音调</value></data>
 </root>

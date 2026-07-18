@@ -52,23 +52,8 @@ public sealed class ProfileIndex
         [
             new NiratanProfile(
                 ProfileConstants.DefaultJapaneseProfileId,
-                "Japanese EPUB",
+                "Japanese",
                 ContentLanguageProfile.Japanese.Id,
-                IsDefault: true),
-            new NiratanProfile(
-                ProfileConstants.DefaultJapaneseVideoProfileId,
-                "Japanese Video",
-                ContentLanguageProfile.Japanese.Id,
-                IsDefault: true),
-            new NiratanProfile(
-                ProfileConstants.DefaultEnglishProfileId,
-                "English EPUB",
-                ContentLanguageProfile.English.Id,
-                IsDefault: true),
-            new NiratanProfile(
-                ProfileConstants.DefaultEnglishVideoProfileId,
-                "English Video",
-                ContentLanguageProfile.English.Id,
                 IsDefault: true),
         ],
         DefaultProfileId = ProfileConstants.DefaultJapaneseProfileId,
@@ -76,7 +61,6 @@ public sealed class ProfileIndex
         PrimaryProfileIdsByLanguage = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             [ContentLanguageProfile.Japanese.Id] = ProfileConstants.DefaultJapaneseProfileId,
-            [ContentLanguageProfile.English.Id] = ProfileConstants.DefaultEnglishProfileId,
         },
     };
 
@@ -89,6 +73,7 @@ public sealed class ProfileIndex
 public static class ProfileConstants
 {
     public const string DefaultJapaneseProfileId = "default-ja";
+    // Retained only to migrate profile indexes written before Niratan v1.4.1.
     public const string DefaultJapaneseVideoProfileId = "default-ja-video";
     public const string DefaultEnglishProfileId = "default-en";
     public const string DefaultEnglishVideoProfileId = "default-en-video";

@@ -196,6 +196,14 @@
                                       HeaderIcon="{ui:FontIcon Glyph=&#xE8E4;}">
                     <ToggleSwitch IsOn="{x:Bind ViewModel.JustifyText, Mode=TwoWay}" />
                 </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="ReaderBlurImagesCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Description="Blur illustrations until clicked"
+                                      Header="Blur Images"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE8B9;}">
+                    <ToggleSwitch IsOn="{x:Bind ViewModel.BlurImages, Mode=TwoWay}" />
+                </toolkit:SettingsCard>
                 <toolkit:SettingsCard x:Uid="ReaderLayoutAdvancedCard"
                                       HorizontalAlignment="Stretch"
                                       HorizontalContentAlignment="Stretch"

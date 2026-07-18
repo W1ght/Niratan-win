@@ -12,11 +12,8 @@ internal static class AnkiFieldMappingResolver
         Dictionary<string, string> savedMappings,
         AnkiMiningContext context)
     {
-        var preset = IsVideoContext(context)
-            ? AnkiFieldMappingPreset.Anime
-            : AnkiFieldMappingPreset.Novel;
-
-        return LapisPreset.AutofillDefaults(noteType, savedMappings, preset);
+        _ = context;
+        return LapisPreset.AutofillDefaults(noteType, savedMappings);
     }
 
     public static AnkiMiningMediaNeeds ResolveMediaNeedsForMining(
@@ -25,19 +22,22 @@ internal static class AnkiFieldMappingResolver
         AnkiMiningContext context)
     {
         var mappings = ResolveForMining(noteType, savedMappings, context);
+        var isVideo = IsVideoContext(context);
         return new AnkiMiningMediaNeeds(
-            mappings.Values.Any(UsesVideoScreenshot),
-            mappings.Values.Any(UsesVideoAudioClip),
-            mappings.Values.Any(UsesSasayakiAudio));
+            mappings.Values.Any(value => UsesVideoScreenshot(value, isVideo)),
+            mappings.Values.Any(value => UsesVideoAudioClip(value, isVideo)),
+            !isVideo && mappings.Values.Any(UsesSasayakiAudio));
     }
 
-    private static bool UsesVideoScreenshot(string value) =>
+    private static bool UsesVideoScreenshot(string value, bool isVideo) =>
         !string.IsNullOrWhiteSpace(value)
-        && value.Contains("{video-screenshot}", System.StringComparison.Ordinal);
+        && (value.Contains("{video-screenshot}", System.StringComparison.Ordinal)
+            || (isVideo && value.Contains("{book-cover}", System.StringComparison.Ordinal)));
 
-    private static bool UsesVideoAudioClip(string value) =>
+    private static bool UsesVideoAudioClip(string value, bool isVideo) =>
         !string.IsNullOrWhiteSpace(value)
-        && value.Contains("{video-audio-clip}", System.StringComparison.Ordinal);
+        && (value.Contains("{video-audio-clip}", System.StringComparison.Ordinal)
+            || (isVideo && value.Contains("{sasayaki-audio}", System.StringComparison.Ordinal)));
 
     private static bool UsesSasayakiAudio(string value) =>
         !string.IsNullOrWhiteSpace(value)

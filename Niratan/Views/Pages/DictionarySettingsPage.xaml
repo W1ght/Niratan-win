@@ -44,6 +44,22 @@
         <ScrollViewer Grid.Row="1">
             <Grid Padding="16,0,16,16">
                 <StackPanel MaxWidth="1280" HorizontalAlignment="Stretch" Spacing="4">
+                    <toolkit:SettingsCard x:Uid="DictionaryRecommendedCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="Download the dictionaries recommended by Niratan for the active profile language"
+                                          Header="Recommended Dictionaries"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE896;}">
+                        <Button AutomationProperties.AutomationId="DownloadRecommendedDictionariesButton"
+                                Click="DownloadRecommendedDictionaries_Click"
+                                IsEnabled="{x:Bind ViewModel.IsDictionaryOperationInProgress, Mode=OneWay, Converter={StaticResource BoolNegationConverter}}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon FontSize="14" Glyph="&#xE896;" />
+                                <TextBlock x:Uid="DictionaryRecommendedDownloadText" Text="Download…" />
+                            </StackPanel>
+                        </Button>
+                    </toolkit:SettingsCard>
+
                     <toolkit:SettingsCard x:Uid="DictionaryImportCard"
                                           HorizontalAlignment="Stretch"
                                           HorizontalContentAlignment="Stretch"
@@ -59,6 +75,82 @@
                                 <FontIcon Glyph="&#xE8A5;" FontSize="14" />
                                 <TextBlock x:Uid="ImportDictionaryButtonText" Text="Import .zip" />
                             </StackPanel>
+                        </Button>
+                    </toolkit:SettingsCard>
+
+                    <TextBlock x:Uid="DictionaryUpdatesSectionHeader"
+                               Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
+                               Text="Updates" />
+
+                    <toolkit:SettingsCard x:Uid="DictionaryAutoUpdateCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Header="Update Automatically"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE895;}">
+                        <ToggleSwitch AutomationProperties.AutomationId="DictionaryAutoUpdateToggle"
+                                      IsOn="{x:Bind ViewModel.UpdateAutomatically, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="DictionaryUpdateIntervalCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Header="Interval"
+                                          Visibility="{x:Bind ViewModel.UpdateAutomatically, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <ComboBox MinWidth="180"
+                                  AutomationProperties.AutomationId="DictionaryUpdateIntervalComboBox"
+                                  SelectedIndex="{x:Bind ViewModel.UpdateIntervalIndex, Mode=TwoWay}">
+                            <ComboBoxItem x:Uid="DictionaryUpdateIntervalDaily" Content="Daily" />
+                            <ComboBoxItem x:Uid="DictionaryUpdateIntervalWeekly" Content="Weekly" />
+                            <ComboBoxItem x:Uid="DictionaryUpdateIntervalMonthly" Content="Monthly" />
+                        </ComboBox>
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="DictionaryLastUpdateCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Header="Last Update">
+                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="{x:Bind ViewModel.LastUpdateText, Mode=OneWay}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="DictionaryUpdateDictionariesCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="Check installed dictionaries that publish an update index"
+                                          Header="Update Dictionaries">
+                        <Button AutomationProperties.AutomationId="UpdateDictionariesButton"
+                                Click="UpdateDictionaries_Click"
+                                IsEnabled="{x:Bind ViewModel.IsDictionaryOperationInProgress, Mode=OneWay, Converter={StaticResource BoolNegationConverter}}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon FontSize="14" Glyph="&#xE895;" />
+                                <TextBlock x:Uid="DictionaryCheckUpdatesText" Text="Check for updates…" />
+                            </StackPanel>
+                        </Button>
+                    </toolkit:SettingsCard>
+
+                    <TextBlock x:Uid="DictionarySettingsSectionHeader"
+                               Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
+                               Text="Settings" />
+
+                    <toolkit:SettingsCard x:Uid="DictionaryDefaultTabCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="Open Lookup instead of the novel library when Niratan starts"
+                                          Header="Default to Dictionary Tab"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE721;}">
+                        <ToggleSwitch AutomationProperties.AutomationId="DictionaryTabDefaultToggle"
+                                      IsOn="{x:Bind ViewModel.DictionaryTabDefault, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="DictionaryCustomCssCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="Edit CSS applied after dictionary-provided styles"
+                                          Header="Custom CSS"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE943;}">
+                        <Button AutomationProperties.AutomationId="DictionaryCustomCssButton"
+                                Click="CustomCss_Click">
+                            <TextBlock x:Uid="DictionaryCustomCssEditText" Text="Edit…" />
                         </Button>
                     </toolkit:SettingsCard>
 
@@ -170,9 +262,29 @@
                                       IsOn="{x:Bind ViewModel.ExpandFirstDictionary, Mode=TwoWay}" />
                     </toolkit:SettingsCard>
 
+                    <toolkit:SettingsCard x:Uid="DictionaryCollapsedDictionariesCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Header="Collapsed Dictionaries"
+                                          Visibility="{x:Bind ViewModel.IsCustomCollapseMode, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Button AutomationProperties.AutomationId="ConfigureCollapsedDictionariesButton"
+                                Click="ConfigureCollapsedDictionaries_Click">
+                            <TextBlock x:Uid="DictionaryConfigureCollapsedText" Text="Configure…" />
+                        </Button>
+                    </toolkit:SettingsCard>
+
                     <TextBlock x:Uid="DictionaryBehaviorSectionHeader"
                                Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
                                Text="Behavior" />
+
+                    <toolkit:SettingsCard x:Uid="DictionaryTwoColumnCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="Arrange dictionary cards in two columns on wide popup surfaces"
+                                          Header="Two-Column Layout">
+                        <ToggleSwitch AutomationProperties.AutomationId="DictionaryTwoColumnLayoutToggle"
+                                      IsOn="{x:Bind ViewModel.TwoColumnLayout, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
 
                     <toolkit:SettingsCard x:Uid="DictionaryCompactGlossariesCard"
                                           HorizontalAlignment="Stretch"
@@ -212,6 +324,24 @@
                                           Header="Compact Pitch">
                         <ToggleSwitch AutomationProperties.AutomationId="DictionaryCompactPitchToggle"
                                       IsOn="{x:Bind ViewModel.CompactPitchAccents, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="DictionaryDesktopHoverDelayCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="Delay before Shift-hover lookup in Reader, Popup, and video subtitles"
+                                          Header="Desktop Hover Delay">
+                        <StackPanel MinWidth="280" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                            <Slider Width="220"
+                                    Minimum="0"
+                                    Maximum="250"
+                                    StepFrequency="5"
+                                    Value="{x:Bind ViewModel.DesktopLookupHoverDelayMs, Mode=TwoWay}" />
+                            <TextBlock MinWidth="56"
+                                       VerticalAlignment="Center"
+                                       Text="{x:Bind ViewModel.DesktopLookupHoverDelayMs, Mode=OneWay}" />
+                            <TextBlock VerticalAlignment="Center" Text="ms" />
+                        </StackPanel>
                     </toolkit:SettingsCard>
 
                     <TextBlock x:Uid="DictionaryTypeDescription"
@@ -337,5 +467,85 @@
                 </StackPanel>
             </Grid>
         </ScrollViewer>
+
+        <ContentDialog x:Name="RecommendedDictionariesDialog"
+                       x:Uid="RecommendedDictionariesDialog"
+                       Grid.RowSpan="2"
+                       Title="Download Dictionaries"
+                       PrimaryButtonText="Download"
+                       CloseButtonText="Cancel"
+                       PrimaryButtonClick="RecommendedDictionariesDialog_PrimaryButtonClick">
+            <Grid MinWidth="460" MaxHeight="520">
+                <ListView ItemsSource="{x:Bind ViewModel.RecommendedDictionaries, Mode=OneWay}"
+                          SelectionMode="None">
+                    <ListView.ItemTemplate>
+                        <DataTemplate>
+                            <Grid MinHeight="52" ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <CheckBox VerticalAlignment="Center" IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Name}" />
+                                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                               Text="{Binding Detail}" />
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </Grid>
+        </ContentDialog>
+
+        <ContentDialog x:Name="DictionaryUpdatesDialog"
+                       x:Uid="DictionaryUpdatesDialog"
+                       Grid.RowSpan="2"
+                       Title="Update Dictionaries"
+                       PrimaryButtonText="Update"
+                       CloseButtonText="Cancel"
+                       PrimaryButtonClick="DictionaryUpdatesDialog_PrimaryButtonClick">
+            <Grid MinWidth="460" MaxHeight="520">
+                <ListView ItemsSource="{x:Bind ViewModel.AvailableUpdates, Mode=OneWay}"
+                          SelectionMode="None">
+                    <ListView.ItemTemplate>
+                        <DataTemplate>
+                            <Grid MinHeight="52" ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                <CheckBox VerticalAlignment="Center" IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Name}" />
+                                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                               Text="{Binding Detail}" />
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </Grid>
+        </ContentDialog>
+
+        <ContentDialog x:Name="CollapsedDictionariesDialog"
+                       x:Uid="CollapsedDictionariesDialog"
+                       Grid.RowSpan="2"
+                       Title="Collapse Dictionaries"
+                       PrimaryButtonText="Save"
+                       CloseButtonText="Cancel"
+                       PrimaryButtonClick="CollapsedDictionariesDialog_PrimaryButtonClick">
+            <StackPanel MinWidth="460" MaxHeight="520" Spacing="10">
+                <TextBlock x:Uid="CollapsedDictionariesDialogDescription"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="Choose which term dictionaries start collapsed in lookup results."
+                           TextWrapping="Wrap" />
+                <ListView ItemsSource="{x:Bind ViewModel.CollapsedDictionaryItems, Mode=OneWay}"
+                          SelectionMode="None">
+                    <ListView.ItemTemplate>
+                        <DataTemplate>
+                            <CheckBox MinHeight="44"
+                                      Content="{Binding Name}"
+                                      IsChecked="{Binding IsCollapsed, Mode=TwoWay}" />
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </StackPanel>
+        </ContentDialog>
+
     </Grid>
 </Page>

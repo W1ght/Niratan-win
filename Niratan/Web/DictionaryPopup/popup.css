@@ -415,15 +415,12 @@ html[data-niratan-color-scheme="dark"] .gloss-image-link[data-appearance="monoch
     margin-top: 0;
 }
 
-.glossary-sections:not(.single-section) {
-    position: relative;
+.glossary-sections:not(.single-section) > .glossary-group {
+    margin-top: var(--popup-dictionary-card-gap);
 }
 
-.glossary-sections:not(.single-section) > .glossary-group {
-    position: absolute;
-    left: 0;
-    top: 0;
-    visibility: hidden;
+.glossary-sections:not(.single-section) > .glossary-group:first-child {
+    margin-top: 0;
 }
 
 .glossary-group > summary {
@@ -649,22 +646,4 @@ html[data-niratan-color-scheme="dark"] body {
     --popup-card-shadow-color: rgba(0, 0, 0, 0.36);
     --popup-scrollbar-thumb: rgba(255, 255, 255, 0.34);
     --popup-scrollbar-thumb-active: rgba(255, 255, 255, 0.56);
-}
-
-@media (max-width: 480px) {
-    .glossary-sections:not(.single-section) {
-        position: static;
-    }
-
-    .glossary-sections:not(.single-section) > .glossary-group {
-        position: static;
-        width: auto;
-        transform: none;
-        visibility: visible;
-        margin-top: var(--popup-dictionary-card-gap);
-    }
-
-    .glossary-sections:not(.single-section) > .glossary-group:first-child {
-        margin-top: 0;
-    }
 }

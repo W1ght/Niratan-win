@@ -81,8 +81,7 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
 
     public IAsyncRelayCommand TestConnectionCommand { get; }
     public IAsyncRelayCommand FetchDataCommand { get; }
-    public IRelayCommand ApplyNovelDefaultsCommand { get; }
-    public IRelayCommand ApplyAnimeDefaultsCommand { get; }
+    public IRelayCommand ApplyDefaultsCommand { get; }
 
     public AnkiSettingsPageViewModel()
     {
@@ -90,10 +89,7 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
         _ankiService = App.GetService<IAnkiService>();
         TestConnectionCommand = new AsyncRelayCommand(TestConnectionAsync);
         FetchDataCommand = new AsyncRelayCommand(FetchDataAsync);
-        ApplyNovelDefaultsCommand = new RelayCommand(
-            () => ApplyFieldMappingDefaults(AnkiFieldMappingPreset.Novel));
-        ApplyAnimeDefaultsCommand = new RelayCommand(
-            () => ApplyFieldMappingDefaults(AnkiFieldMappingPreset.Anime));
+        ApplyDefaultsCommand = new RelayCommand(ApplyFieldMappingDefaults);
 
         HandlebarOptions = new ObservableCollection<string>(
             AnkiHandlebarRenderer.GetHandlebarOptions());
@@ -197,12 +193,12 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
         RefreshFieldMappings(merged);
     }
 
-    private void ApplyFieldMappingDefaults(AnkiFieldMappingPreset preset)
+    private void ApplyFieldMappingDefaults()
     {
         if (SelectedNoteType == null)
             return;
 
-        var merged = LapisPreset.ApplyDefaults(SelectedNoteType, CurrentFieldMappings(), preset);
+        var merged = LapisPreset.ApplyDefaults(SelectedNoteType, CurrentFieldMappings());
         RefreshFieldMappings(merged);
         SaveSettings();
     }

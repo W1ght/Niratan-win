@@ -16,7 +16,7 @@ namespace Niratan.Tests.Services.Profiles;
 public sealed class ProfileRuntimeServiceTests
 {
     [Fact]
-    public async Task ActivateForBookAsync_UsesEnglishPrimaryProfileAndNativeLanguage()
+    public async Task ActivateForBookAsync_KeepsGlobalProfileRegardlessOfBookLanguage()
     {
         var ct = TestContext.Current.CancellationToken;
         using var temp = new TemporaryProfileRoot();
@@ -28,22 +28,18 @@ public sealed class ProfileRuntimeServiceTests
 
         await runtime.ActivateForBookAsync(new NovelBook { Id = "book-1", Language = "en-US" }, ct);
 
-        runtime.ActiveProfileId.Should().Be(ProfileConstants.DefaultEnglishProfileId);
-        runtime.ActiveLanguage.Id.Should().Be(ContentLanguageProfile.English.Id);
-        lookup.LanguageIds.Should().ContainSingle().Which.Should().Be(ContentLanguageProfile.English.Id);
+        runtime.ActiveProfileId.Should().Be(ProfileConstants.DefaultJapaneseProfileId);
+        runtime.ActiveLanguage.Id.Should().Be(ContentLanguageProfile.Japanese.Id);
+        lookup.LanguageIds.Should().ContainSingle().Which.Should().Be(ContentLanguageProfile.Japanese.Id);
         runtime.GetDictionaryConfigRoot(runtime.ActiveProfileId)
-            .Should()
-            .EndWith(Path.Combine(ProfileConstants.DefaultEnglishProfileId, "dictionaries"));
+            .Should().EndWith(Path.Combine(ProfileConstants.DefaultJapaneseProfileId, "dictionaries"));
         runtime.EnableUnconfiguredDictionariesForProfile(ProfileConstants.DefaultJapaneseProfileId)
             .Should()
             .BeTrue();
-        runtime.EnableUnconfiguredDictionariesForProfile(ProfileConstants.DefaultEnglishProfileId)
-            .Should()
-            .BeFalse();
     }
 
     [Fact]
-    public async Task ActivateForVideoAsync_UsesExplicitVideoOverride()
+    public async Task ActivateForVideoAsync_KeepsGlobalProfileRegardlessOfLegacyOverride()
     {
         var ct = TestContext.Current.CancellationToken;
         using var temp = new TemporaryProfileRoot();
@@ -55,13 +51,16 @@ public sealed class ProfileRuntimeServiceTests
             new RecordingReaderSettingsService(),
             lookup);
 
+        var english = await profiles.CreateProfileAsync("English", "en", ct: ct);
+        await runtime.ActivateProfileAsync(english.Id, ct: ct);
+
         await runtime.ActivateForVideoAsync(new VideoItem
         {
             Id = "video-1",
-            ProfileId = ProfileConstants.DefaultEnglishVideoProfileId,
+            ProfileId = ProfileConstants.DefaultJapaneseProfileId,
         }, ct);
 
-        runtime.ActiveProfileId.Should().Be(ProfileConstants.DefaultEnglishVideoProfileId);
+        runtime.ActiveProfileId.Should().Be(english.Id);
         lookup.LanguageIds.Should().ContainSingle().Which.Should().Be(ContentLanguageProfile.English.Id);
     }
 
@@ -75,14 +74,15 @@ public sealed class ProfileRuntimeServiceTests
         var reader = new RecordingReaderSettingsService();
         var runtime = CreateRuntime(profiles, settings, reader, new RecordingLookupService());
 
-        await runtime.ActivateProfileAsync(ProfileConstants.DefaultEnglishProfileId, ct: ct);
+        var english = await profiles.CreateProfileAsync("English", "en", ct: ct);
+        await runtime.ActivateProfileAsync(english.Id, ct: ct);
         settings.Current.DictionaryDisplaySettings = new DictionaryDisplaySettings(MaxResults: 23);
         reader.Current.FontSize = 31;
         await runtime.SaveActiveSettingsAsync(ct);
         await runtime.ActivateProfileAsync(ProfileConstants.DefaultJapaneseProfileId, ct: ct);
         settings.Current.DictionaryDisplaySettings = new DictionaryDisplaySettings(MaxResults: 8);
         reader.Current.FontSize = 18;
-        await runtime.ActivateProfileAsync(ProfileConstants.DefaultEnglishProfileId, ct: ct);
+        await runtime.ActivateProfileAsync(english.Id, ct: ct);
 
         settings.Current.DictionaryDisplaySettings.MaxResults.Should().Be(23);
         reader.Current.FontSize.Should().Be(31);

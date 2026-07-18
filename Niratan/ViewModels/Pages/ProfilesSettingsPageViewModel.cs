@@ -16,17 +16,18 @@ public sealed record ProfileOption(
     string Name,
     string LanguageId,
     string LanguageDisplayName,
-    bool IsDefault);
+    bool IsDefault,
+    bool IsActive)
+{
+    public bool CanDelete => !IsDefault;
+}
 
 public partial class ProfilesSettingsPageViewModel : ObservableObject
 {
     private readonly IProfileService _profileService;
     private readonly IProfileRuntimeService _profileRuntime;
-    private bool _isLoading;
 
     public ObservableCollection<ProfileOption> Profiles { get; } = [];
-    public ObservableCollection<ProfileOption> JapaneseProfiles { get; } = [];
-    public ObservableCollection<ProfileOption> EnglishProfiles { get; } = [];
     public IReadOnlyList<ContentLanguageProfile> AvailableLanguages { get; } =
         ContentLanguageProfile.All
             .Select(language => new ContentLanguageProfile(language.Id, GetLanguageDisplayName(language.Id)))
@@ -39,13 +40,13 @@ public partial class ProfilesSettingsPageViewModel : ObservableObject
     public partial ContentLanguageProfile NewProfileLanguage { get; set; } = null!;
 
     [ObservableProperty]
-    public partial string? GlobalActiveProfileId { get; set; }
+    public partial bool IsCreateEditorVisible { get; set; }
 
     [ObservableProperty]
-    public partial string? JapanesePrimaryProfileId { get; set; }
+    public partial bool IsRenameEditorVisible { get; set; }
 
     [ObservableProperty]
-    public partial string? EnglishPrimaryProfileId { get; set; }
+    public partial string RenameProfileName { get; set; } = "";
 
     [ObservableProperty]
     public partial string StatusText { get; set; } = "";
@@ -53,7 +54,16 @@ public partial class ProfilesSettingsPageViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsOperationInProgress { get; set; }
 
+    public ProfileOption? EditingProfile { get; private set; }
+
+    public IAsyncRelayCommand<ProfileOption> ActivateProfileCommand { get; }
+    public IRelayCommand BeginCreateProfileCommand { get; }
+    public IRelayCommand CancelCreateProfileCommand { get; }
     public IAsyncRelayCommand CreateProfileCommand { get; }
+    public IRelayCommand<ProfileOption> BeginRenameProfileCommand { get; }
+    public IRelayCommand CancelRenameProfileCommand { get; }
+    public IAsyncRelayCommand RenameProfileCommand { get; }
+    public IAsyncRelayCommand<ProfileOption> DeleteProfileCommand { get; }
 
     public ProfilesSettingsPageViewModel(
         IProfileService profileService,
@@ -61,55 +71,54 @@ public partial class ProfilesSettingsPageViewModel : ObservableObject
     {
         _profileService = profileService;
         _profileRuntime = profileRuntime;
-        NewProfileLanguage = AvailableLanguages.First(language => language.Id == ContentLanguageProfile.English.Id);
+        NewProfileLanguage = AvailableLanguages[0];
+        ActivateProfileCommand = new AsyncRelayCommand<ProfileOption>(ActivateProfileAsync);
+        BeginCreateProfileCommand = new RelayCommand(BeginCreateProfile);
+        CancelCreateProfileCommand = new RelayCommand(CancelCreateProfile);
         CreateProfileCommand = new AsyncRelayCommand(CreateProfileAsync);
+        BeginRenameProfileCommand = new RelayCommand<ProfileOption>(BeginRenameProfile);
+        CancelRenameProfileCommand = new RelayCommand(CancelRenameProfile);
+        RenameProfileCommand = new AsyncRelayCommand(RenameProfileAsync);
+        DeleteProfileCommand = new AsyncRelayCommand<ProfileOption>(DeleteProfileAsync);
         RefreshProfiles();
     }
 
-    partial void OnGlobalActiveProfileIdChanged(string? value)
+    private void BeginCreateProfile()
     {
-        if (_isLoading || string.IsNullOrWhiteSpace(value))
-            return;
-
-        _ = ActivateProfileIdAsync(value);
+        NewProfileName = "";
+        NewProfileLanguage = AvailableLanguages.First(language =>
+            language.Id == _profileRuntime.ActiveLanguage.Id);
+        IsRenameEditorVisible = false;
+        IsCreateEditorVisible = true;
+        StatusText = "";
     }
 
-    partial void OnJapanesePrimaryProfileIdChanged(string? value)
-    {
-        if (_isLoading || string.IsNullOrWhiteSpace(value))
-            return;
-
-        _ = SetPrimaryProfileAsync(ContentLanguageProfile.Japanese.Id, value);
-    }
-
-    partial void OnEnglishPrimaryProfileIdChanged(string? value)
-    {
-        if (_isLoading || string.IsNullOrWhiteSpace(value))
-            return;
-
-        _ = SetPrimaryProfileAsync(ContentLanguageProfile.English.Id, value);
-    }
+    private void CancelCreateProfile() => IsCreateEditorVisible = false;
 
     private async Task CreateProfileAsync()
     {
         if (IsOperationInProgress)
             return;
 
+        var name = NewProfileName.Trim();
+        if (name.Length == 0)
+        {
+            StatusText = ResourceStringHelper.GetString(
+                "ProfilesBlankNameError",
+                "Profile name cannot be empty.");
+            return;
+        }
+
         IsOperationInProgress = true;
         try
         {
-            var language = NewProfileLanguage ?? ContentLanguageProfile.English;
-            var name = string.IsNullOrWhiteSpace(NewProfileName)
-                ? ResourceStringHelper.FormatString("ProfilesDefaultProfileName", "{0} Profile", language.DisplayName)
-                : NewProfileName.Trim();
             await _profileRuntime.SaveActiveSettingsAsync();
             var profile = await _profileService.CreateProfileAsync(
                 name,
-                language.Id,
-                ct: default,
+                NewProfileLanguage.Id,
                 copyFromProfileId: _profileRuntime.ActiveProfileId);
-            NewProfileName = "";
             await _profileRuntime.ActivateProfileAsync(profile.Id);
+            IsCreateEditorVisible = false;
             StatusText = ResourceStringHelper.FormatString(
                 "ProfilesCreatedStatus",
                 "Created {0}.",
@@ -126,19 +135,19 @@ public partial class ProfilesSettingsPageViewModel : ObservableObject
         }
     }
 
-    private async Task ActivateProfileIdAsync(string profileId)
+    private async Task ActivateProfileAsync(ProfileOption? option)
     {
-        if (IsOperationInProgress)
+        if (option is null || option.IsActive || IsOperationInProgress)
             return;
 
         IsOperationInProgress = true;
         try
         {
-            await _profileRuntime.ActivateProfileAsync(profileId);
+            await _profileRuntime.ActivateProfileAsync(option.Id);
             StatusText = ResourceStringHelper.FormatString(
                 "ProfilesUsingStatus",
                 "Using {0}.",
-                GetProfileDisplayName(_profileRuntime.ActiveResolution.Profile));
+                option.Name);
             RefreshProfiles();
         }
         catch (Exception ex)
@@ -151,86 +160,103 @@ public partial class ProfilesSettingsPageViewModel : ObservableObject
         }
     }
 
-    private async Task SetPrimaryProfileAsync(string languageId, string profileId)
+    private void BeginRenameProfile(ProfileOption? option)
     {
+        if (option is null)
+            return;
+
+        EditingProfile = option;
+        RenameProfileName = option.Name;
+        IsCreateEditorVisible = false;
+        IsRenameEditorVisible = true;
+        OnPropertyChanged(nameof(EditingProfile));
+    }
+
+    private void CancelRenameProfile()
+    {
+        EditingProfile = null;
+        IsRenameEditorVisible = false;
+        OnPropertyChanged(nameof(EditingProfile));
+    }
+
+    private async Task RenameProfileAsync()
+    {
+        if (EditingProfile is null || IsOperationInProgress)
+            return;
+
+        var name = RenameProfileName.Trim();
+        if (name.Length == 0)
+        {
+            StatusText = ResourceStringHelper.GetString(
+                "ProfilesBlankNameError",
+                "Profile name cannot be empty.");
+            return;
+        }
+
+        IsOperationInProgress = true;
         try
         {
-            await _profileService.SetPrimaryProfileForLanguageAsync(languageId, profileId);
-            var language = ContentLanguageProfile.FromId(languageId);
-            var profileName = Profiles.FirstOrDefault(profile => profile.Id == profileId)?.Name ?? profileId;
-            StatusText = ResourceStringHelper.FormatString(
-                "ProfilesBookDefaultStatus",
-                "{0} books will use {1}.",
-                GetLanguageDisplayName(language.Id),
-                profileName);
+            await _profileService.RenameProfileAsync(EditingProfile.Id, name);
+            CancelRenameProfile();
             RefreshProfiles();
         }
         catch (Exception ex)
         {
             StatusText = ex.Message;
         }
+        finally
+        {
+            IsOperationInProgress = false;
+        }
+    }
+
+    private async Task DeleteProfileAsync(ProfileOption? option)
+    {
+        if (option is null || !option.CanDelete || IsOperationInProgress)
+            return;
+
+        IsOperationInProgress = true;
+        try
+        {
+            await _profileService.DeleteProfileAsync(option.Id);
+            if (option.IsActive)
+                await _profileRuntime.ActivateGlobalAsync();
+            RefreshProfiles();
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+        }
+        finally
+        {
+            IsOperationInProgress = false;
+        }
     }
 
     private void RefreshProfiles()
     {
-        _isLoading = true;
-        try
-        {
-            Profiles.Clear();
-            JapaneseProfiles.Clear();
-            EnglishProfiles.Clear();
-
-            foreach (var option in _profileService.Profiles
-                         .OrderBy(profile => profile.Language.DisplayName, StringComparer.CurrentCultureIgnoreCase)
-                         .ThenBy(profile => profile.Name, StringComparer.CurrentCultureIgnoreCase)
-                         .Select(ToOption))
-            {
-                Profiles.Add(option);
-                if (option.LanguageId == ContentLanguageProfile.Japanese.Id)
-                    JapaneseProfiles.Add(option);
-                if (option.LanguageId == ContentLanguageProfile.English.Id)
-                    EnglishProfiles.Add(option);
-            }
-
-            GlobalActiveProfileId = _profileRuntime.ActiveProfileId;
-            JapanesePrimaryProfileId = _profileService.GetPrimaryProfileIdForLanguage(ContentLanguageProfile.Japanese.Id);
-            EnglishPrimaryProfileId = _profileService.GetPrimaryProfileIdForLanguage(ContentLanguageProfile.English.Id);
-        }
-        finally
-        {
-            _isLoading = false;
-        }
+        Profiles.Clear();
+        foreach (var option in _profileService.Profiles.Select(ToOption))
+            Profiles.Add(option);
     }
 
-    private static ProfileOption ToOption(NiratanProfile profile) =>
+    private ProfileOption ToOption(NiratanProfile profile) =>
         new(
             profile.Id,
             GetProfileDisplayName(profile),
             profile.Language.Id,
             GetLanguageDisplayName(profile.Language.Id),
-            profile.IsDefault);
+            profile.IsDefault,
+            string.Equals(profile.Id, _profileRuntime.ActiveProfileId, StringComparison.Ordinal));
 
     private static string GetLanguageDisplayName(string languageId) =>
         string.Equals(languageId, ContentLanguageProfile.English.Id, StringComparison.OrdinalIgnoreCase)
             ? ResourceStringHelper.GetString("ProfilesLanguageEnglish", "English")
             : ResourceStringHelper.GetString("ProfilesLanguageJapanese", "Japanese");
 
-    private static string GetProfileDisplayName(NiratanProfile profile)
-    {
-        if (!profile.IsDefault)
-            return profile.Name;
-
-        return profile.Id switch
-        {
-            ProfileConstants.DefaultJapaneseProfileId =>
-                ResourceStringHelper.GetString("ProfilesDefaultJapaneseEpub", "Japanese EPUB"),
-            ProfileConstants.DefaultJapaneseVideoProfileId =>
-                ResourceStringHelper.GetString("ProfilesDefaultJapaneseVideo", "Japanese Video"),
-            ProfileConstants.DefaultEnglishProfileId =>
-                ResourceStringHelper.GetString("ProfilesDefaultEnglishEpub", "English EPUB"),
-            ProfileConstants.DefaultEnglishVideoProfileId =>
-                ResourceStringHelper.GetString("ProfilesDefaultEnglishVideo", "English Video"),
-            _ => profile.Name,
-        };
-    }
+    private static string GetProfileDisplayName(NiratanProfile profile) =>
+        profile.Id == ProfileConstants.DefaultJapaneseProfileId
+            && profile.Name is "Japanese" or "Japanese EPUB"
+                ? ResourceStringHelper.GetString("ProfilesDefaultJapanese", "Japanese")
+                : profile.Name;
 }

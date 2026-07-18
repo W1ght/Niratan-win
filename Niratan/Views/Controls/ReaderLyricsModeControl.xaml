@@ -5,6 +5,7 @@
              xmlns:win2d="using:Microsoft.Graphics.Canvas.UI.Xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             IsTabStop="True"
              mc:Ignorable="d">
     <UserControl.Resources>
         <Style x:Key="LyricsTransportButtonStyle" TargetType="Button">
@@ -13,11 +14,10 @@
             <Setter Property="MinWidth" Value="48" />
             <Setter Property="MinHeight" Value="48" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="CornerRadius" Value="24" />
-            <Setter Property="Background" Value="#20FFFFFF" />
-            <Setter Property="Foreground" Value="#E6FFFFFF" />
-            <Setter Property="BorderBrush" Value="#28FFFFFF" />
-            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#E0FFFFFF" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
         </Style>
         <Style x:Key="LyricsOptionButtonStyle" TargetType="ToggleButton">
             <Setter Property="Width" Value="36" />
@@ -25,27 +25,27 @@
             <Setter Property="MinWidth" Value="36" />
             <Setter Property="MinHeight" Value="36" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="CornerRadius" Value="18" />
             <Setter Property="Foreground" Value="#DFFFFFFF" />
-            <Setter Property="Background" Value="#18FFFFFF" />
-            <Setter Property="BorderBrush" Value="#24FFFFFF" />
-            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
         </Style>
     </UserControl.Resources>
 
     <Grid x:Name="LyricsRoot"
           Background="#FF090A0C"
+          PointerPressed="LyricsRoot_PointerPressed"
           AutomationProperties.AutomationId="NovelReaderLyricsMode">
         <Image x:Name="LyricsBackgroundImage"
                Stretch="UniformToFill"
-               Opacity="0.34"
+               Opacity="0.22"
                IsHitTestVisible="False" />
         <Rectangle IsHitTestVisible="False">
             <Rectangle.Fill>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                    <GradientStop Color="#D90A0B0E" Offset="0" />
-                    <GradientStop Color="#A60D1016" Offset="0.52" />
-                    <GradientStop Color="#ED08090B" Offset="1" />
+                <LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1">
+                    <GradientStop Color="#29000000" Offset="0" />
+                    <GradientStop Color="#BD0D1414" Offset="0.52" />
+                    <GradientStop Color="#E0000000" Offset="1" />
                 </LinearGradientBrush>
             </Rectangle.Fill>
         </Rectangle>
@@ -53,94 +53,82 @@
         <Button x:Name="LyricsExitButton"
                 x:Uid="NovelReaderLyricsExitButton"
                 AutomationProperties.AutomationId="NovelReaderLyricsExitButton"
+                Canvas.ZIndex="10"
                 HorizontalAlignment="Right"
                 VerticalAlignment="Top"
-                Margin="0,20,28,0"
+                Margin="0,36,52,0"
                 Width="38"
                 Height="38"
                 Padding="0"
-                CornerRadius="19"
-                Background="#20FFFFFF"
-                Foreground="#CFFFFFFF"
+                Background="Transparent"
+                Foreground="#BDFFFFFF"
+                BorderThickness="0"
                 Click="LyricsExitButton_Click">
-            <FontIcon Glyph="&#xE711;" FontSize="15" />
+            <FontIcon Glyph="&#xE711;" FontSize="18" FontWeight="Bold" />
         </Button>
 
-        <Grid Margin="34,42,34,30"
+        <Grid Margin="34,26,34,26"
               ColumnDefinitions="0.44*,0.08*,*">
             <Grid Grid.Column="0"
                   MaxWidth="430"
+                  MinWidth="220"
                   RowDefinitions="*,Auto,Auto,Auto"
-                  RowSpacing="14">
-                <Border MaxHeight="430"
-                        MaxWidth="430"
-                        MinHeight="120"
-                        MinWidth="120"
-                        HorizontalAlignment="Stretch"
-                        VerticalAlignment="Stretch"
-                        CornerRadius="18"
-                        Background="#18FFFFFF"
-                        BorderBrush="#30FFFFFF"
-                        BorderThickness="1">
-                    <Grid>
-                        <Image x:Name="LyricsCoverImage"
-                               Stretch="UniformToFill" />
-                        <FontIcon x:Name="LyricsCoverFallbackIcon"
-                                  Glyph="&#xE82D;"
-                                  FontSize="58"
-                                  Foreground="#70FFFFFF"
-                                  HorizontalAlignment="Center"
-                                  VerticalAlignment="Center" />
-                    </Grid>
-                </Border>
+                  RowSpacing="12">
+                <Viewbox MaxHeight="430"
+                         MaxWidth="430"
+                         MinHeight="96"
+                         MinWidth="96"
+                         HorizontalAlignment="Stretch"
+                         VerticalAlignment="Stretch"
+                         Stretch="Uniform">
+                    <Border Width="430"
+                            Height="430"
+                            CornerRadius="10"
+                            Background="Transparent">
+                        <Grid>
+                            <Image x:Name="LyricsCoverImage"
+                                   HorizontalAlignment="Stretch"
+                                   VerticalAlignment="Stretch"
+                                   Stretch="Uniform" />
+                            <FontIcon x:Name="LyricsCoverFallbackIcon"
+                                      Glyph="&#xE82D;"
+                                      FontSize="58"
+                                      Foreground="#70FFFFFF"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                </Viewbox>
 
-                <StackPanel Grid.Row="1" Spacing="5">
+                <StackPanel Grid.Row="1" Spacing="6">
                     <TextBlock Text="{x:Bind ViewModel.Title, Mode=OneWay}"
                                FontSize="18"
                                FontWeight="SemiBold"
                                Foreground="#EEFFFFFF"
                                MaxLines="1"
-                               TextTrimming="CharacterEllipsis" />
-                    <TextBlock Text="{x:Bind ViewModel.CurrentCueText, Mode=OneWay}"
-                               FontSize="12"
-                               Foreground="#8FFFFFFF"
-                               MaxLines="1"
-                               TextTrimming="CharacterEllipsis" />
+                               TextTrimming="WordEllipsis" />
                     <TextBlock Text="{x:Bind ViewModel.StatisticsSummaryText, Mode=OneWay}"
                                FontSize="11"
+                               FontWeight="Medium"
                                Foreground="#78FFFFFF"
                                MaxLines="1"
                                TextTrimming="CharacterEllipsis" />
                 </StackPanel>
 
-                <StackPanel Grid.Row="2" Spacing="5">
-                    <ProgressBar Minimum="0"
-                                 Maximum="1"
-                                 Value="{x:Bind ViewModel.PlaybackProgress, Mode=OneWay}"
-                                 Foreground="#CFFFFFFF"
-                                 Background="#26FFFFFF" />
-                    <Grid ColumnDefinitions="Auto,*,Auto">
-                        <TextBlock Text="{x:Bind ViewModel.PositionText, Mode=OneWay}"
-                                   FontSize="11"
-                                   Foreground="#8FFFFFFF" />
-                        <TextBlock Grid.Column="1"
-                                   HorizontalAlignment="Center"
-                                   Text="{x:Bind ViewModel.PlaybackProgressText, Mode=OneWay}"
-                                   FontSize="11"
-                                   Foreground="#70FFFFFF" />
-                        <TextBlock Grid.Column="2"
-                                   Text="{x:Bind ViewModel.DurationText, Mode=OneWay}"
-                                   FontSize="11"
-                                   Foreground="#8FFFFFFF" />
-                    </Grid>
-                </StackPanel>
+                <ProgressBar Grid.Row="2"
+                             Height="8"
+                             Minimum="0"
+                             Maximum="1"
+                             Value="{x:Bind ViewModel.PlaybackProgress, Mode=OneWay}"
+                             Foreground="#B8FFFFFF"
+                             Background="#26FFFFFF" />
 
                 <Grid Grid.Row="3" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="12">
                     <Button x:Uid="NovelReaderLyricsPreviousCueButton"
                             AutomationProperties.AutomationId="NovelReaderLyricsPreviousCueButton"
                             Style="{StaticResource LyricsTransportButtonStyle}"
                             Click="PreviousCueButton_Click">
-                        <FontIcon Glyph="&#xE892;" FontSize="21" />
+                        <FontIcon Glyph="&#xE892;" FontSize="30" FontWeight="Bold" />
                     </Button>
                     <Button Grid.Column="1"
                             x:Uid="NovelReaderLyricsPlayPauseButton"
@@ -150,20 +138,22 @@
                             MinWidth="64"
                             MinHeight="64"
                             Padding="0"
-                            CornerRadius="32"
-                            Background="#30FFFFFF"
-                            Foreground="White"
-                            BorderBrush="#38FFFFFF"
-                            BorderThickness="1"
+                            Background="Transparent"
+                            Foreground="#E0FFFFFF"
+                            BorderBrush="Transparent"
+                            BorderThickness="0"
                             Click="PlayPauseButton_Click">
-                        <FontIcon x:Name="LyricsPlayPauseIcon" Glyph="&#xE768;" FontSize="28" />
+                        <FontIcon x:Name="LyricsPlayPauseIcon"
+                                  Glyph="&#xE768;"
+                                  FontSize="40"
+                                  FontWeight="Bold" />
                     </Button>
                     <Button Grid.Column="2"
                             x:Uid="NovelReaderLyricsNextCueButton"
                             AutomationProperties.AutomationId="NovelReaderLyricsNextCueButton"
                             Style="{StaticResource LyricsTransportButtonStyle}"
                             Click="NextCueButton_Click">
-                        <FontIcon Glyph="&#xE893;" FontSize="21" />
+                        <FontIcon Glyph="&#xE893;" FontSize="30" FontWeight="Bold" />
                     </Button>
                     <ToggleButton Grid.Column="4"
                                   x:Name="LyricsMaskToggle"
@@ -171,7 +161,10 @@
                                   AutomationProperties.AutomationId="NovelReaderLyricsMaskToggle"
                                   Style="{StaticResource LyricsOptionButtonStyle}"
                                   IsChecked="{x:Bind ViewModel.IsMaskEnabled, Mode=TwoWay}">
-                        <FontIcon Glyph="&#xE890;" FontSize="16" />
+                        <FontIcon x:Name="LyricsMaskIcon"
+                                  Glyph="&#xE890;"
+                                  FontSize="19"
+                                  FontWeight="Bold" />
                     </ToggleButton>
                     <ToggleButton Grid.Column="5"
                                   x:Name="VerticalLyricsToggle"
@@ -179,7 +172,11 @@
                                   AutomationProperties.AutomationId="NovelReaderVerticalLyricsToggle"
                                   Style="{StaticResource LyricsOptionButtonStyle}"
                                   IsChecked="{x:Bind ViewModel.IsVertical, Mode=TwoWay}">
-                        <FontIcon Glyph="&#xE8A6;" FontSize="16" />
+                        <FontIcon x:Name="VerticalLyricsIcon"
+                                  Glyph="&#x25AF;"
+                                  FontFamily="Segoe UI Symbol"
+                                  FontSize="19"
+                                  FontWeight="Bold" />
                     </ToggleButton>
                     <Button Grid.Column="6"
                             x:Name="LyricsStatisticsButton"
@@ -190,19 +187,23 @@
                             MinWidth="36"
                             MinHeight="36"
                             Padding="0"
-                            CornerRadius="18"
                             Foreground="#DFFFFFFF"
-                            Background="#18FFFFFF"
-                            BorderBrush="#24FFFFFF"
-                            BorderThickness="1"
+                            Background="Transparent"
+                            BorderBrush="Transparent"
+                            BorderThickness="0"
+                            Visibility="Collapsed"
                             Click="StatisticsButton_Click">
-                        <FontIcon Glyph="&#xE9D2;" FontSize="16" />
+                        <FontIcon x:Name="LyricsStatisticsIcon"
+                                  Glyph="&#xE9D2;"
+                                  FontSize="19"
+                                  FontWeight="Bold" />
                     </Button>
                 </Grid>
             </Grid>
 
             <win2d:CanvasControl x:Name="LyricsCanvas"
                                  Grid.Column="2"
+                                 MinWidth="260"
                                  HorizontalAlignment="Stretch"
                                  VerticalAlignment="Stretch"
                                  AutomationProperties.AutomationId="NovelReaderLyricsTextCanvas"

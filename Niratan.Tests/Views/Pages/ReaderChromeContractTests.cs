@@ -70,6 +70,9 @@ public sealed class ReaderChromeContractTests
         xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderGalleryGrid\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderGalleryBlurUnreadToggle\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderImageViewer\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderImageViewerPreviousButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderImageViewerNextButton\"");
+        xaml.Should().Contain("x:Name=\"ReaderImageViewerBlurCard\"");
         xaml.Should().Contain("ZoomMode=\"Enabled\"");
         xaml.Should().Contain("MaxZoomFactor=\"5\"");
 
@@ -86,6 +89,12 @@ public sealed class ReaderChromeContractTests
         xaml.Should().Contain("Width=\"{Binding ViewportWidth, ElementName=ReaderImageViewerScrollViewer}\"");
         xaml.Should().Contain("Height=\"{Binding ViewportHeight, ElementName=ReaderImageViewerScrollViewer}\"");
         code.Should().Contain("UpdateReaderGalleryPanelSize(ActualWidth, ActualHeight)");
+        code.Should().Contain("case Windows.System.VirtualKey.Left:");
+        code.Should().Contain("case Windows.System.VirtualKey.Right:");
+        code.Should().Contain("_revealedGalleryImagePaths.Add(image.RelativePath)");
+        code.Should().Contain("ReaderImageViewerBlurCard_Tapped");
+        code.Should().Contain("ReaderImageViewerScrollViewer.Visibility = shouldBlur");
+        code.Should().Contain("ReaderImageViewerScrollViewer.Visibility = Visibility.Visible;");
         code.Should().NotContain("ReaderGalleryPanelDialog.Hide();");
     }
 }

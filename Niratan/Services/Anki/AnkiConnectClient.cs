@@ -112,6 +112,12 @@ public sealed class AnkiConnectClient : IDisposable
         return results?.FirstOrDefault()?.CanAdd ?? true;
     }
 
+    public async Task<List<long>> FindNotesAsync(string query)
+    {
+        var result = await RequestAsync("findNotes", new { query });
+        return result.Deserialize<List<long>>() ?? [];
+    }
+
     public async Task<bool> AddNoteAsync(
         AnkiDeck deck,
         AnkiNoteType noteType,
@@ -287,19 +293,32 @@ public sealed class AnkiConnectClient : IDisposable
         }
     }
 
-    public async Task<bool> OpenNoteInAnkiAsync(long noteId)
+    public Task<bool> OpenNoteInAnkiAsync(long noteId) =>
+        OpenNotesInAnkiAsync([noteId]);
+
+    public async Task<bool> OpenNotesInAnkiAsync(IReadOnlyList<long> noteIds)
     {
-        if (noteId <= 0)
+        var validNoteIds = noteIds
+            .Where(noteId => noteId > 0)
+            .Distinct()
+            .ToArray();
+        if (validNoteIds.Length == 0)
             return false;
 
         try
         {
-            await RequestAsync("guiBrowse", new { query = $"nid:{noteId}" });
+            await RequestAsync("guiBrowse", new
+            {
+                query = $"nid:{string.Join(',', validNoteIds)}",
+            });
             return true;
         }
         catch (AnkiConnectException ex)
         {
-            Log.Warning(ex, "[AnkiConnect] guiBrowse failed for note {NoteId}", noteId);
+            Log.Warning(
+                ex,
+                "[AnkiConnect] guiBrowse failed for notes {NoteIds}",
+                string.Join(',', validNoteIds));
             return false;
         }
     }

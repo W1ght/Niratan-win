@@ -35,47 +35,78 @@
             </StackPanel>
         </StackPanel>
 
-        <Grid Grid.Row="1" Padding="16,0,16,16">
-            <ListView MaxWidth="1280"
-                      HorizontalAlignment="Stretch"
-                      AutomationProperties.AutomationId="KeyboardShortcutsList"
-                      ItemsSource="{x:Bind ViewModel.Rows, Mode=OneWay}"
-                      SelectionMode="None">
-            <ListView.ItemTemplate>
-                <DataTemplate x:DataType="vm:ShortcutRowViewModel">
-                    <Grid ColumnDefinitions="*,Auto,Auto"
-                          ColumnSpacing="12"
-                          Padding="0,10">
-                        <StackPanel Spacing="2">
-                            <TextBlock Text="{x:Bind Title, Mode=OneWay}"
-                                       Style="{StaticResource BodyStrongTextBlockStyle}" />
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="{x:Bind CategoryTitle, Mode=OneWay}"
-                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                <TextBlock Text="{x:Bind DefaultShortcutLabel, Mode=OneWay}"
-                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        <ScrollViewer Grid.Row="1">
+            <Grid Padding="16,0,16,24">
+                <ItemsRepeater MaxWidth="1280"
+                               HorizontalAlignment="Stretch"
+                               AutomationProperties.AutomationId="KeyboardShortcutSections"
+                               ItemsSource="{x:Bind ViewModel.Sections, Mode=OneWay}">
+                    <ItemsRepeater.Layout>
+                        <StackLayout Spacing="20" />
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ShortcutSectionViewModel">
+                            <StackPanel Spacing="6">
+                                <TextBlock Margin="2,0,0,0"
+                                           Text="{x:Bind Title, Mode=OneWay}"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="8">
+                                    <ItemsRepeater ItemsSource="{x:Bind Rows, Mode=OneWay}">
+                                        <ItemsRepeater.Layout>
+                                            <StackLayout />
+                                        </ItemsRepeater.Layout>
+                                        <ItemsRepeater.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:ShortcutRowViewModel">
+                                                <Grid MinHeight="64"
+                                                      ColumnDefinitions="*,Auto,Auto"
+                                                      ColumnSpacing="12"
+                                                      Padding="16,10">
+                                                    <Grid.Resources>
+                                                        <Style TargetType="Button">
+                                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                                        </Style>
+                                                    </Grid.Resources>
+                                                    <StackPanel VerticalAlignment="Center" Spacing="2">
+                                                        <TextBlock Text="{x:Bind Title, Mode=OneWay}"
+                                                                   Style="{StaticResource BodyTextBlockStyle}" />
+                                                        <TextBlock Text="{x:Bind DefaultShortcutText, Mode=OneWay}"
+                                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                        <TextBlock Text="{x:Bind ConflictText, Mode=OneWay}"
+                                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                                   Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                                                    </StackPanel>
+                                                    <Button Grid.Column="1"
+                                                            MinWidth="108"
+                                                            HorizontalAlignment="Right"
+                                                            AutomationProperties.AutomationId="ShortcutRecordButton"
+                                                            Click="RecordShortcutButton_Click"
+                                                            Content="{x:Bind ShortcutButtonLabel, Mode=OneWay}" />
+                                                    <Button Grid.Column="2"
+                                                            x:Uid="KeyboardShortcutResetButton"
+                                                            AutomationProperties.AutomationId="ShortcutResetButton"
+                                                            Click="ResetShortcutButton_Click"
+                                                            Content="Reset"
+                                                            IsEnabled="{x:Bind CanReset, Mode=OneWay}" />
+                                                    <Border Grid.ColumnSpan="3"
+                                                            Margin="0,0,0,-10"
+                                                            VerticalAlignment="Bottom"
+                                                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                                            BorderThickness="0,0,0,1"
+                                                            IsHitTestVisible="False" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsRepeater.ItemTemplate>
+                                    </ItemsRepeater>
+                                </Border>
                             </StackPanel>
-                            <TextBlock Text="{x:Bind ConflictText, Mode=OneWay}"
-                                       Style="{StaticResource CaptionTextBlockStyle}"
-                                       Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
-                        </StackPanel>
-                        <Button Grid.Column="1"
-                                MinWidth="108"
-                                HorizontalAlignment="Right"
-                                AutomationProperties.AutomationId="ShortcutRecordButton"
-                                Click="RecordShortcutButton_Click"
-                                Content="{x:Bind CurrentShortcutLabel, Mode=OneWay}" />
-                        <Button Grid.Column="2"
-                                x:Uid="KeyboardShortcutResetButton"
-                                AutomationProperties.AutomationId="ShortcutResetButton"
-                                Click="ResetShortcutButton_Click"
-                                Content="Reset" />
-                    </Grid>
-                </DataTemplate>
-            </ListView.ItemTemplate>
-            </ListView>
-        </Grid>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </Grid>
+        </ScrollViewer>
     </Grid>
 </Page>

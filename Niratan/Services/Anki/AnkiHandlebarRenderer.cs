@@ -40,8 +40,12 @@ public static partial class AnkiHandlebarRenderer
             "{pitch-accent-positions}" => payload.PitchPositions,
             "{pitch-accent-categories}" => payload.PitchCategories,
             "{document-title}" => context.DocumentTitle ?? "",
-            "{book-cover}" => context.CoverTag ?? "",
-            "{sasayaki-audio}" => context.SasayakiAudioTag ?? context.SasayakiAudioPath ?? "",
+            "{book-cover}" => IsVideoContext(context)
+                ? context.VideoScreenshotTag ?? context.VideoScreenshotPath ?? ""
+                : context.CoverTag ?? "",
+            "{sasayaki-audio}" => IsVideoContext(context)
+                ? context.VideoAudioClipTag ?? context.VideoAudioClipPath ?? ""
+                : context.SasayakiAudioTag ?? context.SasayakiAudioPath ?? "",
             "{video-file-name}" => context.VideoFileName ?? "",
             "{video-timestamp}" => context.VideoTimestamp ?? "",
             "{video-cue-start}" => context.VideoCueStart ?? "",
@@ -54,6 +58,15 @@ public static partial class AnkiHandlebarRenderer
             _ => ResolveDynamicHandlebar(handlebar, payload),
         };
     }
+
+    private static bool IsVideoContext(AnkiMiningContext context) =>
+        !string.IsNullOrWhiteSpace(context.VideoFileName)
+        || !string.IsNullOrWhiteSpace(context.VideoTimestamp)
+        || !string.IsNullOrWhiteSpace(context.VideoSubtitle)
+        || !string.IsNullOrWhiteSpace(context.VideoScreenshotPath)
+        || !string.IsNullOrWhiteSpace(context.VideoScreenshotTag)
+        || !string.IsNullOrWhiteSpace(context.VideoAudioClipPath)
+        || !string.IsNullOrWhiteSpace(context.VideoAudioClipTag);
 
     private static string ResolveDynamicHandlebar(string handlebar, AnkiMiningPayload payload)
     {

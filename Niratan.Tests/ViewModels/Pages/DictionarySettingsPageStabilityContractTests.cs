@@ -46,4 +46,17 @@ public class DictionarySettingsPageStabilityContractTests
         xaml.Should().Contain("x:Name=\"DictionaryList\"");
         xaml.Should().NotContain("MaxHeight=\"620\"");
     }
+
+    [Fact]
+    public void DictionaryManagement_ExposesNiratanConfigurationEntrypoints()
+    {
+        var xaml = ReadDictionarySettingsXaml();
+
+        xaml.Should().Contain("DownloadRecommendedDictionariesButton");
+        xaml.Should().Contain("UpdateDictionariesButton");
+        xaml.Should().Contain("DictionaryTabDefaultToggle");
+        xaml.Should().Contain("DictionaryCustomCssButton");
+        xaml.Should().Contain("ConfigureCollapsedDictionariesButton");
+        xaml.Should().Contain("DictionaryTwoColumnLayoutToggle");
+    }
 }

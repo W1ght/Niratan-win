@@ -143,15 +143,11 @@ public partial class ReaderLyricsViewModel : ObservableObject
     public void UpdateStatistics(
         bool showStatistics,
         bool isTracking,
-        string progressText,
-        string speedText,
-        string timeText)
+        string summaryText)
     {
         ShowStatistics = showStatistics;
         IsStatisticsTracking = isTracking;
-        StatisticsSummaryText = showStatistics
-            ? $"{progressText}  •  {speedText}  •  {timeText}"
-            : progressText;
+        StatisticsSummaryText = summaryText;
     }
 
     partial void OnPositionSecondsChanged(double value) => NotifyPlaybackProjection();

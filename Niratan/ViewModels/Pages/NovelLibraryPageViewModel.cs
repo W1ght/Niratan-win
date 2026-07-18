@@ -20,7 +20,6 @@ using Niratan.Models.Settings;
 using Niratan.Models.Sync;
 using Niratan.Services.Settings;
 using Niratan.Services.Novels;
-using Niratan.Services.Sasayaki;
 using Niratan.Services.Sync;
 using Niratan.Services.UI;
 using Niratan.ViewModels.Components;
@@ -34,7 +33,6 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     private readonly IDialogService _dialogService;
     private readonly INotificationService _notificationService;
     private readonly IMessenger _messenger;
-    private readonly ISasayakiMatchService _sasayakiMatchService;
     private readonly ISettingsService _settingsService;
     private readonly INovelShelfService _shelfService;
     private readonly ITtuSyncService _ttuSyncService;
@@ -110,7 +108,6 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         IDialogService dialogService,
         INotificationService notificationService,
         IMessenger messenger,
-        ISasayakiMatchService sasayakiMatchService,
         ISettingsService settingsService,
         NovelStatisticsDashboardViewModel statisticsDashboard,
         INovelShelfService shelfService,
@@ -125,7 +122,6 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         _dialogService = dialogService;
         _notificationService = notificationService;
         _messenger = messenger;
-        _sasayakiMatchService = sasayakiMatchService;
         _settingsService = settingsService;
         StatisticsDashboard = statisticsDashboard;
         _shelfService = shelfService;
@@ -615,38 +611,6 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task MatchSasayakiAsync(NovelBookItemViewModel item)
-    {
-        var audioPath = await _dialogService.OpenFilePickerAsync(".mp3", ".m4b", ".m4a", ".wav", ".flac", ".ogg");
-        if (audioPath == null)
-            return;
-
-        var subtitlePath = await _dialogService.OpenFilePickerAsync(".srt", ".vtt");
-        if (subtitlePath == null)
-            return;
-
-        try
-        {
-            var match = await _sasayakiMatchService.MatchAsync(
-                item.Book,
-                audioPath,
-                subtitlePath,
-                _settingsService.Current.SasayakiSettings.SearchWindowSize,
-                _pageCts.Token);
-            _notificationService.ShowSuccess(
-                $"{match.Matches.Count}/{match.TotalCueCount} cues matched.",
-                "Sasayaki matched");
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex)
-        {
-            _notificationService.ShowError(ex.Message, "Sasayaki match failed");
-        }
-    }
-
-    [RelayCommand]
     private async Task MarkReadNovelAsync(NovelBookItemViewModel item)
     {
         var confirmed = await _dialogService.ConfirmAsync(
@@ -776,6 +740,12 @@ public partial class NovelLibraryPageViewModel : ObservableObject
         IReadOnlyList<NovelBook> books)
     {
         _currentShelfState = state;
+        var collapseStates = ShelfSections
+            .Where(section => section.CanCollapse)
+            .ToDictionary(
+                section => section.Id,
+                section => section.IsCollapsed,
+                StringComparer.Ordinal);
         var booksById = books.ToDictionary(book => book.Id, StringComparer.Ordinal);
         var sections = new List<NovelShelfSectionViewModel>();
         var reading = SortBooks(books.Where(IsReading)).ToList();
@@ -788,6 +758,8 @@ public partial class NovelLibraryPageViewModel : ObservableObject
                     "NovelShelfReadingLabel/Text",
                     "Reading"),
                 IsDerived = true,
+                CanCollapse = true,
+                IsCollapsed = GetCollapsedState(collapseStates, "reading", false),
                 Books = new(reading.Select(book => new NovelBookItemViewModel(book))),
             });
         }
@@ -803,6 +775,11 @@ public partial class NovelLibraryPageViewModel : ObservableObject
             {
                 Id = "shelf:" + shelf.Name,
                 DisplayName = shelf.Name,
+                CanCollapse = true,
+                IsCollapsed = GetCollapsedState(
+                    collapseStates,
+                    "shelf:" + shelf.Name,
+                    true),
                 Books = new(shelfBooks.Select(book => new NovelBookItemViewModel(book))),
             });
         }
@@ -815,6 +792,8 @@ public partial class NovelLibraryPageViewModel : ObservableObject
                 DisplayName = "Google Drive",
                 IsDerived = true,
                 IsRemote = true,
+                CanCollapse = true,
+                IsCollapsed = GetCollapsedState(collapseStates, "google-drive", true),
                 RemoteBooks = RemoteBooks,
             });
         }
@@ -836,6 +815,14 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
         ShelfSections = new(sections);
     }
+
+    private static bool GetCollapsedState(
+        IReadOnlyDictionary<string, bool> collapseStates,
+        string sectionId,
+        bool defaultValue) =>
+        collapseStates.TryGetValue(sectionId, out var isCollapsed)
+            ? isCollapsed
+            : defaultValue;
 
     private static bool IsReading(NovelBook book) =>
         book.CurrentCharacterCount > 0

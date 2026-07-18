@@ -242,12 +242,52 @@ public class DictionaryLookupServiceTests
     }
 
     [Fact]
-    public void PopupScript_SupportsImmediateShiftLookupInsidePopup()
+    public void PopupHtmlGenerator_OnlyEnablesTwoColumnLayoutWhenConfigured()
+    {
+        var enabled = new PopupHtmlGenerator().GenerateShellHtml(
+            settings: new DictionaryDisplaySettings(TwoColumnLayout: true));
+        var disabled = new PopupHtmlGenerator().GenerateShellHtml(
+            settings: new DictionaryDisplaySettings(TwoColumnLayout: false));
+
+        enabled.Should().Contain("window.twoColumnLayout = true");
+        disabled.Should().Contain("window.twoColumnLayout = false");
+    }
+
+    [Fact]
+    public void PopupAssets_KeepSingleColumnDictionaryCardsInNormalFlow()
+    {
+        var stylesheet = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "Web",
+            "DictionaryPopup",
+            "popup.css"));
+        var script = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "Web",
+            "DictionaryPopup",
+            "popup.js"));
+        const string selector = ".glossary-sections:not(.single-section) > .glossary-group {";
+        var ruleStart = stylesheet.IndexOf(selector, StringComparison.Ordinal);
+        var ruleEnd = stylesheet.IndexOf('}', ruleStart);
+
+        ruleStart.Should().BeGreaterThanOrEqualTo(0);
+        ruleEnd.Should().BeGreaterThan(ruleStart);
+        var defaultRule = stylesheet[ruleStart..ruleEnd];
+        defaultRule.Should().NotContain("position: absolute");
+        defaultRule.Should().NotContain("visibility: hidden");
+        script.Should().Contain("window.twoColumnLayout === true");
+        script.Should().Contain("item.style.position = 'absolute'");
+    }
+
+    [Fact]
+    public void PopupScript_AppliesConfiguredShiftHoverDelayInsidePopup()
     {
         var script = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Web", "DictionaryPopup", "popup.js"));
 
         script.Should().Contain("mousemove");
         script.Should().Contain("e.shiftKey");
+        script.Should().Contain("window.desktopLookupHoverDelayMs");
+        script.Should().Contain("scheduleShiftHoverLookup");
         script.Should().Contain("lookupAtPopupPoint");
         script.Should().Contain("postPopupMessage('lookupRedirect'");
     }
@@ -291,6 +331,9 @@ public class DictionaryLookupServiceTests
         script.Should().Contain("window.onMineComplete = function (entryIndex, result)");
         script.Should().Contain("createButtonSlot('viewNote', idx, false)");
         script.Should().Contain("showAnkiNoteButton(entryIndex, result.noteID)");
+        script.Should().Contain("requestDuplicateCheck(idx, expression || '', mineSlot)");
+        script.Should().Contain("function applyAnkiDuplicateLookup(entryIndex, duplicateLookup, slots)");
+        script.Should().Contain("noteIDs: noteIDs.map(Number)");
         script.Should().Contain("postPopupMessage('openAnkiNote'");
         script.Should().Contain("window.onOpenAnkiNoteComplete = function (entryIndex)");
         shellHtml.Should().Contain("window.viewAnkiNoteLabel =");
@@ -311,8 +354,10 @@ public class DictionaryLookupServiceTests
         popup.Should().Contain("dialog.ShowAsync(ContentDialogPlacement.InPlace)");
         popup.Should().Contain("dialog.ShowAsync(ContentDialogPlacement.Popup)");
         popup.Should().Contain("_openableAnkiNotes.TryGetValue");
-        popup.Should().Contain("allowedNoteId == noteId");
-        popup.Should().Contain("_ankiService.OpenNoteInAnkiAsync(noteId)");
+        popup.Should().Contain("allowedNoteIds.SequenceEqual(noteIds)");
+        popup.Should().Contain("_ankiService.OpenNotesInAnkiAsync(noteIds)");
+        popup.Should().Contain("_ankiService.DuplicateLookupExpressionAsync(expression)");
+        popup.Should().Contain("noteIDs = noteIds");
         popup.Should().Contain("noteID = result.NoteId");
     }
 

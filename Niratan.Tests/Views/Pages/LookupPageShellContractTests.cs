@@ -19,20 +19,24 @@ public sealed class LookupPageShellContractTests
         File.ReadAllText(Path.Combine([ProjectRoot, .. parts]));
 
     [Fact]
-    public void ProfilesSettingsPage_UsesLocalizedActiveProfileComboBoxWithoutInstalledSection()
+    public void ProfilesSettingsPage_UsesV141ProfileListAndCrudActions()
     {
         var profilesXaml = ReadProjectFile("Views", "Pages", "ProfilesSettingsPage.xaml");
         var chineseResources = ReadProjectFile("Strings", "zh-CN", "Resources.resw");
 
         XDocument.Parse(profilesXaml);
         XDocument.Parse(chineseResources);
-        profilesXaml.Should().Contain("Header=\"Active Profile\"");
-        profilesXaml.Should().Contain("AutomationProperties.AutomationId=\"GlobalActiveProfileComboBox\"");
+        profilesXaml.Should().Contain("AutomationProperties.AutomationId=\"ProfilesListView\"");
+        profilesXaml.Should().Contain("AutomationProperties.AutomationId=\"CreateProfileButton\"");
+        profilesXaml.Should().Contain("Click=\"RenameProfileMenuItem_Click\"");
+        profilesXaml.Should().Contain("Click=\"DeleteProfileMenuItem_Click\"");
         profilesXaml.Should().Contain("x:Uid=\"ProfilesActiveProfileCard\"");
         profilesXaml.Should().Contain("x:Uid=\"ProfilesSettingsPageTitle\"");
-        profilesXaml.Should().Contain("Dictionary, Reader appearance and Anki mining settings follow the active profile.");
-        profilesXaml.Should().NotContain("Text=\"Installed\"");
-        profilesXaml.Should().NotContain("AutomationProperties.AutomationId=\"ProfilesListView\"");
+        profilesXaml.Should().Contain("<Grid Padding=\"16,0,16,16\">");
+        profilesXaml.Should().Contain("<StackPanel MaxWidth=\"1280\"");
+        profilesXaml.Should().Contain("HorizontalAlignment=\"Stretch\"");
+        profilesXaml.Should().Contain("Text=\"Built-in\"");
+        profilesXaml.Should().NotContain("GlobalActiveProfileComboBox");
         chineseResources.Should().Contain("name=\"ProfilesActiveProfileCard.Header\"");
         chineseResources.Should().Contain("<value>当前配置档案</value>");
         chineseResources.Should().Contain("name=\"ProfilesLanguageJapanese\"");
@@ -40,18 +44,18 @@ public sealed class LookupPageShellContractTests
     }
 
     [Fact]
-    public void LookupSurfaces_ReactivateTheirNiratanProfileContextWhenFocused()
+    public void LookupSurfaces_DoNotSwitchProfileContextWhenFocused()
     {
         var navigationCode = ReadProjectFile("Views", "Pages", "NavigationPage.xaml.cs");
         var readerCode = ReadProjectFile("Views", "Pages", "NovelReaderPage.xaml.cs");
         var videoService = ReadProjectFile("Services", "Video", "VideoPlayerWindowService.cs");
 
-        navigationCode.Should().Contain("mainWindow.Activated += MainWindow_Activated");
-        navigationCode.Should().Contain("ViewModel.ActivateGlobalProfileAsync()");
+        navigationCode.Should().NotContain("mainWindow.Activated += MainWindow_Activated");
+        navigationCode.Should().NotContain("ActivateGlobalProfileAsync");
         readerCode.Should().Contain("mainWindow.Activated += MainWindow_Activated");
-        readerCode.Should().Contain("ViewModel.ActivateCurrentProfileAsync()");
-        videoService.Should().Contain("_window.Activated += OnWindowActivated");
-        videoService.Should().Contain("_profileRuntime.ActivateForVideoAsync(video)");
+        readerCode.Should().NotContain("ActivateCurrentProfileAsync");
+        videoService.Should().NotContain("_window.Activated += OnWindowActivated");
+        videoService.Should().NotContain("ActivateForVideoAsync");
     }
 
     [Fact]

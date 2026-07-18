@@ -9,24 +9,29 @@
                mc:Ignorable="d"
                x:Uid="NovelShelfManagementDialog"
                DefaultButton="Close"
-               MinWidth="480">
-    <Grid RowDefinitions="Auto,*,Auto"
-          RowSpacing="12">
+               MinWidth="520">
+    <Grid RowDefinitions="Auto,Auto,Auto"
+          RowSpacing="20">
         <Grid ColumnDefinitions="*,Auto"
-              ColumnSpacing="8">
+              ColumnSpacing="12">
             <TextBox x:Name="ShelfNameBox"
                      x:Uid="NovelShelfNameBox"
-                     AutomationProperties.AutomationId="NovelShelfNameBox" />
+                     AutomationProperties.AutomationId="NovelShelfNameBox"
+                     TextChanged="ShelfNameBox_TextChanged" />
             <Button Grid.Column="1"
                     x:Name="NovelShelfCreateButton"
                     x:Uid="NovelShelfCreateButton"
+                    MinWidth="88"
+                    VerticalAlignment="Bottom"
                     AutomationProperties.AutomationId="NovelShelfCreateButton"
+                    IsEnabled="False"
                     Click="CreateShelfButton_Click" />
         </Grid>
 
         <ListView x:Name="NovelShelfList"
                   Grid.Row="1"
-                  MinHeight="220"
+                  MinHeight="120"
+                  MaxHeight="240"
                   AutomationProperties.AutomationId="NovelShelfList"
                   ItemsSource="{x:Bind ViewModel.Shelves, Mode=OneWay}"
                   SelectionMode="Single"
@@ -35,29 +40,59 @@
                   CanReorderItems="True"
                   DragItemsCompleted="ShelfList_DragItemsCompleted"
                   SelectionChanged="ShelfList_SelectionChanged">
+            <ListView.Header>
+                <TextBlock x:Uid="NovelShelfListHeader"
+                           Margin="0,0,0,8"
+                           Style="{StaticResource BodyStrongTextBlockStyle}" />
+            </ListView.Header>
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="MinHeight" Value="44" />
+                </Style>
+            </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="novel:NovelShelf">
-                    <TextBlock Text="{x:Bind Name}"
-                               Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <Grid ColumnDefinitions="Auto,*,Auto"
+                          ColumnSpacing="10">
+                        <SymbolIcon VerticalAlignment="Center"
+                                    Symbol="Folder" />
+                        <TextBlock Grid.Column="1"
+                                   VerticalAlignment="Center"
+                                   Text="{x:Bind Name}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                        <FontIcon Grid.Column="2"
+                                  VerticalAlignment="Center"
+                                  FontSize="14"
+                                  Glyph="&#xE7C2;"
+                                  Opacity="0.55" />
+                    </Grid>
                 </DataTemplate>
             </ListView.ItemTemplate>
         </ListView>
 
         <Grid Grid.Row="2"
               ColumnDefinitions="*,Auto,Auto"
-              ColumnSpacing="8">
+              ColumnSpacing="12">
             <TextBox x:Name="ShelfRenameBox"
                      x:Uid="NovelShelfRenameBox"
-                     AutomationProperties.AutomationId="NovelShelfRenameBox" />
+                     AutomationProperties.AutomationId="NovelShelfRenameBox"
+                     IsEnabled="False"
+                     TextChanged="ShelfRenameBox_TextChanged" />
             <Button x:Name="NovelShelfRenameButton"
                     Grid.Column="1"
                     x:Uid="NovelShelfRenameButton"
+                    MinWidth="88"
+                    VerticalAlignment="Bottom"
                     AutomationProperties.AutomationId="NovelShelfRenameButton"
                     IsEnabled="False"
                     Click="RenameShelfButton_Click" />
             <Button x:Name="NovelShelfDeleteButton"
                     Grid.Column="2"
                     x:Uid="NovelShelfDeleteButton"
+                    MinWidth="88"
+                    VerticalAlignment="Bottom"
                     AutomationProperties.AutomationId="NovelShelfDeleteButton"
                     IsEnabled="False">
                 <Button.Flyout>

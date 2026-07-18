@@ -4,12 +4,6 @@ using Niratan.Models.Settings;
 
 namespace Niratan.Services.Anki;
 
-public enum AnkiFieldMappingPreset
-{
-    Novel,
-    Anime,
-}
-
 public static class LapisPreset
 {
     private sealed record FieldTemplate(string NoteType, Dictionary<string, string> Mappings);
@@ -76,9 +70,7 @@ public static class LapisPreset
 
     public static bool HasDefaults(AnkiNoteType noteType) => ResolveTemplate(noteType) != null;
 
-    public static Dictionary<string, string> DefaultMappings(
-        AnkiNoteType noteType,
-        AnkiFieldMappingPreset preset = AnkiFieldMappingPreset.Novel)
+    public static Dictionary<string, string> DefaultMappings(AnkiNoteType noteType)
     {
         var template = ResolveTemplate(noteType);
         if (template == null)
@@ -89,7 +81,7 @@ public static class LapisPreset
         foreach (var field in noteType.Fields)
         {
             if (fields.Contains(field)
-                && TryDefaultMapping(field, template, preset, out var value))
+                && TryDefaultMapping(field, template, out var value))
             {
                 mappings[field] = value;
             }
@@ -103,8 +95,7 @@ public static class LapisPreset
 
     public static Dictionary<string, string> AutofillDefaults(
         AnkiNoteType noteType,
-        Dictionary<string, string> currentMappings,
-        AnkiFieldMappingPreset preset = AnkiFieldMappingPreset.Novel)
+        Dictionary<string, string> currentMappings)
     {
         var template = ResolveTemplate(noteType);
         if (template == null)
@@ -123,12 +114,11 @@ public static class LapisPreset
                 continue;
             }
 
-            if (!TryDefaultMapping(field, template, preset, out var value))
+            if (!TryDefaultMapping(field, template, out var value))
                 continue;
 
             if (!merged.TryGetValue(field, out var existing)
-                || string.IsNullOrWhiteSpace(existing)
-                || IsOppositePresetDefault(field, existing, template, preset))
+                || string.IsNullOrWhiteSpace(existing))
             {
                 merged[field] = value;
             }
@@ -137,37 +127,9 @@ public static class LapisPreset
         return merged;
     }
 
-    private static bool IsOppositePresetDefault(
-        string field,
-        string existing,
-        FieldTemplate template,
-        AnkiFieldMappingPreset preset)
-    {
-        var oppositePreset = preset == AnkiFieldMappingPreset.Anime
-            ? AnkiFieldMappingPreset.Novel
-            : AnkiFieldMappingPreset.Anime;
-        if (!TryDefaultMapping(field, template, oppositePreset, out var oppositeValue)
-            || !string.Equals(oppositeValue, existing, System.StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        return !string.Equals(
-            oppositeValue,
-            TryResolveCurrentDefault(field, template, preset),
-            System.StringComparison.Ordinal);
-    }
-
-    private static string TryResolveCurrentDefault(
-        string field,
-        FieldTemplate template,
-        AnkiFieldMappingPreset preset) =>
-        TryDefaultMapping(field, template, preset, out var value) ? value : "";
-
     public static Dictionary<string, string> ApplyDefaults(
         AnkiNoteType noteType,
-        Dictionary<string, string> currentMappings,
-        AnkiFieldMappingPreset preset = AnkiFieldMappingPreset.Novel)
+        Dictionary<string, string> currentMappings)
     {
         var template = ResolveTemplate(noteType);
         if (template == null)
@@ -186,7 +148,7 @@ public static class LapisPreset
                 continue;
             }
 
-            if (TryDefaultMapping(field, template, preset, out var value))
+            if (TryDefaultMapping(field, template, out var value))
                 merged[field] = value;
         }
 
@@ -221,26 +183,16 @@ public static class LapisPreset
     private static bool TryDefaultMapping(
         string field,
         FieldTemplate template,
-        AnkiFieldMappingPreset preset,
         out string value)
     {
         switch (field.ToLowerInvariant())
         {
             case "sentenceaudio":
-                value = preset == AnkiFieldMappingPreset.Anime
-                    ? "{video-audio-clip}"
-                    : "{sasayaki-audio}";
+                value = "{sasayaki-audio}";
                 return true;
             case "picture":
-                value = preset == AnkiFieldMappingPreset.Anime
-                    ? "{video-screenshot}"
-                    : "{book-cover}";
+                value = "{book-cover}";
                 return true;
-            case "miscinfo":
-                value = preset == AnkiFieldMappingPreset.Anime
-                    ? "{video-file-name} ({video-timestamp})"
-                    : template.Mappings.GetValueOrDefault(field, "");
-                return !string.IsNullOrEmpty(value);
             default:
                 return template.Mappings.TryGetValue(field, out value!);
         }

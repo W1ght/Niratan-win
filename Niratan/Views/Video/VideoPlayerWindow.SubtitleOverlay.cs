@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Graphics.Canvas;
 using Microsoft.Graphics.Canvas.UI.Xaml;
@@ -507,6 +508,7 @@ public sealed partial class VideoPlayerWindow
 
     private void SubtitlePanelBorder_PointerExited(object sender, PointerRoutedEventArgs e)
     {
+        CancelSubtitleHoverLookupDelay();
         _isSubtitlePointerOver = false;
         _lastSubtitlePointerPoint = null;
         _lastSubtitleHoverCharacterIndex = -1;
@@ -681,11 +683,45 @@ public sealed partial class VideoPlayerWindow
             .HasFlag(KeyboardShortcutModifiers.Shift);
         if (!isShiftPressed)
         {
+            CancelSubtitleHoverLookupDelay();
             _lastSubtitleHoverCharacterIndex = -1;
             return;
         }
 
-        _ = LookupSubtitleAtCanvasPointAsync(point, isHoverLookup: true);
+        ScheduleSubtitleHoverLookup(point);
+    }
+
+    private void ScheduleSubtitleHoverLookup(Windows.Foundation.Point point)
+    {
+        CancelSubtitleHoverLookupDelay();
+        _subtitleHoverLookupDelayCts = new CancellationTokenSource();
+        var token = _subtitleHoverLookupDelayCts.Token;
+        var delay = App.GetService<Niratan.Services.Settings.ISettingsService>()
+            .Current.DictionaryDisplaySettings.NormalizedDesktopLookupHoverDelayMs;
+        _ = RunSubtitleHoverLookupAfterDelayAsync(point, delay, token);
+    }
+
+    private async Task RunSubtitleHoverLookupAfterDelayAsync(
+        Windows.Foundation.Point point,
+        int delayMs,
+        CancellationToken ct)
+    {
+        try
+        {
+            if (delayMs > 0)
+                await Task.Delay(delayMs, ct);
+            await LookupSubtitleAtCanvasPointAsync(point, isHoverLookup: true);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void CancelSubtitleHoverLookupDelay()
+    {
+        _subtitleHoverLookupDelayCts?.Cancel();
+        _subtitleHoverLookupDelayCts?.Dispose();
+        _subtitleHoverLookupDelayCts = null;
     }
 
     private async Task LookupSubtitleAtCanvasPointAsync(

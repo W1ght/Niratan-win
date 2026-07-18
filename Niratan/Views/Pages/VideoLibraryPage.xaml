@@ -14,9 +14,9 @@
         <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
 
         <DataTemplate x:Key="FolderFilterTemplate" x:DataType="pages:VideoLibraryFilterRow">
-            <Button Margin="0,0,8,8"
-                    Padding="12,10"
-                    MinWidth="180"
+            <Button Width="220"
+                    Margin="0,0,8,6"
+                    Padding="10,8"
                     HorizontalContentAlignment="Stretch"
                     Command="{Binding ViewModel.SelectFolderFilterCommand, ElementName=ThisPage}"
                     CommandParameter="{x:Bind}">
@@ -37,9 +37,9 @@
         </DataTemplate>
 
         <DataTemplate x:Key="CollectionFilterTemplate" x:DataType="pages:VideoLibraryFilterRow">
-            <Button Margin="0,0,8,8"
-                    Padding="12,10"
-                    MinWidth="180"
+            <Button Width="220"
+                    Margin="0,0,8,6"
+                    Padding="10,8"
                     HorizontalContentAlignment="Stretch"
                     Command="{Binding ViewModel.SelectCollectionFilterCommand, ElementName=ThisPage}"
                     CommandParameter="{x:Bind}">
@@ -60,9 +60,9 @@
         </DataTemplate>
 
         <DataTemplate x:Key="TagFilterTemplate" x:DataType="pages:VideoLibraryFilterRow">
-            <Button Margin="0,0,8,8"
-                    Padding="12,10"
-                    MinWidth="160"
+            <Button Width="180"
+                    Margin="0,0,8,6"
+                    Padding="10,8"
                     HorizontalContentAlignment="Stretch"
                     Command="{Binding ViewModel.SelectTagFilterCommand, ElementName=ThisPage}"
                     CommandParameter="{x:Bind}">
@@ -523,7 +523,7 @@
                 <Grid Grid.Row="1"
                       RowDefinitions="Auto,*">
                     <StackPanel Grid.Row="0"
-                                Margin="20,0,28,12"
+                                Margin="20,0,28,4"
                                 Spacing="8">
                         <ItemsControl x:Name="VideoLibraryFolderFilters"
                                       AutomationProperties.AutomationId="VideoLibraryFolderFilters"
@@ -532,7 +532,8 @@
                                       Visibility="{x:Bind ViewModel.IsFoldersView, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <ItemsWrapGrid Orientation="Horizontal" />
+                                    <ItemsWrapGrid Orientation="Horizontal"
+                                                   ItemWidth="228" />
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                         </ItemsControl>
@@ -543,7 +544,8 @@
                                       Visibility="{x:Bind ViewModel.IsCollectionsView, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <ItemsWrapGrid Orientation="Horizontal" />
+                                    <ItemsWrapGrid Orientation="Horizontal"
+                                                   ItemWidth="228" />
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                         </ItemsControl>
@@ -554,7 +556,8 @@
                                       Visibility="{x:Bind ViewModel.IsTagsView, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <ItemsWrapGrid Orientation="Horizontal" />
+                                    <ItemsWrapGrid Orientation="Horizontal"
+                                                   ItemWidth="188" />
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                         </ItemsControl>

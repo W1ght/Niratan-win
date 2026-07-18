@@ -42,6 +42,7 @@ public sealed partial class ReaderLyricsModeControl : UserControl
     public event EventHandler? PreviousCueRequested;
     public event EventHandler? NextCueRequested;
     public event EventHandler? StatisticsRequested;
+    public event EventHandler? DismissLookupRequested;
     public event EventHandler<ReaderLyricsLookupRequestedEventArgs>? LookupRequested;
 
     public ReaderLyricsModeControl()
@@ -56,12 +57,26 @@ public sealed partial class ReaderLyricsModeControl : UserControl
             ApplyCoverImage();
 
         if (e.PropertyName == nameof(ViewModel.IsPlaying))
+        {
             LyricsPlayPauseIcon.Glyph = ViewModel.IsPlaying ? "\uE769" : "\uE768";
+            LyricsPlayPauseIcon.FontSize = ViewModel.IsPlaying ? 44 : 40;
+        }
+
+        if (e.PropertyName == nameof(ViewModel.IsMaskEnabled))
+            LyricsMaskIcon.Glyph = ViewModel.IsMaskEnabled ? "\uED1A" : "\uE890";
+
+        if (e.PropertyName == nameof(ViewModel.IsVertical))
+            VerticalLyricsIcon.Glyph = ViewModel.IsVertical ? "\u25AD" : "\u25AF";
 
         if (e.PropertyName == nameof(ViewModel.ShowStatistics))
             LyricsStatisticsButton.Visibility = ViewModel.ShowStatistics
                 ? Visibility.Visible
                 : Visibility.Collapsed;
+
+        if (e.PropertyName == nameof(ViewModel.IsStatisticsTracking))
+            LyricsStatisticsIcon.Glyph = ViewModel.IsStatisticsTracking
+                ? "\uE823"
+                : "\uE9D2";
 
         LyricsCanvas.Invalidate();
     }
@@ -142,6 +157,9 @@ public sealed partial class ReaderLyricsModeControl : UserControl
         RequestLookup(e.GetCurrentPoint(LyricsCanvas).Position, isHoverLookup: false);
     }
 
+    private void LyricsRoot_PointerPressed(object sender, PointerRoutedEventArgs e) =>
+        DismissLookupRequested?.Invoke(this, EventArgs.Empty);
+
     private void RequestLookup(Point point, bool isHoverLookup)
     {
         if (!ReaderLyricsCanvasRenderer.TryHitTest(
@@ -151,6 +169,8 @@ public sealed partial class ReaderLyricsModeControl : UserControl
                 point,
                 out var hit))
         {
+            if (!isHoverLookup)
+                DismissLookupRequested?.Invoke(this, EventArgs.Empty);
             return;
         }
 

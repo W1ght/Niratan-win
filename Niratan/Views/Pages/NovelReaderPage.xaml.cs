@@ -17,6 +17,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.UI;
@@ -29,12 +30,14 @@ using Niratan.Services.Settings;
 using Niratan.Views.Dialogs;
 using Serilog;
 using Niratan.Models.DTO;
+using Niratan.Models.GameControllers;
 using Niratan.Models.Novel;
 using Niratan.Models.Shortcuts;
 using Niratan.Models.Settings;
 using Niratan.Models.Sasayaki;
 using Niratan.Services.Anki;
 using Niratan.Services.Dictionary;
+using Niratan.Services.GameControllers;
 using Niratan.Services.Novels;
 using Niratan.Services.Sasayaki;
 using Niratan.Services.Shortcuts;
@@ -56,10 +59,22 @@ public sealed partial class NovelReaderPage : Page
         "HOSHI_NOVEL_READER_ARTIFACT_DIR";
     private static readonly TimeSpan ReaderKeyDownCharacterSuppressWindow =
         TimeSpan.FromMilliseconds(250);
+    private static readonly JsonSerializerOptions ReaderWebJsonOptions =
+        new(JsonSerializerDefaults.Web);
+    private static readonly (ReaderHighlightColor Color, string WireName, string ResourceKey, string Fallback)[]
+        ReaderHighlightContextMenuColors =
+        [
+            (ReaderHighlightColor.Yellow, "yellow", "ReaderHighlightColorYellow", "Yellow"),
+            (ReaderHighlightColor.Green, "green", "ReaderHighlightColorGreen", "Green"),
+            (ReaderHighlightColor.Blue, "blue", "ReaderHighlightColorBlue", "Blue"),
+            (ReaderHighlightColor.Pink, "pink", "ReaderHighlightColorPink", "Pink"),
+            (ReaderHighlightColor.Purple, "purple", "ReaderHighlightColorPurple", "Purple"),
+        ];
 
     public NovelReaderPageViewModel ViewModel { get; set; }
     internal UIElement ReaderTitleBarElement => ReaderTopChrome;
     public SasayakiViewModel SasayakiPanelViewModel => _sasayakiVM;
+    public SasayakiResourcesViewModel SasayakiResourcesViewModel => _sasayakiResourcesVM;
     public ReaderLyricsViewModel LyricsViewModel => ReaderLyricsMode.ViewModel;
     private EpubBook? _epubBook;
     private string _readerJs = "";
@@ -78,20 +93,27 @@ public sealed partial class NovelReaderPage : Page
     private CancellationTokenSource? _openSyncCts;
     private long _searchRequestVersion;
     private bool _isRefreshingGalleryBlurToggle;
+    private int _currentGalleryImageIndex = -1;
+    private readonly HashSet<string> _revealedGalleryImagePaths =
+        new(StringComparer.OrdinalIgnoreCase);
     private readonly ReaderNavigationInputCoordinator _navigationInput;
     private string? _pendingProgrammaticFragment;
     private readonly NovelReaderRenderState _renderState = new();
+    private CoreWebView2ContextMenuItem? _readerHighlightContextMenuItem;
     private DictionaryPopupOverlay? _popupOverlay;
     private readonly SemaphoreSlim _lookupSemaphore = new(1, 1);
     private readonly Dictionary<KeyboardAccelerator, string> _keyboardAcceleratorActionIds = [];
     private readonly IShortcutService _shortcutService;
+    private readonly IGameControllerService _gameControllerService;
     private readonly IMessenger _messenger;
     private DispatcherQueueTimer? _statisticsProjectionTimer;
     private long _lookupRequestVersion;
     private bool _readerFocusMode;
     private KeyboardShortcutBinding _lastKeyDownShortcutBinding;
     private DateTimeOffset _lastKeyDownShortcutHandledAt = DateTimeOffset.MinValue;
+    private bool _suppressNextLyricsCharacterReceived;
     private ContentDialog? _activeReaderPanelDialog;
+    private bool _isReaderWindowActive = true;
 
     private enum ReaderGoToTab
     {
@@ -117,6 +139,8 @@ public sealed partial class NovelReaderPage : Page
     private readonly SasayakiMatcher _sasayakiMatcher = new();
     private readonly SasayakiCueNavigationController _sasayakiNav = new();
     private SasayakiViewModel _sasayakiVM = new();
+    private readonly SasayakiResourcesViewModel _sasayakiResourcesVM =
+        App.GetService<SasayakiResourcesViewModel>();
     private SasayakiMatchData? _sasayakiMatchData;
     private SasayakiSourceData? _sasayakiSourceData;
     private int _lastHighlightedCue = -1;
@@ -124,6 +148,7 @@ public sealed partial class NovelReaderPage : Page
     private double _sasayakiDelay;
     private double _lastSasayakiPlaybackSavePosition = -1;
     private double? _sasayakiStopPlaybackAtSeconds;
+    private readonly SasayakiLookupPlaybackCoordinator _sasayakiLookupPlayback = new();
     private bool _isRefreshingSasayakiPanel = true;
     private bool _isSasayakiPanelOpen;
     private bool _isReaderLyricsMode;
@@ -146,6 +171,7 @@ public sealed partial class NovelReaderPage : Page
     public NovelReaderPage()
     {
         InitializeComponent();
+        SasayakiResourcesPanel.DataContext = _sasayakiResourcesVM;
         SizeChanged += NovelReaderPage_SizeChanged;
         _isRefreshingSasayakiPanel = false;
         ViewModel = App.GetService<NovelReaderPageViewModel>();
@@ -156,6 +182,7 @@ public sealed partial class NovelReaderPage : Page
         DataContext = ViewModel;
         _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         _shortcutService = App.GetService<IShortcutService>();
+        _gameControllerService = App.GetService<IGameControllerService>();
         _messenger = App.GetService<IMessenger>();
         _shortcutService.ShortcutsChanged += OnReaderShortcutsChanged;
         AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(NovelReaderPage_KeyDown), true);
@@ -166,7 +193,9 @@ public sealed partial class NovelReaderPage : Page
         ReaderLyricsMode.PreviousCueRequested += ReaderLyricsMode_PreviousCueRequested;
         ReaderLyricsMode.NextCueRequested += ReaderLyricsMode_NextCueRequested;
         ReaderLyricsMode.StatisticsRequested += ReaderLyricsMode_StatisticsRequested;
+        ReaderLyricsMode.DismissLookupRequested += ReaderLyricsMode_DismissLookupRequested;
         ReaderLyricsMode.LookupRequested += ReaderLyricsMode_LookupRequested;
+        _sasayakiResourcesVM.MatchCompleted += OnSasayakiMatchCompleted;
     }
 
     private void ApplyReaderShortcutLabels()
@@ -180,7 +209,7 @@ public sealed partial class NovelReaderPage : Page
             "Go to",
             "/");
         ApplyShortcutLabel(
-            NovelReaderStatisticsButton,
+            NovelReaderStatisticsToggleButton,
             ShortcutTitle(ReaderShortcutActions.ToggleStatistics),
             ShortcutLabel(ReaderShortcutActions.ToggleStatistics));
         ApplyShortcutLabel(
@@ -240,7 +269,8 @@ public sealed partial class NovelReaderPage : Page
     {
         _dispatcherQueue.TryEnqueue(() =>
         {
-            RegisterReaderKeyboardAccelerators();
+            if (!_isReaderLyricsMode)
+                RegisterReaderKeyboardAccelerators();
             ApplyReaderShortcutLabels();
             _ = RefreshReaderWebShortcutBindingsAsync();
         });
@@ -248,17 +278,22 @@ public sealed partial class NovelReaderPage : Page
 
     private void RegisterReaderKeyboardAccelerators()
     {
-        foreach (var accelerator in _keyboardAcceleratorActionIds.Keys)
-            accelerator.Invoked -= ReaderKeyboardAccelerator_Invoked;
-
-        KeyboardAccelerators.Clear();
-        _keyboardAcceleratorActionIds.Clear();
+        SuspendReaderKeyboardAccelerators();
 
         foreach (var action in ReaderShortcutActions.All)
             RegisterKeyboardAccelerator(action);
 
         foreach (var action in SasayakiShortcutActions.All)
             RegisterKeyboardAccelerator(action);
+    }
+
+    private void SuspendReaderKeyboardAccelerators()
+    {
+        foreach (var accelerator in _keyboardAcceleratorActionIds.Keys)
+            accelerator.Invoked -= ReaderKeyboardAccelerator_Invoked;
+
+        KeyboardAccelerators.Clear();
+        _keyboardAcceleratorActionIds.Clear();
     }
 
     private void RegisterKeyboardAccelerator(ReaderShortcutAction readerAction)
@@ -293,6 +328,8 @@ public sealed partial class NovelReaderPage : Page
         base.OnNavigatedTo(e);
         if (App.MainWindow is { } mainWindow)
             mainWindow.Activated += MainWindow_Activated;
+        _isReaderWindowActive = true;
+        _gameControllerService.ActionInvoked += OnGameControllerActionInvoked;
         _messenger.Unregister<AppBackgroundingMessage>(this);
         _messenger.Register<AppBackgroundingMessage>(
             this,
@@ -315,6 +352,7 @@ public sealed partial class NovelReaderPage : Page
         base.OnNavigatedFrom(e);
         if (App.MainWindow is { } mainWindow)
             mainWindow.Activated -= MainWindow_Activated;
+        _gameControllerService.ActionInvoked -= OnGameControllerActionInvoked;
         _openSyncCts?.Cancel();
         _openSyncCts?.Dispose();
         _openSyncCts = null;
@@ -332,6 +370,8 @@ public sealed partial class NovelReaderPage : Page
         readerSettings.SettingChanged -= OnReaderSettingChanged;
         App.GetService<ISettingsService>().SettingChanged -= OnAppSettingChanged;
         _shortcutService.ShortcutsChanged -= OnReaderShortcutsChanged;
+        _sasayakiResourcesVM.MatchCompleted -= OnSasayakiMatchCompleted;
+        _sasayakiResourcesVM.Cancel();
         ViewModel.PropertyChanged -= OnReaderViewModelPropertyChanged;
 
         if (NovelWebView.CoreWebView2 != null)
@@ -345,6 +385,7 @@ public sealed partial class NovelReaderPage : Page
             NovelWebView.CoreWebView2.FrameNavigationStarting -= OnReaderFrameNavigationStarting;
             NovelWebView.CoreWebView2.NewWindowRequested -= OnReaderNewWindowRequested;
             NovelWebView.CoreWebView2.PermissionRequested -= OnReaderPermissionRequested;
+            NovelWebView.CoreWebView2.ContextMenuRequested -= OnReaderContextMenuRequested;
         }
 
         NovelWebView.SizeChanged -= OnWebViewSizeChanged;
@@ -369,10 +410,9 @@ public sealed partial class NovelReaderPage : Page
         _ = CompleteReaderLifecycleCloseAfterDetachAsync();
     }
 
-    private async void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
+    private void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
     {
-        if (args.WindowActivationState != WindowActivationState.Deactivated)
-            await ViewModel.ActivateCurrentProfileAsync();
+        _isReaderWindowActive = args.WindowActivationState != WindowActivationState.Deactivated;
     }
 
     private void StartOpenSync()
@@ -683,6 +723,8 @@ public sealed partial class NovelReaderPage : Page
 
         NovelWebView.CoreWebView2.WebMessageReceived -= OnWebMessageReceived;
         NovelWebView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+        NovelWebView.CoreWebView2.ContextMenuRequested -= OnReaderContextMenuRequested;
+        NovelWebView.CoreWebView2.ContextMenuRequested += OnReaderContextMenuRequested;
 
         // Capture JS console messages and runtime errors via DevTools protocol
         try
@@ -849,7 +891,18 @@ public sealed partial class NovelReaderPage : Page
         var binding = KeyboardShortcutBindingFromCharacter(
             args.Character,
             ShortcutInputMapper.GetCurrentModifiers());
-        if (binding.IsEmpty || ShouldRegisterKeyboardAccelerator(binding))
+        if (binding.IsEmpty)
+            return;
+
+        if (_isReaderLyricsMode && _suppressNextLyricsCharacterReceived)
+        {
+            _suppressNextLyricsCharacterReceived = false;
+            args.Handled = IsConfiguredReaderShortcutBinding(binding);
+            if (args.Handled)
+                return;
+        }
+
+        if (ShouldRegisterKeyboardAccelerator(binding))
             return;
 
         if (WasRecentlyHandledByReaderKeyDownFallback(binding))
@@ -877,15 +930,44 @@ public sealed partial class NovelReaderPage : Page
         var binding = KeyboardShortcutBinding.FromVirtualKey(
             args.Key,
             ShortcutInputMapper.GetCurrentModifiers());
+        if (_isReaderLyricsMode)
+            _suppressNextLyricsCharacterReceived = args.KeyStatus.WasKeyDown;
+        if (binding.IsEmpty)
+            return;
+
+        if (_isReaderLyricsMode)
+        {
+            if (!IsConfiguredReaderShortcutBinding(binding))
+                return;
+
+            // Page accelerators are suspended in lyrics mode because WinUI
+            // accelerators auto-repeat by design. Claim before awaiting so the
+            // same gesture cannot continue through CharacterReceived.
+            args.Handled = true;
+            if (args.KeyStatus.WasKeyDown)
+                return;
+
+            _lastKeyDownShortcutBinding = binding;
+            _lastKeyDownShortcutHandledAt = DateTimeOffset.UtcNow;
+            await TryHandleReaderShortcutBindingAsync(binding);
+            return;
+        }
+
         if (!IsReaderKeyDownFallbackBinding(binding))
             return;
 
-        args.Handled = await TryHandleReaderShortcutBindingAsync(binding);
-        if (!args.Handled)
+        if (args.KeyStatus.WasKeyDown)
+        {
+            args.Handled = IsConfiguredReaderShortcutBinding(binding);
             return;
+        }
 
+        // CharacterReceived can be raised while the async KeyDown handler is
+        // still awaiting. Claim the gesture before dispatch so '[' and ']'
+        // cannot execute through both routed events.
         _lastKeyDownShortcutBinding = binding;
         _lastKeyDownShortcutHandledAt = DateTimeOffset.UtcNow;
+        args.Handled = await TryHandleReaderShortcutBindingAsync(binding);
     }
 
     private static bool IsReaderKeyDownFallbackBinding(KeyboardShortcutBinding binding) =>
@@ -895,12 +977,30 @@ public sealed partial class NovelReaderPage : Page
         _lastKeyDownShortcutBinding.Matches(binding)
         && DateTimeOffset.UtcNow - _lastKeyDownShortcutHandledAt <= ReaderKeyDownCharacterSuppressWindow;
 
+    private bool IsConfiguredReaderShortcutBinding(KeyboardShortcutBinding binding) =>
+        (_shortcutService.TryResolve(ShortcutScope.Reader, binding, out var readerAction)
+            && readerAction is not null)
+        || (_shortcutService.TryResolve(ShortcutScope.Sasayaki, binding, out var sasayakiAction)
+            && sasayakiAction is not null);
+
     private static bool ShouldIgnoreReaderShortcutSource(object? source) =>
         source is TextBox
             or PasswordBox
             or RichEditBox
             or AutoSuggestBox
             or NumberBox;
+
+    private async void OnGameControllerActionInvoked(
+        object? sender,
+        GameControllerActionEventArgs e)
+    {
+        if (!_isReaderWindowActive)
+            return;
+
+        var actionId = GameControllerActions.ShortcutActionId(e.Action);
+        _ = await HandleReaderShortcutActionAsync(actionId)
+            || await HandleSasayakiShortcutActionAsync(actionId);
+    }
 
     private async Task<bool> TryHandleReaderShortcutBindingAsync(KeyboardShortcutBinding binding)
     {
@@ -1091,8 +1191,12 @@ public sealed partial class NovelReaderPage : Page
         LyricsViewModel.ClearSelection();
         LyricsViewModel.IsActive = true;
         _isReaderLyricsMode = true;
+        _suppressNextLyricsCharacterReceived = false;
+        SuspendReaderKeyboardAccelerators();
         SyncReaderLyricsViewModel();
         ReaderLyricsMode.Visibility = Visibility.Visible;
+        SetNovelReaderSurfaceSuppressedForLyrics(suppress: true);
+        _ = ReaderLyricsMode.Focus(FocusState.Programmatic);
         await ViewModel.ResetStatisticsBaselineAsync();
     }
 
@@ -1102,10 +1206,14 @@ public sealed partial class NovelReaderPage : Page
             return;
 
         _isReaderLyricsMode = false;
+        _suppressNextLyricsCharacterReceived = false;
+        RegisterReaderKeyboardAccelerators();
         LyricsViewModel.IsActive = false;
         LyricsViewModel.IsLookupPopupVisible = false;
         LyricsViewModel.ClearSelection();
+        SetNovelReaderSurfaceSuppressedForLyrics(suppress: false);
         ReaderLyricsMode.Visibility = Visibility.Collapsed;
+        _ = NovelWebView.Focus(FocusState.Programmatic);
         _popupOverlay?.Dismiss();
         await SetLookupPopupActiveAsync(false);
 
@@ -1115,6 +1223,15 @@ public sealed partial class NovelReaderPage : Page
         await ViewModel.ResetStatisticsBaselineAsync();
         if (match != null)
             await JumpToSasayakiMatchAsync(match);
+    }
+
+    private void SetNovelReaderSurfaceSuppressedForLyrics(bool suppress)
+    {
+        // WebView2 composition visuals can bleed through another fading WebView2.
+        // The novel surface is neither visible nor interactive in lyrics mode, so
+        // remove it from composition while dictionary popup content fades in.
+        NovelWebView.IsHitTestVisible = !suppress;
+        NovelWebView.Visibility = suppress ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void SyncReaderLyricsViewModel()
@@ -1139,12 +1256,21 @@ public sealed partial class NovelReaderPage : Page
             _sasayakiPlayer.PositionSeconds,
             _sasayakiPlayer.DurationSeconds,
             _sasayakiNav.CurrentCueIndex);
+        var statisticsSummary = CurrentStatisticsSettings.EnableStatistics
+            ? ResourceStringHelper.FormatString(
+                "ReaderLyricsStatisticsSummaryFormat",
+                "Reading Speed: {0}   Reading Progress: {1}   Reading Time: {2}",
+                ViewModel.StatisticsSessionSpeedText,
+                ViewModel.ReaderProgressText,
+                ViewModel.StatisticsSessionTimeText)
+            : ResourceStringHelper.FormatString(
+                "ReaderLyricsProgressSummaryFormat",
+                "Reading Progress: {0}",
+                ViewModel.ReaderProgressText);
         LyricsViewModel.UpdateStatistics(
             CurrentStatisticsSettings.EnableStatistics,
             ViewModel.IsStatisticsTracking,
-            ViewModel.OverallProgressText,
-            ViewModel.StatisticsSessionSpeedText,
-            ViewModel.StatisticsSessionTimeText);
+            statisticsSummary);
     }
 
     private async Task ApplyLyricsCuePositionAsync(
@@ -1177,6 +1303,19 @@ public sealed partial class NovelReaderPage : Page
 
     private async void ReaderLyricsMode_StatisticsRequested(object? sender, EventArgs e) =>
         await ViewModel.ToggleStatisticsTrackingCommand.ExecuteAsync(null);
+
+    private async void ReaderLyricsMode_DismissLookupRequested(object? sender, EventArgs e)
+    {
+        _popupOverlay?.Dismiss();
+        await SetLookupPopupActiveAsync(false);
+        RestoreReaderLyricsKeyboardFocus();
+    }
+
+    private void RestoreReaderLyricsKeyboardFocus()
+    {
+        if (_isReaderLyricsMode && ReaderLyricsMode.Visibility == Visibility.Visible)
+            _ = ReaderLyricsMode.Focus(FocusState.Programmatic);
+    }
 
     private async void ReaderLyricsMode_LookupRequested(
         object? sender,
@@ -1262,7 +1401,6 @@ public sealed partial class NovelReaderPage : Page
         NovelReaderLyricsModeButton.Visibility = canShowLyrics
             ? Visibility.Visible
             : Visibility.Collapsed;
-        SasayakiPanelLoadAudioButton.IsEnabled = canLoad;
         SasayakiPanelSkipBackButton.IsEnabled = canControl;
         SasayakiPanelPreviousCueButton.IsEnabled = canControl;
         SasayakiPanelPlayPauseButton.IsEnabled = canControl;
@@ -1273,6 +1411,24 @@ public sealed partial class NovelReaderPage : Page
         SasayakiPlayPauseMenuIcon.Glyph = isPlaying ? "\uE769" : "\uE768";
         SasayakiPanelPlayPauseIcon.Glyph = isPlaying ? "\uE769" : "\uE768";
         SasayakiButtonIcon.Glyph = isPlaying ? "\uE769" : "\uE767";
+
+        if (SasayakiProgressSlider != null)
+        {
+            var wasRefreshing = _isRefreshingSasayakiPanel;
+            _isRefreshingSasayakiPanel = true;
+            try
+            {
+                SasayakiProgressSlider.Maximum = Math.Max(1, _sasayakiPlayer?.DurationSeconds ?? 0);
+                SasayakiProgressSlider.Value = Math.Clamp(
+                    _sasayakiPlayer?.PositionSeconds ?? 0,
+                    0,
+                    SasayakiProgressSlider.Maximum);
+            }
+            finally
+            {
+                _isRefreshingSasayakiPanel = wasRefreshing;
+            }
+        }
         UpdateSasayakiPanelValueText();
 
         var currentCue = _sasayakiNav.CurrentMatch?.Text;
@@ -1290,9 +1446,13 @@ public sealed partial class NovelReaderPage : Page
     {
         var readerSettings = App.GetService<IReaderSettingsService>();
         NovelReaderStatisticsButton.Visibility = CurrentStatisticsSettings.EnableStatistics
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        NovelReaderStatisticsToggleButton.Visibility = CurrentStatisticsSettings.EnableStatistics
             && readerSettings.Current.ShowStatisticsToggle
             ? Visibility.Visible
             : Visibility.Collapsed;
+        UpdateReaderBottomChromeVisibility();
     }
 
     private void ToggleReaderFocusMode()
@@ -1310,6 +1470,7 @@ public sealed partial class NovelReaderPage : Page
     private void RefreshReaderDisplayChrome()
     {
         var readerSettings = App.GetService<IReaderSettingsService>();
+        RefreshReaderChromeColors(readerSettings.Current);
         NovelReaderTitleText.Visibility = readerSettings.Current.ShowTitle
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -1348,11 +1509,37 @@ public sealed partial class NovelReaderPage : Page
     private void UpdateReaderBottomChromeVisibility()
     {
         var hasVisibleContent = NovelReaderBottomProgressText.Visibility == Visibility.Visible
+            || NovelReaderStatisticsText.Visibility == Visibility.Visible
+            || NovelReaderStatisticsToggleButton.Visibility == Visibility.Visible
             || NovelReaderHistoryBackButton.Visibility == Visibility.Visible
             || NovelReaderHistoryForwardButton.Visibility == Visibility.Visible;
         ReaderBottomChrome.Visibility = !_readerFocusMode && hasVisibleContent
             ? Visibility.Visible
             : Visibility.Collapsed;
+    }
+
+    private void RefreshReaderChromeColors(ReaderSettings settings)
+    {
+        var appTheme = App.GetService<ISettingsService>().Current.Theme;
+        var backgroundColor = ARGBToWindowsColor(settings.BackgroundColor(appTheme));
+        var foregroundColor = settings.SepiaMode
+            ? ARGBToWindowsColor(0xFF332A1B)
+            : settings.UsesDarkInterface(appTheme)
+                ? Colors.White
+                : Colors.Black;
+
+        Background = new SolidColorBrush(backgroundColor);
+        ReaderBottomChrome.Background = new SolidColorBrush(backgroundColor);
+        var foregroundBrush = new SolidColorBrush(foregroundColor)
+        {
+            Opacity = 0.68,
+        };
+        NovelReaderStatisticsToggleButton.Foreground = foregroundBrush;
+        NovelReaderStatisticsText.Foreground = foregroundBrush;
+        NovelReaderHistoryBackButton.Foreground = foregroundBrush;
+        NovelReaderHistoryForwardButton.Foreground = foregroundBrush;
+        NovelReaderBottomProgressText.Foreground = foregroundBrush;
+        NovelWebView.DefaultBackgroundColor = backgroundColor;
     }
 
     private void UpdateNavigationHistoryButton(
@@ -1401,10 +1588,14 @@ public sealed partial class NovelReaderPage : Page
     private void RefreshReaderStatisticsChrome()
     {
         var readerSettings = App.GetService<IReaderSettingsService>();
+        NovelReaderStatisticsToggleIcon.Glyph = ViewModel.IsStatisticsTracking
+            ? "\uE823"
+            : "\uE9D2";
         if (!CurrentStatisticsSettings.EnableStatistics)
         {
             NovelReaderStatisticsText.Text = "";
             NovelReaderStatisticsText.Visibility = Visibility.Collapsed;
+            UpdateReaderBottomChromeVisibility();
             return;
         }
 
@@ -1418,6 +1609,7 @@ public sealed partial class NovelReaderPage : Page
         NovelReaderStatisticsText.Visibility = parts.Count > 0
             ? Visibility.Visible
             : Visibility.Collapsed;
+        UpdateReaderBottomChromeVisibility();
     }
 
     private void LoadChapter(ReaderNavigationRenderRequest renderRequest)
@@ -1611,10 +1803,13 @@ public sealed partial class NovelReaderPage : Page
             {
                 scanNonJapaneseText = dictionaryDisplaySettings.ScanNonJapaneseText,
                 maxResults = dictionaryDisplaySettings.MaxResults,
-                scanLength = dictionaryDisplaySettings.ScanLength
+                scanLength = dictionaryDisplaySettings.ScanLength,
+                hoverDelayMs = dictionaryDisplaySettings.NormalizedDesktopLookupHoverDelayMs
             });
             await sender.ExecuteScriptAsync(
                 $"window.__niratanLookupSettings = {lookupSettings}; window.scanNonJapaneseText = {JsonSerializer.Serialize(dictionaryDisplaySettings.ScanNonJapaneseText)};");
+            await sender.ExecuteScriptAsync(
+                $"window.__niratanBlurImages = {JsonSerializer.Serialize(readerSettings.Current.BlurImages)};");
             await sender.ExecuteScriptAsync(
                 $"window.__niratanReaderShortcutBindings = {BuildReaderWebShortcutBindingsJson()};");
 
@@ -1744,6 +1939,122 @@ public sealed partial class NovelReaderPage : Page
             args.Reason);
         await HandleTerminalRenderFailureAsync(
             "Reader content process failed.");
+    }
+
+    private void OnReaderContextMenuRequested(
+        object? sender,
+        CoreWebView2ContextMenuRequestedEventArgs args)
+    {
+        if (sender is not CoreWebView2 webView
+            || _renderState.HasActiveNavigation
+            || _renderState.CurrentAttempt is not { } attempt
+            || !args.ContextMenuTarget.IsRequestedForMainFrame
+            || !args.ContextMenuTarget.HasSelection
+            || string.IsNullOrEmpty(args.ContextMenuTarget.SelectionText)
+            || args.ContextMenuTarget.SelectionText.Length > 1_048_576
+            || !ReaderWebContentPolicy.IsTrustedWebMessageSource(
+                args.ContextMenuTarget.PageUri,
+                attempt.Uri))
+        {
+            return;
+        }
+
+        var menuItem = EnsureReaderHighlightContextMenuItem(webView);
+        if (!args.MenuItems.Contains(menuItem))
+            args.MenuItems.Insert(0, menuItem);
+    }
+
+    private CoreWebView2ContextMenuItem EnsureReaderHighlightContextMenuItem(
+        CoreWebView2 webView)
+    {
+        if (_readerHighlightContextMenuItem != null)
+            return _readerHighlightContextMenuItem;
+
+        var menuItem = webView.Environment.CreateContextMenuItem(
+            ResourceStringHelper.GetString("ReaderHighlightContextMenuLabel", "Highlights"),
+            null!,
+            CoreWebView2ContextMenuItemKind.Submenu);
+        foreach (var option in ReaderHighlightContextMenuColors)
+        {
+            var colorItem = webView.Environment.CreateContextMenuItem(
+                ResourceStringHelper.GetString(option.ResourceKey, option.Fallback),
+                null!,
+                CoreWebView2ContextMenuItemKind.Command);
+            colorItem.CustomItemSelected += (_, _) =>
+                _ = CreateHighlightFromSelectionAsync(option.Color, option.WireName);
+            menuItem.Children.Add(colorItem);
+        }
+
+        _readerHighlightContextMenuItem = menuItem;
+        return menuItem;
+    }
+
+    private async Task CreateHighlightFromSelectionAsync(
+        ReaderHighlightColor color,
+        string wireName)
+    {
+        if (NovelWebView.CoreWebView2 == null
+            || _renderState.HasActiveNavigation
+            || _renderState.CurrentAttempt is not { } attempt)
+        {
+            return;
+        }
+
+        var id = Guid.NewGuid();
+        var wasRendered = false;
+        try
+        {
+            var colorJson = JsonSerializer.Serialize(wireName);
+            var idJson = JsonSerializer.Serialize(id.ToString("D"));
+            var resultJson = await NovelWebView.ExecuteScriptAsync(
+                $"window.niratanHighlights?.createHighlight({colorJson}, {idJson}) ?? null;");
+            if (string.IsNullOrWhiteSpace(resultJson) || resultJson == "null")
+                return;
+
+            wasRendered = true;
+            var selection = JsonSerializer.Deserialize<ReaderHighlightSelection>(
+                resultJson,
+                ReaderWebJsonOptions);
+            if (selection == null
+                || selection.Start < 0
+                || selection.Offset < 0
+                || string.IsNullOrEmpty(selection.Text)
+                || selection.Text.Length > 1_048_576
+                || _renderState.HasActiveNavigation
+                || _renderState.CurrentAttempt?.RenderAttemptId != attempt.RenderAttemptId)
+            {
+                await RemoveHighlightFromWebViewAsync(id);
+                return;
+            }
+
+            var highlight = await ViewModel.AddHighlightAsync(
+                id,
+                attempt.ChapterIndex,
+                selection,
+                color,
+                DateTimeOffset.UtcNow);
+            if (highlight == null)
+            {
+                await RemoveHighlightFromWebViewAsync(id);
+                return;
+            }
+
+            RefreshHighlightList();
+        }
+        catch (Exception ex)
+        {
+            if (wasRendered)
+                await RemoveHighlightFromWebViewAsync(id);
+
+            Log.Error(ex, "[NovelReader] Failed to create reader highlight");
+            App.GetService<INotificationService>().ShowError(
+                ResourceStringHelper.GetString(
+                    "ReaderHighlightCreateFailed",
+                    "Could not create the highlight."),
+                ResourceStringHelper.GetString(
+                    "ReaderHighlightContextMenuLabel",
+                    "Highlights"));
+        }
     }
 
     private async void OnWebMessageReceived(
@@ -1990,6 +2301,12 @@ public sealed partial class NovelReaderPage : Page
                     }
                     break;
                 case "shortcut":
+                    // Lyrics mode owns keyboard input on the native page. A
+                    // hidden Reader WebView can retain focus long enough to
+                    // enqueue the same shortcut, so discard that stale route.
+                    if (_isReaderLyricsMode)
+                        break;
+
                     var shortcutPayload = root.GetProperty("payload");
                     var actionId = shortcutPayload.GetProperty("actionId").GetString();
                     if (!string.IsNullOrWhiteSpace(actionId))
@@ -2003,6 +2320,9 @@ public sealed partial class NovelReaderPage : Page
                     var href = internalLinkPayload.GetProperty("href").GetString();
                     if (!string.IsNullOrWhiteSpace(href))
                         await NavigateToInternalLinkAsync(href);
+                    break;
+                case "imageTapped":
+                    await HandleReaderImageTappedAsync(root.GetProperty("payload"));
                     break;
                 case "sasayakiHighlightCompleted":
                     var sasayakiPayload = root.GetProperty("payload");
@@ -2586,17 +2906,21 @@ public sealed partial class NovelReaderPage : Page
 
     private void OnPopupOverlayDismissed(object? sender, EventArgs e)
     {
+        ResumeSasayakiAfterLookup();
         _ = SetLookupPopupActiveAsync(false);
+        RestoreReaderLyricsKeyboardFocus();
     }
 
     private void PauseSasayakiForLookup()
     {
-        if (!CurrentSasayakiSettings.AutoPauseOnLookup)
+        if (!_sasayakiLookupPlayback.TryPauseForLookup(
+                CurrentSasayakiSettings.AutoPauseOnLookup,
+                _sasayakiPlayer?.IsPlaying == true))
+        {
             return;
-        if (_sasayakiPlayer?.IsPlaying != true)
-            return;
+        }
 
-        _sasayakiPlayer.Pause();
+        _sasayakiPlayer!.Pause();
         _sasayakiVM.UpdatePlaybackState(
             false,
             true,
@@ -2604,6 +2928,24 @@ public sealed partial class NovelReaderPage : Page
             _sasayakiPlayer.DurationSeconds);
         UpdateSasayakiChromeState();
         _ = SaveSasayakiPlaybackAsync();
+    }
+
+    private void ResumeSasayakiAfterLookup()
+    {
+        if (!_sasayakiLookupPlayback.TryResumeAfterDismiss(
+                _sasayakiPlayer?.IsPlaying == true)
+            || _sasayakiPlayer?.IsPaused != true)
+        {
+            return;
+        }
+
+        _sasayakiPlayer.Resume();
+        _sasayakiVM.UpdatePlaybackState(
+            true,
+            false,
+            _sasayakiPlayer.PositionSeconds,
+            _sasayakiPlayer.DurationSeconds);
+        UpdateSasayakiChromeState();
     }
 
     private async Task SetLookupPopupActiveAsync(bool active)
@@ -2895,6 +3237,18 @@ public sealed partial class NovelReaderPage : Page
 
     private async void GalleryButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
+        PrepareReaderGalleryPanel(clearRevealSession: true);
+        await ShowReaderPanelDialogAsync(ReaderGalleryPanelDialog);
+    }
+
+    private void PrepareReaderGalleryPanel(bool clearRevealSession)
+    {
+        if (clearRevealSession)
+        {
+            _revealedGalleryImagePaths.Clear();
+            ViewModel.RefreshGalleryBlurState();
+        }
+
         UpdateReaderGalleryPanelSize(ActualWidth, ActualHeight);
         _isRefreshingGalleryBlurToggle = true;
         ReaderGalleryBlurUnreadToggle.IsOn = ViewModel.BlurUnreadGalleryImages;
@@ -2902,7 +3256,69 @@ public sealed partial class NovelReaderPage : Page
         ReaderGalleryEmptyState.Visibility = ViewModel.HasGalleryImages
             ? Visibility.Collapsed
             : Visibility.Visible;
+    }
+
+    private async Task HandleReaderImageTappedAsync(JsonElement payload)
+    {
+        if (_epubBook == null
+            || payload.ValueKind != JsonValueKind.Object
+            || !payload.TryGetProperty("src", out var sourceElement)
+            || sourceElement.ValueKind != JsonValueKind.String
+            || sourceElement.GetString() is not { Length: > 0 and <= 4096 } source
+            || !ReaderWebContentPolicy.IsAllowedTopLevelNavigation(source)
+            || !Uri.TryCreate(source, UriKind.Absolute, out var sourceUri))
+        {
+            Log.Warning("[NovelReader] Ignoring invalid imageTapped payload");
+            return;
+        }
+
+        string filePath;
+        try
+        {
+            var containerRoot = Path.GetFullPath(_epubBook.ContainerDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            var relativePath = Uri.UnescapeDataString(sourceUri.AbsolutePath.TrimStart('/'))
+                .Replace('/', Path.DirectorySeparatorChar);
+            filePath = Path.GetFullPath(Path.Combine(containerRoot, relativePath));
+            if (!filePath.StartsWith(containerRoot, StringComparison.OrdinalIgnoreCase)
+                || !File.Exists(filePath))
+            {
+                Log.Warning("[NovelReader] Ignoring imageTapped path outside the book root");
+                return;
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException
+            or NotSupportedException
+            or PathTooLongException
+            or UriFormatException)
+        {
+            Log.Warning(ex, "[NovelReader] Ignoring malformed imageTapped path");
+            return;
+        }
+
+        var imageIndex = -1;
+        for (var i = 0; i < ViewModel.GalleryImages.Count; i++)
+        {
+            if (string.Equals(
+                    ViewModel.GalleryImages[i].FilePath,
+                    filePath,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                imageIndex = i;
+                break;
+            }
+        }
+
+        if (imageIndex < 0)
+        {
+            Log.Warning("[NovelReader] Ignoring imageTapped resource not present in gallery index");
+            return;
+        }
+
+        PrepareReaderGalleryPanel(clearRevealSession: true);
         await ShowReaderPanelDialogAsync(ReaderGalleryPanelDialog);
+        ShowGalleryImage(imageIndex);
     }
 
     private async void ReaderGalleryBlurUnreadToggle_Toggled(
@@ -2914,6 +3330,11 @@ public sealed partial class NovelReaderPage : Page
 
         await ViewModel.SetBlurUnreadGalleryImagesAsync(
             ReaderGalleryBlurUnreadToggle.IsOn);
+        foreach (var image in ViewModel.GalleryImages)
+        {
+            if (_revealedGalleryImagePaths.Contains(image.RelativePath))
+                image.SetBlurred(false);
+        }
     }
 
     private void GalleryImage_ItemClick(object sender, ItemClickEventArgs e)
@@ -2921,7 +3342,37 @@ public sealed partial class NovelReaderPage : Page
         if (e.ClickedItem is not ReaderGalleryImageItemViewModel image)
             return;
 
-        ReaderImageViewerImage.Source = new BitmapImage(new Uri(image.FilePath));
+        var index = ViewModel.GalleryImages.IndexOf(image);
+        if (index >= 0)
+            ShowGalleryImage(index);
+    }
+
+    private void ShowGalleryImage(int index)
+    {
+        if (index < 0 || index >= ViewModel.GalleryImages.Count)
+            return;
+
+        _currentGalleryImageIndex = index;
+        var image = ViewModel.GalleryImages[index];
+        var source = new BitmapImage(new Uri(image.FilePath));
+        var shouldBlur = image.IsBlurred
+            && !_revealedGalleryImagePaths.Contains(image.RelativePath);
+
+        // The blur card has transparent letterbox space around its uniformly stretched image.
+        // Keep the clear preview out of the visual tree until the user explicitly reveals it,
+        // otherwise that transparent space can expose a second, unblurred copy underneath.
+        ReaderImageViewerScrollViewer.Visibility = shouldBlur
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+        ReaderImageViewerImage.Source = source;
+        ReaderImageViewerBlurCard.FilePath = image.FilePath;
+        ReaderImageViewerBlurCard.Thumbnail = source;
+        ReaderImageViewerBlurCard.IsBlurred = shouldBlur;
+        ReaderImageViewerBlurCard.Visibility = shouldBlur
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        ReaderImageViewerPreviousButton.IsEnabled = index > 0;
+        ReaderImageViewerNextButton.IsEnabled = index + 1 < ViewModel.GalleryImages.Count;
         ReaderImageViewerOverlay.Visibility = Visibility.Visible;
         ReaderImageViewerScrollViewer.ChangeView(null, null, 1, true);
         ReaderImageViewerCloseButton.Focus(FocusState.Programmatic);
@@ -2932,10 +3383,51 @@ public sealed partial class NovelReaderPage : Page
 
     private void ReaderImageViewerOverlay_KeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key != Windows.System.VirtualKey.Escape)
-            return;
+        switch (e.Key)
+        {
+            case Windows.System.VirtualKey.Escape:
+                CloseImageViewer();
+                e.Handled = true;
+                break;
+            case Windows.System.VirtualKey.Left:
+                NavigateGalleryImage(-1);
+                e.Handled = true;
+                break;
+            case Windows.System.VirtualKey.Right:
+                NavigateGalleryImage(1);
+                e.Handled = true;
+                break;
+        }
+    }
 
-        CloseImageViewer();
+    private void ReaderImageViewerPreviousButton_Click(object sender, RoutedEventArgs e) =>
+        NavigateGalleryImage(-1);
+
+    private void ReaderImageViewerNextButton_Click(object sender, RoutedEventArgs e) =>
+        NavigateGalleryImage(1);
+
+    private void NavigateGalleryImage(int delta)
+    {
+        var target = _currentGalleryImageIndex + delta;
+        if (target >= 0 && target < ViewModel.GalleryImages.Count)
+            ShowGalleryImage(target);
+    }
+
+    private void ReaderImageViewerBlurCard_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (_currentGalleryImageIndex < 0
+            || _currentGalleryImageIndex >= ViewModel.GalleryImages.Count)
+        {
+            return;
+        }
+
+        var image = ViewModel.GalleryImages[_currentGalleryImageIndex];
+        _revealedGalleryImagePaths.Add(image.RelativePath);
+        image.SetBlurred(false);
+        ReaderImageViewerBlurCard.IsBlurred = false;
+        ReaderImageViewerBlurCard.Visibility = Visibility.Collapsed;
+        ReaderImageViewerScrollViewer.Visibility = Visibility.Visible;
+        ReaderImageViewerCloseButton.Focus(FocusState.Programmatic);
         e.Handled = true;
     }
 
@@ -2956,9 +3448,15 @@ public sealed partial class NovelReaderPage : Page
 
     private void ResetImageViewer()
     {
+        _currentGalleryImageIndex = -1;
         ReaderImageViewerOverlay.Visibility = Visibility.Collapsed;
         ReaderImageViewerScrollViewer.ChangeView(null, null, 1, true);
         ReaderImageViewerImage.Source = null;
+        ReaderImageViewerBlurCard.IsBlurred = false;
+        ReaderImageViewerBlurCard.Visibility = Visibility.Collapsed;
+        ReaderImageViewerBlurCard.FilePath = string.Empty;
+        ReaderImageViewerBlurCard.Thumbnail = null;
+        ReaderImageViewerScrollViewer.Visibility = Visibility.Visible;
     }
 
     private void NovelReaderPage_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -2976,6 +3474,13 @@ public sealed partial class NovelReaderPage : Page
     private async void StatisticsButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
         await ShowReaderPanelDialogAsync(ReaderStatisticsPanelDialog);
+    }
+
+    private async void StatisticsToggleButton_Click(
+        object sender,
+        Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        await ViewModel.ToggleStatisticsTrackingCommand.ExecuteAsync(null);
     }
 
     private async void GoToButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
@@ -3621,10 +4126,21 @@ public sealed partial class NovelReaderPage : Page
 
     private async void SasayakiButton_Click(object sender, RoutedEventArgs e)
     {
+        await ShowSasayakiPanelAsync(selectResourcesTab: false);
+    }
+
+    private async Task ShowSasayakiPanelAsync(bool selectResourcesTab)
+    {
         if (_isSasayakiPanelOpen)
             return;
 
+        if (ViewModel.CurrentBook != null)
+            await _sasayakiResourcesVM.InitializeAsync(ViewModel.CurrentBook);
+
         RefreshSasayakiPanelControls();
+        SelectSasayakiPanelTab(selectResourcesTab
+            ? 0
+            : _sasayakiVM.IsLoaded && _sasayakiVM.HasChapters ? 1 : 0);
         SasayakiPanelDialog.XamlRoot = XamlRoot;
         _isSasayakiPanelOpen = true;
 
@@ -3654,7 +4170,7 @@ public sealed partial class NovelReaderPage : Page
                 playbackRate = settings.PlaybackRate;
 
             SasayakiDelaySlider.Value = Math.Clamp(_sasayakiDelay, -2, 2);
-            SasayakiSpeedSlider.Value = Math.Clamp(playbackRate, 0.5, 1.5);
+            SasayakiSpeedSlider.Value = Math.Clamp(playbackRate, 0.5, 2);
             SasayakiPanelShowToggleSwitch.IsOn = settings.ReaderShowSasayakiToggle;
             SasayakiPanelAutoScrollToggleSwitch.IsOn = settings.AutoScroll;
             SasayakiPanelAutoPauseToggleSwitch.IsOn = settings.AutoPauseOnLookup;
@@ -3670,6 +4186,16 @@ public sealed partial class NovelReaderPage : Page
             SasayakiPanelDarkBackgroundColorPicker.Color = ParseSasayakiColor(
                 settings.DarkBackgroundColor,
                 "#6652C7FA");
+
+            SasayakiPlaybackHeader.Visibility = _sasayakiVM.IsLoaded
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            SasayakiChapterList.Visibility = _sasayakiVM.HasChapters
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            SasayakiNoChaptersText.Visibility = _sasayakiVM.HasChapters
+                ? Visibility.Collapsed
+                : Visibility.Visible;
 
             UpdateSasayakiPanelValueText();
             UpdateSasayakiChromeState();
@@ -3687,6 +4213,58 @@ public sealed partial class NovelReaderPage : Page
 
         SasayakiDelayValueText.Text = $"{SasayakiDelaySlider.Value:+0.00;-0.00;0.00}s";
         SasayakiSpeedValueText.Text = $"{SasayakiSpeedSlider.Value:0.00}x";
+    }
+
+    private void SasayakiResourcesTabButton_Click(object sender, RoutedEventArgs e) =>
+        SelectSasayakiPanelTab(0);
+
+    private void SasayakiChaptersTabButton_Click(object sender, RoutedEventArgs e) =>
+        SelectSasayakiPanelTab(1);
+
+    private void SasayakiSettingsTabButton_Click(object sender, RoutedEventArgs e) =>
+        SelectSasayakiPanelTab(2);
+
+    private void SelectSasayakiPanelTab(int index)
+    {
+        SasayakiResourcesTabButton.IsChecked = index == 0;
+        SasayakiChaptersTabButton.IsChecked = index == 1;
+        SasayakiSettingsTabButton.IsChecked = index == 2;
+        SasayakiResourcesTabContent.Visibility = index == 0 ? Visibility.Visible : Visibility.Collapsed;
+        SasayakiChaptersTabContent.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
+        SasayakiSettingsTabContent.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async void SasayakiProgressSlider_ValueChanged(
+        object sender,
+        RangeBaseValueChangedEventArgs e)
+    {
+        if (_isRefreshingSasayakiPanel || _sasayakiPlayer == null)
+            return;
+
+        _sasayakiPlayer.Seek(e.NewValue);
+        _sasayakiNav.UpdatePosition(e.NewValue);
+        _sasayakiVM.UpdateCurrentChapter(e.NewValue);
+        await SaveSasayakiPlaybackAsync(e.NewValue);
+    }
+
+    private async void SasayakiChapterList_ItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is not SasayakiChapterItemViewModel chapter
+            || _sasayakiPlayer == null)
+        {
+            return;
+        }
+
+        _sasayakiPlayer.Seek(chapter.StartTime);
+        _sasayakiVM.UpdateCurrentChapter(chapter.StartTime);
+        UpdateSasayakiChromeState();
+        await SaveSasayakiPlaybackAsync(chapter.StartTime);
+    }
+
+    private async void OnSasayakiMatchCompleted(object? sender, SasayakiMatchData data)
+    {
+        await LoadSasayakiSidecarAsync();
+        RefreshSasayakiPanelControls();
     }
 
     private async void SasayakiDelaySlider_ValueChanged(
@@ -3709,7 +4287,7 @@ public sealed partial class NovelReaderPage : Page
         if (_isRefreshingSasayakiPanel)
             return;
 
-        var playbackRate = Math.Clamp(e.NewValue, 0.5, 1.5);
+        var playbackRate = Math.Clamp(e.NewValue, 0.5, 2);
         if (_sasayakiPlayer != null)
             _sasayakiPlayer.PlaybackRate = playbackRate;
 
@@ -3862,38 +4440,7 @@ public sealed partial class NovelReaderPage : Page
 
     private async void SasayakiLoadButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_isSasayakiPanelOpen)
-            SasayakiPanelDialog.Hide();
-
-        if (_epubBook == null || ViewModel.CurrentBook == null || App.MainWindow == null)
-            return;
-        if (!CurrentSasayakiSettings.EnableSasayaki)
-            return;
-
-        // Pick audiobook file
-        var audioPicker = new Windows.Storage.Pickers.FileOpenPicker();
-        audioPicker.FileTypeFilter.Add(".mp3");
-        audioPicker.FileTypeFilter.Add(".m4b");
-        audioPicker.FileTypeFilter.Add(".m4a");
-        audioPicker.FileTypeFilter.Add(".wav");
-        audioPicker.FileTypeFilter.Add(".flac");
-        audioPicker.FileTypeFilter.Add(".ogg");
-
-        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(
-            App.MainWindow);
-        WinRT.Interop.InitializeWithWindow.Initialize(audioPicker, hwnd);
-        var audioFile = await audioPicker.PickSingleFileAsync();
-        if (audioFile == null) return;
-
-        // Pick SRT file
-        var srtPicker = new Windows.Storage.Pickers.FileOpenPicker();
-        srtPicker.FileTypeFilter.Add(".srt");
-        srtPicker.FileTypeFilter.Add(".vtt");
-        WinRT.Interop.InitializeWithWindow.Initialize(srtPicker, hwnd);
-        var srtFile = await srtPicker.PickSingleFileAsync();
-        if (srtFile == null) return;
-
-        await LoadSasayakiAsync(audioFile.Path, srtFile.Path);
+        await ShowSasayakiPanelAsync(selectResourcesTab: true);
     }
 
     private async Task LoadSasayakiAsync(string audiobookPath, string srtPath)
@@ -3929,6 +4476,7 @@ public sealed partial class NovelReaderPage : Page
             };
             _sasayakiNav.Load(matchData);
             _sasayakiVM.UpdateMatchStats(matchData);
+            _sasayakiVM.UpdateChapters(matchData, _epubBook!);
             _sasayakiVM.IsLoaded = true;
 
             // Save sidecar
@@ -3990,6 +4538,7 @@ public sealed partial class NovelReaderPage : Page
             _sasayakiSourceData = sourceData;
             _sasayakiNav.Load(matchData);
             _sasayakiVM.UpdateMatchStats(matchData);
+            _sasayakiVM.UpdateChapters(matchData, _epubBook);
             _sasayakiVM.IsLoaded = true;
 
             // Load audio if file still exists
@@ -4290,6 +4839,7 @@ public sealed partial class NovelReaderPage : Page
         if (!CanHandleSasayakiShortcut())
             return;
 
+        _sasayakiLookupPlayback.CancelAutoResume();
         _sasayakiStopPlaybackAtSeconds = null;
 
         if (_sasayakiPlayer!.IsPlaying)
@@ -4468,13 +5018,17 @@ public sealed partial class NovelReaderPage : Page
         var duration = _sasayakiPlayer.DurationSeconds;
 
         if (startPlayback)
+        {
+            _sasayakiLookupPlayback.CancelAutoResume();
             _sasayakiPlayer.Play();
+        }
 
         _sasayakiVM.UpdatePlaybackState(
             _sasayakiPlayer.IsPlaying,
             _sasayakiPlayer.IsPaused,
             cue.StartTime,
             duration);
+        _sasayakiVM.UpdateCurrentChapter(cue.StartTime);
         UpdateSasayakiChromeState();
 
         if (_isReaderLyricsMode)
@@ -4562,6 +5116,7 @@ public sealed partial class NovelReaderPage : Page
             _sasayakiPlayer.IsPaused,
             position,
             duration);
+        _sasayakiVM.UpdateCurrentChapter(position);
         UpdateSasayakiChromeState();
 
         if (_isReaderLyricsMode && currentCue != null)
@@ -4603,6 +5158,7 @@ public sealed partial class NovelReaderPage : Page
             var currentCue = _sasayakiNav.CurrentMatch;
             var currentCueIndex = _sasayakiNav.CurrentCueIndex;
             _sasayakiVM.UpdateCurrentCue(currentCue, currentCueIndex);
+            _sasayakiVM.UpdateCurrentChapter(seconds);
             UpdateSasayakiChromeState();
 
             if (_isReaderLyricsMode

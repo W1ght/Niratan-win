@@ -88,6 +88,26 @@ public sealed class DictionaryProfileConfigurationTests
         lookupService.RebuildCount.Should().Be(1);
     }
 
+    [Fact]
+    public async Task ImportAsync_ReplacesAnExistingDictionaryAtomically()
+    {
+        using var temp = new TemporaryProfileDictionaryRoot();
+        var importService = new DictionaryImportService(
+            NullLogger<DictionaryImportService>.Instance,
+            new RecordingLookupService(),
+            temp.DictionaryRoot,
+            temp.CreateContext("default-ja", "default-ja"));
+
+        (await importService.ImportAsync(temp.CreateDictionaryZip("JMdict", "2026-01")))
+            .Success.Should().BeTrue();
+        (await importService.ImportAsync(temp.CreateDictionaryZip("JMdict", "2026-02")))
+            .Success.Should().BeTrue();
+
+        var dictionaries = await importService.GetInstalledDictionariesAsync(DictionaryType.Term);
+        dictionaries.Should().ContainSingle();
+        dictionaries[0].Revision.Should().Be("2026-02");
+    }
+
     private sealed class TemporaryProfileDictionaryRoot : IDisposable
     {
         private readonly string _root = Path.Combine(
@@ -146,7 +166,7 @@ public sealed class DictionaryProfileConfigurationTests
                 DictionaryConfigurationStore.Load(ProfileConfigRoot(profileId)),
                 type);
 
-        public string CreateDictionaryZip(string name)
+        public string CreateDictionaryZip(string name, string revision = "test")
         {
             var inputDir = Path.Combine(InputRoot, name);
             if (Directory.Exists(inputDir))
@@ -156,7 +176,7 @@ public sealed class DictionaryProfileConfigurationTests
             {
               "title": "{{name}}",
               "format": 3,
-              "revision": "test"
+              "revision": "{{revision}}"
             }
             """);
             File.WriteAllText(

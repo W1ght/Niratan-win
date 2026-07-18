@@ -94,6 +94,7 @@ public sealed partial class VideoPlayerWindow : Window
     private readonly RemoteVideoPlaybackSession _remotePlaybackSession;
     private CancellationTokenSource? _remoteOperationCts;
     private CancellationTokenSource? _remoteSubtitleOperationCts;
+    private CancellationTokenSource? _subtitleHoverLookupDelayCts;
     private long _remoteSubtitleSelectionVersion;
     private int _remoteRecoveryStage;
     private bool _isRecoveringRemotePlayback;
@@ -1348,6 +1349,9 @@ public sealed partial class VideoPlayerWindow : Window
             _remoteSubtitleOperationCts?.Cancel();
             _remoteSubtitleOperationCts?.Dispose();
             _remoteSubtitleOperationCts = null;
+            _subtitleHoverLookupDelayCts?.Cancel();
+            _subtitleHoverLookupDelayCts?.Dispose();
+            _subtitleHoverLookupDelayCts = null;
             _remotePlaybackSession.Invalidate();
             _playbackEngine.MediaLoaded -= PlaybackEngine_MediaLoaded;
             _playbackEngine.MediaFailed -= PlaybackEngine_MediaFailed;

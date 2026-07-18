@@ -633,6 +633,39 @@ var reader = {
     });
   },
 
+  setupImage: function (element, source, wrap, blurElement) {
+    if (!element || !source) return;
+
+    var blurredTarget = blurElement || element;
+    var clickTarget = element;
+    if (window.__niratanBlurImages === true) {
+      blurredTarget.classList.add("niratan-blurred");
+      if (wrap) {
+        clickTarget = document.createElement("div");
+        clickTarget.className = "niratan-blur-wrapper";
+        blurredTarget.before(clickTarget);
+        clickTarget.appendChild(blurredTarget);
+      }
+    }
+
+    clickTarget.addEventListener("click", function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (blurredTarget.classList.contains("niratan-blurred")) {
+        blurredTarget.classList.remove("niratan-blurred");
+        return;
+      }
+
+      try {
+        postToHost("imageTapped", {
+          src: new URL(source, document.baseURI).href,
+        });
+      } catch (error) {
+        logDebug("image-tap-invalid-source", { source: String(source) });
+      }
+    });
+  },
+
   initialize: async function (initialProgress, navigationGeneration, restoreTarget, renderAttemptId) {
     if (reader.didInitialize) return;
     reader.didInitialize = true;
@@ -669,19 +702,29 @@ var reader = {
     reader.columnGap = reader.currentColumnGap();
 
     Array.from(document.querySelectorAll("svg")).forEach(function (svg) {
+      var svgImage = svg.querySelector("image");
       if (
-        svg.querySelector("image") &&
+        svgImage &&
         svg.getAttribute("preserveAspectRatio") === "none"
       ) {
         svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+      }
+      if (svgImage) {
+        var svgSource = svgImage.getAttribute("href")
+          || svgImage.getAttribute("xlink:href")
+          || (svgImage.href && svgImage.href.baseVal);
+        reader.setupImage(svgImage, svgSource, false, svg);
       }
     });
 
     var imagePromises = Array.from(document.querySelectorAll("img")).map(function (img) {
       return new Promise(function (resolve) {
         function mark() {
-          if (img.naturalWidth > 256 || img.naturalHeight > 256) {
+          var isGaiji = img.classList.contains("gaiji")
+            || img.classList.contains("gaiji-line");
+          if (!isGaiji && (img.naturalWidth > 256 || img.naturalHeight > 256)) {
             img.classList.add("block-img");
+            reader.setupImage(img, img.currentSrc || img.src, true, img);
           }
           resolve();
         }
@@ -1111,7 +1154,9 @@ document.addEventListener("click", function (event) {
 }, true);
 
 document.addEventListener("keydown", function (event) {
-  if (event.defaultPrevented) return;
+  // Niratan ignores NSEvent.isARepeat for shortcuts. WebView2 must do the
+  // equivalent so one physical key press dispatches at most once.
+  if (event.defaultPrevented || event.repeat) return;
 
   var actionId = shortcutActionForKeyboardEvent(event);
   if (!actionId) return;

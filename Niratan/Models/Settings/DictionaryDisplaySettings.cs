@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
@@ -20,6 +21,8 @@ public sealed record DictionaryDisplaySettings(
     bool DeduplicatePitchAccents = false,
     bool HarmonicFrequency = false,
     bool ShowExpressionTags = false,
+    bool TwoColumnLayout = false,
+    int DesktopLookupHoverDelayMs = 45,
     string CustomCSS = "",
     bool ScanNonJapaneseText = true,
     int MaxResults = 16,
@@ -42,4 +45,8 @@ public sealed record DictionaryDisplaySettings(
         DictionaryCollapseMode.Custom => "Custom",
         _ => "Expand All",
     };
+
+    [JsonIgnore]
+    public int NormalizedDesktopLookupHoverDelayMs =>
+        Math.Clamp(DesktopLookupHoverDelayMs, 0, 250);
 }

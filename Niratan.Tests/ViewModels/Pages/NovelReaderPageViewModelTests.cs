@@ -74,7 +74,6 @@ public sealed class NovelReaderPageViewModelTests
             It.IsAny<NovelBook>(), It.IsAny<CancellationToken>()), Times.Never);
         events.Should().Equal(
             "load-local",
-            "activate-profile",
             "mark-opened");
     }
 
@@ -234,6 +233,57 @@ public sealed class NovelReaderPageViewModelTests
             .Should()
             .ContainSingle()
             .Which.ChapterLabel.Should().Be("Two");
+    }
+
+    [Fact]
+    public async Task AddHighlightAsync_PersistsSelectedChapterTextAtWholeBookCharacter()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempBookDirectory();
+        var highlightService = new ReaderHighlightService();
+        var sut = CreateInitializedSut(temp.Path, highlightService);
+        sut.SetChapterCharacterCounts([10, 20]);
+        var id = Guid.Parse("0a8f87f4-9165-4f2c-8104-28f04a39f69f");
+        var createdAt = new DateTimeOffset(2026, 7, 19, 12, 34, 56, TimeSpan.Zero);
+
+        var created = await sut.AddHighlightAsync(
+            id,
+            chapterIndex: 1,
+            new ReaderHighlightSelection(Start: 4, Offset: 7, Text: "読む"),
+            ReaderHighlightColor.Blue,
+            createdAt,
+            ct);
+
+        created.Should().Be(new ReaderHighlight(
+            id,
+            Character: 14,
+            Offset: 7,
+            Text: "読む",
+            Color: ReaderHighlightColor.Blue,
+            CreatedAt: createdAt));
+        sut.Highlights.Should().ContainSingle().Which.Should().Be(created);
+        var saved = await highlightService.LoadAsync(temp.Path, ct);
+        saved.Should().ContainSingle().Which.Should().Be(created);
+    }
+
+    [Fact]
+    public async Task AddHighlightAsync_RejectsSelectionOutsideRenderedChapter()
+    {
+        using var temp = new TempBookDirectory();
+        var sut = CreateInitializedSut(temp.Path, new ReaderHighlightService());
+        sut.SetChapterCharacterCounts([10]);
+
+        var created = await sut.AddHighlightAsync(
+            Guid.NewGuid(),
+            chapterIndex: 0,
+            new ReaderHighlightSelection(Start: 10, Offset: 10, Text: "範囲外"),
+            ReaderHighlightColor.Yellow,
+            DateTimeOffset.UtcNow,
+            TestContext.Current.CancellationToken);
+
+        created.Should().BeNull();
+        sut.Highlights.Should().BeEmpty();
+        File.Exists(System.IO.Path.Combine(temp.Path, "highlights.json")).Should().BeFalse();
     }
 
     [Theory]

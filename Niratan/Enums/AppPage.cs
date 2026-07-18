@@ -11,5 +11,6 @@ public enum AppPage
     StatisticsSettingsPage,
     VideoSettingsPage,
     KeyboardShortcutsSettingsPage,
+    GameControllerSettingsPage,
     Other,
 }

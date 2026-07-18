@@ -574,9 +574,10 @@
     }
   });
 
-  // Hover + Shift handler (immediate)
+  // Hover + Shift handler
   let lastHoverPoint = null;
   let lastShiftHoverKey = '';
+  let shiftHoverTimer = 0;
   function lookupAtPoint(x, y) {
     const hit = niratanSelection.getCharacterAtPoint(x, y);
     if (!hit) {
@@ -590,17 +591,31 @@
     niratanSelection.selectText(x, y, getScanLength());
   }
 
+  function scheduleLookupAtPoint(x, y) {
+    if (shiftHoverTimer) clearTimeout(shiftHoverTimer);
+    const configured = Number(window.__niratanLookupSettings?.hoverDelayMs);
+    const delay = Number.isFinite(configured)
+      ? Math.min(250, Math.max(0, configured))
+      : 45;
+    shiftHoverTimer = setTimeout(() => {
+      shiftHoverTimer = 0;
+      lookupAtPoint(x, y);
+    }, delay);
+  }
+
   document.addEventListener('mousemove', (e) => {
     lastHoverPoint = { x: e.clientX, y: e.clientY };
     if (!e.shiftKey) {
+      if (shiftHoverTimer) clearTimeout(shiftHoverTimer);
+      shiftHoverTimer = 0;
       lastShiftHoverKey = '';
       return;
     }
-    lookupAtPoint(e.clientX, e.clientY);
+    scheduleLookupAtPoint(e.clientX, e.clientY);
   });
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Shift' || !lastHoverPoint) return;
-    lookupAtPoint(lastHoverPoint.x, lastHoverPoint.y);
+    scheduleLookupAtPoint(lastHoverPoint.x, lastHoverPoint.y);
   });
 })();

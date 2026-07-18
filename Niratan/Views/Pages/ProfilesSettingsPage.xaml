@@ -8,15 +8,12 @@
       xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
       xmlns:ui="using:CommunityToolkit.WinUI"
       xmlns:helpers="using:Niratan.Helpers.UI.Converters"
+      xmlns:vm="using:Niratan.ViewModels.Pages"
       mc:Ignorable="d">
 
     <Page.Resources>
         <helpers:BooleanNegationConverter x:Key="BoolNegationConverter" />
-        <Style x:Key="ProfilesSectionHeaderTextBlockStyle" BasedOn="{StaticResource BodyStrongTextBlockStyle}" TargetType="TextBlock">
-            <Style.Setters>
-                <Setter Property="Margin" Value="1,30,0,6" />
-            </Style.Setters>
-        </Style>
+        <helpers:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
     </Page.Resources>
 
     <Grid RowDefinitions="Auto,*">
@@ -42,90 +39,138 @@
 
         <ScrollViewer Grid.Row="1">
             <Grid Padding="16,0,16,16">
-                <StackPanel MaxWidth="1280" HorizontalAlignment="Stretch" Spacing="4">
-                    <toolkit:SettingsCard x:Uid="ProfilesActiveProfileCard"
-                                          HorizontalAlignment="Stretch"
-                                          HorizontalContentAlignment="Stretch"
+                <StackPanel MaxWidth="1280"
+                            HorizontalAlignment="Stretch"
+                            Spacing="4">
+                <toolkit:SettingsExpander x:Uid="ProfilesActiveProfileCard"
                                           Header="Active Profile"
                                           Description="Dictionary, Reader appearance and Anki mining settings follow the active profile."
-                                          HeaderIcon="{ui:FontIcon Glyph=&#xE77B;}">
-                        <ComboBox x:Uid="ProfilesActiveProfileComboBox"
-                                  MinWidth="260"
-                                  AutomationProperties.AutomationId="GlobalActiveProfileComboBox"
-                                  DisplayMemberPath="Name"
-                                  ItemsSource="{x:Bind ViewModel.Profiles, Mode=OneWay}"
-                                  SelectedValue="{x:Bind ViewModel.GlobalActiveProfileId, Mode=TwoWay}"
-                                  SelectedValuePath="Id" />
-                    </toolkit:SettingsCard>
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE77B;}"
+                                          IsExpanded="True">
+                    <ItemsRepeater AutomationProperties.AutomationId="ProfilesListView"
+                                   ItemsSource="{x:Bind ViewModel.Profiles, Mode=OneWay}">
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ProfileOption">
+                                <Grid MinHeight="52" Padding="12,4">
+                                    <Grid.ContextFlyout>
+                                        <MenuFlyout>
+                                            <MenuFlyoutItem Text="Rename"
+                                                            x:Uid="ProfilesRenameMenuItem"
+                                                            Tag="{x:Bind}"
+                                                            Click="RenameProfileMenuItem_Click" />
+                                            <MenuFlyoutItem Text="Delete"
+                                                            x:Uid="ProfilesDeleteMenuItem"
+                                                            Tag="{x:Bind}"
+                                                            Visibility="{x:Bind CanDelete, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                            Click="DeleteProfileMenuItem_Click" />
+                                        </MenuFlyout>
+                                    </Grid.ContextFlyout>
+                                    <Button Padding="0"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Stretch"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Command="{Binding ViewModel.ActivateProfileCommand, ElementName=ThisPage}"
+                                            CommandParameter="{x:Bind}">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                            <Grid Width="20" Height="20">
+                                                <FontIcon Glyph="&#xE73E;"
+                                                          FontSize="16"
+                                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                <FontIcon Glyph="&#xE73E;"
+                                                          FontSize="16"
+                                                          Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                                          Visibility="{x:Bind IsActive, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                            </Grid>
+                                            <StackPanel Grid.Column="1" Spacing="2">
+                                                <TextBlock Text="{x:Bind Name}" />
+                                                <TextBlock Text="{x:Bind LanguageDisplayName}"
+                                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2"
+                                                       x:Uid="ProfilesBuiltInText"
+                                                       Text="Built-in"
+                                                       VerticalAlignment="Center"
+                                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       Visibility="{x:Bind IsDefault, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                        </Grid>
+                                    </Button>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </toolkit:SettingsExpander>
+
+                <toolkit:SettingsCard x:Uid="ProfilesNewProfileCard"
+                                      Header="New Profile"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE710;}"
+                                      HorizontalAlignment="Stretch">
+                    <Button x:Uid="ProfilesBeginCreateProfileButton"
+                            Content="Create Profile"
+                            AutomationProperties.AutomationId="BeginCreateProfileButton"
+                            Command="{x:Bind ViewModel.BeginCreateProfileCommand}" />
+                </toolkit:SettingsCard>
+
+                <toolkit:SettingsCard x:Uid="ProfilesCreateEditorCard"
+                                      Header="New Profile"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Visibility="{x:Bind ViewModel.IsCreateEditorVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Spacing="12">
+                        <TextBox x:Uid="ProfilesNewProfileNameTextBox"
+                                 Header="Profile Name"
+                                 AutomationProperties.AutomationId="NewProfileNameTextBox"
+                                 Text="{x:Bind ViewModel.NewProfileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <ComboBox x:Uid="ProfilesNewProfileLanguageComboBox"
+                                  Header="Language"
+                                  AutomationProperties.AutomationId="NewProfileLanguageComboBox"
+                                  DisplayMemberPath="DisplayName"
+                                  ItemsSource="{x:Bind ViewModel.AvailableLanguages}"
+                                  SelectedItem="{x:Bind ViewModel.NewProfileLanguage, Mode=TwoWay}" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                            <Button x:Uid="ProfilesCancelCreateButton"
+                                    Content="Cancel"
+                                    Command="{x:Bind ViewModel.CancelCreateProfileCommand}" />
+                            <Button x:Uid="ProfilesCreateProfileButton"
+                                    Content="Create"
+                                    AutomationProperties.AutomationId="CreateProfileButton"
+                                    Command="{x:Bind ViewModel.CreateProfileCommand}"
+                                    IsEnabled="{x:Bind ViewModel.IsOperationInProgress, Mode=OneWay, Converter={StaticResource BoolNegationConverter}}" />
+                        </StackPanel>
+                    </StackPanel>
+                </toolkit:SettingsCard>
+
+                <toolkit:SettingsCard x:Uid="ProfilesRenameEditorCard"
+                                      Header="Rename Profile"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Visibility="{x:Bind ViewModel.IsRenameEditorVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Spacing="12">
+                        <TextBox x:Uid="ProfilesRenameProfileNameTextBox"
+                                 Header="Profile Name"
+                                 AutomationProperties.AutomationId="RenameProfileNameTextBox"
+                                 Text="{x:Bind ViewModel.RenameProfileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBox x:Uid="ProfilesRenameProfileLanguageTextBox"
+                                 Header="Language"
+                                 IsReadOnly="True"
+                                 Text="{x:Bind ViewModel.EditingProfile.LanguageDisplayName, Mode=OneWay}" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                            <Button x:Uid="ProfilesCancelRenameButton"
+                                    Content="Cancel"
+                                    Command="{x:Bind ViewModel.CancelRenameProfileCommand}" />
+                            <Button x:Uid="ProfilesRenameProfileButton"
+                                    Content="Save"
+                                    AutomationProperties.AutomationId="RenameProfileButton"
+                                    Command="{x:Bind ViewModel.RenameProfileCommand}"
+                                    IsEnabled="{x:Bind ViewModel.IsOperationInProgress, Mode=OneWay, Converter={StaticResource BoolNegationConverter}}" />
+                        </StackPanel>
+                    </StackPanel>
+                </toolkit:SettingsCard>
 
                     <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
-
-                    <TextBlock x:Uid="ProfilesNewProfileSectionHeader"
-                               Style="{StaticResource ProfilesSectionHeaderTextBlockStyle}"
-                               Text="New Profile" />
-
-                    <toolkit:SettingsCard x:Uid="ProfilesCreateCard"
-                                          HorizontalAlignment="Stretch"
-                                          HorizontalContentAlignment="Stretch"
-                                          Header="Create"
-                                          HeaderIcon="{ui:FontIcon Glyph=&#xE710;}">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBox x:Uid="ProfilesNewProfileNameTextBox"
-                                     Width="240"
-                                     AutomationProperties.AutomationId="NewProfileNameTextBox"
-                                     PlaceholderText="Name"
-                                     Text="{x:Bind ViewModel.NewProfileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            <ComboBox x:Uid="ProfilesNewProfileLanguageComboBox"
-                                      MinWidth="150"
-                                      AutomationProperties.AutomationId="NewProfileLanguageComboBox"
-                                      DisplayMemberPath="DisplayName"
-                                      ItemsSource="{x:Bind ViewModel.AvailableLanguages}"
-                                      SelectedItem="{x:Bind ViewModel.NewProfileLanguage, Mode=TwoWay}" />
-                            <Button x:Uid="ProfilesCreateProfileButton"
-                                    AutomationProperties.AutomationId="CreateProfileButton"
-                                    Command="{x:Bind ViewModel.CreateProfileCommand}"
-                                    IsEnabled="{x:Bind ViewModel.IsOperationInProgress, Mode=OneWay, Converter={StaticResource BoolNegationConverter}}">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <FontIcon Glyph="&#xE710;" FontSize="14" />
-                                    <TextBlock x:Uid="ProfilesCreateProfileButtonText" Text="Create" />
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
-                    </toolkit:SettingsCard>
-
-                    <TextBlock x:Uid="ProfilesBookDefaultsSectionHeader"
-                               Style="{StaticResource ProfilesSectionHeaderTextBlockStyle}"
-                               Text="Book Defaults" />
-
-                    <toolkit:SettingsCard x:Uid="ProfilesJapaneseBooksCard"
-                                          HorizontalAlignment="Stretch"
-                                          HorizontalContentAlignment="Stretch"
-                                          Header="Japanese Books"
-                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8F1;}">
-                        <ComboBox x:Uid="ProfilesJapanesePrimaryProfileComboBox"
-                                  MinWidth="260"
-                                  AutomationProperties.AutomationId="JapanesePrimaryProfileComboBox"
-                                  DisplayMemberPath="Name"
-                                  ItemsSource="{x:Bind ViewModel.JapaneseProfiles, Mode=OneWay}"
-                                  SelectedValue="{x:Bind ViewModel.JapanesePrimaryProfileId, Mode=TwoWay}"
-                                  SelectedValuePath="Id" />
-                    </toolkit:SettingsCard>
-
-                    <toolkit:SettingsCard x:Uid="ProfilesEnglishBooksCard"
-                                          HorizontalAlignment="Stretch"
-                                          HorizontalContentAlignment="Stretch"
-                                          Header="English Books"
-                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8F1;}">
-                        <ComboBox x:Uid="ProfilesEnglishPrimaryProfileComboBox"
-                                  MinWidth="260"
-                                  AutomationProperties.AutomationId="EnglishPrimaryProfileComboBox"
-                                  DisplayMemberPath="Name"
-                                  ItemsSource="{x:Bind ViewModel.EnglishProfiles, Mode=OneWay}"
-                                  SelectedValue="{x:Bind ViewModel.EnglishPrimaryProfileId, Mode=TwoWay}"
-                                  SelectedValuePath="Id" />
-                    </toolkit:SettingsCard>
-
                 </StackPanel>
             </Grid>
         </ScrollViewer>

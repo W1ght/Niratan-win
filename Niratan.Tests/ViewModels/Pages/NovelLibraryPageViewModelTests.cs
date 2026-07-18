@@ -10,7 +10,6 @@ using Niratan.Models.Sasayaki;
 using Niratan.Models.Settings;
 using Niratan.Models.Sync;
 using Niratan.Services.Novels;
-using Niratan.Services.Sasayaki;
 using Niratan.Services.Settings;
 using Niratan.Services.Sync;
 using Niratan.Services.UI;
@@ -210,64 +209,6 @@ public class NovelLibraryPageViewModelTests
         sut.ShowStatisticsDashboard.Should().BeFalse();
         sut.ShowBookshelf.Should().BeTrue();
         sut.StatisticsDashboard.IsActive.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task MatchSasayakiCommand_PicksFilesAndRunsMatch()
-    {
-        var dialog = new Mock<IDialogService>();
-        dialog
-            .SetupSequence(d => d.OpenFilePickerAsync(It.IsAny<string[]>()))
-            .ReturnsAsync("D:\\Audio\\book.m4b")
-            .ReturnsAsync("D:\\Subs\\book.srt");
-        var notification = new Mock<INotificationService>();
-        var matchService = new Mock<ISasayakiMatchService>();
-        var settings = Mock.Of<ISettingsService>(s => s.Current == new AppSettings
-        {
-            SasayakiSettings = new SasayakiSettings { SearchWindowSize = 321 },
-        });
-        var book = new NovelBook
-        {
-            Id = "book-1",
-            Title = "Book One",
-            FilePath = "D:\\Books\\one.epub",
-        };
-        matchService
-            .Setup(s => s.MatchAsync(
-                book,
-                "D:\\Audio\\book.m4b",
-                "D:\\Subs\\book.srt",
-                321,
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new SasayakiMatchData
-            {
-                Matches =
-                [
-                    new SasayakiMatch
-                    {
-                        Id = "0",
-                        Text = "星",
-                        StartTime = 0,
-                        EndTime = 1,
-                        ChapterIndex = 0,
-                        Length = 1,
-                    },
-                ],
-            });
-        var sut = CreateSut(
-            dialogService: dialog.Object,
-            notificationService: notification.Object,
-            sasayakiMatchService: matchService.Object,
-            settingsService: settings);
-
-        await sut.MatchSasayakiCommand.ExecuteAsync(new NovelBookItemViewModel(book));
-
-        matchService.VerifyAll();
-        notification.Verify(
-            n => n.ShowSuccess(
-                It.Is<string>(message => message.Contains("1/1")),
-                "Sasayaki matched"),
-            Times.Once);
     }
 
     [Fact]
@@ -714,6 +655,11 @@ public class NovelLibraryPageViewModelTests
         sut.ShelfSections[0].Books.Select(item => item.Book.Id).Should().Equal("a");
         sut.ShelfSections[1].Books.Select(item => item.Book.Id).Should().Equal("b");
         sut.ShelfSections[2].Books.Select(item => item.Book.Id).Should().Equal("a", "c");
+        sut.ShelfSections[0].CanCollapse.Should().BeTrue();
+        sut.ShelfSections[0].IsCollapsed.Should().BeFalse();
+        sut.ShelfSections[1].CanCollapse.Should().BeTrue();
+        sut.ShelfSections[1].IsCollapsed.Should().BeTrue();
+        sut.ShelfSections[2].CanCollapse.Should().BeFalse();
         sut.HasNovelStorageWarnings.Should().BeTrue();
         sut.NovelStorageWarnings.Should().Equal("broken/metadata.json");
     }
@@ -1087,7 +1033,6 @@ public class NovelLibraryPageViewModelTests
         IDialogService? dialogService = null,
         INotificationService? notificationService = null,
         FakeMessenger? messenger = null,
-        ISasayakiMatchService? sasayakiMatchService = null,
         ISettingsService? settingsService = null,
         INovelStatisticsDashboardService? statisticsDashboardService = null,
         INovelShelfService? shelfService = null,
@@ -1120,7 +1065,6 @@ public class NovelLibraryPageViewModelTests
             dialogService ?? Mock.Of<IDialogService>(),
             notificationService ?? Mock.Of<INotificationService>(),
             messenger ?? new FakeMessenger(),
-            sasayakiMatchService ?? Mock.Of<ISasayakiMatchService>(),
             effectiveSettings,
             new NovelStatisticsDashboardViewModel(
                 effectiveDashboardService,

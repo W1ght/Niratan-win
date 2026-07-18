@@ -130,9 +130,9 @@
                                           HorizontalContentAlignment="Stretch"
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE7FC;}">
                         <Button AutomationProperties.AutomationId="GameControllerSettingsButton"
-                                IsEnabled="False">
+                                Click="GameControllerSettings_Click">
                             <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock x:Uid="SettingsUnavailableText" Text="Unavailable" />
+                                <TextBlock x:Uid="SettingsOpenText" Text="Open" />
                             </StackPanel>
                         </Button>
                     </toolkit:SettingsCard>

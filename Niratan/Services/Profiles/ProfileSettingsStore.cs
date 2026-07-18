@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -54,7 +55,8 @@ public sealed class ProfileSettingsStore
         if (string.Equals(_activeProfileId, profileId, StringComparison.Ordinal))
             return;
 
-        if (_activeProfileId is not null)
+        if (_activeProfileId is not null
+            && _profiles.Profiles.Any(profile => profile.Id == _activeProfileId))
             await SaveProfileOwnedSettingsAsync(_activeProfileId, ct);
 
         await LoadProfileOwnedSettingsAsync(profileId, ct);

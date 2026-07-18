@@ -22,6 +22,9 @@ public sealed class AnkiService : IAnkiService, IDisposable
     private AnkiSettings _settings;
     private string? _cachedWritableMediaDirectory;
     private readonly ConcurrentDictionary<string, byte> _savedExpressions = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, long[]> _savedNoteIds = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, Lazy<Task<AnkiDuplicateLookupResult>>> _duplicateLookups =
+        new(StringComparer.Ordinal);
 
     public AnkiSettings Settings => _settings;
 
@@ -38,6 +41,7 @@ public sealed class AnkiService : IAnkiService, IDisposable
         _client?.Dispose();
         _client = null;
         _cachedWritableMediaDirectory = null;
+        _duplicateLookups.Clear();
     }
 
     private AnkiConnectClient GetClient()
@@ -363,8 +367,11 @@ public sealed class AnkiService : IAnkiService, IDisposable
 
             Log.Information("[Anki] Mine completed: expression={Expression}, success={Success}, noteId={NoteId}, total={TotalMs}ms, audioResolveDownload={AudioMs}ms, mediaRead={MediaReadMs}ms, mediaUpload={MediaUploadMs}ms, addNote={AddNoteMs}ms, batchCount={BatchCount}",
                 payload.Expression, noteId.HasValue, noteId, totalSw.ElapsedMilliseconds, audioSw.ElapsedMilliseconds, mediaReadSw.ElapsedMilliseconds, mediaUploadSw.ElapsedMilliseconds, addNoteSw.ElapsedMilliseconds, uploads.Count);
-            if (noteId.HasValue && !string.IsNullOrWhiteSpace(payload.Expression))
+            if (noteId is long addedNoteId && !string.IsNullOrWhiteSpace(payload.Expression))
+            {
                 _savedExpressions[payload.Expression] = 0;
+                _savedNoteIds[payload.Expression] = [addedNoteId];
+            }
             return noteId;
         }
         catch (Exception ex)
@@ -376,6 +383,9 @@ public sealed class AnkiService : IAnkiService, IDisposable
 
     public Task<bool> OpenNoteInAnkiAsync(long noteId) =>
         GetClient().OpenNoteInAnkiAsync(noteId);
+
+    public Task<bool> OpenNotesInAnkiAsync(IReadOnlyList<long> noteIds) =>
+        GetClient().OpenNotesInAnkiAsync(noteIds);
 
     public async Task<bool> DuplicateCheckAsync(string rawPayloadJson)
     {
@@ -391,34 +401,116 @@ public sealed class AnkiService : IAnkiService, IDisposable
         }
     }
 
-    public async Task<bool> DuplicateCheckExpressionAsync(string expression)
+    public async Task<AnkiDuplicateLookupResult> DuplicateLookupExpressionAsync(string expression)
+    {
+        if (string.IsNullOrWhiteSpace(expression))
+            return AnkiDuplicateLookupResult.NotDuplicate();
+
+        var pending = _duplicateLookups.GetOrAdd(
+            expression,
+            key => new Lazy<Task<AnkiDuplicateLookupResult>>(
+                () => DuplicateLookupExpressionCoreAsync(key),
+                System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));
+        try
+        {
+            return await pending.Value;
+        }
+        finally
+        {
+            _duplicateLookups.TryRemove(
+                new KeyValuePair<string, Lazy<Task<AnkiDuplicateLookupResult>>>(expression, pending));
+        }
+    }
+
+    public async Task<bool> DuplicateCheckExpressionAsync(string expression) =>
+        (await DuplicateLookupExpressionAsync(expression)).IsDuplicate;
+
+    private async Task<AnkiDuplicateLookupResult> DuplicateLookupExpressionCoreAsync(string expression)
     {
         try
         {
-            if (!_settings.IsConfigured || string.IsNullOrWhiteSpace(expression))
-                return !string.IsNullOrWhiteSpace(expression) && _savedExpressions.ContainsKey(expression);
+            if (!_settings.IsConfigured)
+                return SavedDuplicateLookup(expression);
 
             var deck = ResolveDeck();
             var noteType = ResolveNoteType();
             var firstField = noteType?.Fields.FirstOrDefault();
             if (deck == null || noteType == null || string.IsNullOrWhiteSpace(firstField))
-                return _savedExpressions.ContainsKey(expression);
+                return SavedDuplicateLookup(expression);
 
             var fields = new Dictionary<string, string>
             {
                 [firstField] = expression,
             };
             var canAdd = await GetClient().CanAddNotesAsync(deck, noteType, fields, _settings);
-            if (!canAdd)
-                _savedExpressions[expression] = 0;
-            return !canAdd;
+            if (canAdd)
+                return AnkiDuplicateLookupResult.NotDuplicate();
+
+            _savedExpressions[expression] = 0;
+            var query = BuildDuplicateSearchQuery(expression, deck, noteType, _settings);
+            var noteIds = await GetClient().FindNotesAsync(query);
+            var distinctNoteIds = noteIds
+                .Where(noteId => noteId > 0)
+                .Distinct()
+                .ToArray();
+            if (distinctNoteIds.Length > 0)
+                _savedNoteIds[expression] = distinctNoteIds;
+            return AnkiDuplicateLookupResult.Duplicate(distinctNoteIds);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "[Anki] DuplicateCheckExpressionAsync failed");
-            return _savedExpressions.ContainsKey(expression);
+            Log.Error(ex, "[Anki] DuplicateLookupExpressionAsync failed");
+            return SavedDuplicateLookup(expression);
         }
     }
+
+    private AnkiDuplicateLookupResult SavedDuplicateLookup(string expression) =>
+        _savedExpressions.ContainsKey(expression)
+            ? AnkiDuplicateLookupResult.Duplicate(
+                _savedNoteIds.TryGetValue(expression, out var noteIds) ? noteIds : [])
+            : AnkiDuplicateLookupResult.NotDuplicate();
+
+    internal static string BuildDuplicateSearchQuery(
+        string expression,
+        AnkiDeck deck,
+        AnkiNoteType noteType,
+        AnkiSettings settings)
+    {
+        var terms = new List<string>();
+        if (settings.DuplicateScope == AnkiDuplicateScope.Deck)
+        {
+            terms.Add(QuoteAnkiSearchTerm($"deck:{deck.Name}"));
+        }
+        else if (settings.DuplicateScope == AnkiDuplicateScope.DeckRoot)
+        {
+            var rootDeck = deck.Name.Split("::", 2, StringSplitOptions.None)[0];
+            terms.Add(QuoteAnkiSearchTerm($"deck:{rootDeck}"));
+        }
+
+        if (!settings.CheckDuplicatesAcrossAllModels)
+            terms.Add(QuoteAnkiSearchTerm($"note:{noteType.Name}"));
+
+        var firstFields = settings.CheckDuplicatesAcrossAllModels
+            ? settings.AvailableNoteTypes
+                .Select(candidate => candidate.Fields.FirstOrDefault())
+                .Where(field => !string.IsNullOrWhiteSpace(field))
+                .Cast<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray()
+            : [noteType.Fields.First()];
+        var fieldTerms = firstFields
+            .Select(field => QuoteAnkiSearchTerm($"{field.ToLowerInvariant()}:{expression}"))
+            .ToArray();
+        if (fieldTerms.Length == 1)
+            terms.Add(fieldTerms[0]);
+        else if (fieldTerms.Length > 1)
+            terms.Add($"({string.Join(" or ", fieldTerms)})");
+
+        return string.Join(' ', terms);
+    }
+
+    private static string QuoteAnkiSearchTerm(string term) =>
+        $"\"{term.Replace("\"", "", StringComparison.Ordinal)}\"";
 
     public async Task<string?> GetWritableMediaDirectoryAsync()
     {

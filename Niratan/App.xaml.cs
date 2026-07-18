@@ -18,6 +18,7 @@ using Niratan.Services.Anki;
 using Niratan.Services.Audio;
 using Niratan.Services.Backup;
 using Niratan.Services.Dictionary;
+using Niratan.Services.GameControllers;
 using Niratan.Services.Logging;
 using Niratan.Services.Novels;
 using Niratan.Services.Profiles;
@@ -29,6 +30,7 @@ using Niratan.Services.Sync;
 using Niratan.Services.UI;
 using Niratan.Services.Updates;
 using Niratan.Services.Video;
+using Niratan.ViewModels.Components;
 using Niratan.ViewModels.Pages;
 using Niratan.ViewModels.Dialogs;
 using Niratan.ViewModels.Windowing;
@@ -140,6 +142,7 @@ public partial class App : Application
         services.AddTransient<AudioSettingsPageViewModel>();
         services.AddTransient<VideoSettingsPageViewModel>();
         services.AddTransient<KeyboardShortcutsSettingsPageViewModel>();
+        services.AddTransient<GameControllerSettingsPageViewModel>();
         services.AddTransient<SasayakiSettingsPageViewModel>();
         services.AddTransient<StatisticsSettingsPageViewModel>();
         services.AddTransient<NovelStatisticsDashboardViewModel>();
@@ -147,6 +150,7 @@ public partial class App : Application
         services.AddTransient<AnkiSettingsPageViewModel>();
         services.AddTransient<NovelLibraryPageViewModel>();
         services.AddTransient<NovelShelfManagementViewModel>();
+        services.AddTransient<SasayakiResourcesViewModel>();
         services.AddTransient<VideoLibraryPageViewModel>();
         services.AddTransient<NovelLookupPageViewModel>();
         services.AddTransient<ReaderNavigationTransactionCoordinator>();
@@ -170,6 +174,7 @@ public partial class App : Application
         services.AddSingleton<IDictionaryProfileContext>(provider =>
             provider.GetRequiredService<ProfileRuntimeService>());
         services.AddSingleton<IShortcutService, ShortcutService>();
+        services.AddSingleton<IGameControllerService, GameControllerService>();
         services.AddSingleton<IVideoDataService, VideoDataService>();
         services.AddSingleton<INiratanJsonFileStore, NiratanJsonFileStore>();
         services.AddSingleton<INovelBookStorageService, NovelBookStorageService>();
@@ -229,6 +234,7 @@ public partial class App : Application
             provider.GetRequiredService<DictionaryLookupService>());
         services.AddSingleton<IDictionaryPopupRequestService, DictionaryPopupRequestService>();
         services.AddSingleton<IDictionaryImportService, DictionaryImportService>();
+        services.AddSingleton<IDictionaryCatalogService, DictionaryCatalogService>();
         services.AddSingleton<IGlobalLookupWindowService, GlobalLookupWindowService>();
         services.AddSingleton<IGlobalLookupPopupService, GlobalLookupPopupService>();
         services.AddSingleton<IGlobalSelectionLookupService, GlobalSelectionLookupService>();
@@ -262,6 +268,7 @@ public partial class App : Application
             MainWindow = new MainWindow();
             MainWindow.Activate();
             MainWindow.SetMicaBackdrop();
+            GetService<IGameControllerService>().Start();
 
             StartHangWatchdog();
 

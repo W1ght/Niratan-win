@@ -2,10 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Niratan.Messages;
-using Niratan.Services.Profiles;
 using Niratan.Services.UI;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace Niratan.ViewModels.Pages;
 
@@ -15,19 +12,15 @@ public partial class NavigationPageViewModel
 {
     private readonly INavigationService _navigationService;
     private readonly IMessenger _messenger;
-    private readonly IProfileRuntimeService _profileRuntime;
 
     public bool IsBackEnabled => _navigationService.CanGoBack;
 
     public NavigationPageViewModel(
         INavigationService navigationService,
-        IMessenger messenger,
-        IProfileRuntimeService profileRuntime)
+        IMessenger messenger)
     {
         _navigationService = navigationService;
         _messenger = messenger;
-        _profileRuntime = profileRuntime;
-
         _messenger.RegisterAll(this);
     }
 
@@ -49,7 +42,4 @@ public partial class NavigationPageViewModel
         if (_navigationService.GoBack())
             OnPropertyChanged(nameof(IsBackEnabled));
     }
-
-    public Task ActivateGlobalProfileAsync(CancellationToken ct = default) =>
-        _profileRuntime.ActivateGlobalAsync(ct);
 }

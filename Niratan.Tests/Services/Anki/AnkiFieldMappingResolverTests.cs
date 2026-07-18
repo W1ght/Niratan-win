@@ -8,7 +8,7 @@ namespace Niratan.Tests.Services.Anki;
 public class AnkiFieldMappingResolverTests
 {
     [Fact]
-    public void ResolveForMining_UsesAnimeLapisDefaultsWhenSavedMappingsAreEmptyForVideoContext()
+    public void ResolveForMining_UsesUnifiedLapisDefaultsInVideoContext()
     {
         var noteType = new AnkiNoteType
         {
@@ -39,14 +39,14 @@ public class AnkiFieldMappingResolverTests
         mappings["Expression"].Should().Be("{expression}");
         mappings["MainDefinition"].Should().Be("{glossary-first}");
         mappings["Sentence"].Should().Be("{sentence}");
-        mappings["SentenceAudio"].Should().Be("{video-audio-clip}");
-        mappings["Picture"].Should().Be("{video-screenshot}");
-        mappings["MiscInfo"].Should().Be("{video-file-name} ({video-timestamp})");
+        mappings["SentenceAudio"].Should().Be("{sasayaki-audio}");
+        mappings["Picture"].Should().Be("{book-cover}");
+        mappings["MiscInfo"].Should().Be("{document-title}");
         mappings["IsWordAndSentenceCard"].Should().Be("x");
     }
 
     [Fact]
-    public void ResolveForMining_SwapsSavedNovelDefaultsForVideoMediaWithoutOverwritingCustomFields()
+    public void ResolveForMining_DoesNotRewriteSavedMappingsForVideoContext()
     {
         var noteType = new AnkiNoteType
         {
@@ -67,13 +67,13 @@ public class AnkiFieldMappingResolverTests
             context);
 
         mappings["Expression"].Should().Be("{custom-expression}");
-        mappings["SentenceAudio"].Should().Be("{video-audio-clip}");
-        mappings["Picture"].Should().Be("{video-screenshot}");
-        mappings["MiscInfo"].Should().Be("{video-file-name} ({video-timestamp})");
+        mappings["SentenceAudio"].Should().Be("{sasayaki-audio}");
+        mappings["Picture"].Should().Be("{book-cover}");
+        mappings["MiscInfo"].Should().Be("{document-title}");
     }
 
     [Fact]
-    public void ResolveForMining_SwapsSavedAnimeDefaultsBackForNovelMedia()
+    public void ResolveForMining_PreservesLegacyExplicitVideoMappingsInNovelContext()
     {
         var noteType = new AnkiNoteType
         {
@@ -91,8 +91,8 @@ public class AnkiFieldMappingResolverTests
             },
             new AnkiMiningContext { CoverPath = "D:\\Books\\cover.jpg" });
 
-        mappings["SentenceAudio"].Should().Be("{sasayaki-audio}");
-        mappings["Picture"].Should().Be("{book-cover}");
-        mappings["MiscInfo"].Should().Be("{document-title}");
+        mappings["SentenceAudio"].Should().Be("{video-audio-clip}");
+        mappings["Picture"].Should().Be("{video-screenshot}");
+        mappings["MiscInfo"].Should().Be("{video-file-name} ({video-timestamp})");
     }
 }

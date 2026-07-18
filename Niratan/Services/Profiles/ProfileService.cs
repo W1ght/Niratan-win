@@ -2,9 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Niratan.Helpers;
@@ -14,6 +13,14 @@ namespace Niratan.Services.Profiles;
 
 public sealed class ProfileService : IProfileService
 {
+    private static readonly string[] ProfileOwnedRelativePaths =
+    [
+        "dictionary-settings.json",
+        "reader-settings.json",
+        "anki-settings.json",
+        Path.Combine("dictionaries", "dictionary-config.json"),
+    ];
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -61,7 +68,7 @@ public sealed class ProfileService : IProfileService
             await SaveAsync();
         }
 
-        EnsureBuiltInProfiles();
+        NormalizeAndMigrateProfiles();
         await SaveAsync();
     }
 
@@ -82,9 +89,11 @@ public sealed class ProfileService : IProfileService
         ct.ThrowIfCancellationRequested();
 
         var language = ContentLanguageProfile.Normalize(languageId);
-        var safeName = string.IsNullOrWhiteSpace(name) ? language.DisplayName : name.Trim();
+        var safeName = name.Trim();
+        if (safeName.Length == 0)
+            throw new ArgumentException("Profile name cannot be empty.", nameof(name));
         var id = string.IsNullOrWhiteSpace(profileId)
-            ? CreateProfileId(safeName, language.Id)
+            ? $"profile-{Guid.NewGuid():D}"
             : profileId.Trim();
         ValidateProfileId(id);
 
@@ -104,6 +113,42 @@ public sealed class ProfileService : IProfileService
         return profile;
     }
 
+    public async Task RenameProfileAsync(
+        string profileId,
+        string name,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        var profile = RequireProfile(profileId);
+        var trimmedName = name.Trim();
+        if (trimmedName.Length == 0)
+            throw new ArgumentException("Profile name cannot be empty.", nameof(name));
+
+        var index = _index.Profiles.FindIndex(item => item.Id == profile.Id);
+        _index.Profiles[index] = profile with { Name = trimmedName };
+        await SaveAsync();
+    }
+
+    public async Task DeleteProfileAsync(string profileId, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        var profile = RequireProfile(profileId);
+        if (profile.IsDefault || string.Equals(profile.Id, _index.DefaultProfileId, StringComparison.Ordinal))
+            throw new InvalidOperationException("The default profile cannot be deleted.");
+
+        _index.Profiles.RemoveAll(item => string.Equals(item.Id, profile.Id, StringComparison.Ordinal));
+        if (string.Equals(_index.GlobalActiveProfileId, profile.Id, StringComparison.Ordinal))
+            _index.GlobalActiveProfileId = _index.DefaultProfileId;
+        _index.PrimaryProfileIdsByLanguage = _index.PrimaryProfileIdsByLanguage
+            .Where(pair => !string.Equals(pair.Value, profile.Id, StringComparison.Ordinal))
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+
+        var profileDirectory = GetProfileDirectory(profile.Id);
+        if (Directory.Exists(profileDirectory))
+            Directory.Delete(profileDirectory, recursive: true);
+        await SaveAsync();
+    }
+
     public async Task SetPrimaryProfileForLanguageAsync(
         string languageId,
         string profileId,
@@ -112,7 +157,9 @@ public sealed class ProfileService : IProfileService
         ct.ThrowIfCancellationRequested();
 
         var language = ContentLanguageProfile.Normalize(languageId);
-        RequireProfile(profileId);
+        var profile = RequireProfile(profileId);
+        if (profile.Language.Id != language.Id)
+            throw new InvalidOperationException("The profile language does not match.");
         _index.PrimaryProfileIdsByLanguage[language.Id] = profileId;
         await SaveAsync();
     }
@@ -137,12 +184,9 @@ public sealed class ProfileService : IProfileService
 
     public ProfileResolution Resolve(ProfileContext context)
     {
-        var profile = context.Kind switch
-        {
-            ProfileContextKind.Book => ResolveBook(context),
-            ProfileContextKind.Video => ResolveExplicitOrFallback(context.ProfileId),
-            _ => ResolveExplicitOrFallback(context.ProfileId ?? _index.GlobalActiveProfileId),
-        };
+        // v1.4.1 keeps legacy book/video contexts serializable, but runtime
+        // selection is controlled globally from Settings > Profiles.
+        var profile = ResolveExplicitOrFallback(_index.GlobalActiveProfileId);
 
         return new ProfileResolution(profile, profile.Language, context);
     }
@@ -153,33 +197,16 @@ public sealed class ProfileService : IProfileService
         return Path.Combine(ProfilesRoot, profileId);
     }
 
-    private NiratanProfile ResolveBook(ProfileContext context)
-    {
-        var explicitProfile = _index.FindProfile(context.ProfileId);
-        if (explicitProfile is not null)
-            return explicitProfile;
-
-        var language = ContentLanguageProfile.TryNormalize(context.BookLanguage);
-        if (language is not null
-            && _index.PrimaryProfileIdsByLanguage.TryGetValue(language.Id, out var primaryId)
-            && _index.FindProfile(primaryId) is { } primaryProfile)
-        {
-            return primaryProfile;
-        }
-
-        return ResolveExplicitOrFallback(_index.GlobalActiveProfileId);
-    }
-
     private NiratanProfile ResolveExplicitOrFallback(string? profileId) =>
         _index.FindProfile(profileId)
         ?? _index.FindProfile(_index.DefaultProfileId)
         ?? _index.Profiles.First(profile => profile.DictionaryLanguageId == ContentLanguageProfile.Japanese.Id);
 
-    private void RequireProfile(string profileId)
+    private NiratanProfile RequireProfile(string profileId)
     {
         ValidateProfileId(profileId);
-        if (_index.FindProfile(profileId) is null)
-            throw new InvalidOperationException($"Profile '{profileId}' does not exist.");
+        return _index.FindProfile(profileId)
+               ?? throw new InvalidOperationException($"Profile '{profileId}' does not exist.");
     }
 
     private static void CopyProfileOwnedFiles(string sourceDirectory, string destinationDirectory)
@@ -209,97 +236,133 @@ public sealed class ProfileService : IProfileService
             overwrite: false);
     }
 
-    private void EnsureBuiltInProfiles()
+    private void NormalizeAndMigrateProfiles()
     {
-        var changed = false;
-        if (_index.FindProfile(ProfileConstants.DefaultJapaneseProfileId) is null)
+        _index.Profiles = _index.Profiles
+            .Where(profile => IsSafeProfileId(profile.Id))
+            .GroupBy(profile => profile.Id, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .ToList();
+
+        var defaultJapanese = _index.FindProfile(ProfileConstants.DefaultJapaneseProfileId);
+        if (defaultJapanese is null)
         {
-            _index.Profiles.Add(new NiratanProfile(
+            _index.Profiles.Insert(0, new NiratanProfile(
                 ProfileConstants.DefaultJapaneseProfileId,
-                "Japanese EPUB",
+                "Japanese",
                 ContentLanguageProfile.Japanese.Id,
                 IsDefault: true));
-            changed = true;
+        }
+        else
+        {
+            ReplaceProfile(defaultJapanese with
+            {
+                Name = defaultJapanese.Name is "Japanese" or "Japanese EPUB"
+                    ? "Japanese"
+                    : defaultJapanese.Name,
+                IsDefault = true,
+            });
         }
 
-        if (_index.FindProfile(ProfileConstants.DefaultJapaneseVideoProfileId) is null)
-        {
-            _index.Profiles.Add(new NiratanProfile(
-                ProfileConstants.DefaultJapaneseVideoProfileId,
-                "Japanese Video",
-                ContentLanguageProfile.Japanese.Id,
-                IsDefault: true));
-            changed = true;
-        }
+        MigrateLegacyJapaneseVideoProfile();
+        MigrateWindowsOnlyBuiltInProfile(ProfileConstants.DefaultEnglishProfileId);
+        MigrateWindowsOnlyBuiltInProfile(ProfileConstants.DefaultEnglishVideoProfileId);
 
-        if (_index.FindProfile(ProfileConstants.DefaultEnglishProfileId) is null)
-        {
-            _index.Profiles.Add(new NiratanProfile(
-                ProfileConstants.DefaultEnglishProfileId,
-                "English EPUB",
-                ContentLanguageProfile.English.Id,
-                IsDefault: true));
-            changed = true;
-        }
-
-        if (_index.FindProfile(ProfileConstants.DefaultEnglishVideoProfileId) is null)
-        {
-            _index.Profiles.Add(new NiratanProfile(
-                ProfileConstants.DefaultEnglishVideoProfileId,
-                "English Video",
-                ContentLanguageProfile.English.Id,
-                IsDefault: true));
-            changed = true;
-        }
-
-        if (!_index.PrimaryProfileIdsByLanguage.ContainsKey(ContentLanguageProfile.Japanese.Id))
-        {
-            _index.PrimaryProfileIdsByLanguage[ContentLanguageProfile.Japanese.Id] =
-                ProfileConstants.DefaultJapaneseProfileId;
-            changed = true;
-        }
-
-        if (!_index.PrimaryProfileIdsByLanguage.ContainsKey(ContentLanguageProfile.English.Id))
-        {
-            _index.PrimaryProfileIdsByLanguage[ContentLanguageProfile.English.Id] =
-                ProfileConstants.DefaultEnglishProfileId;
-            changed = true;
-        }
-
-        if (_index.FindProfile(_index.DefaultProfileId) is null)
-        {
+        if (_index.DefaultProfileId == ProfileConstants.DefaultJapaneseVideoProfileId
+            || _index.FindProfile(_index.DefaultProfileId) is null)
             _index.DefaultProfileId = ProfileConstants.DefaultJapaneseProfileId;
-            changed = true;
-        }
 
         if (_index.FindProfile(_index.GlobalActiveProfileId) is null)
-        {
             _index.GlobalActiveProfileId = _index.DefaultProfileId;
-            changed = true;
-        }
 
-        if (changed)
-        {
-            foreach (var profile in _index.Profiles)
-                Directory.CreateDirectory(GetProfileDirectory(profile.Id));
-        }
+        var validIds = _index.Profiles.Select(profile => profile.Id).ToHashSet(StringComparer.Ordinal);
+        _index.PrimaryProfileIdsByLanguage = _index.PrimaryProfileIdsByLanguage
+            .Where(pair => ContentLanguageProfile.All.Any(language => language.Id == pair.Key)
+                           && validIds.Contains(pair.Value))
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+        if (!_index.PrimaryProfileIdsByLanguage.ContainsKey(ContentLanguageProfile.Japanese.Id))
+            _index.PrimaryProfileIdsByLanguage[ContentLanguageProfile.Japanese.Id] = _index.DefaultProfileId;
+
+        foreach (var profile in _index.Profiles)
+            Directory.CreateDirectory(GetProfileDirectory(profile.Id));
     }
 
-    private static string CreateProfileId(string name, string languageId)
+    private void MigrateLegacyJapaneseVideoProfile()
     {
-        var baseId = new string(name
-            .Trim()
-            .ToLowerInvariant()
-            .Select(ch => char.IsLetterOrDigit(ch) ? ch : '-')
-            .ToArray());
-        baseId = string.Join('-', baseId.Split('-', StringSplitOptions.RemoveEmptyEntries));
-        if (string.IsNullOrWhiteSpace(baseId))
-            baseId = languageId;
+        var legacy = _index.FindProfile(ProfileConstants.DefaultJapaneseVideoProfileId);
+        if (legacy is null)
+            return;
 
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{languageId}:{name}")))[..8]
-            .ToLowerInvariant();
-        return $"{languageId}-{baseId}-{hash}";
+        var source = GetProfileDirectory(legacy.Id);
+        var destination = GetProfileDirectory(ProfileConstants.DefaultJapaneseProfileId);
+        var equivalent = ProfileOwnedRelativePaths.All(relativePath =>
+            ProfileFilesAreEquivalent(
+                Path.Combine(source, relativePath),
+                Path.Combine(destination, relativePath)));
+        if (equivalent)
+        {
+            _index.Profiles.RemoveAll(profile => profile.Id == legacy.Id);
+            return;
+        }
+
+        ReplaceProfile(legacy with { IsDefault = false });
     }
+
+    private void MigrateWindowsOnlyBuiltInProfile(string profileId)
+    {
+        var legacy = _index.FindProfile(profileId);
+        if (legacy is null)
+            return;
+
+        var directory = GetProfileDirectory(profileId);
+        var ownsSettings = ProfileOwnedRelativePaths.Any(relativePath =>
+            File.Exists(Path.Combine(directory, relativePath)));
+        if (!ownsSettings)
+        {
+            _index.Profiles.RemoveAll(profile => profile.Id == profileId);
+            return;
+        }
+
+        ReplaceProfile(legacy with { IsDefault = false });
+    }
+
+    private void ReplaceProfile(NiratanProfile replacement)
+    {
+        var index = _index.Profiles.FindIndex(profile => profile.Id == replacement.Id);
+        if (index >= 0)
+            _index.Profiles[index] = replacement;
+    }
+
+    private static bool ProfileFilesAreEquivalent(string lhs, string rhs)
+    {
+        var lhsExists = File.Exists(lhs);
+        var rhsExists = File.Exists(rhs);
+        if (lhsExists != rhsExists)
+            return false;
+        if (!lhsExists)
+            return true;
+
+        var lhsBytes = File.ReadAllBytes(lhs);
+        var rhsBytes = File.ReadAllBytes(rhs);
+        if (lhsBytes.AsSpan().SequenceEqual(rhsBytes))
+            return true;
+
+        try
+        {
+            return JsonNode.DeepEquals(JsonNode.Parse(lhsBytes), JsonNode.Parse(rhsBytes));
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsSafeProfileId(string profileId) =>
+        !string.IsNullOrWhiteSpace(profileId)
+        && profileId is not "." and not ".."
+        && !profileId.Contains('/')
+        && !profileId.Contains('\\')
+        && profileId.IndexOfAny(Path.GetInvalidFileNameChars()) < 0;
 
     private static void ValidateProfileId(string profileId)
     {

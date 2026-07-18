@@ -25,4 +25,17 @@ public sealed class NovelReaderContentStylesTests
         css.Should().Contain($"writing-mode: {expectedWritingMode} !important;");
         css.Should().Contain($"-webkit-writing-mode: {expectedWritingMode} !important;");
     }
+
+    [Fact]
+    public void GenerateCss_ProvidesReaderImageBlurPresentation()
+    {
+        var css = NovelReaderContentStyles.GenerateCss(
+            new ReaderSettings(),
+            ThemeMode.Light);
+
+        css.Should().Contain(".niratan-blur-wrapper");
+        css.Should().Contain("img.block-img.niratan-blurred");
+        css.Should().Contain("svg.niratan-blurred");
+        css.Should().Contain("filter: blur(24px) !important");
+    }
 }

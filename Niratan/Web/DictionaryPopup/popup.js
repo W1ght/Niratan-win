@@ -868,7 +868,9 @@ function updateButtonSlot(slot, changes) {
   if (!slot) return;
   if ('state' in changes) slot.dataset.state = changes.state;
   if ('enabled' in changes) slot.dataset.enabled = String(changes.enabled);
-  if ('noteID' in changes) slot.dataset.noteId = String(changes.noteID);
+  if ('noteIDs' in changes) {
+    slot.dataset.noteIds = normalizedAnkiNoteIDs(changes.noteIDs).map(String).join(' ');
+  }
   if ('hidden' in changes) slot.hidden = Boolean(changes.hidden);
   var kind = slot.dataset.kind;
   var state = slot.dataset.state || 'default';
@@ -1299,11 +1301,19 @@ async function mineEntryAtIndex(entryIndex) {
   }
 }
 
-function showAnkiNoteButton(entryIndex, noteID) {
-  var viewNoteSlot = getButtonSlot('viewNote', entryIndex);
-  if (!viewNoteSlot || !noteID) return;
+function normalizedAnkiNoteIDs(noteIDs) {
+  if (noteIDs === null || noteIDs === undefined) return [];
+  if (Array.isArray(noteIDs)) return noteIDs.filter(Boolean);
+  if (typeof noteIDs === 'object') return Object.values(noteIDs).filter(Boolean);
+  return [noteIDs].filter(Boolean);
+}
+
+function showAnkiNoteButton(entryIndex, noteIDs, slot) {
+  var viewNoteSlot = slot || getButtonSlot('viewNote', entryIndex);
+  var normalizedNoteIDs = normalizedAnkiNoteIDs(noteIDs);
+  if (!viewNoteSlot || normalizedNoteIDs.length === 0) return;
   updateButtonSlot(viewNoteSlot, {
-    noteID: noteID,
+    noteIDs: normalizedNoteIDs,
     hidden: false,
     enabled: true,
   });
@@ -1311,14 +1321,16 @@ function showAnkiNoteButton(entryIndex, noteID) {
 
 function openAnkiNoteAtIndex(entryIndex) {
   var viewNoteSlot = getButtonSlot('viewNote', entryIndex);
-  var noteID = viewNoteSlot && viewNoteSlot.dataset.noteId;
-  if (!noteID) return;
+  var noteIDs = viewNoteSlot && viewNoteSlot.dataset.noteIds
+    ? viewNoteSlot.dataset.noteIds.split(' ').filter(Boolean)
+    : [];
+  if (noteIDs.length === 0) return;
 
   updateButtonSlot(viewNoteSlot, { enabled: false });
   postPopupMessage('openAnkiNote', {
     entryIndex: entryIndex,
     renderGeneration: Number(window.popupRenderGeneration || 0),
-    noteID: Number(noteID),
+    noteIDs: noteIDs.map(Number),
   });
 }
 
@@ -1370,17 +1382,33 @@ window.onContextMineComplete = function (entryIndex, result) {
   applyMiningResult(entryIndex, result);
 };
 
-window.onDuplicateCheck = function (entryIndex, isDuplicate) {
-  var slot = getButtonSlot('mine', entryIndex);
-  if (!slot || slot.dataset.state === 'pending') return;
-  updateButtonSlot(slot, {
+function applyAnkiDuplicateLookup(entryIndex, duplicateLookup, slots) {
+  slots = slots || {};
+  var isDuplicate = typeof duplicateLookup === 'boolean'
+    ? duplicateLookup
+    : !!(duplicateLookup && duplicateLookup.isDuplicate);
+  var mineSlot = slots.mine || getButtonSlot('mine', entryIndex);
+  if (!mineSlot || mineSlot.dataset.state === 'pending') return;
+  updateButtonSlot(mineSlot, {
     state: isDuplicate ? 'duplicate' : 'default',
     enabled: !(isDuplicate && !window.allowDupes),
   });
+
+  var viewNoteSlot = slots.viewNote || getButtonSlot('viewNote', entryIndex);
+  var noteIDs = normalizedAnkiNoteIDs(duplicateLookup && duplicateLookup.noteIDs);
+  if (isDuplicate && noteIDs.length > 0) {
+    showAnkiNoteButton(entryIndex, noteIDs, viewNoteSlot);
+  } else {
+    updateButtonSlot(viewNoteSlot, { noteIDs: [], hidden: true, enabled: false });
+  }
+}
+
+window.onDuplicateCheck = function (entryIndex, duplicateLookup) {
+  applyAnkiDuplicateLookup(entryIndex, duplicateLookup);
 };
 
-function requestDuplicateCheck(entryIndex, expression) {
-  var slot = getButtonSlot('mine', entryIndex);
+function requestDuplicateCheck(entryIndex, expression, slot) {
+  slot = slot || getButtonSlot('mine', entryIndex);
   if (!slot || slot.dataset.duplicateCheckRequested === 'true') return;
   slot.dataset.duplicateCheckRequested = 'true';
   postPopupMessage('duplicateCheck', {
@@ -1436,6 +1464,7 @@ function createEntryHeader(entry, idx) {
     var viewNoteSlot = createButtonSlot('viewNote', idx, false);
     viewNoteSlot.hidden = true;
     buttonsContainer.appendChild(viewNoteSlot);
+    requestDuplicateCheck(idx, expression || '', mineSlot);
   }
 
   header.appendChild(buttonsContainer);
@@ -1625,6 +1654,7 @@ function capturePopupRuntime() {
     compactPitchAccents: window.compactPitchAccents,
     harmonicFrequency: window.harmonicFrequency,
     deduplicatePitchAccents: window.deduplicatePitchAccents,
+    twoColumnLayout: window.twoColumnLayout,
     expandFirstDictionary: window.expandFirstDictionary,
     collapseMode: window.collapseMode,
     collapsedDictionaries: window.collapsedDictionaries,
@@ -1632,6 +1662,7 @@ function capturePopupRuntime() {
     scanNonJapaneseText: window.scanNonJapaneseText,
     maxResults: window.maxResults,
     scanLength: window.scanLength,
+    desktopLookupHoverDelayMs: window.desktopLookupHoverDelayMs,
     customCSS: window.customCSS,
     lookupTraceId: window.lookupTraceId,
     audioSources: window.audioSources,
@@ -1654,6 +1685,7 @@ function applyPopupRuntime(runtime) {
   window.compactPitchAccents = runtime.compactPitchAccents;
   window.harmonicFrequency = runtime.harmonicFrequency;
   window.deduplicatePitchAccents = runtime.deduplicatePitchAccents;
+  window.twoColumnLayout = runtime.twoColumnLayout;
   window.expandFirstDictionary = runtime.expandFirstDictionary;
   window.collapseMode = runtime.collapseMode;
   window.collapsedDictionaries = runtime.collapsedDictionaries;
@@ -1661,6 +1693,7 @@ function applyPopupRuntime(runtime) {
   window.scanNonJapaneseText = runtime.scanNonJapaneseText;
   window.maxResults = runtime.maxResults;
   window.scanLength = runtime.scanLength;
+  window.desktopLookupHoverDelayMs = runtime.desktopLookupHoverDelayMs;
   window.customCSS = runtime.customCSS;
   window.lookupTraceId = runtime.lookupTraceId;
   window.audioSources = runtime.audioSources;
@@ -1851,7 +1884,8 @@ function dictionaryColumnsGap() {
 }
 
 function shouldUseDictionaryColumns(section) {
-  return section
+  return window.twoColumnLayout === true
+    && section
     && !section.classList.contains('single-section')
     && section.clientWidth >= 480;
 }
@@ -2299,18 +2333,42 @@ window.renderPopup = function (pendingPayload) {
 
     if (!window.niratanPopupShiftLookupAttached) {
       window.niratanPopupShiftLookupAttached = true;
+      var shiftHoverTimer = 0;
+      var lastShiftHoverPoint = null;
+      function cancelShiftHoverLookup() {
+        if (shiftHoverTimer) clearTimeout(shiftHoverTimer);
+        shiftHoverTimer = 0;
+      }
+      function scheduleShiftHoverLookup(point) {
+        cancelShiftHoverLookup();
+        if (!point) return;
+        var delay = Number(window.desktopLookupHoverDelayMs);
+        delay = Number.isFinite(delay) ? Math.min(250, Math.max(0, delay)) : 45;
+        shiftHoverTimer = setTimeout(function () {
+          shiftHoverTimer = 0;
+          lookupAtPopupPoint(point.x, point.y, false, 'shift');
+        }, delay);
+      }
       document.addEventListener('mousemove', function (e) {
-        if (!e.shiftKey) return;
         var target = e.target && e.target.nodeType === Node.TEXT_NODE ? e.target.parentElement : e.target;
         if (!target || (!target.closest('.glossary-content') && !target.closest('.expr-tag'))) return;
         if (target.closest('.button-slot')) return;
+        lastShiftHoverPoint = { x: e.clientX, y: e.clientY };
+        if (!e.shiftKey) {
+          cancelShiftHoverLookup();
+          return;
+        }
         var key = Math.round(e.clientX) + ':' + Math.round(e.clientY);
         if (key === lastShiftLookupKey) return;
         lastShiftLookupKey = key;
-        lookupAtPopupPoint(e.clientX, e.clientY, false, 'shift');
+        scheduleShiftHoverLookup(lastShiftHoverPoint);
       }, { passive: true });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Shift') scheduleShiftHoverLookup(lastShiftHoverPoint);
+      });
       document.addEventListener('keyup', function (e) {
         if (e.key === 'Shift') {
+          cancelShiftHoverLookup();
           lastShiftLookupKey = '';
           lastShiftLookupQuery = '';
           lastShiftLookupAt = 0;

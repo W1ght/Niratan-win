@@ -19,6 +19,11 @@ public sealed record ReaderHighlight(
     ReaderHighlightColor Color,
     DateTimeOffset CreatedAt);
 
+public sealed record ReaderHighlightSelection(
+    int Start,
+    int Offset,
+    string Text);
+
 public sealed record ReaderHighlightJumpTarget(
     int ChapterIndex,
     double ChapterProgress);

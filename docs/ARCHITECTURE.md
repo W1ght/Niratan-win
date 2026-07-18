@@ -207,7 +207,8 @@ ruby { ruby-position: over; }
 
 - `ReaderImageGalleryService` 只扫描 spine 章节中的 `<img src>` 与 SVG `<image href/xlink:href>`，按阅读顺序去重，并把相对 content root 的 JPG/JPEG/PNG 路径写入 `bookinfo.json.images`。外部 URL、data URL、越出 content root 的路径、缺失文件和 `gaiji` 图片全部拒绝。
 - 每个运行时图片项同时记录 spine index 与图片标签之前的可读字符比例。`ReaderGalleryProgressPolicy` 用当前章节和章节内逻辑进度判断图片是否已读；未知旧索引保持可见，避免兼容数据永久锁定。
-- 图片库外层、缩略图列表和缩放查看使用 WinUI 原生控件；面板按当前 XamlRoot 尺寸尽可能扩展，大图查看器嵌在同一面板中，不关闭或重建图片列表。未读缩略图通过 Win2D `GaussianBlurEffect` + Composition 模糊。`BlurUnreadGalleryImages` 默认开启并持久化到 Reader 设置。
+- 图片库外层、缩略图列表和缩放查看使用 WinUI 原生控件；面板按当前 XamlRoot 尺寸尽可能扩展，大图查看器嵌在同一面板中，不关闭或重建图片列表。大图使用左右按钮/方向键在索引内切换；未读大图继续模糊，仅点击图片才在当次图片库会话中显式揭示。
+- 未读图片库图片通过 Win2D `GaussianBlurEffect` + Composition 模糊，`BlurUnreadGalleryImages` 默认开启。外观中独立的 `BlurImages` 默认关闭，对 Reader WebView 内非 `gaiji` 的大图施加 CSS 模糊：第一次点击只揭示，再次点击才通过受校验的 `imageTapped` bridge 打开原生大图。两个开关均持久化到 Reader 设置且互不覆盖。
 - Hoshi-Reader 仅作为该功能的实现参考。Windows 使用自适应 GridView 和 1×–5× `ScrollViewer` 缩放，是相对 iOS 纵向 sheet 的平台化呈现；小说正文渲染仍只走 WebView2。
 
 ---
