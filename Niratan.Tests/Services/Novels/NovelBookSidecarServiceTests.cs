@@ -69,7 +69,8 @@ public sealed class NovelBookSidecarServiceTests
         var bookInfo = service.CreateBookInfo(
             chapters,
             chapterCharacterCounts: [100, 50],
-            containerDirectory: Path.Combine(temp.Path, "OEBPS"));
+            containerDirectory: Path.Combine(temp.Path, "OEBPS"),
+            images: ["Images/illustration.jpg"]);
         await service.SaveBookInfoAsync(temp.Path, bookInfo, ct);
 
         var json = await File.ReadAllTextAsync(Path.Combine(temp.Path, "bookinfo.json"), ct);
@@ -84,6 +85,8 @@ public sealed class NovelBookSidecarServiceTests
         second.GetProperty("spineIndex").GetInt32().Should().Be(1);
         second.GetProperty("currentTotal").GetInt32().Should().Be(100);
         second.GetProperty("chapterCount").GetInt32().Should().Be(50);
+        document.RootElement.GetProperty("images")[0].GetString()
+            .Should().Be("Images/illustration.jpg");
 
         var loaded = await service.LoadBookInfoAsync(temp.Path, ct);
 

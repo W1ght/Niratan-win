@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
@@ -20,6 +21,7 @@ using Niratan.Services.Profiles;
 using Niratan.Services.Settings;
 using Niratan.Services.Sync;
 using Niratan.Services.UI;
+using Niratan.ViewModels.Components;
 
 namespace Niratan.ViewModels.Pages;
 
@@ -30,11 +32,13 @@ public partial class NovelReaderPageViewModel : ObservableObject
     private readonly IMessenger _messenger;
     private readonly IReaderHighlightService _readerHighlightService;
     private readonly INovelBookSidecarService _novelBookSidecarService;
+    private readonly IReaderImageGalleryService? _readerImageGalleryService;
     private readonly IReaderStatisticsSession _statisticsSession;
     private readonly IProfileRuntimeService _profileRuntime;
     private readonly ISettingsService _settingsService;
     private readonly IReaderAutoSyncCoordinator _readerAutoSyncCoordinator;
     private readonly ReaderNavigationTransactionCoordinator _navigationTransactions;
+    private readonly IReaderSettingsService? _readerSettingsService;
 
     [ObservableProperty]
     public partial NovelBook? CurrentBook { get; set; }
@@ -61,6 +65,11 @@ public partial class NovelReaderPageViewModel : ObservableObject
     public partial bool IsStatisticsPaused { get; set; }
 
     private IReadOnlyList<ReaderHighlight> _highlights = [];
+
+    public ObservableCollection<ReaderGalleryImageItemViewModel> GalleryImages { get; } = [];
+    public bool HasGalleryImages => GalleryImages.Count > 0;
+    public bool BlurUnreadGalleryImages =>
+        _readerSettingsService?.Current.BlurUnreadGalleryImages ?? true;
 
     public IReadOnlyList<ReaderHighlight> Highlights
     {
@@ -140,6 +149,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
     private bool _lifecycleWriterBarrier;
     private bool _readerWriterClosed;
     private IReadOnlyList<int> _chapterCharacterCounts = [];
+    private IReadOnlyList<string>? _galleryImageRelativePaths;
     private readonly object _lifecycleCloseGate = new();
     private readonly SemaphoreSlim _lifecycleCheckpointLock = new(1, 1);
     private Task? _lifecycleCloseTask;
@@ -157,7 +167,9 @@ public partial class NovelReaderPageViewModel : ObservableObject
         IProfileRuntimeService profileRuntime,
         ISettingsService settingsService,
         IReaderAutoSyncCoordinator readerAutoSyncCoordinator,
-        ReaderNavigationTransactionCoordinator navigationTransactions
+        ReaderNavigationTransactionCoordinator navigationTransactions,
+        IReaderImageGalleryService? readerImageGalleryService = null,
+        IReaderSettingsService? readerSettingsService = null
     )
     {
         _novelLibraryService = novelLibraryService;
@@ -165,12 +177,14 @@ public partial class NovelReaderPageViewModel : ObservableObject
         _messenger = messenger;
         _readerHighlightService = readerHighlightService;
         _novelBookSidecarService = novelBookSidecarService;
+        _readerImageGalleryService = readerImageGalleryService;
         _statisticsSession = statisticsSession;
         _statisticsSession.StateChanged += OnStatisticsSessionStateChanged;
         _profileRuntime = profileRuntime;
         _settingsService = settingsService;
         _readerAutoSyncCoordinator = readerAutoSyncCoordinator;
         _navigationTransactions = navigationTransactions;
+        _readerSettingsService = readerSettingsService;
     }
 
     public async Task InitializeAsync(
@@ -231,6 +245,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
         OnPropertyChanged(nameof(CanGoNext));
         OnPropertyChanged(nameof(CanGoPrevious));
         OnStatisticsTextChanged();
+        RefreshGalleryReadState();
     }
 
     public void UpdateProgress(double progress)
@@ -245,6 +260,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
         OnPropertyChanged(nameof(OverallProgressText));
         OnPropertyChanged(nameof(ReaderProgressText));
         OnStatisticsTextChanged();
+        RefreshGalleryReadState();
     }
 
     public void SetChapterCharacterCounts(IReadOnlyList<int> chapterCharacterCounts)
@@ -257,6 +273,36 @@ public partial class NovelReaderPageViewModel : ObservableObject
         OnPropertyChanged(nameof(OverallProgressText));
         OnPropertyChanged(nameof(ReaderProgressText));
         OnStatisticsTextChanged();
+    }
+
+    public async Task ApplyLyricsCuePositionAsync(
+        int chapterIndex,
+        int chapterOffset,
+        bool naturalPlaybackAdvance,
+        CancellationToken ct = default)
+    {
+        if (!CanAcceptReaderPositionMutation
+            || chapterIndex < 0
+            || chapterIndex >= _chapterCharacterCounts.Count)
+        {
+            return;
+        }
+
+        var chapterCount = Math.Max(1, _chapterCharacterCounts[chapterIndex]);
+        SetChapter(chapterIndex, ChapterCount);
+        UpdateProgress(Math.Clamp(chapterOffset / (double)chapterCount, 0, 1));
+
+        if (!naturalPlaybackAdvance)
+        {
+            SaveProgressDebounced();
+            await ResetStatisticsBaselineAsync(ct);
+            return;
+        }
+
+        StartStatisticsForAutostart(StatisticsAutostartMode.PageTurn);
+        await SaveProgressAndCheckpointAsync(
+            ReaderStatisticsCheckpointReason.ReadingMovement,
+            ct);
     }
 
     public async Task LoadHighlightsAsync(CancellationToken ct = default)
@@ -722,8 +768,67 @@ public partial class NovelReaderPageViewModel : ObservableObject
         var bookInfo = _novelBookSidecarService.CreateBookInfo(
             chapters,
             _chapterCharacterCounts,
-            containerDirectory);
+            containerDirectory,
+            _galleryImageRelativePaths);
         await _novelBookSidecarService.SaveBookInfoAsync(CurrentBook.ExtractedPath, bookInfo, ct);
+    }
+
+    public async Task LoadGalleryAsync(EpubBook book, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(book);
+        GalleryImages.Clear();
+        _galleryImageRelativePaths = null;
+        OnPropertyChanged(nameof(HasGalleryImages));
+
+        if (_readerImageGalleryService == null
+            || string.IsNullOrWhiteSpace(CurrentBook?.ExtractedPath))
+        {
+            return;
+        }
+
+        var existingBookInfo = await _novelBookSidecarService.LoadBookInfoAsync(
+            CurrentBook.ExtractedPath,
+            ct);
+        var images = await _readerImageGalleryService.LoadImagesAsync(
+            book,
+            existingBookInfo?.Images,
+            ct);
+        _galleryImageRelativePaths = images
+            .Select(image => image.RelativePath)
+            .ToArray();
+        for (var i = 0; i < images.Count; i++)
+            GalleryImages.Add(new ReaderGalleryImageItemViewModel(images[i], i));
+
+        OnPropertyChanged(nameof(HasGalleryImages));
+        RefreshGalleryReadState();
+    }
+
+    public async Task SetBlurUnreadGalleryImagesAsync(
+        bool value,
+        CancellationToken ct = default)
+    {
+        if (_readerSettingsService != null)
+        {
+            _readerSettingsService.Set(settings => settings.BlurUnreadGalleryImages, value);
+            await _readerSettingsService.SaveAsync();
+        }
+
+        OnPropertyChanged(nameof(BlurUnreadGalleryImages));
+        RefreshGalleryReadState(value);
+    }
+
+    private void RefreshGalleryReadState(bool? blurUnread = null)
+    {
+        var shouldBlur = blurUnread ?? BlurUnreadGalleryImages;
+        foreach (var image in GalleryImages)
+        {
+            var isRead = ReaderGalleryProgressPolicy.IsRead(
+                CurrentChapterIndex,
+                Progress,
+                image.SpineIndex,
+                image.ChapterProgress);
+            image.SetBlurred(shouldBlur && !isRead);
+        }
     }
 
     public string? GetCurrentChapterHighlightsJson()

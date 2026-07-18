@@ -31,6 +31,10 @@ NovelBookCard_<bookId>
 NovelReaderBackButton
 NovelWebView
 NovelReaderSettingsButton
+NovelReaderGalleryButton
+NovelReaderGalleryPanelDialog
+NovelReaderGalleryBlurUnreadToggle
+NovelReaderGalleryGrid
 NovelDictionaryPopup
 NovelDictionaryCloseButton
 ```
@@ -159,7 +163,25 @@ YYYY-MM-DD-uia-tree.txt
 
 诊断失败时保留 Reader 日志，并重点搜索 `ProgrammaticDeparture`、`navigationGeneration`、`Background`、`Close` 和 `Restore completed`。
 
-#### 1.10.1 同章翻页与 typed movement 回归
+#### 1.10.1 Reader 歌词模式
+
+1. 为测试 EPUB 导入音频和匹配 SRT；音频或有效匹配缺失时歌词入口不可见，两者就绪后顶部音符按钮、Sasayaki 菜单和 `L` 快捷键均可进入。
+2. 播放时当前句按时间推进高亮，前后句保持弱化；窗口在窄、宽和小于 560px 高度下调整上下文行数且不裁切播放器控制。
+3. 验证上一句、下一句、播放/暂停、横竖排、歌词遮罩；遮罩仅在播放时生效，悬停歌词或打开查词弹窗后文字恢复清晰。
+4. 点击与 Shift hover 查词，确认弹窗贴近命中字形、嵌套查词可用，制卡上下文可向前/向后扩展并使用对应 Sasayaki 音频范围。
+5. 手动跳句或跳 15 秒不得增加阅读字符；自然播放跨句按匹配字符推进统计。按 Esc、关闭按钮或再次按 `L` 退出后，小说落在当前 cue 对应章节与位置，包括跨章节 cue。
+
+#### 1.10.2 Reader 插画图片库
+
+1. 使用同时包含章节内联插画、重复引用、`gaiji` 字形图和外部 URL 的测试 EPUB；图片库只按 spine 阅读顺序显示一份有效 JPG/JPEG/PNG 插画，不显示字形图或书外资源。
+2. 开启“模糊未读插画”，在到达后续插画前打开 `NovelReaderGalleryPanelDialog`，确认后续章节和当章未达位置的插画均显示模糊及未读标记。
+3. 在同章翻页经过插画位置，再次打开图片库，确认该插画解锁；章节切换后前章插画全部解锁，后章仍保持模糊。
+4. 关闭模糊开关后所有缩略图立即可见；关闭 Reader 并重新打开同一本书，设置保持。
+5. 点击缩略图在图片库面板内打开大图，图片库不得关闭；初始 1 倍必须按当前 viewport 缩放并完整显示图片。放大后水平和垂直滚动条保持可见且可拖动到图片四边；关闭大图后回到原图片库及滚动位置。鼠标滚轮或手势缩放范围为 1–5 倍，双击在 1 倍与 3 倍间切，Esc 只关闭大图。
+6. 在大、中、窄三种窗口尺寸下打开图片库，确认面板随窗口尺寸尽可能扩展、只保留必要边距，且不裁切开关、图片列表或关闭操作。Light、Dark 和 High Contrast 下检查未读标记和操作可辨认。
+7. 检查私有书籍目录中 `bookinfo.json` 的 `images` 仅保存相对路径，不包含绝对路径、`..` 越界路径或外部 URL。
+
+#### 1.10.3 同章翻页与 typed movement 回归
 
 自动化测试必须同时覆盖 WebView 与 native 两侧的 typed contract：
 
@@ -170,7 +192,7 @@ YYYY-MM-DD-uia-tree.txt
 
 真实运行时使用 `C:\Users\Wight\Downloads\哈利波特1魔法石.epub`：在同一章节内记录翻页前后的 `pageIndex`、`pageCount`、`progress`、`scrollPosition`、当前字符和 sidecar hash/mtime。断言 `pageIndex` 与 `scrollPosition / pageSize` 对齐、所有值无越界，而且 `statistics.json` 在跨章前已经变化。
 
-#### 1.10.2 Reader compact statistics panel
+#### 1.10.4 Reader compact statistics panel
 
 1. 打开 `NovelReaderStatisticsPanelDialog`，确认 compact dialog 宽度约为 520–560 effective pixels，只有一个纵向滚动所有者；窗口缩小时无裁切、嵌套滚动或不可达操作。
 2. Session、Today、All Time 三组均显示字符/近似词数、时间和速度；日文内容使用 characters，英文内容使用 approximate words，语言切换后单位和数值投影一致。
@@ -178,7 +200,7 @@ YYYY-MM-DD-uia-tree.txt
 4. 使用键盘、鼠标和触摸完成打开、滚动、Start/Stop 和关闭；在 200% text scaling 下无截断，Automation name 非空。
 5. Light、Dark、High Contrast 下检查 Session/Today/All Time、按钮、分隔和滚动提示均可辨认。
 
-#### 1.10.3 Reader 自动同步、writer 与生命周期
+#### 1.10.5 Reader 自动同步、writer 与生命周期
 
 自动化必须使用 mock remote store/coordinator，不得依赖真实 Google Drive：
 
@@ -199,7 +221,7 @@ dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter
 
 真实 UI/runtime 还要确认 Niratan 顶层窗口响应、Reader 可打开、同章翻页与 compact panel 状态同步，并在返回书架、最小化/恢复和关闭路径检查最终 sidecar。真实 Google Drive import/export 会修改远端账户或书籍，**只有用户显式确认可修改的测试账户与测试书后才允许执行**；否则以 coordinator/mock 测试为远端调用证据，并在报告中明确写“真实 Drive 未执行”。
 
-#### 1.10.4 Reader 原子跳转事务
+#### 1.10.6 Reader 原子跳转事务
 
 1. 准备相邻章节 A、B，从 A 最后一页进入 B 第一页，再从 B 第一页返回上一章；必须直接显示 A 最后一页，Reader chrome、ViewModel、`bookmark.json` 和统计 baseline 在隐藏渲染期间保持源位置，最终只发布一次 WebView 回报的 page-aligned progress，不能临时出现 `1.0`/100%、第一页进度或二次闪烁。
 2. 在事务 `Rendering` 阶段触发 Background/Close：事务必须恢复并确认源位置后再写 lifecycle checkpoint；在 `Committing` 阶段触发时必须等待已接纳的目的地 bookmark 写入和终态渲染确认，再保存目的地终态，不能取消后复活旧位置。

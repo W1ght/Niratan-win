@@ -108,7 +108,8 @@ public class NovelEpubImportServiceTests
             {
                 var first = Path.Combine(outputDirectory, "chapter-1.xhtml");
                 var second = Path.Combine(outputDirectory, "chapter-2.xhtml");
-                File.WriteAllText(first, "<body><ruby>星<rt>ほし</rt></ruby>A!</body>");
+                File.WriteAllBytes(Path.Combine(outputDirectory, "illustration.jpg"), [1]);
+                File.WriteAllText(first, "<body><ruby>星<rt>ほし</rt></ruby>A!<img src='illustration.jpg'/></body>");
                 File.WriteAllText(second, "<body>読む。</body>");
                 return new EpubBook
                 {
@@ -126,7 +127,8 @@ public class NovelEpubImportServiceTests
             parser.Object,
             sidecars,
             NullLogger<NovelEpubImportService>.Instance,
-            id => Path.Combine(booksRoot, id));
+            id => Path.Combine(booksRoot, id),
+            new ReaderImageGalleryService());
 
         var result = await sut.ImportAsync(sourcePath, ct);
 
@@ -138,6 +140,7 @@ public class NovelEpubImportServiceTests
             new NovelBookInfoChapter(SpineIndex: 0, CurrentTotal: 0, ChapterCount: 2));
         bookInfo.ChapterInfo["chapter-2.xhtml"].Should().Be(
             new NovelBookInfoChapter(SpineIndex: 1, CurrentTotal: 2, ChapterCount: 2));
+        bookInfo.Images.Should().Equal("illustration.jpg");
     }
 
     private sealed class TempDirectory : IDisposable

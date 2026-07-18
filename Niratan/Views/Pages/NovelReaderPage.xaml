@@ -44,6 +44,14 @@
             <Setter Property="MaxLines" Value="1" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         </Style>
+        <Style x:Key="ReaderGoToSegmentButtonStyle" TargetType="ToggleButton">
+            <Setter Property="MinWidth" Value="92" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
     </Page.Resources>
 
     <Grid RowDefinitions="Auto,*,Auto">
@@ -70,23 +78,11 @@
             </Button>
 
             <Button Grid.Column="1"
+                    x:Name="NovelReaderGoToButton"
                     HorizontalAlignment="Left"
-                    AutomationProperties.AutomationId="NovelReaderChapterButton"
-                    x:Uid="NovelReaderChapterButton"
-                    Click="ChapterListButton_Click"
-                    Style="{StaticResource CompactReaderToolbarButtonStyle}">
-                <Button.Content>
-                    <FontIcon Glyph="&#xE8A4;"
-                              Style="{StaticResource CompactReaderToolbarIconStyle}" />
-                </Button.Content>
-            </Button>
-
-            <Button Grid.Column="2"
-                    x:Name="NovelReaderSearchButton"
-                    HorizontalAlignment="Left"
-                    AutomationProperties.AutomationId="NovelReaderSearchButton"
-                    x:Uid="NovelReaderSearchButton"
-                    Click="SearchButton_Click"
+                    AutomationProperties.AutomationId="NovelReaderGoToButton"
+                    x:Uid="NovelReaderGoToButton"
+                    Click="GoToButton_Click"
                     Style="{StaticResource CompactReaderToolbarButtonStyle}">
                 <Button.Content>
                     <FontIcon Glyph="&#xE721;"
@@ -94,19 +90,7 @@
                 </Button.Content>
             </Button>
 
-            <Button Grid.Column="4"
-                    HorizontalAlignment="Left"
-                    AutomationProperties.AutomationId="NovelReaderHighlightsButton"
-                    x:Uid="NovelReaderHighlightsButton"
-                    Click="HighlightsButton_Click"
-                    Style="{StaticResource CompactReaderToolbarButtonStyle}">
-                <Button.Content>
-                    <FontIcon Glyph="&#xE8D2;"
-                              Style="{StaticResource CompactReaderToolbarIconStyle}" />
-                </Button.Content>
-            </Button>
-
-            <Button Grid.Column="5"
+            <Button Grid.Column="3"
                     x:Name="NovelReaderStatisticsButton"
                     HorizontalAlignment="Left"
                     AutomationProperties.AutomationId="NovelReaderStatisticsButton"
@@ -119,7 +103,7 @@
                 </Button.Content>
             </Button>
 
-            <Button Grid.Column="3"
+            <Button Grid.Column="2"
                     HorizontalAlignment="Left"
                     AutomationProperties.AutomationId="NovelReaderAppearanceButton"
                     x:Uid="NovelReaderAppearanceButton"
@@ -131,7 +115,20 @@
                 </Button.Content>
             </Button>
 
-            <Button Grid.Column="6"
+            <Button Grid.Column="4"
+                    x:Name="NovelReaderGalleryButton"
+                    HorizontalAlignment="Left"
+                    AutomationProperties.AutomationId="NovelReaderGalleryButton"
+                    x:Uid="NovelReaderGalleryButton"
+                    Click="GalleryButton_Click"
+                    Style="{StaticResource CompactReaderToolbarButtonStyle}">
+                <Button.Content>
+                    <FontIcon Glyph="&#xE91B;"
+                              Style="{StaticResource CompactReaderToolbarIconStyle}" />
+                </Button.Content>
+            </Button>
+
+            <Button Grid.Column="5"
                     x:Name="SasayakiButton"
                     HorizontalAlignment="Left"
                     AutomationProperties.AutomationId="NovelReaderSasayakiButton"
@@ -203,6 +200,15 @@
                                 <FontIcon Glyph="&#xE8AD;" />
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
+                        <MenuFlyoutItem x:Name="SasayakiLyricsModeMenuItem"
+                                        x:Uid="NovelReaderLyricsModeMenuItem"
+                                        AutomationProperties.AutomationId="NovelReaderLyricsModeMenuItem"
+                                        Click="SasayakiLyricsMode_Click"
+                                        Visibility="Collapsed">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE189;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem x:Name="SasayakiLoadAudioMenuItem"
                                         x:Uid="SasayakiLoadAudioMenuItem"
@@ -214,6 +220,20 @@
                         </MenuFlyoutItem>
                     </MenuFlyout>
                 </Button.ContextFlyout>
+            </Button>
+
+            <Button Grid.Column="6"
+                    x:Name="NovelReaderLyricsModeButton"
+                    x:Uid="NovelReaderLyricsModeButton"
+                    HorizontalAlignment="Left"
+                    AutomationProperties.AutomationId="NovelReaderLyricsModeButton"
+                    Click="SasayakiLyricsMode_Click"
+                    Style="{StaticResource CompactReaderToolbarButtonStyle}"
+                    Visibility="Collapsed">
+                <Button.Content>
+                    <FontIcon Glyph="&#xE189;"
+                              Style="{StaticResource CompactReaderToolbarIconStyle}" />
+                </Button.Content>
             </Button>
 
             <Grid Grid.Column="7"
@@ -251,178 +271,341 @@
                       AutomationProperties.AutomationId="NovelWebView" />
         </Grid>
 
+        <controls:ReaderLyricsModeControl x:Name="ReaderLyricsMode"
+                                          Grid.RowSpan="3"
+                                          Canvas.ZIndex="90"
+                                          HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Stretch"
+                                          Visibility="Collapsed" />
+
         <!-- Dictionary popup overlay — lives in the main visual tree so MicaBackdrop shows through -->
         <Canvas x:Name="DictionaryOverlayCanvas"
-                Grid.Row="1"
-                Canvas.ZIndex="20"
+                Grid.RowSpan="3"
+                Canvas.ZIndex="120"
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch"
                 Background="Transparent"
                 Visibility="Collapsed"
                 AutomationProperties.AutomationId="DictionaryOverlayCanvas" />
 
-        <ContentDialog x:Name="ReaderChapterPanelDialog"
-                       x:Uid="ReaderChapterPanelDialog"
-                       AutomationProperties.AutomationId="NovelReaderChapterPanelDialog"
-                       MinWidth="1120"
-                       MaxWidth="1600"
+        <ContentDialog x:Name="ReaderGoToPanelDialog"
+                       x:Uid="ReaderGoToPanelDialog"
+                       AutomationProperties.AutomationId="NovelReaderGoToPanelDialog"
+                       MaxWidth="640"
                        CloseButtonText="Close"
                        DefaultButton="Close">
             <ContentDialog.Resources>
-                <x:Double x:Key="ContentDialogMaxWidth">1600</x:Double>
-                <x:Double x:Key="ContentDialogMinWidth">1120</x:Double>
+                <x:Double x:Key="ContentDialogMaxWidth">640</x:Double>
             </ContentDialog.Resources>
-            <Grid Width="1120"
-                  Height="560">
-                <controls:ReaderChapterListContent x:Name="ReaderChapterListContent" />
-            </Grid>
-        </ContentDialog>
-
-        <ContentDialog x:Name="ReaderSearchPanelDialog"
-                       x:Uid="ReaderSearchPanelDialog"
-                       AutomationProperties.AutomationId="NovelReaderSearchPanelDialog"
-                       MinWidth="1120"
-                       MaxWidth="1600"
-                       CloseButtonText="Close"
-                       DefaultButton="Close">
-            <ContentDialog.Resources>
-                <x:Double x:Key="ContentDialogMaxWidth">1600</x:Double>
-                <x:Double x:Key="ContentDialogMinWidth">1120</x:Double>
-            </ContentDialog.Resources>
-            <Grid Width="1120"
-                  Height="560"
-                  RowDefinitions="Auto,*"
+            <Grid Width="580"
+                  Height="640"
+                  RowDefinitions="Auto,Auto,*"
                   RowSpacing="12">
-                <TextBox x:Name="ReaderSearchQueryBox"
-                         x:Uid="ReaderSearchQueryBox"
-                         AutomationProperties.AutomationId="NovelReaderSearchQueryBox"
-                         PlaceholderText="Search in this book"
-                         TextChanged="ReaderSearchQueryBox_TextChanged" />
-                <Grid Grid.Row="1">
-                    <ListView x:Name="ReaderSearchResultsList"
-                              AutomationProperties.AutomationId="NovelReaderSearchResultsList"
-                              IsItemClickEnabled="True"
-                              ItemClick="SearchResult_ItemClick"
-                              SelectionMode="None">
-                        <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="novel:ReaderSearchResult">
-                                <StackPanel Padding="4,8" Spacing="4">
-                                    <TextBlock FontWeight="SemiBold"
-                                               Text="{x:Bind ChapterLabel}" />
-                                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                               MaxLines="3"
-                                               TextWrapping="Wrap">
-                                        <Run Text="{x:Bind SnippetBeforeMatch}" />
-                                        <Run FontWeight="SemiBold"
-                                             Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
-                                             Text="{x:Bind SnippetMatch}" />
-                                        <Run Text="{x:Bind SnippetAfterMatch}" />
-                                    </TextBlock>
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-                    <StackPanel x:Name="ReaderSearchStatusPanel"
-                                HorizontalAlignment="Center"
+                <Grid Margin="4,0,4,4"
+                      ColumnDefinitions="50,*,Auto"
+                      ColumnSpacing="16">
+                    <Border Width="50"
+                            Height="75"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            CornerRadius="4">
+                        <Grid>
+                            <FontIcon HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      FontSize="22"
+                                      Glyph="&#xE8B9;"
+                                      Opacity="0.35" />
+                            <Image x:Name="ReaderGoToCoverImage"
+                                   Stretch="UniformToFill" />
+                        </Grid>
+                    </Border>
+                    <StackPanel Grid.Column="1"
                                 VerticalAlignment="Center"
-                                IsHitTestVisible="False"
-                                Spacing="8">
-                        <ProgressRing x:Name="ReaderSearchLoadingRing"
-                                      Width="24"
-                                      Height="24"
-                                      IsActive="False"
-                                      Visibility="Collapsed" />
-                        <TextBlock x:Name="ReaderSearchPromptText"
-                                   x:Uid="ReaderSearchPromptText"
+                                Spacing="6">
+                        <TextBlock x:Name="ReaderGoToBookTitle"
+                                   FontWeight="SemiBold"
+                                   MaxLines="2"
+                                   Style="{StaticResource BodyStrongTextBlockStyle}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock x:Name="ReaderGoToProgressText"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   Style="{StaticResource BodyTextBlockStyle}"
-                                   Text="Enter text to search this book" />
-                        <TextBlock x:Name="ReaderSearchLoadingText"
-                                   x:Uid="ReaderSearchLoadingText"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   Style="{StaticResource BodyTextBlockStyle}"
-                                   Text="Searching..."
-                                   Visibility="Collapsed" />
-                        <TextBlock x:Name="ReaderSearchNoMatchesText"
-                                   x:Uid="ReaderSearchNoMatchesText"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   Style="{StaticResource BodyTextBlockStyle}"
-                                   Text="No matches"
-                                   Visibility="Collapsed" />
-                        <TextBlock x:Name="ReaderSearchFailedText"
-                                   x:Uid="ReaderSearchFailedText"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   Style="{StaticResource BodyTextBlockStyle}"
-                                   Text="Could not search this book"
-                                   Visibility="Collapsed" />
+                                   Style="{StaticResource CaptionTextBlockStyle}" />
                     </StackPanel>
+                    <Button x:Name="ReaderGoToCharacterButton"
+                            Grid.Column="2"
+                            x:Uid="ReaderGoToCharacterButton"
+                            AutomationProperties.AutomationId="NovelReaderGoToCharacterButton"
+                            VerticalAlignment="Center"
+                            Click="ReaderGoToCharacterButton_Click">
+                        <FontIcon FontSize="13" Glyph="&#xE8AD;" />
+                    </Button>
+                </Grid>
+
+                <Border Grid.Row="1"
+                        HorizontalAlignment="Center"
+                        Padding="2"
+                        Background="{ThemeResource ControlFillColorDefaultBrush}"
+                        CornerRadius="18">
+                    <StackPanel Orientation="Horizontal" Spacing="2">
+                        <ToggleButton x:Name="ReaderGoToSearchTabButton"
+                                      x:Uid="ReaderGoToSearchTabButton"
+                                      AutomationProperties.AutomationId="NovelReaderGoToSearchTabButton"
+                                      Click="ReaderGoToSearchTabButton_Click"
+                                      IsChecked="True"
+                                      Style="{StaticResource ReaderGoToSegmentButtonStyle}" />
+                        <ToggleButton x:Name="ReaderGoToChaptersTabButton"
+                                      x:Uid="ReaderGoToChaptersTabButton"
+                                      AutomationProperties.AutomationId="NovelReaderGoToChaptersTabButton"
+                                      Click="ReaderGoToChaptersTabButton_Click"
+                                      Style="{StaticResource ReaderGoToSegmentButtonStyle}" />
+                        <ToggleButton x:Name="ReaderGoToHighlightsTabButton"
+                                      x:Uid="ReaderGoToHighlightsTabButton"
+                                      AutomationProperties.AutomationId="NovelReaderGoToHighlightsTabButton"
+                                      Click="ReaderGoToHighlightsTabButton_Click"
+                                      Style="{StaticResource ReaderGoToSegmentButtonStyle}" />
+                    </StackPanel>
+                </Border>
+
+                <Grid Grid.Row="2">
+                    <Grid x:Name="ReaderGoToSearchContent"
+                          AutomationProperties.AutomationId="NovelReaderGoToSearchContent"
+                          RowDefinitions="Auto,*"
+                          RowSpacing="10">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBox x:Name="ReaderSearchQueryBox"
+                                     x:Uid="ReaderSearchQueryBox"
+                                     AutomationProperties.AutomationId="NovelReaderSearchQueryBox"
+                                     CornerRadius="18"
+                                     KeyDown="ReaderSearchQueryBox_KeyDown"
+                                     PlaceholderText="Search in this book"
+                                     TextChanged="ReaderSearchQueryBox_TextChanged" />
+                            <Button x:Name="ReaderSearchSubmitButton"
+                                    Grid.Column="1"
+                                    x:Uid="ReaderSearchSubmitButton"
+                                    AutomationProperties.AutomationId="NovelReaderSearchSubmitButton"
+                                    Click="ReaderSearchSubmitButton_Click">
+                                <FontIcon FontSize="13" Glyph="&#xE721;" />
+                            </Button>
+                        </Grid>
+                        <Grid Grid.Row="1">
+                            <ListView x:Name="ReaderSearchResultsList"
+                                      AutomationProperties.AutomationId="NovelReaderSearchResultsList"
+                                      IsItemClickEnabled="True"
+                                      ItemClick="SearchResult_ItemClick"
+                                      SelectionMode="None">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="novel:ReaderSearchResult">
+                                        <StackPanel Padding="4,8" Spacing="4">
+                                            <TextBlock FontWeight="SemiBold"
+                                                       Text="{x:Bind ChapterLabel}" />
+                                            <TextBlock MaxLines="4"
+                                                       TextWrapping="Wrap">
+                                                <Run Text="{x:Bind SnippetBeforeMatch}" />
+                                                <Run FontWeight="SemiBold"
+                                                     Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                                     Text="{x:Bind SnippetMatch}" />
+                                                <Run Text="{x:Bind SnippetAfterMatch}" />
+                                            </TextBlock>
+                                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                                       Text="{x:Bind Character}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                            <StackPanel x:Name="ReaderSearchStatusPanel"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        IsHitTestVisible="False"
+                                        Spacing="8">
+                                <ProgressRing x:Name="ReaderSearchLoadingRing"
+                                              Width="24"
+                                              Height="24"
+                                              IsActive="False"
+                                              Visibility="Collapsed" />
+                                <TextBlock x:Name="ReaderSearchPromptText"
+                                           x:Uid="ReaderSearchPromptText"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Style="{StaticResource BodyTextBlockStyle}"
+                                           Text="Enter text to search this book" />
+                                <TextBlock x:Name="ReaderSearchLoadingText"
+                                           x:Uid="ReaderSearchLoadingText"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Style="{StaticResource BodyTextBlockStyle}"
+                                           Text="Searching..."
+                                           Visibility="Collapsed" />
+                                <TextBlock x:Name="ReaderSearchNoMatchesText"
+                                           x:Uid="ReaderSearchNoMatchesText"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Style="{StaticResource BodyTextBlockStyle}"
+                                           Text="No matches"
+                                           Visibility="Collapsed" />
+                                <TextBlock x:Name="ReaderSearchFailedText"
+                                           x:Uid="ReaderSearchFailedText"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Style="{StaticResource BodyTextBlockStyle}"
+                                           Text="Could not search this book"
+                                           Visibility="Collapsed" />
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+
+                    <controls:ReaderChapterListContent x:Name="ReaderChapterListContent"
+                                                       AutomationProperties.AutomationId="NovelReaderGoToChaptersContent"
+                                                       Visibility="Collapsed" />
+
+                    <Grid x:Name="ReaderGoToHighlightsContent"
+                          AutomationProperties.AutomationId="NovelReaderGoToHighlightsContent"
+                          Visibility="Collapsed">
+                        <ListView x:Name="ReaderHighlightsList"
+                                  AutomationProperties.AutomationId="NovelReaderHighlightsList"
+                                  IsItemClickEnabled="True"
+                                  ItemClick="Highlight_ItemClick"
+                                  SelectionMode="None">
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="novel:ReaderHighlightListItem">
+                                    <Grid Padding="4,8"
+                                          ColumnDefinitions="4,*"
+                                          ColumnSpacing="10">
+                                        <Grid.ContextFlyout>
+                                            <MenuFlyout>
+                                                <MenuFlyoutItem x:Uid="ReaderHighlightDeleteMenuItem"
+                                                                Text="Delete"
+                                                                AutomationProperties.AutomationId="ReaderHighlightDeleteMenuItem"
+                                                                Tag="{Binding}"
+                                                                Click="ReaderHighlightDeleteMenuItem_Click" />
+                                            </MenuFlyout>
+                                        </Grid.ContextFlyout>
+                                        <Border CornerRadius="2">
+                                            <Border.Background>
+                                                <SolidColorBrush Color="{x:Bind SwatchColor}" />
+                                            </Border.Background>
+                                        </Border>
+                                        <StackPanel Grid.Column="1" Spacing="4">
+                                            <TextBlock FontWeight="SemiBold"
+                                                       Text="{x:Bind ChapterLabel}" />
+                                            <TextBlock MaxLines="5"
+                                                       Text="{x:Bind Text}"
+                                                       TextWrapping="Wrap" />
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                                           Text="{x:Bind PositionText}" />
+                                                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                                           Text="{x:Bind CreatedText}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                        <TextBlock x:Name="ReaderHighlightsEmptyText"
+                                   x:Uid="ReaderHighlightsEmptyText"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="No highlights"
+                                   Visibility="Collapsed" />
+                    </Grid>
                 </Grid>
             </Grid>
         </ContentDialog>
 
-        <ContentDialog x:Name="ReaderHighlightsPanelDialog"
-                       x:Uid="ReaderHighlightsPanelDialog"
-                       AutomationProperties.AutomationId="NovelReaderHighlightsPanelDialog"
-                       MinWidth="1120"
-                       MaxWidth="1600"
+        <ContentDialog x:Name="ReaderGalleryPanelDialog"
+                       x:Uid="ReaderGalleryPanelDialog"
+                       AutomationProperties.AutomationId="NovelReaderGalleryPanelDialog"
+                       MaxWidth="10000"
+                       MaxHeight="10000"
                        CloseButtonText="Close"
                        DefaultButton="Close">
             <ContentDialog.Resources>
-                <x:Double x:Key="ContentDialogMaxWidth">1600</x:Double>
-                <x:Double x:Key="ContentDialogMinWidth">1120</x:Double>
+                <x:Double x:Key="ContentDialogMaxWidth">10000</x:Double>
+                <x:Double x:Key="ContentDialogMaxHeight">10000</x:Double>
             </ContentDialog.Resources>
-            <Grid Width="1120"
-                  Height="560">
-                <ListView x:Name="ReaderHighlightsList"
-                          AutomationProperties.AutomationId="NovelReaderHighlightsList"
+            <Grid x:Name="ReaderGalleryPanelContent"
+                  MinWidth="320"
+                  MinHeight="320"
+                  RowDefinitions="Auto,*"
+                  RowSpacing="12">
+                <ToggleSwitch x:Name="ReaderGalleryBlurUnreadToggle"
+                              x:Uid="ReaderGalleryBlurUnreadToggle"
+                              AutomationProperties.AutomationId="NovelReaderGalleryBlurUnreadToggle"
+                              HorizontalAlignment="Right"
+                              Toggled="ReaderGalleryBlurUnreadToggle_Toggled" />
+                <GridView x:Name="ReaderGalleryGrid"
+                          Grid.Row="1"
+                          AutomationProperties.AutomationId="NovelReaderGalleryGrid"
                           IsItemClickEnabled="True"
-                          ItemClick="Highlight_ItemClick"
+                          ItemClick="GalleryImage_ItemClick"
+                          ItemsSource="{x:Bind ViewModel.GalleryImages, Mode=OneWay}"
                           SelectionMode="None">
-                    <ListView.ItemTemplate>
-                        <DataTemplate x:DataType="novel:ReaderHighlightListItem">
-                            <Grid Padding="4,8"
-                                  ColumnDefinitions="4,*"
-                                  ColumnSpacing="10">
-                                <Grid.ContextFlyout>
-                                    <MenuFlyout>
-                                        <MenuFlyoutItem x:Uid="ReaderHighlightDeleteMenuItem"
-                                                        Text="Delete"
-                                                        AutomationProperties.AutomationId="ReaderHighlightDeleteMenuItem"
-                                                        Tag="{Binding}"
-                                                        Click="ReaderHighlightDeleteMenuItem_Click" />
-                                    </MenuFlyout>
-                                </Grid.ContextFlyout>
-                                <Border CornerRadius="2">
-                                    <Border.Background>
-                                        <SolidColorBrush Color="{x:Bind SwatchColor}" />
-                                    </Border.Background>
-                                </Border>
-                                <StackPanel Grid.Column="1" Spacing="4">
-                                    <TextBlock FontWeight="SemiBold"
-                                               Text="{x:Bind ChapterLabel}" />
-                                    <TextBlock MaxLines="5"
-                                               Text="{x:Bind Text}"
-                                               TextWrapping="Wrap" />
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                   Style="{StaticResource CaptionTextBlockStyle}"
-                                                   Text="{x:Bind PositionText}" />
-                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                   Style="{StaticResource CaptionTextBlockStyle}"
-                                                   Text="{x:Bind CreatedText}" />
-                                    </StackPanel>
-                                </StackPanel>
-                            </Grid>
+                    <GridView.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <ItemsWrapGrid Orientation="Horizontal"
+                                           ItemWidth="252"
+                                           ItemHeight="320" />
+                        </ItemsPanelTemplate>
+                    </GridView.ItemsPanel>
+                    <GridView.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ReaderGalleryImageItemViewModel">
+                            <Border Margin="6"
+                                    Padding="8"
+                                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    AutomationProperties.AutomationId="{x:Bind AutomationId}">
+                                <controls:ReaderGalleryImageCard FilePath="{x:Bind FilePath}"
+                                                                 Thumbnail="{x:Bind Thumbnail}"
+                                                                 IsBlurred="{x:Bind IsBlurred, Mode=OneWay}" />
+                            </Border>
                         </DataTemplate>
-                    </ListView.ItemTemplate>
-                </ListView>
-                <TextBlock x:Name="ReaderHighlightsEmptyText"
-                           x:Uid="ReaderHighlightsEmptyText"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                           Text="No highlights"
-                           Visibility="Collapsed" />
+                    </GridView.ItemTemplate>
+                </GridView>
+                <StackPanel x:Name="ReaderGalleryEmptyState"
+                            Grid.Row="1"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            IsHitTestVisible="False"
+                            Spacing="12"
+                            Visibility="Collapsed">
+                    <FontIcon Glyph="&#xE91B;" FontSize="36" />
+                    <TextBlock x:Uid="ReaderGalleryEmptyText"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="No images" />
+                </StackPanel>
+
+                <Grid x:Name="ReaderImageViewerOverlay"
+                      Grid.RowSpan="2"
+                      Canvas.ZIndex="10"
+                      Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                      Visibility="Collapsed"
+                      KeyDown="ReaderImageViewerOverlay_KeyDown"
+                      AutomationProperties.AutomationId="NovelReaderImageViewer">
+                    <ScrollViewer x:Name="ReaderImageViewerScrollViewer"
+                                  HorizontalScrollBarVisibility="Visible"
+                                  HorizontalScrollMode="Enabled"
+                                  VerticalScrollBarVisibility="Visible"
+                                  VerticalScrollMode="Enabled"
+                                  ZoomMode="Enabled"
+                                  MinZoomFactor="1"
+                                  MaxZoomFactor="5"
+                                  DoubleTapped="ReaderImageViewer_DoubleTapped">
+                        <Image x:Name="ReaderImageViewerImage"
+                               Width="{Binding ViewportWidth, ElementName=ReaderImageViewerScrollViewer}"
+                               Height="{Binding ViewportHeight, ElementName=ReaderImageViewerScrollViewer}"
+                               Stretch="Uniform" />
+                    </ScrollViewer>
+                    <Button x:Name="ReaderImageViewerCloseButton"
+                            x:Uid="ReaderImageViewerCloseButton"
+                            AutomationProperties.AutomationId="NovelReaderImageViewerCloseButton"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Margin="16"
+                            Click="ReaderImageViewerCloseButton_Click">
+                        <FontIcon Glyph="&#xE711;" />
+                    </Button>
+                </Grid>
             </Grid>
         </ContentDialog>
 

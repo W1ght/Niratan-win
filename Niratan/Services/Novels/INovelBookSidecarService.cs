@@ -28,5 +28,6 @@ public interface INovelBookSidecarService
     NovelBookInfo CreateBookInfo(
         IReadOnlyList<EpubChapter> chapters,
         IReadOnlyList<int> chapterCharacterCounts,
-        string? containerDirectory);
+        string? containerDirectory,
+        IReadOnlyList<string>? images = null);
 }

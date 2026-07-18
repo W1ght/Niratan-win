@@ -63,7 +63,8 @@ public sealed class NovelBookSidecarService : INovelBookSidecarService
     public NovelBookInfo CreateBookInfo(
         IReadOnlyList<EpubChapter> chapters,
         IReadOnlyList<int> chapterCharacterCounts,
-        string? containerDirectory)
+        string? containerDirectory,
+        IReadOnlyList<string>? images = null)
     {
         ArgumentNullException.ThrowIfNull(chapters);
         ArgumentNullException.ThrowIfNull(chapterCharacterCounts);
@@ -82,7 +83,7 @@ public sealed class NovelBookSidecarService : INovelBookSidecarService
             currentTotal += chapterCount;
         }
 
-        return new NovelBookInfo(currentTotal, chapterInfo);
+        return new NovelBookInfo(currentTotal, chapterInfo, images);
     }
 
     private async Task<T?> TryReadAsync<T>(

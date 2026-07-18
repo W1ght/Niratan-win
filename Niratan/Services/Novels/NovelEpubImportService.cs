@@ -15,14 +15,16 @@ public sealed class NovelEpubImportService : INovelEpubImportService
 {
     private readonly IEpubParserService _epubParser;
     private readonly INovelBookSidecarService _sidecars;
+    private readonly IReaderImageGalleryService? _imageGallery;
     private readonly ILogger<NovelEpubImportService> _logger;
     private readonly Func<string, string> _bookRootResolver;
 
     public NovelEpubImportService(
         IEpubParserService epubParser,
         INovelBookSidecarService sidecars,
-        ILogger<NovelEpubImportService> logger
-    ) : this(epubParser, sidecars, logger, AppDataHelper.GetNovelBookPath)
+        ILogger<NovelEpubImportService> logger,
+        IReaderImageGalleryService? imageGallery = null
+    ) : this(epubParser, sidecars, logger, AppDataHelper.GetNovelBookPath, imageGallery)
     {
     }
 
@@ -30,10 +32,12 @@ public sealed class NovelEpubImportService : INovelEpubImportService
         IEpubParserService epubParser,
         INovelBookSidecarService sidecars,
         ILogger<NovelEpubImportService> logger,
-        Func<string, string> bookRootResolver)
+        Func<string, string> bookRootResolver,
+        IReaderImageGalleryService? imageGallery = null)
     {
         _epubParser = epubParser;
         _sidecars = sidecars;
+        _imageGallery = imageGallery;
         _logger = logger;
         _bookRootResolver = bookRootResolver;
     }
@@ -74,10 +78,14 @@ public sealed class NovelEpubImportService : INovelEpubImportService
                     .ToArray(),
                 ct
             );
+            var galleryImages = _imageGallery == null
+                ? null
+                : await _imageGallery.LoadImagesAsync(epubBook, ct: ct);
             var bookInfo = _sidecars.CreateBookInfo(
                 epubBook.Chapters,
                 chapterCharacterCounts,
-                epubBook.ContainerDirectory
+                epubBook.ContainerDirectory,
+                galleryImages?.Select(image => image.RelativePath).ToArray()
             );
             await _sidecars.SaveBookInfoAsync(bookRoot, bookInfo, ct);
 

@@ -158,9 +158,7 @@
   <data name="AppUpdateFailedStatus" xml:space="preserve"><value>Unable to check for updates. Please try again later.</value></data>
   <data name="AppUpdateBannerTitle" xml:space="preserve"><value>Update available</value></data>
   <data name="AppUpdateBannerMessage" xml:space="preserve"><value>Niratan {0} is available on GitHub.</value></data>
-  <data name="NovelReaderChapterButton.AutomationProperties.Name" xml:space="preserve"><value>Chapters</value></data>
-  <data name="NovelReaderSearchButton.AutomationProperties.Name" xml:space="preserve"><value>Search</value></data>
-  <data name="NovelReaderHighlightsButton.AutomationProperties.Name" xml:space="preserve"><value>Highlights</value></data>
+  <data name="NovelReaderGoToButton.AutomationProperties.Name" xml:space="preserve"><value>Go to</value></data>
   <data name="NovelReaderAppearanceButton.AutomationProperties.Name" xml:space="preserve"><value>Appearance</value></data>
   <data name="ReaderAppearanceDialog.Title" xml:space="preserve"><value>Appearance</value></data>
   <data name="ReaderAppearanceDialog.PrimaryButtonText" xml:space="preserve"><value>Done</value></data>
@@ -453,19 +451,20 @@
   <data name="VideoPlayerRestoredStatus" xml:space="preserve"><value>Restored to {0}</value></data>
   <data name="VideoPlayerRestorePendingStatus" xml:space="preserve"><value>Could not verify restore to {0}. Progress will be protected until playback catches up.</value></data>
   <data name="ReaderChapterPanelTitle.Text" xml:space="preserve"><value>Chapters</value></data>
-  <data name="ReaderChapterPanelDialog.Title" xml:space="preserve"><value>Chapters</value></data>
-  <data name="ReaderChapterPanelDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
+  <data name="ReaderGoToPanelDialog.Title" xml:space="preserve"><value>Go to</value></data>
+  <data name="ReaderGoToPanelDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
+  <data name="ReaderGoToSearchTabButton.Content" xml:space="preserve"><value>Search</value></data>
+  <data name="ReaderGoToChaptersTabButton.Content" xml:space="preserve"><value>Chapters</value></data>
+  <data name="ReaderGoToHighlightsTabButton.Content" xml:space="preserve"><value>Highlights</value></data>
+  <data name="ReaderGoToCharacterButton.AutomationProperties.Name" xml:space="preserve"><value>Jump to character count</value></data>
+  <data name="ReaderSearchSubmitButton.AutomationProperties.Name" xml:space="preserve"><value>Search</value></data>
   <data name="ReaderSearchPanelTitle.Text" xml:space="preserve"><value>Search</value></data>
-  <data name="ReaderSearchPanelDialog.Title" xml:space="preserve"><value>Search</value></data>
-  <data name="ReaderSearchPanelDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
   <data name="ReaderSearchQueryBox.PlaceholderText" xml:space="preserve"><value>Search in this book</value></data>
   <data name="ReaderSearchPromptText.Text" xml:space="preserve"><value>Enter text to search this book</value></data>
   <data name="ReaderSearchLoadingText.Text" xml:space="preserve"><value>Searching...</value></data>
   <data name="ReaderSearchNoMatchesText.Text" xml:space="preserve"><value>No matches</value></data>
   <data name="ReaderSearchFailedText.Text" xml:space="preserve"><value>Could not search this book</value></data>
   <data name="ReaderHighlightsPanelTitle.Text" xml:space="preserve"><value>Highlights</value></data>
-  <data name="ReaderHighlightsPanelDialog.Title" xml:space="preserve"><value>Highlights</value></data>
-  <data name="ReaderHighlightsPanelDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
   <data name="ReaderHighlightsEmptyText.Text" xml:space="preserve"><value>No highlights</value></data>
   <data name="ReaderHighlightDeleteMenuItem.Text" xml:space="preserve"><value>Delete</value></data>
   <data name="NovelReaderCharacterJumpNumberBox.PlaceholderText" xml:space="preserve"><value>Character count</value></data>
@@ -970,4 +969,22 @@
   <data name="BackupCompletedTitle" xml:space="preserve"><value>Backup complete</value></data>
   <data name="BackupRestoreCompletedTitle" xml:space="preserve"><value>Restore complete</value></data>
   <data name="BackupErrorTitle" xml:space="preserve"><value>Backup error</value></data>
+  <data name="NovelReaderGalleryButton.AutomationProperties.Name" xml:space="preserve"><value>Gallery</value></data>
+  <data name="ReaderGalleryPanelDialog.Title" xml:space="preserve"><value>Gallery</value></data>
+  <data name="ReaderGalleryPanelDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
+  <data name="ReaderGalleryBlurUnreadToggle.OnContent" xml:space="preserve"><value>Blur unread illustrations</value></data>
+  <data name="ReaderGalleryBlurUnreadToggle.OffContent" xml:space="preserve"><value>Blur unread illustrations</value></data>
+  <data name="ReaderGalleryEmptyText.Text" xml:space="preserve"><value>No images</value></data>
+  <data name="ReaderGalleryUnreadBadgeText.Text" xml:space="preserve"><value>Unread</value></data>
+  <data name="ReaderImageViewerCloseButton.AutomationProperties.Name" xml:space="preserve"><value>Close image</value></data>
+  <data name="NovelReaderLyricsModeMenuItem.Text" xml:space="preserve"><value>Lyrics Mode</value></data>
+  <data name="NovelReaderLyricsModeButton.AutomationProperties.Name" xml:space="preserve"><value>Open Lyrics Mode</value></data>
+  <data name="NovelReaderLyricsExitButton.AutomationProperties.Name" xml:space="preserve"><value>Exit Lyrics Mode</value></data>
+  <data name="NovelReaderLyricsPreviousCueButton.AutomationProperties.Name" xml:space="preserve"><value>Previous lyric</value></data>
+  <data name="NovelReaderLyricsPlayPauseButton.AutomationProperties.Name" xml:space="preserve"><value>Play or pause</value></data>
+  <data name="NovelReaderLyricsNextCueButton.AutomationProperties.Name" xml:space="preserve"><value>Next lyric</value></data>
+  <data name="NovelReaderLyricsMaskToggle.AutomationProperties.Name" xml:space="preserve"><value>Lyrics Mask</value></data>
+  <data name="NovelReaderVerticalLyricsToggle.AutomationProperties.Name" xml:space="preserve"><value>Vertical Lyrics Mode</value></data>
+  <data name="NovelReaderLyricsStatisticsButton.AutomationProperties.Name" xml:space="preserve"><value>Toggle reading timer</value></data>
+  <data name="NovelReaderLyricsNoMatch" xml:space="preserve"><value>No lyrics match</value></data>
 </root>

@@ -59,6 +59,14 @@ public sealed partial class ReaderChapterListContent : UserControl
         });
     }
 
+    public void FocusCharacterJump()
+    {
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            CharacterJumpNumberBox.Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
+        });
+    }
+
     private void ChapterListView_ItemClick(object sender, ItemClickEventArgs e)
     {
         if (e.ClickedItem is ChapterDisplayItem item)

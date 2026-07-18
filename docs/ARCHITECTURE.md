@@ -195,6 +195,21 @@ ruby { ruby-position: over; }
 - 最小化对应 Windows Background checkpoint；返回书架、页面消失和主窗口关闭共用一个可等待、幂等的 Close checkpoint。
 - 日期键使用 Windows 本地日期。跨日时先归档旧 Today、建立新日期，再把本次完整 checkpoint 计入新日期，保持 Niratan 当前语义。
 
+### 3.7 Reader 歌词模式
+
+- 歌词模式是 Reader 内的原生沉浸层，只在 Sasayaki 已启用、音频已加载且 SRT 匹配有效时开放；不建立第二套音频或匹配状态。
+- `ReaderLyricsViewModel` 投影当前 cue、播放进度、遮罩与横竖排状态，`ReaderLyricsCanvasRenderer` 使用 Win2D 绘制并命中文字；小说正文仍只由 WebView2 渲染。
+- 自然播放跨 cue 会把书签推进到匹配的章节/字符并产生阅读 checkpoint；上一句、下一句、15 秒跳转和显式 seek 只更新位置并重置统计基线，不把跳过文本计入阅读量。
+- 歌词查词复用 Reader 的 `DictionaryPopupOverlay`、Sasayaki 音频制卡与相邻 cue 上下文，弹窗打开或鼠标悬停时歌词遮罩恢复清晰。
+- Windows 竖排歌词使用 Win2D 按文本元素分列，避免用 WinUI `TextBlock` 重写正文；部分日文标点的字形旋转与 macOS 原生纵排可能略有差异，这是 Win2D 文本 API 的平台约束。
+
+### 3.8 Reader 图片库
+
+- `ReaderImageGalleryService` 只扫描 spine 章节中的 `<img src>` 与 SVG `<image href/xlink:href>`，按阅读顺序去重，并把相对 content root 的 JPG/JPEG/PNG 路径写入 `bookinfo.json.images`。外部 URL、data URL、越出 content root 的路径、缺失文件和 `gaiji` 图片全部拒绝。
+- 每个运行时图片项同时记录 spine index 与图片标签之前的可读字符比例。`ReaderGalleryProgressPolicy` 用当前章节和章节内逻辑进度判断图片是否已读；未知旧索引保持可见，避免兼容数据永久锁定。
+- 图片库外层、缩略图列表和缩放查看使用 WinUI 原生控件；面板按当前 XamlRoot 尺寸尽可能扩展，大图查看器嵌在同一面板中，不关闭或重建图片列表。未读缩略图通过 Win2D `GaussianBlurEffect` + Composition 模糊。`BlurUnreadGalleryImages` 默认开启并持久化到 Reader 设置。
+- Hoshi-Reader 仅作为该功能的实现参考。Windows 使用自适应 GridView 和 1×–5× `ScrollViewer` 缩放，是相对 iOS 纵向 sheet 的平台化呈现；小说正文渲染仍只走 WebView2。
+
 ---
 
 ## 4. 字典查询架构

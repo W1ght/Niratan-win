@@ -52,7 +52,7 @@ public sealed class NovelReaderStatisticsLifecycleTests
             @"(?s)SettleNavigationForLifecycleAsync.*?ApplyNavigationSettlement.*?WaitForTerminalRenderAsync.*?(CheckpointAppBackgroundingAsync|PrepareForReaderLifecycleCloseAsync)"));
         lifecycleBody.Should().NotContain("ResetStatisticsBaselineAsync");
         readerCode.Should().MatchRegex(new Regex(
-            @"(?s)case string id when id == ReaderShortcutActions\.Close\.Id:\s*ViewModel\.BackToLibraryCommand\.Execute\(null\);\s*return true;"));
+            @"(?s)case string id when id == ReaderShortcutActions\.Close\.Id:\s*if \(_isReaderLyricsMode\)\s*\{\s*await ExitReaderLyricsModeAsync\(\);\s*return true;\s*\}\s*ViewModel\.BackToLibraryCommand\.Execute\(null\);\s*return true;"));
         readerCode.Should().MatchRegex(new Regex(
             @"(?ms)^    protected override void OnNavigatedFrom\(NavigationEventArgs e\)\s*\{.*?_ = CompleteReaderLifecycleCloseAfterDetachAsync\(\);.*?^    \}"));
         var navigatedFromBody = Regex.Match(

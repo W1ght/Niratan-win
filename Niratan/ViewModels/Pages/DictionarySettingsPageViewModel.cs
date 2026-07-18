@@ -274,31 +274,76 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
             picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Downloads;
             WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
 
-            var file = await picker.PickSingleFileAsync();
-            if (file == null) return;
+            var files = await picker.PickMultipleFilesAsync();
+            if (files.Count == 0) return;
 
             var notification = App.GetService<INotificationService>();
             var importService = App.GetService<IDictionaryImportService>();
+            var successfulImports = new List<DictionaryImportResult>();
+            var failures = new List<string>();
 
             IsDictionaryOperationInProgress = true;
-            DictionaryStatusText = $"Importing {file.Name}...";
-            Log.Information("[DictionarySettings] Importing dictionary from {Path} (Name={FileName})", file.Path, file.Name);
-
-            var result = await importService.ImportAsync(file.Path);
-            Log.Information("[DictionarySettings] ImportAsync returned Success={Success}, Title={Title}, Errors={Errors}",
-                result.Success, result.Title, string.Join("; ", result.Errors));
-
-            if (result.Success)
+            for (var index = 0; index < files.Count; index++)
             {
-                notification.ShowSuccess(
-                    $"Imported '{result.Title}': {result.TermCount} term banks, {result.FreqCount} freq banks",
-                    "Dictionary Imported");
+                var file = files[index];
+                DictionaryStatusText = $"Importing {index + 1} of {files.Count}: {file.Name}...";
+                Log.Information(
+                    "[DictionarySettings] Importing dictionary {Index}/{Count} from {Path} (Name={FileName})",
+                    index + 1, files.Count, file.Path, file.Name);
+
+                try
+                {
+                    var result = await importService.ImportAsync(file.Path);
+                    Log.Information(
+                        "[DictionarySettings] ImportAsync returned Success={Success}, Title={Title}, Errors={Errors}",
+                        result.Success, result.Title, string.Join("; ", result.Errors));
+
+                    if (result.Success)
+                    {
+                        successfulImports.Add(result);
+                    }
+                    else
+                    {
+                        var error = string.Join("; ", result.Errors);
+                        failures.Add($"{file.Name}: {(string.IsNullOrWhiteSpace(error) ? "Unknown import error." : error)}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex,
+                        "[DictionarySettings] Failed to import dictionary {Index}/{Count} from {Path}",
+                        index + 1, files.Count, file.Path);
+                    failures.Add($"{file.Name}: [{ex.GetType().Name}] {ex.Message}");
+                }
+            }
+
+            if (successfulImports.Count > 0)
+            {
                 await RefreshDictionariesAsync();
+            }
+
+            if (failures.Count == 0)
+            {
+                var message = successfulImports.Count == 1
+                    ? $"Imported '{successfulImports[0].Title}': {successfulImports[0].TermCount} term banks, {successfulImports[0].FreqCount} freq banks"
+                    : $"Imported {successfulImports.Count} dictionaries.";
+                notification.ShowSuccess(message,
+                    successfulImports.Count == 1 ? "Dictionary Imported" : "Dictionaries Imported");
             }
             else
             {
-                var errors = string.Join("\n", result.Errors);
-                notification.ShowError($"Failed to import dictionary:\n{errors}", "Import Failed");
+                var failureDetails = string.Join("\n", failures);
+                if (successfulImports.Count > 0)
+                {
+                    notification.ShowWarning(
+                        $"Imported {successfulImports.Count} of {files.Count} dictionaries. Failed:\n{failureDetails}",
+                        "Dictionary Import Partially Completed");
+                }
+                else
+                {
+                    DictionaryStatusText = $"Failed to import {failures.Count} dictionaries.";
+                    notification.ShowError($"Failed to import dictionaries:\n{failureDetails}", "Import Failed");
+                }
             }
         }
         catch (Exception ex)

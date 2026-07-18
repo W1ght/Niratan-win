@@ -357,7 +357,7 @@ public class NovelReaderWebAssetTests
         readerXaml
             .Should()
             .Contain("AutomationProperties.AutomationId=\"NovelReaderBackButton\"");
-        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderChapterButton\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderGoToButton\"");
         readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderAppearanceButton\"");
         readerXaml.Should().NotContain("NovelReaderPreviousPageRegion");
         readerXaml.Should().NotContain("NovelReaderNextPageRegion");
@@ -400,7 +400,7 @@ public class NovelReaderWebAssetTests
         readerXaml.Should().Contain("<Grid Grid.Column=\"7\"");
         readerXaml.Should().Contain("Style=\"{StaticResource CompactReaderTitleTextStyle}\"");
         readerXaml.Should().Contain("Style=\"{StaticResource CompactReaderProgressTextStyle}\"");
-        readerXaml.Should().Contain("Canvas.ZIndex=\"20\"");
+        readerXaml.Should().Contain("Canvas.ZIndex=\"120\"");
         readerXaml.Should().NotContain("readerBlankClick");
         windowCode.Should().Contain("TitleBarHeightOption.Standard");
         windowCode.Should().NotContain("TitleBarHeightOption.Tall");
@@ -1167,6 +1167,22 @@ public class NovelReaderWebAssetTests
         {
             enResources.Should().Contain(key);
             zhResources.Should().Contain(key);
+        }
+    }
+
+    [Fact]
+    public void DictionaryImport_AllowsSelectingMultipleZipFiles()
+    {
+        var dictionarySettingsViewModel = File.ReadAllText(Path.Combine(
+            ProjectRoot, "ViewModels", "Pages", "DictionarySettingsPageViewModel.cs"));
+        var legacySettingsViewModel = File.ReadAllText(Path.Combine(
+            ProjectRoot, "ViewModels", "Pages", "SettingsPageViewModel.cs"));
+
+        foreach (var viewModel in new[] { dictionarySettingsViewModel, legacySettingsViewModel })
+        {
+            viewModel.Should().Contain("PickMultipleFilesAsync()");
+            viewModel.Should().NotContain("PickSingleFileAsync()");
+            viewModel.Should().Contain("index < files.Count");
         }
     }
 
@@ -3255,7 +3271,7 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
-    public void ReaderPage_ExposesBookSearchPanelAndResultJump()
+    public void ReaderPage_ExposesUnifiedGoToSearchAndResultJump()
     {
         var readerXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml")
@@ -3264,10 +3280,13 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs")
         );
 
-        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSearchButton\"");
-        readerXaml.Should().Contain("x:Uid=\"NovelReaderSearchButton\"");
-        readerXaml.Should().Contain("x:Name=\"ReaderSearchPanelDialog\"");
-        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSearchPanelDialog\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderGoToButton\"");
+        readerXaml.Should().Contain("x:Uid=\"NovelReaderGoToButton\"");
+        readerXaml.Should().Contain("x:Name=\"ReaderGoToPanelDialog\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderGoToPanelDialog\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderGoToSearchTabButton\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderGoToChaptersTabButton\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderGoToHighlightsTabButton\"");
         readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSearchQueryBox\"");
         readerXaml.Should().Contain("x:Uid=\"ReaderSearchQueryBox\"");
         readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSearchResultsList\"");
@@ -3288,17 +3307,23 @@ public class NovelReaderWebAssetTests
         var zhResources = File.ReadAllText(
             Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw")
         );
-        enResources.Should().Contain("NovelReaderSearchButton.AutomationProperties.Name");
-        enResources.Should().Contain("ReaderSearchPanelDialog.Title");
-        enResources.Should().Contain("ReaderSearchPanelDialog.CloseButtonText");
+        enResources.Should().Contain("NovelReaderGoToButton.AutomationProperties.Name");
+        enResources.Should().Contain("ReaderGoToPanelDialog.Title");
+        enResources.Should().Contain("ReaderGoToPanelDialog.CloseButtonText");
+        enResources.Should().Contain("ReaderGoToSearchTabButton.Content");
+        enResources.Should().Contain("ReaderGoToChaptersTabButton.Content");
+        enResources.Should().Contain("ReaderGoToHighlightsTabButton.Content");
         enResources.Should().Contain("ReaderSearchQueryBox.PlaceholderText");
         enResources.Should().Contain("ReaderSearchPromptText.Text");
         enResources.Should().Contain("ReaderSearchLoadingText.Text");
         enResources.Should().Contain("ReaderSearchNoMatchesText.Text");
         enResources.Should().Contain("ReaderSearchFailedText.Text");
-        zhResources.Should().Contain("NovelReaderSearchButton.AutomationProperties.Name");
-        zhResources.Should().Contain("ReaderSearchPanelDialog.Title");
-        zhResources.Should().Contain("ReaderSearchPanelDialog.CloseButtonText");
+        zhResources.Should().Contain("NovelReaderGoToButton.AutomationProperties.Name");
+        zhResources.Should().Contain("ReaderGoToPanelDialog.Title");
+        zhResources.Should().Contain("ReaderGoToPanelDialog.CloseButtonText");
+        zhResources.Should().Contain("ReaderGoToSearchTabButton.Content");
+        zhResources.Should().Contain("ReaderGoToChaptersTabButton.Content");
+        zhResources.Should().Contain("ReaderGoToHighlightsTabButton.Content");
         zhResources.Should().Contain("ReaderSearchQueryBox.PlaceholderText");
         zhResources.Should().Contain("ReaderSearchPromptText.Text");
         zhResources.Should().Contain("ReaderSearchLoadingText.Text");
@@ -3391,7 +3416,7 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
-    public void ReaderPage_ExposesHighlightListPanelAndActions()
+    public void ReaderPage_ExposesHighlightListInUnifiedGoToPanel()
     {
         var readerXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml")
@@ -3409,28 +3434,25 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Strings", "zh-CN", "Resources.resw")
         );
 
-        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderHighlightsButton\"");
-        readerXaml.Should().Contain("x:Uid=\"NovelReaderHighlightsButton\"");
-        readerXaml.Should().Contain("x:Name=\"ReaderHighlightsPanelDialog\"");
-        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderHighlightsPanelDialog\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderGoToHighlightsTabButton\"");
+        readerXaml.Should().Contain("x:Name=\"ReaderGoToHighlightsContent\"");
+        readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderGoToPanelDialog\"");
         readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderHighlightsList\"");
         readerXaml.Should().Contain("ReaderHighlightDeleteMenuItem_Click");
         readerXaml.Should().Contain("SolidColorBrush Color=\"{x:Bind SwatchColor}\"");
         readerXaml.Should().NotContain("Background=\"{ThemeResource SystemAccentColor}\"");
-        readerCode.Should().Contain("HighlightsButton_Click");
+        readerCode.Should().Contain("ReaderGoToHighlightsTabButton_Click");
         readerCode.Should().Contain("RefreshHighlightList");
         readerCode.Should().Contain("Highlight_ItemClick");
         readerCode.Should().Contain("DeleteHighlightAsync");
         readerCode.Should().Contain("RemoveHighlight");
         viewModelCode.Should().Contain("GetHighlightListItems");
         viewModelCode.Should().Contain("DeleteHighlightAsync");
-        enResources.Should().Contain("NovelReaderHighlightsButton.AutomationProperties.Name");
-        enResources.Should().Contain("ReaderHighlightsPanelDialog.Title");
-        enResources.Should().Contain("ReaderHighlightsPanelDialog.CloseButtonText");
+        enResources.Should().Contain("NovelReaderGoToButton.AutomationProperties.Name");
+        enResources.Should().Contain("ReaderGoToHighlightsTabButton.Content");
         enResources.Should().Contain("ReaderHighlightsPanelTitle.Text");
-        zhResources.Should().Contain("NovelReaderHighlightsButton.AutomationProperties.Name");
-        zhResources.Should().Contain("ReaderHighlightsPanelDialog.Title");
-        zhResources.Should().Contain("ReaderHighlightsPanelDialog.CloseButtonText");
+        zhResources.Should().Contain("NovelReaderGoToButton.AutomationProperties.Name");
+        zhResources.Should().Contain("ReaderGoToHighlightsTabButton.Content");
         zhResources.Should().Contain("ReaderHighlightsPanelTitle.Text");
     }
 
@@ -3683,7 +3705,7 @@ public class NovelReaderWebAssetTests
         readerXaml.Should().Contain("KeyboardAcceleratorPlacementMode=\"Hidden\"");
         readerXaml.Should().Contain("CharacterReceived=\"NovelReaderPage_CharacterReceived\"");
         readerXaml.Should().Contain("x:Name=\"NovelReaderBackButton\"");
-        readerXaml.Should().Contain("x:Name=\"NovelReaderSearchButton\"");
+        readerXaml.Should().Contain("x:Name=\"NovelReaderGoToButton\"");
 
         shortcutModels.Should().Contain("ReaderKeyboardShortcut");
         shortcutModels.Should().Contain("ReaderShortcutActions");
@@ -3952,7 +3974,7 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
-    public void ReaderPage_OrdersSasayakiMenuLikeNiratanWithoutLyricsMode()
+    public void ReaderPage_OrdersSasayakiMenuWithNiratanLyricsModeEntry()
     {
         var readerXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml")
@@ -3967,6 +3989,7 @@ public class NovelReaderWebAssetTests
         var skipForward = IndexOf("x:Name=\"SasayakiSkipForwardMenuItem\"");
         var replayCue = IndexOf("x:Name=\"SasayakiReplayCueMenuItem\"");
         var jumpCue = IndexOf("x:Name=\"SasayakiJumpCueMenuItem\"");
+        var lyricsMode = IndexOf("x:Name=\"SasayakiLyricsModeMenuItem\"");
         var loadAudio = IndexOf("x:Name=\"SasayakiLoadAudioMenuItem\"");
 
         skipBack.Should().BeGreaterThanOrEqualTo(0);
@@ -3976,14 +3999,15 @@ public class NovelReaderWebAssetTests
         skipForward.Should().BeGreaterThan(nextCue);
         replayCue.Should().BeGreaterThan(skipForward);
         jumpCue.Should().BeGreaterThan(replayCue);
-        loadAudio.Should().BeGreaterThan(jumpCue);
+        lyricsMode.Should().BeGreaterThan(jumpCue);
+        loadAudio.Should().BeGreaterThan(lyricsMode);
 
-        readerXaml.Should().NotContain("NovelReaderLyricsModeMenuItem");
-        readerXaml.Should().NotContain("Lyrics Mode");
+        readerXaml.Should().Contain("NovelReaderLyricsModeButton");
+        readerXaml.Should().Contain("ReaderLyricsModeControl");
     }
 
     [Fact]
-    public void ReaderPage_DefinesNiratanStyleSasayakiPanelWithoutLyricsMode()
+    public void ReaderPage_DefinesNiratanStyleSasayakiPanelAndLyricsMode()
     {
         var readerXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml")
@@ -4021,8 +4045,8 @@ public class NovelReaderWebAssetTests
             readerXaml.Should().Contain(requiredToken);
         }
 
-        readerXaml.Should().NotContain("NovelReaderLyricsModeMenuItem");
-        readerXaml.Should().NotContain("Lyrics Mode");
+        readerXaml.Should().Contain("NovelReaderLyricsModeMenuItem");
+        readerXaml.Should().Contain("NovelReaderLyricsModeButton");
     }
 
     [Fact]
@@ -4055,14 +4079,10 @@ public class NovelReaderWebAssetTests
 
         foreach (var requiredToken in new[]
         {
-            "ReaderChapterPanelDialog",
-            "ReaderSearchPanelDialog",
-            "ReaderHighlightsPanelDialog",
+            "ReaderGoToPanelDialog",
             "ReaderStatisticsPanelDialog",
             "ReaderAppearancePanelDialog",
-            "AutomationProperties.AutomationId=\"NovelReaderChapterPanelDialog\"",
-            "AutomationProperties.AutomationId=\"NovelReaderSearchPanelDialog\"",
-            "AutomationProperties.AutomationId=\"NovelReaderHighlightsPanelDialog\"",
+            "AutomationProperties.AutomationId=\"NovelReaderGoToPanelDialog\"",
             "AutomationProperties.AutomationId=\"NovelReaderStatisticsPanelDialog\"",
             "AutomationProperties.AutomationId=\"NovelReaderAppearancePanelDialog\"",
         })
@@ -4435,7 +4455,7 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
-    public void ReaderPage_UsesWideSheetDialogContentForNonStatisticsReaderPanels()
+    public void ReaderPage_UsesCompactUnifiedGoToAndWideConfigurationPanels()
     {
         var readerXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml")
@@ -4444,20 +4464,21 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Views", "Controls", "ReaderAppearanceSettingsContent.xaml")
         );
 
-        readerXaml.Should().Contain("<Grid Width=\"1120\"");
+        readerXaml.Should().Contain("<Grid Width=\"580\"");
+        readerXaml.Should().Contain("<x:Double x:Key=\"ContentDialogMaxWidth\">640</x:Double>");
         readerXaml.Should().Contain("<controls:ReaderAppearanceSettingsContent Width=\"1280\"");
         readerXaml.Should().Contain("<StackPanel Width=\"1120\"");
         readerXaml.Should().Contain("MaxWidth=\"1120\"");
         (readerXaml.Split("<x:Double x:Key=\"ContentDialogMaxWidth\">1600</x:Double>").Length - 1)
-            .Should().Be(5);
+            .Should().Be(2);
         (readerXaml.Split("<x:Double x:Key=\"ContentDialogMinWidth\">1120</x:Double>").Length - 1)
-            .Should().Be(4);
+            .Should().Be(1);
         readerXaml.Should().Contain("<x:Double x:Key=\"ContentDialogMinWidth\">1280</x:Double>");
         appearanceContentXaml.Should().Contain("MaxWidth=\"1280\"");
 
         readerXaml.Should().NotContain("<Grid Width=\"560\"");
         readerXaml.Should().Contain("MaxWidth=\"560\"");
-        readerXaml.Should().NotContain("Width=\"640\"");
+        readerXaml.Should().NotContain("<Grid Width=\"640\"");
         appearanceContentXaml.Should().NotContain("MaxWidth=\"1000\"");
     }
 

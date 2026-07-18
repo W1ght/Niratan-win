@@ -194,6 +194,7 @@ public partial class App : Application
         services.AddSingleton<IVideoPlayerWindowService, VideoPlayerWindowService>();
         services.AddSingleton<SubtitleParserService>();
         services.AddSingleton<INovelBookSidecarService, NovelBookSidecarService>();
+        services.AddSingleton<IReaderImageGalleryService, ReaderImageGalleryService>();
         services.AddSingleton<INovelStatisticsSidecarService, NovelStatisticsSidecarService>();
         services.AddTransient<IReaderStatisticsSession>(provider =>
             new ReaderStatisticsSession(

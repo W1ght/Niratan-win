@@ -11,7 +11,8 @@ public sealed record NovelBookmark(
 
 public sealed record NovelBookInfo(
     int CharacterCount,
-    Dictionary<string, NovelBookInfoChapter> ChapterInfo);
+    Dictionary<string, NovelBookInfoChapter> ChapterInfo,
+    IReadOnlyList<string>? Images = null);
 
 public sealed record NovelBookInfoChapter(
     int? SpineIndex,

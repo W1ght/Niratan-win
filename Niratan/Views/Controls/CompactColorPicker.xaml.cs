@@ -27,7 +27,8 @@ public sealed partial class CompactColorPicker : UserControl
         nameof(FlyoutPlacement),
         typeof(FlyoutPlacementMode),
         typeof(CompactColorPicker),
-        new PropertyMetadata(FlyoutPlacementMode.Auto));
+        // WinAppSDK 2.0 rejects Auto (value 13) when the flyout opens with E_INVALIDARG.
+        new PropertyMetadata(FlyoutPlacementMode.Bottom));
 
     private bool _isSynchronizingPicker;
     private bool _isAutomationConfigured;

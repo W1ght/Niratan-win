@@ -56,4 +56,36 @@ public sealed class ReaderChromeContractTests
         var rootGrid = document.Root!.Element(presentation + "Grid");
         rootGrid!.Attribute("RowDefinitions")?.Value.Should().Be("Auto,*,Auto");
     }
+
+    [Fact]
+    public void ReaderGallery_HasToolbarEntryUnreadBlurAndZoomViewer()
+    {
+        var xaml = ReadProjectFile("Views", "Pages", "NovelReaderPage.xaml");
+        var code = ReadProjectFile("Views", "Pages", "NovelReaderPage.xaml.cs");
+        var document = XDocument.Parse(xaml);
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderGalleryButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderGalleryGrid\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderGalleryBlurUnreadToggle\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderImageViewer\"");
+        xaml.Should().Contain("ZoomMode=\"Enabled\"");
+        xaml.Should().Contain("MaxZoomFactor=\"5\"");
+
+        var viewer = document.Descendants(presentation + "Grid")
+            .Single(element => (string?)element.Attribute(x + "Name") == "ReaderImageViewerOverlay");
+        viewer.Ancestors(presentation + "ContentDialog")
+            .Single()
+            .Attribute(x + "Name")?.Value.Should().Be("ReaderGalleryPanelDialog");
+        xaml.Should().Contain("x:Name=\"ReaderGalleryPanelContent\"");
+        xaml.Should().Contain("MaxWidth=\"10000\"");
+        xaml.Should().Contain("x:Key=\"ContentDialogMaxHeight\">10000");
+        xaml.Should().Contain("HorizontalScrollBarVisibility=\"Visible\"");
+        xaml.Should().Contain("VerticalScrollBarVisibility=\"Visible\"");
+        xaml.Should().Contain("Width=\"{Binding ViewportWidth, ElementName=ReaderImageViewerScrollViewer}\"");
+        xaml.Should().Contain("Height=\"{Binding ViewportHeight, ElementName=ReaderImageViewerScrollViewer}\"");
+        code.Should().Contain("UpdateReaderGalleryPanelSize(ActualWidth, ActualHeight)");
+        code.Should().NotContain("ReaderGalleryPanelDialog.Hide();");
+    }
 }

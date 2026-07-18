@@ -158,9 +158,7 @@
   <data name="AppUpdateFailedStatus" xml:space="preserve"><value>无法检查更新，请稍后再试。</value></data>
   <data name="AppUpdateBannerTitle" xml:space="preserve"><value>发现新版本</value></data>
   <data name="AppUpdateBannerMessage" xml:space="preserve"><value>Niratan {0} 已在 GitHub 发布。</value></data>
-  <data name="NovelReaderChapterButton.AutomationProperties.Name" xml:space="preserve"><value>章节</value></data>
-  <data name="NovelReaderSearchButton.AutomationProperties.Name" xml:space="preserve"><value>搜索</value></data>
-  <data name="NovelReaderHighlightsButton.AutomationProperties.Name" xml:space="preserve"><value>高亮</value></data>
+  <data name="NovelReaderGoToButton.AutomationProperties.Name" xml:space="preserve"><value>跳转</value></data>
   <data name="NovelReaderAppearanceButton.AutomationProperties.Name" xml:space="preserve"><value>外观</value></data>
   <data name="ReaderAppearanceDialog.Title" xml:space="preserve"><value>外观</value></data>
   <data name="ReaderAppearanceDialog.PrimaryButtonText" xml:space="preserve"><value>完成</value></data>
@@ -453,19 +451,20 @@
   <data name="VideoPlayerRestoredStatus" xml:space="preserve"><value>已恢复到 {0}</value></data>
   <data name="VideoPlayerRestorePendingStatus" xml:space="preserve"><value>无法确认已恢复到 {0}。播放追上之前不会覆盖原进度。</value></data>
   <data name="ReaderChapterPanelTitle.Text" xml:space="preserve"><value>章节</value></data>
-  <data name="ReaderChapterPanelDialog.Title" xml:space="preserve"><value>章节</value></data>
-  <data name="ReaderChapterPanelDialog.CloseButtonText" xml:space="preserve"><value>关闭</value></data>
+  <data name="ReaderGoToPanelDialog.Title" xml:space="preserve"><value>跳转</value></data>
+  <data name="ReaderGoToPanelDialog.CloseButtonText" xml:space="preserve"><value>关闭</value></data>
+  <data name="ReaderGoToSearchTabButton.Content" xml:space="preserve"><value>搜索</value></data>
+  <data name="ReaderGoToChaptersTabButton.Content" xml:space="preserve"><value>章节</value></data>
+  <data name="ReaderGoToHighlightsTabButton.Content" xml:space="preserve"><value>标注</value></data>
+  <data name="ReaderGoToCharacterButton.AutomationProperties.Name" xml:space="preserve"><value>跳转到字符数</value></data>
+  <data name="ReaderSearchSubmitButton.AutomationProperties.Name" xml:space="preserve"><value>搜索</value></data>
   <data name="ReaderSearchPanelTitle.Text" xml:space="preserve"><value>搜索</value></data>
-  <data name="ReaderSearchPanelDialog.Title" xml:space="preserve"><value>搜索</value></data>
-  <data name="ReaderSearchPanelDialog.CloseButtonText" xml:space="preserve"><value>关闭</value></data>
   <data name="ReaderSearchQueryBox.PlaceholderText" xml:space="preserve"><value>在本书中搜索</value></data>
   <data name="ReaderSearchPromptText.Text" xml:space="preserve"><value>输入文字以搜索本书</value></data>
   <data name="ReaderSearchLoadingText.Text" xml:space="preserve"><value>正在搜索...</value></data>
   <data name="ReaderSearchNoMatchesText.Text" xml:space="preserve"><value>没有匹配结果</value></data>
   <data name="ReaderSearchFailedText.Text" xml:space="preserve"><value>无法搜索这本书</value></data>
   <data name="ReaderHighlightsPanelTitle.Text" xml:space="preserve"><value>高亮</value></data>
-  <data name="ReaderHighlightsPanelDialog.Title" xml:space="preserve"><value>高亮</value></data>
-  <data name="ReaderHighlightsPanelDialog.CloseButtonText" xml:space="preserve"><value>关闭</value></data>
   <data name="ReaderHighlightsEmptyText.Text" xml:space="preserve"><value>暂无高亮</value></data>
   <data name="ReaderHighlightDeleteMenuItem.Text" xml:space="preserve"><value>删除</value></data>
   <data name="NovelReaderCharacterJumpNumberBox.PlaceholderText" xml:space="preserve"><value>字符数</value></data>
@@ -970,4 +969,22 @@
   <data name="BackupCompletedTitle" xml:space="preserve"><value>备份完成</value></data>
   <data name="BackupRestoreCompletedTitle" xml:space="preserve"><value>恢复完成</value></data>
   <data name="BackupErrorTitle" xml:space="preserve"><value>备份错误</value></data>
+  <data name="NovelReaderGalleryButton.AutomationProperties.Name" xml:space="preserve"><value>图片库</value></data>
+  <data name="ReaderGalleryPanelDialog.Title" xml:space="preserve"><value>图片库</value></data>
+  <data name="ReaderGalleryPanelDialog.CloseButtonText" xml:space="preserve"><value>关闭</value></data>
+  <data name="ReaderGalleryBlurUnreadToggle.OnContent" xml:space="preserve"><value>模糊未阅读插画</value></data>
+  <data name="ReaderGalleryBlurUnreadToggle.OffContent" xml:space="preserve"><value>模糊未阅读插画</value></data>
+  <data name="ReaderGalleryEmptyText.Text" xml:space="preserve"><value>没有图片</value></data>
+  <data name="ReaderGalleryUnreadBadgeText.Text" xml:space="preserve"><value>未阅读</value></data>
+  <data name="ReaderImageViewerCloseButton.AutomationProperties.Name" xml:space="preserve"><value>关闭图片</value></data>
+  <data name="NovelReaderLyricsModeMenuItem.Text" xml:space="preserve"><value>歌词模式</value></data>
+  <data name="NovelReaderLyricsModeButton.AutomationProperties.Name" xml:space="preserve"><value>打开歌词模式</value></data>
+  <data name="NovelReaderLyricsExitButton.AutomationProperties.Name" xml:space="preserve"><value>退出歌词模式</value></data>
+  <data name="NovelReaderLyricsPreviousCueButton.AutomationProperties.Name" xml:space="preserve"><value>上一句歌词</value></data>
+  <data name="NovelReaderLyricsPlayPauseButton.AutomationProperties.Name" xml:space="preserve"><value>播放或暂停</value></data>
+  <data name="NovelReaderLyricsNextCueButton.AutomationProperties.Name" xml:space="preserve"><value>下一句歌词</value></data>
+  <data name="NovelReaderLyricsMaskToggle.AutomationProperties.Name" xml:space="preserve"><value>歌词遮罩</value></data>
+  <data name="NovelReaderVerticalLyricsToggle.AutomationProperties.Name" xml:space="preserve"><value>竖排歌词模式</value></data>
+  <data name="NovelReaderLyricsStatisticsButton.AutomationProperties.Name" xml:space="preserve"><value>切换阅读计时</value></data>
+  <data name="NovelReaderLyricsNoMatch" xml:space="preserve"><value>没有匹配的歌词</value></data>
 </root>

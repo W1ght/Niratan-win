@@ -35,6 +35,7 @@ public class ReaderSettings
     public bool ShowStatisticsToggle { get; set; } = false;
     public bool ShowReadingSpeed { get; set; } = false;
     public bool ShowReadingTime { get; set; } = false;
+    public bool BlurUnreadGalleryImages { get; set; } = true;
 
     // --- Computed CSS properties ---
 
