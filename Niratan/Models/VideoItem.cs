@@ -16,6 +16,8 @@ public class VideoItem
     public long FileSizeBytes { get; set; }
     public DateTime? ModifiedAt { get; set; }
     public string? SourceFolderPath { get; set; }
+    public string? SourceId { get; set; }
+    public DateTime? LastSeenAt { get; set; }
     public string? PosterPath { get; set; }
     public string? ThumbnailPath { get; set; }
     public string? Tags { get; set; }

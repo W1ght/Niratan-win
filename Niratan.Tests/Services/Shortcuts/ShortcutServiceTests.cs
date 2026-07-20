@@ -59,6 +59,19 @@ public sealed class ShortcutServiceTests
             && conflict.Action.Id == VideoShortcutActions.ToggleFullscreenId);
     }
 
+    [Fact]
+    public void DictionaryEntryJumpCount_IsClampedAndPersisted()
+    {
+        var settings = new RecordingSettingsService();
+        var service = new ShortcutService(settings);
+
+        service.SetDictionaryEntryJumpCount(50);
+
+        service.DictionaryEntryJumpCount.Should().Be(10);
+        settings.Current.ShortcutConfiguration.DictionaryEntryJumpCount.Should().Be(10);
+        settings.SaveCount.Should().Be(1);
+    }
+
     private sealed class RecordingSettingsService : ISettingsService
     {
         public AppSettings Current { get; private set; } = new();

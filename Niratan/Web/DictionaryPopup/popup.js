@@ -18,6 +18,76 @@ const COMPACT_GLOSSARIES_ANKI = '.yomitan-glossary ul[data-sc-content="glossary"
 let selectedDictionaries = {};
 let miningRequestPending = false;
 let popupScrollIndicatorTimer = 0;
+let currentDictionaryEntryIndex = 0;
+
+const defaultPopupShortcutBindings = {
+  'popup.dismiss': { key: 'Escape', control: false, shift: false, alt: false, windows: false },
+  'dictionary.previousEntry': { key: 'PageUp', control: false, shift: false, alt: true, windows: false },
+  'dictionary.nextEntry': { key: 'PageDown', control: false, shift: false, alt: true, windows: false },
+};
+
+function popupKeyboardEventKey(event) {
+  switch (event.key) {
+    case 'ArrowLeft': return 'LeftArrow';
+    case 'ArrowRight': return 'RightArrow';
+    case 'ArrowUp': return 'UpArrow';
+    case 'ArrowDown': return 'DownArrow';
+    case 'PageUp': return 'PageUp';
+    case 'PageDown': return 'PageDown';
+    case 'Escape': return 'Escape';
+    case ' ': return 'Space';
+  }
+
+  switch (event.code) {
+    case 'BracketLeft': return '[';
+    case 'Backslash': return '\\';
+    case 'BracketRight': return ']';
+    case 'Comma': return ',';
+    case 'Period': return '.';
+    case 'Slash': return '/';
+  }
+
+  return event.key && event.key.length === 1
+    ? event.key.toLowerCase()
+    : event.key;
+}
+
+function popupShortcutActionForKeyboardEvent(event) {
+  var bindings = window.__niratanPopupShortcutBindings || defaultPopupShortcutBindings;
+  var key = popupKeyboardEventKey(event);
+  if (!key) return null;
+
+  for (var actionId in bindings) {
+    if (!Object.prototype.hasOwnProperty.call(bindings, actionId)) continue;
+    var binding = bindings[actionId];
+    if (binding
+      && binding.key === key
+      && !!event.ctrlKey === !!binding.control
+      && !!event.shiftKey === !!binding.shift
+      && !!event.altKey === !!binding.alt
+      && !!event.metaKey === !!binding.windows) {
+      return actionId;
+    }
+  }
+
+  return null;
+}
+
+document.addEventListener('keydown', function (event) {
+  if (event.defaultPrevented || event.repeat) return;
+  var actionId = popupShortcutActionForKeyboardEvent(event);
+  if (!actionId) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  postPopupMessage('shortcut', {
+    key: popupKeyboardEventKey(event),
+    control: !!event.ctrlKey,
+    shift: !!event.shiftKey,
+    alt: !!event.altKey,
+    windows: !!event.metaKey,
+  });
+}, true);
 
 function getPopupScrollElement() {
   return document.getElementById('popup-viewport') || document.scrollingElement;
@@ -705,6 +775,41 @@ function isVerbOrAdjective(rules) {
   });
 }
 
+function getDictionaryEntries() {
+  var container = document.getElementById('entries-container');
+  if (!container) return [];
+  return Array.from(container.querySelectorAll('.entry')).filter(function (entry) {
+    return entry instanceof HTMLElement && entry.offsetParent !== null;
+  });
+}
+
+window.hoshiFocusDictionaryEntry = function (index, smooth) {
+  var entries = getDictionaryEntries();
+  if (!entries.length) return false;
+
+  index = Math.max(0, Math.min(Number(index) || 0, entries.length - 1));
+  entries.forEach(function (entry) { entry.classList.remove('entry-current'); });
+  var entry = entries[index];
+  entry.classList.add('entry-current');
+  currentDictionaryEntryIndex = index;
+  entry.scrollIntoView({
+    block: 'start',
+    inline: 'nearest',
+    behavior: smooth === false ? 'auto' : 'smooth'
+  });
+  return true;
+};
+
+window.hoshiMoveDictionaryEntry = function (direction, count) {
+  direction = Number(direction);
+  count = Number(count);
+  if (!Number.isFinite(direction) || direction === 0) return false;
+  count = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 1;
+  return window.hoshiFocusDictionaryEntry(
+    currentDictionaryEntryIndex + (direction > 0 ? count : -count),
+    true);
+};
+
 function getPitchCategory(reading, pitchAccentValue, verbOrAdjective) {
   verbOrAdjective = verbOrAdjective || false;
   if (pitchAccentValue === 0) return 'heiban';
@@ -1229,11 +1334,24 @@ function constructPitchCategories(entryIndex) {
 function constructFrequencyHtml(entryIndex) {
   var entry = window.lookupEntries && window.lookupEntries[entryIndex];
   if (!entry || !entry.frequencies || !entry.frequencies.length) return '';
-  var container = document.createElement('div');
+  var list = document.createElement('ul');
+  list.style.textAlign = 'left';
+  var itemCount = 0;
   for (var fi = 0; fi < entry.frequencies.length; fi++) {
-    container.appendChild(createFrequencyGroup(entry.frequencies[fi]));
+    var freqGroup = entry.frequencies[fi];
+    if (!freqGroup || !freqGroup.frequencies || !freqGroup.frequencies.length) continue;
+    var dictionary = freqGroup.dictionary || '';
+    for (var vi = 0; vi < freqGroup.frequencies.length; vi++) {
+      var frequency = freqGroup.frequencies[vi];
+      if (!frequency) continue;
+      var value = frequency.displayValue || frequency.value;
+      var item = document.createElement('li');
+      item.textContent = dictionary + ': ' + value;
+      list.appendChild(item);
+      itemCount++;
+    }
   }
-  return container.innerHTML;
+  return itemCount ? list.outerHTML : '';
 }
 
 async function buildMiningPayload(entryIndex) {
@@ -1662,7 +1780,6 @@ function capturePopupRuntime() {
     scanNonJapaneseText: window.scanNonJapaneseText,
     maxResults: window.maxResults,
     scanLength: window.scanLength,
-    desktopLookupHoverDelayMs: window.desktopLookupHoverDelayMs,
     customCSS: window.customCSS,
     lookupTraceId: window.lookupTraceId,
     audioSources: window.audioSources,
@@ -1693,7 +1810,6 @@ function applyPopupRuntime(runtime) {
   window.scanNonJapaneseText = runtime.scanNonJapaneseText;
   window.maxResults = runtime.maxResults;
   window.scanLength = runtime.scanLength;
-  window.desktopLookupHoverDelayMs = runtime.desktopLookupHoverDelayMs;
   window.customCSS = runtime.customCSS;
   window.lookupTraceId = runtime.lookupTraceId;
   window.audioSources = runtime.audioSources;
@@ -1979,6 +2095,7 @@ document.addEventListener('toggle', function () {
 // === Main render ===
 
 window.renderPopup = function (pendingPayload) {
+  currentDictionaryEntryIndex = 0;
   var liveContainer = document.getElementById('entries-container');
   if (!liveContainer || !window.entryCount) return;
   var stagingContainer = document.createElement('div');
@@ -2342,12 +2459,10 @@ window.renderPopup = function (pendingPayload) {
       function scheduleShiftHoverLookup(point) {
         cancelShiftHoverLookup();
         if (!point) return;
-        var delay = Number(window.desktopLookupHoverDelayMs);
-        delay = Number.isFinite(delay) ? Math.min(250, Math.max(0, delay)) : 45;
         shiftHoverTimer = setTimeout(function () {
           shiftHoverTimer = 0;
           lookupAtPopupPoint(point.x, point.y, false, 'shift');
-        }, delay);
+        }, 0);
       }
       document.addEventListener('mousemove', function (e) {
         var target = e.target && e.target.nodeType === Node.TEXT_NODE ? e.target.parentElement : e.target;

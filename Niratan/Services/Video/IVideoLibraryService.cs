@@ -11,6 +11,11 @@ public sealed record VideoFolderScanResult(
     int ImportedCount,
     IReadOnlyList<VideoItem> Videos);
 
+public sealed record VideoSourceRefreshResult(
+    VideoLibrarySource Source,
+    int VideoCount,
+    IReadOnlyList<VideoItem> Videos);
+
 public interface IVideoLibraryService
 {
     Task<Result<IReadOnlyList<VideoItem>>> GetVideosAsync(
@@ -28,11 +33,40 @@ public interface IVideoLibraryService
         string folderPath,
         CancellationToken ct = default);
 
+    Task<Result<IReadOnlyList<VideoLibrarySource>>> GetSourcesAsync(CancellationToken ct = default) =>
+        Task.FromResult(Result<IReadOnlyList<VideoLibrarySource>>.Success([]));
+
+    Task<Result<VideoSourceRefreshResult>> RefreshSourceAsync(
+        string sourceId,
+        CancellationToken ct = default) =>
+        Task.FromResult(Result<VideoSourceRefreshResult>.Failure("Video source was not found.", "Refresh failed"));
+
+    Task<Result<IReadOnlyList<VideoSourceRefreshResult>>> RefreshAllSourcesAsync(
+        CancellationToken ct = default) =>
+        Task.FromResult(Result<IReadOnlyList<VideoSourceRefreshResult>>.Success([]));
+
+    Task<Result> RemoveSourceAsync(string sourceId, CancellationToken ct = default) =>
+        Task.FromResult(Result.Success());
+
+    Task<Result<int>> RemoveMissingVideosAsync(CancellationToken ct = default) =>
+        Task.FromResult(Result<int>.Success(0));
+
     Task<Result<VideoItem?>> GetVideoAsync(string videoId, CancellationToken ct = default);
 
     Task<Result> MarkOpenedAsync(string videoId, CancellationToken ct = default);
 
     Task<Result> DeleteVideoAsync(string videoId, CancellationToken ct = default);
+
+    Task<Result> DeleteVideosAsync(IReadOnlyList<string> videoIds, CancellationToken ct = default) =>
+        Task.FromResult(Result.Success());
+
+    Task<Result> UpdateVideoDetailsAsync(
+        string videoId,
+        string title,
+        IReadOnlyList<string> tags,
+        string? subtitlePath,
+        CancellationToken ct = default) =>
+        Task.FromResult(Result.Success());
 
     Task<Result> SaveProgressAsync(
         string videoId,
@@ -75,6 +109,19 @@ public interface IVideoLibraryService
 
     Task<Result> DeleteCollectionAsync(string collectionId, CancellationToken ct = default) =>
         Task.FromResult(Result.Success());
+
+    Task<Result<VideoCollection>> UpdateManualCollectionAsync(
+        VideoCollection collection,
+        IReadOnlyList<string> videoIds,
+        CancellationToken ct = default) =>
+        Task.FromResult(Result<VideoCollection>.Success(collection));
+
+    Task<Result<VideoCollection>> UpdateSmartCollectionAsync(
+        VideoCollection collection,
+        string name,
+        IReadOnlyList<VideoSmartRule> rules,
+        CancellationToken ct = default) =>
+        Task.FromResult(Result<VideoCollection>.Success(collection));
 
     Task<Result> SetFavoriteAsync(
         string videoId,

@@ -532,6 +532,82 @@ public class VideoLibraryPageViewModelTests
             .Which.Video.LastPositionSeconds.Should().Be(76);
     }
 
+    [Fact]
+    public async Task SelectionCommands_ApplyBatchPlaybackChanges()
+    {
+        var service = new RecordingVideoLibraryService
+        {
+            Videos =
+            [
+                new VideoItem { Id = "one", Title = "One", FilePath = @"D:\Videos\one.mkv" },
+                new VideoItem { Id = "two", Title = "Two", FilePath = @"D:\Videos\two.mkv" },
+            ],
+        };
+        var sut = CreateSut(videoService: service);
+        await sut.InitializeAsync();
+
+        sut.ToggleVideoSelectionCommand.Execute(sut.Videos[0]);
+        sut.ToggleVideoSelectionCommand.Execute(sut.Videos[1]);
+        await sut.MarkSelectedWatchedCommand.ExecuteAsync(null);
+        await sut.ClearSelectedProgressCommand.ExecuteAsync(null);
+
+        sut.SelectedVideoCount.Should().Be(2);
+        service.MarkedWatchedIds.Should().BeEquivalentTo("one", "two");
+        service.ClearedProgressIds.Should().BeEquivalentTo("one", "two");
+    }
+
+    [Fact]
+    public async Task SaveVideoDetailsCommand_PersistsTitleTagsAndBoundSubtitle()
+    {
+        var service = new RecordingVideoLibraryService
+        {
+            Videos =
+            [
+                new VideoItem { Id = "one", Title = "One", FilePath = @"D:\Videos\one.mkv" },
+            ],
+        };
+        var sut = CreateSut(videoService: service);
+        await sut.InitializeAsync();
+        sut.SelectVideoDetailsCommand.Execute(sut.Videos[0]);
+        sut.SelectedVideoTitleDraft = "Display One";
+        sut.SelectedVideoTagsDraft = "anime, japanese\nstudy";
+        sut.SelectedVideoSubtitlePath = @"D:\Subs\one.srt";
+
+        await sut.SaveVideoDetailsCommand.ExecuteAsync(null);
+
+        var update = service.DetailUpdates.Should().ContainSingle().Subject;
+        update.VideoId.Should().Be("one");
+        update.Title.Should().Be("Display One");
+        update.Tags.Should().Equal("anime", "japanese", "study");
+        update.SubtitlePath.Should().Be(@"D:\Subs\one.srt");
+    }
+
+    [Fact]
+    public async Task SmartCollectionEditor_PersistsMultipleRulesWhenEditing()
+    {
+        var existing = new VideoCollection
+        {
+            Id = "smart",
+            Name = "Anime",
+            Kind = VideoCollectionKind.Smart,
+            SmartRules = [new VideoSmartRule(VideoSmartRuleField.Tag, "anime")],
+        };
+        var service = new RecordingVideoLibraryService { Collections = [existing] };
+        var sut = CreateSut(videoService: service);
+        await sut.InitializeAsync();
+        var row = sut.CollectionFilters.Single(filter => filter.Key == "smart");
+
+        sut.BeginEditSmartCollection(row).Should().BeTrue();
+        sut.AddSmartRuleCommand.Execute(null);
+        sut.SmartRuleDrafts[1].Field = VideoSmartRuleField.HasBoundSubtitle;
+        sut.SmartRuleDrafts[1].Match = VideoSmartRuleMatch.IsTrue;
+        sut.SmartCollectionNameDraft = "Subbed anime";
+        await sut.CreateSmartCollectionCommand.ExecuteAsync(null);
+
+        service.UpdatedSmartCollections.Should().ContainSingle();
+        service.UpdatedSmartCollections[0].Rules.Should().HaveCount(2);
+    }
+
     private static VideoLibraryPageViewModel CreateSut(
         IVideoLibraryService? videoService = null,
         IDialogService? dialogService = null,
@@ -562,6 +638,8 @@ public class VideoLibraryPageViewModelTests
         public List<(string VideoId, bool IsFavorite)> FavoriteUpdates { get; } = [];
         public List<VideoCollection> CreatedSmartCollections { get; } = [];
         public List<(string Name, IReadOnlyList<string> VideoIds)> CreatedManualCollections { get; } = [];
+        public List<(string VideoId, string Title, IReadOnlyList<string> Tags, string? SubtitlePath)> DetailUpdates { get; } = [];
+        public List<(VideoCollection Collection, string Name, IReadOnlyList<VideoSmartRule> Rules)> UpdatedSmartCollections { get; } = [];
         public int LoadCount { get; private set; }
 
         public Task<Result<IReadOnlyList<VideoItem>>> GetVideosAsync(
@@ -608,6 +686,17 @@ public class VideoLibraryPageViewModelTests
         public Task<Result> DeleteVideoAsync(string videoId, CancellationToken ct = default) =>
             Task.FromResult(Result.Success());
 
+        public Task<Result> UpdateVideoDetailsAsync(
+            string videoId,
+            string title,
+            IReadOnlyList<string> tags,
+            string? subtitlePath,
+            CancellationToken ct = default)
+        {
+            DetailUpdates.Add((videoId, title, tags, subtitlePath));
+            return Task.FromResult(Result.Success());
+        }
+
         public Task<Result<VideoCollection>> CreateSmartCollectionAsync(
             string name,
             IReadOnlyList<VideoSmartRule> rules,
@@ -639,6 +728,18 @@ public class VideoLibraryPageViewModelTests
 
         public Task<Result> DeleteCollectionAsync(string collectionId, CancellationToken ct = default) =>
             Task.FromResult(Result.Success());
+
+        public Task<Result<VideoCollection>> UpdateSmartCollectionAsync(
+            VideoCollection collection,
+            string name,
+            IReadOnlyList<VideoSmartRule> rules,
+            CancellationToken ct = default)
+        {
+            UpdatedSmartCollections.Add((collection, name, rules));
+            collection.Name = name;
+            collection.SmartRules = rules;
+            return Task.FromResult(Result<VideoCollection>.Success(collection));
+        }
 
         public Task<Result> SetFavoriteAsync(
             string videoId,

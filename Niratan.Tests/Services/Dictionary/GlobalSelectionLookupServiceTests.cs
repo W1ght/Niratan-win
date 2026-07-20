@@ -330,6 +330,8 @@ public class GlobalSelectionLookupServiceTests
 
         public event EventHandler? ShortcutsChanged;
 
+        public int DictionaryEntryJumpCount => 1;
+
         public KeyboardShortcutBinding GetBinding(ShortcutAction action) =>
             action.Id == GlobalShortcutActions.LookupSelectedTextId
                 ? _globalBinding
@@ -359,6 +361,10 @@ public class GlobalSelectionLookupServiceTests
         {
             _globalBinding = action.DefaultBinding;
             ShortcutsChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void SetDictionaryEntryJumpCount(int count)
+        {
         }
     }
 

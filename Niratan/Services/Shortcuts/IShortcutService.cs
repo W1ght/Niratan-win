@@ -12,6 +12,8 @@ public interface IShortcutService
 
     KeyboardShortcutBinding GetBinding(ShortcutAction action);
 
+    int DictionaryEntryJumpCount => 1;
+
     bool TryResolve(
         ShortcutScope scope,
         KeyboardShortcutBinding binding,
@@ -23,4 +25,8 @@ public interface IShortcutService
 
     void SetBinding(ShortcutAction action, KeyboardShortcutBinding binding);
     void ResetBinding(ShortcutAction action);
+
+    void SetDictionaryEntryJumpCount(int count)
+    {
+    }
 }

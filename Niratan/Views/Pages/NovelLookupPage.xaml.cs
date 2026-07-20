@@ -24,6 +24,7 @@ public sealed partial class NovelLookupPage : Page, IDisposable
         ViewModel = App.GetService<NovelLookupPageViewModel>();
         InitializeComponent();
         DataContext = ViewModel;
+        AddHandler(KeyDownEvent, new KeyEventHandler(NovelLookupPage_KeyDown), true);
         Loaded += NovelLookupPage_Loaded;
         Unloaded += NovelLookupPage_Unloaded;
     }
@@ -47,6 +48,18 @@ public sealed partial class NovelLookupPage : Page, IDisposable
         var popupOverlay = EnsurePopupOverlay();
         DictionaryPanelRoot.SizeChanged += OnDictionaryPanelSizeChanged;
         _ = popupOverlay.PrewarmAsync(XamlRoot);
+    }
+
+    private async void NovelLookupPage_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (_popupOverlay is null)
+            return;
+
+        var binding = Niratan.Models.Shortcuts.KeyboardShortcutBinding.FromVirtualKey(
+            e.Key,
+            Niratan.Models.Shortcuts.ShortcutInputMapper.GetCurrentModifiers());
+        if (await _popupOverlay.TryHandleShortcutAsync(binding))
+            e.Handled = true;
     }
 
     private DictionaryPopupOverlay EnsurePopupOverlay()

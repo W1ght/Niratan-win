@@ -7,6 +7,7 @@
       xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
       xmlns:ui="using:CommunityToolkit.WinUI"
       xmlns:helpers="using:Niratan.Helpers.UI.Converters"
+      xmlns:settings="using:Niratan.Models.Settings"
       xmlns:pageViewModels="using:Niratan.ViewModels.Pages"
       mc:Ignorable="d">
 
@@ -152,6 +153,35 @@
                                 Click="CustomCss_Click">
                             <TextBlock x:Uid="DictionaryCustomCssEditText" Text="Edit…" />
                         </Button>
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="DictionaryFontCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="Select or import the font used by dictionary results"
+                                          Header="Font"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8D4;}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <ComboBox MinWidth="180"
+                                      AutomationProperties.AutomationId="DictionaryFontComboBox"
+                                      ItemsSource="{x:Bind ViewModel.AvailableDictionaryFonts}"
+                                      SelectedItem="{x:Bind ViewModel.SelectedDictionaryFont, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="settings:JapaneseFontOption">
+                                        <TextBlock Text="{x:Bind Name}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <Button x:Uid="DictionaryImportFontButton"
+                                    AutomationProperties.AutomationId="DictionaryImportFontButton"
+                                    Content="Import Font"
+                                    Command="{x:Bind ViewModel.ImportDictionaryFontCommand}" />
+                            <Button x:Uid="DictionaryDeleteFontButton"
+                                    AutomationProperties.AutomationId="DictionaryDeleteFontButton"
+                                    Content="Delete"
+                                    Command="{x:Bind ViewModel.DeleteSelectedDictionaryFontCommand}"
+                                    IsEnabled="{x:Bind ViewModel.CanDeleteSelectedDictionaryFont, Mode=OneWay}" />
+                        </StackPanel>
                     </toolkit:SettingsCard>
 
                     <TextBlock x:Uid="DictionaryLookupSectionHeader"
@@ -324,24 +354,6 @@
                                           Header="Compact Pitch">
                         <ToggleSwitch AutomationProperties.AutomationId="DictionaryCompactPitchToggle"
                                       IsOn="{x:Bind ViewModel.CompactPitchAccents, Mode=TwoWay}" />
-                    </toolkit:SettingsCard>
-
-                    <toolkit:SettingsCard x:Uid="DictionaryDesktopHoverDelayCard"
-                                          HorizontalAlignment="Stretch"
-                                          HorizontalContentAlignment="Stretch"
-                                          Description="Delay before Shift-hover lookup in Reader, Popup, and video subtitles"
-                                          Header="Desktop Hover Delay">
-                        <StackPanel MinWidth="280" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                            <Slider Width="220"
-                                    Minimum="0"
-                                    Maximum="250"
-                                    StepFrequency="5"
-                                    Value="{x:Bind ViewModel.DesktopLookupHoverDelayMs, Mode=TwoWay}" />
-                            <TextBlock MinWidth="56"
-                                       VerticalAlignment="Center"
-                                       Text="{x:Bind ViewModel.DesktopLookupHoverDelayMs, Mode=OneWay}" />
-                            <TextBlock VerticalAlignment="Center" Text="ms" />
-                        </StackPanel>
                     </toolkit:SettingsCard>
 
                     <TextBlock x:Uid="DictionaryTypeDescription"

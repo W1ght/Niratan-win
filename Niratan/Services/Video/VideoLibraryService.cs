@@ -135,7 +135,103 @@ internal sealed class VideoLibraryService : IVideoLibraryService
         if (!Directory.Exists(folderPath))
             return Result<VideoFolderScanResult>.Failure("Video folder was not found.", "Scan failed");
 
-        var rootPath = Path.GetFullPath(folderPath);
+        var rootPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folderPath));
+        var source = await _dataService.GetVideoLibrarySourceByPathAsync(rootPath, ct)
+            ?? new VideoLibrarySource
+            {
+                Name = new DirectoryInfo(rootPath).Name,
+                FolderPath = rootPath,
+                CreatedAt = DateTime.UtcNow,
+            };
+        await _dataService.UpsertVideoLibrarySourceAsync(source, ct);
+
+        var refreshed = await RefreshSourceCoreAsync(source, ct);
+        return refreshed.IsSuccess
+            ? Result<VideoFolderScanResult>.Success(new VideoFolderScanResult(
+                refreshed.Value!.VideoCount,
+                refreshed.Value.Videos))
+            : Result<VideoFolderScanResult>.Failure(refreshed.Error!, refreshed.ErrorTitle!);
+    }
+
+    public async Task<Result<IReadOnlyList<VideoLibrarySource>>> GetSourcesAsync(CancellationToken ct = default) =>
+        await ExecuteAsync(
+            async token => Result<IReadOnlyList<VideoLibrarySource>>.Success(
+                await _dataService.GetVideoLibrarySourcesAsync(token)),
+            "Error loading video sources",
+            ct);
+
+    public async Task<Result<VideoSourceRefreshResult>> RefreshSourceAsync(
+        string sourceId,
+        CancellationToken ct = default)
+    {
+        var source = await _dataService.GetVideoLibrarySourceAsync(sourceId, ct);
+        return source == null
+            ? Result<VideoSourceRefreshResult>.Failure("Video source was not found.", "Refresh failed")
+            : await RefreshSourceCoreAsync(source, ct);
+    }
+
+    public async Task<Result<IReadOnlyList<VideoSourceRefreshResult>>> RefreshAllSourcesAsync(
+        CancellationToken ct = default)
+    {
+        var sourcesResult = await GetSourcesAsync(ct);
+        if (!sourcesResult.IsSuccess)
+        {
+            return Result<IReadOnlyList<VideoSourceRefreshResult>>.Failure(
+                sourcesResult.Error!, sourcesResult.ErrorTitle!);
+        }
+
+        var refreshed = new List<VideoSourceRefreshResult>();
+        string? firstError = null;
+        foreach (var source in sourcesResult.Value!)
+        {
+            ct.ThrowIfCancellationRequested();
+            var result = await RefreshSourceCoreAsync(source, ct);
+            if (result.IsSuccess)
+                refreshed.Add(result.Value!);
+            else
+                firstError ??= result.Error;
+        }
+
+        return firstError == null
+            ? Result<IReadOnlyList<VideoSourceRefreshResult>>.Success(refreshed)
+            : Result<IReadOnlyList<VideoSourceRefreshResult>>.Failure(
+                firstError, "Some sources could not be refreshed");
+    }
+
+    public async Task<Result> RemoveSourceAsync(string sourceId, CancellationToken ct = default) =>
+        await ExecuteAsync(
+            token => _dataService.DeleteVideoLibrarySourceAsync(sourceId, token),
+            "Error removing video source",
+            ct);
+
+    public async Task<Result<int>> RemoveMissingVideosAsync(CancellationToken ct = default) =>
+        await ExecuteAsync(
+            async token =>
+            {
+                var videos = await _dataService.GetVideosAsync(ct: token);
+                var missingIds = videos
+                    .Where(video => !video.IsRemote && !File.Exists(video.FilePath))
+                    .Select(video => video.Id)
+                    .ToList();
+                await _dataService.DeleteVideosAsync(missingIds, token);
+                return Result<int>.Success(missingIds.Count);
+            },
+            "Error removing missing videos",
+            ct);
+
+    private async Task<Result<VideoSourceRefreshResult>> RefreshSourceCoreAsync(
+        VideoLibrarySource source,
+        CancellationToken ct)
+    {
+        if (!Directory.Exists(source.FolderPath))
+        {
+            const string error = "Video source folder is no longer available.";
+            await _dataService.UpdateVideoLibrarySourceScanStateAsync(
+                source.Id, source.LastScannedAt, error, ct);
+            return Result<VideoSourceRefreshResult>.Failure(error, "Refresh failed");
+        }
+
+        var rootPath = source.FolderPath;
         var options = new EnumerationOptions
         {
             RecurseSubdirectories = true,
@@ -143,14 +239,15 @@ internal sealed class VideoLibraryService : IVideoLibraryService
             AttributesToSkip = FileAttributes.System,
         };
 
-        return await ExecuteAsync(
+        var result = await ExecuteAsync(
             async token =>
             {
+                var scannedAt = DateTime.UtcNow;
                 var videos = Directory
                     .EnumerateFiles(rootPath, "*", options)
                     .Where(path => SupportedVideoExtensions.Contains(Path.GetExtension(path)))
                     .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-                    .Select(path => CreateVideoItemFromPath(path, rootPath))
+                    .Select(path => CreateVideoItemFromPath(path, rootPath, source.Id, scannedAt))
                     .ToList();
 
                 foreach (var video in videos)
@@ -159,15 +256,33 @@ internal sealed class VideoLibraryService : IVideoLibraryService
                     await _dataService.UpsertVideoAsync(video, token);
                 }
 
+                await _dataService.DeleteSourceVideosExceptAsync(
+                    source.Id,
+                    videos.Select(video => video.FilePath).ToList(),
+                    token);
+                await _dataService.UpdateVideoLibrarySourceScanStateAsync(
+                    source.Id, scannedAt, null, token);
+                source.LastScannedAt = scannedAt;
+                source.LastError = null;
+
                 _logger.LogInformation(
                     "Scanned {Count} videos from {FolderPath}",
                     videos.Count,
                     rootPath);
-                return Result<VideoFolderScanResult>.Success(
-                    new VideoFolderScanResult(videos.Count, videos));
+                return Result<VideoSourceRefreshResult>.Success(
+                    new VideoSourceRefreshResult(source, videos.Count, videos));
             },
             "Error scanning video folder",
             ct);
+
+        if (!result.IsSuccess && !result.IsCancelled)
+        {
+            source.LastError = result.Error;
+            await _dataService.UpdateVideoLibrarySourceScanStateAsync(
+                source.Id, source.LastScannedAt, result.Error, CancellationToken.None);
+        }
+
+        return result;
     }
 
     public async Task<Result<VideoItem?>> GetVideoAsync(string videoId, CancellationToken ct = default) =>
@@ -230,6 +345,44 @@ internal sealed class VideoLibraryService : IVideoLibraryService
             "Error deleting video collection",
             ct);
 
+    public async Task<Result<VideoCollection>> UpdateManualCollectionAsync(
+        VideoCollection collection,
+        IReadOnlyList<string> videoIds,
+        CancellationToken ct = default) =>
+        await ExecuteAsync(
+            async token =>
+            {
+                collection.Kind = VideoCollectionKind.Manual;
+                collection.ItemIds = NormalizeItemIds(videoIds);
+                collection.SmartRules = [];
+                collection.UpdatedAt = DateTime.UtcNow;
+                await _dataService.UpsertVideoCollectionAsync(collection, token);
+                await _dataService.SetVideoCollectionItemsAsync(collection.Id, collection.ItemIds, token);
+                return Result<VideoCollection>.Success(collection);
+            },
+            "Error updating video collection",
+            ct);
+
+    public async Task<Result<VideoCollection>> UpdateSmartCollectionAsync(
+        VideoCollection collection,
+        string name,
+        IReadOnlyList<VideoSmartRule> rules,
+        CancellationToken ct = default) =>
+        await ExecuteAsync(
+            async token =>
+            {
+                collection.Name = NormalizeCollectionName(name);
+                collection.Kind = VideoCollectionKind.Smart;
+                collection.SmartRules = NormalizeSmartRules(rules);
+                collection.ItemIds = [];
+                collection.UpdatedAt = DateTime.UtcNow;
+                await _dataService.UpsertVideoCollectionAsync(collection, token);
+                await _dataService.SetVideoCollectionItemsAsync(collection.Id, [], token);
+                return Result<VideoCollection>.Success(collection);
+            },
+            "Error updating smart collection",
+            ct);
+
     public async Task<Result> SetFavoriteAsync(string videoId, bool isFavorite, CancellationToken ct = default) =>
         await ExecuteAsync(
             async token => await _dataService.UpdateVideoFavoriteAsync(videoId, isFavorite, token),
@@ -270,6 +423,45 @@ internal sealed class VideoLibraryService : IVideoLibraryService
             _logger.LogError(ex, "Error deleting video {VideoId}", videoId);
             return Result.Failure(ex.Message, "Error deleting video");
         }
+    }
+
+    public async Task<Result> DeleteVideosAsync(IReadOnlyList<string> videoIds, CancellationToken ct = default) =>
+        await ExecuteAsync(
+            token => _dataService.DeleteVideosAsync(NormalizeItemIds(videoIds), token),
+            "Error deleting videos",
+            ct);
+
+    public async Task<Result> UpdateVideoDetailsAsync(
+        string videoId,
+        string title,
+        IReadOnlyList<string> tags,
+        string? subtitlePath,
+        CancellationToken ct = default)
+    {
+        var normalizedTitle = title?.Trim() ?? string.Empty;
+        if (normalizedTitle.Length == 0)
+            return Result.Failure("Display title cannot be empty.", "Could not save video details");
+
+        var normalizedTags = tags
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Select(tag => tag.Trim())
+            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+        var normalizedSubtitle = string.IsNullOrWhiteSpace(subtitlePath)
+            ? null
+            : Path.GetFullPath(subtitlePath);
+        if (normalizedSubtitle != null && !File.Exists(normalizedSubtitle))
+            return Result.Failure("The selected subtitle file no longer exists.", "Could not bind subtitle");
+
+        return await ExecuteAsync(
+            token => _dataService.UpdateVideoDetailsAsync(
+                videoId,
+                normalizedTitle,
+                normalizedTags.Count == 0 ? null : string.Join(", ", normalizedTags),
+                normalizedSubtitle,
+                token),
+            "Error saving video details",
+            ct);
     }
 
     public async Task<Result> SaveProgressAsync(
@@ -432,7 +624,11 @@ internal sealed class VideoLibraryService : IVideoLibraryService
         return null;
     }
 
-    private static VideoItem CreateVideoItemFromPath(string filePath, string rootPath)
+    private static VideoItem CreateVideoItemFromPath(
+        string filePath,
+        string rootPath,
+        string sourceId,
+        DateTime scannedAt)
     {
         var directory = Path.GetDirectoryName(filePath);
         var fileInfo = new FileInfo(filePath);
@@ -442,6 +638,8 @@ internal sealed class VideoLibraryService : IVideoLibraryService
             FilePath = filePath,
             SubtitlePath = FindSidecarSubtitle(filePath),
             SourceFolderPath = directory,
+            SourceId = sourceId,
+            LastSeenAt = scannedAt,
             PosterPath = FindPosterImage(filePath),
             CollectionName = GetCollectionName(filePath, rootPath),
             FileSizeBytes = fileInfo.Length,

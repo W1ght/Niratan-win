@@ -102,7 +102,7 @@ public sealed partial class NovelReaderPage : Page
     private CoreWebView2ContextMenuItem? _readerHighlightContextMenuItem;
     private DictionaryPopupOverlay? _popupOverlay;
     private readonly SemaphoreSlim _lookupSemaphore = new(1, 1);
-    private readonly Dictionary<KeyboardAccelerator, string> _keyboardAcceleratorActionIds = [];
+    private readonly Dictionary<KeyboardAccelerator, KeyboardShortcutBinding> _keyboardAcceleratorBindings = [];
     private readonly IShortcutService _shortcutService;
     private readonly IGameControllerService _gameControllerService;
     private readonly IMessenger _messenger;
@@ -280,6 +280,12 @@ public sealed partial class NovelReaderPage : Page
     {
         SuspendReaderKeyboardAccelerators();
 
+        foreach (var action in PopupShortcutActions.All)
+            RegisterKeyboardAccelerator(action);
+
+        foreach (var action in DictionaryShortcutActions.All)
+            RegisterKeyboardAccelerator(action);
+
         foreach (var action in ReaderShortcutActions.All)
             RegisterKeyboardAccelerator(action);
 
@@ -289,11 +295,11 @@ public sealed partial class NovelReaderPage : Page
 
     private void SuspendReaderKeyboardAccelerators()
     {
-        foreach (var accelerator in _keyboardAcceleratorActionIds.Keys)
+        foreach (var accelerator in _keyboardAcceleratorBindings.Keys)
             accelerator.Invoked -= ReaderKeyboardAccelerator_Invoked;
 
         KeyboardAccelerators.Clear();
-        _keyboardAcceleratorActionIds.Clear();
+        _keyboardAcceleratorBindings.Clear();
     }
 
     private void RegisterKeyboardAccelerator(ReaderShortcutAction readerAction)
@@ -302,8 +308,14 @@ public sealed partial class NovelReaderPage : Page
         if (shortcutAction == null)
             return;
 
+        RegisterKeyboardAccelerator(shortcutAction);
+    }
+
+    private void RegisterKeyboardAccelerator(ShortcutAction shortcutAction)
+    {
         var binding = _shortcutService.GetBinding(shortcutAction);
         if (!ShouldRegisterKeyboardAccelerator(binding)
+            || _keyboardAcceleratorBindings.Values.Any(existing => existing.Matches(binding))
             || !ShortcutInputMapper.TryGetVirtualKey(binding, out var key, out var modifiers))
         {
             return;
@@ -315,7 +327,7 @@ public sealed partial class NovelReaderPage : Page
             Modifiers = modifiers,
         };
         accelerator.Invoked += ReaderKeyboardAccelerator_Invoked;
-        _keyboardAcceleratorActionIds[accelerator] = readerAction.Id;
+        _keyboardAcceleratorBindings[accelerator] = binding;
         KeyboardAccelerators.Add(accelerator);
     }
 
@@ -391,7 +403,10 @@ public sealed partial class NovelReaderPage : Page
         NovelWebView.SizeChanged -= OnWebViewSizeChanged;
 
         if (_popupOverlay != null)
+        {
             _popupOverlay.Dismissed -= OnPopupOverlayDismissed;
+            _popupOverlay.DismissStarted -= OnPopupOverlayDismissStarted;
+        }
         _popupOverlay?.Dispose();
         _popupOverlay = null;
 
@@ -758,6 +773,11 @@ public sealed partial class NovelReaderPage : Page
             _epubBook.ContainerDirectory,
             CoreWebView2HostResourceAccessKind.DenyCors
         );
+        NovelWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+            ReaderFontCatalog.VirtualHostName,
+            App.GetService<IReaderFontService>().FontsPath,
+            CoreWebView2HostResourceAccessKind.Allow
+        );
 
         NovelWebView.CoreWebView2.AddWebResourceRequestedFilter(
             $"https://{NovelBookHostName}/*",
@@ -874,11 +894,16 @@ public sealed partial class NovelReaderPage : Page
         KeyboardAccelerator sender,
         KeyboardAcceleratorInvokedEventArgs args)
     {
-        if (!_keyboardAcceleratorActionIds.TryGetValue(sender, out var actionId))
+        if (!_keyboardAcceleratorBindings.TryGetValue(sender, out var binding))
             return;
 
-        args.Handled = await HandleReaderShortcutActionAsync(actionId)
-            || await HandleSasayakiShortcutActionAsync(actionId);
+        if (_popupOverlay is not null && await _popupOverlay.TryHandleShortcutAsync(binding))
+        {
+            args.Handled = true;
+            return;
+        }
+
+        args.Handled = await TryHandleReaderShortcutBindingAsync(binding);
     }
 
     private async void NovelReaderPage_CharacterReceived(
@@ -978,7 +1003,10 @@ public sealed partial class NovelReaderPage : Page
         && DateTimeOffset.UtcNow - _lastKeyDownShortcutHandledAt <= ReaderKeyDownCharacterSuppressWindow;
 
     private bool IsConfiguredReaderShortcutBinding(KeyboardShortcutBinding binding) =>
-        (_shortcutService.TryResolve(ShortcutScope.Reader, binding, out var readerAction)
+        (_popupOverlay?.IsVisible == true
+            && (_shortcutService.TryResolve(ShortcutScope.Popup, binding, out _)
+                || _shortcutService.TryResolve(ShortcutScope.Dictionary, binding, out _)))
+        || (_shortcutService.TryResolve(ShortcutScope.Reader, binding, out var readerAction)
             && readerAction is not null)
         || (_shortcutService.TryResolve(ShortcutScope.Sasayaki, binding, out var sasayakiAction)
             && sasayakiAction is not null);
@@ -1004,6 +1032,9 @@ public sealed partial class NovelReaderPage : Page
 
     private async Task<bool> TryHandleReaderShortcutBindingAsync(KeyboardShortcutBinding binding)
     {
+        if (_popupOverlay is not null && await _popupOverlay.TryHandleShortcutAsync(binding))
+            return true;
+
         if (_shortcutService.TryResolve(ShortcutScope.Reader, binding, out var readerAction)
             && readerAction != null
             && await HandleReaderShortcutActionAsync(readerAction.Id))
@@ -1109,18 +1140,21 @@ public sealed partial class NovelReaderPage : Page
 
     private string BuildReaderWebShortcutBindingsJson()
     {
-        var shortcuts = ReaderShortcutActions.All
-            .Concat(SasayakiShortcutActions.All)
-            .Select(action =>
+        var actionIds = PopupShortcutActions.All
+            .Concat(DictionaryShortcutActions.All)
+            .Select(action => action.Id)
+            .Concat(ReaderShortcutActions.All.Select(action => action.Id))
+            .Concat(SasayakiShortcutActions.All.Select(action => action.Id));
+        var shortcuts = actionIds
+            .Select(actionId =>
             {
-                var shortcutAction = _shortcutService.Registry.Action(action.Id);
-                var binding = shortcutAction == null
-                    ? KeyboardShortcutBinding.FromReaderShortcut(action.DefaultShortcut)
-                    : _shortcutService.GetBinding(shortcutAction);
+                var shortcutAction = _shortcutService.Registry.Action(actionId)
+                    ?? throw new InvalidOperationException($"Unknown shortcut action '{actionId}'.");
+                var binding = _shortcutService.GetBinding(shortcutAction);
 
                 return new
                 {
-                    action.Id,
+                    shortcutAction.Id,
                     Binding = new
                     {
                         key = binding.Key,
@@ -1306,15 +1340,21 @@ public sealed partial class NovelReaderPage : Page
 
     private async void ReaderLyricsMode_DismissLookupRequested(object? sender, EventArgs e)
     {
+        Interlocked.Increment(ref _lookupRequestVersion);
         _popupOverlay?.Dismiss();
         await SetLookupPopupActiveAsync(false);
-        RestoreReaderLyricsKeyboardFocus();
+        RestoreReaderKeyboardFocus();
     }
 
-    private void RestoreReaderLyricsKeyboardFocus()
+    private void RestoreReaderKeyboardFocus()
     {
         if (_isReaderLyricsMode && ReaderLyricsMode.Visibility == Visibility.Visible)
+        {
             _ = ReaderLyricsMode.Focus(FocusState.Programmatic);
+            return;
+        }
+
+        _ = NovelWebView.Focus(FocusState.Programmatic);
     }
 
     private async void ReaderLyricsMode_LookupRequested(
@@ -1522,18 +1562,16 @@ public sealed partial class NovelReaderPage : Page
     {
         var appTheme = App.GetService<ISettingsService>().Current.Theme;
         var backgroundColor = ARGBToWindowsColor(settings.BackgroundColor(appTheme));
-        var foregroundColor = settings.SepiaMode
-            ? ARGBToWindowsColor(0xFF332A1B)
-            : settings.UsesDarkInterface(appTheme)
-                ? Colors.White
-                : Colors.Black;
+        var foregroundColor = ARGBToWindowsColor(settings.InfoColor(appTheme));
 
         Background = new SolidColorBrush(backgroundColor);
         ReaderBottomChrome.Background = new SolidColorBrush(backgroundColor);
         var foregroundBrush = new SolidColorBrush(foregroundColor)
         {
-            Opacity = 0.68,
+            Opacity = settings.UseCustomColors ? 1 : 0.68,
         };
+        NovelReaderTitleText.Foreground = foregroundBrush;
+        NovelReaderTopProgressText.Foreground = foregroundBrush;
         NovelReaderStatisticsToggleButton.Foreground = foregroundBrush;
         NovelReaderStatisticsText.Foreground = foregroundBrush;
         NovelReaderHistoryBackButton.Foreground = foregroundBrush;
@@ -1803,8 +1841,7 @@ public sealed partial class NovelReaderPage : Page
             {
                 scanNonJapaneseText = dictionaryDisplaySettings.ScanNonJapaneseText,
                 maxResults = dictionaryDisplaySettings.MaxResults,
-                scanLength = dictionaryDisplaySettings.ScanLength,
-                hoverDelayMs = dictionaryDisplaySettings.NormalizedDesktopLookupHoverDelayMs
+                scanLength = dictionaryDisplaySettings.ScanLength
             });
             await sender.ExecuteScriptAsync(
                 $"window.__niratanLookupSettings = {lookupSettings}; window.scanNonJapaneseText = {JsonSerializer.Serialize(dictionaryDisplaySettings.ScanNonJapaneseText)};");
@@ -2308,12 +2345,8 @@ public sealed partial class NovelReaderPage : Page
                         break;
 
                     var shortcutPayload = root.GetProperty("payload");
-                    var actionId = shortcutPayload.GetProperty("actionId").GetString();
-                    if (!string.IsNullOrWhiteSpace(actionId))
-                    {
-                        _ = await HandleReaderShortcutActionAsync(actionId)
-                            || await HandleSasayakiShortcutActionAsync(actionId);
-                    }
+                    var shortcutBinding = ParseReaderShortcutBinding(shortcutPayload);
+                    await TryHandleReaderShortcutBindingAsync(shortcutBinding);
                     break;
                 case "internalLink":
                     var internalLinkPayload = root.GetProperty("payload");
@@ -2662,6 +2695,56 @@ public sealed partial class NovelReaderPage : Page
         }
     }
 
+    private KeyboardShortcutBinding ParseReaderShortcutBinding(JsonElement payload)
+    {
+        if (!payload.TryGetProperty("key", out var keyElement)
+            || keyElement.ValueKind != JsonValueKind.String
+            || !TryGetShortcutBoolean(payload, "control", out var control)
+            || !TryGetShortcutBoolean(payload, "shift", out var shift)
+            || !TryGetShortcutBoolean(payload, "alt", out var alt)
+            || !TryGetShortcutBoolean(payload, "windows", out var windows))
+        {
+            throw new InvalidDataException("Invalid reader shortcut message.");
+        }
+
+        var modifiers = KeyboardShortcutModifiers.None;
+        if (control) modifiers |= KeyboardShortcutModifiers.Control;
+        if (shift) modifiers |= KeyboardShortcutModifiers.Shift;
+        if (alt) modifiers |= KeyboardShortcutModifiers.Alt;
+        if (windows) modifiers |= KeyboardShortcutModifiers.Windows;
+        var binding = new KeyboardShortcutBinding(keyElement.GetString() ?? "", modifiers);
+        if (binding.IsEmpty
+            || !ShortcutInputMapper.TryGetVirtualKey(binding, out _, out _)
+            || !_shortcutService.Registry.Actions.Any(action =>
+                action.Scopes.Any(scope => scope is
+                    ShortcutScope.Popup
+                    or ShortcutScope.Dictionary
+                    or ShortcutScope.Reader
+                    or ShortcutScope.Sasayaki)
+                && _shortcutService.GetBinding(action).Matches(binding)))
+        {
+            throw new InvalidDataException("Unsupported reader shortcut binding.");
+        }
+
+        return binding;
+    }
+
+    private static bool TryGetShortcutBoolean(
+        JsonElement payload,
+        string propertyName,
+        out bool value)
+    {
+        value = false;
+        if (!payload.TryGetProperty(propertyName, out var element)
+            || element.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+        {
+            return false;
+        }
+
+        value = element.GetBoolean();
+        return true;
+    }
+
     private async Task HandleReaderLyricsLookupAsync(
         ReaderLyricsLookupRequestedEventArgs request)
     {
@@ -2669,12 +2752,18 @@ public sealed partial class NovelReaderPage : Page
             || request.CharacterIndex < 0
             || request.CharacterIndex >= request.Cue.Text.Length)
         {
+            if (!request.IsHoverLookup)
+                await DismissReaderLyricsLookupAsync();
             return;
         }
 
         var lookupText = request.Cue.Text[request.CharacterIndex..];
         if (string.IsNullOrWhiteSpace(lookupText))
+        {
+            if (!request.IsHoverLookup)
+                await DismissReaderLyricsLookupAsync();
             return;
+        }
 
         var requestVersion = Interlocked.Increment(ref _lookupRequestVersion);
         var traceId = $"reader-lyrics-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
@@ -2696,6 +2785,12 @@ public sealed partial class NovelReaderPage : Page
             if (results.Count == 0
                 || requestVersion != Volatile.Read(ref _lookupRequestVersion))
             {
+                if (results.Count == 0
+                    && !request.IsHoverLookup
+                    && requestVersion == Volatile.Read(ref _lookupRequestVersion))
+                {
+                    await DismissReaderLyricsLookupAsync();
+                }
                 return;
             }
 
@@ -2740,6 +2835,13 @@ public sealed partial class NovelReaderPage : Page
         {
             _lookupSemaphore.Release();
         }
+    }
+
+    private async Task DismissReaderLyricsLookupAsync()
+    {
+        _popupOverlay?.Dismiss();
+        await SetLookupPopupActiveAsync(false);
+        RestoreReaderKeyboardFocus();
     }
 
     private AnkiMiningContext CreateLyricsAnkiMiningContext(
@@ -2898,6 +3000,7 @@ public sealed partial class NovelReaderPage : Page
 
         _popupOverlay = new DictionaryPopupOverlay();
         _popupOverlay.Dismissed += OnPopupOverlayDismissed;
+        _popupOverlay.DismissStarted += OnPopupOverlayDismissStarted;
         _popupOverlay.UseCanvas(
             DictionaryOverlayCanvas,
             DictionaryPopupCanvasInputMode.VisibleHostsOnly);
@@ -2908,8 +3011,11 @@ public sealed partial class NovelReaderPage : Page
     {
         ResumeSasayakiAfterLookup();
         _ = SetLookupPopupActiveAsync(false);
-        RestoreReaderLyricsKeyboardFocus();
+        RestoreReaderKeyboardFocus();
     }
+
+    private void OnPopupOverlayDismissStarted(object? sender, EventArgs e) =>
+        RestoreReaderKeyboardFocus();
 
     private void PauseSasayakiForLookup()
     {

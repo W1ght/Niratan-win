@@ -43,6 +43,15 @@
                     HorizontalContentAlignment="Stretch"
                     Command="{Binding ViewModel.SelectCollectionFilterCommand, ElementName=ThisPage}"
                     CommandParameter="{x:Bind}">
+                <Button.ContextFlyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem Text="Edit smart collection"
+                                        Click="EditSmartCollectionMenuItem_Click" />
+                        <MenuFlyoutItem Text="Delete collection"
+                                        Command="{Binding ViewModel.DeleteCollectionCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                    </MenuFlyout>
+                </Button.ContextFlyout>
                 <Grid ColumnDefinitions="Auto,*"
                       ColumnSpacing="10">
                     <FontIcon Glyph="&#xE8F1;"
@@ -83,6 +92,7 @@
         </DataTemplate>
 
         <DataTemplate x:Key="VideoListItemTemplate" x:DataType="vmc:VideoItemViewModel">
+            <Grid>
             <Button Padding="0"
                     HorizontalContentAlignment="Stretch"
                     AutomationProperties.AutomationId="{x:Bind AutomationId, Mode=OneTime}"
@@ -99,6 +109,9 @@
                         <MenuFlyoutItem x:Uid="VideoLibraryPlayFromBeginningMenuItem"
                                         Text="Play from beginning"
                                         Command="{Binding ViewModel.OpenVideoFromBeginningCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                        <MenuFlyoutItem Text="Details"
+                                        Command="{Binding ViewModel.SelectVideoDetailsCommand, ElementName=ThisPage}"
                                         CommandParameter="{x:Bind}" />
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem x:Uid="VideoLibraryAddFavoriteMenuItem"
@@ -178,9 +191,18 @@
                     </Grid>
                 </Grid>
             </Button>
+                <CheckBox Margin="6"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Top"
+                          IsChecked="{x:Bind IsSelected, Mode=OneWay}"
+                          Command="{Binding ViewModel.ToggleVideoSelectionCommand, ElementName=ThisPage}"
+                          CommandParameter="{x:Bind}"
+                          AutomationProperties.Name="Select video" />
+            </Grid>
         </DataTemplate>
 
         <DataTemplate x:Key="VideoPosterItemTemplate" x:DataType="vmc:VideoItemViewModel">
+            <Grid>
             <Button Width="220"
                     Padding="0"
                     HorizontalContentAlignment="Stretch"
@@ -199,6 +221,9 @@
                         <MenuFlyoutItem x:Uid="VideoLibraryPlayFromBeginningMenuItem"
                                         Text="Play from beginning"
                                         Command="{Binding ViewModel.OpenVideoFromBeginningCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}" />
+                        <MenuFlyoutItem Text="Details"
+                                        Command="{Binding ViewModel.SelectVideoDetailsCommand, ElementName=ThisPage}"
                                         CommandParameter="{x:Bind}" />
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem x:Uid="VideoLibraryAddFavoriteMenuItem"
@@ -277,6 +302,14 @@
                     </StackPanel>
                 </StackPanel>
             </Button>
+                <CheckBox Margin="6"
+                          HorizontalAlignment="Left"
+                          VerticalAlignment="Top"
+                          IsChecked="{x:Bind IsSelected, Mode=OneWay}"
+                          Command="{Binding ViewModel.ToggleVideoSelectionCommand, ElementName=ThisPage}"
+                          CommandParameter="{x:Bind}"
+                          AutomationProperties.Name="Select video" />
+            </Grid>
         </DataTemplate>
     </Page.Resources>
 
@@ -407,9 +440,12 @@
             <Grid RowDefinitions="Auto,*">
                 <Grid Grid.Row="0"
                       Padding="20,14,28,16"
-                      ColumnDefinitions="*,280,156,112,Auto"
+                      RowDefinitions="Auto,Auto"
+                      ColumnDefinitions="*,156,112,Auto"
                       ColumnSpacing="12">
-                    <StackPanel VerticalAlignment="Center"
+                    <StackPanel Grid.ColumnSpan="4"
+                                Margin="0,0,0,12"
+                                VerticalAlignment="Center"
                                 Spacing="2">
                         <StackPanel Orientation="Horizontal"
                                     Spacing="8"
@@ -423,7 +459,7 @@
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
 
-                    <TextBox Grid.Column="1"
+                    <TextBox Grid.Row="1"
                              x:Name="VideoLibrarySearchBox"
                              x:Uid="VideoLibrarySearchBox"
                              AutomationProperties.AutomationId="VideoLibrarySearchBox"
@@ -431,7 +467,8 @@
                              VerticalAlignment="Center"
                              Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
-                    <ComboBox Grid.Column="2"
+                    <ComboBox Grid.Row="1"
+                              Grid.Column="1"
                               x:Name="VideoLibrarySortComboBox"
                               x:Uid="VideoLibrarySortComboBox"
                               AutomationProperties.AutomationId="VideoLibrarySortComboBox"
@@ -444,7 +481,8 @@
 
                     <Grid x:Name="VideoLibraryLayoutSegment"
                           AutomationProperties.AutomationId="VideoLibraryLayoutSegment"
-                          Grid.Column="3"
+                          Grid.Row="1"
+                          Grid.Column="2"
                           Height="36"
                           ColumnDefinitions="*,*">
                         <ToggleButton x:Uid="VideoLibraryLayoutList"
@@ -462,9 +500,26 @@
                         </ToggleButton>
                     </Grid>
 
-                    <CommandBar Grid.Column="4"
-                                DefaultLabelPosition="Right"
+                    <CommandBar Grid.Row="1"
+                                Grid.Column="3"
+                                DefaultLabelPosition="Collapsed"
                                 VerticalAlignment="Center">
+                        <AppBarButton Label="Refresh sources"
+                                      AutomationProperties.AutomationId="RefreshVideoSourcesButton"
+                                      IsEnabled="{x:Bind ViewModel.HasSources, Mode=OneWay}"
+                                      Command="{x:Bind ViewModel.RefreshAllSourcesCommand}">
+                            <AppBarButton.Icon>
+                                <FontIcon Glyph="&#xE72C;" />
+                            </AppBarButton.Icon>
+                        </AppBarButton>
+                        <AppBarButton Label="Manage sources"
+                                      AutomationProperties.AutomationId="ManageVideoSourcesButton"
+                                      IsEnabled="{x:Bind ViewModel.HasSources, Mode=OneWay}"
+                                      Click="ManageVideoSourcesButton_Click">
+                            <AppBarButton.Icon>
+                                <FontIcon Glyph="&#xE713;" />
+                            </AppBarButton.Icon>
+                        </AppBarButton>
                         <AppBarButton x:Name="ScanVideoFolderButton"
                                       x:Uid="ScanVideoFolderButton"
                                       AutomationProperties.AutomationId="ScanVideoFolderButton"
@@ -564,8 +619,33 @@
                     </StackPanel>
 
                     <Grid Grid.Row="1"
-                          Margin="20,0,28,0">
-                        <ListView x:Name="VideoLibraryListView"
+                          Margin="20,0,28,0"
+                          ColumnDefinitions="*,340"
+                          ColumnSpacing="16">
+                        <Grid RowDefinitions="Auto,*">
+                            <CommandBar Grid.Row="0"
+                                        Margin="0,0,0,8"
+                                        Visibility="{x:Bind ViewModel.HasSelection, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                                <AppBarButton Label="Mark selected watched"
+                                              Command="{x:Bind ViewModel.MarkSelectedWatchedCommand}">
+                                    <AppBarButton.Icon><SymbolIcon Symbol="Accept" /></AppBarButton.Icon>
+                                </AppBarButton>
+                                <AppBarButton Label="Clear selected progress"
+                                              Command="{x:Bind ViewModel.ClearSelectedProgressCommand}">
+                                    <AppBarButton.Icon><SymbolIcon Symbol="Clear" /></AppBarButton.Icon>
+                                </AppBarButton>
+                                <AppBarButton Label="Remove selected"
+                                              Command="{x:Bind ViewModel.DeleteSelectedVideosCommand}">
+                                    <AppBarButton.Icon><SymbolIcon Symbol="Delete" /></AppBarButton.Icon>
+                                </AppBarButton>
+                                <AppBarButton Label="Remove missing"
+                                              Command="{x:Bind ViewModel.RemoveMissingVideosCommand}">
+                                    <AppBarButton.Icon><FontIcon Glyph="&#xE74D;" /></AppBarButton.Icon>
+                                </AppBarButton>
+                            </CommandBar>
+
+                        <ListView Grid.Row="1"
+                                  x:Name="VideoLibraryListView"
                                   AutomationProperties.AutomationId="VideoLibraryListView"
                                   ItemTemplate="{StaticResource VideoListItemTemplate}"
                                   ItemsSource="{x:Bind ViewModel.Videos, Mode=OneWay}"
@@ -574,7 +654,8 @@
                                   SelectionMode="None"
                                   Visibility="{x:Bind ViewModel.IsListLayout, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
 
-                        <GridView x:Name="VideoGridView"
+                        <GridView Grid.Row="1"
+                                  x:Name="VideoGridView"
                                   AutomationProperties.AutomationId="VideoGridView"
                                   Padding="0,0,16,0"
                                   IsItemClickEnabled="True"
@@ -591,12 +672,71 @@
                                 </ItemsPanelTemplate>
                             </GridView.ItemsPanel>
                         </GridView>
+                        </Grid>
+
+                        <Border Grid.Column="1"
+                                Padding="16"
+                                BorderThickness="1,0,0,0"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                Visibility="{x:Bind ViewModel.HasSelectedVideo, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                            <ScrollViewer>
+                                <StackPanel Spacing="14">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="Video details" Style="{StaticResource SubtitleTextBlockStyle}" />
+                                        <Button Grid.Column="1"
+                                                Command="{x:Bind ViewModel.CloseVideoDetailsCommand}">
+                                            <FontIcon Glyph="&#xE711;" />
+                                        </Button>
+                                    </Grid>
+                                    <TextBox Header="Display title"
+                                             Text="{x:Bind ViewModel.SelectedVideoTitleDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBox Header="Tags"
+                                             PlaceholderText="Comma or line separated"
+                                             AcceptsReturn="True"
+                                             Text="{x:Bind ViewModel.SelectedVideoTagsDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    <Button Content="Save metadata"
+                                            HorizontalAlignment="Left"
+                                            Command="{x:Bind ViewModel.SaveVideoDetailsCommand}" />
+
+                                    <TextBlock Text="Bound subtitle" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                    <TextBlock Text="{x:Bind ViewModel.SelectedVideoSubtitlePath, Mode=OneWay}"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Button Content="Bind subtitle"
+                                                Command="{x:Bind ViewModel.BindSubtitleCommand}" />
+                                        <Button Content="Clear"
+                                                Command="{x:Bind ViewModel.ClearBoundSubtitleCommand}" />
+                                    </StackPanel>
+
+                                    <TextBlock Text="Collections" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                    <ItemsControl ItemsSource="{x:Bind ViewModel.ManualCollectionOptions, Mode=OneWay}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="pages:VideoCollectionMembershipOption">
+                                                <CheckBox Content="{x:Bind Collection.Name, Mode=OneWay}"
+                                                          IsChecked="{x:Bind IsIncluded, Mode=TwoWay}"
+                                                          Command="{Binding ViewModel.SetSelectedCollectionMembershipCommand, ElementName=ThisPage}"
+                                                          CommandParameter="{x:Bind}" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                        <TextBox PlaceholderText="New collection"
+                                                 Text="{x:Bind ViewModel.ManualCollectionNameDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        <Button Grid.Column="1"
+                                                Content="Add"
+                                                Command="{x:Bind ViewModel.AddSelectedToNewCollectionCommand}" />
+                                    </Grid>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
                     </Grid>
                 </Grid>
             </Grid>
         </NavigationView>
 
         <ContentDialog x:Name="CreateSmartCollectionDialog"
+                       Title="{x:Bind ViewModel.SmartCollectionDialogTitle, Mode=OneWay}"
                        FullSizeDesired="False"
                        DefaultButton="None">
             <StackPanel Spacing="16"
@@ -605,17 +745,40 @@
                          Header="Name"
                          PlaceholderText="Smart collection name"
                          Text="{Binding SmartCollectionNameDraft, Mode=TwoWay}" />
-                <ComboBox x:Uid="VideoLibrarySmartCollectionRuleField"
-                          Header="Rule field"
-                          DisplayMemberPath="DisplayName"
-                          ItemsSource="{x:Bind ViewModel.AvailableSmartRuleFields, Mode=OneWay}"
-                          SelectedValue="{x:Bind ViewModel.SelectedSmartRuleField, Mode=TwoWay}"
-                          SelectedValuePath="Value" />
-                <TextBox x:Uid="VideoLibrarySmartCollectionRuleValue"
-                         Header="Rule"
-                         PlaceholderText="Rule text"
-                         Visibility="{x:Bind ViewModel.IsSmartRuleValueVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}"
-                         Text="{Binding SmartRuleValueDraft, Mode=TwoWay}" />
+                <TextBlock Text="All rules must match" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <ItemsControl ItemsSource="{x:Bind ViewModel.SmartRuleDrafts, Mode=OneWay}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="pages:VideoSmartRuleDraft">
+                            <Grid ColumnDefinitions="132,112,*,Auto"
+                                  ColumnSpacing="8"
+                                  Margin="0,0,0,8">
+                                <ComboBox DisplayMemberPath="DisplayName"
+                                          ItemsSource="{Binding ViewModel.AvailableSmartRuleFields, ElementName=ThisPage}"
+                                          SelectedValue="{x:Bind Field, Mode=TwoWay}"
+                                          SelectedValuePath="Value"
+                                          SelectionChanged="SmartRuleEditor_SelectionChanged" />
+                                <ComboBox Grid.Column="1"
+                                          DisplayMemberPath="DisplayName"
+                                          ItemsSource="{Binding ViewModel.AvailableSmartRuleMatches, ElementName=ThisPage}"
+                                          SelectedValue="{x:Bind Match, Mode=TwoWay}"
+                                          SelectedValuePath="Value"
+                                          SelectionChanged="SmartRuleEditor_SelectionChanged" />
+                                <TextBox Grid.Column="2"
+                                         PlaceholderText="Value"
+                                         Text="{x:Bind Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         TextChanged="SmartRuleEditor_TextChanged" />
+                                <Button Grid.Column="3"
+                                        Command="{Binding ViewModel.RemoveSmartRuleCommand, ElementName=ThisPage}"
+                                        CommandParameter="{x:Bind}">
+                                    <SymbolIcon Symbol="Remove" />
+                                </Button>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Content="Add rule"
+                        HorizontalAlignment="Left"
+                        Command="{x:Bind ViewModel.AddSmartRuleCommand}" />
                 <StackPanel Spacing="8">
                     <TextBlock x:Uid="VideoLibraryPreviewMatches"
                                Text="Preview matches"
@@ -641,6 +804,59 @@
                             Click="CreateSmartCollectionPrimaryButton_Click" />
                 </StackPanel>
             </StackPanel>
+        </ContentDialog>
+
+        <ContentDialog x:Name="ManageVideoSourcesDialog"
+                       Title="Manage sources"
+                       PrimaryButtonText="Done"
+                       DefaultButton="Primary">
+            <ListView MinWidth="640"
+                      MaxHeight="440"
+                      SelectionMode="None"
+                      ItemsSource="{x:Bind ViewModel.SourceSummaries, Mode=OneWay}">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="pages:VideoLibrarySourceSummary">
+                        <Grid Padding="8"
+                              ColumnDefinitions="Auto,*,Auto,Auto,Auto"
+                              ColumnSpacing="10">
+                            <FontIcon Glyph="&#xE8B7;" VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" Spacing="3">
+                                <TextBlock Text="{x:Bind Source.Name, Mode=OneWay}"
+                                           Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <TextBlock Text="{x:Bind Source.FolderPath, Mode=OneWay}"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Text="{x:Bind StatusText, Mode=OneWay}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Text="{x:Bind LastScannedText, Mode=OneWay}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Text="{x:Bind Source.LastError, Mode=OneWay}"
+                                           Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                           TextWrapping="Wrap"
+                                           Visibility="{x:Bind HasError, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                            </StackPanel>
+                            <Button Grid.Column="2"
+                                    Command="{Binding ViewModel.RefreshSourceCommand, ElementName=ThisPage}"
+                                    CommandParameter="{x:Bind}"
+                                    ToolTipService.ToolTip="Refresh source">
+                                <FontIcon Glyph="&#xE72C;" />
+                            </Button>
+                            <Button Grid.Column="3"
+                                    Command="{Binding ViewModel.RevealSourceCommand, ElementName=ThisPage}"
+                                    CommandParameter="{x:Bind}"
+                                    ToolTipService.ToolTip="Reveal source">
+                                <FontIcon Glyph="&#xE8B7;" />
+                            </Button>
+                            <Button Grid.Column="4"
+                                    Command="{Binding ViewModel.RemoveSourceCommand, ElementName=ThisPage}"
+                                    CommandParameter="{x:Bind}"
+                                    ToolTipService.ToolTip="Remove source">
+                                <FontIcon Glyph="&#xE74D;" />
+                            </Button>
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
         </ContentDialog>
 
     </Grid>

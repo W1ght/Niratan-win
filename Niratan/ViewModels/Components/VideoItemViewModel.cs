@@ -6,17 +6,24 @@ using System.Linq;
 using Niratan.Helpers;
 using Niratan.Models;
 using Microsoft.UI.Xaml.Media.Imaging;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Niratan.ViewModels.Components;
 
-public sealed class VideoItemViewModel
+public sealed partial class VideoItemViewModel : ObservableObject
 {
-    public VideoItemViewModel(VideoItem video)
+    public VideoItemViewModel(VideoItem video, bool isSelected = false)
     {
         Video = video;
+        IsSelected = isSelected;
     }
 
     public VideoItem Video { get; }
+
+    [ObservableProperty]
+    public partial bool IsSelected { get; set; }
+
+    public bool IsMissing => !Video.IsRemote && !File.Exists(Video.FilePath);
 
     public string AutomationId => $"VideoItem_{Video.Id}";
 

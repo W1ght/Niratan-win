@@ -1,3 +1,4 @@
+using System;
 using System.Text;
 using Niratan.Enums;
 using Niratan.Models.Settings;
@@ -16,6 +17,11 @@ public static class NovelReaderContentStyles
         var columnGap = settings.ColumnGapCss;
         var imageMaxWidth = settings.ImageMaxWidthFallbackCss;
         var imageMaxHeight = settings.ImageMaxHeightFallbackCss;
+        var horizontalSpread = settings.UsesTwoColumnHorizontalPages;
+        var readerContentWidth = horizontalSpread
+            ? "max(1px, calc((var(--page-width) - " + settings.HorizontalPadding + "vw - 32px) / 2))"
+            : "max(1px, var(--page-width))";
+        var readerColumnGap = horizontalSpread ? "32px" : columnGap;
 
         var sb = new StringBuilder();
 
@@ -26,8 +32,8 @@ public static class NovelReaderContentStyles
                 --page-height: 100vh;
                 --reader-safe-inline: 0px;
                 --reader-safe-block: 0px;
-                --reader-content-width: max(1px, var(--page-width));
-                --reader-column-gap: {{columnGap}};
+                --reader-content-width: {{readerContentWidth}};
+                --reader-column-gap: {{readerColumnGap}};
                 --reader-content-height: max(1px, var(--page-height));
             }
             @media (prefers-color-scheme: light) {
@@ -55,6 +61,18 @@ public static class NovelReaderContentStyles
             """));
         sb.Append('\n');
 
+        if (settings.ImportedFontUrl is { } importedFontUrl)
+        {
+            sb.Append(Css($$"""
+            @font-face {
+                font-family: {{ImportedFontFamily(settings.SelectedFont)}};
+                src: url({{CssString(importedFontUrl)}});
+                font-display: swap;
+            }
+            """));
+            sb.Append('\n');
+        }
+
         // Body: font, size, writing mode, column layout, padding
         sb.Append(Css($$"""
             body {
@@ -67,6 +85,7 @@ public static class NovelReaderContentStyles
                 column-gap: var(--reader-column-gap) !important;
                 padding: {{pagePadding}} !important;
                 padding-bottom: {{bottomPadding}} !important;
+                {{(horizontalSpread ? "column-count: 2 !important; -webkit-column-count: 2 !important;" : "")}}
             }
             """));
         sb.Append('\n');
@@ -110,6 +129,18 @@ public static class NovelReaderContentStyles
             body {
                 line-height: {{settings.LineHeight.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}} !important;
                 letter-spacing: {{letterSpacingEm}}em !important;
+            }
+            """));
+            sb.Append('\n');
+
+            var paragraphSpacing = Math.Clamp(settings.ParagraphSpacing, 0, 3)
+                .ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+            var paragraphMargins = settings.VerticalWriting
+                ? $"margin-right: {paragraphSpacing}em !important; margin-left: {paragraphSpacing}em !important;"
+                : $"margin-top: {paragraphSpacing}em !important; margin-bottom: {paragraphSpacing}em !important;";
+            sb.Append(Css($$"""
+            p {
+                {{paragraphMargins}}
             }
             """));
             sb.Append('\n');
@@ -184,6 +215,16 @@ public static class NovelReaderContentStyles
         if (argb == 0xFF18150C) return "#18150C";
         return $"#{argb & 0x00FFFFFF:X6}";
     }
+
+    private static string ImportedFontFamily(string selectedFont)
+    {
+        var comma = selectedFont.IndexOf(',');
+        return (comma >= 0 ? selectedFont[..comma] : selectedFont).Trim();
+    }
+
+    private static string CssString(string value) =>
+        "\"" + value.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
 
     public static string GenerateCss(
         int fontSize = 22,

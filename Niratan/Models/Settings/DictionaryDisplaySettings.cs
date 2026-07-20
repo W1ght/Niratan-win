@@ -22,8 +22,10 @@ public sealed record DictionaryDisplaySettings(
     bool HarmonicFrequency = false,
     bool ShowExpressionTags = false,
     bool TwoColumnLayout = false,
-    int DesktopLookupHoverDelayMs = 45,
     string CustomCSS = "",
+    // Windows extension: WebView2 dictionary surfaces reuse the reader's controlled font catalog.
+    string FontFamily = "",
+    string? FontFileName = null,
     bool ScanNonJapaneseText = true,
     int MaxResults = 16,
     int ScanLength = 16,
@@ -46,7 +48,4 @@ public sealed record DictionaryDisplaySettings(
         _ => "Expand All",
     };
 
-    [JsonIgnore]
-    public int NormalizedDesktopLookupHoverDelayMs =>
-        Math.Clamp(DesktopLookupHoverDelayMs, 0, 250);
 }

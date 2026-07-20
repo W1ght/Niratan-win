@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Niratan.Helpers;
 using Niratan.Models.Shortcuts;
 using Niratan.Services.Shortcuts;
@@ -46,6 +47,7 @@ public partial class KeyboardShortcutsSettingsPageViewModel : ObservableObject
         row.IsRecording = true;
     }
 
+    [RelayCommand]
     public void CancelRecording()
     {
         if (RecordingRow != null)
@@ -81,7 +83,7 @@ public partial class KeyboardShortcutsSettingsPageViewModel : ObservableObject
             var sectionRows = _shortcutService.Registry.ActionsIn(category)
                 .Select(action =>
                 {
-                    var row = new ShortcutRowViewModel(action);
+                    var row = new ShortcutRowViewModel(action, StartRecording, ResetShortcut);
                     UpdateRow(row);
                     Rows.Add(row);
                     return row;
@@ -89,7 +91,14 @@ public partial class KeyboardShortcutsSettingsPageViewModel : ObservableObject
                 .ToList();
 
             if (sectionRows.Count > 0)
-                Sections.Add(new ShortcutSectionViewModel(category, sectionRows));
+            {
+                Sections.Add(new ShortcutSectionViewModel(
+                    category,
+                    sectionRows,
+                    category == ShortcutCategory.DictionaryPopup
+                        ? _shortcutService.DictionaryEntryJumpCount
+                        : null));
+            }
         }
     }
 
@@ -97,7 +106,13 @@ public partial class KeyboardShortcutsSettingsPageViewModel : ObservableObject
     {
         foreach (var row in Rows)
             UpdateRow(row);
+
+        foreach (var section in Sections.Where(section => section.ShowsEntryJumpCount))
+            section.EntryJumpCount = _shortcutService.DictionaryEntryJumpCount;
     }
+
+    public void SetDictionaryEntryJumpCount(double value) =>
+        _shortcutService.SetDictionaryEntryJumpCount((int)System.Math.Round(value));
 
     private void UpdateRow(ShortcutRowViewModel row)
     {
@@ -107,27 +122,42 @@ public partial class KeyboardShortcutsSettingsPageViewModel : ObservableObject
     }
 }
 
-public sealed class ShortcutSectionViewModel
+public partial class ShortcutSectionViewModel : ObservableObject
 {
     public ShortcutSectionViewModel(
         ShortcutCategory category,
-        IReadOnlyList<ShortcutRowViewModel> rows)
+        IReadOnlyList<ShortcutRowViewModel> rows,
+        int? entryJumpCount)
     {
         Category = category;
         Title = ShortcutCategoryTitle.For(category);
         Rows = rows;
+        ShowsEntryJumpCount = entryJumpCount.HasValue;
+        EntryJumpCount = entryJumpCount ?? 1;
     }
 
     public ShortcutCategory Category { get; }
     public string Title { get; }
     public IReadOnlyList<ShortcutRowViewModel> Rows { get; }
+    public bool ShowsEntryJumpCount { get; }
+
+    [ObservableProperty]
+    public partial int EntryJumpCount { get; set; }
 }
 
 public partial class ShortcutRowViewModel : ObservableObject
 {
-    public ShortcutRowViewModel(ShortcutAction action)
+    private readonly System.Action<ShortcutRowViewModel> _startRecording;
+    private readonly System.Action<ShortcutRowViewModel> _resetShortcut;
+
+    public ShortcutRowViewModel(
+        ShortcutAction action,
+        System.Action<ShortcutRowViewModel> startRecording,
+        System.Action<ShortcutRowViewModel> resetShortcut)
     {
         Action = action;
+        _startRecording = startRecording;
+        _resetShortcut = resetShortcut;
         Title = ResourceStringHelper.GetString(action.TitleResourceKey, action.Title);
         DefaultShortcutText = ResourceStringHelper.FormatString(
             "KeyboardShortcutsDefaultText",
@@ -163,6 +193,12 @@ public partial class ShortcutRowViewModel : ObservableObject
         IsRecording
             ? ResourceStringHelper.GetString("KeyboardShortcutsPressKeysText", "Press keys...")
             : CurrentShortcutLabel;
+
+    [RelayCommand]
+    private void Record() => _startRecording(this);
+
+    [RelayCommand]
+    private void Reset() => _resetShortcut(this);
 
     public void Update(KeyboardShortcutBinding binding, IReadOnlyList<ShortcutConflict> conflicts)
     {

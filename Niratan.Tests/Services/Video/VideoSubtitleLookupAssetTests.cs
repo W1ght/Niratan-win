@@ -212,7 +212,8 @@ public class VideoSubtitleLookupAssetTests
         code.Should().Contain(
             "await LookupSubtitleAtCanvasPointAsync(point, isHoverLookup: false)");
         code.Should().Contain("ScheduleSubtitleHoverLookup(point)");
-        code.Should().Contain("RunSubtitleHoverLookupAfterDelayAsync(point, delay, token)");
+        code.Should().Contain("RunSubtitleHoverLookupAsync(point, token)");
+        code.Should().NotContain("NormalizedDesktopLookupHoverDelayMs");
         code.Should().Contain(
             "await LookupSubtitleAtCanvasPointAsync(point, isHoverLookup: true)");
         code.Should().Contain("await StartSubtitleLookupAsync(");

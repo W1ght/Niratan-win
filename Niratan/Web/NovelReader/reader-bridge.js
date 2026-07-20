@@ -174,6 +174,14 @@ var reader = {
     return Number.isFinite(value) ? value : 0;
   },
 
+  currentImageMaxWidth: function (pageWidth) {
+    if (!this.isVertical()) {
+      var columnWidth = parseFloat(getComputedStyle(document.body).columnWidth);
+      if (Number.isFinite(columnWidth) && columnWidth > 0) return columnWidth;
+    }
+    return Math.max(1, Math.floor(pageWidth - (this.currentSafeInline() * 2)));
+  },
+
   pageStep: function (context) {
     return context.pageSize;
   },
@@ -607,7 +615,7 @@ var reader = {
     document.documentElement.style.setProperty("--page-width", pageWidth + "px");
     document.documentElement.style.setProperty(
       "--niratan-image-max-width",
-      Math.max(1, Math.floor(pageWidth - (this.currentSafeInline() * 2))) + "px"
+      this.currentImageMaxWidth(pageWidth) + "px"
     );
     document.documentElement.style.setProperty(
       "--niratan-image-max-height",
@@ -691,7 +699,7 @@ var reader = {
     );
     document.documentElement.style.setProperty(
       "--niratan-image-max-width",
-      Math.max(1, Math.floor(pageWidth - (reader.currentSafeInline() * 2))) + "px"
+      reader.currentImageMaxWidth(pageWidth) + "px"
     );
     document.documentElement.style.setProperty(
       "--niratan-image-max-height",
@@ -803,6 +811,9 @@ function createBridgeErrorReporter() {
 }
 
 var defaultShortcutBindings = {
+  "popup.dismiss": { key: "Escape", control: false, shift: false, alt: false, windows: false },
+  "dictionary.previousEntry": { key: "PageUp", control: false, shift: false, alt: true, windows: false },
+  "dictionary.nextEntry": { key: "PageDown", control: false, shift: false, alt: true, windows: false },
   "reader.previousPage": { key: "LeftArrow", control: false, shift: false, alt: false, windows: false },
   "reader.nextPage": { key: "RightArrow", control: false, shift: false, alt: false, windows: false },
   "reader.close": { key: "Escape", control: false, shift: false, alt: false, windows: false },
@@ -1161,20 +1172,14 @@ document.addEventListener("keydown", function (event) {
   var actionId = shortcutActionForKeyboardEvent(event);
   if (!actionId) return;
 
-  if (actionId === "reader.previousPage") {
-    event.preventDefault();
-    requestPageNavigation("backward");
-    return;
-  }
-
-  if (actionId === "reader.nextPage") {
-    event.preventDefault();
-    requestPageNavigation("forward");
-    return;
-  }
-
   event.preventDefault();
-  postToHost("shortcut", { actionId: actionId });
+  postToHost("shortcut", {
+    key: keyboardEventToShortcutKey(event),
+    control: !!event.ctrlKey,
+    shift: !!event.shiftKey,
+    alt: !!event.altKey,
+    windows: !!event.metaKey,
+  });
 });
 
 window.__niratanReaderState.bridgeReady = true;

@@ -2,6 +2,7 @@ using System.Windows.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 
 namespace Niratan.Views.Controls;
@@ -98,6 +99,18 @@ public sealed partial class NovelBookCard : UserControl
         typeof(NovelBookCard),
         new PropertyMetadata(null));
 
+    public static readonly DependencyProperty IsSelectionModeProperty = DependencyProperty.Register(
+        nameof(IsSelectionMode),
+        typeof(bool),
+        typeof(NovelBookCard),
+        new PropertyMetadata(false));
+
+    public static readonly DependencyProperty IsSelectedProperty = DependencyProperty.Register(
+        nameof(IsSelected),
+        typeof(bool),
+        typeof(NovelBookCard),
+        new PropertyMetadata(false));
+
     public NovelBookCard()
     {
         InitializeComponent();
@@ -191,5 +204,23 @@ public sealed partial class NovelBookCard : UserControl
     {
         get => (FlyoutBase?)GetValue(CardContextFlyoutProperty);
         set => SetValue(CardContextFlyoutProperty, value);
+    }
+
+    public bool IsSelectionMode
+    {
+        get => (bool)GetValue(IsSelectionModeProperty);
+        set => SetValue(IsSelectionModeProperty, value);
+    }
+
+    public bool IsSelected
+    {
+        get => (bool)GetValue(IsSelectedProperty);
+        set => SetValue(IsSelectedProperty, value);
+    }
+
+    private void BookButton_ContextRequested(UIElement sender, ContextRequestedEventArgs args)
+    {
+        if (IsSelectionMode)
+            args.Handled = true;
     }
 }

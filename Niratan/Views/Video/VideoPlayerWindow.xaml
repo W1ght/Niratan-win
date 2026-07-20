@@ -34,34 +34,34 @@
                 <Setter Property="MinHeight" Value="30" />
                 <Setter Property="Padding" Value="8,4" />
                 <Setter Property="FontSize" Value="12" />
-                <Setter Property="Foreground" Value="#CC111111" />
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
                 <Setter Property="HorizontalAlignment" Value="Stretch" />
                 <Setter Property="HorizontalContentAlignment" Value="Center" />
             </Style>
             <Style x:Key="VideoInspectorCardStyle" TargetType="Border">
                 <Setter Property="Padding" Value="12" />
-                <Setter Property="Background" Value="#DDFFFFFF" />
-                <Setter Property="BorderBrush" Value="#44FFFFFF" />
+                <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
                 <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="CornerRadius" Value="16" />
             </Style>
             <Style x:Key="VideoInspectorSectionTitleStyle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="12" />
                 <Setter Property="FontWeight" Value="SemiBold" />
-                <Setter Property="Foreground" Value="#99111111" />
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
             </Style>
             <Style x:Key="VideoInspectorPrimaryTextStyle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="13" />
-                <Setter Property="Foreground" Value="#D9111111" />
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
             </Style>
             <Style x:Key="VideoInspectorSecondaryTextStyle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="12" />
-                <Setter Property="Foreground" Value="#80111111" />
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
             </Style>
             <Style x:Key="VideoInspectorValueTextStyle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="12" />
                 <Setter Property="FontWeight" Value="SemiBold" />
-                <Setter Property="Foreground" Value="#AA111111" />
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
             </Style>
         </Grid.Resources>
 
@@ -305,7 +305,7 @@
                     <Grid Background="Transparent">
                         <Border Width="2"
                                 HorizontalAlignment="Center"
-                                Background="#33111111"
+                                Background="{ThemeResource ControlStrokeColorDefaultBrush}"
                                 CornerRadius="1" />
                     </Grid>
                 </ControlTemplate>
@@ -321,9 +321,8 @@
                         MaxWidth="720"
                         Visibility="Collapsed"
                         Padding="12,20,16,20"
-                        RequestedTheme="Light"
-                        Background="#E8F2F2F2"
-                        BorderBrush="#66FFFFFF"
+                        Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
                         BorderThickness="1,0,0,0"
                         AutomationProperties.AutomationId="VideoInspectorRightDockPanel">
                     <Grid RowDefinitions="Auto,Auto,Auto,*"
@@ -331,7 +330,7 @@
                         <Grid ColumnDefinitions="Auto,*,Auto"
                               ColumnSpacing="10">
                             <FontIcon FontSize="14"
-                                      Foreground="#CC111111"
+                                      Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                                       Glyph="&#xE8A0;"
                                       VerticalAlignment="Center" />
                             <TextBlock x:Uid="VideoInspectorTitleText"
@@ -339,7 +338,7 @@
                                        Text="视频面板"
                                        FontSize="14"
                                        FontWeight="SemiBold"
-                                       Foreground="#E6111111"
+                                       Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                                        VerticalAlignment="Center" />
                             <Button x:Name="InspectorCloseButton"
                                     x:Uid="VideoInspectorCloseButton"
@@ -348,7 +347,7 @@
                                     Width="28"
                                     Height="28"
                                     Padding="0"
-                                    Foreground="#CC111111"
+                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                                     Click="InspectorCloseButton_Click">
                                 <FontIcon FontSize="11"
                                           Glyph="&#xE711;" />
@@ -461,7 +460,7 @@
                                             <Grid ColumnDefinitions="Auto,*"
                                                   ColumnSpacing="8">
                                                 <FontIcon FontSize="13"
-                                                          Foreground="#99111111"
+                                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                           Glyph="&#xE8F1;"
                                                           VerticalAlignment="Center" />
                                                 <TextBlock x:Uid="VideoInspectorMiningHistoryHeaderText"
@@ -544,7 +543,7 @@
                                             <Grid ColumnDefinitions="Auto,*"
                                                   ColumnSpacing="8">
                                                 <FontIcon FontSize="13"
-                                                          Foreground="#99111111"
+                                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                           Glyph="&#xE8FD;"
                                                           VerticalAlignment="Center" />
                                                 <TextBlock x:Uid="VideoInspectorChaptersHeaderText"
@@ -630,7 +629,7 @@
                                             <Grid ColumnDefinitions="Auto,*"
                                                   ColumnSpacing="8">
                                                 <FontIcon FontSize="13"
-                                                          Foreground="#99111111"
+                                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                           Glyph="&#xE945;"
                                                           VerticalAlignment="Center" />
                                                 <TextBlock x:Uid="VideoInspectorPlaybackSpeedHeaderText"
@@ -701,7 +700,7 @@
                                             <Grid ColumnDefinitions="Auto,*"
                                                   ColumnSpacing="8">
                                                 <FontIcon FontSize="13"
-                                                          Foreground="#99111111"
+                                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                           Glyph="&#xE9CE;"
                                                           VerticalAlignment="Center" />
                                                 <TextBlock x:Uid="VideoInspectorVideoEnhancementHeaderText"
@@ -734,7 +733,7 @@
                                                            IsOn="{x:Bind ViewModel.HdrEnhancementEnabled, Mode=OneWay}"
                                                            Toggled="HdrEnhancementToggle_Toggled" />
                                             <Border Height="1"
-                                                    Background="#22111111"
+                                                    Background="{ThemeResource DividerStrokeColorDefaultBrush}"
                                                     Margin="0,2" />
                                             <StackPanel Spacing="7">
                                                 <TextBlock x:Uid="VideoPlayerAnime4KHeaderText"
@@ -774,7 +773,7 @@
                                                            Style="{StaticResource VideoInspectorSecondaryTextStyle}" />
                                             </StackPanel>
                                             <Border Height="1"
-                                                    Background="#22111111"
+                                                    Background="{ThemeResource DividerStrokeColorDefaultBrush}"
                                                     Margin="0,2" />
                                             <Grid ColumnDefinitions="72,*,Auto"
                                                   ColumnSpacing="8">
@@ -954,7 +953,7 @@
                                             <Grid ColumnDefinitions="Auto,*"
                                                   ColumnSpacing="8">
                                                 <FontIcon FontSize="13"
-                                                          Foreground="#99111111"
+                                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                           Glyph="&#xE714;"
                                                           VerticalAlignment="Center" />
                                                 <TextBlock x:Uid="VideoInspectorVideoTrackHeaderText"
@@ -1000,7 +999,7 @@
                                             <Grid ColumnDefinitions="Auto,*,Auto"
                                                   ColumnSpacing="8">
                                                 <FontIcon FontSize="13"
-                                                          Foreground="#99111111"
+                                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                           Glyph="&#xE7F4;"
                                                           VerticalAlignment="Center" />
                                                 <TextBlock x:Uid="VideoInspectorAspectRatioHeaderText"
@@ -1049,7 +1048,7 @@
                                             <Grid ColumnDefinitions="Auto,*"
                                                   ColumnSpacing="8">
                                                 <FontIcon FontSize="13"
-                                                          Foreground="#99111111"
+                                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                           Glyph="&#xE7F4;"
                                                           VerticalAlignment="Center" />
                                                 <TextBlock x:Uid="VideoInspectorLoopHeaderText"
@@ -1102,7 +1101,7 @@
                                             <Grid ColumnDefinitions="Auto,*"
                                                   ColumnSpacing="8">
                                                 <FontIcon FontSize="13"
-                                                          Foreground="#99111111"
+                                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                           Glyph="&#xE767;"
                                                           VerticalAlignment="Center" />
                                                 <TextBlock x:Uid="VideoInspectorAudioHeaderText"
@@ -1113,7 +1112,7 @@
                                             <Grid ColumnDefinitions="Auto,*"
                                                   ColumnSpacing="10">
                                                 <FontIcon FontSize="16"
-                                                          Foreground="#AA111111"
+                                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                           Glyph="&#xE767;"
                                                           VerticalAlignment="Center" />
                                                 <Slider x:Name="InspectorVolumeSlider"
@@ -1131,7 +1130,7 @@
                                             <Grid ColumnDefinitions="Auto,*"
                                                   ColumnSpacing="8">
                                                 <FontIcon FontSize="13"
-                                                          Foreground="#99111111"
+                                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                           Glyph="&#xE8D6;"
                                                           VerticalAlignment="Center" />
                                                 <TextBlock x:Uid="VideoInspectorAudioTrackHeaderText"
@@ -1194,7 +1193,7 @@
                                             <Grid ColumnDefinitions="Auto,*,Auto"
                                                   ColumnSpacing="8">
                                                 <FontIcon FontSize="13"
-                                                          Foreground="#99111111"
+                                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                           Glyph="&#xE823;"
                                                           VerticalAlignment="Center" />
                                                 <TextBlock x:Uid="VideoInspectorAudioTimingHeaderText"
@@ -1250,7 +1249,7 @@
                                             <Grid ColumnDefinitions="Auto,*"
                                                   ColumnSpacing="8">
                                                 <FontIcon FontSize="13"
-                                                          Foreground="#99111111"
+                                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                           Glyph="&#xE8D2;"
                                                           VerticalAlignment="Center" />
                                                 <TextBlock x:Uid="VideoInspectorExternalSubtitlesHeaderText"
@@ -1293,7 +1292,7 @@
                                                     </StackPanel>
                                                     <FontIcon Grid.Column="2"
                                                               Glyph="&#xE711;"
-                                                              Foreground="#80111111"
+                                                              Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                               VerticalAlignment="Center" />
                                                 </Grid>
                                             </Button>
@@ -1305,7 +1304,7 @@
                                             <Grid ColumnDefinitions="Auto,*"
                                                   ColumnSpacing="8">
                                                 <FontIcon FontSize="13"
-                                                          Foreground="#99111111"
+                                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                           Glyph="&#xE8D2;"
                                                           VerticalAlignment="Center" />
                                                 <TextBlock x:Uid="VideoInspectorSubtitleTrackHeaderText"
@@ -1321,7 +1320,7 @@
                                                 <Grid ColumnDefinitions="Auto,*">
                                                     <FontIcon x:Name="SubtitleTrackOffIcon"
                                                               Glyph="&#xE73E;"
-                                                              Foreground="#80111111"
+                                                              Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                               VerticalAlignment="Center" />
                                                     <TextBlock x:Uid="VideoInspectorOffText"
                                                                Grid.Column="1"
@@ -1368,7 +1367,7 @@
                                             <Grid ColumnDefinitions="Auto,*,Auto"
                                                   ColumnSpacing="8">
                                                 <FontIcon FontSize="13"
-                                                          Foreground="#99111111"
+                                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                           Glyph="&#xE823;"
                                                           VerticalAlignment="Center" />
                                                 <TextBlock x:Uid="VideoInspectorSubtitleTimingHeaderText"
@@ -1411,7 +1410,7 @@
                                                            Text="{x:Bind ViewModel.SubtitleDelayText, Mode=OneWay}"
                                                            FontSize="16"
                                                            FontWeight="SemiBold"
-                                                           Foreground="#E6111111" />
+                                                           Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                                                 <Button Grid.Column="3"
                                                         Width="32"
                                                         Height="32"
@@ -1452,7 +1451,7 @@
                                             <Grid ColumnDefinitions="Auto,*"
                                                   ColumnSpacing="8">
                                                 <FontIcon FontSize="13"
-                                                          Foreground="#99111111"
+                                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                           Glyph="&#xE8D3;"
                                                           VerticalAlignment="Center" />
                                                 <TextBlock x:Uid="VideoInspectorSubtitleAppearanceHeaderText"
@@ -1540,7 +1539,7 @@
                                             <Grid ColumnDefinitions="Auto,*,Auto"
                                                   ColumnSpacing="10">
                                                 <Grid Width="24" Height="18">
-                                                    <Border BorderBrush="#99111111"
+                                                    <Border BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
                                                             BorderThickness="1"
                                                             CornerRadius="2" />
                                                     <Border Height="4"
@@ -1558,7 +1557,7 @@
                                                         Value="{x:Bind ViewModel.SubtitleVerticalPosition, Mode=OneWay}"
                                                         ValueChanged="SubtitleVerticalPositionSlider_ValueChanged" />
                                                 <Grid Grid.Column="2" Width="24" Height="18">
-                                                    <Border BorderBrush="#99111111"
+                                                    <Border BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
                                                             BorderThickness="1"
                                                             CornerRadius="2" />
                                                     <Border Height="4"
@@ -1619,7 +1618,7 @@
                                             <Grid ColumnDefinitions="Auto,*"
                                                   ColumnSpacing="8">
                                                 <FontIcon FontSize="13"
-                                                          Foreground="#99111111"
+                                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                           Glyph="&#xED1A;"
                                                           VerticalAlignment="Center" />
                                                 <TextBlock x:Uid="VideoInspectorSubtitleMaskHeaderText"
@@ -1705,7 +1704,7 @@
                                             <Grid ColumnDefinitions="Auto,*"
                                                   ColumnSpacing="8">
                                                 <FontIcon FontSize="13"
-                                                          Foreground="#99111111"
+                                                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                           Glyph="&#xE8C1;"
                                                           VerticalAlignment="Center" />
                                                 <TextBlock x:Uid="VideoInspectorTranscriptHeaderText"

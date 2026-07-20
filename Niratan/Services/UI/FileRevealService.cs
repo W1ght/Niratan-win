@@ -11,7 +11,8 @@ internal sealed class FileRevealService : IFileRevealService
 {
     public Task<Result> RevealInFileExplorerAsync(string filePath, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+        if (string.IsNullOrWhiteSpace(filePath)
+            || (!File.Exists(filePath) && !Directory.Exists(filePath)))
         {
             return Task.FromResult(Result.Failure(
                 "The video file no longer exists.",
@@ -22,10 +23,11 @@ internal sealed class FileRevealService : IFileRevealService
         {
             ct.ThrowIfCancellationRequested();
             var fullPath = Path.GetFullPath(filePath);
+            var isDirectory = Directory.Exists(fullPath);
             using var _ = Process.Start(new ProcessStartInfo
             {
                 FileName = "explorer.exe",
-                Arguments = $"/select,\"{fullPath}\"",
+                Arguments = isDirectory ? $"\"{fullPath}\"" : $"/select,\"{fullPath}\"",
                 UseShellExecute = true,
             });
 

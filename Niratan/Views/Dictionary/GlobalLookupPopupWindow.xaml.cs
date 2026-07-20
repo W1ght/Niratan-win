@@ -541,21 +541,17 @@ public sealed partial class GlobalLookupPopupWindow : Window, IDisposable
             _loadedCompletion.SetResult();
     }
 
-    private void RootGrid_KeyDown(object sender, KeyRoutedEventArgs e)
+    private async void RootGrid_KeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key != VirtualKey.Escape)
+        var binding = Niratan.Models.Shortcuts.KeyboardShortcutBinding.FromVirtualKey(
+            e.Key,
+            Niratan.Models.Shortcuts.ShortcutInputMapper.GetCurrentModifiers());
+        if (_popupOverlay is not null && await _popupOverlay.TryHandleShortcutAsync(binding))
+        {
+            e.Handled = true;
             return;
+        }
 
-        e.Handled = true;
-        if (DictionaryOverlayCanvas.Visibility == Visibility.Visible
-            && _popupOverlay is not null)
-        {
-            _popupOverlay.Dismiss();
-        }
-        else
-        {
-            Close();
-        }
     }
 
     private void OnPopupOverlayDismissed(object? sender, EventArgs e)

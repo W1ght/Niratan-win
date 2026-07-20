@@ -50,6 +50,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     private CancellationTokenSource? _remoteListCts;
     private bool _suppressSortApplication;
     private bool _hasExplicitSortSelection;
+    private readonly HashSet<string> _selectedBookIds = new(StringComparer.Ordinal);
 
     public bool IsBookSyncing => !_activeNovelSyncs.IsEmpty;
 
@@ -75,10 +76,30 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowBookshelf))]
+    [NotifyPropertyChangedFor(nameof(ShowBookshelfCommands))]
+    [NotifyPropertyChangedFor(nameof(ShowSelectionCommands))]
     public partial bool ShowStatisticsDashboard { get; set; }
 
     public bool ShowBookshelf => !ShowStatisticsDashboard;
+    public bool ShowBookshelfCommands => ShowBookshelf && !IsSelecting;
+    public bool ShowSelectionCommands => ShowBookshelf && IsSelecting;
     public NovelStatisticsDashboardViewModel StatisticsDashboard { get; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowBookshelfCommands))]
+    [NotifyPropertyChangedFor(nameof(ShowSelectionCommands))]
+    public partial bool IsSelecting { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedBooks))]
+    [NotifyPropertyChangedFor(nameof(SelectionSummary))]
+    public partial int SelectedBookCount { get; set; }
+
+    public bool HasSelectedBooks => SelectedBookCount > 0;
+    public string SelectionSummary => ResourceStringHelper.FormatString(
+        "NovelLibrarySelectionSummaryFormat",
+        "{0} selected",
+        SelectedBookCount);
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NoNovels))]
@@ -139,6 +160,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
+        ExitSelectionMode();
         RestoreSelectedSortOption();
         await LoadNovelsAsync();
     }
@@ -521,9 +543,39 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     [RelayCommand]
     private void OpenNovel(NovelBookItemViewModel item)
     {
+        if (IsSelecting)
+        {
+            ToggleBookSelection(item);
+            return;
+        }
+
         _messenger.Send(
             new SwitchAppModeMessage(AppMode.NovelReader, new NovelReaderNavigationArgs(item.Book.Id))
         );
+    }
+
+    [RelayCommand]
+    private void EnterSelectionMode()
+    {
+        IsSelecting = true;
+    }
+
+    [RelayCommand]
+    private void ExitSelectionMode()
+    {
+        _selectedBookIds.Clear();
+        foreach (var item in NovelBooks)
+            item.IsSelected = false;
+        SelectedBookCount = 0;
+        IsSelecting = false;
+    }
+
+    private void ToggleBookSelection(NovelBookItemViewModel item)
+    {
+        item.IsSelected = !_selectedBookIds.Remove(item.Book.Id);
+        if (item.IsSelected)
+            _selectedBookIds.Add(item.Book.Id);
+        SelectedBookCount = _selectedBookIds.Count;
     }
 
     [RelayCommand]
@@ -600,6 +652,26 @@ public partial class NovelLibraryPageViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task MoveSelectedBooksAsync(string? targetShelfName)
+    {
+        if (_selectedBookIds.Count == 0)
+            return;
+
+        var result = await _shelfService.MoveBooksAsync(
+            _selectedBookIds.ToList(),
+            targetShelfName,
+            _pageCts.Token);
+        if (!result.IsSuccess)
+        {
+            ApplyShelfResult(result);
+            return;
+        }
+
+        ApplyShelfResult(result);
+        ExitSelectionMode();
+    }
+
+    [RelayCommand]
     private async Task ReorderShelfBookAsync(NovelShelfBookReorderRequest request)
     {
         var result = await _shelfService.ReorderBookAsync(
@@ -660,6 +732,79 @@ public partial class NovelLibraryPageViewModel : ObservableObject
 
         _notificationService.ShowSuccess("Novel deleted.");
         await LoadNovelsAsync();
+    }
+
+    [RelayCommand]
+    private async Task RenameNovelAsync(NovelBookRenameRequest request)
+    {
+        var result = await _novelLibraryService.RenameNovelAsync(
+            request.BookId,
+            request.Title,
+            _pageCts.Token);
+        if (!result.IsSuccess)
+        {
+            if (!result.IsCancelled)
+                _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+            return;
+        }
+
+        await LoadNovelsAsync();
+    }
+
+    [RelayCommand]
+    private async Task DeleteSelectedBooksAsync()
+    {
+        if (_selectedBookIds.Count == 0)
+            return;
+
+        var selectedIds = _selectedBookIds.ToList();
+        var confirmed = await _dialogService.ConfirmAsync(
+            ResourceStringHelper.FormatString(
+                "NovelLibraryBulkDeleteConfirmation/Title",
+                "Delete {0} book(s)?",
+                selectedIds.Count),
+            ResourceStringHelper.GetString(
+                "NovelLibraryBulkDeleteConfirmation/Content",
+                "This cannot be undone."),
+            ResourceStringHelper.GetString(
+                "NovelLibraryBulkDeleteConfirmation/PrimaryButtonText",
+                "Delete"),
+            ResourceStringHelper.GetString(
+                "NovelLibraryBulkDeleteConfirmation/CloseButtonText",
+                "Cancel"));
+        if (!confirmed)
+            return;
+
+        var deletedCount = 0;
+        var errors = new List<string>();
+        foreach (var bookId in selectedIds)
+        {
+            var result = await _novelLibraryService.DeleteNovelAsync(bookId, _pageCts.Token);
+            if (result.IsSuccess)
+                deletedCount++;
+            else if (!result.IsCancelled)
+                errors.Add(result.Error ?? "Delete failed.");
+        }
+
+        ExitSelectionMode();
+        await LoadNovelsAsync();
+
+        if (deletedCount > 0)
+        {
+            _notificationService.ShowSuccess(
+                ResourceStringHelper.FormatString(
+                    "NovelLibraryBulkDeleteSuccessFormat",
+                    "Deleted {0} book(s).",
+                    deletedCount));
+        }
+        if (errors.Count > 0)
+        {
+            _notificationService.ShowError(
+                string.Join(Environment.NewLine, errors.Distinct(StringComparer.Ordinal)),
+                ResourceStringHelper.GetString(
+                    "NovelLibraryBulkDeleteFailedTitle",
+                    "Some books could not be deleted"));
+        }
     }
 
     private async Task LoadNovelsAsync()
@@ -747,6 +892,17 @@ public partial class NovelLibraryPageViewModel : ObservableObject
                 section => section.IsCollapsed,
                 StringComparer.Ordinal);
         var booksById = books.ToDictionary(book => book.Id, StringComparer.Ordinal);
+        _selectedBookIds.IntersectWith(booksById.Keys);
+        SelectedBookCount = _selectedBookIds.Count;
+        var itemsById = NovelBooks
+            .GroupBy(item => item.Book.Id, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        foreach (var book in books)
+        {
+            if (!itemsById.ContainsKey(book.Id))
+                itemsById[book.Id] = new NovelBookItemViewModel(book);
+            itemsById[book.Id].IsSelected = _selectedBookIds.Contains(book.Id);
+        }
         var sections = new List<NovelShelfSectionViewModel>();
         var reading = SortBooks(books.Where(IsReading)).ToList();
         if (reading.Count > 0)
@@ -760,7 +916,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
                 IsDerived = true,
                 CanCollapse = true,
                 IsCollapsed = GetCollapsedState(collapseStates, "reading", false),
-                Books = new(reading.Select(book => new NovelBookItemViewModel(book))),
+                Books = new(reading.Select(book => itemsById[book.Id])),
             });
         }
 
@@ -780,7 +936,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
                     collapseStates,
                     "shelf:" + shelf.Name,
                     true),
-                Books = new(shelfBooks.Select(book => new NovelBookItemViewModel(book))),
+                Books = new(shelfBooks.Select(book => itemsById[book.Id])),
             });
         }
 
@@ -810,7 +966,7 @@ public partial class NovelLibraryPageViewModel : ObservableObject
                 "NovelShelfUnshelvedLabel/Text",
                 "Unshelved"),
             IsUnshelved = true,
-            Books = new(unshelvedBooks.Select(book => new NovelBookItemViewModel(book))),
+            Books = new(unshelvedBooks.Select(book => itemsById[book.Id])),
         });
 
         ShelfSections = new(sections);
@@ -922,6 +1078,10 @@ public sealed record NovelShelfMoveRequest(
 public sealed record NovelBookShelfMoveRequest(
     string BookId,
     string? TargetShelfName);
+
+public sealed record NovelBookRenameRequest(
+    string BookId,
+    string Title);
 
 public sealed record NovelShelfBookReorderRequest(
     string SourceBookId,

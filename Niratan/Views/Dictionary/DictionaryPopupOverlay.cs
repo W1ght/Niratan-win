@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI;
@@ -12,9 +13,11 @@ using Niratan.Enums;
 using Niratan.Models.Anki;
 using Niratan.Models.Dictionary;
 using Niratan.Models.Settings;
+using Niratan.Models.Shortcuts;
 using Niratan.Services.Anki;
 using Niratan.Services.Dictionary;
 using Niratan.Services.Settings;
+using Niratan.Services.Shortcuts;
 using Serilog;
 
 namespace Niratan.Views.Dictionary;
@@ -92,12 +95,61 @@ public sealed class DictionaryPopupOverlay : IDisposable
         DictionaryPopupLayoutResult> _rootStateCoordinator = new();
 
     public event EventHandler? Dismissed;
+    public event EventHandler? DismissStarted;
     public event EventHandler<DictionaryPopupContentCommittedEventArgs>? RootContentCommitted;
     public event EventHandler<DictionaryPopupContentCommittedEventArgs>? RootContentAborted;
     public event EventHandler<DictionaryPopupShowDroppedEventArgs>? RootShowDropped;
     public event EventHandler? VisibleHostBoundsChanged;
     public event EventHandler<DictionaryPopupExternalChildRequest>? ExternalChildRequested;
     public event EventHandler? ExternalTapInsideRequested;
+
+    public bool IsVisible => _rootVisible;
+
+    public async Task<bool> TryHandleShortcutAsync(KeyboardShortcutBinding binding)
+    {
+        if (!_rootVisible || binding.IsEmpty)
+            return false;
+
+        var shortcutService = App.GetService<IShortcutService>();
+        if (shortcutService.TryResolve(ShortcutScope.Popup, binding, out var popupAction)
+            && popupAction?.Id == PopupShortcutActions.DismissId)
+        {
+            DismissTopmost();
+            return true;
+        }
+
+        if (!shortcutService.TryResolve(ShortcutScope.Dictionary, binding, out var dictionaryAction)
+            || dictionaryAction is null)
+        {
+            return false;
+        }
+
+        var direction = dictionaryAction.Id switch
+        {
+            DictionaryShortcutActions.PreviousEntryId => -1,
+            DictionaryShortcutActions.NextEntryId => 1,
+            _ => 0,
+        };
+        if (direction == 0)
+            return false;
+
+        var activeHost = _childHosts.LastOrDefault(IsHostVisible) ?? _rootHost;
+        return await activeHost.MoveDictionaryEntryAsync(
+            direction,
+            shortcutService.DictionaryEntryJumpCount);
+    }
+
+    private void DismissTopmost()
+    {
+        var child = _childHosts.LastOrDefault(IsHostVisible);
+        if (child is not null)
+        {
+            RemoveChild(child);
+            return;
+        }
+
+        Dismiss();
+    }
 
     public DictionaryPopupOverlay()
     {
@@ -225,6 +277,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         _rootHost.RedirectRequested += OnRootRedirectRequested;
         _rootHost.TapOutsideRequested += OnRootTapOutsideRequested;
         _rootHost.DismissRequested += OnPopupDismissRequested;
+        _rootHost.ShortcutRequested += OnPopupShortcutRequested;
         _rootHost.Scrolled += OnRootScrolled;
         _rootHost.ContentCommitted += OnRootContentCommitted;
         _rootHost.ContentCommitAborted += OnRootContentCommitAborted;
@@ -415,7 +468,29 @@ public sealed class DictionaryPopupOverlay : IDisposable
 
     private void OnPopupDismissRequested(object? sender, EventArgs e)
     {
+        if (sender is DictionaryLookupPopup host
+            && !ReferenceEquals(host, _rootHost)
+            && _childHosts.Contains(host))
+        {
+            RemoveChild(host);
+            return;
+        }
+
         Dismiss();
+    }
+
+    private async void OnPopupShortcutRequested(
+        object? sender,
+        DictionaryPopupShortcutRequest request)
+    {
+        try
+        {
+            await TryHandleShortcutAsync(request.Binding);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "[DictOverlay] Failed to handle popup shortcut");
+        }
     }
 
     private void OnRootContentCommitted(
@@ -855,6 +930,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
         child.RedirectRequested += OnChildRedirectRequested;
         child.TapOutsideRequested += OnChildTapOutsideRequested;
         child.DismissRequested += OnPopupDismissRequested;
+        child.ShortcutRequested += OnPopupShortcutRequested;
         child.Scrolled += OnChildScrolled;
         _childHostPool.Add(child);
         return child;
@@ -1358,6 +1434,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
             _rootHost.RedirectRequested -= OnRootRedirectRequested;
             _rootHost.TapOutsideRequested -= OnRootTapOutsideRequested;
             _rootHost.DismissRequested -= OnPopupDismissRequested;
+            _rootHost.ShortcutRequested -= OnPopupShortcutRequested;
             _rootHost.Scrolled -= OnRootScrolled;
             _rootHost.ContentCommitted -= OnRootContentCommitted;
             _rootHost.ContentCommitAborted -= OnRootContentCommitAborted;
@@ -1373,6 +1450,7 @@ public sealed class DictionaryPopupOverlay : IDisposable
             pooledHost.RedirectRequested -= OnChildRedirectRequested;
             pooledHost.TapOutsideRequested -= OnChildTapOutsideRequested;
             pooledHost.DismissRequested -= OnPopupDismissRequested;
+            pooledHost.ShortcutRequested -= OnPopupShortcutRequested;
             pooledHost.Scrolled -= OnChildScrolled;
             if (_canvas.Children.Contains(pooledHost.VisualRoot))
                 _canvas.Children.Remove(pooledHost.VisualRoot);
@@ -1397,6 +1475,8 @@ public sealed class DictionaryPopupOverlay : IDisposable
         _rootStateCoordinator.Clear();
         _rootVisible = false;
         _canvas.IsHitTestVisible = false;
+        if (wasVisible)
+            DismissStarted?.Invoke(this, EventArgs.Empty);
         var hideTask = _rootWarm
             ? _rootHost.HideAnimatedAsync()
             : Task.FromResult(true);

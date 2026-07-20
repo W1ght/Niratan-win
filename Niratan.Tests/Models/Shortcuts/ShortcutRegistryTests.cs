@@ -18,15 +18,30 @@ public sealed class ShortcutRegistryTests
         registry.Action(GlobalShortcutActions.LookupSelectedTextId)
             .Should().Be(GlobalShortcutActions.LookupSelectedText);
         registry.ActionsIn(ShortcutCategory.Global)
-            .Should().ContainSingle()
-            .Which.DefaultBinding.Label.Should().Be("Ctrl+Alt+D");
+            .Select(action => action.Id)
+            .Should().Equal(
+                GlobalShortcutActions.OpenId,
+                GlobalShortcutActions.LookupSelectedTextId);
+        GlobalShortcutActions.Open.DefaultBinding.Label.Should().Be("Ctrl+O");
+        GlobalShortcutActions.LookupSelectedText.DefaultBinding.Label.Should().Be("Ctrl+Alt+D");
+        registry.ActionsIn(ShortcutCategory.DictionaryPopup)
+            .Select(action => action.Id)
+            .Should().Equal(
+                DictionaryShortcutActions.PreviousEntryId,
+                DictionaryShortcutActions.NextEntryId,
+                PopupShortcutActions.DismissId);
         registry.ActionsIn(ShortcutCategory.Video)
             .Select(action => action.Id)
             .Should()
             .Contain([
                 VideoShortcutActions.SeekBackwardId,
                 VideoShortcutActions.SeekForwardId,
-                VideoShortcutActions.CloseOverlayOrFullscreenId,
+                VideoShortcutActions.PreviousEpisodeId,
+                VideoShortcutActions.NextEpisodeId,
+                VideoShortcutActions.ToggleSubtitleGapFastForwardId,
+                VideoShortcutActions.SetABLoopStartId,
+                VideoShortcutActions.SetABLoopEndId,
+                VideoShortcutActions.ExitFocusModeId,
             ]);
         registry.ActionsIn(ShortcutCategory.Reader).Should().NotBeEmpty();
         registry.ActionsIn(ShortcutCategory.Sasayaki).Should().NotBeEmpty();
@@ -91,5 +106,70 @@ public sealed class ShortcutRegistryTests
     public void KeyboardShortcutBinding_LabelUsesUnifiedKeyNames(string key, string expected)
     {
         new KeyboardShortcutBinding(key).Label.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("\\", 220)]
+    [InlineData(",", 188)]
+    [InlineData(".", 190)]
+    [InlineData("/", 191)]
+    public void ShortcutInputMapper_MapsVideoPunctuationKeys(string key, int expectedVirtualKey)
+    {
+        ShortcutInputMapper.TryGetVirtualKey(
+                new KeyboardShortcutBinding(key),
+                out var virtualKey,
+                out _)
+            .Should().BeTrue();
+        ((int)virtualKey).Should().Be(expectedVirtualKey);
+        KeyboardShortcutBinding.FromVirtualKey(virtualKey).Key.Should().Be(key);
+    }
+
+    [Fact]
+    public void VideoRegistry_ContainsNiratanAdvancedPlaybackActions()
+    {
+        VideoShortcutActions.All.Select(action => action.Id).Should().Contain([
+            VideoShortcutActions.PreviousEpisodeId,
+            VideoShortcutActions.NextEpisodeId,
+            VideoShortcutActions.DecreaseSpeedId,
+            VideoShortcutActions.IncreaseSpeedId,
+            VideoShortcutActions.ResetSpeedId,
+            VideoShortcutActions.ToggleMuteId,
+            VideoShortcutActions.MineCurrentSubtitleId,
+            VideoShortcutActions.ToggleSubtitleGapFastForwardId,
+            VideoShortcutActions.SubtitleEarlierId,
+            VideoShortcutActions.SubtitleLaterId,
+            VideoShortcutActions.ResetSubtitleTimingId,
+            VideoShortcutActions.AlignPreviousSubtitleToCurrentTimeId,
+            VideoShortcutActions.AlignNextSubtitleToCurrentTimeId,
+            VideoShortcutActions.AudioEarlierId,
+            VideoShortcutActions.AudioLaterId,
+            VideoShortcutActions.ToggleFileLoopId,
+            VideoShortcutActions.SetABLoopStartId,
+            VideoShortcutActions.SetABLoopEndId,
+            VideoShortcutActions.ToggleTranscriptId,
+            VideoShortcutActions.RotateClockwiseId,
+            VideoShortcutActions.ToggleFullScreenId,
+            VideoShortcutActions.ExitFocusModeId,
+        ]);
+
+        VideoShortcutActions.PreviousEpisode.DefaultBinding.Label.Should().Be("Ctrl+Shift+\u2190");
+        VideoShortcutActions.PreviousSubtitleCue.DefaultBinding.Label.Should().Be("Alt+\u2190");
+        VideoShortcutActions.AudioEarlier.DefaultBinding.Label.Should().Be("Shift+Alt+,");
+    }
+
+    [Fact]
+    public void ShortcutConfiguration_ReadsAndResetsLegacyWindowsActionIds()
+    {
+        var configuration = new ShortcutConfiguration
+        {
+            Bindings =
+            {
+                ["video.toggleFullscreen"] = new KeyboardShortcutBinding("q"),
+            },
+        };
+
+        configuration.GetBinding(VideoShortcutActions.ToggleFullScreen).Label.Should().Be("Q");
+        configuration.ResetBinding(VideoShortcutActions.ToggleFullScreenId);
+        configuration.Bindings.Should().NotContainKey("video.toggleFullscreen");
     }
 }

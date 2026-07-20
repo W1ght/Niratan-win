@@ -162,10 +162,35 @@ public sealed class NovelLibraryPageAssetTests
         xaml.Should().NotContain("<MenuFlyoutItem.Icon>");
         xaml.Should().NotContain("<MenuFlyoutSubItem.Icon>");
         cardXaml.Should().Contain("MaxLines=\"2\"");
+        cardXaml.Should().Contain("Height=\"40\"");
         cardXaml.Should().Contain("TextTrimming=\"Clip\"");
         cardXaml.Should().Contain("Width=\"180\"");
+        cardXaml.Should().Contain("Height=\"326\"");
+        cardXaml.Should().Contain("<Grid Height=\"20\"");
+        cardXaml.Should().NotContain("<StackPanel Height=\"27\"");
         cardXaml.Should().Contain("TextWrapping=\"Wrap\"");
         cardXaml.Should().NotContain("TextWrapping=\"WrapWholeWords\"");
+        xaml.Split("MinItemHeight=\"326\"").Should().HaveCount(3);
+    }
+
+    [Fact]
+    public void Bookshelf_ExposesRenameAndNiratanAlignedBulkSelectionActions()
+    {
+        var xaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelLibraryPage.xaml"));
+        var code = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelLibraryPage.xaml.cs"));
+        var card = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Controls", "NovelBookCard.xaml"));
+
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelBookRenameMenuItem\"");
+        xaml.Should().Contain("Click=\"RenameNovelMenuItem_Click\"");
+        code.Should().Contain("ViewModel.RenameNovelCommand.ExecuteAsync");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelLibrarySelectButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelLibraryBulkMoveButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"NovelLibraryBulkDeleteButton\"");
+        xaml.Should().Contain("Command=\"{x:Bind ViewModel.DeleteSelectedBooksCommand}\"");
+        card.Should().Contain("IsChecked=\"{Binding IsSelected, ElementName=Root}\"");
     }
 
     [Fact]

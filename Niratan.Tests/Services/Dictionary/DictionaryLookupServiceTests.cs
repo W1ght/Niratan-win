@@ -31,6 +31,18 @@ public class DictionaryLookupServiceTests
                 Pitches: []),
             PreprocessorSteps: 0);
 
+    private static string ExtractInitialCustomCss(string html)
+    {
+        const string prefix = "window.customCSS = ";
+        var start = html.IndexOf(prefix, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        start += prefix.Length;
+        var end = html.IndexOf('\n', start);
+        end.Should().BeGreaterThan(start);
+        var serialized = html[start..end].TrimEnd('\r', ';');
+        return JsonSerializer.Deserialize<string>(serialized)!;
+    }
+
     [Fact]
     public void EnumerateLookupCandidates_ReturnsLongestPrefixesFirst()
     {
@@ -254,6 +266,34 @@ public class DictionaryLookupServiceTests
     }
 
     [Fact]
+    public void PopupHtmlGenerator_AppliesConfiguredDictionaryFontBeforeCustomCss()
+    {
+        var html = new PopupHtmlGenerator().GenerateShellHtml(
+            settings: new DictionaryDisplaySettings(
+                CustomCSS: ".entry { color: red; }",
+                FontFamily: "Yu Mincho"));
+        var configuredCss = ExtractInitialCustomCss(html);
+
+        configuredCss.Should().Contain("font-family: 'Yu Mincho', serif !important;");
+        configuredCss.IndexOf("font-family: 'Yu Mincho', serif !important;", StringComparison.Ordinal)
+            .Should().BeLessThan(configuredCss.IndexOf(".entry { color: red; }", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void PopupHtmlGenerator_LoadsImportedDictionaryFontFromControlledVirtualHost()
+    {
+        var html = new PopupHtmlGenerator().GenerateShellHtml(
+            settings: new DictionaryDisplaySettings(
+                FontFamily: "NiratanImportedABC123",
+                FontFileName: "my font.woff2"));
+        var configuredCss = ExtractInitialCustomCss(html);
+
+        configuredCss.Should().Contain("@font-face");
+        configuredCss.Should().Contain("font-family: 'NiratanImportedABC123'");
+        configuredCss.Should().Contain("https://niratan-reader-fonts.local/my%20font.woff2");
+    }
+
+    [Fact]
     public void PopupAssets_KeepSingleColumnDictionaryCardsInNormalFlow()
     {
         var stylesheet = File.ReadAllText(Path.Combine(
@@ -280,16 +320,16 @@ public class DictionaryLookupServiceTests
     }
 
     [Fact]
-    public void PopupScript_AppliesConfiguredShiftHoverDelayInsidePopup()
+    public void PopupScript_PerformsShiftHoverLookupWithoutConfigurableDelay()
     {
         var script = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Web", "DictionaryPopup", "popup.js"));
 
         script.Should().Contain("mousemove");
         script.Should().Contain("e.shiftKey");
-        script.Should().Contain("window.desktopLookupHoverDelayMs");
         script.Should().Contain("scheduleShiftHoverLookup");
         script.Should().Contain("lookupAtPopupPoint");
         script.Should().Contain("postPopupMessage('lookupRedirect'");
+        script.Should().NotContain("window.desktopLookupHoverDelayMs");
     }
 
     [Fact]
@@ -373,6 +413,34 @@ public class DictionaryLookupServiceTests
         script.Should().Contain("applyTableStyles(tempDiv.innerHTML)");
         script.Should().Contain("constructDictCss(css, dictName)");
         script.Should().Contain("window.compactGlossariesAnki");
+    }
+
+    [Fact]
+    public void PopupScript_ExportsFrequenciesAsStandaloneAnkiList()
+    {
+        var script = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "Web",
+            "DictionaryPopup",
+            "popup.js"));
+        var functionStart = script.IndexOf(
+            "function constructFrequencyHtml(entryIndex)",
+            StringComparison.Ordinal);
+        var functionEnd = script.IndexOf(
+            "async function buildMiningPayload(entryIndex)",
+            functionStart,
+            StringComparison.Ordinal);
+
+        functionStart.Should().BeGreaterThanOrEqualTo(0);
+        functionEnd.Should().BeGreaterThan(functionStart);
+        var function = script[functionStart..functionEnd];
+
+        function.Should().Contain("document.createElement('ul')");
+        function.Should().Contain("list.style.textAlign = 'left'");
+        function.Should().Contain("document.createElement('li')");
+        function.Should().Contain("item.textContent = dictionary + ': ' + value");
+        function.Should().Contain("return itemCount ? list.outerHTML : ''");
+        function.Should().NotContain("createFrequencyGroup");
     }
 
     [Fact]

@@ -24,10 +24,14 @@ using Windows.Graphics;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.System;
 using Niratan.Helpers;
+using Niratan.Enums;
 using Niratan.Models;
 using Niratan.Models.Anki;
+using Niratan.Models.DTO;
+using Niratan.Models.Settings;
 using Niratan.Models.Shortcuts;
 using Niratan.Services.Anki;
+using Niratan.Services.Settings;
 using Niratan.Services.Shortcuts;
 using Niratan.Services.Video;
 using Niratan.ViewModels.Pages;
@@ -80,6 +84,7 @@ public sealed partial class VideoPlayerWindow : Window
     private readonly IVideoMiningMediaExtractor _mediaExtractor;
     private readonly IVideoSubtitleTranscriptExtractor _subtitleTranscriptExtractor;
     private readonly IShortcutService _shortcutService;
+    private readonly ISettingsService _settingsService;
     private readonly VideoSubtitleTranscriptLoadCoordinator _subtitleTranscriptLoadCoordinator;
     private readonly DispatcherTimer _positionTimer = new();
     private readonly DispatcherTimer _bottomChromeAutoHideTimer = new();
@@ -94,7 +99,7 @@ public sealed partial class VideoPlayerWindow : Window
     private readonly RemoteVideoPlaybackSession _remotePlaybackSession;
     private CancellationTokenSource? _remoteOperationCts;
     private CancellationTokenSource? _remoteSubtitleOperationCts;
-    private CancellationTokenSource? _subtitleHoverLookupDelayCts;
+    private CancellationTokenSource? _subtitleHoverLookupCts;
     private long _remoteSubtitleSelectionVersion;
     private int _remoteRecoveryStage;
     private bool _isRecoveringRemotePlayback;
@@ -135,6 +140,9 @@ public sealed partial class VideoPlayerWindow : Window
     private int _lastSubtitleHoverCharacterIndex = -1;
     private Windows.Foundation.Point? _lastSubtitlePointerPoint;
     private bool _isAutoPlayingNextEpisode;
+    private double _volumeBeforeMute = 100;
+    private bool _subtitleGapFastForwardEnabled;
+    private bool _isSubtitleGapFastForwardActive;
     private TimeSpan? _protectedRestoreFloor;
     private DateTimeOffset _lastProgressSaveAt = DateTimeOffset.MinValue;
     private VideoInspectorTab _selectedInspectorTab = VideoInspectorTab.SubtitleList;
@@ -147,6 +155,9 @@ public sealed partial class VideoPlayerWindow : Window
     public VideoPlayerWindow()
     {
         InitializeComponent();
+        _settingsService = App.GetService<ISettingsService>();
+        ApplyInspectorTheme(_settingsService.Current.Theme);
+        _settingsService.SettingChanged += SettingsService_SettingChanged;
         ViewModel = App.GetService<VideoPlayerViewModel>();
         InspectorSubtitleListContent.Initialize(ViewModel);
         InspectorSubtitleListContent.TranscriptSelected += InspectorSubtitleListContent_TranscriptSelected;
@@ -217,6 +228,20 @@ public sealed partial class VideoPlayerWindow : Window
         UpdateSubtitleTrackSelection();
         RefreshMiningHistoryRows();
     }
+
+    private void SettingsService_SettingChanged(object? sender, SettingsChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(AppSettings.Theme))
+            ApplyInspectorTheme(e.NewValue is ThemeMode theme ? theme : ThemeMode.System);
+    }
+
+    private void ApplyInspectorTheme(ThemeMode theme) =>
+        InspectorPanel.RequestedTheme = theme switch
+        {
+            ThemeMode.Light => ElementTheme.Light,
+            ThemeMode.Dark => ElementTheme.Dark,
+            _ => ElementTheme.Default,
+        };
 
     public Task OpenVideoAsync(VideoItem video, CancellationToken ct = default) =>
         OpenVideoAsync(video, [video], ct);
@@ -1343,15 +1368,16 @@ public sealed partial class VideoPlayerWindow : Window
         }
         finally
         {
+            _settingsService.SettingChanged -= SettingsService_SettingChanged;
             _remoteOperationCts?.Cancel();
             _remoteOperationCts?.Dispose();
             _remoteOperationCts = null;
             _remoteSubtitleOperationCts?.Cancel();
             _remoteSubtitleOperationCts?.Dispose();
             _remoteSubtitleOperationCts = null;
-            _subtitleHoverLookupDelayCts?.Cancel();
-            _subtitleHoverLookupDelayCts?.Dispose();
-            _subtitleHoverLookupDelayCts = null;
+            _subtitleHoverLookupCts?.Cancel();
+            _subtitleHoverLookupCts?.Dispose();
+            _subtitleHoverLookupCts = null;
             _remotePlaybackSession.Invalidate();
             _playbackEngine.MediaLoaded -= PlaybackEngine_MediaLoaded;
             _playbackEngine.MediaFailed -= PlaybackEngine_MediaFailed;

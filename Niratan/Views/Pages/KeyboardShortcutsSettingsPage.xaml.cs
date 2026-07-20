@@ -18,6 +18,10 @@ public sealed partial class KeyboardShortcutsSettingsPage : Page
         ViewModel = App.GetService<KeyboardShortcutsSettingsPageViewModel>();
         InitializeComponent();
         DataContext = ViewModel;
+        ShortcutCaptureLayer.AddHandler(
+            UIElement.KeyDownEvent,
+            new KeyEventHandler(ShortcutCaptureLayer_KeyDown),
+            true);
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -26,6 +30,15 @@ public sealed partial class KeyboardShortcutsSettingsPage : Page
         KeyboardShortcutsBackButton.Visibility = e.Parameter is SettingsNavigationMode.Embedded
             ? Visibility.Collapsed
             : Visibility.Visible;
+        ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
+        ViewModel.PropertyChanged += ViewModel_PropertyChanged;
+    }
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
+        ViewModel.CancelRecording();
+        base.OnNavigatedFrom(e);
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e)
@@ -35,22 +48,23 @@ public sealed partial class KeyboardShortcutsSettingsPage : Page
             navigation.Navigate(typeof(SettingsPage));
     }
 
-    private void RecordShortcutButton_Click(object sender, RoutedEventArgs e)
+    private void DictionaryEntryJumpCountNumberBox_ValueChanged(
+        NumberBox sender,
+        NumberBoxValueChangedEventArgs args)
     {
-        if ((sender as FrameworkElement)?.DataContext is not ShortcutRowViewModel row)
+        if (!double.IsNaN(args.NewValue))
+            ViewModel.SetDictionaryEntryJumpCount(args.NewValue);
+    }
+
+    private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(ViewModel.IsRecording) || !ViewModel.IsRecording)
             return;
 
-        ViewModel.StartRecording(row);
-        KeyboardShortcutsRoot.Focus(FocusState.Programmatic);
+        DispatcherQueue.TryEnqueue(() => ShortcutCaptureLayer.Focus(FocusState.Programmatic));
     }
 
-    private void ResetShortcutButton_Click(object sender, RoutedEventArgs e)
-    {
-        if ((sender as FrameworkElement)?.DataContext is ShortcutRowViewModel row)
-            ViewModel.ResetShortcut(row);
-    }
-
-    private void KeyboardShortcutsRoot_KeyDown(object sender, KeyRoutedEventArgs e)
+    private void ShortcutCaptureLayer_KeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (!ViewModel.IsRecording)
             return;

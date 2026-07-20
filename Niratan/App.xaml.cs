@@ -166,6 +166,7 @@ public partial class App : Application
         services.AddSingleton<IFileRevealService, FileRevealService>();
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IReaderSettingsService, ReaderSettingsService>();
+        services.AddSingleton<IReaderFontService, ReaderFontService>();
         services.AddSingleton<IProfileService, ProfileService>();
         services.AddSingleton<ProfileSettingsStore>();
         services.AddSingleton<ProfileRuntimeService>();
@@ -214,8 +215,12 @@ public partial class App : Application
         services.AddSingleton<IReaderHighlightService, ReaderHighlightService>();
         services.AddSingleton<ISasayakiSidecarService, SasayakiSidecarService>();
         services.AddSingleton<ISasayakiMatchService, SasayakiMatchService>();
-        services.AddSingleton(new HttpClient());
+        services.AddSingleton(new HttpClient
+        {
+            Timeout = TimeSpan.FromMinutes(30),
+        });
         services.AddSingleton<IAppUpdateService, GitHubAppUpdateService>();
+        services.AddSingleton<IAppUpdateInstallerLauncher, SystemAppUpdateInstallerLauncher>();
         services.AddSingleton<GoogleDriveTokenClient>();
         services.AddSingleton<IGoogleDriveCredentialStore, WindowsCredentialGoogleDriveCredentialStore>();
         services.AddSingleton<IGoogleOAuthLoopbackReceiver, GoogleOAuthLoopbackReceiver>();

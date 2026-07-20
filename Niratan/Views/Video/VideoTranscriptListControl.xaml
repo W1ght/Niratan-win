@@ -11,23 +11,23 @@
             <Setter Property="MinHeight" Value="58" />
             <Setter Property="Margin" Value="0,4" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="Background" Value="#DDF8F8F8" />
-            <Setter Property="BorderBrush" Value="#80FFFFFF" />
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="14" />
         </Style>
         <Style x:Key="VideoInspectorSectionTitleStyle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="#99111111" />
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
         </Style>
         <Style x:Key="VideoInspectorPrimaryTextStyle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="13" />
-            <Setter Property="Foreground" Value="#D9111111" />
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
         </Style>
         <Style x:Key="VideoInspectorSecondaryTextStyle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12" />
-            <Setter Property="Foreground" Value="#80111111" />
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
         </Style>
     </UserControl.Resources>
 
@@ -41,7 +41,7 @@
             <Grid ColumnDefinitions="Auto,*"
                   ColumnSpacing="8">
                 <FontIcon FontSize="13"
-                          Foreground="#99111111"
+                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                           Glyph="&#xE8C1;"
                           VerticalAlignment="Center" />
                 <TextBlock x:Uid="VideoInspectorTranscriptHeaderText"
@@ -94,7 +94,7 @@
                                     <TextBlock Text="{x:Bind StartText}"
                                                FontSize="11"
                                                FontFamily="Consolas"
-                                               Foreground="#80111111" />
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                     <TextBlock Text="{x:Bind Text}"
                                                TextWrapping="Wrap"
                                                Style="{StaticResource VideoInspectorPrimaryTextStyle}" />

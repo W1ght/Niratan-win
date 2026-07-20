@@ -14,6 +14,7 @@ public class AppSettings
     public WindowState MainWindowState { get; set; } = new();
     public DictionaryDisplaySettings DictionaryDisplaySettings { get; set; } = new();
     public DictionaryUpdateSettings DictionaryUpdateSettings { get; set; } = new();
+    public AppUpdateSettings AppUpdateSettings { get; set; } = new();
     public GlobalLookupSettings GlobalLookup { get; set; } = new();
     public AudioSettings AudioSettings { get; set; } = new();
     public VideoSettings VideoSettings { get; set; } = new();

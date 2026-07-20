@@ -45,6 +45,15 @@ public class VideoLibraryServiceTests : IDisposable
         savedVideos.Should().OnlyContain(video => video.FileSizeBytes > 0);
         savedVideos.Should().OnlyContain(video => video.ModifiedAt.HasValue);
         savedVideos.Select(video => video.CollectionName).Should().Contain("niratan-video-library-" + Path.GetFileName(_directory).Split('-').Last());
+        savedVideos.Should().OnlyContain(video => !string.IsNullOrWhiteSpace(video.SourceId));
+        savedVideos.Should().OnlyContain(video => video.LastSeenAt.HasValue);
+        data.Verify(service => service.UpsertVideoLibrarySourceAsync(
+            It.Is<VideoLibrarySource>(source => source.FolderPath == _directory),
+            It.IsAny<CancellationToken>()), Times.Once);
+        data.Verify(service => service.DeleteSourceVideosExceptAsync(
+            It.IsAny<string>(),
+            It.Is<IReadOnlyList<string>>(paths => paths.Count == 2),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

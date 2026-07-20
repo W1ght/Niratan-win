@@ -10,6 +10,8 @@
     </UserControl.Resources>
 
     <Button Width="180"
+            Height="326"
+            x:Name="BookButton"
             Padding="0"
             HorizontalContentAlignment="Stretch"
             VerticalContentAlignment="Stretch"
@@ -19,7 +21,8 @@
             BorderThickness="0"
             Command="{Binding Command, ElementName=Root}"
             CommandParameter="{Binding CommandParameter, ElementName=Root}"
-            ContextFlyout="{Binding CardContextFlyout, ElementName=Root}">
+            ContextFlyout="{Binding CardContextFlyout, ElementName=Root}"
+            ContextRequested="BookButton_ContextRequested">
         <StackPanel Spacing="6">
             <Border Height="250"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
@@ -34,32 +37,54 @@
                               HorizontalAlignment="Center"
                               VerticalAlignment="Center"
                               Visibility="{Binding HasCover, ElementName=Root, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}" />
+                    <Border BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                            BorderThickness="3"
+                            CornerRadius="8"
+                            IsHitTestVisible="False"
+                            Visibility="{Binding IsSelected, ElementName=Root, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    <CheckBox Margin="8"
+                              HorizontalAlignment="Right"
+                              VerticalAlignment="Top"
+                              IsChecked="{Binding IsSelected, ElementName=Root}"
+                              IsHitTestVisible="False"
+                              Visibility="{Binding IsSelectionMode, ElementName=Root, Converter={StaticResource BooleanToVisibilityConverter}}" />
                 </Grid>
             </Border>
             <StackPanel Spacing="4">
-                <Grid Margin="0,0,0,4"
-                      ColumnDefinitions="*,Auto"
-                      ColumnSpacing="8">
-                    <ProgressBar Height="4"
-                                 Minimum="0"
-                                 Maximum="100"
-                                 VerticalAlignment="Center"
-                                 Value="{Binding OverallProgressPercent, ElementName=Root}" />
-                    <TextBlock Grid.Column="1"
-                               VerticalAlignment="Center"
-                               FontWeight="SemiBold"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               Text="{Binding OverallProgressText, ElementName=Root}" />
+                <Grid Height="20"
+                      Margin="0,0,0,4">
+                    <Grid ColumnDefinitions="*,Auto"
+                          ColumnSpacing="8"
+                          Visibility="{Binding HasDownloadStatus, ElementName=Root, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}">
+                        <ProgressBar Height="4"
+                                     Minimum="0"
+                                     Maximum="100"
+                                     VerticalAlignment="Center"
+                                     Value="{Binding OverallProgressPercent, ElementName=Root}" />
+                        <TextBlock Grid.Column="1"
+                                   VerticalAlignment="Center"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="{Binding OverallProgressText, ElementName=Root}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto"
+                          ColumnSpacing="8"
+                          Visibility="{Binding HasDownloadStatus, ElementName=Root, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <ProgressBar Height="4"
+                                     Minimum="0"
+                                     Maximum="1"
+                                     VerticalAlignment="Center"
+                                     Value="{Binding DownloadProgress, ElementName=Root}"
+                                     Visibility="{Binding IsDownloading, ElementName=Root, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <TextBlock Grid.Column="1"
+                                   VerticalAlignment="Center"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="{Binding DownloadStatusText, ElementName=Root}" />
+                    </Grid>
                 </Grid>
-                <ProgressBar Height="3"
-                             Minimum="0"
-                             Maximum="1"
-                             Value="{Binding DownloadProgress, ElementName=Root}"
-                             Visibility="{Binding IsDownloading, ElementName=Root, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                           Text="{Binding DownloadStatusText, ElementName=Root}"
-                           Visibility="{Binding HasDownloadStatus, ElementName=Root, Converter={StaticResource BooleanToVisibilityConverter}}" />
                 <TextBlock Width="180"
+                           Height="40"
                            MaxLines="2"
                            Text="{Binding Title, ElementName=Root}"
                            TextTrimming="Clip"

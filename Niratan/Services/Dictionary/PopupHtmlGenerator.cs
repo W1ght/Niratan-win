@@ -54,7 +54,7 @@ public sealed class PopupHtmlGenerator
         var stylesJson = SerializeStyles(styles);
         var collapsedDictionariesJson = SerializeCollapsedDictionaries(settings.CollapsedDictionariesOrDefault);
         var popupScaleDeclarations = DictionaryPopupScaleCss.BuildDeclarations(settings.PopupScale);
-        var customCss = DictionaryPopupScaleCss.ScaleCustomCss(settings.CustomCSS);
+        var customCss = BuildConfiguredCss(settings);
 
         var (bgColor, textColor) = GetThemeColors(themeMode);
 
@@ -100,7 +100,6 @@ window.showExpressionTags = {BoolToJs(settings.ShowExpressionTags)};
 window.scanNonJapaneseText = {BoolToJs(settings.ScanNonJapaneseText)};
 window.maxResults = {settings.MaxResults};
 window.scanLength = {settings.ScanLength};
-window.desktopLookupHoverDelayMs = {settings.NormalizedDesktopLookupHoverDelayMs};
 window.popupRenderGeneration = {renderGeneration};
 window.niratanPopupDocumentEpoch = {documentEpoch};
 window.lookupTraceId = '';
@@ -368,7 +367,7 @@ window.viewAnkiNoteLabel = {JsonSerializer.Serialize(ViewAnkiNoteLabel)};
         var stylesJson = SerializeStyles(styles);
         var collapsedDictionariesJson = SerializeCollapsedDictionaries(settings.CollapsedDictionariesOrDefault);
         var popupScaleDeclarations = DictionaryPopupScaleCss.BuildDeclarations(settings.PopupScale);
-        var customCss = DictionaryPopupScaleCss.ScaleCustomCss(settings.CustomCSS);
+        var customCss = BuildConfiguredCss(settings);
         var (bgColor, textColor) = GetThemeColors(themeMode);
 
         var runtime = $@"{{
@@ -389,7 +388,6 @@ window.viewAnkiNoteLabel = {JsonSerializer.Serialize(ViewAnkiNoteLabel)};
         scanNonJapaneseText: {BoolToJs(settings.ScanNonJapaneseText)},
         maxResults: {settings.MaxResults},
         scanLength: {settings.ScanLength},
-        desktopLookupHoverDelayMs: {settings.NormalizedDesktopLookupHoverDelayMs},
         customCSS: {JsonSerializer.Serialize(customCss)},
         lookupTraceId: {JsonSerializer.Serialize(traceId ?? "")},
         audioSources: {SerializeAudioSources(audioSettings)},
@@ -437,7 +435,6 @@ window.showExpressionTags = {BoolToJs(settings.ShowExpressionTags)};
 window.scanNonJapaneseText = {BoolToJs(settings.ScanNonJapaneseText)};
 window.maxResults = {settings.MaxResults};
 window.scanLength = {settings.ScanLength};
-window.desktopLookupHoverDelayMs = {settings.NormalizedDesktopLookupHoverDelayMs};
 window.customCSS = {JsonSerializer.Serialize(customCss)};
 window.lookupTraceId = {JsonSerializer.Serialize(traceId ?? "")};
 window.audioSources = {SerializeAudioSources(audioSettings)};
@@ -530,6 +527,44 @@ return window.niratanRedirectResults?.({entriesJson}, {finalResultCount}, {rende
 
         return JsonSerializer.Serialize(styles);
     }
+
+    private static string BuildConfiguredCss(DictionaryDisplaySettings settings)
+    {
+        var customCss = DictionaryPopupScaleCss.ScaleCustomCss(settings.CustomCSS);
+        if (string.IsNullOrWhiteSpace(settings.FontFamily))
+            return customCss;
+
+        var family = settings.FontFamily.Trim();
+        var catalogFont = JapaneseFontCatalog.FindBySubtitleFontFamily(family);
+        var familyCss = catalogFont?.ReaderCssValue
+            ?? $"'{EscapeCssString(family)}', serif";
+        var fontFace = BuildImportedFontFace(family, settings.FontFileName);
+        var fontOverride =
+            $"html, body, #popup-viewport, #entries-container {{ font-family: {familyCss} !important; }}";
+
+        return string.IsNullOrWhiteSpace(customCss)
+            ? $"{fontFace}{fontOverride}"
+            : $"{fontFace}{fontOverride}\n{customCss}";
+    }
+
+    private static string BuildImportedFontFace(string family, string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+            return "";
+
+        var safeFileName = Path.GetFileName(fileName);
+        if (!string.Equals(safeFileName, fileName, StringComparison.Ordinal))
+            return "";
+
+        var fontUrl = $"https://{ReaderFontCatalog.VirtualHostName}/{Uri.EscapeDataString(safeFileName)}";
+        return $"@font-face {{ font-family: '{EscapeCssString(family)}'; src: url('{fontUrl}'); font-display: swap; }}\n";
+    }
+
+    private static string EscapeCssString(string value) =>
+        value.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("'", "\\'", StringComparison.Ordinal)
+            .Replace("\r", "\\d ", StringComparison.Ordinal)
+            .Replace("\n", "\\a ", StringComparison.Ordinal);
 
     private (string bgVar, string textColor) GetThemeColors(ThemeMode themeMode)
     {

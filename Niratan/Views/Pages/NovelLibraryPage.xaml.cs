@@ -70,8 +70,25 @@ public sealed partial class NovelLibraryPage : Page
         if ((sender as MenuFlyoutItem)?.Tag is not NovelBookItemViewModel novelItem)
             return;
 
+        var target = await ShowShelfPickerAsync();
+        if (target is not null)
+        {
+            await ViewModel.MoveBookCommand.ExecuteAsync(
+                new NovelBookShelfMoveRequest(novelItem.Book.Id, target.ShelfName));
+        }
+    }
+
+    private async void BulkMoveNovelButton_Click(object sender, RoutedEventArgs e)
+    {
+        var target = await ShowShelfPickerAsync();
+        if (target is not null)
+            await ViewModel.MoveSelectedBooksCommand.ExecuteAsync(target.ShelfName);
+    }
+
+    private async System.Threading.Tasks.Task<NovelShelfTarget?> ShowShelfPickerAsync()
+    {
         var targets = ViewModel.ShelfSections
-            .Where(section => !section.IsDerived)
+            .Where(section => !section.IsDerived && !section.IsUnshelved)
             .Select(section => new NovelShelfTarget(section.DisplayName, section.DisplayName))
             .Prepend(new NovelShelfTarget(
                 ResourceStringHelper.GetString(
@@ -101,11 +118,43 @@ public sealed partial class NovelLibraryPage : Page
                 "Cancel"),
             DefaultButton = ContentDialogButton.Primary,
         };
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary
-            && targetPicker.SelectedItem is NovelShelfTarget target)
+        return await dialog.ShowAsync() == ContentDialogResult.Primary
+            ? targetPicker.SelectedItem as NovelShelfTarget
+            : null;
+    }
+
+    private async void RenameNovelMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as MenuFlyoutItem)?.Tag is not NovelBookItemViewModel novelItem)
+            return;
+
+        var titleBox = new TextBox
         {
-            await ViewModel.MoveBookCommand.ExecuteAsync(
-                new NovelBookShelfMoveRequest(novelItem.Book.Id, target.ShelfName));
+            Text = novelItem.Book.Title,
+            Header = ResourceStringHelper.GetString(
+                "NovelBookRenameDialogTitleBox/Header",
+                "Title"),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = ResourceStringHelper.GetString(
+                "NovelBookRenameDialog/Title",
+                "Rename"),
+            Content = titleBox,
+            PrimaryButtonText = ResourceStringHelper.GetString(
+                "NovelBookRenameDialog/PrimaryButtonText",
+                "Save"),
+            CloseButtonText = ResourceStringHelper.GetString(
+                "NovelBookRenameDialog/CloseButtonText",
+                "Cancel"),
+            DefaultButton = ContentDialogButton.Primary,
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+        {
+            await ViewModel.RenameNovelCommand.ExecuteAsync(
+                new NovelBookRenameRequest(novelItem.Book.Id, titleBox.Text));
         }
     }
 

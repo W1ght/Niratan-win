@@ -24,6 +24,7 @@ public partial class SettingsPageViewModel : ObservableObject
 {
     private readonly ISettingsService _settingsService;
     private readonly IReaderSettingsService _readerSettingsService;
+    private readonly IReaderFontService _readerFontService;
     private readonly IProfileRuntimeService _profileRuntime;
     private readonly IMessenger _messenger;
 
@@ -41,11 +42,26 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty]
     public partial bool SepiaMode { get; set; }
 
+    [ObservableProperty]
+    public partial bool UseCustomReaderColors { get; set; }
+
+    [ObservableProperty]
+    public partial Windows.UI.Color CustomReaderBackgroundColor { get; set; }
+
+    [ObservableProperty]
+    public partial Windows.UI.Color CustomReaderTextColor { get; set; }
+
+    [ObservableProperty]
+    public partial Windows.UI.Color CustomReaderInfoColor { get; set; }
+
+    public bool AreCustomReaderColorsVisible => UseCustomReaderColors;
+
     // --- Reader settings: Text ---
     [ObservableProperty]
     public partial bool VerticalWriting { get; set; }
 
-    public IReadOnlyList<JapaneseFontOption> AvailableReaderFonts { get; } = JapaneseFontCatalog.Fonts;
+    public ObservableCollection<JapaneseFontOption> AvailableReaderFonts { get; } =
+        new(JapaneseFontCatalog.Fonts);
 
     [ObservableProperty]
     public partial JapaneseFontOption SelectedReaderFont { get; set; } = null!;
@@ -56,9 +72,14 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty]
     public partial bool HideFurigana { get; set; }
 
+    public bool CanDeleteSelectedReaderFont => SelectedReaderFont?.IsImported == true;
+
     // --- Reader settings: Layout ---
     [ObservableProperty]
     public partial bool ContinuousMode { get; set; }
+
+    [ObservableProperty]
+    public partial bool TwoColumnHorizontalPages { get; set; }
 
     [ObservableProperty]
     public partial bool MouseWheelPageTurn { get; set; }
@@ -90,9 +111,14 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty]
     public partial double CharacterSpacing { get; set; }
 
+    [ObservableProperty]
+    public partial double ParagraphSpacing { get; set; }
+
     public bool IsSwipeDistanceVisible => ContinuousMode;
+    public bool IsTwoColumnHorizontalPagesVisible => !ContinuousMode && !VerticalWriting;
     public bool IsLineHeightVisible => LayoutAdvanced;
     public bool IsCharacterSpacingVisible => LayoutAdvanced;
+    public bool IsParagraphSpacingVisible => LayoutAdvanced;
 
     // --- Reader settings: Display ---
     [ObservableProperty]
@@ -152,21 +178,27 @@ public partial class SettingsPageViewModel : ObservableObject
 
     public IAsyncRelayCommand ImportDictionaryCommand { get; }
     public IAsyncRelayCommand<string?> DeleteDictionaryCommand { get; }
+    public IAsyncRelayCommand ImportReaderFontCommand { get; }
+    public IAsyncRelayCommand DeleteSelectedReaderFontCommand { get; }
 
     public SettingsPageViewModel(
         ISettingsService settingsService,
         IReaderSettingsService readerSettingsService,
+        IReaderFontService readerFontService,
         IProfileRuntimeService profileRuntime,
         IMessenger messenger
     )
     {
         _settingsService = settingsService;
         _readerSettingsService = readerSettingsService;
+        _readerFontService = readerFontService;
         _profileRuntime = profileRuntime;
         _messenger = messenger;
 
         ImportDictionaryCommand = new AsyncRelayCommand(ImportDictionaryAsync);
         DeleteDictionaryCommand = new AsyncRelayCommand<string?>(DeleteDictionaryAsync);
+        ImportReaderFontCommand = new AsyncRelayCommand(ImportReaderFontAsync);
+        DeleteSelectedReaderFontCommand = new AsyncRelayCommand(DeleteSelectedReaderFontAsync);
 
         _ = InitializeAsync();
     }
@@ -206,14 +238,23 @@ public partial class SettingsPageViewModel : ObservableObject
         var s = _readerSettingsService.Current;
 
         SepiaMode = s.SepiaMode;
+        UseCustomReaderColors = s.UseCustomColors;
+        CustomReaderBackgroundColor = ParseColor(s.CustomBackgroundColor, 0xFFFFFFFF);
+        CustomReaderTextColor = ParseColor(s.CustomTextColor, 0xFF000000);
+        CustomReaderInfoColor = ParseColor(s.CustomInfoColor, 0xFF999999);
 
         VerticalWriting = s.VerticalWriting;
-        SelectedReaderFont = JapaneseFontCatalog.FindByReaderCssValue(s.SelectedFont)
+        RefreshAvailableReaderFonts();
+        SelectedReaderFont = AvailableReaderFonts.FirstOrDefault(font =>
+                                 string.Equals(font.ReaderCssValue, s.SelectedFont, StringComparison.Ordinal)
+                                 && string.Equals(font.ImportedFileName, s.SelectedFontFileName, StringComparison.Ordinal))
+                             ?? JapaneseFontCatalog.FindByReaderCssValue(s.SelectedFont)
                              ?? AvailableReaderFonts[0];
         FontSize = s.FontSize;
         HideFurigana = s.HideFurigana;
 
         ContinuousMode = s.ContinuousMode;
+        TwoColumnHorizontalPages = s.TwoColumnHorizontalPages;
         MouseWheelPageTurn = s.MouseWheelPageTurn;
         ChapterSwipeDistance = s.ChapterSwipeDistance;
         HorizontalPadding = s.HorizontalPadding;
@@ -224,6 +265,7 @@ public partial class SettingsPageViewModel : ObservableObject
         LayoutAdvanced = s.LayoutAdvanced;
         LineHeight = s.LineHeight;
         CharacterSpacing = s.CharacterSpacing;
+        ParagraphSpacing = s.ParagraphSpacing;
 
         ShowTitle = s.ShowTitle;
         ShowCharacters = s.ShowCharacters;
@@ -266,8 +308,34 @@ public partial class SettingsPageViewModel : ObservableObject
 
     partial void OnSepiaModeChanged(bool value) => ApplyReaderSetting(s => s.SepiaMode, value);
 
-    partial void OnVerticalWritingChanged(bool value) => ApplyReaderSetting(s => s.VerticalWriting, value);
-    partial void OnSelectedReaderFontChanged(JapaneseFontOption value) => ApplyReaderSetting(s => s.SelectedFont, value.ReaderCssValue);
+    partial void OnUseCustomReaderColorsChanged(bool value)
+    {
+        ApplyReaderSetting(s => s.UseCustomColors, value);
+        OnPropertyChanged(nameof(AreCustomReaderColorsVisible));
+    }
+
+    partial void OnCustomReaderBackgroundColorChanged(Windows.UI.Color value) =>
+        ApplyReaderSetting(s => s.CustomBackgroundColor, ToHex(value));
+
+    partial void OnCustomReaderTextColorChanged(Windows.UI.Color value) =>
+        ApplyReaderSetting(s => s.CustomTextColor, ToHex(value));
+
+    partial void OnCustomReaderInfoColorChanged(Windows.UI.Color value) =>
+        ApplyReaderSetting(s => s.CustomInfoColor, ToHex(value));
+
+    partial void OnVerticalWritingChanged(bool value)
+    {
+        ApplyReaderSetting(s => s.VerticalWriting, value);
+        OnPropertyChanged(nameof(IsTwoColumnHorizontalPagesVisible));
+    }
+
+    partial void OnSelectedReaderFontChanged(JapaneseFontOption value)
+    {
+        if (value is null) return;
+        ApplyReaderSetting(s => s.SelectedFont, value.ReaderCssValue);
+        ApplyReaderSetting(s => s.SelectedFontFileName, value.ImportedFileName);
+        OnPropertyChanged(nameof(CanDeleteSelectedReaderFont));
+    }
     partial void OnFontSizeChanged(int value) => ApplyReaderSetting(s => s.FontSize, value);
     partial void OnHideFuriganaChanged(bool value) => ApplyReaderSetting(s => s.HideFurigana, value);
 
@@ -275,7 +343,11 @@ public partial class SettingsPageViewModel : ObservableObject
     {
         ApplyReaderSetting(s => s.ContinuousMode, value);
         OnPropertyChanged(nameof(IsSwipeDistanceVisible));
+        OnPropertyChanged(nameof(IsTwoColumnHorizontalPagesVisible));
     }
+
+    partial void OnTwoColumnHorizontalPagesChanged(bool value) =>
+        ApplyReaderSetting(s => s.TwoColumnHorizontalPages, value);
 
     partial void OnMouseWheelPageTurnChanged(bool value) => ApplyReaderSetting(s => s.MouseWheelPageTurn, value);
 
@@ -291,10 +363,12 @@ public partial class SettingsPageViewModel : ObservableObject
         ApplyReaderSetting(s => s.LayoutAdvanced, value);
         OnPropertyChanged(nameof(IsLineHeightVisible));
         OnPropertyChanged(nameof(IsCharacterSpacingVisible));
+        OnPropertyChanged(nameof(IsParagraphSpacingVisible));
     }
 
     partial void OnLineHeightChanged(double value) => ApplyReaderSetting(s => s.LineHeight, value);
     partial void OnCharacterSpacingChanged(double value) => ApplyReaderSetting(s => s.CharacterSpacing, value);
+    partial void OnParagraphSpacingChanged(double value) => ApplyReaderSetting(s => s.ParagraphSpacing, value);
 
     partial void OnShowTitleChanged(bool value) => ApplyReaderSetting(s => s.ShowTitle, value);
     partial void OnShowCharactersChanged(bool value)
@@ -344,6 +418,107 @@ public partial class SettingsPageViewModel : ObservableObject
 
     partial void OnPopupFullWidthChanged(bool value) =>
         ApplyPopupSetting(current => current with { PopupFullWidth = value });
+
+    private void RefreshAvailableReaderFonts()
+    {
+        AvailableReaderFonts.Clear();
+        foreach (var font in _readerFontService.GetAvailableFonts())
+            AvailableReaderFonts.Add(font);
+    }
+
+    private async Task ImportReaderFontAsync()
+    {
+        try
+        {
+            var filePath = await App.GetService<IDialogService>().OpenFilePickerAsync(
+                ".ttf", ".otf", ".woff", ".woff2");
+            if (string.IsNullOrWhiteSpace(filePath)) return;
+
+            var imported = await _readerFontService.ImportAsync(filePath);
+            RefreshAvailableReaderFonts();
+            SelectedReaderFont = AvailableReaderFonts.First(font =>
+                string.Equals(font.ImportedFileName, imported.ImportedFileName, StringComparison.Ordinal));
+            App.GetService<INotificationService>().ShowSuccess(
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    ResourceStringHelper.GetString(
+                        "ReaderFontImportedMessage",
+                        "Imported '{0}'."),
+                    imported.Name),
+                ResourceStringHelper.GetString("ReaderFontNotificationTitle", "Reader Font"));
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[Settings] Failed to import reader font");
+            App.GetService<INotificationService>().ShowError(
+                ex.Message,
+                ResourceStringHelper.GetString("ReaderFontNotificationTitle", "Reader Font"));
+        }
+    }
+
+    private async Task DeleteSelectedReaderFontAsync()
+    {
+        var selected = SelectedReaderFont;
+        if (selected?.ImportedFileName is not { } fileName) return;
+
+        try
+        {
+            var confirmed = await App.GetService<IDialogService>().ConfirmAsync(
+                ResourceStringHelper.GetString("ReaderFontDeleteDialogTitle", "Delete Reader Font"),
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    ResourceStringHelper.GetString(
+                        "ReaderFontDeleteDialogMessage",
+                        "Delete '{0}'? The font file will be removed from Niratan."),
+                    selected.Name));
+            if (!confirmed) return;
+
+            await _readerFontService.DeleteAsync(fileName);
+            RefreshAvailableReaderFonts();
+            SelectedReaderFont = JapaneseFontCatalog.FindByReaderCssValue(
+                JapaneseFontCatalog.DefaultReaderCssValue) ?? AvailableReaderFonts[0];
+            App.GetService<INotificationService>().ShowSuccess(
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    ResourceStringHelper.GetString(
+                        "ReaderFontDeletedMessage",
+                        "Deleted '{0}'."),
+                    selected.Name),
+                ResourceStringHelper.GetString("ReaderFontNotificationTitle", "Reader Font"));
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[Settings] Failed to delete reader font {Font}", fileName);
+            App.GetService<INotificationService>().ShowError(
+                ex.Message,
+                ResourceStringHelper.GetString("ReaderFontNotificationTitle", "Reader Font"));
+        }
+    }
+
+    private static string ToHex(Windows.UI.Color color) =>
+        $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+
+    private static Windows.UI.Color ParseColor(string? value, uint fallback)
+    {
+        var hex = value?.Trim().TrimStart('#');
+        if (hex is not null
+            && (hex.Length == 6 || hex.Length == 8)
+            && uint.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var parsed))
+        {
+            var argb = hex.Length == 6 ? 0xFF000000 | parsed : parsed;
+            return Windows.UI.Color.FromArgb(
+                (byte)(argb >> 24),
+                (byte)(argb >> 16),
+                (byte)(argb >> 8),
+                (byte)argb);
+        }
+
+        return Windows.UI.Color.FromArgb(
+            (byte)(fallback >> 24),
+            (byte)(fallback >> 16),
+            (byte)(fallback >> 8),
+            (byte)fallback);
+    }
 
     public async Task RefreshDictionariesAsync()
     {

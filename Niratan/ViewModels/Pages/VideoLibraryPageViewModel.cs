@@ -28,6 +28,8 @@ public partial class VideoLibraryPageViewModel : ObservableObject
     private CancellationTokenSource _cts = new();
     private List<VideoItem> _allVideos = [];
     private List<VideoCollection> _collections = [];
+    private List<VideoLibrarySource> _sources = [];
+    private readonly HashSet<string> _selectedVideoIds = new(StringComparer.OrdinalIgnoreCase);
     private string? _activeFolderPath;
     private string? _activeCollectionId;
     private string? _activeSeriesName;
@@ -46,6 +48,40 @@ public partial class VideoLibraryPageViewModel : ObservableObject
 
     [ObservableProperty]
     public partial ObservableCollection<VideoLibraryFilterRow> TagFilters { get; set; } = new();
+
+    [ObservableProperty]
+    public partial ObservableCollection<VideoLibrarySourceSummary> SourceSummaries { get; set; } = new();
+
+    [ObservableProperty]
+    public partial ObservableCollection<VideoCollectionMembershipOption> ManualCollectionOptions { get; set; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedVideo))]
+    public partial VideoItemViewModel? SelectedVideo { get; set; }
+
+    [ObservableProperty]
+    public partial string SelectedVideoTitleDraft { get; set; } = "";
+
+    [ObservableProperty]
+    public partial string SelectedVideoTagsDraft { get; set; } = "";
+
+    [ObservableProperty]
+    public partial string SelectedVideoSubtitlePath { get; set; } = "";
+
+    [ObservableProperty]
+    public partial string ManualCollectionNameDraft { get; set; } = "";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelection))]
+    public partial int SelectedVideoCount { get; set; }
+
+    [ObservableProperty]
+    public partial ObservableCollection<VideoSmartRuleDraft> SmartRuleDrafts { get; set; } = new();
+
+    [ObservableProperty]
+    public partial string SmartCollectionDialogTitle { get; set; } = "Create smart collection";
+
+    private string? _editingSmartCollectionId;
 
     [ObservableProperty]
     public partial string SearchText { get; set; } = "";
@@ -100,6 +136,9 @@ public partial class VideoLibraryPageViewModel : ObservableObject
     ];
 
     public bool NoVideos => !IsContentLoading && Videos.Count == 0;
+    public bool HasSelectedVideo => SelectedVideo != null;
+    public bool HasSelection => SelectedVideoCount > 0;
+    public bool HasSources => SourceSummaries.Count > 0;
     public bool IsListLayout => SelectedLayoutMode == VideoLibraryLayoutMode.List;
     public bool IsPosterLayout => SelectedLayoutMode == VideoLibraryLayoutMode.Posters;
     public bool IsSmartRuleValueVisible => SelectedSmartRuleField != VideoSmartRuleField.HasBoundSubtitle;
@@ -148,6 +187,13 @@ public partial class VideoLibraryPageViewModel : ObservableObject
         _cts.Cancel();
         UnsubscribeFromPlayerLibraryChanges();
     }
+
+    public IReadOnlyList<VideoSmartRuleMatchOption> AvailableSmartRuleMatches { get; } =
+    [
+        new(VideoSmartRuleMatch.Contains, "Contains"),
+        new(VideoSmartRuleMatch.Equals, "Equals"),
+        new(VideoSmartRuleMatch.IsTrue, "Is true"),
+    ];
 
     public Task OpenResolvedYouTubeAsync(VideoPlaybackLaunchRequest request) =>
         _playerWindowService.OpenAsync(request, _cts.Token);
@@ -206,6 +252,67 @@ public partial class VideoLibraryPageViewModel : ObservableObject
                 "Scanned {0} videos.",
                 result.Value!.ImportedCount),
             ResourceStringHelper.GetString("VideoLibraryFolderScannedTitle", "Folder scanned"));
+        await LoadVideosAsync();
+    }
+
+    [RelayCommand]
+    private async Task RefreshAllSourcesAsync()
+    {
+        var result = await _videoLibraryService.RefreshAllSourcesAsync(_cts.Token);
+        if (!result.IsSuccess && !result.IsCancelled)
+            _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+        await LoadVideosAsync();
+    }
+
+    [RelayCommand]
+    private async Task RefreshSourceAsync(VideoLibrarySourceSummary summary)
+    {
+        var result = await _videoLibraryService.RefreshSourceAsync(summary.Source.Id, _cts.Token);
+        if (!result.IsSuccess && !result.IsCancelled)
+            _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+        await LoadVideosAsync();
+    }
+
+    [RelayCommand]
+    private async Task RemoveSourceAsync(VideoLibrarySourceSummary summary)
+    {
+        var confirmed = await _dialogService.ConfirmAsync(
+            "Remove video source",
+            $"Remove '{summary.Source.Name}' and its videos from Niratan? Files on disk are kept.");
+        if (!confirmed)
+            return;
+
+        var result = await _videoLibraryService.RemoveSourceAsync(summary.Source.Id, _cts.Token);
+        if (!result.IsSuccess)
+        {
+            if (!result.IsCancelled)
+                _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+            return;
+        }
+
+        await LoadVideosAsync();
+    }
+
+    [RelayCommand]
+    private async Task RevealSourceAsync(VideoLibrarySourceSummary summary)
+    {
+        var result = await _fileRevealService.RevealInFileExplorerAsync(summary.Source.FolderPath, _cts.Token);
+        if (!result.IsSuccess && !result.IsCancelled)
+            _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+    }
+
+    [RelayCommand]
+    private async Task RemoveMissingVideosAsync()
+    {
+        var result = await _videoLibraryService.RemoveMissingVideosAsync(_cts.Token);
+        if (!result.IsSuccess)
+        {
+            if (!result.IsCancelled)
+                _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+            return;
+        }
+
+        _notificationService.ShowSuccess($"Removed {result.Value} missing videos.");
         await LoadVideosAsync();
     }
 
@@ -365,6 +472,188 @@ public partial class VideoLibraryPageViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void ToggleVideoSelection(VideoItemViewModel item)
+    {
+        if (_selectedVideoIds.Contains(item.Video.Id))
+            _selectedVideoIds.Remove(item.Video.Id);
+        else
+            _selectedVideoIds.Add(item.Video.Id);
+
+        item.IsSelected = _selectedVideoIds.Contains(item.Video.Id);
+        SelectedVideoCount = _selectedVideoIds.Count;
+        if (item.IsSelected)
+            SelectVideoDetails(item);
+        else if (SelectedVideo?.Video.Id == item.Video.Id)
+            SelectFirstRemainingVideo();
+    }
+
+    [RelayCommand]
+    private void SelectVideoDetails(VideoItemViewModel item)
+    {
+        _selectedVideoIds.Add(item.Video.Id);
+        item.IsSelected = true;
+        SelectedVideoCount = _selectedVideoIds.Count;
+        SelectedVideo = item;
+        SelectedVideoTitleDraft = item.Video.Title;
+        SelectedVideoTagsDraft = item.Video.Tags ?? "";
+        SelectedVideoSubtitlePath = item.Video.SubtitlePath ?? item.Video.SubtitleSelectionPath ?? "";
+        RebuildManualCollectionOptions();
+    }
+
+    [RelayCommand]
+    private void CloseVideoDetails() => SelectedVideo = null;
+
+    [RelayCommand]
+    private async Task SaveVideoDetailsAsync()
+    {
+        if (SelectedVideo == null)
+            return;
+
+        var tags = SplitTags(SelectedVideoTagsDraft);
+        var result = await _videoLibraryService.UpdateVideoDetailsAsync(
+            SelectedVideo.Video.Id,
+            SelectedVideoTitleDraft,
+            tags,
+            string.IsNullOrWhiteSpace(SelectedVideoSubtitlePath) ? null : SelectedVideoSubtitlePath,
+            _cts.Token);
+        if (!result.IsSuccess)
+        {
+            if (!result.IsCancelled)
+                _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+            return;
+        }
+
+        await LoadVideosAsync();
+        RestoreSelectedVideoDetails();
+    }
+
+    [RelayCommand]
+    private async Task BindSubtitleAsync()
+    {
+        if (SelectedVideo == null)
+            return;
+        var path = await _dialogService.OpenFilePickerAsync(".srt", ".vtt", ".ass", ".ssa");
+        if (path == null)
+            return;
+        SelectedVideoSubtitlePath = path;
+        await SaveVideoDetailsAsync();
+    }
+
+    [RelayCommand]
+    private async Task ClearBoundSubtitleAsync()
+    {
+        SelectedVideoSubtitlePath = "";
+        await SaveVideoDetailsAsync();
+    }
+
+    [RelayCommand]
+    private async Task SetSelectedCollectionMembershipAsync(VideoCollectionMembershipOption option)
+    {
+        if (SelectedVideo == null)
+            return;
+
+        var ids = option.Collection.ItemIds.ToList();
+        if (option.IsIncluded)
+        {
+            if (!ids.Contains(SelectedVideo.Video.Id, StringComparer.OrdinalIgnoreCase))
+                ids.Add(SelectedVideo.Video.Id);
+        }
+        else
+        {
+            ids.RemoveAll(id => string.Equals(id, SelectedVideo.Video.Id, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var result = await _videoLibraryService.UpdateManualCollectionAsync(
+            option.Collection, ids, _cts.Token);
+        if (!result.IsSuccess)
+        {
+            if (!result.IsCancelled)
+                _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+            return;
+        }
+
+        await LoadVideosAsync();
+        RestoreSelectedVideoDetails();
+    }
+
+    [RelayCommand]
+    private async Task AddSelectedToNewCollectionAsync()
+    {
+        if (SelectedVideo == null || string.IsNullOrWhiteSpace(ManualCollectionNameDraft))
+            return;
+
+        var result = await _videoLibraryService.CreateManualCollectionAsync(
+            ManualCollectionNameDraft,
+            [SelectedVideo.Video.Id],
+            _cts.Token);
+        if (!result.IsSuccess)
+        {
+            if (!result.IsCancelled)
+                _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+            return;
+        }
+
+        ManualCollectionNameDraft = "";
+        await LoadVideosAsync();
+        RestoreSelectedVideoDetails();
+    }
+
+    [RelayCommand]
+    private async Task MarkSelectedWatchedAsync()
+    {
+        foreach (var id in _selectedVideoIds.ToList())
+        {
+            var result = await _videoLibraryService.MarkWatchedAsync(id, _cts.Token);
+            if (!result.IsSuccess && !result.IsCancelled)
+            {
+                _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+                return;
+            }
+        }
+        await LoadVideosAsync();
+    }
+
+    [RelayCommand]
+    private async Task ClearSelectedProgressAsync()
+    {
+        foreach (var id in _selectedVideoIds.ToList())
+        {
+            var result = await _videoLibraryService.ClearProgressAsync(id, _cts.Token);
+            if (!result.IsSuccess && !result.IsCancelled)
+            {
+                _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+                return;
+            }
+        }
+        await LoadVideosAsync();
+    }
+
+    [RelayCommand]
+    private async Task DeleteSelectedVideosAsync()
+    {
+        if (_selectedVideoIds.Count == 0)
+            return;
+        var confirmed = await _dialogService.ConfirmAsync(
+            "Remove selected videos",
+            $"Remove {_selectedVideoIds.Count} selected videos from Niratan? Files on disk are kept.");
+        if (!confirmed)
+            return;
+
+        var result = await _videoLibraryService.DeleteVideosAsync(_selectedVideoIds.ToList(), _cts.Token);
+        if (!result.IsSuccess)
+        {
+            if (!result.IsCancelled)
+                _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+            return;
+        }
+
+        _selectedVideoIds.Clear();
+        SelectedVideoCount = 0;
+        SelectedVideo = null;
+        await LoadVideosAsync();
+    }
+
+    [RelayCommand]
     private void SelectLibraryView(string? viewName)
     {
         if (!Enum.TryParse<VideoLibraryView>(viewName, out var view))
@@ -421,6 +710,79 @@ public partial class VideoLibraryPageViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task DeleteCollectionAsync(VideoLibraryFilterRow row)
+    {
+        var collection = _collections.FirstOrDefault(item => item.Id == row.Key);
+        if (collection == null)
+            return;
+        var confirmed = await _dialogService.ConfirmAsync(
+            "Delete collection",
+            $"Delete '{collection.Name}'? Videos stay in your library.");
+        if (!confirmed)
+            return;
+
+        var result = await _videoLibraryService.DeleteCollectionAsync(collection.Id, _cts.Token);
+        if (!result.IsSuccess)
+        {
+            if (!result.IsCancelled)
+                _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+            return;
+        }
+        if (_activeCollectionId == collection.Id)
+            _activeCollectionId = null;
+        await LoadVideosAsync();
+        RestoreSelectedVideoDetails();
+    }
+
+    [RelayCommand]
+    private void BeginCreateSmartCollection()
+    {
+        _editingSmartCollectionId = null;
+        SmartCollectionDialogTitle = "Create smart collection";
+        SmartCollectionNameDraft = "";
+        SmartRuleDrafts = new ObservableCollection<VideoSmartRuleDraft>
+        {
+            new(VideoSmartRuleField.FileName, VideoSmartRuleMatch.Contains, ""),
+        };
+        OnPropertyChanged(nameof(SmartCollectionPreviewRows));
+    }
+
+    public bool BeginEditSmartCollection(VideoLibraryFilterRow row)
+    {
+        var collection = _collections.FirstOrDefault(item => item.Id == row.Key);
+        if (collection?.Kind != VideoCollectionKind.Smart)
+            return false;
+
+        _editingSmartCollectionId = collection.Id;
+        SmartCollectionDialogTitle = "Edit smart collection";
+        SmartCollectionNameDraft = collection.Name;
+        SmartRuleDrafts = new ObservableCollection<VideoSmartRuleDraft>(
+            collection.SmartRules.Select(rule => new VideoSmartRuleDraft(
+                rule.Field, rule.Match, rule.Value)));
+        if (SmartRuleDrafts.Count == 0)
+            SmartRuleDrafts.Add(new VideoSmartRuleDraft(VideoSmartRuleField.FileName, VideoSmartRuleMatch.Contains, ""));
+        OnPropertyChanged(nameof(SmartCollectionPreviewRows));
+        return true;
+    }
+
+    [RelayCommand]
+    private void AddSmartRule()
+    {
+        SmartRuleDrafts.Add(new VideoSmartRuleDraft(
+            VideoSmartRuleField.FileName, VideoSmartRuleMatch.Contains, ""));
+        OnPropertyChanged(nameof(SmartCollectionPreviewRows));
+    }
+
+    [RelayCommand]
+    private void RemoveSmartRule(VideoSmartRuleDraft rule)
+    {
+        SmartRuleDrafts.Remove(rule);
+        OnPropertyChanged(nameof(SmartCollectionPreviewRows));
+    }
+
+    public void RefreshSmartCollectionPreview() => OnPropertyChanged(nameof(SmartCollectionPreviewRows));
+
+    [RelayCommand]
     private async Task CreateSmartCollectionAsync()
     {
         var name = SmartCollectionNameDraft.Trim();
@@ -428,7 +790,12 @@ public partial class VideoLibraryPageViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(name) || rules.Count == 0)
             return;
 
-        var result = await _videoLibraryService.CreateSmartCollectionAsync(name, rules, _cts.Token);
+        var existing = string.IsNullOrWhiteSpace(_editingSmartCollectionId)
+            ? null
+            : _collections.FirstOrDefault(collection => collection.Id == _editingSmartCollectionId);
+        var result = existing == null
+            ? await _videoLibraryService.CreateSmartCollectionAsync(name, rules, _cts.Token)
+            : await _videoLibraryService.UpdateSmartCollectionAsync(existing, name, rules, _cts.Token);
         if (!result.IsSuccess)
         {
             if (!result.IsCancelled)
@@ -441,6 +808,8 @@ public partial class VideoLibraryPageViewModel : ObservableObject
         SmartCollectionNameDraft = "";
         SelectedSmartRuleField = VideoSmartRuleField.FileName;
         SmartRuleValueDraft = "";
+        SmartRuleDrafts.Clear();
+        _editingSmartCollectionId = null;
 
         await LoadVideosAsync();
 
@@ -471,10 +840,12 @@ public partial class VideoLibraryPageViewModel : ObservableObject
 
         var videosTask = _videoLibraryService.GetVideosAsync(ct: _cts.Token);
         var collectionsTask = _videoLibraryService.GetCollectionsAsync(_cts.Token);
-        await Task.WhenAll(videosTask, collectionsTask);
+        var sourcesTask = _videoLibraryService.GetSourcesAsync(_cts.Token);
+        await Task.WhenAll(videosTask, collectionsTask, sourcesTask);
 
         var videoResult = await videosTask;
         var collectionResult = await collectionsTask;
+        var sourceResult = await sourcesTask;
 
         if (videoResult.IsSuccess)
         {
@@ -482,6 +853,12 @@ public partial class VideoLibraryPageViewModel : ObservableObject
             _collections = collectionResult.IsSuccess
                 ? collectionResult.Value!.ToList()
                 : [];
+            _sources = sourceResult.IsSuccess
+                ? sourceResult.Value!.ToList()
+                : [];
+            var currentIds = _allVideos.Select(video => video.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            _selectedVideoIds.RemoveWhere(id => !currentIds.Contains(id));
+            SelectedVideoCount = _selectedVideoIds.Count;
             RebuildFilters();
             ApplyVisibleVideos();
         }
@@ -492,6 +869,8 @@ public partial class VideoLibraryPageViewModel : ObservableObject
 
         if (!collectionResult.IsSuccess && !collectionResult.IsCancelled)
             _notificationService.ShowError(collectionResult.Error!, collectionResult.ErrorTitle!);
+        if (!sourceResult.IsSuccess && !sourceResult.IsCancelled)
+            _notificationService.ShowError(sourceResult.Error!, sourceResult.ErrorTitle!);
 
         IsContentLoading = false;
     }
@@ -541,11 +920,16 @@ public partial class VideoLibraryPageViewModel : ObservableObject
         OnPropertyChanged(nameof(IsTagsView));
     }
 
+    partial void OnSourceSummariesChanged(ObservableCollection<VideoLibrarySourceSummary> value) =>
+        OnPropertyChanged(nameof(HasSources));
+
     private void ApplyVisibleVideos()
     {
         var filtered = FilterVideos(_allVideos).ToList();
         Videos = new ObservableCollection<VideoItemViewModel>(
-            SortVideos(filtered).Select(video => new VideoItemViewModel(video)));
+            SortVideos(filtered).Select(video => new VideoItemViewModel(
+                video,
+                _selectedVideoIds.Contains(video.Id))));
         CurrentViewSubtitle = FormatVideoCount(Videos.Count);
         OnPropertyChanged(nameof(SmartCollectionPreviewRows));
         _ = GenerateMissingThumbnailsForVisibleVideosAsync(_cts.Token);
@@ -616,7 +1000,8 @@ public partial class VideoLibraryPageViewModel : ObservableObject
                     .Select(collection => new VideoLibraryFilterRow(
                         collection.Id,
                         collection.Name,
-                        FormatVideoCount(_allVideos.Count(video => MatchesCollection(video, collection.Id)))))
+                        FormatVideoCount(_allVideos.Count(video => MatchesCollection(video, collection.Id))),
+                        collection.Kind))
                 : _allVideos
                     .Where(video => !string.IsNullOrWhiteSpace(video.CollectionName))
                     .GroupBy(video => video.CollectionName!, StringComparer.OrdinalIgnoreCase)
@@ -635,6 +1020,19 @@ public partial class VideoLibraryPageViewModel : ObservableObject
                     group.Key,
                     group.Key,
                     FormatVideoCount(group.Count()))));
+
+        SourceSummaries = new ObservableCollection<VideoLibrarySourceSummary>(
+            _sources.Select(source =>
+            {
+                var sourceVideos = _allVideos
+                    .Where(video => string.Equals(video.SourceId, source.Id, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                return new VideoLibrarySourceSummary(
+                    source,
+                    sourceVideos.Count,
+                    sourceVideos.Count(video => HasProgress(video) && !video.IsWatched),
+                    sourceVideos.Count(video => !video.IsRemote && !File.Exists(video.FilePath)));
+            }));
     }
 
     private static bool MatchesSearch(VideoItem video, string query) =>
@@ -662,7 +1060,7 @@ public partial class VideoLibraryPageViewModel : ObservableObject
         string.IsNullOrWhiteSpace(tags)
             ? []
             : tags
-                .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Split([',', '\n', '\r'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
@@ -690,6 +1088,19 @@ public partial class VideoLibraryPageViewModel : ObservableObject
 
     private IReadOnlyList<VideoSmartRule> BuildSmartRules()
     {
+        if (SmartRuleDrafts.Count > 0)
+        {
+            return SmartRuleDrafts
+                .Select(draft => new VideoSmartRule
+                {
+                    Field = draft.Field,
+                    Match = draft.Match,
+                    Value = draft.Value.Trim(),
+                })
+                .Where(rule => rule.Match == VideoSmartRuleMatch.IsTrue || rule.Value.Length > 0)
+                .ToList();
+        }
+
         if (SelectedSmartRuleField == VideoSmartRuleField.HasBoundSubtitle)
         {
             return
@@ -723,6 +1134,8 @@ public partial class VideoLibraryPageViewModel : ObservableObject
             FileSizeBytes = video.FileSizeBytes,
             ModifiedAt = video.ModifiedAt,
             SourceFolderPath = video.SourceFolderPath,
+            SourceId = video.SourceId,
+            LastSeenAt = video.LastSeenAt,
             PosterPath = video.PosterPath,
             ThumbnailPath = video.ThumbnailPath,
             Tags = video.Tags,
@@ -741,6 +1154,38 @@ public partial class VideoLibraryPageViewModel : ObservableObject
             RemoteThumbnailUrl = video.RemoteThumbnailUrl,
             RemoteSubtitleLanguage = video.RemoteSubtitleLanguage,
         };
+
+    private void RebuildManualCollectionOptions()
+    {
+        var selectedId = SelectedVideo?.Video.Id;
+        ManualCollectionOptions = new ObservableCollection<VideoCollectionMembershipOption>(
+            _collections
+                .Where(collection => collection.Kind == VideoCollectionKind.Manual)
+                .OrderBy(collection => collection.Name, StringComparer.CurrentCultureIgnoreCase)
+                .Select(collection => new VideoCollectionMembershipOption(
+                    collection,
+                    selectedId != null && collection.ItemIds.Contains(selectedId, StringComparer.OrdinalIgnoreCase))));
+    }
+
+    private void RestoreSelectedVideoDetails()
+    {
+        var selectedId = SelectedVideo?.Video.Id;
+        if (selectedId == null)
+            return;
+        var item = Videos.FirstOrDefault(video =>
+            string.Equals(video.Video.Id, selectedId, StringComparison.OrdinalIgnoreCase));
+        if (item != null)
+            SelectVideoDetails(item);
+    }
+
+    private void SelectFirstRemainingVideo()
+    {
+        var item = Videos.FirstOrDefault(video => _selectedVideoIds.Contains(video.Video.Id));
+        if (item == null)
+            SelectedVideo = null;
+        else
+            SelectVideoDetails(item);
+    }
 
     private bool IsCoveredByAnyCollection(VideoItem video) =>
         _collections.Count == 0
@@ -811,7 +1256,61 @@ public sealed record VideoSmartRuleFieldOption(
     VideoSmartRuleField Value,
     string DisplayName);
 
+public sealed record VideoSmartRuleMatchOption(
+    VideoSmartRuleMatch Value,
+    string DisplayName);
+
 public sealed record VideoLibraryFilterRow(
     string Key,
     string DisplayName,
-    string MetadataText);
+    string MetadataText,
+    VideoCollectionKind? CollectionKind = null);
+
+public sealed record VideoLibrarySourceSummary(
+    VideoLibrarySource Source,
+    int ItemCount,
+    int InProgressCount,
+    int MissingCount)
+{
+    public string StatusText => $"{ItemCount} videos • {InProgressCount} in progress • {MissingCount} missing";
+    public string LastScannedText => Source.LastScannedAt.HasValue
+        ? $"Last scanned {Source.LastScannedAt.Value.ToLocalTime():g}"
+        : "Never scanned";
+    public bool HasError => !string.IsNullOrWhiteSpace(Source.LastError);
+}
+
+public sealed partial class VideoCollectionMembershipOption : ObservableObject
+{
+    public VideoCollectionMembershipOption(VideoCollection collection, bool isIncluded)
+    {
+        Collection = collection;
+        IsIncluded = isIncluded;
+    }
+
+    public VideoCollection Collection { get; }
+
+    [ObservableProperty]
+    public partial bool IsIncluded { get; set; }
+}
+
+public sealed partial class VideoSmartRuleDraft : ObservableObject
+{
+    public VideoSmartRuleDraft(
+        VideoSmartRuleField field,
+        VideoSmartRuleMatch match,
+        string value)
+    {
+        Field = field;
+        Match = match;
+        Value = value;
+    }
+
+    [ObservableProperty]
+    public partial VideoSmartRuleField Field { get; set; }
+
+    [ObservableProperty]
+    public partial VideoSmartRuleMatch Match { get; set; }
+
+    [ObservableProperty]
+    public partial string Value { get; set; }
+}

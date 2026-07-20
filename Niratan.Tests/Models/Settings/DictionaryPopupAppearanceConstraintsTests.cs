@@ -53,4 +53,5 @@ public sealed class DictionaryPopupAppearanceConstraintsTests
         DictionaryPopupAppearanceConstraints.NormalizeScale(double.NaN).Should().Be(1.0);
         DictionaryPopupAppearanceConstraints.NormalizeScale(double.PositiveInfinity).Should().Be(1.0);
     }
+
 }

@@ -92,4 +92,27 @@ public sealed class VideoPlayerChromeContractTests
         playerCode.Should().Contain("AppDataHelper.GetTemporaryDataPath()");
         playerCode.Should().NotContain("ApplicationData.Current.TemporaryFolder");
     }
+
+    [Fact]
+    public void Inspector_UsesApplicationThemeAndThemeAwareColors()
+    {
+        var projectRoot = Path.GetFullPath(
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "Niratan"));
+        var playerXaml = File.ReadAllText(
+            Path.Combine(projectRoot, "Views", "Video", "VideoPlayerWindow.xaml"));
+        var transcriptXaml = File.ReadAllText(
+            Path.Combine(projectRoot, "Views", "Video", "VideoTranscriptListControl.xaml"));
+        var playerCode = File.ReadAllText(
+            Path.Combine(projectRoot, "Views", "Video", "VideoPlayerWindow.xaml.cs"));
+
+        playerXaml.Should().NotContain("RequestedTheme=\"Light\"");
+        playerXaml.Should().Contain("{ThemeResource SolidBackgroundFillColorBaseBrush}");
+        playerXaml.Should().Contain("{ThemeResource TextFillColorPrimaryBrush}");
+        playerXaml.Should().Contain("{ThemeResource CardBackgroundFillColorDefaultBrush}");
+        transcriptXaml.Should().Contain("{ThemeResource CardBackgroundFillColorDefaultBrush}");
+        transcriptXaml.Should().Contain("{ThemeResource TextFillColorPrimaryBrush}");
+        playerCode.Should().Contain("ApplyInspectorTheme(_settingsService.Current.Theme)");
+        playerCode.Should().Contain("_settingsService.SettingChanged += SettingsService_SettingChanged");
+        playerCode.Should().Contain("_settingsService.SettingChanged -= SettingsService_SettingChanged");
+    }
 }

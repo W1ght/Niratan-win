@@ -38,4 +38,39 @@ public sealed class NovelReaderContentStylesTests
         css.Should().Contain("svg.niratan-blurred");
         css.Should().Contain("filter: blur(24px) !important");
     }
+
+    [Fact]
+    public void GenerateCss_AddsTwoColumnSpreadAndParagraphSpacing()
+    {
+        var css = NovelReaderContentStyles.GenerateCss(
+            new ReaderSettings
+            {
+                VerticalWriting = false,
+                ContinuousMode = false,
+                TwoColumnHorizontalPages = true,
+                LayoutAdvanced = true,
+                ParagraphSpacing = 1.2,
+            },
+            ThemeMode.Light);
+
+        css.Should().Contain("column-count: 2 !important");
+        css.Should().Contain("--reader-column-gap: 32px");
+        css.Should().Contain("margin-top: 1.2em !important");
+        css.Should().Contain("margin-bottom: 1.2em !important");
+    }
+
+    [Fact]
+    public void GenerateCss_DeclaresImportedFontFromControlledHost()
+    {
+        var css = NovelReaderContentStyles.GenerateCss(
+            new ReaderSettings
+            {
+                SelectedFont = "'NiratanImportedABC', serif",
+                SelectedFontFileName = "book.otf",
+            },
+            ThemeMode.Light);
+
+        css.Should().Contain("@font-face");
+        css.Should().Contain("https://niratan-reader-fonts.local/book.otf");
+    }
 }

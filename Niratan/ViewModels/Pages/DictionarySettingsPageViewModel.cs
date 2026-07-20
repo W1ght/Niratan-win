@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -20,6 +21,7 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
     private readonly ISettingsService _settingsService;
     private readonly IGlobalSelectionLookupService _globalLookupService;
     private readonly IDictionaryCatalogService _catalogService;
+    private readonly IReaderFontService _readerFontService;
     private bool _isLoadingDisplaySettings;
 
     public DictionaryCollapseMode[] AvailableCollapseModes { get; } = Enum.GetValues<DictionaryCollapseMode>();
@@ -28,6 +30,7 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
     public ObservableCollection<RecommendedDictionarySelectionItemViewModel> RecommendedDictionaries { get; } = [];
     public ObservableCollection<DictionaryUpdateSelectionItemViewModel> AvailableUpdates { get; } = [];
     public ObservableCollection<CollapsedDictionaryItemViewModel> CollapsedDictionaryItems { get; } = [];
+    public ObservableCollection<JapaneseFontOption> AvailableDictionaryFonts { get; } = [];
 
     [ObservableProperty]
     public partial DictionaryType SelectedDictionaryType { get; set; } = DictionaryType.Term;
@@ -84,9 +87,6 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
     public partial bool TwoColumnLayout { get; set; }
 
     [ObservableProperty]
-    public partial int DesktopLookupHoverDelayMs { get; set; } = 45;
-
-    [ObservableProperty]
     public partial bool UpdateAutomatically { get; set; } = true;
 
     [ObservableProperty]
@@ -108,6 +108,11 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
     [ObservableProperty]
     public partial string CustomCssDraft { get; set; } = "";
 
+    [ObservableProperty]
+    public partial JapaneseFontOption SelectedDictionaryFont { get; set; } = null!;
+
+    public bool CanDeleteSelectedDictionaryFont => SelectedDictionaryFont?.IsImported == true;
+
     public bool IsTermSelected => SelectedDictionaryType == DictionaryType.Term;
     public bool IsFrequencySelected => SelectedDictionaryType == DictionaryType.Frequency;
     public bool IsPitchSelected => SelectedDictionaryType == DictionaryType.Pitch;
@@ -119,11 +124,14 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
     public IRelayCommand DecreaseMaxResultsCommand { get; }
     public IRelayCommand IncreaseScanLengthCommand { get; }
     public IRelayCommand DecreaseScanLengthCommand { get; }
+    public IAsyncRelayCommand ImportDictionaryFontCommand { get; }
+    public IAsyncRelayCommand DeleteSelectedDictionaryFontCommand { get; }
     public DictionarySettingsPageViewModel()
     {
         _settingsService = App.GetService<ISettingsService>();
         _globalLookupService = App.GetService<IGlobalSelectionLookupService>();
         _catalogService = App.GetService<IDictionaryCatalogService>();
+        _readerFontService = App.GetService<IReaderFontService>();
         _globalLookupService.StatusChanged += OnGlobalLookupStatusChanged;
         LoadDisplaySettings();
         ImportDictionaryCommand = new AsyncRelayCommand(ImportDictionaryAsync);
@@ -132,6 +140,8 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
         DecreaseMaxResultsCommand = new RelayCommand(() => MaxResults = Clamp(MaxResults - 1, 1, 50));
         IncreaseScanLengthCommand = new RelayCommand(() => ScanLength = Clamp(ScanLength + 1, 1, 64));
         DecreaseScanLengthCommand = new RelayCommand(() => ScanLength = Clamp(ScanLength - 1, 1, 64));
+        ImportDictionaryFontCommand = new AsyncRelayCommand(ImportDictionaryFontAsync);
+        DeleteSelectedDictionaryFontCommand = new AsyncRelayCommand(DeleteSelectedDictionaryFontAsync);
         _ = RefreshDictionariesAsync();
         LoadRecommendations();
     }
@@ -198,19 +208,21 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
     partial void OnDictionaryTabDefaultChanged(bool value) =>
         UpdateDisplaySettings(current => current with { DictionaryTabDefault = value });
 
+    partial void OnSelectedDictionaryFontChanged(JapaneseFontOption value)
+    {
+        OnPropertyChanged(nameof(CanDeleteSelectedDictionaryFont));
+        if (value is null)
+            return;
+
+        UpdateDisplaySettings(current => current with
+        {
+            FontFamily = value.SubtitleFontFamily,
+            FontFileName = value.ImportedFileName,
+        });
+    }
+
     partial void OnTwoColumnLayoutChanged(bool value) =>
         UpdateDisplaySettings(current => current with { TwoColumnLayout = value });
-
-    partial void OnDesktopLookupHoverDelayMsChanged(int value)
-    {
-        var normalized = Clamp(value, 0, 250);
-        if (normalized != value)
-        {
-            DesktopLookupHoverDelayMs = normalized;
-            return;
-        }
-        UpdateDisplaySettings(current => current with { DesktopLookupHoverDelayMs = normalized });
-    }
 
     partial void OnUpdateAutomaticallyChanged(bool value) => UpdateDictionaryUpdateSettings();
 
@@ -240,8 +252,13 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
             CompactPitchAccents = settings.CompactPitchAccents;
             DictionaryTabDefault = settings.DictionaryTabDefault;
             TwoColumnLayout = settings.TwoColumnLayout;
-            DesktopLookupHoverDelayMs = settings.NormalizedDesktopLookupHoverDelayMs;
             CustomCssDraft = settings.CustomCSS;
+            RefreshAvailableDictionaryFonts();
+            SelectedDictionaryFont = AvailableDictionaryFonts.FirstOrDefault(font =>
+                                         string.Equals(font.SubtitleFontFamily, settings.FontFamily, StringComparison.Ordinal)
+                                         && string.Equals(font.ImportedFileName, settings.FontFileName, StringComparison.Ordinal))
+                                     ?? JapaneseFontCatalog.FindBySubtitleFontFamily(settings.FontFamily)
+                                     ?? AvailableDictionaryFonts[0];
             var updates = _settingsService.Current.DictionaryUpdateSettings;
             UpdateAutomatically = updates.UpdateAutomatically;
             UpdateInterval = updates.Interval;
@@ -602,6 +619,80 @@ public partial class DictionarySettingsPageViewModel : ObservableObject
 
     public void SaveCustomCss() =>
         UpdateDisplaySettings(current => current with { CustomCSS = CustomCssDraft });
+
+    private void RefreshAvailableDictionaryFonts()
+    {
+        AvailableDictionaryFonts.Clear();
+        foreach (var font in _readerFontService.GetAvailableFonts())
+            AvailableDictionaryFonts.Add(font);
+    }
+
+    private async Task ImportDictionaryFontAsync()
+    {
+        try
+        {
+            var filePath = await App.GetService<IDialogService>().OpenFilePickerAsync(
+                ".ttf", ".otf", ".woff", ".woff2");
+            if (string.IsNullOrWhiteSpace(filePath))
+                return;
+
+            var imported = await _readerFontService.ImportAsync(filePath);
+            RefreshAvailableDictionaryFonts();
+            SelectedDictionaryFont = AvailableDictionaryFonts.First(font =>
+                string.Equals(font.ImportedFileName, imported.ImportedFileName, StringComparison.Ordinal));
+            App.GetService<INotificationService>().ShowSuccess(
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    ResourceStringHelper.GetString("DictionaryFontImportedMessage", "Imported '{0}'."),
+                    imported.Name),
+                ResourceStringHelper.GetString("DictionaryFontNotificationTitle", "Dictionary Font"));
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[DictionarySettings] Failed to import dictionary font");
+            App.GetService<INotificationService>().ShowError(
+                ex.Message,
+                ResourceStringHelper.GetString("DictionaryFontNotificationTitle", "Dictionary Font"));
+        }
+    }
+
+    private async Task DeleteSelectedDictionaryFontAsync()
+    {
+        var selected = SelectedDictionaryFont;
+        if (selected?.ImportedFileName is not { } fileName)
+            return;
+
+        try
+        {
+            var confirmed = await App.GetService<IDialogService>().ConfirmAsync(
+                ResourceStringHelper.GetString("DictionaryFontDeleteDialogTitle", "Delete Dictionary Font"),
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    ResourceStringHelper.GetString(
+                        "DictionaryFontDeleteDialogMessage",
+                        "Delete '{0}'? The font file will be removed from Niratan."),
+                    selected.Name));
+            if (!confirmed)
+                return;
+
+            await _readerFontService.DeleteAsync(fileName);
+            RefreshAvailableDictionaryFonts();
+            SelectedDictionaryFont = AvailableDictionaryFonts[0];
+            App.GetService<INotificationService>().ShowSuccess(
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    ResourceStringHelper.GetString("DictionaryFontDeletedMessage", "Deleted '{0}'."),
+                    selected.Name),
+                ResourceStringHelper.GetString("DictionaryFontNotificationTitle", "Dictionary Font"));
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[DictionarySettings] Failed to delete dictionary font {Font}", fileName);
+            App.GetService<INotificationService>().ShowError(
+                ex.Message,
+                ResourceStringHelper.GetString("DictionaryFontNotificationTitle", "Dictionary Font"));
+        }
+    }
 
     private async Task RunCatalogOperationAsync(
         string initialStatus,

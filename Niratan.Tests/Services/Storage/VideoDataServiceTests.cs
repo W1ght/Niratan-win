@@ -259,6 +259,31 @@ public class VideoDataServiceTests
     }
 
     [Fact]
+    public async Task Migration014_AddsPersistentVideoSourcesAndMembershipColumns()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+
+        await InvokeMigrationAsync("Migration_008", connection, transaction);
+        await InvokeMigrationAsync("Migration_014", connection, transaction);
+        await transaction.CommitAsync(ct);
+
+        var sourceTable = await ScalarAsync(
+            connection,
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'VideoLibrarySources';",
+            ct);
+        var membershipColumns = await ScalarAsync(
+            connection,
+            "SELECT COUNT(*) FROM pragma_table_info('VideoItems') WHERE name IN ('SourceId', 'LastSeenAt');",
+            ct);
+
+        sourceTable.Should().Be(1);
+        membershipColumns.Should().Be(2);
+    }
+
+    [Fact]
     public async Task Migration013_AddsRemoteIdentityAndUniqueIndex()
     {
         var ct = TestContext.Current.CancellationToken;
@@ -389,6 +414,57 @@ public class VideoDataServiceTests
         DbTransaction transaction)
     {
         await InvokeMigrationAsync("Migration_008", connection, transaction);
+    }
+
+    [Fact]
+    public async Task DataService_PersistsAndRemovesVideoSourceWithItsItems()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var dbPath = Path.Combine(Path.GetTempPath(), $"niratan-video-source-{Guid.NewGuid():N}.db");
+        try
+        {
+            var connectionString = $"Data Source={dbPath};Pooling=False";
+            await new DatabaseMigrator(NullLogger<DatabaseMigrator>.Instance, connectionString).MigrateAsync();
+            var service = new VideoDataService(connectionString);
+            var source = new VideoLibrarySource
+            {
+                Id = "source-1",
+                Name = "Anime",
+                FolderPath = @"D:\Anime",
+            };
+            await service.UpsertVideoLibrarySourceAsync(source, ct);
+            await service.UpsertVideoAsync(new VideoItem
+            {
+                Id = "video-1",
+                Title = "Episode 1",
+                FilePath = @"D:\Anime\Episode 1.mkv",
+                SourceId = source.Id,
+            }, ct);
+
+            (await service.GetVideoLibrarySourcesAsync(ct)).Should().ContainSingle()
+                .Which.FolderPath.Should().Be(@"D:\Anime");
+
+            await service.DeleteVideoLibrarySourceAsync(source.Id, ct);
+
+            (await service.GetVideoLibrarySourcesAsync(ct)).Should().BeEmpty();
+            (await service.GetVideosAsync(ct: ct)).Should().BeEmpty();
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (File.Exists(dbPath))
+                File.Delete(dbPath);
+        }
+    }
+
+    private static async Task<long> ScalarAsync(
+        SqliteConnection connection,
+        string sql,
+        CancellationToken ct)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        return (long)(await command.ExecuteScalarAsync(ct))!;
     }
 
     private static async Task InvokeMigrationAsync(

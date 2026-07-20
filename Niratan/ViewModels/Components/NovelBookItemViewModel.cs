@@ -1,11 +1,12 @@
 using System;
 using System.IO;
+using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Niratan.Models;
 
 namespace Niratan.ViewModels.Components;
 
-public class NovelBookItemViewModel
+public partial class NovelBookItemViewModel : ObservableObject
 {
     public NovelBook Book { get; }
     public string AutomationId => $"NovelBookCard_{Book.Id}";
@@ -19,6 +20,9 @@ public class NovelBookItemViewModel
 
     public BitmapImage? CoverImage { get; }
     public bool HasCover => CoverImage != null;
+
+    [ObservableProperty]
+    public partial bool IsSelected { get; set; }
 
     public NovelBookItemViewModel(NovelBook book)
     {

@@ -47,7 +47,7 @@ internal class VideoDataService : IVideoDataService
             SELECT Id, Title, FilePath, SubtitlePath, ImportedAt, LastOpenedAt,
                    LastPositionSeconds, DurationSeconds, ManualSortOrder,
                    FileSizeBytes, ModifiedAt, ThumbnailPath, IsFavorite,
-                   SourceFolderPath, PosterPath, Tags, CollectionName, IsWatched,
+                   SourceFolderPath, SourceId, LastSeenAt, PosterPath, Tags, CollectionName, IsWatched,
                    SubtitleSelectionKind, SubtitleSelectionPath,
                    SubtitleSelectionTrackId, SubtitleSelectionTrackName,
                    ProfileId, ProviderId, RemoteId, OriginalUrl, CanonicalUrl,
@@ -81,7 +81,7 @@ internal class VideoDataService : IVideoDataService
             SELECT Id, Title, FilePath, SubtitlePath, ImportedAt, LastOpenedAt,
                    LastPositionSeconds, DurationSeconds, ManualSortOrder,
                    FileSizeBytes, ModifiedAt, ThumbnailPath, IsFavorite,
-                   SourceFolderPath, PosterPath, Tags, CollectionName, IsWatched,
+                   SourceFolderPath, SourceId, LastSeenAt, PosterPath, Tags, CollectionName, IsWatched,
                    SubtitleSelectionKind, SubtitleSelectionPath,
                    SubtitleSelectionTrackId, SubtitleSelectionTrackName,
                    ProfileId, ProviderId, RemoteId, OriginalUrl, CanonicalUrl,
@@ -103,7 +103,7 @@ internal class VideoDataService : IVideoDataService
                 (Id, Title, FilePath, SubtitlePath, ImportedAt, LastOpenedAt,
                  LastPositionSeconds, DurationSeconds, ManualSortOrder,
                  FileSizeBytes, ModifiedAt, ThumbnailPath, IsFavorite,
-                 SourceFolderPath, PosterPath, Tags, CollectionName, IsWatched,
+                 SourceFolderPath, SourceId, LastSeenAt, PosterPath, Tags, CollectionName, IsWatched,
                  SubtitleSelectionKind, SubtitleSelectionPath,
                  SubtitleSelectionTrackId, SubtitleSelectionTrackName,
                  ProfileId, ProviderId, RemoteId, OriginalUrl, CanonicalUrl,
@@ -112,13 +112,17 @@ internal class VideoDataService : IVideoDataService
                 (@Id, @Title, @FilePath, @SubtitlePath, @ImportedAt, @LastOpenedAt,
                  @LastPositionSeconds, @DurationSeconds, @ManualSortOrder,
                  @FileSizeBytes, @ModifiedAt, @ThumbnailPath, @IsFavorite,
-                 @SourceFolderPath, @PosterPath, @Tags, @CollectionName, @IsWatched,
+                 @SourceFolderPath, @SourceId, @LastSeenAt, @PosterPath, @Tags, @CollectionName, @IsWatched,
                  @SubtitleSelectionKind, @SubtitleSelectionPath,
                  @SubtitleSelectionTrackId, @SubtitleSelectionTrackName,
                  @ProfileId, @ProviderId, @RemoteId, @OriginalUrl, @CanonicalUrl,
                  @RemoteThumbnailUrl, @RemoteSubtitleLanguage)
             ON CONFLICT(FilePath) DO UPDATE SET
-                Title = excluded.Title,
+                Title = CASE
+                    WHEN excluded.SourceId IS NOT NULL AND VideoItems.SourceId IS NOT NULL
+                        THEN VideoItems.Title
+                    ELSE excluded.Title
+                END,
                 SubtitlePath = COALESCE(excluded.SubtitlePath, VideoItems.SubtitlePath),
                 FileSizeBytes = excluded.FileSizeBytes,
                 ModifiedAt = COALESCE(excluded.ModifiedAt, VideoItems.ModifiedAt),
@@ -128,6 +132,8 @@ internal class VideoDataService : IVideoDataService
                     ELSE VideoItems.IsFavorite
                 END,
                 SourceFolderPath = COALESCE(excluded.SourceFolderPath, VideoItems.SourceFolderPath),
+                SourceId = COALESCE(excluded.SourceId, VideoItems.SourceId),
+                LastSeenAt = COALESCE(excluded.LastSeenAt, VideoItems.LastSeenAt),
                 PosterPath = COALESCE(excluded.PosterPath, VideoItems.PosterPath),
                 Tags = COALESCE(VideoItems.Tags, excluded.Tags),
                 CollectionName = COALESCE(VideoItems.CollectionName, excluded.CollectionName),
@@ -145,6 +151,34 @@ internal class VideoDataService : IVideoDataService
             """;
 
         await connection.ExecuteAsync(new CommandDefinition(sql, video, cancellationToken: ct));
+    }
+
+    public async Task UpdateVideoDetailsAsync(
+        string videoId,
+        string title,
+        string? tags,
+        string? subtitlePath,
+        CancellationToken ct = default)
+    {
+        using var connection = await GetOpenConnectionAsync();
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                UPDATE VideoItems
+                SET Title = @Title,
+                    Tags = @Tags,
+                    SubtitlePath = @SubtitlePath,
+                    SubtitleSelectionKind = CASE
+                        WHEN @SubtitlePath IS NULL THEN 0
+                        ELSE 1
+                    END,
+                    SubtitleSelectionPath = @SubtitlePath,
+                    SubtitleSelectionTrackId = NULL,
+                    SubtitleSelectionTrackName = NULL
+                WHERE Id = @VideoId;
+                """,
+                new { VideoId = videoId, Title = title, Tags = tags, SubtitlePath = subtitlePath },
+                cancellationToken: ct));
     }
 
     public async Task<IReadOnlyList<VideoCollection>> GetVideoCollectionsAsync(CancellationToken ct = default)
@@ -298,6 +332,135 @@ internal class VideoDataService : IVideoDataService
                 cancellationToken: ct
             )
         );
+    }
+
+    public async Task DeleteVideosAsync(IReadOnlyList<string> videoIds, CancellationToken ct = default)
+    {
+        if (videoIds.Count == 0)
+            return;
+
+        using var connection = await GetOpenConnectionAsync();
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                "DELETE FROM VideoItems WHERE Id IN @VideoIds;",
+                new { VideoIds = videoIds },
+                cancellationToken: ct));
+    }
+
+    public async Task<IReadOnlyList<VideoLibrarySource>> GetVideoLibrarySourcesAsync(
+        CancellationToken ct = default)
+    {
+        using var connection = await GetOpenConnectionAsync();
+        var result = await connection.QueryAsync<VideoLibrarySource>(
+            new CommandDefinition(
+                """
+                SELECT Id, Name, FolderPath, CreatedAt, LastScannedAt, LastError
+                FROM VideoLibrarySources
+                ORDER BY Name COLLATE NOCASE, FolderPath COLLATE NOCASE;
+                """,
+                cancellationToken: ct));
+        return result.ToList();
+    }
+
+    public async Task<VideoLibrarySource?> GetVideoLibrarySourceAsync(
+        string sourceId,
+        CancellationToken ct = default)
+    {
+        using var connection = await GetOpenConnectionAsync();
+        return await connection.QueryFirstOrDefaultAsync<VideoLibrarySource>(
+            new CommandDefinition(
+                """
+                SELECT Id, Name, FolderPath, CreatedAt, LastScannedAt, LastError
+                FROM VideoLibrarySources
+                WHERE Id = @SourceId;
+                """,
+                new { SourceId = sourceId },
+                cancellationToken: ct));
+    }
+
+    public async Task<VideoLibrarySource?> GetVideoLibrarySourceByPathAsync(
+        string folderPath,
+        CancellationToken ct = default)
+    {
+        using var connection = await GetOpenConnectionAsync();
+        return await connection.QueryFirstOrDefaultAsync<VideoLibrarySource>(
+            new CommandDefinition(
+                """
+                SELECT Id, Name, FolderPath, CreatedAt, LastScannedAt, LastError
+                FROM VideoLibrarySources
+                WHERE FolderPath = @FolderPath COLLATE NOCASE;
+                """,
+                new { FolderPath = folderPath },
+                cancellationToken: ct));
+    }
+
+    public async Task UpsertVideoLibrarySourceAsync(
+        VideoLibrarySource source,
+        CancellationToken ct = default)
+    {
+        using var connection = await GetOpenConnectionAsync();
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                INSERT INTO VideoLibrarySources
+                    (Id, Name, FolderPath, CreatedAt, LastScannedAt, LastError)
+                VALUES
+                    (@Id, @Name, @FolderPath, @CreatedAt, @LastScannedAt, @LastError)
+                ON CONFLICT(FolderPath) DO UPDATE SET
+                    Name = excluded.Name,
+                    LastScannedAt = excluded.LastScannedAt,
+                    LastError = excluded.LastError;
+                """,
+                source,
+                cancellationToken: ct));
+    }
+
+    public async Task UpdateVideoLibrarySourceScanStateAsync(
+        string sourceId,
+        DateTime? lastScannedAt,
+        string? lastError,
+        CancellationToken ct = default)
+    {
+        using var connection = await GetOpenConnectionAsync();
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                UPDATE VideoLibrarySources
+                SET LastScannedAt = @LastScannedAt,
+                    LastError = @LastError
+                WHERE Id = @SourceId;
+                """,
+                new { SourceId = sourceId, LastScannedAt = lastScannedAt, LastError = lastError },
+                cancellationToken: ct));
+    }
+
+    public async Task DeleteVideoLibrarySourceAsync(string sourceId, CancellationToken ct = default)
+    {
+        using var connection = await GetOpenConnectionAsync();
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        await connection.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM VideoItems WHERE SourceId = @SourceId;",
+            new { SourceId = sourceId }, transaction, cancellationToken: ct));
+        await connection.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM VideoLibrarySources WHERE Id = @SourceId;",
+            new { SourceId = sourceId }, transaction, cancellationToken: ct));
+        await transaction.CommitAsync(ct);
+    }
+
+    public async Task DeleteSourceVideosExceptAsync(
+        string sourceId,
+        IReadOnlyList<string> retainedFilePaths,
+        CancellationToken ct = default)
+    {
+        using var connection = await GetOpenConnectionAsync();
+        var sql = retainedFilePaths.Count == 0
+            ? "DELETE FROM VideoItems WHERE SourceId = @SourceId;"
+            : "DELETE FROM VideoItems WHERE SourceId = @SourceId AND FilePath NOT IN @RetainedFilePaths;";
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                sql,
+                new { SourceId = sourceId, RetainedFilePaths = retainedFilePaths },
+                cancellationToken: ct));
     }
 
     public async Task UpdateVideoLastOpenedAsync(

@@ -51,4 +51,25 @@ public sealed class NovelReaderSasayakiAssetTests
         code.Should().Contain("_sasayakiLookupPlayback.TryResumeAfterDismiss(");
         code.Should().Contain("_sasayakiLookupPlayback.CancelAutoResume();");
     }
+
+    [Fact]
+    public void LyricsLookup_UsesAdaptiveHitBoundsAndInvalidatesPendingRequestOnMiss()
+    {
+        var controlCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Controls", "ReaderLyricsModeControl.xaml.cs"));
+        var pageCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+        var rendererCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Services", "Sasayaki", "ReaderLyricsCanvasRenderer.cs"));
+
+        controlCode.Should().Contain("e.Handled = true;");
+        controlCode.Should().Contain("DismissLookupRequested?.Invoke(this, EventArgs.Empty);");
+        controlCode.Should().Contain("canvasOffset.X");
+        controlCode.Should().Contain("hit.Bounds.Width");
+        controlCode.Should().Contain("hit.Bounds.Height");
+        pageCode.Should().Contain("Interlocked.Increment(ref _lookupRequestVersion);");
+        pageCode.Should().Contain("_popupOverlay?.Dismiss();");
+        rendererCode.Should().Contain(
+            "drawingSession.DrawText(glyph.Text, glyph.Bounds, glyph.Color, glyph.Format);");
+    }
 }

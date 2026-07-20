@@ -735,7 +735,7 @@ public class NovelReaderWebAssetTests
         popupCode.Should().Contain("UseCanvas(DictionaryOverlayCanvas)");
         popupCode.Should().Contain("ShowLookupAsync(");
         popupCode.Should().Contain("Niratan Lookup Popup");
-        popupCode.Should().Contain("VirtualKey.Escape");
+        popupCode.Should().Contain("await _popupOverlay.TryHandleShortcutAsync(binding)");
         popupCode.Should().NotContain("Activated += OnActivated");
         popupCode.Should().NotContain("WindowActivationState.Deactivated");
         popupCode.Should().NotContain("ShowWindow(hwnd, SwShowNoActivate)");
@@ -1142,13 +1142,20 @@ public class NovelReaderWebAssetTests
         appearanceXaml.Should().Contain("Minimum=\"0.8\" Maximum=\"1.5\"");
         appearanceXaml.Should().Contain("AutomationProperties.AutomationId=\"PopupActionBarToggle\"");
         appearanceXaml.Should().Contain("AutomationProperties.AutomationId=\"PopupFullWidthToggle\"");
+        appearanceXaml.Should().NotContain("PopupDisableTransparency");
+        appearanceXaml.Should().NotContain("PopupSwipeToDismiss");
+        appearanceXaml.Should().NotContain("PopupSwipeThreshold");
         appearanceViewModel.Should().Contain("partial double PopupScale");
         appearanceViewModel.Should().Contain("current with { PopupFullWidth = value }");
+        appearanceViewModel.Should().NotContain("PopupDisableTransparency");
+        appearanceViewModel.Should().NotContain("PopupSwipeToDismiss");
 
         dictionaryXaml.Should().NotContain("DictionaryPopupMaxWidthCard");
         dictionaryXaml.Should().NotContain("DictionaryPopupMaxHeightCard");
+        dictionaryXaml.Should().NotContain("DictionaryDesktopHoverDelayCard");
         dictionaryViewModel.Should().NotContain("PopupMaxWidth");
         dictionaryViewModel.Should().NotContain("PopupMaxHeight");
+        dictionaryViewModel.Should().NotContain("DesktopLookupHoverDelayMs");
 
         foreach (var key in new[]
         {
@@ -1822,7 +1829,7 @@ public class NovelReaderWebAssetTests
         popupJs.Should().Contain("document.addEventListener('mousemove'");
         popupJs.Should().Contain("scheduleShiftHoverLookup(lastShiftHoverPoint)");
         popupJs.Should().Contain("lookupAtPopupPoint(point.x, point.y, false, 'shift')");
-        popupJs.Should().Contain("Number(window.desktopLookupHoverDelayMs)");
+        popupJs.Should().NotContain("desktopLookupHoverDelayMs");
         popupJs.Should().Contain("postPopupMessage('lookupRedirect', {");
         popupJs.Should().Contain("var rect = window.niratanSelection?.getSelectionRect?.(x, y) || null");
         popupJs.Should().Contain("rectMs: rectMs");
@@ -1891,7 +1898,7 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
-    public void SelectionScript_UsesConfiguredShiftHoverLookupDelay()
+    public void SelectionScript_PerformsShiftHoverLookupWithoutConfigurableDelay()
     {
         var script = File.ReadAllText(Path.Combine(ReaderRoot, "selection.js"));
         var readerCode = File.ReadAllText(
@@ -1901,8 +1908,9 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Models", "Settings", "DictionaryDisplaySettings.cs")
         );
 
-        script.Should().Contain("window.__niratanLookupSettings?.hoverDelayMs");
         script.Should().Contain("setTimeout(() =>");
+        script.Should().Contain("}, 0);");
+        script.Should().NotContain("hoverDelayMs");
         script.Should().Contain("scheduleLookupAtPoint(e.clientX, e.clientY)");
         script.Should().Contain("window.__niratanLookupPopupActive === true");
         script.Should().Contain("&& !selectedText");
@@ -1912,7 +1920,7 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("DictionaryPopupCanvasInputMode.VisibleHostsOnly");
         readerCode.Should().Contain("SetLookupPopupActiveAsync(true)");
         readerCode.Should().Contain("SetLookupPopupActiveAsync(false)");
-        settingsCode.Should().Contain("DesktopLookupHoverDelayMs = 45");
+        settingsCode.Should().NotContain("DesktopLookupHoverDelayMs");
     }
 
     [Fact]
@@ -4148,9 +4156,9 @@ public class NovelReaderWebAssetTests
         readerCode.Should().Contain("_popupOverlay?.Dismiss();");
         readerCode.Should().Contain("await SetLookupPopupActiveAsync(false);");
         readerCode.Should().MatchRegex(
-            "(?s)ReaderLyricsMode_DismissLookupRequested.*?await SetLookupPopupActiveAsync\\(false\\);.*?RestoreReaderLyricsKeyboardFocus\\(\\)");
+            "(?s)ReaderLyricsMode_DismissLookupRequested.*?await SetLookupPopupActiveAsync\\(false\\);.*?RestoreReaderKeyboardFocus\\(\\)");
         readerCode.Should().MatchRegex(
-            "(?s)OnPopupOverlayDismissed.*?RestoreReaderLyricsKeyboardFocus\\(\\)");
+            "(?s)OnPopupOverlayDismissed.*?RestoreReaderKeyboardFocus\\(\\)");
         readerCode.Should().Contain("ReaderLyricsMode.Focus(FocusState.Programmatic)");
     }
 

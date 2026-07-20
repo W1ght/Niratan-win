@@ -208,6 +208,60 @@ public sealed class NovelLibraryServiceTests
     }
 
     [Fact]
+    public async Task RenameNovelAsync_TrimsAndPersistsDisplayTitleWithoutChangingOriginalTitle()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var book = new NovelBook
+        {
+            Id = "a",
+            Title = "Original",
+            OriginalTitle = "Original",
+        };
+        var storage = new Mock<INovelBookStorageService>();
+        storage.Setup(service => service.LoadAsync("a", ct)).ReturnsAsync(book);
+        storage.Setup(service => service.SaveMetadataAsync(
+                It.Is<NovelBook>(value =>
+                    value.Title == "Renamed"
+                    && value.OriginalTitle == "Original"
+                    && value.RenamedTitle == "Renamed"),
+                ct))
+            .Returns(Task.CompletedTask);
+        var sut = CreateSut(storage: storage);
+
+        var result = await sut.RenameNovelAsync("a", "  Renamed  ", ct);
+
+        result.IsSuccess.Should().BeTrue(result.Error);
+        storage.VerifyAll();
+    }
+
+    [Fact]
+    public async Task RenameNovelAsync_EmptyTitleRestoresOriginalTitle()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var book = new NovelBook
+        {
+            Id = "a",
+            Title = "Renamed",
+            OriginalTitle = "Original",
+            RenamedTitle = "Renamed",
+        };
+        var storage = new Mock<INovelBookStorageService>();
+        storage.Setup(service => service.LoadAsync("a", ct)).ReturnsAsync(book);
+        storage.Setup(service => service.SaveMetadataAsync(
+                It.Is<NovelBook>(value =>
+                    value.Title == "Original"
+                    && value.RenamedTitle == null),
+                ct))
+            .Returns(Task.CompletedTask);
+        var sut = CreateSut(storage: storage);
+
+        var result = await sut.RenameNovelAsync("a", "   ", ct);
+
+        result.IsSuccess.Should().BeTrue(result.Error);
+        storage.VerifyAll();
+    }
+
+    [Fact]
     public async Task ExportEpubAsync_CopiesPrivateEpubBytesExactly()
     {
         var ct = TestContext.Current.CancellationToken;

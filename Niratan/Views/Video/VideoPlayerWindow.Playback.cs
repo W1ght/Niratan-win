@@ -18,6 +18,7 @@ using Niratan.Models;
 using Niratan.Models.Settings;
 using Niratan.Models.Shortcuts;
 using Niratan.Services.Video;
+using Niratan.Services.UI;
 using Niratan.ViewModels.Pages;
 
 namespace Niratan.Views.Video;
@@ -432,6 +433,8 @@ public sealed partial class VideoPlayerWindow
             _isUpdatingPlaybackSpeed = false;
             if (_isLoaded)
                 await _playbackEngine.SetPlaybackSpeedAsync(value);
+            if (_isSubtitleGapFastForwardActive)
+                await UpdateSubtitleGapFastForwardAsync(force: true);
 
             ViewModel.StatusText = $"Speed {value:0.##}x";
         }
@@ -883,6 +886,7 @@ public sealed partial class VideoPlayerWindow
                 ViewModel.UpdatePosition(position, duration);
                 if (ViewModel.IsEmbeddedSubtitleActive && !ViewModel.HasCompleteEmbeddedTranscript)
                     ViewModel.UpdateEmbeddedSubtitleCue(await _playbackEngine.GetCurrentSubtitleCueAsync());
+                await UpdateSubtitleGapFastForwardAsync();
                 await SaveCurrentVideoProgressIfDueAsync();
                 await TryAutoPlayNextEpisodeAsync();
             }
@@ -1097,6 +1101,27 @@ public sealed partial class VideoPlayerWindow
         }
 
         return null;
+    }
+
+    private async Task OpenAdjacentEpisodeAsync(int offset)
+    {
+        var currentIndex = -1;
+        for (var index = 0; index < ViewModel.EpisodeRows.Count; index++)
+        {
+            if (ViewModel.EpisodeRows[index].IsCurrent)
+            {
+                currentIndex = index;
+                break;
+            }
+        }
+
+        var targetIndex = currentIndex + offset;
+        if (currentIndex < 0 || targetIndex < 0 || targetIndex >= ViewModel.EpisodeRows.Count)
+            return;
+
+        await SaveCurrentVideoProgressAsync();
+        var playlist = ViewModel.EpisodeRows.Select(row => row.Video).ToList();
+        await OpenVideoAsync(ViewModel.EpisodeRows[targetIndex].Video, playlist);
     }
 
     private void ProgressSlider_PointerPressed(object sender, PointerRoutedEventArgs e)
@@ -1526,25 +1551,34 @@ public sealed partial class VideoPlayerWindow
             return;
         }
 
-        if (!TryResolveVideoShortcut(e.Key, out var action))
+        var binding = KeyboardShortcutBinding.FromVirtualKey(
+            e.Key,
+            ShortcutInputMapper.GetCurrentModifiers());
+        if (_popupOverlay is not null && await _popupOverlay.TryHandleShortcutAsync(binding))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (!TryResolveVideoShortcut(binding, out var action))
             return;
 
         e.Handled = true;
         await HandleVideoShortcutActionAsync(action!.Id);
     }
 
-    private bool TryResolveVideoShortcut(VirtualKey key, out ShortcutAction? action)
-    {
-        var binding = KeyboardShortcutBinding.FromVirtualKey(
-            key,
-            ShortcutInputMapper.GetCurrentModifiers());
-        return _shortcutService.TryResolve(ShortcutScope.Video, binding, out action);
-    }
+    private bool TryResolveVideoShortcut(
+        KeyboardShortcutBinding binding,
+        out ShortcutAction? action) =>
+        _shortcutService.TryResolve(ShortcutScope.Video, binding, out action);
 
     private async Task HandleVideoShortcutActionAsync(string actionId)
     {
         switch (actionId)
         {
+            case GlobalShortcutActions.OpenId:
+                await OpenVideoFromShortcutAsync();
+                break;
             case VideoShortcutActions.PlayPauseId:
                 await TogglePlayPauseAsync();
                 break;
@@ -1553,6 +1587,24 @@ public sealed partial class VideoPlayerWindow
                 break;
             case VideoShortcutActions.SeekForwardId:
                 await SeekRelativeAsync(ViewModel.SeekIntervalSeconds);
+                break;
+            case VideoShortcutActions.PreviousEpisodeId:
+                await OpenAdjacentEpisodeAsync(-1);
+                break;
+            case VideoShortcutActions.NextEpisodeId:
+                await OpenAdjacentEpisodeAsync(1);
+                break;
+            case VideoShortcutActions.DecreaseSpeedId:
+                await SetPlaybackSpeedAsync(ViewModel.PlaybackSpeed - 0.1);
+                break;
+            case VideoShortcutActions.IncreaseSpeedId:
+                await SetPlaybackSpeedAsync(ViewModel.PlaybackSpeed + 0.1);
+                break;
+            case VideoShortcutActions.ResetSpeedId:
+                await SetPlaybackSpeedAsync(1);
+                break;
+            case VideoShortcutActions.ToggleMuteId:
+                await ToggleMuteAsync();
                 break;
             case VideoShortcutActions.VolumeUpId:
                 await SetVolumeAsync(ViewModel.Volume + VolumeStep);
@@ -1566,11 +1618,57 @@ public sealed partial class VideoPlayerWindow
             case VideoShortcutActions.NextSubtitleId:
                 await SeekToSubtitleAsync(ViewModel.GetNextSubtitleStart());
                 break;
+            case VideoShortcutActions.MineCurrentSubtitleId:
+                await RecordCurrentMiningHistoryAsync();
+                break;
             case VideoShortcutActions.ToggleSubtitlesId:
                 ToggleSubtitlesVisible();
                 break;
+            case VideoShortcutActions.ToggleSubtitleGapFastForwardId:
+                _subtitleGapFastForwardEnabled = !_subtitleGapFastForwardEnabled;
+                await UpdateSubtitleGapFastForwardAsync(force: true);
+                ViewModel.StatusText = _subtitleGapFastForwardEnabled
+                    ? "Fast-forward subtitle gaps on"
+                    : "Fast-forward subtitle gaps off";
+                break;
             case VideoShortcutActions.CycleSubtitleTrackId:
                 await CycleSubtitleTrackAsync();
+                break;
+            case VideoShortcutActions.SubtitleEarlierId:
+                await SetSubtitleDelayAsync(ViewModel.SubtitleDelayMilliseconds - 50);
+                break;
+            case VideoShortcutActions.SubtitleLaterId:
+                await SetSubtitleDelayAsync(ViewModel.SubtitleDelayMilliseconds + 50);
+                break;
+            case VideoShortcutActions.ResetSubtitleTimingId:
+                await SetSubtitleDelayAsync(0);
+                break;
+            case VideoShortcutActions.AlignPreviousSubtitleToCurrentTimeId:
+                await AlignSubtitleToCurrentTimeAsync(ViewModel.GetPreviousSubtitleStart());
+                break;
+            case VideoShortcutActions.AlignNextSubtitleToCurrentTimeId:
+                await AlignSubtitleToCurrentTimeAsync(ViewModel.GetNextSubtitleStart());
+                break;
+            case VideoShortcutActions.AudioEarlierId:
+                await SetAudioDelayAsync(ViewModel.AudioDelaySeconds - 0.5);
+                break;
+            case VideoShortcutActions.AudioLaterId:
+                await SetAudioDelayAsync(ViewModel.AudioDelaySeconds + 0.5);
+                break;
+            case VideoShortcutActions.ToggleFileLoopId:
+                await SetLoopFileEnabledAsync(!ViewModel.LoopFileEnabled);
+                break;
+            case VideoShortcutActions.SetABLoopStartId:
+                await SetABLoopStartAsync(ViewModel.CurrentPosition);
+                break;
+            case VideoShortcutActions.SetABLoopEndId:
+                await SetABLoopEndAsync(ViewModel.CurrentPosition);
+                break;
+            case VideoShortcutActions.ToggleTranscriptId:
+                ToggleTranscriptInspector();
+                break;
+            case VideoShortcutActions.RotateClockwiseId:
+                await RotateClockwiseAsync();
                 break;
             case VideoShortcutActions.ToggleFullscreenId:
                 ToggleFullScreen();
@@ -1601,6 +1699,74 @@ public sealed partial class VideoPlayerWindow
                     ToggleFullScreen();
                 }
                 break;
+        }
+    }
+
+    private async Task OpenVideoFromShortcutAsync()
+    {
+        var path = await App.GetService<IDialogService>().OpenFilePickerAsync(
+            ".mkv", ".mp4", ".webm", ".avi", ".mov");
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        var imported = await _videoLibraryService.ImportVideoAsync(path);
+        if (imported.IsSuccess && imported.Value is not null)
+            await OpenVideoAsync(imported.Value);
+        else
+            ViewModel.StatusText = imported.Error ?? "Could not open video";
+    }
+
+    private async Task ToggleMuteAsync()
+    {
+        if (ViewModel.Volume > 0)
+        {
+            _volumeBeforeMute = ViewModel.Volume;
+            await SetVolumeAsync(0);
+        }
+        else
+        {
+            await SetVolumeAsync(Math.Max(1, _volumeBeforeMute));
+        }
+    }
+
+    private async Task AlignSubtitleToCurrentTimeAsync(TimeSpan? subtitleStart)
+    {
+        if (subtitleStart is null)
+            return;
+
+        var delay = (int)Math.Round(
+            (ViewModel.CurrentPosition - subtitleStart.Value).TotalMilliseconds);
+        await SetSubtitleDelayAsync(delay);
+    }
+
+    private void ToggleTranscriptInspector()
+    {
+        if (_isInspectorOpen && _selectedInspectorTab == VideoInspectorTab.SubtitleList)
+        {
+            _isInspectorOpen = false;
+            InspectorPanel.Visibility = Visibility.Collapsed;
+            RefreshVideoLayoutAfterInspectorChanged();
+            return;
+        }
+
+        OpenInspectorTab(VideoInspectorTab.SubtitleList);
+        ViewModel.RefreshTranscriptWindowForCurrentRow();
+    }
+
+    private async Task UpdateSubtitleGapFastForwardAsync(bool force = false)
+    {
+        var shouldFastForward = _subtitleGapFastForwardEnabled
+            && !_isPaused
+            && ViewModel.AreSubtitlesVisible
+            && ViewModel.CurrentCue is null;
+        if (!force && shouldFastForward == _isSubtitleGapFastForwardActive)
+            return;
+
+        _isSubtitleGapFastForwardActive = shouldFastForward;
+        if (_isLoaded)
+        {
+            await _playbackEngine.SetPlaybackSpeedAsync(
+                shouldFastForward ? Math.Max(2, ViewModel.PlaybackSpeed) : ViewModel.PlaybackSpeed);
         }
     }
 
@@ -1752,9 +1918,21 @@ public sealed partial class VideoPlayerWindow
             case WM_KEYDOWN:
             case WM_SYSKEYDOWN:
                 var key = (VirtualKey)wParam.ToUInt32();
-                if (TryResolveVideoShortcut(key, out var action))
+                var binding = KeyboardShortcutBinding.FromVirtualKey(
+                    key,
+                    ShortcutInputMapper.GetCurrentModifiers());
+                if (TryResolveVideoShortcut(binding, out var action))
                 {
-                    DispatcherQueue.TryEnqueue(async () => await HandleVideoShortcutActionAsync(action!.Id));
+                    DispatcherQueue.TryEnqueue(async () =>
+                    {
+                        if (_popupOverlay is not null
+                            && await _popupOverlay.TryHandleShortcutAsync(binding))
+                        {
+                            return;
+                        }
+
+                        await HandleVideoShortcutActionAsync(action!.Id);
+                    });
                     return IntPtr.Zero;
                 }
 

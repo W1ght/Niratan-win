@@ -148,15 +148,25 @@
   <data name="SettingsSendFeedbackLink.Content" xml:space="preserve"><value>Send Feedback</value></data>
   <data name="AppUpdateCard.Header" xml:space="preserve"><value>Updates</value></data>
   <data name="AppUpdateCheckButton.Content" xml:space="preserve"><value>Check for updates</value></data>
-  <data name="AppUpdateOpenButton.Content" xml:space="preserve"><value>View update</value></data>
-  <data name="AppUpdateBannerActionButton.Content" xml:space="preserve"><value>View update</value></data>
-  <data name="AppUpdateInitialStatus" xml:space="preserve"><value>Check GitHub for the latest release.</value></data>
+  <data name="AppUpdateInstallButton.Content" xml:space="preserve"><value>Download and install</value></data>
+  <data name="AppUpdateBannerActionButton.Content" xml:space="preserve"><value>Download and install</value></data>
+  <data name="AppUpdateDownloadDirectoryCard.Header" xml:space="preserve"><value>Download location</value></data>
+  <data name="AppUpdateChooseDownloadDirectoryButton.Content" xml:space="preserve"><value>Choose folder</value></data>
+  <data name="AppUpdateInitialStatus" xml:space="preserve"><value>Check for the latest release.</value></data>
   <data name="AppUpdateCheckingStatus" xml:space="preserve"><value>Checking for updates…</value></data>
   <data name="AppUpdateAvailableStatus" xml:space="preserve"><value>Version {0} is available.</value></data>
   <data name="AppUpdateCurrentStatus" xml:space="preserve"><value>You're up to date (version {0}).</value></data>
   <data name="AppUpdateFailedStatus" xml:space="preserve"><value>Unable to check for updates. Please try again later.</value></data>
+  <data name="AppUpdateDownloadingStatus" xml:space="preserve"><value>Downloading version {0}… {1:F0}%</value></data>
+  <data name="AppUpdateInstallerStartedStatus" xml:space="preserve"><value>Version {0} was downloaded. Continue in Setup to finish updating.</value></data>
+  <data name="AppUpdateDownloadFailedStatus" xml:space="preserve"><value>Unable to download or start the update. Please try again later.</value></data>
   <data name="AppUpdateBannerTitle" xml:space="preserve"><value>Update available</value></data>
-  <data name="AppUpdateBannerMessage" xml:space="preserve"><value>Niratan {0} is available on GitHub.</value></data>
+  <data name="AppUpdateBannerMessage" xml:space="preserve"><value>Niratan {0} is available.</value></data>
+  <data name="AppUpdateBannerDownloadingTitle" xml:space="preserve"><value>Downloading update</value></data>
+  <data name="AppUpdateBannerDownloadingMessage" xml:space="preserve"><value>Downloading Niratan {0}… {1:F0}%</value></data>
+  <data name="AppUpdateBannerReadyTitle" xml:space="preserve"><value>Update ready</value></data>
+  <data name="AppUpdateBannerReadyMessage" xml:space="preserve"><value>Niratan {0} was downloaded. Continue in Setup to finish updating.</value></data>
+  <data name="AppUpdateBannerFailedTitle" xml:space="preserve"><value>Update failed</value></data>
   <data name="NovelReaderGoToButton.AutomationProperties.Name" xml:space="preserve"><value>Go to</value></data>
   <data name="NovelReaderAppearanceButton.AutomationProperties.Name" xml:space="preserve"><value>Appearance</value></data>
   <data name="ReaderAppearanceDialog.Title" xml:space="preserve"><value>Appearance</value></data>
@@ -165,6 +175,13 @@
   <data name="ReaderAppearancePanelDialog.Title" xml:space="preserve"><value>Appearance</value></data>
   <data name="ReaderAppearancePanelDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
   <data name="ReaderThemeSectionHeader.Text" xml:space="preserve"><value>Reader Theme</value></data>
+  <data name="ReaderSepiaModeCard.Header" xml:space="preserve"><value>Sepia Mode</value></data>
+  <data name="ReaderSepiaModeCard.Description" xml:space="preserve"><value>Use sepia-tone background and text colors for reading</value></data>
+  <data name="ReaderCustomColorsCard.Header" xml:space="preserve"><value>Custom Colors</value></data>
+  <data name="ReaderCustomColorsCard.Description" xml:space="preserve"><value>Override the reader background, body text, and information text colors</value></data>
+  <data name="ReaderCustomBackgroundColorCard.Header" xml:space="preserve"><value>Background Color</value></data>
+  <data name="ReaderCustomTextColorCard.Header" xml:space="preserve"><value>Body Text Color</value></data>
+  <data name="ReaderCustomInfoColorCard.Header" xml:space="preserve"><value>Information Text Color</value></data>
   <data name="ReaderColorThemeCard.Header" xml:space="preserve"><value>Color Theme</value></data>
   <data name="ReaderColorThemeCard.Description" xml:space="preserve"><value>Select the reading color theme</value></data>
   <data name="ReaderEInkModeCard.Header" xml:space="preserve"><value>E-Ink Mode</value></data>
@@ -180,6 +197,13 @@
   <data name="ReaderTextOrientationHorizontal.Content" xml:space="preserve"><value>Horizontal</value></data>
   <data name="ReaderFontCard.Header" xml:space="preserve"><value>Font</value></data>
   <data name="ReaderFontCard.Description" xml:space="preserve"><value>Select the reader font family</value></data>
+  <data name="ReaderImportFontButton.Content" xml:space="preserve"><value>Import Font</value></data>
+  <data name="ReaderDeleteFontButton.Content" xml:space="preserve"><value>Delete</value></data>
+  <data name="ReaderFontNotificationTitle" xml:space="preserve"><value>Reader Font</value></data>
+  <data name="ReaderFontImportedMessage" xml:space="preserve"><value>Imported '{0}'.</value></data>
+  <data name="ReaderFontDeleteDialogTitle" xml:space="preserve"><value>Delete Reader Font</value></data>
+  <data name="ReaderFontDeleteDialogMessage" xml:space="preserve"><value>Delete '{0}'? The font file will be removed from Niratan.</value></data>
+  <data name="ReaderFontDeletedMessage" xml:space="preserve"><value>Deleted '{0}'.</value></data>
   <data name="ReaderFontSizeCard.Header" xml:space="preserve"><value>Font Size</value></data>
   <data name="ReaderFontSizeCard.Description" xml:space="preserve"><value>Adjust the text size</value></data>
   <data name="ReaderHideFuriganaCard.Header" xml:space="preserve"><value>Hide Furigana</value></data>
@@ -189,6 +213,8 @@
   <data name="ReaderLayoutModeCard.Description" xml:space="preserve"><value>Paginated or continuous scrolling</value></data>
   <data name="ReaderLayoutPaginated.Content" xml:space="preserve"><value>Paginated</value></data>
   <data name="ReaderLayoutContinuous.Content" xml:space="preserve"><value>Continuous</value></data>
+  <data name="ReaderTwoColumnHorizontalPagesCard.Header" xml:space="preserve"><value>Two-Column Horizontal Pages</value></data>
+  <data name="ReaderTwoColumnHorizontalPagesCard.Description" xml:space="preserve"><value>Show two text columns in each horizontal paginated spread</value></data>
   <data name="ReaderMouseWheelPageTurnCard.Header" xml:space="preserve"><value>Mouse Wheel Page Turn</value></data>
   <data name="ReaderMouseWheelPageTurnCard.Description" xml:space="preserve"><value>Turn pages with the mouse wheel in paginated mode</value></data>
   <data name="ReaderChapterSwipeDistanceCard.Header" xml:space="preserve"><value>Chapter Swipe Distance</value></data>
@@ -207,6 +233,8 @@
   <data name="ReaderLineHeightCard.Description" xml:space="preserve"><value>Space between lines</value></data>
   <data name="ReaderCharacterSpacingCard.Header" xml:space="preserve"><value>Character Spacing</value></data>
   <data name="ReaderCharacterSpacingCard.Description" xml:space="preserve"><value>Space between characters</value></data>
+  <data name="ReaderParagraphSpacingCard.Header" xml:space="preserve"><value>Paragraph Spacing</value></data>
+  <data name="ReaderParagraphSpacingCard.Description" xml:space="preserve"><value>Space before and after paragraphs</value></data>
   <data name="ReaderDisplaySectionHeader.Text" xml:space="preserve"><value>Reader Display</value></data>
   <data name="ReaderShowTitleCard.Header" xml:space="preserve"><value>Show Title</value></data>
   <data name="ReaderShowTitleCard.Description" xml:space="preserve"><value>Show the book title in the reader</value></data>
@@ -794,15 +822,23 @@
   <data name="KeyboardShortcutsRecordingHint" xml:space="preserve"><value>Press a shortcut for {0}. Esc cancels.</value></data>
   <data name="KeyboardShortcutsDefaultText" xml:space="preserve"><value>Default Shortcut: {0}</value></data>
   <data name="KeyboardShortcutsPressKeysText" xml:space="preserve"><value>Press keys...</value></data>
+  <data name="KeyboardShortcutsCancelRecordingButton.Content" xml:space="preserve"><value>Cancel</value></data>
+  <data name="KeyboardShortcutsCancelRecordingButton.AutomationProperties.Name" xml:space="preserve"><value>Cancel shortcut recording</value></data>
   <data name="KeyboardShortcutsUnassignedText" xml:space="preserve"><value>Unassigned</value></data>
   <data name="KeyboardShortcutsConflictText" xml:space="preserve"><value>Conflicts with {0}</value></data>
   <data name="KeyboardShortcutsShadowedText" xml:space="preserve"><value>Shadowed by {0}</value></data>
   <data name="ShortcutCategoryGlobal" xml:space="preserve"><value>Global</value></data>
+  <data name="ShortcutActionGlobalOpen" xml:space="preserve"><value>Open</value></data>
   <data name="ShortcutActionGlobalLookupSelectedText" xml:space="preserve"><value>Lookup Selected Text</value></data>
   <data name="ShortcutCategoryReader" xml:space="preserve"><value>Reader</value></data>
   <data name="ShortcutCategoryDictionaryPopup" xml:space="preserve"><value>Dictionary / Popup</value></data>
   <data name="ShortcutCategorySasayaki" xml:space="preserve"><value>Sasayaki</value></data>
   <data name="ShortcutCategoryVideo" xml:space="preserve"><value>Video</value></data>
+  <data name="ShortcutActionDictionaryPreviousEntry" xml:space="preserve"><value>Previous Entry</value></data>
+  <data name="ShortcutActionDictionaryNextEntry" xml:space="preserve"><value>Next Entry</value></data>
+  <data name="ShortcutActionPopupDismiss" xml:space="preserve"><value>Close Popup</value></data>
+  <data name="KeyboardShortcutsEntryJumpCountText.Text" xml:space="preserve"><value>Entry Jump Count</value></data>
+  <data name="KeyboardShortcutsEntryJumpCountDescriptionText.Text" xml:space="preserve"><value>Number of dictionary entries skipped by Previous/Next Entry.</value></data>
   <data name="ShortcutActionReaderPreviousPage" xml:space="preserve"><value>Previous Page</value></data>
   <data name="ShortcutActionReaderNextPage" xml:space="preserve"><value>Next Page</value></data>
   <data name="ShortcutActionReaderClose" xml:space="preserve"><value>Close Reader</value></data>
@@ -817,12 +853,37 @@
   <data name="ShortcutActionVideoPlayPause" xml:space="preserve"><value>Play/Pause</value></data>
   <data name="ShortcutActionVideoSeekBackward" xml:space="preserve"><value>Seek Backward</value></data>
   <data name="ShortcutActionVideoSeekForward" xml:space="preserve"><value>Seek Forward</value></data>
+  <data name="ShortcutActionVideoPreviousEpisode" xml:space="preserve"><value>Previous Episode</value></data>
+  <data name="ShortcutActionVideoNextEpisode" xml:space="preserve"><value>Next Episode</value></data>
+  <data name="ShortcutActionVideoDecreaseSpeed" xml:space="preserve"><value>Decrease Playback Speed</value></data>
+  <data name="ShortcutActionVideoIncreaseSpeed" xml:space="preserve"><value>Increase Playback Speed</value></data>
+  <data name="ShortcutActionVideoResetSpeed" xml:space="preserve"><value>Reset Playback Speed</value></data>
+  <data name="ShortcutActionVideoToggleMute" xml:space="preserve"><value>Mute / Unmute</value></data>
   <data name="ShortcutActionVideoVolumeUp" xml:space="preserve"><value>Volume Up</value></data>
   <data name="ShortcutActionVideoVolumeDown" xml:space="preserve"><value>Volume Down</value></data>
+  <data name="ShortcutActionVideoPreviousSubtitleCue" xml:space="preserve"><value>Previous Subtitle</value></data>
+  <data name="ShortcutActionVideoMineCurrentSubtitle" xml:space="preserve"><value>Mine Current Subtitle</value></data>
+  <data name="ShortcutActionVideoNextSubtitleCue" xml:space="preserve"><value>Next Subtitle</value></data>
+  <data name="ShortcutActionVideoToggleSubtitlesVisible" xml:space="preserve"><value>Show / Hide Subtitles</value></data>
+  <data name="ShortcutActionVideoToggleSubtitleGapFastForward" xml:space="preserve"><value>Fast-forward Subtitle Gaps</value></data>
   <data name="ShortcutActionVideoPreviousSubtitle" xml:space="preserve"><value>Previous Subtitle</value></data>
   <data name="ShortcutActionVideoNextSubtitle" xml:space="preserve"><value>Next Subtitle</value></data>
   <data name="ShortcutActionVideoToggleSubtitles" xml:space="preserve"><value>Toggle Subtitles</value></data>
   <data name="ShortcutActionVideoCycleSubtitleTrack" xml:space="preserve"><value>Cycle Subtitle Track</value></data>
+  <data name="ShortcutActionVideoSubtitleEarlier" xml:space="preserve"><value>Subtitle Earlier</value></data>
+  <data name="ShortcutActionVideoSubtitleLater" xml:space="preserve"><value>Subtitle Later</value></data>
+  <data name="ShortcutActionVideoResetSubtitleTiming" xml:space="preserve"><value>Reset Subtitle Timing</value></data>
+  <data name="ShortcutActionVideoAlignPreviousSubtitleToCurrentTime" xml:space="preserve"><value>Align Previous Subtitle to Current Time</value></data>
+  <data name="ShortcutActionVideoAlignNextSubtitleToCurrentTime" xml:space="preserve"><value>Align Next Subtitle to Current Time</value></data>
+  <data name="ShortcutActionVideoAudioEarlier" xml:space="preserve"><value>Audio Earlier</value></data>
+  <data name="ShortcutActionVideoAudioLater" xml:space="preserve"><value>Audio Later</value></data>
+  <data name="ShortcutActionVideoToggleFileLoop" xml:space="preserve"><value>Toggle File Loop</value></data>
+  <data name="ShortcutActionVideoSetABLoopStart" xml:space="preserve"><value>Set A-B Loop Start</value></data>
+  <data name="ShortcutActionVideoSetABLoopEnd" xml:space="preserve"><value>Set A-B Loop End</value></data>
+  <data name="ShortcutActionVideoToggleTranscript" xml:space="preserve"><value>Toggle Transcript</value></data>
+  <data name="ShortcutActionVideoRotateClockwise" xml:space="preserve"><value>Rotate Clockwise</value></data>
+  <data name="ShortcutActionVideoToggleFullScreen" xml:space="preserve"><value>Toggle Full Screen</value></data>
+  <data name="ShortcutActionVideoExitFocusMode" xml:space="preserve"><value>Exit Full Screen or Focus Mode</value></data>
   <data name="ShortcutActionVideoToggleFullscreen" xml:space="preserve"><value>Toggle Full Screen</value></data>
   <data name="ShortcutActionVideoLookupSubtitle" xml:space="preserve"><value>Lookup Current Subtitle</value></data>
   <data name="ShortcutActionVideoToggleHardwareDecoding" xml:space="preserve"><value>Toggle Hardware Decoding</value></data>
@@ -928,6 +989,27 @@
   <data name="NovelBookMoveDialog.Title" xml:space="preserve"><value>Move to shelf</value></data>
   <data name="NovelBookMoveDialog.PrimaryButtonText" xml:space="preserve"><value>Move</value></data>
   <data name="NovelBookMoveDialog.CloseButtonText" xml:space="preserve"><value>Cancel</value></data>
+  <data name="NovelBookRenameMenuItem.Text" xml:space="preserve"><value>Rename</value></data>
+  <data name="NovelBookRenameMenuItem.AutomationProperties.Name" xml:space="preserve"><value>Rename book</value></data>
+  <data name="NovelBookRenameDialog.Title" xml:space="preserve"><value>Rename</value></data>
+  <data name="NovelBookRenameDialogTitleBox.Header" xml:space="preserve"><value>Title</value></data>
+  <data name="NovelBookRenameDialog.PrimaryButtonText" xml:space="preserve"><value>Save</value></data>
+  <data name="NovelBookRenameDialog.CloseButtonText" xml:space="preserve"><value>Cancel</value></data>
+  <data name="NovelLibrarySelectButton.Label" xml:space="preserve"><value>Select</value></data>
+  <data name="NovelLibrarySelectButton.AutomationProperties.Name" xml:space="preserve"><value>Select books</value></data>
+  <data name="NovelLibrarySelectionDoneButton.Label" xml:space="preserve"><value>Done</value></data>
+  <data name="NovelLibrarySelectionDoneButton.AutomationProperties.Name" xml:space="preserve"><value>Finish selecting</value></data>
+  <data name="NovelLibraryBulkMoveButton.Label" xml:space="preserve"><value>Move</value></data>
+  <data name="NovelLibraryBulkMoveButton.AutomationProperties.Name" xml:space="preserve"><value>Move selected books</value></data>
+  <data name="NovelLibraryBulkDeleteButton.Label" xml:space="preserve"><value>Delete</value></data>
+  <data name="NovelLibraryBulkDeleteButton.AutomationProperties.Name" xml:space="preserve"><value>Delete selected books</value></data>
+  <data name="NovelLibrarySelectionSummaryFormat" xml:space="preserve"><value>{0} selected</value></data>
+  <data name="NovelLibraryBulkDeleteConfirmation.Title" xml:space="preserve"><value>Delete {0} book(s)?</value></data>
+  <data name="NovelLibraryBulkDeleteConfirmation.Content" xml:space="preserve"><value>This cannot be undone.</value></data>
+  <data name="NovelLibraryBulkDeleteConfirmation.PrimaryButtonText" xml:space="preserve"><value>Delete</value></data>
+  <data name="NovelLibraryBulkDeleteConfirmation.CloseButtonText" xml:space="preserve"><value>Cancel</value></data>
+  <data name="NovelLibraryBulkDeleteSuccessFormat" xml:space="preserve"><value>Deleted {0} book(s).</value></data>
+  <data name="NovelLibraryBulkDeleteFailedTitle" xml:space="preserve"><value>Some books could not be deleted</value></data>
   <data name="NovelStatisticsBackToBookshelfButton.Label" xml:space="preserve"><value>Bookshelf</value></data>
   <data name="NovelStatisticsBackToBookshelfButton.AutomationProperties.Name" xml:space="preserve"><value>Back to bookshelf</value></data>
   <data name="NovelStatisticsDashboardTitle.Text" xml:space="preserve"><value>Statistics</value></data>
@@ -1078,12 +1160,19 @@
   <data name="DictionaryCustomCssCard.Header" xml:space="preserve"><value>Custom CSS</value></data>
   <data name="DictionaryCustomCssCard.Description" xml:space="preserve"><value>Edit CSS applied after dictionary-provided styles</value></data>
   <data name="DictionaryCustomCssEditText.Text" xml:space="preserve"><value>Edit…</value></data>
+  <data name="DictionaryFontCard.Header" xml:space="preserve"><value>Font</value></data>
+  <data name="DictionaryFontCard.Description" xml:space="preserve"><value>Select or import the font used by dictionary results</value></data>
+  <data name="DictionaryImportFontButton.Content" xml:space="preserve"><value>Import Font</value></data>
+  <data name="DictionaryDeleteFontButton.Content" xml:space="preserve"><value>Delete</value></data>
+  <data name="DictionaryFontNotificationTitle" xml:space="preserve"><value>Dictionary Font</value></data>
+  <data name="DictionaryFontImportedMessage" xml:space="preserve"><value>Imported '{0}'.</value></data>
+  <data name="DictionaryFontDeleteDialogTitle" xml:space="preserve"><value>Delete Dictionary Font</value></data>
+  <data name="DictionaryFontDeleteDialogMessage" xml:space="preserve"><value>Delete '{0}'? The font file will be removed from Niratan.</value></data>
+  <data name="DictionaryFontDeletedMessage" xml:space="preserve"><value>Deleted '{0}'.</value></data>
   <data name="DictionaryCollapsedDictionariesCard.Header" xml:space="preserve"><value>Collapsed Dictionaries</value></data>
   <data name="DictionaryConfigureCollapsedText.Text" xml:space="preserve"><value>Configure…</value></data>
   <data name="DictionaryTwoColumnCard.Header" xml:space="preserve"><value>Two-Column Layout</value></data>
   <data name="DictionaryTwoColumnCard.Description" xml:space="preserve"><value>Arrange dictionary cards in two columns on wide popup surfaces</value></data>
-  <data name="DictionaryDesktopHoverDelayCard.Header" xml:space="preserve"><value>Desktop Hover Delay</value></data>
-  <data name="DictionaryDesktopHoverDelayCard.Description" xml:space="preserve"><value>Delay before Shift-hover lookup in Reader, Popup, and video subtitles</value></data>
   <data name="RecommendedDictionariesDialog.Title" xml:space="preserve"><value>Download Dictionaries</value></data>
   <data name="RecommendedDictionariesDialog.PrimaryButtonText" xml:space="preserve"><value>Download</value></data>
   <data name="RecommendedDictionariesDialog.CloseButtonText" xml:space="preserve"><value>Cancel</value></data>

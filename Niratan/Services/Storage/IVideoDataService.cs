@@ -15,7 +15,14 @@ public interface IVideoDataService
     );
     Task<VideoItem?> GetVideoAsync(string videoId, CancellationToken ct = default);
     Task UpsertVideoAsync(VideoItem video, CancellationToken ct = default);
+    Task UpdateVideoDetailsAsync(
+        string videoId,
+        string title,
+        string? tags,
+        string? subtitlePath,
+        CancellationToken ct = default);
     Task DeleteVideoAsync(string videoId, CancellationToken ct = default);
+    Task DeleteVideosAsync(IReadOnlyList<string> videoIds, CancellationToken ct = default);
     Task UpdateVideoLastOpenedAsync(
         string videoId,
         DateTime lastOpenedAt,
@@ -39,6 +46,20 @@ public interface IVideoDataService
     Task SetVideoCollectionItemsAsync(
         string collectionId,
         IReadOnlyList<string> videoIds,
+        CancellationToken ct = default);
+    Task<IReadOnlyList<VideoLibrarySource>> GetVideoLibrarySourcesAsync(CancellationToken ct = default);
+    Task<VideoLibrarySource?> GetVideoLibrarySourceAsync(string sourceId, CancellationToken ct = default);
+    Task<VideoLibrarySource?> GetVideoLibrarySourceByPathAsync(string folderPath, CancellationToken ct = default);
+    Task UpsertVideoLibrarySourceAsync(VideoLibrarySource source, CancellationToken ct = default);
+    Task UpdateVideoLibrarySourceScanStateAsync(
+        string sourceId,
+        DateTime? lastScannedAt,
+        string? lastError,
+        CancellationToken ct = default);
+    Task DeleteVideoLibrarySourceAsync(string sourceId, CancellationToken ct = default);
+    Task DeleteSourceVideosExceptAsync(
+        string sourceId,
+        IReadOnlyList<string> retainedFilePaths,
         CancellationToken ct = default);
     Task UpdateVideoThumbnailPathAsync(string videoId, string? thumbnailPath, CancellationToken ct = default);
     Task UpdateVideoFavoriteAsync(string videoId, bool isFavorite, CancellationToken ct = default);

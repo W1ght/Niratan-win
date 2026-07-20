@@ -14,7 +14,6 @@ public interface IEpubParserService
     EpubBook Parse(string epubFilePath, string outputDirectory);
     EpubBook ParseExtracted(string outputDirectory, string? fallbackTitle = null);
 }
-
 public sealed class EpubParserService : IEpubParserService
 {
     private static readonly XNamespace OpfNs = "http://www.idpf.org/2007/opf";
@@ -143,6 +142,7 @@ public sealed class EpubParserService : IEpubParserService
                 Id = id,
                 Href = resolvedHref,
                 MediaType = mediaType,
+                Properties = item.Attribute("properties")?.Value,
             };
         }
 
@@ -337,7 +337,13 @@ public sealed class EpubParserService : IEpubParserService
 
     private static string? FindCoverHref(XElement packageElement, Dictionary<string, EpubManifestItem> manifest)
     {
-        // Try to find cover by ID
+        // EPUB 3: prefer the explicitly declared cover image.
+        var epub3Cover = manifest.Values.FirstOrDefault(item =>
+            HasManifestProperty(item.Properties, "cover-image"));
+        if (epub3Cover != null)
+            return epub3Cover.Href;
+
+        // EPUB 2: resolve <meta name="cover" content="..." /> through the manifest ID.
         var coverId = packageElement.Descendants(OpfNs + "meta")
             .Concat(packageElement.Descendants("meta"))
             .FirstOrDefault(e =>
@@ -348,15 +354,27 @@ public sealed class EpubParserService : IEpubParserService
         if (coverId != null && manifest.TryGetValue(coverId, out var coverItem))
             return coverItem.Href;
 
-        // Fallback: first image item
-        foreach (var kv in manifest)
-        {
-            if (kv.Value.MediaType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
-                return kv.Value.Href;
-        }
+        // Niratan fallbacks for non-conforming publications.
+        var namedCover = manifest.Values.FirstOrDefault(item =>
+            item.Id.Contains("cover", StringComparison.OrdinalIgnoreCase)
+            && IsSupportedCoverImage(item.MediaType));
+        if (namedCover != null)
+            return namedCover.Href;
 
-        return null;
+        return manifest.Values.FirstOrDefault(item =>
+            IsSupportedCoverImage(item.MediaType))?.Href;
     }
+
+    private static bool HasManifestProperty(string? properties, string property) =>
+        !string.IsNullOrWhiteSpace(properties)
+        && properties.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+            .Contains(property, StringComparer.Ordinal);
+
+    private static bool IsSupportedCoverImage(string mediaType) =>
+        mediaType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase)
+        || mediaType.Equals("image/png", StringComparison.OrdinalIgnoreCase)
+        || mediaType.Equals("image/gif", StringComparison.OrdinalIgnoreCase)
+        || mediaType.Equals("image/svg+xml", StringComparison.OrdinalIgnoreCase);
 
     private static string ResolveResourcePath(string href, string opfDirectory)
     {

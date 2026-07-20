@@ -38,7 +38,9 @@ public sealed class ProfileSettingsStoreTests
             PopupMaxHeight: 700,
             PopupScale: 1.25,
             PopupActionBar: true,
-            PopupFullWidth: true);
+            PopupFullWidth: true,
+            FontFamily: "NiratanImportedABC123",
+            FontFileName: "dictionary-font.woff2");
         reader.Current.FontSize = 28;
         await store.ActivateAsync(english.Id, TestContext.Current.CancellationToken);
 
@@ -52,7 +54,9 @@ public sealed class ProfileSettingsStoreTests
             && value.PopupMaxHeight == 700
             && value.PopupScale == 1.25
             && value.PopupActionBar
-            && value.PopupFullWidth);
+            && value.PopupFullWidth
+            && value.FontFamily == "NiratanImportedABC123"
+            && value.FontFileName == "dictionary-font.woff2");
         reader.Current.FontSize.Should().Be(28);
     }
 

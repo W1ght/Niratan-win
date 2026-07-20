@@ -4,7 +4,14 @@ using System.Linq;
 
 namespace Niratan.Models.Settings;
 
-public sealed record JapaneseFontOption(string Name, string ReaderCssValue, string SubtitleFontFamily);
+public sealed record JapaneseFontOption(
+    string Name,
+    string ReaderCssValue,
+    string SubtitleFontFamily,
+    string? ImportedFileName = null)
+{
+    public bool IsImported => !string.IsNullOrWhiteSpace(ImportedFileName);
+}
 
 public static class JapaneseFontCatalog
 {

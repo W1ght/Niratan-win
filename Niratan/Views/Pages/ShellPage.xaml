@@ -29,8 +29,8 @@
             <InfoBar.ActionButton>
                 <Button x:Uid="AppUpdateBannerActionButton"
                         AutomationProperties.AutomationId="AppUpdateBannerActionButton"
-                        Command="{x:Bind ViewModel.OpenAvailableUpdateCommand}"
-                        Content="View update" />
+                        Command="{x:Bind ViewModel.InstallAvailableUpdateCommand}"
+                        Content="Download and install" />
             </InfoBar.ActionButton>
         </InfoBar>
 

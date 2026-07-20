@@ -221,9 +221,10 @@ public static class ReaderLyricsCanvasRenderer
                 10000,
                 (float)rowHeight);
             var measuredWidth = Math.Max(1, measured.DrawBounds.Width);
-            var fittedFontSize = measuredWidth <= availableWidth
-                ? baseFontSize
-                : Math.Max(isFocused ? 24 : 18, baseFontSize * availableWidth / measuredWidth);
+            var fittedFontSize = ReaderLyricsAdaptiveFontPolicy.FitHorizontal(
+                baseFontSize,
+                measuredWidth,
+                availableWidth);
             measured.Dispose();
             format.Dispose();
             format = CreateHorizontalFormat(fittedFontSize);
@@ -249,7 +250,7 @@ public static class ReaderLyricsCanvasRenderer
     private static CanvasTextFormat CreateHorizontalFormat(double fontSize) => new()
     {
         FontFamily = "Segoe UI, Yu Gothic UI, Meiryo",
-        FontSize = (float)Math.Clamp(fontSize, 12, 72),
+        FontSize = (float)Math.Clamp(fontSize, 1, 72),
         FontWeight = new FontWeight { Weight = 700 },
         HorizontalAlignment = CanvasHorizontalAlignment.Left,
         VerticalAlignment = CanvasVerticalAlignment.Center,
@@ -293,12 +294,7 @@ public static class ReaderLyricsCanvasRenderer
         {
             if (glyph.IsSelected)
                 drawingSession.FillRoundedRectangle(glyph.Bounds, 4, 4, SelectionColor);
-            drawingSession.DrawText(
-                glyph.Text,
-                (float)glyph.Bounds.X,
-                (float)glyph.Bounds.Y,
-                glyph.Color,
-                glyph.Format);
+            drawingSession.DrawText(glyph.Text, glyph.Bounds, glyph.Color, glyph.Format);
         }
         foreach (var glyph in glyphs)
             glyph.Format.Dispose();
@@ -356,14 +352,16 @@ public static class ReaderLyricsCanvasRenderer
             var focused = cueIndex == safeCurrent;
             var baseFont = focused ? Math.Clamp(size.Width * 0.052, 28, 44) : Math.Clamp(size.Width * 0.038, 20, 32);
             var textElements = TextElements(cue.Text);
-            var rowHeight = baseFont * 1.08;
-            var fittedFont = textElements.Count * rowHeight <= size.Height
-                ? baseFont
-                : Math.Max(focused ? 24 : 18, baseFont * size.Height / Math.Max(1, textElements.Count * rowHeight));
-            rowHeight = fittedFont * 1.08;
-            var totalHeight = Math.Min(size.Height, textElements.Count * rowHeight);
+            var fittedFont = ReaderLyricsAdaptiveFontPolicy.FitVertical(
+                baseFont,
+                textElements.Count,
+                size.Height,
+                slotWidth);
+            var rowHeight = fittedFont * ReaderLyricsAdaptiveFontPolicy.VerticalRowHeightRatio;
+            var totalHeight = textElements.Count * rowHeight;
             var startY = Math.Max(0, (size.Height - totalHeight) / 2);
-            var x = slot * slotWidth + Math.Max(0, (slotWidth - fittedFont * 1.35) / 2);
+            var columnWidth = fittedFont * ReaderLyricsAdaptiveFontPolicy.VerticalColumnWidthRatio;
+            var x = slot * slotWidth + Math.Max(0, (slotWidth - columnWidth) / 2);
             var progress = focused
                 ? ReaderLyricsModeProjection.CueProgress(cue, options.PlaybackSeconds, options.DelaySeconds)
                 : 0;
@@ -391,7 +389,7 @@ public static class ReaderLyricsCanvasRenderer
                     cueIndex,
                     element.Text,
                     element.Utf16Start,
-                    new Rect(x, startY + elementIndex * rowHeight, fittedFont * 1.35, rowHeight),
+                    new Rect(x, startY + elementIndex * rowHeight, columnWidth, rowHeight),
                     color,
                     selected,
                     format));

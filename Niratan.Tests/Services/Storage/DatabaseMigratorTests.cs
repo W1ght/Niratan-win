@@ -138,7 +138,7 @@ public class DatabaseMigratorTests
                 SELECT name
                 FROM sqlite_master
                 WHERE type = 'table'
-                  AND name IN ('NovelBooks', 'NovelReadingProgress', 'NovelReaderSettings', 'VideoItems')
+                  AND name IN ('NovelBooks', 'NovelReadingProgress', 'NovelReaderSettings', 'VideoItems', 'VideoLibrarySources')
                 ORDER BY name;
                 """;
             var tables = new List<string>();
@@ -146,7 +146,7 @@ public class DatabaseMigratorTests
             while (await reader.ReadAsync(ct))
                 tables.Add(reader.GetString(0));
 
-            tables.Should().Equal("VideoItems");
+            tables.Should().Equal("VideoItems", "VideoLibrarySources");
         }
         finally
         {

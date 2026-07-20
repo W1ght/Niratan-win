@@ -22,9 +22,12 @@ using Niratan.Helpers;
 using Niratan.Models.Anki;
 using Niratan.Models.Dictionary;
 using Niratan.Models.Settings;
+using Niratan.Models.Shortcuts;
 using Niratan.Services.Anki;
 using Niratan.Services.Audio;
 using Niratan.Services.Dictionary;
+using Niratan.Services.Settings;
+using Niratan.Services.Shortcuts;
 using Niratan.Views.Dialogs;
 using Serilog;
 
@@ -55,6 +58,8 @@ public sealed class DictionaryPopupShowDroppedEventArgs(
 {
     public string? TraceId { get; } = traceId;
 }
+
+public sealed record DictionaryPopupShortcutRequest(KeyboardShortcutBinding Binding);
 
 public sealed class DictionaryLookupPopup : IDisposable
 {
@@ -88,6 +93,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     public event EventHandler<DictionaryPopupRedirectRequest>? RedirectRequested;
     public event EventHandler? TapOutsideRequested;
     public event EventHandler? DismissRequested;
+    public event EventHandler<DictionaryPopupShortcutRequest>? ShortcutRequested;
     public event EventHandler? Scrolled;
     public event EventHandler? ContentReady;
     public event EventHandler<DictionaryPopupContentCommittedEventArgs>? ContentCommitted;
@@ -113,6 +119,7 @@ public sealed class DictionaryLookupPopup : IDisposable
     private readonly IDictionaryLookupService _lookupService;
     private readonly IAudioService _audioService;
     private readonly IAnkiService _ankiService;
+    private readonly IShortcutService _shortcutService;
     private readonly DictionaryPopupDisplayTransaction _displayTransaction = new();
     private readonly DictionaryPopupNavigationStateCoordinator _navigationStateCoordinator = new();
     private readonly DictionaryPopupWarmCoordinator _warmCoordinator = new();
@@ -176,6 +183,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         _lookupService = App.GetService<IDictionaryLookupService>();
         _audioService = App.GetService<IAudioService>();
         _ankiService = App.GetService<IAnkiService>();
+        _shortcutService = App.GetService<IShortcutService>();
 
         var initialSurfaceColor =
             DictionaryPopupMaterial.GetOpaqueSurfaceColor(ThemeMode.System);
@@ -572,6 +580,8 @@ public sealed class DictionaryLookupPopup : IDisposable
             await WaitForShellReadyAsync(documentEpoch, shellReady.Task, lease);
             lease.ThrowIfInvalid();
             _rendererEpoch = documentEpoch;
+            await ApplyShortcutBindingsToWebViewAsync();
+            lease.ThrowIfInvalid();
             await ApplyPopupCornerRadiusToWebViewAsync();
             lease.ThrowIfInvalid();
         }
@@ -714,6 +724,8 @@ public sealed class DictionaryLookupPopup : IDisposable
         try
         {
             request.GenerationStarted?.Invoke(generation);
+            await ApplyShortcutBindingsToWebViewAsync();
+            request.CancellationToken.ThrowIfCancellationRequested();
             _stagedNativeContext = new DictionaryPopupNativeContext(
                 generation,
                 _rendererEpoch,
@@ -842,6 +854,16 @@ public sealed class DictionaryLookupPopup : IDisposable
     {
         if (_contentWebView.CoreWebView2 is not null)
             await _contentWebView.CoreWebView2.ExecuteScriptAsync("window.navigateForward?.()");
+    }
+
+    public async Task<bool> MoveDictionaryEntryAsync(int direction, int count)
+    {
+        if (_contentWebView.CoreWebView2 is null || direction == 0)
+            return false;
+
+        var result = await _contentWebView.CoreWebView2.ExecuteScriptAsync(
+            $"window.hoshiMoveDictionaryEntry?.({Math.Sign(direction)}, {Math.Clamp(count, 1, 10)})");
+        return string.Equals(result, "true", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task AppendDeferredResultsAsync(
@@ -1075,6 +1097,11 @@ public sealed class DictionaryLookupPopup : IDisposable
             var coreWebView = _contentWebView.CoreWebView2;
             if (coreWebView == null)
                 throw new InvalidOperationException("Dictionary popup WebView2 initialization was cancelled.");
+
+            coreWebView.SetVirtualHostNameToFolderMapping(
+                ReaderFontCatalog.VirtualHostName,
+                App.GetService<IReaderFontService>().FontsPath,
+                CoreWebView2HostResourceAccessKind.Allow);
 
             coreWebView.Settings.IsScriptEnabled = true;
             coreWebView.Settings.IsWebMessageEnabled = true;
@@ -1486,6 +1513,14 @@ public sealed class DictionaryLookupPopup : IDisposable
                         Scrolled?.Invoke(this, EventArgs.Empty));
                     break;
 
+                case "shortcut":
+                    var shortcutBinding = ParsePopupShortcutBinding(payload);
+                    _contentWebView.DispatcherQueue.TryEnqueue(() =>
+                        ShortcutRequested?.Invoke(
+                            this,
+                            new DictionaryPopupShortcutRequest(shortcutBinding)));
+                    break;
+
                 case "playWordAudio":
                     // Extract values synchronously — payload is a JsonElement that references
                     // the JsonDocument, which is disposed when this handler returns. Passing the
@@ -1686,6 +1721,99 @@ public sealed class DictionaryLookupPopup : IDisposable
 
         VisualRoot.Opacity = 0;
         _ = AnimateOpacityAsync(_readyOpacity, PopupEntranceFadeDuration);
+    }
+
+    private KeyboardShortcutBinding ParsePopupShortcutBinding(JsonElement payload)
+    {
+        if (!payload.TryGetProperty("body", out var body)
+            || body.ValueKind != JsonValueKind.Object
+            || !TryParseShortcutBinding(body, out var binding))
+        {
+            throw new InvalidDataException("Invalid popup shortcut message.");
+        }
+
+        var isConfiguredPopupBinding = PopupShortcutActions.All
+            .Concat(DictionaryShortcutActions.All)
+            .Select(action => _shortcutService.Registry.Action(action.Id))
+            .Where(action => action is not null)
+            .Any(action => _shortcutService.GetBinding(action!).Matches(binding));
+        return isConfiguredPopupBinding
+            ? binding
+            : throw new InvalidDataException("Unsupported popup shortcut binding.");
+    }
+
+    private static bool TryParseShortcutBinding(
+        JsonElement payload,
+        out KeyboardShortcutBinding binding)
+    {
+        binding = default;
+        if (!payload.TryGetProperty("key", out var keyElement)
+            || keyElement.ValueKind != JsonValueKind.String
+            || !TryGetBoolean(payload, "control", out var control)
+            || !TryGetBoolean(payload, "shift", out var shift)
+            || !TryGetBoolean(payload, "alt", out var alt)
+            || !TryGetBoolean(payload, "windows", out var windows))
+        {
+            return false;
+        }
+
+        var modifiers = KeyboardShortcutModifiers.None;
+        if (control) modifiers |= KeyboardShortcutModifiers.Control;
+        if (shift) modifiers |= KeyboardShortcutModifiers.Shift;
+        if (alt) modifiers |= KeyboardShortcutModifiers.Alt;
+        if (windows) modifiers |= KeyboardShortcutModifiers.Windows;
+        binding = new KeyboardShortcutBinding(keyElement.GetString() ?? "", modifiers);
+        return !binding.IsEmpty
+            && ShortcutInputMapper.TryGetVirtualKey(binding, out _, out _);
+    }
+
+    private static bool TryGetBoolean(
+        JsonElement payload,
+        string propertyName,
+        out bool value)
+    {
+        value = false;
+        if (!payload.TryGetProperty(propertyName, out var element)
+            || element.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+        {
+            return false;
+        }
+
+        value = element.GetBoolean();
+        return true;
+    }
+
+    private async Task ApplyShortcutBindingsToWebViewAsync()
+    {
+        if (!_webViewReady || _contentWebView.CoreWebView2 is null)
+            return;
+
+        var actionIds = PopupShortcutActions.All
+            .Concat(DictionaryShortcutActions.All)
+            .Select(action => action.Id);
+        var bindings = actionIds
+            .Select(actionId => _shortcutService.Registry.Action(actionId))
+            .Where(action => action is not null)
+            .Select(action =>
+            {
+                var binding = _shortcutService.GetBinding(action!);
+                return new
+                {
+                    action!.Id,
+                    Binding = new
+                    {
+                        key = binding.Key,
+                        control = binding.Modifiers.HasFlag(KeyboardShortcutModifiers.Control),
+                        shift = binding.Modifiers.HasFlag(KeyboardShortcutModifiers.Shift),
+                        alt = binding.Modifiers.HasFlag(KeyboardShortcutModifiers.Alt),
+                        windows = binding.Modifiers.HasFlag(KeyboardShortcutModifiers.Windows),
+                    },
+                };
+            })
+            .ToDictionary(item => item.Id, item => item.Binding);
+
+        await _contentWebView.CoreWebView2.ExecuteScriptAsync(
+            $"window.__niratanPopupShortcutBindings = {JsonSerializer.Serialize(bindings)};");
     }
 
     private Task<bool> AnimateOpacityAsync(double targetOpacity, TimeSpan duration)

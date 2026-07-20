@@ -40,9 +40,12 @@ public class VideoLibraryPageAssetTests
         xaml.Should().Contain("ItemHeight=\"260\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"CreateSmartCollectionButton\"");
         xaml.Should().Contain("Command=\"{x:Bind ViewModel.CreateSmartCollectionCommand}\"");
-        xaml.Should().Contain("x:Uid=\"VideoLibrarySmartCollectionRuleField\"");
-        xaml.Should().Contain("ItemsSource=\"{x:Bind ViewModel.AvailableSmartRuleFields");
-        xaml.Should().Contain("SelectedValue=\"{x:Bind ViewModel.SelectedSmartRuleField");
+        xaml.Should().Contain("ItemsSource=\"{x:Bind ViewModel.SmartRuleDrafts");
+        xaml.Should().Contain("Command=\"{x:Bind ViewModel.AddSmartRuleCommand}\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"RefreshVideoSourcesButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"ManageVideoSourcesButton\"");
+        xaml.Should().Contain("Command=\"{x:Bind ViewModel.MarkSelectedWatchedCommand}\"");
+        xaml.Should().Contain("Command=\"{x:Bind ViewModel.SaveVideoDetailsCommand}\"");
         xaml.Should().Contain("VideoLibraryUnwatchedNavItem");
         xaml.Should().Contain("VideoLibraryFinishedNavItem");
         xaml.Should().Contain("VideoLibraryRecentNavItem");
@@ -79,6 +82,24 @@ public class VideoLibraryPageAssetTests
     }
 
     [Fact]
+    public void VideoLibraryPage_UsesCompactResponsiveHeader()
+    {
+        var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml"));
+        var document = XDocument.Parse(xaml);
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var searchBox = document.Descendants(presentation + "TextBox")
+            .Single(element => (string?)element.Attribute(x + "Name") == "VideoLibrarySearchBox");
+        searchBox.Attribute("Grid.Row")?.Value.Should().Be("1");
+
+        var commandBar = searchBox.Parent!.Elements(presentation + "CommandBar").Single();
+        commandBar.Attribute("Grid.Row")?.Value.Should().Be("1");
+        commandBar.Attribute("DefaultLabelPosition")?.Value.Should().Be("Collapsed");
+        searchBox.Parent!.Attribute("RowDefinitions")?.Value.Should().Be("Auto,Auto");
+    }
+
+    [Fact]
     public void VideoLibraryPage_UsesLocalizedVisibleText()
     {
         var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml"));
@@ -111,8 +132,6 @@ public class VideoLibraryPageAssetTests
             "ImportVideoButton",
             "CreateSmartCollectionButton",
             "VideoLibrarySmartCollectionName",
-            "VideoLibrarySmartCollectionRuleField",
-            "VideoLibrarySmartCollectionRuleValue",
             "VideoLibraryPlayMenuItem",
             "VideoLibraryPlayFromBeginningMenuItem",
             "VideoLibraryAddFavoriteMenuItem",

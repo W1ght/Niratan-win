@@ -211,6 +211,36 @@ internal sealed class NovelLibraryService : INovelLibraryService
             ct);
     }
 
+    public async Task<Result> RenameNovelAsync(
+        string bookId,
+        string title,
+        CancellationToken ct = default)
+    {
+        var readOnly = ReadOnlyFailure();
+        if (readOnly is not null)
+            return readOnly;
+
+        return await ExecuteAsync(
+            async token =>
+            {
+                var book = await _storage.LoadAsync(bookId, token);
+                if (book is null)
+                    return Result.Failure("Book not found.", "Rename failed");
+
+                var normalizedTitle = title.Trim();
+                book.RenamedTitle = normalizedTitle.Length == 0 ? null : normalizedTitle;
+                book.Title = book.RenamedTitle
+                    ?? (string.IsNullOrWhiteSpace(book.OriginalTitle)
+                        ? book.Title
+                        : book.OriginalTitle);
+                await _storage.SaveMetadataAsync(book, token);
+                _logger.LogInformation("Renamed novel {Id} to '{Title}'", bookId, book.Title);
+                return Result.Success();
+            },
+            "Error renaming novel",
+            ct);
+    }
+
     public async Task<Result> MarkReadAsync(
         string bookId,
         CancellationToken ct = default)

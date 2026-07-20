@@ -46,6 +46,16 @@ public sealed class KeyboardShortcutsSettingsPageContractTests
         xaml.Should().Contain("Text=\"{x:Bind DefaultShortcutText, Mode=OneWay}\"");
         xaml.Should().Contain("Content=\"{x:Bind ShortcutButtonLabel, Mode=OneWay}\"");
         xaml.Should().Contain("IsEnabled=\"{x:Bind CanReset, Mode=OneWay}\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"DictionaryEntryJumpCountNumberBox\"");
+        xaml.Should().Contain("Maximum=\"10\"");
+        var code = ReadProjectFile("Views", "Pages", "KeyboardShortcutsSettingsPage.xaml.cs");
+        xaml.Should().Contain("Command=\"{x:Bind RecordCommand}\"");
+        xaml.Should().Contain("Command=\"{x:Bind ResetCommand}\"");
+        xaml.Should().Contain("x:Name=\"ShortcutCaptureLayer\"");
+        xaml.Should().Contain("ViewModel.CancelRecordingCommand");
+        code.Should().Contain("ShortcutCaptureLayer.AddHandler(");
+        code.Should().Contain("new KeyEventHandler(ShortcutCaptureLayer_KeyDown)");
+        code.Should().Contain("ShortcutCaptureLayer.Focus(FocusState.Programmatic)");
         xaml.Should().NotContain("ItemsSource=\"{x:Bind ViewModel.Rows, Mode=OneWay}\"");
         xaml.Should().NotContain("Text=\"{x:Bind CategoryTitle, Mode=OneWay}\"");
 
@@ -54,6 +64,7 @@ public sealed class KeyboardShortcutsSettingsPageContractTests
         viewModel.Should().Contain("ShortcutCategory.DictionaryPopup");
         viewModel.Should().Contain("ShortcutCategory.Sasayaki");
         viewModel.Should().Contain("ShortcutCategory.Video");
+        viewModel.Should().Contain("SetDictionaryEntryJumpCount");
         viewModel.Should().Contain("if (sectionRows.Count > 0)");
     }
 

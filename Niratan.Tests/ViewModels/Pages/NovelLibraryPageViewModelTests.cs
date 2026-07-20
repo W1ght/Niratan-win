@@ -193,6 +193,41 @@ public class NovelLibraryPageViewModelTests
     }
 
     [Fact]
+    public async Task SelectionMode_OpenNovelCommandTogglesSelectionWithoutNavigating()
+    {
+        var messenger = new FakeMessenger();
+        var library = new RecordingNovelLibraryService
+        {
+            Books = [new NovelBook { Id = "book-1", Title = "Book One" }],
+        };
+        var shelves = new Mock<INovelShelfService>();
+        shelves.Setup(service => service.LoadAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelShelfState>.Success(
+                new NovelShelfState([], ["book-1"])));
+        var sut = CreateSut(
+            novelService: library,
+            shelfService: shelves.Object,
+            messenger: messenger);
+        await sut.InitializeAsync();
+        var item = sut.NovelBooks.Single();
+
+        sut.EnterSelectionModeCommand.Execute(null);
+        sut.OpenNovelCommand.Execute(item);
+
+        sut.IsSelecting.Should().BeTrue();
+        sut.SelectedBookCount.Should().Be(1);
+        sut.HasSelectedBooks.Should().BeTrue();
+        item.IsSelected.Should().BeTrue();
+        sut.ShelfSections.Single().Books.Single().Should().BeSameAs(item);
+        messenger.SentMessages.Should().NotContain(message => message is SwitchAppModeMessage);
+
+        sut.OpenNovelCommand.Execute(item);
+
+        sut.SelectedBookCount.Should().Be(0);
+        item.IsSelected.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task StatisticsSurfaceCommands_ActivateAndDeactivateDashboard()
     {
         var sut = CreateSut();
@@ -722,6 +757,110 @@ public class NovelLibraryPageViewModelTests
         shelves.VerifyAll();
     }
 
+    [Fact]
+    public async Task MoveSelectedBooksCommand_MovesAllSelectedBooksAndExitsSelectionMode()
+    {
+        var library = new RecordingNovelLibraryService
+        {
+            Books =
+            [
+                new NovelBook { Id = "a", Title = "A" },
+                new NovelBook { Id = "b", Title = "B" },
+            ],
+        };
+        var shelves = new Mock<INovelShelfService>();
+        shelves.Setup(service => service.LoadAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelShelfState>.Success(new NovelShelfState([], ["a", "b"])));
+        shelves.Setup(service => service.MoveBooksAsync(
+                It.Is<IReadOnlyList<string>>(ids => ids.Count == 2 && ids.Contains("a") && ids.Contains("b")),
+                "收藏",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelShelfState>.Success(new NovelShelfState(
+                [new NovelShelf("收藏", ["a", "b"])],
+                [])));
+        var sut = CreateSut(novelService: library, shelfService: shelves.Object);
+        await sut.InitializeAsync();
+        sut.EnterSelectionModeCommand.Execute(null);
+        foreach (var item in sut.NovelBooks)
+            sut.OpenNovelCommand.Execute(item);
+
+        await sut.MoveSelectedBooksCommand.ExecuteAsync("收藏");
+
+        sut.IsSelecting.Should().BeFalse();
+        sut.SelectedBookCount.Should().Be(0);
+        sut.ShelfSections.Single(section => section.Id == "shelf:收藏")
+            .Books.Select(item => item.Book.Id).Should().BeEquivalentTo("a", "b");
+        shelves.VerifyAll();
+    }
+
+    [Fact]
+    public async Task RenameNovelCommand_PersistsAndReloadsCatalog()
+    {
+        var library = new Mock<INovelLibraryService>();
+        library.Setup(service => service.RenameNovelAsync(
+                "a", "新标题", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        library.Setup(service => service.GetNovelBooksAsync(
+                null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelBookCatalogSnapshot>.Success(
+                new NovelBookCatalogSnapshot(
+                    [new NovelBook { Id = "a", Title = "新标题", RenamedTitle = "新标题" }],
+                    [])));
+        var sut = CreateSut(novelService: library.Object);
+
+        await sut.RenameNovelCommand.ExecuteAsync(new NovelBookRenameRequest("a", "新标题"));
+
+        sut.NovelBooks.Should().ContainSingle()
+            .Which.Book.Title.Should().Be("新标题");
+        library.VerifyAll();
+    }
+
+    [Fact]
+    public async Task DeleteSelectedBooksCommand_DeletesEachSelectedBookAndExitsSelectionMode()
+    {
+        var library = new Mock<INovelLibraryService>();
+        library.SetupSequence(service => service.GetNovelBooksAsync(
+                null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelBookCatalogSnapshot>.Success(
+                new NovelBookCatalogSnapshot(
+                    [
+                        new NovelBook { Id = "a", Title = "A" },
+                        new NovelBook { Id = "b", Title = "B" },
+                    ],
+                    [])))
+            .ReturnsAsync(Result<NovelBookCatalogSnapshot>.Success(
+                new NovelBookCatalogSnapshot([], [])));
+        library.Setup(service => service.DeleteNovelAsync(
+                It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result.Success());
+        var shelves = new Mock<INovelShelfService>();
+        shelves.Setup(service => service.LoadAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<NovelShelfState>.Success(new NovelShelfState([], ["a", "b"])));
+        var dialog = new Mock<IDialogService>();
+        dialog.Setup(service => service.ConfirmAsync(
+                It.Is<string>(title => title.Contains("2", StringComparison.Ordinal)),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()))
+            .ReturnsAsync(true);
+        var sut = CreateSut(
+            novelService: library.Object,
+            shelfService: shelves.Object,
+            dialogService: dialog.Object);
+        await sut.InitializeAsync();
+        sut.EnterSelectionModeCommand.Execute(null);
+        foreach (var item in sut.NovelBooks)
+            sut.OpenNovelCommand.Execute(item);
+
+        await sut.DeleteSelectedBooksCommand.ExecuteAsync(null);
+
+        sut.IsSelecting.Should().BeFalse();
+        sut.SelectedBookCount.Should().Be(0);
+        sut.NovelBooks.Should().BeEmpty();
+        library.Verify(service => service.DeleteNovelAsync(
+            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
     [Theory]
     [InlineData("SyncNovelCommand", TtuSyncDirection.Auto)]
     [InlineData("ImportNovelFromTtuCommand", TtuSyncDirection.ImportFromTtu)]
@@ -1201,6 +1340,9 @@ public class NovelLibraryPageViewModelTests
             Task.FromResult(Result.Success());
 
         public Task<Result> MarkReadAsync(string bookId, CancellationToken ct = default) =>
+            Task.FromResult(Result.Success());
+
+        public Task<Result> RenameNovelAsync(string bookId, string title, CancellationToken ct = default) =>
             Task.FromResult(Result.Success());
 
         public Task<Result> DeleteNovelAsync(string bookId, CancellationToken ct = default) =>

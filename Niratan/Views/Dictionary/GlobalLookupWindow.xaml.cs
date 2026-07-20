@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml.Input;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
 using Windows.System;
+using Niratan.Models.Shortcuts;
 
 namespace Niratan.Views.Dictionary;
 
@@ -34,9 +35,22 @@ public sealed partial class GlobalLookupWindow : Window, IDisposable
         RootGrid.Loaded += OnLoaded;
         DictionaryPanelRoot.SizeChanged += OnDictionaryPanelSizeChanged;
         Closed += OnClosed;
+        RootGrid.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(RootGrid_KeyDown), true);
 
         AppWindow.SetIcon("Assets/AppIcon.ico");
         AppWindow.Resize(new SizeInt32(720, 560));
+    }
+
+    private async void RootGrid_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (_popupOverlay is null)
+            return;
+
+        var binding = KeyboardShortcutBinding.FromVirtualKey(
+            e.Key,
+            ShortcutInputMapper.GetCurrentModifiers());
+        if (await _popupOverlay.TryHandleShortcutAsync(binding))
+            e.Handled = true;
     }
 
     public async Task OpenAsync(string? initialQuery = null, CancellationToken ct = default)

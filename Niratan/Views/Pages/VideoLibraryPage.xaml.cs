@@ -66,9 +66,34 @@ public sealed partial class VideoLibraryPage : Page
 
     private void CreateSmartCollectionButton_Click(object sender, RoutedEventArgs e)
     {
+        ViewModel.BeginCreateSmartCollectionCommand.Execute(null);
         CreateSmartCollectionDialog.XamlRoot = XamlRoot;
         _ = CreateSmartCollectionDialog.ShowAsync();
     }
+
+    private void ManageVideoSourcesButton_Click(object sender, RoutedEventArgs e)
+    {
+        ManageVideoSourcesDialog.XamlRoot = XamlRoot;
+        _ = ManageVideoSourcesDialog.ShowAsync();
+    }
+
+    private void EditSmartCollectionMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not VideoLibraryFilterRow row
+            || !ViewModel.BeginEditSmartCollection(row))
+        {
+            return;
+        }
+
+        CreateSmartCollectionDialog.XamlRoot = XamlRoot;
+        _ = CreateSmartCollectionDialog.ShowAsync();
+    }
+
+    private void SmartRuleEditor_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        ViewModel.RefreshSmartCollectionPreview();
+
+    private void SmartRuleEditor_TextChanged(object sender, TextChangedEventArgs e) =>
+        ViewModel.RefreshSmartCollectionPreview();
 
     private async void AddYouTubeLinkButton_Click(object sender, RoutedEventArgs e)
     {

@@ -61,7 +61,11 @@ public static partial class ShortcutInputMapper
             "Add" => VirtualKey.Add,
             "Subtract" => VirtualKey.Subtract,
             "[" => (VirtualKey)219,
+            "\\" => (VirtualKey)220,
             "]" => (VirtualKey)221,
+            "," => (VirtualKey)188,
+            "." => (VirtualKey)190,
+            "/" => (VirtualKey)191,
             _ => VirtualKey.None,
         };
 

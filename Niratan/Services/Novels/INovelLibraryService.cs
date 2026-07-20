@@ -27,6 +27,11 @@ public interface INovelLibraryService
 
     Task<Result> MarkReadAsync(string bookId, CancellationToken ct = default);
 
+    Task<Result> RenameNovelAsync(
+        string bookId,
+        string title,
+        CancellationToken ct = default);
+
     Task<Result> DeleteNovelAsync(string bookId, CancellationToken ct = default);
 
     Task<Result> SaveProgressAsync(

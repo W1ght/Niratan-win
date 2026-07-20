@@ -6,6 +6,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
              xmlns:ui="using:CommunityToolkit.WinUI"
+             xmlns:controls="using:Niratan.Views.Controls"
              xmlns:helpers="using:Niratan.Helpers.UI.Converters"
              xmlns:settings="using:Niratan.Models.Settings"
              mc:Ignorable="d">
@@ -50,6 +51,44 @@
                                       HeaderIcon="{ui:FontIcon Glyph=&#xE790;}">
                     <ToggleSwitch IsOn="{x:Bind ViewModel.SepiaMode, Mode=TwoWay}" />
                 </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="ReaderCustomColorsCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Description="Override the reader background, body text, and information text colors"
+                                      Header="Custom Colors"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE790;}">
+                    <ToggleSwitch IsOn="{x:Bind ViewModel.UseCustomReaderColors, Mode=TwoWay}" />
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="ReaderCustomBackgroundColorCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Header="Background Color"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE790;}"
+                                      Visibility="{x:Bind ViewModel.AreCustomReaderColorsVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <controls:CompactColorPicker AutomationProperties.AutomationId="ReaderCustomBackgroundColorPicker"
+                                                 IsAlphaEnabled="False"
+                                                 Color="{x:Bind ViewModel.CustomReaderBackgroundColor, Mode=TwoWay}" />
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="ReaderCustomTextColorCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Header="Text Color"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE8D4;}"
+                                      Visibility="{x:Bind ViewModel.AreCustomReaderColorsVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <controls:CompactColorPicker AutomationProperties.AutomationId="ReaderCustomTextColorPicker"
+                                                 IsAlphaEnabled="False"
+                                                 Color="{x:Bind ViewModel.CustomReaderTextColor, Mode=TwoWay}" />
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="ReaderCustomInfoColorCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Header="Information Text Color"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE946;}"
+                                      Visibility="{x:Bind ViewModel.AreCustomReaderColorsVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <controls:CompactColorPicker AutomationProperties.AutomationId="ReaderCustomInfoColorPicker"
+                                                 IsAlphaEnabled="False"
+                                                 Color="{x:Bind ViewModel.CustomReaderInfoColor, Mode=TwoWay}" />
+                </toolkit:SettingsCard>
 
                 <TextBlock x:Uid="ReaderTextSectionHeader"
                            Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
@@ -77,14 +116,24 @@
                                       Description="Select the reader font family"
                                       Header="Font"
                                       HeaderIcon="{ui:FontIcon Glyph=&#xE8D4;}">
-                    <ComboBox ItemsSource="{x:Bind ViewModel.AvailableReaderFonts}"
-                              SelectedItem="{x:Bind ViewModel.SelectedReaderFont, Mode=TwoWay}">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate x:DataType="settings:JapaneseFontOption">
-                                <TextBlock Text="{x:Bind Name}" />
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <ComboBox MinWidth="180"
+                                  ItemsSource="{x:Bind ViewModel.AvailableReaderFonts}"
+                                  SelectedItem="{x:Bind ViewModel.SelectedReaderFont, Mode=TwoWay}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="settings:JapaneseFontOption">
+                                    <TextBlock Text="{x:Bind Name}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Button x:Uid="ReaderImportFontButton"
+                                Content="Import Font"
+                                Command="{x:Bind ViewModel.ImportReaderFontCommand}" />
+                        <Button x:Uid="ReaderDeleteFontButton"
+                                Content="Delete"
+                                Command="{x:Bind ViewModel.DeleteSelectedReaderFontCommand}"
+                                IsEnabled="{x:Bind ViewModel.CanDeleteSelectedReaderFont, Mode=OneWay}" />
+                    </StackPanel>
                 </toolkit:SettingsCard>
                 <toolkit:SettingsCard x:Uid="ReaderFontSizeCard"
                                       HorizontalAlignment="Stretch"
@@ -129,6 +178,15 @@
                                      IsChecked="{x:Bind ViewModel.ContinuousMode, Mode=TwoWay}"
                                      GroupName="LayoutMode" />
                     </StackPanel>
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="ReaderTwoColumnHorizontalPagesCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Description="Show two text columns in each horizontal paginated spread"
+                                      Header="Two-Column Horizontal Pages"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE8A9;}"
+                                      Visibility="{x:Bind ViewModel.IsTwoColumnHorizontalPagesVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <ToggleSwitch IsOn="{x:Bind ViewModel.TwoColumnHorizontalPages, Mode=TwoWay}" />
                 </toolkit:SettingsCard>
                 <toolkit:SettingsCard x:Uid="ReaderMouseWheelPageTurnCard"
                                       HorizontalAlignment="Stretch"
@@ -233,6 +291,22 @@
                     <Slider Minimum="-10" Maximum="10" SmallChange="1" StepFrequency="1"
                             Width="160"
                             Value="{x:Bind ViewModel.CharacterSpacing, Mode=TwoWay}" />
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="ReaderParagraphSpacingCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Description="Space before and after paragraphs"
+                                      Header="Paragraph Spacing"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE8EC;}"
+                                      Visibility="{x:Bind ViewModel.IsParagraphSpacingVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBlock MinWidth="56"
+                                   VerticalAlignment="Center"
+                                   Text="{x:Bind ViewModel.ParagraphSpacing, Mode=OneWay}" />
+                        <Slider Minimum="0" Maximum="3" SmallChange="0.1" StepFrequency="0.1"
+                                Width="160"
+                                Value="{x:Bind ViewModel.ParagraphSpacing, Mode=TwoWay}" />
+                    </StackPanel>
                 </toolkit:SettingsCard>
 
                 <TextBlock x:Uid="ReaderDisplaySectionHeader"

@@ -56,7 +56,11 @@ public class DictionarySettingsPageStabilityContractTests
         xaml.Should().Contain("UpdateDictionariesButton");
         xaml.Should().Contain("DictionaryTabDefaultToggle");
         xaml.Should().Contain("DictionaryCustomCssButton");
+        xaml.Should().Contain("DictionaryFontComboBox");
+        xaml.Should().Contain("DictionaryImportFontButton");
         xaml.Should().Contain("ConfigureCollapsedDictionariesButton");
         xaml.Should().Contain("DictionaryTwoColumnLayoutToggle");
+        xaml.IndexOf("DictionaryCustomCssCard", System.StringComparison.Ordinal)
+            .Should().BeLessThan(xaml.IndexOf("DictionaryFontCard", System.StringComparison.Ordinal));
     }
 }

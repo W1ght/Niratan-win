@@ -59,21 +59,39 @@
                                           Description="{x:Bind ViewModel.UpdateStatusText, Mode=OneWay}"
                                           Header="Updates"
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE895;}">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <ProgressRing Width="20"
-                                          Height="20"
-                                          IsActive="{x:Bind ViewModel.IsCheckingForUpdates, Mode=OneWay}"
-                                          Visibility="{x:Bind ViewModel.IsCheckingForUpdates, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                            <Button x:Uid="AppUpdateCheckButton"
-                                    AutomationProperties.AutomationId="AppUpdateCheckButton"
-                                    Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
-                                    Content="Check for updates" />
-                            <Button x:Uid="AppUpdateOpenButton"
-                                    AutomationProperties.AutomationId="AppUpdateOpenButton"
-                                    Command="{x:Bind ViewModel.OpenUpdateCommand}"
-                                    Content="View update"
-                                    Visibility="{x:Bind ViewModel.HasAvailableUpdate, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <StackPanel MinWidth="280" Spacing="8">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <ProgressRing Width="20"
+                                              Height="20"
+                                              IsActive="{x:Bind ViewModel.IsCheckingForUpdates, Mode=OneWay}"
+                                              Visibility="{x:Bind ViewModel.IsCheckingForUpdates, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                <Button x:Uid="AppUpdateCheckButton"
+                                        AutomationProperties.AutomationId="AppUpdateCheckButton"
+                                        Command="{x:Bind ViewModel.CheckForUpdatesCommand}"
+                                        Content="Check for updates" />
+                                <Button x:Uid="AppUpdateInstallButton"
+                                        AutomationProperties.AutomationId="AppUpdateInstallButton"
+                                        Command="{x:Bind ViewModel.InstallUpdateCommand}"
+                                        Content="Download and install"
+                                        Visibility="{x:Bind ViewModel.HasAvailableUpdate, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            </StackPanel>
+                            <ProgressBar Minimum="0"
+                                         Maximum="100"
+                                         Value="{x:Bind ViewModel.UpdateDownloadProgress, Mode=OneWay}"
+                                         Visibility="{x:Bind ViewModel.IsDownloadingUpdate, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
                         </StackPanel>
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="AppUpdateDownloadDirectoryCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          Description="{x:Bind ViewModel.UpdateDownloadDirectory, Mode=OneWay}"
+                                          Header="Download location"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8B7;}">
+                        <Button x:Uid="AppUpdateChooseDownloadDirectoryButton"
+                                AutomationProperties.AutomationId="AppUpdateChooseDownloadDirectoryButton"
+                                Command="{x:Bind ViewModel.ChooseUpdateDownloadDirectoryCommand}"
+                                Content="Choose folder" />
                     </toolkit:SettingsCard>
                 </StackPanel>
             </Grid>

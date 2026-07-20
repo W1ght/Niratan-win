@@ -23,6 +23,9 @@ internal sealed class ShortcutService : IShortcutService
     public KeyboardShortcutBinding GetBinding(ShortcutAction action) =>
         CurrentConfiguration.GetBinding(action);
 
+    public int DictionaryEntryJumpCount =>
+        Math.Clamp(CurrentConfiguration.DictionaryEntryJumpCount, 1, 10);
+
     public bool TryResolve(
         ShortcutScope scope,
         KeyboardShortcutBinding binding,
@@ -32,9 +35,12 @@ internal sealed class ShortcutService : IShortcutService
         if (binding.IsEmpty)
             return false;
 
+        var configuration = CurrentConfiguration;
         action = Registry.Actions
             .Where(candidate => AppliesToScope(candidate, scope))
-            .FirstOrDefault(candidate => GetBinding(candidate).Matches(binding));
+            .Where(candidate => configuration.GetBinding(candidate).Matches(binding))
+            .OrderByDescending(candidate => configuration.HasCustomBinding(candidate.Id))
+            .FirstOrDefault();
 
         return action != null;
     }
@@ -78,6 +84,13 @@ internal sealed class ShortcutService : IShortcutService
     {
         var next = CurrentConfiguration.Clone();
         next.ResetBinding(action.Id);
+        SaveConfiguration(next);
+    }
+
+    public void SetDictionaryEntryJumpCount(int count)
+    {
+        var next = CurrentConfiguration.Clone();
+        next.DictionaryEntryJumpCount = Math.Clamp(count, 1, 10);
         SaveConfiguration(next);
     }
 

@@ -20,6 +20,8 @@
                                     HasCover="{x:Bind HasCover, Mode=OneTime}"
                                     OverallProgressPercent="{x:Bind OverallProgressPercent, Mode=OneWay}"
                                     OverallProgressText="{x:Bind OverallProgressText, Mode=OneWay}"
+                                    IsSelectionMode="{Binding ViewModel.IsSelecting, ElementName=ThisPage}"
+                                    IsSelected="{x:Bind IsSelected, Mode=OneWay}"
                                     PlaceholderGlyph="&#xE8B9;"
                                     Command="{Binding ViewModel.OpenNovelCommand, ElementName=ThisPage}"
                                     CommandParameter="{x:Bind}">
@@ -29,6 +31,10 @@
                                         AutomationProperties.AutomationId="NovelBookMarkReadMenuItem"
                                         Tag="{x:Bind}"
                                         Click="MarkReadNovelMenuItem_Click" />
+                        <MenuFlyoutItem x:Uid="NovelBookRenameMenuItem"
+                                        AutomationProperties.AutomationId="NovelBookRenameMenuItem"
+                                        Tag="{x:Bind}"
+                                        Click="RenameNovelMenuItem_Click" />
                         <MenuFlyoutSeparator />
                         <MenuFlyoutItem x:Uid="NovelBookExportMenuItem"
                                         Text="Export EPUB…"
@@ -161,7 +167,12 @@
                               ItemsSource="{x:Bind ViewModel.SortOptions, Mode=OneWay}"
                               DisplayMemberPath="DisplayName"
                               SelectedItem="{x:Bind ViewModel.SelectedSortOptionItem, Mode=TwoWay}"
-                              Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                              Visibility="{x:Bind ViewModel.ShowBookshelfCommands, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                    <TextBlock Grid.Column="2"
+                               VerticalAlignment="Center"
+                               Style="{StaticResource SubtitleTextBlockStyle}"
+                               Text="{x:Bind ViewModel.SelectionSummary, Mode=OneWay}"
+                               Visibility="{x:Bind ViewModel.ShowSelectionCommands, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
                 </Grid>
             </CommandBar.Content>
             <CommandBar.PrimaryCommands>
@@ -169,7 +180,7 @@
                               x:Uid="NovelLibraryStatisticsButton"
                               AutomationProperties.AutomationId="NovelLibraryStatisticsButton"
                               Command="{x:Bind ViewModel.EnterStatisticsCommand}"
-                              Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                              Visibility="{x:Bind ViewModel.ShowBookshelfCommands, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
                     <AppBarButton.Icon>
                         <FontIcon Glyph="&#xE9D2;" />
                     </AppBarButton.Icon>
@@ -188,19 +199,48 @@
                               AutomationProperties.AutomationId="NovelShelfManagementButton"
                               Icon="Folder"
                               Click="ShelfManagementButton_Click"
-                              Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                              Visibility="{x:Bind ViewModel.ShowBookshelfCommands, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
                 <AppBarButton x:Name="NovelLibraryRefreshGoogleDriveButton"
                               x:Uid="NovelLibraryRefreshGoogleDriveButton"
                               AutomationProperties.AutomationId="NovelLibraryRefreshGoogleDriveButton"
                               Icon="Refresh"
                               Command="{x:Bind ViewModel.RefreshRemoteBooksCommand}"
-                              Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                              Visibility="{x:Bind ViewModel.ShowBookshelfCommands, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                <AppBarButton x:Name="NovelLibrarySelectButton"
+                              x:Uid="NovelLibrarySelectButton"
+                              AutomationProperties.AutomationId="NovelLibrarySelectButton"
+                              Command="{x:Bind ViewModel.EnterSelectionModeCommand}"
+                              Visibility="{x:Bind ViewModel.ShowBookshelfCommands, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                    <AppBarButton.Icon>
+                        <FontIcon Glyph="&#xE762;" />
+                    </AppBarButton.Icon>
+                </AppBarButton>
                 <AppBarButton x:Name="ImportNovelButton"
                               x:Uid="ImportNovelButton"
                               AutomationProperties.AutomationId="ImportNovelButton"
                               Icon="Add"
                               Command="{x:Bind ViewModel.ImportNovelCommand}"
-                              Visibility="{x:Bind ViewModel.ShowBookshelf, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                              Visibility="{x:Bind ViewModel.ShowBookshelfCommands, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                <AppBarButton x:Name="NovelLibrarySelectionDoneButton"
+                              x:Uid="NovelLibrarySelectionDoneButton"
+                              AutomationProperties.AutomationId="NovelLibrarySelectionDoneButton"
+                              Icon="Cancel"
+                              Command="{x:Bind ViewModel.ExitSelectionModeCommand}"
+                              Visibility="{x:Bind ViewModel.ShowSelectionCommands, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                <AppBarButton x:Name="NovelLibraryBulkMoveButton"
+                              x:Uid="NovelLibraryBulkMoveButton"
+                              AutomationProperties.AutomationId="NovelLibraryBulkMoveButton"
+                              Icon="Folder"
+                              IsEnabled="{x:Bind ViewModel.HasSelectedBooks, Mode=OneWay}"
+                              Click="BulkMoveNovelButton_Click"
+                              Visibility="{x:Bind ViewModel.ShowSelectionCommands, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                <AppBarButton x:Name="NovelLibraryBulkDeleteButton"
+                              x:Uid="NovelLibraryBulkDeleteButton"
+                              AutomationProperties.AutomationId="NovelLibraryBulkDeleteButton"
+                              Icon="Delete"
+                              IsEnabled="{x:Bind ViewModel.HasSelectedBooks, Mode=OneWay}"
+                              Command="{x:Bind ViewModel.DeleteSelectedBooksCommand}"
+                              Visibility="{x:Bind ViewModel.ShowSelectionCommands, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
             </CommandBar.PrimaryCommands>
         </CommandBar>
 

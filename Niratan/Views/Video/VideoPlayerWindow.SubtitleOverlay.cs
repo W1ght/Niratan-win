@@ -508,7 +508,7 @@ public sealed partial class VideoPlayerWindow
 
     private void SubtitlePanelBorder_PointerExited(object sender, PointerRoutedEventArgs e)
     {
-        CancelSubtitleHoverLookupDelay();
+        CancelSubtitleHoverLookup();
         _isSubtitlePointerOver = false;
         _lastSubtitlePointerPoint = null;
         _lastSubtitleHoverCharacterIndex = -1;
@@ -683,7 +683,7 @@ public sealed partial class VideoPlayerWindow
             .HasFlag(KeyboardShortcutModifiers.Shift);
         if (!isShiftPressed)
         {
-            CancelSubtitleHoverLookupDelay();
+            CancelSubtitleHoverLookup();
             _lastSubtitleHoverCharacterIndex = -1;
             return;
         }
@@ -693,23 +693,20 @@ public sealed partial class VideoPlayerWindow
 
     private void ScheduleSubtitleHoverLookup(Windows.Foundation.Point point)
     {
-        CancelSubtitleHoverLookupDelay();
-        _subtitleHoverLookupDelayCts = new CancellationTokenSource();
-        var token = _subtitleHoverLookupDelayCts.Token;
-        var delay = App.GetService<Niratan.Services.Settings.ISettingsService>()
-            .Current.DictionaryDisplaySettings.NormalizedDesktopLookupHoverDelayMs;
-        _ = RunSubtitleHoverLookupAfterDelayAsync(point, delay, token);
+        CancelSubtitleHoverLookup();
+        _subtitleHoverLookupCts = new CancellationTokenSource();
+        var token = _subtitleHoverLookupCts.Token;
+        _ = RunSubtitleHoverLookupAsync(point, token);
     }
 
-    private async Task RunSubtitleHoverLookupAfterDelayAsync(
+    private async Task RunSubtitleHoverLookupAsync(
         Windows.Foundation.Point point,
-        int delayMs,
         CancellationToken ct)
     {
         try
         {
-            if (delayMs > 0)
-                await Task.Delay(delayMs, ct);
+            await Task.Yield();
+            ct.ThrowIfCancellationRequested();
             await LookupSubtitleAtCanvasPointAsync(point, isHoverLookup: true);
         }
         catch (OperationCanceledException)
@@ -717,11 +714,11 @@ public sealed partial class VideoPlayerWindow
         }
     }
 
-    private void CancelSubtitleHoverLookupDelay()
+    private void CancelSubtitleHoverLookup()
     {
-        _subtitleHoverLookupDelayCts?.Cancel();
-        _subtitleHoverLookupDelayCts?.Dispose();
-        _subtitleHoverLookupDelayCts = null;
+        _subtitleHoverLookupCts?.Cancel();
+        _subtitleHoverLookupCts?.Dispose();
+        _subtitleHoverLookupCts = null;
     }
 
     private async Task LookupSubtitleAtCanvasPointAsync(

@@ -1,4 +1,6 @@
+using System;
 using System.Globalization;
+using System.IO;
 using Niratan.Enums;
 using Microsoft.UI.Xaml;
 
@@ -8,15 +10,21 @@ public class ReaderSettings
 {
     // --- Theme ---
     public bool SepiaMode { get; set; } = false;
+    public bool UseCustomColors { get; set; } = false;
+    public string CustomBackgroundColor { get; set; } = "#FFFFFF";
+    public string CustomTextColor { get; set; } = "#000000";
+    public string CustomInfoColor { get; set; } = "#999999";
 
     // --- Text ---
     public bool VerticalWriting { get; set; } = true;
     public string SelectedFont { get; set; } = JapaneseFontCatalog.DefaultReaderCssValue;
+    public string? SelectedFontFileName { get; set; }
     public int FontSize { get; set; } = 22;
     public bool HideFurigana { get; set; } = false;
 
     // --- Layout ---
     public bool ContinuousMode { get; set; } = false;
+    public bool TwoColumnHorizontalPages { get; set; } = false;
     public bool MouseWheelPageTurn { get; set; } = true;
     public int ChapterSwipeDistance { get; set; } = 20;
     public int HorizontalPadding { get; set; } = 5;
@@ -27,6 +35,7 @@ public class ReaderSettings
     public bool LayoutAdvanced { get; set; } = false;
     public double LineHeight { get; set; } = 1.65;
     public double CharacterSpacing { get; set; } = 0.0;
+    public double ParagraphSpacing { get; set; } = 0.0;
 
     // --- Display ---
     public bool ShowTitle { get; set; } = true;
@@ -67,6 +76,23 @@ public class ReaderSettings
     public string ImageMaxHeightFallbackCss =>
         $"calc(var(--page-height, 100vh) - {BottomOverlapPx}px)";
 
+    public bool UsesTwoColumnHorizontalPages =>
+        TwoColumnHorizontalPages && !VerticalWriting && !ContinuousMode;
+
+    public string? ImportedFontUrl
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(SelectedFontFileName))
+                return null;
+
+            var fileName = Path.GetFileName(SelectedFontFileName);
+            return string.Equals(fileName, SelectedFontFileName, StringComparison.Ordinal)
+                ? $"https://{ReaderFontCatalog.VirtualHostName}/{Uri.EscapeDataString(fileName)}"
+                : null;
+        }
+    }
+
     // --- Color methods ---
 
     private static bool IsDark(ThemeMode themeMode)
@@ -79,17 +105,57 @@ public class ReaderSettings
 
     public uint BackgroundColor(ThemeMode themeMode)
     {
+        if (UseCustomColors && TryParseColor(CustomBackgroundColor, out var custom)) return custom;
         if (SepiaMode) return 0xFFF2E2C9;
         return IsDark(themeMode) ? 0xFF000000 : 0xFFFFFFFF;
     }
 
     public string TextColorCss(ThemeMode themeMode)
     {
+        if (UseCustomColors && TryNormalizeCssColor(CustomTextColor, out var custom)) return custom;
         if (SepiaMode) return "#332A1B";
         return IsDark(themeMode) ? "#fff" : "#000";
+    }
+
+    public string InfoColorCss(ThemeMode themeMode)
+    {
+        if (UseCustomColors && TryNormalizeCssColor(CustomInfoColor, out var custom)) return custom;
+        if (SepiaMode) return "#74664F";
+        return IsDark(themeMode) ? "#A6A6A6" : "#666666";
+    }
+
+    public uint InfoColor(ThemeMode themeMode)
+    {
+        if (UseCustomColors && TryParseColor(CustomInfoColor, out var custom)) return custom;
+        if (SepiaMode) return 0xFF74664F;
+        return IsDark(themeMode) ? 0xFFA6A6A6 : 0xFF666666;
     }
 
     public bool UsesDarkInterface(ThemeMode themeMode) => IsDark(themeMode);
 
     public bool UsesSepiaLightContent() => SepiaMode;
+
+    private static bool TryNormalizeCssColor(string? value, out string color)
+    {
+        color = "";
+        if (!TryParseColor(value, out var argb))
+            return false;
+
+        color = $"#{argb & 0x00FFFFFF:X6}";
+        return true;
+    }
+
+    private static bool TryParseColor(string? value, out uint argb)
+    {
+        argb = 0;
+        var hex = value?.Trim().TrimStart('#');
+        if (hex is null || (hex.Length != 6 && hex.Length != 8)
+            || !uint.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return false;
+        }
+
+        argb = hex.Length == 6 ? 0xFF000000 | parsed : parsed;
+        return true;
+    }
 }

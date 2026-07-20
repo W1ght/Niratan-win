@@ -593,14 +593,10 @@
 
   function scheduleLookupAtPoint(x, y) {
     if (shiftHoverTimer) clearTimeout(shiftHoverTimer);
-    const configured = Number(window.__niratanLookupSettings?.hoverDelayMs);
-    const delay = Number.isFinite(configured)
-      ? Math.min(250, Math.max(0, configured))
-      : 45;
     shiftHoverTimer = setTimeout(() => {
       shiftHoverTimer = 0;
       lookupAtPoint(x, y);
-    }, delay);
+    }, 0);
   }
 
   document.addEventListener('mousemove', (e) => {

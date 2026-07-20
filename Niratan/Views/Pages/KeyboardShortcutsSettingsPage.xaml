@@ -4,13 +4,17 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:converters="using:Niratan.Helpers.UI.Converters"
       xmlns:vm="using:Niratan.ViewModels.Pages"
       mc:Ignorable="d">
 
+    <Page.Resources>
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </Page.Resources>
+
     <Grid x:Name="KeyboardShortcutsRoot"
           RowDefinitions="Auto,*"
-          IsTabStop="True"
-          KeyDown="KeyboardShortcutsRoot_KeyDown">
+          IsTabStop="True">
         <StackPanel Padding="20,14,36,16"
                     Orientation="Horizontal"
                     Spacing="8"
@@ -54,6 +58,7 @@
                                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                         BorderThickness="1"
                                         CornerRadius="8">
+                                    <StackPanel>
                                     <ItemsRepeater ItemsSource="{x:Bind Rows, Mode=OneWay}">
                                         <ItemsRepeater.Layout>
                                             <StackLayout />
@@ -83,12 +88,12 @@
                                                             MinWidth="108"
                                                             HorizontalAlignment="Right"
                                                             AutomationProperties.AutomationId="ShortcutRecordButton"
-                                                            Click="RecordShortcutButton_Click"
+                                                            Command="{x:Bind RecordCommand}"
                                                             Content="{x:Bind ShortcutButtonLabel, Mode=OneWay}" />
                                                     <Button Grid.Column="2"
                                                             x:Uid="KeyboardShortcutResetButton"
                                                             AutomationProperties.AutomationId="ShortcutResetButton"
-                                                            Click="ResetShortcutButton_Click"
+                                                            Command="{x:Bind ResetCommand}"
                                                             Content="Reset"
                                                             IsEnabled="{x:Bind CanReset, Mode=OneWay}" />
                                                     <Border Grid.ColumnSpan="3"
@@ -101,6 +106,29 @@
                                             </DataTemplate>
                                         </ItemsRepeater.ItemTemplate>
                                     </ItemsRepeater>
+                                    <Grid MinHeight="64"
+                                          ColumnDefinitions="*,Auto"
+                                          Padding="16,10"
+                                          Visibility="{x:Bind ShowsEntryJumpCount, Mode=OneWay}">
+                                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                                            <TextBlock x:Uid="KeyboardShortcutsEntryJumpCountText"
+                                                       Text="Entry Jump Count"
+                                                       Style="{StaticResource BodyTextBlockStyle}" />
+                                            <TextBlock x:Uid="KeyboardShortcutsEntryJumpCountDescriptionText"
+                                                       Text="Number of dictionary entries skipped by Previous/Next Entry."
+                                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        </StackPanel>
+                                        <NumberBox Grid.Column="1"
+                                                   Width="96"
+                                                   Minimum="1"
+                                                   Maximum="10"
+                                                   SpinButtonPlacementMode="Inline"
+                                                   AutomationProperties.AutomationId="DictionaryEntryJumpCountNumberBox"
+                                                   Value="{x:Bind EntryJumpCount, Mode=OneWay}"
+                                                   ValueChanged="DictionaryEntryJumpCountNumberBox_ValueChanged" />
+                                    </Grid>
+                                    </StackPanel>
                                 </Border>
                             </StackPanel>
                         </DataTemplate>
@@ -108,5 +136,37 @@
                 </ItemsRepeater>
             </Grid>
         </ScrollViewer>
+
+        <Grid x:Name="ShortcutCaptureLayer"
+              Grid.RowSpan="2"
+              Background="#66000000"
+              IsTabStop="True"
+              AutomationProperties.AutomationId="ShortcutCaptureLayer"
+              Visibility="{x:Bind ViewModel.IsRecording, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Border MaxWidth="460"
+                    Margin="24"
+                    Padding="28"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="12">
+                <StackPanel Spacing="18">
+                    <FontIcon HorizontalAlignment="Center"
+                              FontSize="32"
+                              Glyph="&#xEA3A;" />
+                    <TextBlock HorizontalAlignment="Center"
+                               Text="{x:Bind ViewModel.RecordingHintText, Mode=OneWay}"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap" />
+                    <Button x:Uid="KeyboardShortcutsCancelRecordingButton"
+                            HorizontalAlignment="Center"
+                            AutomationProperties.AutomationId="KeyboardShortcutsCancelRecordingButton"
+                            Command="{x:Bind ViewModel.CancelRecordingCommand}"
+                            Content="Cancel" />
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </Page>
