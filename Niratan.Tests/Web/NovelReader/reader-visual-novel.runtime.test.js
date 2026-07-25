@@ -74,4 +74,3 @@ reader.setRevealSpeed(999);
 assert.equal(reader.revealSpeed, 120);
 reader.setRevealSpeed(-3);
 assert.equal(reader.revealSpeed, 0);
-
