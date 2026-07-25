@@ -22,7 +22,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <VersionPrefix>0.6.2</VersionPrefix>
+    <VersionPrefix>0.7.0</VersionPrefix>
     <VersionSuffix></VersionSuffix>
     <Version>$(VersionPrefix)$([System.String]::Copy('-$(VersionSuffix)').TrimEnd('-'))</Version>
     <AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
