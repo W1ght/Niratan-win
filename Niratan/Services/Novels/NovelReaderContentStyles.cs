@@ -90,6 +90,72 @@ public static class NovelReaderContentStyles
             """));
         sb.Append('\n');
 
+        if (settings.VisualNovelMode)
+        {
+            sb.Append(Css($$"""
+            body {
+                column-width: auto !important;
+                column-count: auto !important;
+                -webkit-column-count: auto !important;
+                column-gap: 0 !important;
+                padding: 0 !important;
+                padding-bottom: 0 !important;
+            }
+            .niratan-vn-stage {
+                box-sizing: border-box !important;
+                width: var(--page-width) !important;
+                height: var(--page-height) !important;
+                max-width: none !important;
+                max-height: none !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                overflow: hidden !important;
+                writing-mode: {{writingMode}} !important;
+                -webkit-writing-mode: {{writingMode}} !important;
+                background: {{bg}} !important;
+                color: {{fg}} !important;
+            }
+            .niratan-vn-screen {
+                box-sizing: border-box !important;
+                width: 100% !important;
+                height: 100% !important;
+                max-width: none !important;
+                max-height: none !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                overflow: hidden !important;
+                padding: {{pagePadding}} !important;
+                padding-bottom: {{settings.VerticalPaddingBlockCss}} !important;
+                writing-mode: {{writingMode}} !important;
+                -webkit-writing-mode: {{writingMode}} !important;
+            }
+            .niratan-vn-content {
+                box-sizing: border-box !important;
+                max-width: 100% !important;
+                max-height: 100% !important;
+                overflow: visible !important;
+                writing-mode: {{writingMode}} !important;
+                -webkit-writing-mode: {{writingMode}} !important;
+            }
+            .niratan-vn-content, .niratan-vn-content * {
+                column-width: auto !important;
+                column-count: auto !important;
+                -webkit-column-count: auto !important;
+            }
+            .niratan-vn-content img.block-img,
+            .niratan-vn-content svg {
+                max-width: var(--niratan-image-max-width, {{imageMaxWidth}}) !important;
+                max-height: var(--niratan-image-max-height, {{imageMaxHeight}}) !important;
+            }
+            [data-niratan-vn-unrevealed] {
+                visibility: hidden !important;
+            }
+            """));
+            sb.Append('\n');
+        }
+
         // Text alignment: if not justified, use start + hanging punctuation + strict line-break
         if (!settings.JustifyText)
             sb.Append($$"""

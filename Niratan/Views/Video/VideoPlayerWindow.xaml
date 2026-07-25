@@ -496,9 +496,9 @@
                                                  <ListView.ItemTemplate>
                                                      <DataTemplate x:DataType="models:VideoMiningHistoryRow">
                                                          <StackPanel Spacing="4"
-                                                                     AutomationProperties.Name="{x:Bind AutomationName, Mode=OneWay}">
+                                                                     AutomationProperties.Name="{x:Bind AutomationName, Mode=OneTime}">
                                                              <TextBlock Text="{x:Bind SourceHeader}"
-                                                                        Opacity="{x:Bind SourceHeaderOpacity, Mode=OneWay}"
+                                                                         Opacity="{x:Bind SourceHeaderOpacity, Mode=OneTime}"
                                                                         TextTrimming="CharacterEllipsis"
                                                                         Style="{StaticResource VideoInspectorSecondaryTextStyle}" />
                                                              <Grid ColumnDefinitions="*,Auto,Auto"
@@ -573,7 +573,7 @@
                                                 </ListView.ItemContainerStyle>
                                                 <ListView.ItemTemplate>
                                                     <DataTemplate x:DataType="models:VideoChapterRow">
-                                                        <Grid AutomationProperties.Name="{x:Bind AutomationName, Mode=OneWay}"
+                                                        <Grid AutomationProperties.Name="{x:Bind AutomationName, Mode=OneTime}"
                                                               ColumnDefinitions="4,Auto,*"
                                                               ColumnSpacing="8"
                                                               MinHeight="42"
@@ -581,7 +581,7 @@
                                                             <Border Width="3"
                                                                     Background="#3F8DFF"
                                                                     CornerRadius="2"
-                                                                    Opacity="{x:Bind CurrentIndicatorOpacity, Mode=OneWay}"
+                                                                    Opacity="{x:Bind CurrentIndicatorOpacity, Mode=OneTime}"
                                                                     VerticalAlignment="Stretch" />
                                                             <FontIcon Grid.Column="1"
                                                                       FontSize="15"

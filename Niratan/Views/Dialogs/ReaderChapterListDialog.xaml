@@ -19,7 +19,7 @@
               ItemClick="ChapterListView_ItemClick">
         <ListView.ItemTemplate>
             <DataTemplate x:DataType="dialogs:ChapterDisplayItem">
-                <StackPanel Padding="4,8" Opacity="{x:Bind DisplayOpacity, Mode=OneWay}">
+                <StackPanel Padding="4,8" Opacity="{x:Bind DisplayOpacity, Mode=OneTime}">
                     <TextBlock FontWeight="SemiBold"
                                Text="{x:Bind DisplayTitle}" />
                     <TextBlock FontSize="12"

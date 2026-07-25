@@ -78,6 +78,17 @@ public sealed partial class NovelLibraryPage : Page
         }
     }
 
+    private async void ZLibraryButton_Click(object sender, RoutedEventArgs e)
+    {
+        await ZLibraryDialog.ShowAsync(XamlRoot);
+    }
+
+    private async void NyaaButton_Click(object sender, RoutedEventArgs e)
+    {
+        await NyaaImportDialog.ShowAsync(XamlRoot);
+        await ViewModel.InitializeAsync();
+    }
+
     private async void BulkMoveNovelButton_Click(object sender, RoutedEventArgs e)
     {
         var target = await ShowShelfPickerAsync();

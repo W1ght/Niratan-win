@@ -6,9 +6,9 @@ namespace Niratan.Tests.Services.Video;
 public sealed class VideoBottomChromeAutoHideStateTests
 {
     [Fact]
-    public void DefaultHideDelay_IsTwoSeconds()
+    public void DefaultHideDelay_IsOneSecond()
     {
-        VideoBottomChromeAutoHideState.DefaultHideDelay.Should().Be(TimeSpan.FromSeconds(2));
+        VideoBottomChromeAutoHideState.DefaultHideDelay.Should().Be(TimeSpan.FromSeconds(1));
     }
 
     [Fact]

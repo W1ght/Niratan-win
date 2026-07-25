@@ -94,6 +94,7 @@ public sealed partial class VideoPlayerWindow
     {
         try
         {
+            _lookupPlaybackCoordinator.CancelAutoResume();
             _isPaused = !_isPaused;
             await _playbackEngine.SetPausedAsync(_isPaused);
             PlayPauseIcon.Glyph = _isPaused ? "\uE768" : "\uE769";
@@ -919,6 +920,7 @@ public sealed partial class VideoPlayerWindow
         if (!ViewModel.RememberPlaybackState)
             return false;
 
+        await RestoreAudioSelectionAsync(state.AudioSelection ?? VideoAudioSelection.None(), ct);
         var restoredSubtitle = await RestoreSubtitleSelectionAsync(state.SubtitleSelection, ct);
         if (openedStartPosition != null)
         {
@@ -963,6 +965,23 @@ public sealed partial class VideoPlayerWindow
             "Restored to {0}",
             ViewModel.PositionText);
         return restoredSubtitle;
+    }
+
+    private async Task RestoreAudioSelectionAsync(
+        VideoAudioSelection selection,
+        CancellationToken ct = default)
+    {
+        switch (selection.Kind)
+        {
+            case VideoAudioSelectionKind.Off:
+                await SelectAudioTrackAsync(null, persistSelection: false, ct: ct);
+                return;
+            case VideoAudioSelectionKind.EmbeddedTrack:
+                var track = selection.ResolveTrack(ViewModel.AudioTracks);
+                if (track != null)
+                    await SelectAudioTrackAsync(track, persistSelection: false, ct: ct);
+                return;
+        }
     }
 
     private async Task<bool> RestoreSubtitleSelectionAsync(
@@ -1034,9 +1053,6 @@ public sealed partial class VideoPlayerWindow
             ViewModel.Duration);
         var positionSeconds = ViewModel.CurrentPosition.TotalSeconds;
         var durationSeconds = ViewModel.Duration.TotalSeconds;
-        if (!shouldPersistProgress && selection.Kind == VideoSubtitleSelectionKind.None)
-            return;
-
         if (!shouldPersistProgress)
         {
             var latest = await _videoLibraryService.GetVideoAsync(ViewModel.CurrentVideo.Id, ct);
@@ -1053,7 +1069,11 @@ public sealed partial class VideoPlayerWindow
             new VideoPlaybackState(
                 positionSeconds,
                 durationSeconds,
-                selection),
+                selection,
+                ViewModel.SubtitleDelayMilliseconds,
+                ViewModel.PlaybackSpeed,
+                ViewModel.AudioDelaySeconds,
+                ViewModel.GetCurrentAudioSelection()),
             ct);
     }
 

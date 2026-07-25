@@ -58,7 +58,7 @@
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    Style="{StaticResource CaptionTextBlockStyle}"
                                    Text="{x:Bind CharacterCountText}"
-                                   Visibility="{x:Bind CharacterCountVisibility, Mode=OneWay}" />
+                                   Visibility="{x:Bind CharacterCountVisibility, Mode=OneTime}" />
                     </Grid>
                 </DataTemplate>
             </ListView.ItemTemplate>

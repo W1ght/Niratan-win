@@ -13,7 +13,7 @@
             <Ellipse Width="28"
                      Height="28"
                      Fill="{ThemeResource ControlFillColorDefaultBrush}" />
-            <Ellipse Width="28" Height="28" Fill="{x:Bind SwatchBrush, Mode=OneWay}" />
+            <Ellipse Width="28" Height="28" Fill="{x:Bind SwatchBrush, Mode=OneTime}" />
             <Ellipse Width="28"
                      Height="28"
                      Stroke="{ThemeResource ControlStrongStrokeColorDefaultBrush}"

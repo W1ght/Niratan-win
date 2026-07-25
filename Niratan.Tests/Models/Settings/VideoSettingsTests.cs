@@ -12,6 +12,7 @@ public sealed class VideoSettingsTests
 
         settings.AutoPlayNextEpisode.Should().BeTrue();
         settings.RememberPlaybackState.Should().BeTrue();
+        settings.Volume.Should().Be(100);
         settings.SeekIntervalSeconds.Should().Be(5);
         settings.MiningHistoryLimit.Should().Be(25);
         settings.HardwareDecodingEnabled.Should().BeTrue();
@@ -53,6 +54,7 @@ public sealed class VideoSettingsTests
     {
         var settings = new VideoSettings
         {
+            Volume = 999,
             SeekIntervalSeconds = 999,
             MiningHistoryLimit = -10,
             VideoBrightness = double.NaN,
@@ -73,6 +75,7 @@ public sealed class VideoSettingsTests
             SubtitleMaskHiddenOpacity = -1,
         };
 
+        settings.Volume.Should().Be(130);
         settings.SeekIntervalSeconds.Should().Be(60);
         settings.MiningHistoryLimit.Should().Be(0);
         settings.VideoBrightness.Should().Be(0);

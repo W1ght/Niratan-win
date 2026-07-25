@@ -30,7 +30,10 @@ public sealed partial class VideoPlayerWindow
         }
     }
 
-    private async Task SelectAudioTrackAsync(VideoTrackInfo? track, CancellationToken ct = default)
+    private async Task SelectAudioTrackAsync(
+        VideoTrackInfo? track,
+        bool persistSelection = true,
+        CancellationToken ct = default)
     {
         try
         {
@@ -41,6 +44,8 @@ public sealed partial class VideoPlayerWindow
             UpdateAudioTrackSelection();
             await Task.Delay(120, ct);
             await RefreshMediaTracksAsync(ct: ct);
+            if (persistSelection)
+                await SaveCurrentVideoProgressAsync(ct);
         }
         catch (Exception ex)
         {

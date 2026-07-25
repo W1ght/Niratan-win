@@ -39,6 +39,7 @@ public partial class VideoPlayerViewModel : ObservableObject
     private string? _primarySubtitlePath;
     private string? _remoteSubtitleLanguage;
     private bool _subtitleSelectionOff;
+    private bool _audioSelectionOff;
     private bool _hasCompleteEmbeddedTranscript;
     private readonly VideoTranscriptWindow _transcriptWindow = new();
     private int _lastTranscriptCurrentIndex = -1;
@@ -403,6 +404,7 @@ public partial class VideoPlayerViewModel : ObservableObject
         SelectedSubtitleTrackId = null;
         SelectedAudioTrackId = null;
         SelectedVideoTrackId = null;
+        _audioSelectionOff = false;
         _embeddedSubtitleCue = null;
         _lastSelectedSubtitleTrackId = null;
         _subtitleSelectionOff = false;
@@ -599,7 +601,10 @@ public partial class VideoPlayerViewModel : ObservableObject
         HasSubtitleTracks = SubtitleTracks.Count > 0;
 
         SelectedVideoTrackId = videoTracks.FirstOrDefault(track => track.IsSelected)?.Id;
-        SelectedAudioTrackId = audioTracks.FirstOrDefault(track => track.IsSelected)?.Id;
+        var selectedAudioTrack = audioTracks.FirstOrDefault(track => track.IsSelected);
+        SelectedAudioTrackId = selectedAudioTrack?.Id;
+        if (selectedAudioTrack != null)
+            _audioSelectionOff = false;
 
         var selected = subtitleTracks.FirstOrDefault(track => track.IsSelected);
         SelectedSubtitleTrackId = selected?.Id;
@@ -612,6 +617,7 @@ public partial class VideoPlayerViewModel : ObservableObject
     public void SelectAudioTrack(VideoTrackInfo? track)
     {
         SelectedAudioTrackId = track?.Id;
+        _audioSelectionOff = track == null;
         StatusText = track == null
             ? "Audio off"
             : $"Audio track: {track.DisplayName}";
@@ -1118,6 +1124,21 @@ public partial class VideoPlayerViewModel : ObservableObject
         return VideoSubtitleSelection.None();
     }
 
+    public VideoAudioSelection GetCurrentAudioSelection()
+    {
+        if (_audioSelectionOff)
+            return VideoAudioSelection.Off();
+
+        if (SelectedAudioTrackId.HasValue)
+        {
+            var track = AudioTracks.FirstOrDefault(item => item.Id == SelectedAudioTrackId.Value);
+            if (track != null)
+                return VideoAudioSelection.EmbeddedTrack(track);
+        }
+
+        return VideoAudioSelection.None();
+    }
+
     public VideoMiningHistoryCapture? CreateMiningHistoryCapture()
     {
         if (CurrentVideo == null)
@@ -1223,6 +1244,7 @@ public partial class VideoPlayerViewModel : ObservableObject
         RememberPlaybackState = settings.RememberPlaybackState;
         SeekIntervalSeconds = settings.SeekIntervalSeconds;
         MiningHistoryLimit = settings.MiningHistoryLimit;
+        Volume = settings.Volume;
         HardwareDecodingEnabled = settings.HardwareDecodingEnabled;
         DeinterlaceEnabled = settings.DeinterlacingEnabled;
         HdrEnhancementEnabled = settings.HdrEnhancementEnabled;
@@ -1548,6 +1570,26 @@ public partial class VideoPlayerViewModel : ObservableObject
             : VideoSubtitleMaskMode.Blur;
         updatedSettings.SubtitleMaskBlurRadius = SubtitleMaskBlurRadius;
         updatedSettings.SubtitleMaskHiddenOpacity = SubtitleMaskHiddenOpacity;
+
+        _settingsService.Set(settings => settings.VideoSettings, updatedSettings);
+        QueueSubtitleAppearanceSave(_settingsService);
+    }
+
+    private void SaveVideoEnhancementSettings()
+    {
+        if (_isApplyingSettings || _settingsService is null)
+            return;
+
+        var updatedSettings = _settingsService.Current.VideoSettings.Clone();
+        updatedSettings.Volume = Volume;
+        updatedSettings.HardwareDecodingEnabled = HardwareDecodingEnabled;
+        updatedSettings.DeinterlacingEnabled = DeinterlaceEnabled;
+        updatedSettings.HdrEnhancementEnabled = HdrEnhancementEnabled;
+        updatedSettings.VideoBrightness = VideoBrightness;
+        updatedSettings.VideoContrast = VideoContrast;
+        updatedSettings.VideoSaturation = VideoSaturation;
+        updatedSettings.VideoGamma = VideoGamma;
+        updatedSettings.VideoHue = VideoHue;
 
         _settingsService.Set(settings => settings.VideoSettings, updatedSettings);
         QueueSubtitleAppearanceSave(_settingsService);
@@ -1889,6 +1931,24 @@ public partial class VideoPlayerViewModel : ObservableObject
     {
         SubtitleDelayText = $"{Math.Clamp(value, -10_000, 10_000):+#;-#;0} ms";
     }
+
+    partial void OnHardwareDecodingEnabledChanged(bool value) => SaveVideoEnhancementSettings();
+
+    partial void OnVolumeChanged(double value) => SaveVideoEnhancementSettings();
+
+    partial void OnDeinterlaceEnabledChanged(bool value) => SaveVideoEnhancementSettings();
+
+    partial void OnHdrEnhancementEnabledChanged(bool value) => SaveVideoEnhancementSettings();
+
+    partial void OnVideoBrightnessChanged(double value) => SaveVideoEnhancementSettings();
+
+    partial void OnVideoContrastChanged(double value) => SaveVideoEnhancementSettings();
+
+    partial void OnVideoSaturationChanged(double value) => SaveVideoEnhancementSettings();
+
+    partial void OnVideoGammaChanged(double value) => SaveVideoEnhancementSettings();
+
+    partial void OnVideoHueChanged(double value) => SaveVideoEnhancementSettings();
 
     partial void OnSubtitleVerticalPositionChanged(double value)
     {

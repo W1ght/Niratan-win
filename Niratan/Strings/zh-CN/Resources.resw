@@ -210,9 +210,23 @@
   <data name="ReaderHideFuriganaCard.Description" xml:space="preserve"><value>隐藏汉字上方的 ruby 注音</value></data>
   <data name="ReaderLayoutSectionHeader.Text" xml:space="preserve"><value>阅读布局</value></data>
   <data name="ReaderLayoutModeCard.Header" xml:space="preserve"><value>模式</value></data>
-  <data name="ReaderLayoutModeCard.Description" xml:space="preserve"><value>分页或连续滚动</value></data>
+  <data name="ReaderLayoutModeCard.Description" xml:space="preserve"><value>分页、连续滚动或视觉小说式呈现</value></data>
   <data name="ReaderLayoutPaginated.Content" xml:space="preserve"><value>分页</value></data>
   <data name="ReaderLayoutContinuous.Content" xml:space="preserve"><value>连续</value></data>
+  <data name="ReaderLayoutVisualNovel.Content" xml:space="preserve"><value>VN</value></data>
+  <data name="ReaderVisualNovelRevealSpeedCard.Header" xml:space="preserve"><value>文字显示速度</value></data>
+  <data name="ReaderVisualNovelRevealSpeedCard.Description" xml:space="preserve"><value>逐字显示当前屏内容；设为 0 时立即显示</value></data>
+  <data name="ReaderVisualNovelRevealSpeedInstant" xml:space="preserve"><value>立即</value></data>
+  <data name="ReaderVisualNovelScreenModeCard.Header" xml:space="preserve"><value>屏幕内容</value></data>
+  <data name="ReaderVisualNovelScreenModeCard.Description" xml:space="preserve"><value>选择章节内容如何拆分到各屏</value></data>
+  <data name="ReaderVisualNovelScreenModeBlock.Content" xml:space="preserve"><value>按段落</value></data>
+  <data name="ReaderVisualNovelScreenModeSentences.Content" xml:space="preserve"><value>按句子</value></data>
+  <data name="ReaderVisualNovelSentencesPerScreenCard.Header" xml:space="preserve"><value>每屏句数</value></data>
+  <data name="ReaderVisualNovelSentencesPerScreenCard.Description" xml:space="preserve"><value>在按可视区域适配前，每屏最多组合的句数</value></data>
+  <data name="ReaderVisualNovelPreserveDialogueCard.Header" xml:space="preserve"><value>对话保持同屏</value></data>
+  <data name="ReaderVisualNovelPreserveDialogueCard.Description" xml:space="preserve"><value>在空间允许时，让日文括号中的对话保持在同一屏</value></data>
+  <data name="ReaderVisualNovelClickAdvanceCard.Header" xml:space="preserve"><value>点击空白处推进</value></data>
+  <data name="ReaderVisualNovelClickAdvanceCard.Description" xml:space="preserve"><value>点击阅读区域空白处以补全文字或进入下一屏</value></data>
   <data name="ReaderTwoColumnHorizontalPagesCard.Header" xml:space="preserve"><value>横排双页模式</value></data>
   <data name="ReaderTwoColumnHorizontalPagesCard.Description" xml:space="preserve"><value>横排分页时每屏显示两栏正文</value></data>
   <data name="ReaderMouseWheelPageTurnCard.Header" xml:space="preserve"><value>鼠标滚轮翻页</value></data>
@@ -946,6 +960,51 @@
   <data name="NovelLibraryRefreshGoogleDriveButton.AutomationProperties.Name" xml:space="preserve"><value>同步 Google Drive</value></data>
   <data name="ImportNovelButton.Label" xml:space="preserve"><value>导入</value></data>
   <data name="ImportNovelButton.AutomationProperties.Name" xml:space="preserve"><value>导入小说</value></data>
+  <data name="NovelLibraryZLibraryButton.Label" xml:space="preserve"><value>Z-Library</value></data>
+  <data name="NovelLibraryZLibraryButton.AutomationProperties.Name" xml:space="preserve"><value>搜索 Z-Library</value></data>
+  <data name="ZLibraryDialog.Title" xml:space="preserve"><value>Z-Library</value></data>
+  <data name="ZLibraryDialog.CloseButtonText" xml:space="preserve"><value>关闭</value></data>
+  <data name="ZLibraryAccountExpander.Header" xml:space="preserve"><value>账号与服务器</value></data>
+  <data name="ZLibraryCredentialHint.Text" xml:space="preserve"><value>请输入 Z-Access 页面显示的 HTTPS 服务器地址。账号凭据将保存在 Windows 凭据管理器中。</value></data>
+  <data name="ZLibraryBaseUrlBox.Header" xml:space="preserve"><value>服务器地址</value></data>
+  <data name="ZLibraryBaseUrlBox.PlaceholderText" xml:space="preserve"><value>Z-Access 提供的 HTTPS 地址</value></data>
+  <data name="ZLibraryEmailBox.Header" xml:space="preserve"><value>邮箱</value></data>
+  <data name="ZLibraryPasswordBox.Header" xml:space="preserve"><value>密码</value></data>
+  <data name="ZLibraryConnectButton.Content" xml:space="preserve"><value>连接并保存</value></data>
+  <data name="ZLibraryDisconnectButton.Content" xml:space="preserve"><value>忘记账号</value></data>
+  <data name="ZLibrarySearchBox.PlaceholderText" xml:space="preserve"><value>搜索书名、作者、ISBN 或关键词</value></data>
+  <data name="ZLibrarySearchButton.Content" xml:space="preserve"><value>搜索</value></data>
+  <data name="ZLibraryPreviousButton.Content" xml:space="preserve"><value>上一页</value></data>
+  <data name="ZLibraryNextButton.Content" xml:space="preserve"><value>下一页</value></data>
+  <data name="ZLibraryDownloadButton.Content" xml:space="preserve"><value>加入书架</value></data>
+  <data name="ZLibraryStatusNotConnected" xml:space="preserve"><value>未连接</value></data>
+  <data name="ZLibraryStatusConnecting" xml:space="preserve"><value>正在连接…</value></data>
+  <data name="ZLibraryStatusConnectedAs" xml:space="preserve"><value>已连接：{0}</value></data>
+  <data name="ZLibraryStatusDownloading" xml:space="preserve"><value>正在下载…</value></data>
+  <data name="ZLibraryStatusImportFailed" xml:space="preserve"><value>导入失败</value></data>
+  <data name="ZLibraryStatusAddedToShelf" xml:space="preserve"><value>已加入书架</value></data>
+  <data name="ZLibraryResultSummaryWithTotal" xml:space="preserve"><value>第 {0} 页 · 共 {1:N0} 项结果</value></data>
+  <data name="ZLibraryResultSummaryPage" xml:space="preserve"><value>第 {0} 页</value></data>
+  <data name="ZLibraryImportSuccessTitle" xml:space="preserve"><value>Z-Library 导入完成</value></data>
+  <data name="ZLibraryImportSuccessMessage" xml:space="preserve"><value>《{0}》已加入小说书架。</value></data>
+  <data name="ZLibraryExactMatchingCheckBox.Content" xml:space="preserve"><value>精确匹配</value></data>
+  <data name="ZLibraryYearFromComboBox.Header" xml:space="preserve"><value>起始年份</value></data>
+  <data name="ZLibraryYearToComboBox.Header" xml:space="preserve"><value>截止年份</value></data>
+  <data name="ZLibraryLanguageComboBox.Header" xml:space="preserve"><value>语言</value></data>
+  <data name="ZLibraryExtensionComboBox.Header" xml:space="preserve"><value>格式</value></data>
+  <data name="ZLibraryFilterAnyYear" xml:space="preserve"><value>不限年份</value></data>
+  <data name="ZLibraryFilterAllLanguages" xml:space="preserve"><value>所有语言</value></data>
+  <data name="ZLibraryFilterAllFormats" xml:space="preserve"><value>所有格式</value></data>
+  <data name="ZLibraryLanguageJapanese" xml:space="preserve"><value>日语</value></data>
+  <data name="ZLibraryLanguageChinese" xml:space="preserve"><value>中文</value></data>
+  <data name="ZLibraryLanguageEnglish" xml:space="preserve"><value>英语</value></data>
+  <data name="ZLibraryLanguageKorean" xml:space="preserve"><value>韩语</value></data>
+  <data name="ZLibraryLanguageRussian" xml:space="preserve"><value>俄语</value></data>
+  <data name="ZLibraryLanguageGerman" xml:space="preserve"><value>德语</value></data>
+  <data name="ZLibraryLanguageFrench" xml:space="preserve"><value>法语</value></data>
+  <data name="ZLibraryLanguageSpanish" xml:space="preserve"><value>西班牙语</value></data>
+  <data name="ZLibraryStatusUnsupportedFormat" xml:space="preserve"><value>仅 EPUB 可加入书架</value></data>
+  <data name="ZLibraryResultSummaryWithTotalLabel" xml:space="preserve"><value>第 {0} 页 · 共 {1} 项结果</value></data>
   <data name="NovelShelfManageButton.Label" xml:space="preserve"><value>管理书架</value></data>
   <data name="NovelShelfManageButton.AutomationProperties.Name" xml:space="preserve"><value>管理书架</value></data>
   <data name="NovelShelfManagementDialog.Title" xml:space="preserve"><value>管理书架</value></data>
@@ -1194,4 +1253,74 @@
   <data name="DictionaryTypeTermLabel" xml:space="preserve"><value>词条</value></data>
   <data name="DictionaryTypeFrequencyLabel" xml:space="preserve"><value>词频</value></data>
   <data name="DictionaryTypePitchLabel" xml:space="preserve"><value>音调</value></data>
+  <data name="NovelLibraryNyaaButton.Label" xml:space="preserve"><value>从 Nyaa 导入</value></data>
+  <data name="NovelLibraryNyaaButton.AutomationProperties.Name" xml:space="preserve"><value>导入 Nyaa 资源包</value></data>
+  <data name="VideoLibraryNyaaButton.Label" xml:space="preserve"><value>从 Nyaa 导入</value></data>
+  <data name="VideoLibraryNyaaButton.AutomationProperties.Name" xml:space="preserve"><value>从 Nyaa 导入视频</value></data>
+  <data name="NyaaDialog.Title" xml:space="preserve"><value>Nyaa 资源导入</value></data>
+  <data name="NyaaDialog.CloseButtonText" xml:space="preserve"><value>关闭</value></data>
+  <data name="NyaaLegalNotice.Title" xml:space="preserve"><value>请仅下载你有权获取的资源</value></data>
+  <data name="NyaaLegalNotice.Message" xml:space="preserve"><value>Niratan 通过 Nyaa RSS 搜索，使用内置 BitTorrent 引擎下载，并导入支持的 EPUB、有声书/SRT、视频与外挂字幕。</value></data>
+  <data name="NyaaSearchBox.PlaceholderText" xml:space="preserve"><value>标题、发布组或关键词</value></data>
+  <data name="NyaaSearchButton.Content" xml:space="preserve"><value>搜索</value></data>
+  <data name="NyaaDownloadButton.Content" xml:space="preserve"><value>下载并导入</value></data>
+  <data name="NyaaInitialSummary" xml:space="preserve"><value>搜索 Nyaa 资源包。</value></data>
+  <data name="NyaaCategoryAll" xml:space="preserve"><value>全部分类</value></data>
+  <data name="NyaaCategoryLiterature" xml:space="preserve"><value>文学</value></data>
+  <data name="NyaaCategoryAudio" xml:space="preserve"><value>音频</value></data>
+  <data name="NyaaCategoryAnime" xml:space="preserve"><value>动画</value></data>
+  <data name="NyaaCategoryLiveAction" xml:space="preserve"><value>真人影视</value></data>
+  <data name="NyaaNoResults" xml:space="preserve"><value>没有匹配的种子。</value></data>
+  <data name="NyaaResultSummary" xml:space="preserve"><value>找到 {0} 项；下载前请核对发布内容。</value></data>
+  <data name="NyaaStatusStarting" xml:space="preserve"><value>正在启动…</value></data>
+  <data name="NyaaStatusCancelled" xml:space="preserve"><value>已取消</value></data>
+  <data name="NyaaStatusDownloadFailed" xml:space="preserve"><value>下载失败</value></data>
+  <data name="NyaaStatusImporting" xml:space="preserve"><value>正在导入资源…</value></data>
+  <data name="NyaaStatusImportFailed" xml:space="preserve"><value>导入失败</value></data>
+  <data name="NyaaImportSuccessTitle" xml:space="preserve"><value>Nyaa 资源导入完成</value></data>
+  <data name="NyaaImportedEpubCount" xml:space="preserve"><value>{0} 本 EPUB</value></data>
+  <data name="NyaaMatchedNovelCount" xml:space="preserve"><value>{0} 套有声书/SRT 匹配</value></data>
+  <data name="NyaaImportedVideoCount" xml:space="preserve"><value>{0} 个视频</value></data>
+  <data name="NyaaNoResourcesImported" xml:space="preserve"><value>没有导入资源</value></data>
+  <data name="NyaaImportedSummary" xml:space="preserve"><value>已导入：{0}</value></data>
+  <data name="NyaaResultMetadata" xml:space="preserve"><value>{0} · ↑ {1} · ↓ {2} · 下载 {3} 次</value></data>
+  <data name="NyaaTrustedLabel" xml:space="preserve"><value>可信发布者</value></data>
+  <data name="NyaaRemakeLabel" xml:space="preserve"><value>重制</value></data>
+  <data name="NyaaUnknownSize" xml:space="preserve"><value>大小未知</value></data>
+  <data name="NyaaSearchTab.Header" xml:space="preserve"><value>搜索</value></data>
+  <data name="NyaaDownloadsTabHeader" xml:space="preserve"><value>下载管理（{0}）</value></data>
+  <data name="NyaaStatusQueued" xml:space="preserve"><value>已加入下载</value></data>
+  <data name="NyaaPauseButton.Content" xml:space="preserve"><value>暂停</value></data>
+  <data name="NyaaResumeButton.Content" xml:space="preserve"><value>继续</value></data>
+  <data name="NyaaCancelButton.Content" xml:space="preserve"><value>取消</value></data>
+  <data name="NyaaRetryButton.Content" xml:space="preserve"><value>重试</value></data>
+  <data name="NyaaOpenFolderButton.Content" xml:space="preserve"><value>打开目录</value></data>
+  <data name="NyaaRemoveTaskButton.Content" xml:space="preserve"><value>移除记录</value></data>
+  <data name="NyaaPeersRun.Text" xml:space="preserve"><value> 个节点</value></data>
+  <data name="NyaaNoDownloadsText.Text" xml:space="preserve"><value>没有符合筛选条件的下载任务。</value></data>
+  <data name="NyaaDownloadFilterComboBox.Header" xml:space="preserve"><value>筛选</value></data>
+  <data name="NyaaDownloadSortComboBox.Header" xml:space="preserve"><value>排序</value></data>
+  <data name="NyaaDownloadFilterAll" xml:space="preserve"><value>全部任务</value></data>
+  <data name="NyaaDownloadFilterActive" xml:space="preserve"><value>进行中</value></data>
+  <data name="NyaaDownloadFilterPaused" xml:space="preserve"><value>已暂停</value></data>
+  <data name="NyaaDownloadFilterCompleted" xml:space="preserve"><value>已完成</value></data>
+  <data name="NyaaDownloadFilterFailed" xml:space="preserve"><value>失败/已取消</value></data>
+  <data name="NyaaDownloadSortNewest" xml:space="preserve"><value>最新优先</value></data>
+  <data name="NyaaDownloadSortOldest" xml:space="preserve"><value>最早优先</value></data>
+  <data name="NyaaDownloadSortStatus" xml:space="preserve"><value>按状态</value></data>
+  <data name="NyaaDownloadSortProgress" xml:space="preserve"><value>按进度</value></data>
+  <data name="NyaaDownloadSortTitle" xml:space="preserve"><value>按标题</value></data>
+  <data name="NyaaResultFilterComboBox.AutomationProperties.Name" xml:space="preserve"><value>筛选搜索结果</value></data>
+  <data name="NyaaResultSortComboBox.AutomationProperties.Name" xml:space="preserve"><value>排序搜索结果</value></data>
+  <data name="NyaaResultFilterAll" xml:space="preserve"><value>全部结果</value></data>
+  <data name="NyaaResultFilterTrusted" xml:space="preserve"><value>仅可信发布者</value></data>
+  <data name="NyaaResultFilterOriginal" xml:space="preserve"><value>排除重制</value></data>
+  <data name="NyaaResultFilterSeeded" xml:space="preserve"><value>有做种者</value></data>
+  <data name="NyaaResultSortSeeders" xml:space="preserve"><value>做种数优先</value></data>
+  <data name="NyaaResultSortNewest" xml:space="preserve"><value>最新发布</value></data>
+  <data name="NyaaResultSortDownloads" xml:space="preserve"><value>下载数优先</value></data>
+  <data name="NyaaResultSortSmallest" xml:space="preserve"><value>体积最小</value></data>
+  <data name="NyaaResultSortLargest" xml:space="preserve"><value>体积最大</value></data>
+  <data name="NyaaResultSortTitle" xml:space="preserve"><value>按标题</value></data>
+  <data name="NyaaFilteredResultSummary" xml:space="preserve"><value>显示 {0}/{1} 项结果。</value></data>
 </root>

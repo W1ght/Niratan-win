@@ -210,9 +210,23 @@
   <data name="ReaderHideFuriganaCard.Description" xml:space="preserve"><value>Hide ruby text above kanji</value></data>
   <data name="ReaderLayoutSectionHeader.Text" xml:space="preserve"><value>Reader Layout</value></data>
   <data name="ReaderLayoutModeCard.Header" xml:space="preserve"><value>Mode</value></data>
-  <data name="ReaderLayoutModeCard.Description" xml:space="preserve"><value>Paginated or continuous scrolling</value></data>
+  <data name="ReaderLayoutModeCard.Description" xml:space="preserve"><value>Paginated, continuous, or visual novel presentation</value></data>
   <data name="ReaderLayoutPaginated.Content" xml:space="preserve"><value>Paginated</value></data>
   <data name="ReaderLayoutContinuous.Content" xml:space="preserve"><value>Continuous</value></data>
+  <data name="ReaderLayoutVisualNovel.Content" xml:space="preserve"><value>VN</value></data>
+  <data name="ReaderVisualNovelRevealSpeedCard.Header" xml:space="preserve"><value>Text Reveal Speed</value></data>
+  <data name="ReaderVisualNovelRevealSpeedCard.Description" xml:space="preserve"><value>Reveal the current screen character by character; zero is instant</value></data>
+  <data name="ReaderVisualNovelRevealSpeedInstant" xml:space="preserve"><value>Instant</value></data>
+  <data name="ReaderVisualNovelScreenModeCard.Header" xml:space="preserve"><value>Screen Content</value></data>
+  <data name="ReaderVisualNovelScreenModeCard.Description" xml:space="preserve"><value>Choose how chapter content is divided into screens</value></data>
+  <data name="ReaderVisualNovelScreenModeBlock.Content" xml:space="preserve"><value>By Paragraph</value></data>
+  <data name="ReaderVisualNovelScreenModeSentences.Content" xml:space="preserve"><value>By Sentence</value></data>
+  <data name="ReaderVisualNovelSentencesPerScreenCard.Header" xml:space="preserve"><value>Sentences per Screen</value></data>
+  <data name="ReaderVisualNovelSentencesPerScreenCard.Description" xml:space="preserve"><value>Maximum sentence group size before viewport fitting</value></data>
+  <data name="ReaderVisualNovelPreserveDialogueCard.Header" xml:space="preserve"><value>Keep Dialogue Together</value></data>
+  <data name="ReaderVisualNovelPreserveDialogueCard.Description" xml:space="preserve"><value>Keep Japanese bracketed dialogue together on one screen when possible</value></data>
+  <data name="ReaderVisualNovelClickAdvanceCard.Header" xml:space="preserve"><value>Click Blank Space to Advance</value></data>
+  <data name="ReaderVisualNovelClickAdvanceCard.Description" xml:space="preserve"><value>Click blank reader space to reveal or advance</value></data>
   <data name="ReaderTwoColumnHorizontalPagesCard.Header" xml:space="preserve"><value>Two-Column Horizontal Pages</value></data>
   <data name="ReaderTwoColumnHorizontalPagesCard.Description" xml:space="preserve"><value>Show two text columns in each horizontal paginated spread</value></data>
   <data name="ReaderMouseWheelPageTurnCard.Header" xml:space="preserve"><value>Mouse Wheel Page Turn</value></data>
@@ -946,6 +960,51 @@
   <data name="NovelLibraryRefreshGoogleDriveButton.AutomationProperties.Name" xml:space="preserve"><value>Sync Google Drive</value></data>
   <data name="ImportNovelButton.Label" xml:space="preserve"><value>Import</value></data>
   <data name="ImportNovelButton.AutomationProperties.Name" xml:space="preserve"><value>Import novels</value></data>
+  <data name="NovelLibraryZLibraryButton.Label" xml:space="preserve"><value>Z-Library</value></data>
+  <data name="NovelLibraryZLibraryButton.AutomationProperties.Name" xml:space="preserve"><value>Search Z-Library</value></data>
+  <data name="ZLibraryDialog.Title" xml:space="preserve"><value>Z-Library</value></data>
+  <data name="ZLibraryDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
+  <data name="ZLibraryAccountExpander.Header" xml:space="preserve"><value>Account and server</value></data>
+  <data name="ZLibraryCredentialHint.Text" xml:space="preserve"><value>Use the HTTPS server address shown on your Z-Access page. Credentials are stored in Windows Credential Manager.</value></data>
+  <data name="ZLibraryBaseUrlBox.Header" xml:space="preserve"><value>Server address</value></data>
+  <data name="ZLibraryBaseUrlBox.PlaceholderText" xml:space="preserve"><value>HTTPS address from Z-Access</value></data>
+  <data name="ZLibraryEmailBox.Header" xml:space="preserve"><value>Email</value></data>
+  <data name="ZLibraryPasswordBox.Header" xml:space="preserve"><value>Password</value></data>
+  <data name="ZLibraryConnectButton.Content" xml:space="preserve"><value>Connect and save</value></data>
+  <data name="ZLibraryDisconnectButton.Content" xml:space="preserve"><value>Forget account</value></data>
+  <data name="ZLibrarySearchBox.PlaceholderText" xml:space="preserve"><value>Search title, author, ISBN, or keyword</value></data>
+  <data name="ZLibrarySearchButton.Content" xml:space="preserve"><value>Search</value></data>
+  <data name="ZLibraryPreviousButton.Content" xml:space="preserve"><value>Previous</value></data>
+  <data name="ZLibraryNextButton.Content" xml:space="preserve"><value>Next</value></data>
+  <data name="ZLibraryDownloadButton.Content" xml:space="preserve"><value>Add to shelf</value></data>
+  <data name="ZLibraryStatusNotConnected" xml:space="preserve"><value>Not connected</value></data>
+  <data name="ZLibraryStatusConnecting" xml:space="preserve"><value>Connecting…</value></data>
+  <data name="ZLibraryStatusConnectedAs" xml:space="preserve"><value>Connected as {0}</value></data>
+  <data name="ZLibraryStatusDownloading" xml:space="preserve"><value>Downloading…</value></data>
+  <data name="ZLibraryStatusImportFailed" xml:space="preserve"><value>Import failed</value></data>
+  <data name="ZLibraryStatusAddedToShelf" xml:space="preserve"><value>Added to shelf</value></data>
+  <data name="ZLibraryResultSummaryWithTotal" xml:space="preserve"><value>Page {0} · {1:N0} matches</value></data>
+  <data name="ZLibraryResultSummaryPage" xml:space="preserve"><value>Page {0}</value></data>
+  <data name="ZLibraryImportSuccessTitle" xml:space="preserve"><value>Z-Library import complete</value></data>
+  <data name="ZLibraryImportSuccessMessage" xml:space="preserve"><value>“{0}” was added to the novel shelf.</value></data>
+  <data name="ZLibraryExactMatchingCheckBox.Content" xml:space="preserve"><value>Exact matching</value></data>
+  <data name="ZLibraryYearFromComboBox.Header" xml:space="preserve"><value>Year from</value></data>
+  <data name="ZLibraryYearToComboBox.Header" xml:space="preserve"><value>Year to</value></data>
+  <data name="ZLibraryLanguageComboBox.Header" xml:space="preserve"><value>Language</value></data>
+  <data name="ZLibraryExtensionComboBox.Header" xml:space="preserve"><value>Format</value></data>
+  <data name="ZLibraryFilterAnyYear" xml:space="preserve"><value>Any year</value></data>
+  <data name="ZLibraryFilterAllLanguages" xml:space="preserve"><value>All languages</value></data>
+  <data name="ZLibraryFilterAllFormats" xml:space="preserve"><value>All formats</value></data>
+  <data name="ZLibraryLanguageJapanese" xml:space="preserve"><value>Japanese</value></data>
+  <data name="ZLibraryLanguageChinese" xml:space="preserve"><value>Chinese</value></data>
+  <data name="ZLibraryLanguageEnglish" xml:space="preserve"><value>English</value></data>
+  <data name="ZLibraryLanguageKorean" xml:space="preserve"><value>Korean</value></data>
+  <data name="ZLibraryLanguageRussian" xml:space="preserve"><value>Russian</value></data>
+  <data name="ZLibraryLanguageGerman" xml:space="preserve"><value>German</value></data>
+  <data name="ZLibraryLanguageFrench" xml:space="preserve"><value>French</value></data>
+  <data name="ZLibraryLanguageSpanish" xml:space="preserve"><value>Spanish</value></data>
+  <data name="ZLibraryStatusUnsupportedFormat" xml:space="preserve"><value>Only EPUB can be added to the shelf</value></data>
+  <data name="ZLibraryResultSummaryWithTotalLabel" xml:space="preserve"><value>Page {0} · {1} matches</value></data>
   <data name="NovelShelfManageButton.Label" xml:space="preserve"><value>Manage shelves</value></data>
   <data name="NovelShelfManageButton.AutomationProperties.Name" xml:space="preserve"><value>Manage shelves</value></data>
   <data name="NovelShelfManagementDialog.Title" xml:space="preserve"><value>Manage shelves</value></data>
@@ -1194,4 +1253,74 @@
   <data name="DictionaryTypeTermLabel" xml:space="preserve"><value>Term</value></data>
   <data name="DictionaryTypeFrequencyLabel" xml:space="preserve"><value>Frequency</value></data>
   <data name="DictionaryTypePitchLabel" xml:space="preserve"><value>Pitch</value></data>
+  <data name="NovelLibraryNyaaButton.Label" xml:space="preserve"><value>Import from Nyaa</value></data>
+  <data name="NovelLibraryNyaaButton.AutomationProperties.Name" xml:space="preserve"><value>Import a Nyaa resource pack</value></data>
+  <data name="VideoLibraryNyaaButton.Label" xml:space="preserve"><value>Import from Nyaa</value></data>
+  <data name="VideoLibraryNyaaButton.AutomationProperties.Name" xml:space="preserve"><value>Import videos from Nyaa</value></data>
+  <data name="NyaaDialog.Title" xml:space="preserve"><value>Nyaa resource import</value></data>
+  <data name="NyaaDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
+  <data name="NyaaLegalNotice.Title" xml:space="preserve"><value>Use only resources you are authorized to download</value></data>
+  <data name="NyaaLegalNotice.Message" xml:space="preserve"><value>Niratan searches Nyaa's RSS feed, downloads through its built-in BitTorrent engine, then imports supported EPUB, audiobook/SRT, video, and sidecar subtitle files.</value></data>
+  <data name="NyaaSearchBox.PlaceholderText" xml:space="preserve"><value>Title, release group, or keyword</value></data>
+  <data name="NyaaSearchButton.Content" xml:space="preserve"><value>Search</value></data>
+  <data name="NyaaDownloadButton.Content" xml:space="preserve"><value>Download and import</value></data>
+  <data name="NyaaInitialSummary" xml:space="preserve"><value>Search Nyaa for a resource pack.</value></data>
+  <data name="NyaaCategoryAll" xml:space="preserve"><value>All categories</value></data>
+  <data name="NyaaCategoryLiterature" xml:space="preserve"><value>Literature</value></data>
+  <data name="NyaaCategoryAudio" xml:space="preserve"><value>Audio</value></data>
+  <data name="NyaaCategoryAnime" xml:space="preserve"><value>Anime</value></data>
+  <data name="NyaaCategoryLiveAction" xml:space="preserve"><value>Live action</value></data>
+  <data name="NyaaNoResults" xml:space="preserve"><value>No matching torrents.</value></data>
+  <data name="NyaaResultSummary" xml:space="preserve"><value>{0} results. Verify the release contents before downloading.</value></data>
+  <data name="NyaaStatusStarting" xml:space="preserve"><value>Starting…</value></data>
+  <data name="NyaaStatusCancelled" xml:space="preserve"><value>Cancelled</value></data>
+  <data name="NyaaStatusDownloadFailed" xml:space="preserve"><value>Download failed</value></data>
+  <data name="NyaaStatusImporting" xml:space="preserve"><value>Importing resources…</value></data>
+  <data name="NyaaStatusImportFailed" xml:space="preserve"><value>Import failed</value></data>
+  <data name="NyaaImportSuccessTitle" xml:space="preserve"><value>Nyaa resource import completed</value></data>
+  <data name="NyaaImportedEpubCount" xml:space="preserve"><value>{0} EPUB</value></data>
+  <data name="NyaaMatchedNovelCount" xml:space="preserve"><value>{0} audiobook/SRT match</value></data>
+  <data name="NyaaImportedVideoCount" xml:space="preserve"><value>{0} video</value></data>
+  <data name="NyaaNoResourcesImported" xml:space="preserve"><value>No resources imported</value></data>
+  <data name="NyaaImportedSummary" xml:space="preserve"><value>Imported {0}</value></data>
+  <data name="NyaaResultMetadata" xml:space="preserve"><value>{0} · ↑ {1} · ↓ {2} · {3} downloads</value></data>
+  <data name="NyaaTrustedLabel" xml:space="preserve"><value>Trusted</value></data>
+  <data name="NyaaRemakeLabel" xml:space="preserve"><value>Remake</value></data>
+  <data name="NyaaUnknownSize" xml:space="preserve"><value>Unknown size</value></data>
+  <data name="NyaaSearchTab.Header" xml:space="preserve"><value>Search</value></data>
+  <data name="NyaaDownloadsTabHeader" xml:space="preserve"><value>Downloads ({0})</value></data>
+  <data name="NyaaStatusQueued" xml:space="preserve"><value>Added to downloads</value></data>
+  <data name="NyaaPauseButton.Content" xml:space="preserve"><value>Pause</value></data>
+  <data name="NyaaResumeButton.Content" xml:space="preserve"><value>Resume</value></data>
+  <data name="NyaaCancelButton.Content" xml:space="preserve"><value>Cancel</value></data>
+  <data name="NyaaRetryButton.Content" xml:space="preserve"><value>Retry</value></data>
+  <data name="NyaaOpenFolderButton.Content" xml:space="preserve"><value>Open folder</value></data>
+  <data name="NyaaRemoveTaskButton.Content" xml:space="preserve"><value>Remove</value></data>
+  <data name="NyaaPeersRun.Text" xml:space="preserve"><value> peers</value></data>
+  <data name="NyaaNoDownloadsText.Text" xml:space="preserve"><value>No matching download tasks.</value></data>
+  <data name="NyaaDownloadFilterComboBox.Header" xml:space="preserve"><value>Filter</value></data>
+  <data name="NyaaDownloadSortComboBox.Header" xml:space="preserve"><value>Sort</value></data>
+  <data name="NyaaDownloadFilterAll" xml:space="preserve"><value>All tasks</value></data>
+  <data name="NyaaDownloadFilterActive" xml:space="preserve"><value>Active</value></data>
+  <data name="NyaaDownloadFilterPaused" xml:space="preserve"><value>Paused</value></data>
+  <data name="NyaaDownloadFilterCompleted" xml:space="preserve"><value>Completed</value></data>
+  <data name="NyaaDownloadFilterFailed" xml:space="preserve"><value>Failed / cancelled</value></data>
+  <data name="NyaaDownloadSortNewest" xml:space="preserve"><value>Newest first</value></data>
+  <data name="NyaaDownloadSortOldest" xml:space="preserve"><value>Oldest first</value></data>
+  <data name="NyaaDownloadSortStatus" xml:space="preserve"><value>Status</value></data>
+  <data name="NyaaDownloadSortProgress" xml:space="preserve"><value>Progress</value></data>
+  <data name="NyaaDownloadSortTitle" xml:space="preserve"><value>Title</value></data>
+  <data name="NyaaResultFilterComboBox.AutomationProperties.Name" xml:space="preserve"><value>Filter search results</value></data>
+  <data name="NyaaResultSortComboBox.AutomationProperties.Name" xml:space="preserve"><value>Sort search results</value></data>
+  <data name="NyaaResultFilterAll" xml:space="preserve"><value>All results</value></data>
+  <data name="NyaaResultFilterTrusted" xml:space="preserve"><value>Trusted only</value></data>
+  <data name="NyaaResultFilterOriginal" xml:space="preserve"><value>Exclude remakes</value></data>
+  <data name="NyaaResultFilterSeeded" xml:space="preserve"><value>Has seeders</value></data>
+  <data name="NyaaResultSortSeeders" xml:space="preserve"><value>Most seeders</value></data>
+  <data name="NyaaResultSortNewest" xml:space="preserve"><value>Newest</value></data>
+  <data name="NyaaResultSortDownloads" xml:space="preserve"><value>Most downloads</value></data>
+  <data name="NyaaResultSortSmallest" xml:space="preserve"><value>Smallest</value></data>
+  <data name="NyaaResultSortLargest" xml:space="preserve"><value>Largest</value></data>
+  <data name="NyaaResultSortTitle" xml:space="preserve"><value>Title</value></data>
+  <data name="NyaaFilteredResultSummary" xml:space="preserve"><value>Showing {0} of {1} results.</value></data>
 </root>

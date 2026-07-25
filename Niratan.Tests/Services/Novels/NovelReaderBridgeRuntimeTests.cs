@@ -129,6 +129,46 @@ public sealed class NovelReaderBridgeRuntimeTests
         process.ExitCode.Should().Be(0, $"Node stdout:\n{output}\nNode stderr:\n{error}");
     }
 
+    [Fact]
+    public async Task VisualNovelRuntime_RevealsBeforeAdvancingAndClampsSpeed()
+    {
+        var projectRoot = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "..", "..", "..", "..", ".."));
+        var runtimeTest = Path.Combine(
+            projectRoot,
+            "Niratan.Tests", "Web", "NovelReader", "reader-visual-novel.runtime.test.js");
+        var visualNovel = Path.Combine(
+            projectRoot,
+            "Niratan", "Web", "NovelReader", "reader-visual-novel.js");
+        var node = FindNodeExecutable();
+
+        node.Should().NotBeNull(
+            "the VN runtime regression requires Node.js; set NIRATAN_NODE_PATH when node is not on PATH");
+
+        var startInfo = new ProcessStartInfo(node!)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        startInfo.ArgumentList.Add(runtimeTest);
+        startInfo.ArgumentList.Add(visualNovel);
+
+        using var process = Process.Start(startInfo);
+        process.Should().NotBeNull();
+        var standardOutput = process!.StandardOutput.ReadToEndAsync(
+            TestContext.Current.CancellationToken);
+        var standardError = process.StandardError.ReadToEndAsync(
+            TestContext.Current.CancellationToken);
+        await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+
+        process.ExitCode.Should().Be(
+            0,
+            $"Node stdout:\n{await standardOutput}\nNode stderr:\n{await standardError}");
+    }
+
     private static string? FindNodeExecutable()
     {
         var candidates = new[]

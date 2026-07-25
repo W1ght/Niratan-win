@@ -76,7 +76,45 @@ public partial class SettingsPageViewModel : ObservableObject
 
     // --- Reader settings: Layout ---
     [ObservableProperty]
+    public partial bool PaginatedMode { get; set; }
+
+    [ObservableProperty]
     public partial bool ContinuousMode { get; set; }
+
+    [ObservableProperty]
+    public partial bool VisualNovelMode { get; set; }
+
+    [ObservableProperty]
+    public partial int VisualNovelRevealSpeed { get; set; }
+
+    public string VisualNovelRevealSpeedText =>
+        VisualNovelRevealSpeed == 0
+            ? ResourceStringHelper.GetString("ReaderVisualNovelRevealSpeedInstant", "Instant")
+            : VisualNovelRevealSpeed.ToString(CultureInfo.CurrentCulture);
+
+    [ObservableProperty]
+    public partial VisualNovelScreenMode SelectedVisualNovelScreenMode { get; set; }
+
+    public bool IsVisualNovelBlockScreenMode
+    {
+        get => SelectedVisualNovelScreenMode == VisualNovelScreenMode.Block;
+        set { if (value) SelectedVisualNovelScreenMode = VisualNovelScreenMode.Block; }
+    }
+
+    public bool IsVisualNovelSentenceScreenMode
+    {
+        get => SelectedVisualNovelScreenMode == VisualNovelScreenMode.Sentences;
+        set { if (value) SelectedVisualNovelScreenMode = VisualNovelScreenMode.Sentences; }
+    }
+
+    [ObservableProperty]
+    public partial int VisualNovelSentencesPerScreen { get; set; }
+
+    [ObservableProperty]
+    public partial bool VisualNovelPreserveDialogue { get; set; }
+
+    [ObservableProperty]
+    public partial bool VisualNovelClickAdvance { get; set; }
 
     [ObservableProperty]
     public partial bool TwoColumnHorizontalPages { get; set; }
@@ -115,7 +153,10 @@ public partial class SettingsPageViewModel : ObservableObject
     public partial double ParagraphSpacing { get; set; }
 
     public bool IsSwipeDistanceVisible => ContinuousMode;
-    public bool IsTwoColumnHorizontalPagesVisible => !ContinuousMode && !VerticalWriting;
+    public bool IsVisualNovelSettingsVisible => VisualNovelMode;
+    public bool IsVisualNovelSentenceSettingsVisible =>
+        VisualNovelMode && SelectedVisualNovelScreenMode == VisualNovelScreenMode.Sentences;
+    public bool IsTwoColumnHorizontalPagesVisible => PaginatedMode && !VerticalWriting;
     public bool IsLineHeightVisible => LayoutAdvanced;
     public bool IsCharacterSpacingVisible => LayoutAdvanced;
     public bool IsParagraphSpacingVisible => LayoutAdvanced;
@@ -253,7 +294,14 @@ public partial class SettingsPageViewModel : ObservableObject
         FontSize = s.FontSize;
         HideFurigana = s.HideFurigana;
 
-        ContinuousMode = s.ContinuousMode;
+        VisualNovelMode = s.VisualNovelMode;
+        ContinuousMode = s.ContinuousMode && !s.VisualNovelMode;
+        PaginatedMode = !ContinuousMode && !VisualNovelMode;
+        VisualNovelRevealSpeed = s.NormalizedVisualNovelRevealSpeed;
+        SelectedVisualNovelScreenMode = s.VisualNovelScreenMode;
+        VisualNovelSentencesPerScreen = s.NormalizedVisualNovelSentencesPerScreen;
+        VisualNovelPreserveDialogue = s.VisualNovelPreserveDialogue;
+        VisualNovelClickAdvance = s.VisualNovelClickAdvance;
         TwoColumnHorizontalPages = s.TwoColumnHorizontalPages;
         MouseWheelPageTurn = s.MouseWheelPageTurn;
         ChapterSwipeDistance = s.ChapterSwipeDistance;
@@ -339,12 +387,62 @@ public partial class SettingsPageViewModel : ObservableObject
     partial void OnFontSizeChanged(int value) => ApplyReaderSetting(s => s.FontSize, value);
     partial void OnHideFuriganaChanged(bool value) => ApplyReaderSetting(s => s.HideFurigana, value);
 
+    partial void OnPaginatedModeChanged(bool value)
+    {
+        if (!value || _isInitializing) return;
+        SelectReaderMode(continuous: false, visualNovel: false);
+    }
+
     partial void OnContinuousModeChanged(bool value)
     {
-        ApplyReaderSetting(s => s.ContinuousMode, value);
+        if (!value || _isInitializing) return;
+        SelectReaderMode(continuous: true, visualNovel: false);
+    }
+
+    partial void OnVisualNovelModeChanged(bool value)
+    {
+        if (!value || _isInitializing) return;
+        SelectReaderMode(continuous: false, visualNovel: true);
+    }
+
+    private void SelectReaderMode(bool continuous, bool visualNovel)
+    {
+        _isInitializing = true;
+        PaginatedMode = !continuous && !visualNovel;
+        ContinuousMode = continuous;
+        VisualNovelMode = visualNovel;
+        _isInitializing = false;
+
+        ApplyReaderSetting(s => s.ContinuousMode, continuous);
+        ApplyReaderSetting(s => s.VisualNovelMode, visualNovel);
         OnPropertyChanged(nameof(IsSwipeDistanceVisible));
+        OnPropertyChanged(nameof(IsVisualNovelSettingsVisible));
+        OnPropertyChanged(nameof(IsVisualNovelSentenceSettingsVisible));
         OnPropertyChanged(nameof(IsTwoColumnHorizontalPagesVisible));
     }
+
+    partial void OnVisualNovelRevealSpeedChanged(int value)
+    {
+        OnPropertyChanged(nameof(VisualNovelRevealSpeedText));
+        ApplyReaderSetting(s => s.VisualNovelRevealSpeed, Math.Clamp(value, 0, 120));
+    }
+
+    partial void OnSelectedVisualNovelScreenModeChanged(VisualNovelScreenMode value)
+    {
+        ApplyReaderSetting(s => s.VisualNovelScreenMode, value);
+        OnPropertyChanged(nameof(IsVisualNovelBlockScreenMode));
+        OnPropertyChanged(nameof(IsVisualNovelSentenceScreenMode));
+        OnPropertyChanged(nameof(IsVisualNovelSentenceSettingsVisible));
+    }
+
+    partial void OnVisualNovelSentencesPerScreenChanged(int value) =>
+        ApplyReaderSetting(s => s.VisualNovelSentencesPerScreen, Math.Clamp(value, 1, 12));
+
+    partial void OnVisualNovelPreserveDialogueChanged(bool value) =>
+        ApplyReaderSetting(s => s.VisualNovelPreserveDialogue, value);
+
+    partial void OnVisualNovelClickAdvanceChanged(bool value) =>
+        ApplyReaderSetting(s => s.VisualNovelClickAdvance, value);
 
     partial void OnTwoColumnHorizontalPagesChanged(bool value) =>
         ApplyReaderSetting(s => s.TwoColumnHorizontalPages, value);

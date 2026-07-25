@@ -51,7 +51,10 @@ internal class VideoDataService : IVideoDataService
                    SubtitleSelectionKind, SubtitleSelectionPath,
                    SubtitleSelectionTrackId, SubtitleSelectionTrackName,
                    ProfileId, ProviderId, RemoteId, OriginalUrl, CanonicalUrl,
-                   RemoteThumbnailUrl, RemoteSubtitleLanguage
+                   RemoteThumbnailUrl, RemoteSubtitleLanguage, SubtitleDelayMilliseconds,
+                   PlaybackSpeed, AudioDelaySeconds, AudioSelectionKind,
+                   AudioSelectionTrackId, AudioSelectionFfIndex, AudioSelectionTitle,
+                   AudioSelectionLanguage, AudioSelectionCodec
             FROM VideoItems
             WHERE @QueryText IS NULL
                 OR TRIM(@QueryText) = ''
@@ -85,7 +88,10 @@ internal class VideoDataService : IVideoDataService
                    SubtitleSelectionKind, SubtitleSelectionPath,
                    SubtitleSelectionTrackId, SubtitleSelectionTrackName,
                    ProfileId, ProviderId, RemoteId, OriginalUrl, CanonicalUrl,
-                   RemoteThumbnailUrl, RemoteSubtitleLanguage
+                   RemoteThumbnailUrl, RemoteSubtitleLanguage, SubtitleDelayMilliseconds,
+                   PlaybackSpeed, AudioDelaySeconds, AudioSelectionKind,
+                   AudioSelectionTrackId, AudioSelectionFfIndex, AudioSelectionTitle,
+                   AudioSelectionLanguage, AudioSelectionCodec
             FROM VideoItems
             WHERE Id = @VideoId;
             """;
@@ -107,7 +113,10 @@ internal class VideoDataService : IVideoDataService
                  SubtitleSelectionKind, SubtitleSelectionPath,
                  SubtitleSelectionTrackId, SubtitleSelectionTrackName,
                  ProfileId, ProviderId, RemoteId, OriginalUrl, CanonicalUrl,
-                 RemoteThumbnailUrl, RemoteSubtitleLanguage)
+                 RemoteThumbnailUrl, RemoteSubtitleLanguage, SubtitleDelayMilliseconds,
+                 PlaybackSpeed, AudioDelaySeconds, AudioSelectionKind,
+                 AudioSelectionTrackId, AudioSelectionFfIndex, AudioSelectionTitle,
+                 AudioSelectionLanguage, AudioSelectionCodec)
             VALUES
                 (@Id, @Title, @FilePath, @SubtitlePath, @ImportedAt, @LastOpenedAt,
                  @LastPositionSeconds, @DurationSeconds, @ManualSortOrder,
@@ -116,7 +125,10 @@ internal class VideoDataService : IVideoDataService
                  @SubtitleSelectionKind, @SubtitleSelectionPath,
                  @SubtitleSelectionTrackId, @SubtitleSelectionTrackName,
                  @ProfileId, @ProviderId, @RemoteId, @OriginalUrl, @CanonicalUrl,
-                 @RemoteThumbnailUrl, @RemoteSubtitleLanguage)
+                 @RemoteThumbnailUrl, @RemoteSubtitleLanguage, @SubtitleDelayMilliseconds,
+                 @PlaybackSpeed, @AudioDelaySeconds, @AudioSelectionKind,
+                 @AudioSelectionTrackId, @AudioSelectionFfIndex, @AudioSelectionTitle,
+                 @AudioSelectionLanguage, @AudioSelectionCodec)
             ON CONFLICT(FilePath) DO UPDATE SET
                 Title = CASE
                     WHEN excluded.SourceId IS NOT NULL AND VideoItems.SourceId IS NOT NULL
@@ -532,7 +544,16 @@ internal class VideoDataService : IVideoDataService
                     SubtitleSelectionPath = @SubtitleSelectionPath,
                     SubtitleSelectionTrackId = @SubtitleSelectionTrackId,
                     SubtitleSelectionTrackName = @SubtitleSelectionTrackName,
-                    RemoteSubtitleLanguage = @RemoteSubtitleLanguage
+                    RemoteSubtitleLanguage = @RemoteSubtitleLanguage,
+                    SubtitleDelayMilliseconds = @SubtitleDelayMilliseconds,
+                    PlaybackSpeed = @PlaybackSpeed,
+                    AudioDelaySeconds = @AudioDelaySeconds,
+                    AudioSelectionKind = @AudioSelectionKind,
+                    AudioSelectionTrackId = @AudioSelectionTrackId,
+                    AudioSelectionFfIndex = @AudioSelectionFfIndex,
+                    AudioSelectionTitle = @AudioSelectionTitle,
+                    AudioSelectionLanguage = @AudioSelectionLanguage,
+                    AudioSelectionCodec = @AudioSelectionCodec
                 WHERE Id = @VideoId;
                 """,
                 new
@@ -546,6 +567,15 @@ internal class VideoDataService : IVideoDataService
                     SubtitleSelectionTrackId = state.SubtitleSelection.TrackId,
                     SubtitleSelectionTrackName = state.SubtitleSelection.TrackName,
                     RemoteSubtitleLanguage = state.SubtitleSelection.RemoteLanguageCode,
+                    state.SubtitleDelayMilliseconds,
+                    state.PlaybackSpeed,
+                    state.AudioDelaySeconds,
+                    AudioSelectionKind = (int)(state.AudioSelection?.Kind ?? VideoAudioSelectionKind.None),
+                    AudioSelectionTrackId = state.AudioSelection?.TrackId,
+                    AudioSelectionFfIndex = state.AudioSelection?.FfIndex,
+                    AudioSelectionTitle = state.AudioSelection?.Title,
+                    AudioSelectionLanguage = state.AudioSelection?.Language,
+                    AudioSelectionCodec = state.AudioSelection?.Codec,
                 },
                 cancellationToken: ct
             )

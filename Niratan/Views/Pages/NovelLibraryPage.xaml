@@ -215,6 +215,25 @@
                         <FontIcon Glyph="&#xE762;" />
                     </AppBarButton.Icon>
                 </AppBarButton>
+                <AppBarButton x:Name="NovelLibraryZLibraryButton"
+                              x:Uid="NovelLibraryZLibraryButton"
+                              AutomationProperties.AutomationId="NovelLibraryZLibraryButton"
+                              Click="ZLibraryButton_Click"
+                              Visibility="{x:Bind ViewModel.ShowBookshelfCommands, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                    <AppBarButton.Icon>
+                        <FontIcon Glyph="&#xE82D;" />
+                    </AppBarButton.Icon>
+                </AppBarButton>
+                <AppBarButton x:Name="NovelLibraryNyaaButton"
+                              x:Uid="NovelLibraryNyaaButton"
+                              AutomationProperties.AutomationId="NovelLibraryNyaaButton"
+                              Label="Import from Nyaa"
+                              Click="NyaaButton_Click"
+                              Visibility="{x:Bind ViewModel.ShowBookshelfCommands, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                    <AppBarButton.Icon>
+                        <FontIcon Glyph="&#xE774;" />
+                    </AppBarButton.Icon>
+                </AppBarButton>
                 <AppBarButton x:Name="ImportNovelButton"
                               x:Uid="ImportNovelButton"
                               AutomationProperties.AutomationId="ImportNovelButton"

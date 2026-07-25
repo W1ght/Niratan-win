@@ -35,6 +35,15 @@ public class VideoItem
     public string? CanonicalUrl { get; set; }
     public string? RemoteThumbnailUrl { get; set; }
     public string? RemoteSubtitleLanguage { get; set; }
+    public int SubtitleDelayMilliseconds { get; set; }
+    public double PlaybackSpeed { get; set; } = 1;
+    public double AudioDelaySeconds { get; set; }
+    public VideoAudioSelectionKind AudioSelectionKind { get; set; }
+    public int? AudioSelectionTrackId { get; set; }
+    public int? AudioSelectionFfIndex { get; set; }
+    public string? AudioSelectionTitle { get; set; }
+    public string? AudioSelectionLanguage { get; set; }
+    public string? AudioSelectionCodec { get; set; }
 
     public bool IsRemote => !string.IsNullOrWhiteSpace(ProviderId);
 
@@ -76,4 +85,19 @@ public class VideoItem
         SubtitleSelectionTrackName = selection.TrackName;
         RemoteSubtitleLanguage = selection.RemoteLanguageCode;
     }
+
+    public VideoAudioSelection GetAudioSelection() =>
+        AudioSelectionKind switch
+        {
+            VideoAudioSelectionKind.EmbeddedTrack =>
+                new VideoAudioSelection(
+                    AudioSelectionKind,
+                    AudioSelectionTrackId,
+                    AudioSelectionFfIndex,
+                    AudioSelectionTitle,
+                    AudioSelectionLanguage,
+                    AudioSelectionCodec),
+            VideoAudioSelectionKind.Off => VideoAudioSelection.Off(),
+            _ => VideoAudioSelection.None(),
+        };
 }

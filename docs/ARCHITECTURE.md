@@ -107,8 +107,8 @@ Niratan.Tests/
 EpubParserService 解析 EPUB
   → WebResourceRequested 拦截章节 HTML 请求
     → NovelReaderContentStyles.GenerateCss() 注入分页 CSS
-    → reader-bridge.js 注入分页/进度/翻页 JS
-      → window.niratanReader 接管渲染
+    → reader-bridge.js 注入私有分页/进度/翻页 bridge
+      → 普通分页 / 连续阅读 / VN 屏幕分页共享同一章节事务
 ```
 
 ### 3.2 IPC 消息
@@ -120,6 +120,7 @@ C# → JS:
 | `setChapter` | 章节信息、目标进度和可选 navigation generation |
 | `restoreProgress` | 恢复阅读进度 (0-1)，可携带 navigation generation |
 | `jumpToFragment` | 跳到当前章节锚点并回传最终分页进度 |
+| `setVisualNovelRevealSpeed` | VN 模式中实时更新逐字显示速度 |
 
 JS → C#:
 
@@ -162,6 +163,14 @@ ruby { ruby-position: over; }
 - 翻页 scroll offset 按 `context.pageSize` 对齐，`column-gap` 只作间距，不得加进翻页步长。
 - 安全区：`column-width = pageWidth - 2 * safeInline`，`column-gap = 2 * safeInline`。
 - reflow 后优先按逻辑进度恢复位置。
+
+#### 3.4.1 VN 屏幕分页
+
+- VN 是用户明确要求的扩展模式；固定的 Niratan 参考版本没有该功能。交互参考 Hoshi Reader Android，但 Niratan 仍是分页、章节事务、查词和统计语义的事实源。
+- VN 不建立第二套 EPUB 引擎：章节仍由 native 按 spine 加载，WebView2 将已清洗的当前章节正文划分为居中的段落屏或句子屏。
+- 向前翻页在逐字显示未完成时只补全当前屏；再次向前才移动。向后翻页直接显示上一屏完整内容。章节边界仍由 native 决定。
+- 章节级原始/可匹配字符偏移必须跨 VN 屏保持稳定，以便书签、进度、标注、查词和 Sasayaki 继续复用现有模型。
+- 窗口 resize、字体和排版变化后按逻辑进度重新分屏；不能把 EPUB 内容或宽泛的 native API 暴露给脚本。
 
 ### 3.5 Windows Reader chrome
 
@@ -400,6 +409,18 @@ metadata.json + bookinfo.json + statistics.json + shelves.json
 
 ---
 
+### 6.6 Z-Library 获取与导入（Windows 扩展）
+
+Z-Library 获取不是 Niratan 的用户可见行为，而是 Windows 端显式记录的平台扩展。入口位于小说书架 CommandBar，并通过独立 `ZLibraryDialogViewModel → IZLibraryService → IZLibraryClient` 链路工作；Reader、WebView2 与 JavaScript 不参与认证、搜索或下载。
+
+- 用户必须输入 Z-Access 提供的当前 HTTPS server address；应用不内置或自动发现镜像域名，避免过期域名接收账号凭据。
+- email、password 与 server address 只保存在 Windows Credential Manager 的 `Niratan.ZLibrary.Credentials` generic credential 中，不写入 settings JSON、sidecar 或日志。
+- 客户端使用非公开 `/eapi` 协议登录，并只通过 `POST /eapi/book/search` 搜索书籍；不调用需要浏览器验证的 `/s` 或 `/fulltext` HTML 页面。
+- 搜索支持精确匹配、年份、语言和格式，结果计数与分页读取 EAPI 的 `exactBooksCount` 和 `pagination`。
+- 格式默认 EPUB；其他格式可用于查看筛选结果，但只有 EPUB 提供“加入书架”。下载限制为 512 MB，拒绝 HTTP URL、HTML challenge/配额页面、非 ZIP 文件、缺少 `META-INF/container.xml` 或正确 `mimetype` 的归档。
+- API redirect 只在 HTTPS 下跟随；credential-bearing POST 不允许跨 origin redirect，下载跨 origin redirect 会移除 session Cookie 和 Referer。
+- 下载先落到系统临时目录，验证后调用 `INovelLibraryService.ImportEpubAsync`；现有私有书籍目录、zip-slip 防护、metadata 与 sidecar 写入仍是唯一导入真源。无论成功或失败都清理临时文件。
+
 ## 7. 性能规则
 
 ### 7.1 阅读器
@@ -488,7 +509,20 @@ JavaScript：
 - 不使用 YouTube IFrame/Data API 作为播放链路，因为它们不能同时满足主动画质选择、libmpv 分离流播放、字幕查词与音频制卡；禁止引入 yt-dlp、youtube-dl、Deno、Node、converter/helper 下载或子进程。
 - `IRemoteVideoResolver` 是唯一接触 YoutubeExplode 类型的适配边界。其他层只使用 `RemoteVideoIdentity`、`ResolvedRemoteVideoSource`、`VideoPlaybackRequest` 等自有强类型模型。
 - 签名流 URL、字幕 URL、请求 headers 和过期时间只驻留内存；SQLite 仅保存 `remote://youtube/{videoId}` 稳定键、原始/规范 URL、远程身份、缩略图 URL与字幕语言。日志只记录 provider/id，不记录签名 URL。
+- 视频恢复状态按媒体身份保存进度、字幕选择、播放速度、音频选择及音频/字幕延迟；音轨优先以 ff-index 恢复，并以轨道元数据作唯一匹配回退。音量、硬解、去隔行、HDR、色彩校正和字幕外观是全局偏好；循环、A-B 点、旋转、画面比例、远程临时画质和 Anime4K 是会话态，不自动恢复。
 - 解析缓存以稳定键索引，优先使用流 URL 的 `expire`，提前 5 分钟失效；无过期参数时使用 4 小时 TTL。首次播放失败强制刷新一次，随后仅允许一次 muxed fallback。
 - 匿名 v1 只支持公开、非直播、非播放列表视频，最高 1080p。画质切换重开流但恢复位置、暂停、音量、速度、延迟、循环、宽高比、旋转与字幕覆盖层。
 - 发布者字幕过滤自动生成轨道，下载到应用临时目录并继续走现有 SRT 解析、透明字幕覆盖层、查词和 transcript；不交给 mpv 渲染，也不持久化临时路径。
 - 远程挖卡截图复用当前 libmpv 实例；音频导出使用当前解析的音频流或 muxed fallback。挖卡历史保存稳定媒体键，重开时经资料库重新解析，不对远程键调用 `File.Exists`。
+
+---
+
+## 12. Nyaa / BitTorrent 资源包导入（实验性）
+
+- `INyaaClient` 只读取固定 HTTPS origin `https://nyaa.si/` 的 RSS，不执行 HTML 抓取，也不接受任意索引站脚本。RSS 上限 2 MiB；详情、torrent URL 和 HTTP 重定向后的最终地址必须同源、同端口且不得包含 credentials。
+- `ITorrentDownloadService` 是 BitTorrent 边界。Windows 实现使用固定版本 `MonoTorrent 3.0.2`，引擎缓存位于应用缓存目录，完成文件位于 `Data/TorrentDownloads`；下载完成后停止 torrent，不提供后台做种或宽泛 tracker 管理 API。
+- `INyaaDownloadManager` 持有应用会话内的任务队列。搜索对话框只负责入队，关闭对话框不会取消任务；搜索结果可按可信度/重制/做种状态筛选并按做种数/时间/下载数/体积/标题排序。管理页展示进度与错误，并提供暂停、继续、取消、重试、打开目录、移除记录、状态筛选和排序。
+- `.torrent` 元数据限制为 32 MiB，以覆盖文件数量较多的合法资源包。启动下载前必须验证每个 torrent 文件的规范化路径仍位于该任务目录内；资源包递归扫描跳过 reparse point，并再次执行目录边界校验。
+- `ResourcePackageAnalyzer` 只分类强类型扩展：EPUB、音频、SRT/字幕和视频。单 EPUB + 单音频 + 单 SRT 直接视为高置信度；多资源包使用规范化文件名评分，低分或前两名接近时不得自动匹配。
+- `IResourcePackageImportService` 是唯一编排入口：EPUB 复用 `INovelLibraryService`，有声书/SRT 复制到书籍私有 `Resources/Sasayaki` 后调用 `ISasayakiMatchService`，视频复用 `IVideoLibraryService` 并绑定同名或语言后缀字幕。ViewModel 不直接访问文件存储或 SQLite。
+- 下载内容保持不可信。资源包中的可执行文件、脚本和未知格式不会启动或导入；只有用户明确选择的结果才会下载。UI 必须提示用户仅下载有权获取的内容。

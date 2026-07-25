@@ -35,6 +35,17 @@ var reader = {
     return getComputedStyle(document.body).writingMode === "vertical-rl";
   },
 
+  visualNovel: function () {
+    return window.niratanVisualNovel?.enabled === true
+      ? window.niratanVisualNovel
+      : null;
+  },
+
+  currentCharBase: function () {
+    var visualNovel = this.visualNovel();
+    return visualNovel ? visualNovel.currentRange().startChar : 0;
+  },
+
   isFurigana: function (node) {
     var el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
     return !!(el && el.closest("rt, rp"));
@@ -86,7 +97,7 @@ var reader = {
   buildNodeOffsets: function () {
     var offsets = new WeakMap();
     var walker = this.createWalker();
-    var count = 0;
+    var count = this.currentCharBase();
     var node;
     while ((node = walker.nextNode())) {
       offsets.set(node, count);
@@ -156,6 +167,7 @@ var reader = {
   },
 
   bottomOverlap: function () {
+    if (this.visualNovel()) return 0;
     return this.isVertical() ? 22 : 0;
   },
 
@@ -350,6 +362,9 @@ var reader = {
   },
 
   calculateProgress: function () {
+    var visualNovel = this.visualNovel();
+    if (visualNovel) return visualNovel.calculateProgress();
+
     var context = this.getScrollContext();
     var walker = this.createWalker();
     var totalChars = 0;
@@ -455,6 +470,15 @@ var reader = {
   },
 
   paginate: function (direction) {
+    var visualNovel = this.visualNovel();
+    if (visualNovel) {
+      var visualNovelResult = visualNovel.paginate(direction);
+      this.buildNodeOffsets();
+      if (typeof sasayaki !== "undefined") sasayaki.refreshVisualNovelHighlight();
+      this.lastProgress = visualNovel.calculateProgress();
+      return visualNovelResult;
+    }
+
     var context = this.getScrollContext();
     if (context.pageSize <= 0) return "limit";
     var step = this.pageStep(context);
@@ -486,77 +510,93 @@ var reader = {
   restoreProgress: async function (progress, navigationGeneration, restoreTarget, renderAttemptId) {
     renderAttemptId = renderAttemptId ?? currentChapter?.renderAttemptId ?? 0;
     await document.fonts.ready;
-    var context = this.getScrollContext();
-    var targetScroll;
-    if (restoreTarget === "start") {
-      targetScroll = this.contentFirstPageScroll(context);
-    } else if (restoreTarget === "end") {
-      targetScroll = this.contentLastPageScroll(context);
-    } else if (context.pageSize <= 0 || progress <= 0) {
-      targetScroll = this.contentFirstPageScroll(context);
-    } else if (progress >= 0.99) {
-      targetScroll = this.contentLastPageScroll(context);
+    var visualNovel = this.visualNovel();
+    if (visualNovel) {
+      visualNovel.restoreProgress(progress, restoreTarget);
+      this.buildNodeOffsets();
+      this.lastProgress = visualNovel.calculateProgress();
     } else {
-      var walker = this.createWalker();
-      var totalChars = 0;
-      var node;
-      while ((node = walker.nextNode())) {
-        totalChars += this.countChars(node.textContent);
-      }
-      var targetCharCount = Math.ceil(totalChars * progress);
-      var runningSum = 0;
-      var targetNode = null;
-      var targetOffset = 0;
-      walker = this.createWalker();
-      while ((node = walker.nextNode())) {
-        var nodeLen = this.countChars(node.textContent);
-        if (runningSum + nodeLen > targetCharCount) {
-          targetNode = node;
-          targetOffset = this.textOffsetForCharCount(
-            node,
-            Math.max(0, targetCharCount - runningSum)
-          );
-          break;
-        }
-        runningSum += nodeLen;
-      }
-      if (targetNode) {
-        var range = document.createRange();
-        var targetText = targetNode.textContent || "";
-        var targetChar = String.fromCodePoint(targetText.codePointAt(targetOffset));
-        range.setStart(targetNode, targetOffset);
-        range.setEnd(
-          targetNode,
-          Math.min(targetText.length, targetOffset + Math.max(1, targetChar.length))
-        );
-        var rect = this.getRect(range);
-        var currentScroll = this.getPagePosition(context);
-        var anchor =
-          (context.vertical ? rect.top : rect.left) + currentScroll;
-        targetScroll = this.alignToPage(context, anchor);
-      } else {
+      var context = this.getScrollContext();
+      var targetScroll;
+      if (restoreTarget === "start") {
         targetScroll = this.contentFirstPageScroll(context);
+      } else if (restoreTarget === "end") {
+        targetScroll = this.contentLastPageScroll(context);
+      } else if (context.pageSize <= 0 || progress <= 0) {
+        targetScroll = this.contentFirstPageScroll(context);
+      } else if (progress >= 0.99) {
+        targetScroll = this.contentLastPageScroll(context);
+      } else {
+        var walker = this.createWalker();
+        var totalChars = 0;
+        var node;
+        while ((node = walker.nextNode())) {
+          totalChars += this.countChars(node.textContent);
+        }
+        var targetCharCount = Math.ceil(totalChars * progress);
+        var runningSum = 0;
+        var targetNode = null;
+        var targetOffset = 0;
+        walker = this.createWalker();
+        while ((node = walker.nextNode())) {
+          var nodeLen = this.countChars(node.textContent);
+          if (runningSum + nodeLen > targetCharCount) {
+            targetNode = node;
+            targetOffset = this.textOffsetForCharCount(
+              node,
+              Math.max(0, targetCharCount - runningSum)
+            );
+            break;
+          }
+          runningSum += nodeLen;
+        }
+        if (targetNode) {
+          var range = document.createRange();
+          var targetText = targetNode.textContent || "";
+          var targetChar = String.fromCodePoint(targetText.codePointAt(targetOffset));
+          range.setStart(targetNode, targetOffset);
+          range.setEnd(
+            targetNode,
+            Math.min(targetText.length, targetOffset + Math.max(1, targetChar.length))
+          );
+          var rect = this.getRect(range);
+          var currentScroll = this.getPagePosition(context);
+          var anchor =
+            (context.vertical ? rect.top : rect.left) + currentScroll;
+          targetScroll = this.alignToPage(context, anchor);
+        } else {
+          targetScroll = this.contentFirstPageScroll(context);
+        }
       }
-    }
 
-    this.setPagePosition(context, Math.max(0, targetScroll));
-    await new Promise(function (resolve) {
-      requestAnimationFrame(function () { requestAnimationFrame(resolve); });
-    });
-    context = this.getScrollContext();
-    if (restoreTarget === "start")
-      targetScroll = this.contentFirstPageScroll(context);
-    else if (restoreTarget === "end")
-      targetScroll = this.contentLastPageScroll(context);
-    this.setPagePosition(context, Math.max(0, targetScroll));
-    this.registerSnapScroll(targetScroll);
-    this.lastProgress = this.calculateProgress();
+      this.setPagePosition(context, Math.max(0, targetScroll));
+      await new Promise(function (resolve) {
+        requestAnimationFrame(function () { requestAnimationFrame(resolve); });
+      });
+      context = this.getScrollContext();
+      if (restoreTarget === "start")
+        targetScroll = this.contentFirstPageScroll(context);
+      else if (restoreTarget === "end")
+        targetScroll = this.contentLastPageScroll(context);
+      this.setPagePosition(context, Math.max(0, targetScroll));
+      this.registerSnapScroll(targetScroll);
+      this.lastProgress = this.calculateProgress();
+    }
     notifyRestoreComplete(navigationGeneration, renderAttemptId);
   },
 
   jumpToFragment: async function (fragment, navigationGeneration, renderAttemptId) {
     renderAttemptId = renderAttemptId ?? currentChapter?.renderAttemptId ?? 0;
     await document.fonts.ready;
+    var visualNovel = this.visualNovel();
+    if (visualNovel) {
+      var didFindVisualNovelFragment = visualNovel.jumpToFragment(fragment);
+      this.buildNodeOffsets();
+      this.lastProgress = visualNovel.calculateProgress();
+      notifyRestoreComplete(navigationGeneration, renderAttemptId);
+      return didFindVisualNovelFragment;
+    }
+
     var context = this.getScrollContext();
     var rawFragment = (fragment || "").trim();
     var target =
@@ -585,6 +625,8 @@ var reader = {
   },
 
   scrollToRange: function (range) {
+    if (this.visualNovel()) return false;
+
     var context = this.getScrollContext();
     if (context.pageSize <= 0) return false;
 
@@ -628,6 +670,15 @@ var reader = {
     window.snapScrollRegistered = false;
     window.lastPageScroll = 0;
     this.lastProgress = progress != null ? progress : this.lastProgress;
+
+    var visualNovel = this.visualNovel();
+    if (visualNovel) {
+      visualNovel.reflow(this.lastProgress);
+      this.buildNodeOffsets();
+      this.lastProgress = visualNovel.calculateProgress();
+      updateDiagnostics();
+      return Promise.resolve();
+    }
 
     var self = this;
     return new Promise(function (resolve) {
@@ -674,6 +725,42 @@ var reader = {
     });
   },
 
+  setupImagesInRoot: function (root) {
+    var scope = root || document;
+    Array.from(scope.querySelectorAll("svg")).forEach(function (svg) {
+      var svgImage = svg.querySelector("image");
+      if (svgImage && svg.getAttribute("preserveAspectRatio") === "none") {
+        svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+      }
+      if (svgImage) {
+        var svgSource = svgImage.getAttribute("href")
+          || svgImage.getAttribute("xlink:href")
+          || (svgImage.href && svgImage.href.baseVal);
+        reader.setupImage(svgImage, svgSource, false, svg);
+      }
+    });
+
+    return Array.from(scope.querySelectorAll("img")).map(function (img) {
+      return new Promise(function (resolve) {
+        function mark() {
+          var isGaiji = img.classList.contains("gaiji")
+            || img.classList.contains("gaiji-line");
+          if (!isGaiji && (img.naturalWidth > 256 || img.naturalHeight > 256)) {
+            img.classList.add("block-img");
+            reader.setupImage(img, img.currentSrc || img.src, true, img);
+          }
+          resolve();
+        }
+        if (img.complete && img.naturalWidth > 0) {
+          mark();
+        } else {
+          img.onload = mark;
+          img.onerror = function () { resolve(); };
+        }
+      });
+    });
+  },
+
   initialize: async function (initialProgress, navigationGeneration, restoreTarget, renderAttemptId) {
     if (reader.didInitialize) return;
     reader.didInitialize = true;
@@ -709,41 +796,24 @@ var reader = {
     reader.pageWidth = pageWidth;
     reader.columnGap = reader.currentColumnGap();
 
-    Array.from(document.querySelectorAll("svg")).forEach(function (svg) {
-      var svgImage = svg.querySelector("image");
-      if (
-        svgImage &&
-        svg.getAttribute("preserveAspectRatio") === "none"
-      ) {
-        svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-      }
-      if (svgImage) {
-        var svgSource = svgImage.getAttribute("href")
-          || svgImage.getAttribute("xlink:href")
-          || (svgImage.href && svgImage.href.baseVal);
-        reader.setupImage(svgImage, svgSource, false, svg);
-      }
-    });
-
-    var imagePromises = Array.from(document.querySelectorAll("img")).map(function (img) {
-      return new Promise(function (resolve) {
-        function mark() {
-          var isGaiji = img.classList.contains("gaiji")
-            || img.classList.contains("gaiji-line");
-          if (!isGaiji && (img.naturalWidth > 256 || img.naturalHeight > 256)) {
-            img.classList.add("block-img");
-            reader.setupImage(img, img.currentSrc || img.src, true, img);
-          }
-          resolve();
-        }
-        if (img.complete && img.naturalWidth > 0) {
-          mark();
-        } else {
-          img.onload = mark;
-          img.onerror = function () { resolve(); };
-        }
+    var visualNovel = this.visualNovel();
+    if (visualNovel) {
+      await visualNovel.initialize({
+        setupImages: function (root) { return reader.setupImagesInRoot(root); },
       });
-    });
+      await this.restoreProgress(
+        initialProgress != null ? initialProgress : 0,
+        navigationGeneration,
+        restoreTarget,
+        renderAttemptId
+      );
+      this.lastProgress = this.calculateProgress();
+      updateDiagnostics();
+      notifyChapterReady(navigationGeneration, renderAttemptId);
+      return;
+    }
+
+    var imagePromises = this.setupImagesInRoot(document);
 
     var spacer = document.createElement("div");
     spacer.style.height = this.isVertical() ? "22px" : "100%";
@@ -874,16 +944,20 @@ function shortcutActionForKeyboardEvent(event) {
 
 function updateDiagnostics() {
   var context = reader.getScrollContext();
-  var metrics =
-    reader.paginationMetrics ||
-    reader.buildPaginationMetrics();
-  var step = reader.pageStep(context);
-  var pageCount = context.pageSize > 0
-    ? Math.max(1, Math.floor(context.maxScroll / step) + 1)
-    : 0;
-  var currentPage = context.pageSize > 0
-    ? Math.floor(reader.getPagePosition(context) / step)
-    : 0;
+  var visualNovel = reader.visualNovel();
+  var visualNovelMetrics = visualNovel ? visualNovel.metrics() : null;
+  var metrics = visualNovelMetrics || reader.paginationMetrics || reader.buildPaginationMetrics();
+  var step = visualNovel ? 1 : reader.pageStep(context);
+  var pageCount = visualNovel
+    ? visualNovelMetrics.pageCount
+    : context.pageSize > 0
+      ? Math.max(1, Math.floor(context.maxScroll / step) + 1)
+      : 0;
+  var currentPage = visualNovel
+    ? visualNovelMetrics.pageIndex
+    : context.pageSize > 0
+      ? Math.floor(reader.getPagePosition(context) / step)
+      : 0;
   var progress = reader.calculateProgress();
   reader.lastProgress = progress;
   var renderedText = document.body?.innerText?.trim()?.length ?? 0;
@@ -915,9 +989,9 @@ function updateDiagnostics() {
       pageCount: pageCount,
       totalChars: metrics.totalChars,
       progress: progress,
-      minScroll: metrics.minScroll,
-      maxScroll: metrics.maxScroll,
-      scrollPosition: reader.getPagePosition(context),
+      minScroll: visualNovel ? 0 : metrics.minScroll,
+      maxScroll: visualNovel ? Math.max(0, pageCount - 1) : metrics.maxScroll,
+      scrollPosition: visualNovel ? currentPage : reader.getPagePosition(context),
       columnGap: reader.currentColumnGap(),
       safeInline: reader.currentSafeInline(),
       safeBlock: reader.currentSafeBlock(),
@@ -1093,6 +1167,17 @@ async function handleMessage(event) {
         }
         reader.registerWheelNavigation(payload.enabled);
         break;
+      case "setVisualNovelRevealSpeed":
+        var visualNovelRevealSpeed = requireInteger(
+          payload.charactersPerSecond,
+          "payload.charactersPerSecond",
+          0
+        );
+        if (visualNovelRevealSpeed > 120) {
+          throw new Error("payload.charactersPerSecond must be <= 120");
+        }
+        reader.visualNovel()?.setRevealSpeed(visualNovelRevealSpeed);
+        break;
       case "highlightSasayakiCue":
         var sasayakiGeneration = requireInteger(
           payload.generation,
@@ -1222,6 +1307,8 @@ var sasayaki = {
   _textColor: null,
   _backgroundColor: null,
   _highlightName: "niratan-sasayaki",
+  _activeRequest: null,
+  _preserveActiveRequest: false,
 
   setColors: function (textColor, backgroundColor) {
     this._textColor = textColor || null;
@@ -1260,6 +1347,7 @@ var sasayaki = {
       }
     });
     this._currentHighlightNodes = [];
+    if (!this._preserveActiveRequest) this._activeRequest = null;
     if (didMutateDom) notifyReaderContentChanged();
   },
 
@@ -1279,13 +1367,36 @@ var sasayaki = {
   },
 
   highlightCue: function (startCodePoint, length, autoScroll) {
+    this._preserveActiveRequest = true;
     this.clearHighlight();
+    this._preserveActiveRequest = false;
+    this._activeRequest = {
+      startCodePoint: startCodePoint,
+      length: length,
+    };
     this._clearReaderSelection();
     this._ensureStyle();
     if (length <= 0) return null;
     var beforeProgress = reader.calculateProgress();
 
+    var visualNovel = reader.visualNovel();
+    if (visualNovel && autoScroll !== false) {
+      visualNovel.showCharOffset(startCodePoint);
+      reader.buildNodeOffsets();
+    }
+    if (visualNovel && !visualNovel.revealComplete) {
+      visualNovel.completeReveal();
+      reader.buildNodeOffsets();
+    }
+
     var endOffset = startCodePoint + length;
+    if (visualNovel) {
+      var currentVisualNovelRange = visualNovel.currentRange();
+      if (endOffset <= currentVisualNovelRange.startChar
+          || startCodePoint >= currentVisualNovelRange.endChar) {
+        return null;
+      }
+    }
     var startBoundary = this._findBoundary(startCodePoint, false);
     var endBoundary = this._findBoundary(endOffset, true);
 
@@ -1308,10 +1419,20 @@ var sasayaki = {
 
   _findBoundary: function (targetCodePoint, isEndBoundary) {
     var walker = reader.createWalker();
-    var runningCount = 0;
+    var visualNovel = reader.visualNovel();
+    var visibleRange = visualNovel ? visualNovel.currentRange() : null;
+    var runningCount = visibleRange ? visibleRange.startChar : 0;
     var node;
+    var firstNode = null;
+    var lastNode = null;
+
+    if (visibleRange && targetCodePoint <= visibleRange.startChar) {
+      firstNode = walker.nextNode();
+      return firstNode ? { node: firstNode, offset: 0 } : null;
+    }
 
     while ((node = walker.nextNode())) {
+      lastNode = node;
       var nodeLen = reader.countChars(node.textContent);
       var containsBoundary = isEndBoundary
         ? runningCount + nodeLen >= targetCodePoint
@@ -1330,7 +1451,17 @@ var sasayaki = {
       runningCount += nodeLen;
     }
 
+    if (visibleRange && isEndBoundary && lastNode && targetCodePoint >= visibleRange.endChar) {
+      return { node: lastNode, offset: (lastNode.textContent || "").length };
+    }
+
     return null;
+  },
+
+  refreshVisualNovelHighlight: function () {
+    var request = this._activeRequest;
+    if (!request || !reader.visualNovel()) return;
+    this.highlightCue(request.startCodePoint, request.length, false);
   },
 
   _collectHighlightNodes: function (startNode, endNode) {

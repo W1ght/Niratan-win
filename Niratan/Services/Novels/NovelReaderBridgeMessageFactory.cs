@@ -138,6 +138,18 @@ public static class NovelReaderBridgeMessageFactory
         return JsonSerializer.Serialize(message, JsonOptions);
     }
 
+    public static string CreateSetVisualNovelRevealSpeedMessage(int charactersPerSecond)
+    {
+        if (charactersPerSecond is < 0 or > 120)
+            throw new ArgumentOutOfRangeException(nameof(charactersPerSecond));
+
+        var message = new NovelReaderWebMessage<SetVisualNovelRevealSpeedPayload>(
+            1,
+            "setVisualNovelRevealSpeed",
+            new SetVisualNovelRevealSpeedPayload(charactersPerSecond));
+        return JsonSerializer.Serialize(message, JsonOptions);
+    }
+
     private static string ConvertArgbHexToCssColor(string color)
     {
         var value = color.Trim();
@@ -182,6 +194,8 @@ public static class NovelReaderBridgeMessageFactory
     private sealed record NavigatePagePayload(string Direction);
 
     private sealed record SetWheelNavigationPayload(bool Enabled);
+
+    private sealed record SetVisualNovelRevealSpeedPayload(int CharactersPerSecond);
 
     private sealed record SasayakiHighlightPayload(
         long Generation,

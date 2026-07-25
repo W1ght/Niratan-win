@@ -78,6 +78,7 @@ public sealed partial class NovelReaderPage : Page
     public ReaderLyricsViewModel LyricsViewModel => ReaderLyricsMode.ViewModel;
     private EpubBook? _epubBook;
     private string _readerJs = "";
+    private string _visualNovelJs = "";
     private string _selectionJs = "";
     private string _highlightsJs = "";
     private string _currentReaderCss = "";
@@ -711,6 +712,17 @@ public sealed partial class NovelReaderPage : Page
         else
             Log.Error("[NovelReader] Bridge JS file not found at {Path}", jsPath);
 
+        var visualNovelPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "Web",
+            "NovelReader",
+            "reader-visual-novel.js"
+        );
+        if (File.Exists(visualNovelPath))
+            _visualNovelJs = await File.ReadAllTextAsync(visualNovelPath);
+        else
+            Log.Error("[NovelReader] Visual novel JS file not found at {Path}", visualNovelPath);
+
         var selPath = Path.Combine(
             AppContext.BaseDirectory,
             "Web",
@@ -869,6 +881,17 @@ public sealed partial class NovelReaderPage : Page
 
     private async void OnReaderSettingChanged(object? sender, Models.DTO.SettingsChangedEventArgs e)
     {
+        var readerSettings = App.GetService<IReaderSettingsService>().Current;
+        if (e.PropertyName == nameof(ReaderSettings.VisualNovelRevealSpeed)
+            && readerSettings.VisualNovelMode
+            && NovelWebView.CoreWebView2 != null)
+        {
+            NovelWebView.CoreWebView2.PostWebMessageAsJson(
+                NovelReaderBridgeMessageFactory.CreateSetVisualNovelRevealSpeedMessage(
+                    readerSettings.NormalizedVisualNovelRevealSpeed));
+            return;
+        }
+
         _reloadCts?.Cancel();
         _reloadCts = new CancellationTokenSource();
         var token = _reloadCts.Token;
@@ -1847,6 +1870,19 @@ public sealed partial class NovelReaderPage : Page
                 $"window.__niratanLookupSettings = {lookupSettings}; window.scanNonJapaneseText = {JsonSerializer.Serialize(dictionaryDisplaySettings.ScanNonJapaneseText)};");
             await sender.ExecuteScriptAsync(
                 $"window.__niratanBlurImages = {JsonSerializer.Serialize(readerSettings.Current.BlurImages)};");
+            var visualNovelSettings = JsonSerializer.Serialize(new
+            {
+                enabled = readerSettings.Current.VisualNovelMode,
+                revealSpeed = readerSettings.Current.NormalizedVisualNovelRevealSpeed,
+                screenMode = readerSettings.Current.VisualNovelScreenMode == VisualNovelScreenMode.Sentences
+                    ? "sentences"
+                    : "block",
+                sentencesPerScreen = readerSettings.Current.NormalizedVisualNovelSentencesPerScreen,
+                preserveDialogue = readerSettings.Current.VisualNovelPreserveDialogue,
+                clickAdvance = readerSettings.Current.VisualNovelClickAdvance,
+            });
+            await sender.ExecuteScriptAsync(
+                $"window.__niratanVisualNovelSettings = {visualNovelSettings};");
             await sender.ExecuteScriptAsync(
                 $"window.__niratanReaderShortcutBindings = {BuildReaderWebShortcutBindingsJson()};");
 
@@ -1858,6 +1894,9 @@ public sealed partial class NovelReaderPage : Page
 
             if (!string.IsNullOrEmpty(_highlightsJs))
                 await sender.ExecuteScriptAsync(_highlightsJs);
+
+            if (readerSettings.Current.VisualNovelMode && !string.IsNullOrEmpty(_visualNovelJs))
+                await sender.ExecuteScriptAsync(_visualNovelJs);
 
             if (!string.IsNullOrEmpty(_readerJs))
                 await sender.ExecuteScriptAsync(_readerJs);

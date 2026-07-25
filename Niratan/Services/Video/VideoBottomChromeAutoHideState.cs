@@ -4,7 +4,7 @@ namespace Niratan.Services.Video;
 
 public sealed class VideoBottomChromeAutoHideState
 {
-    public static TimeSpan DefaultHideDelay { get; } = TimeSpan.FromSeconds(2);
+    public static TimeSpan DefaultHideDelay { get; } = TimeSpan.FromSeconds(1);
 
     public bool IsVisible { get; private set; } = true;
 

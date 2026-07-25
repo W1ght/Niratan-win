@@ -283,6 +283,16 @@ dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter
 5. 导出 ッツ ZIP，确认每本 EPUB 目录包含 `bookdata_1_6_*`，有数据时同时包含 `statistics_1_6_*`、`progress_1_6_*` 与封面；在 TTU Reader 或 Niratan 导入确认正文、CSS、图片和章节可读。
 6. 导入同一 ッツ ZIP：不存在的原始书名应新增，已存在的原始书名不得重复创建，只覆盖 `statistics.json` 与 `bookmark.json`；返回书架确认统计与阅读进度刷新。
 
+### 1.13 Z-Library 获取与导入验证
+
+1. 运行 `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Release -p:Platform=x64 -p:SelfContained=true --filter "FullyQualifiedName~ZLibrary"`，覆盖登录、EAPI 搜索及筛选参数、session Cookie、真实计数、直接下载路径、跨 origin Cookie 移除，以及下载后安全导入。
+2. 在书架点击 `NovelLibraryZLibraryButton`，确认首次打开只要求当前 HTTPS server address、email 和 password；错误域名、HTTP 地址、错误密码和 browser challenge 都显示可恢复错误。
+3. 连接后搜索日文书名，确认请求只访问 `/eapi/book/search`，结果列表及计数与 EAPI 一致；切换精确匹配、年份、语言和格式后，翻页仍保持筛选条件，界面不再出现全文搜索或内容类型选择。
+4. 默认 EPUB 结果可加入书架；选择 PDF 等其他格式时结果仍可查看，但“加入书架”禁用并显示仅支持 EPUB 的提示。关闭并重新打开对话框可从 Windows Credential Manager 恢复连接。
+5. 下载一本有权访问的测试 EPUB，确认按钮进入 downloading 状态，成功后显示 Added to shelf、书架立即刷新且书籍可正常打开；系统临时目录不得残留该下载。
+6. 使用 HTML、截断 ZIP、超大 Content-Length 和缺少 EPUB container metadata 的 fixture，确认均在调用书架导入前失败。
+7. 真实服务测试会消耗账户下载配额并修改本地书架，只在用户明确提供可测试账号和测试书时执行；普通 CI 只运行 mock HTTP 与 mock import 测试。
+
 ## 2. Reader 修改后的强制验证
 
 每次修改以下文件后必须执行完整验证：
@@ -304,6 +314,15 @@ reader paginator/view 相关代码
 5. 调整窗口大小后验证 reflow：至少覆盖常规窗口和缩小窗口；resize 后正文必须重新布局
 6. 捕获 reader 日志和诊断状态，确认 `scrollPosition`、`pageCount`、`pageIndex`、`sectionIndex` 一致且无越界
 7. 如果设置了 `NIRATAN_NOVEL_READER_ARTIFACT_DIR`，必须保存 WebView2 截图和 `__niratanReaderState` JSON
+
+#### 2.1.1 VN 模式
+
+1. 分别从“设置 → 外观”和 Reader 顶部“外观”进入阅读布局，确认“分页 / 连续 / VN”互斥且重启后保持。
+2. 在 VN 的“段落屏”和“句子屏”之间切换；句子屏覆盖每屏 1、2 和 12 句，长段落、对话括号、ruby、图片及空章节不能溢出或形成不可前进的空屏。
+3. 逐字显示未完成时按一次向前只补全当前屏，再按一次才进入下一屏；向后应直接显示上一屏完整内容。速度为 0 时立即显示，非零速度切换应即时生效。
+4. 开启“点击空白处前进”后验证查词选区、标注右键、链接、图片和 popup 操作不会误翻页；关闭后空白点击仍只遵循 Reader chrome 规则。
+5. 连续前进到章节末尾和后退到章节开头，确认章节切换仍由 native 决定；`pageChanged`、bookmark、统计 baseline 和 history 不得重复结算。
+6. 在横排、竖排、窗口 resize 和字体变化后确认当前逻辑进度保持；查词、标注、内部链接和 Sasayaki cue 能定位到正确 VN 屏，诊断的 `pageCount`、`pageIndex`、`sectionIndex` 无越界。
 
 ### 2.2 Niratan 对齐要求
 
@@ -489,3 +508,25 @@ dotnet build -p:Platform=x64
 3. 临时让媒体目录只读或使用无有效音轨的片段，确认显示截图/音频采集错误且不提交引用缺失文件的卡片。
 4. 打开带封面的 EPUB，使用含 `{book-cover}` 的字段映射制卡；卡片字段必须为 Anki 媒体文件名的 `<img>`，不得包含应用私有目录或盘符路径。
 5. 对 `rules` 为 `v1`、`v5 adj-i` 和空字符串的词条分别制卡，确认弹窗不再因 `.some()` 报错。
+
+---
+
+## 7. Nyaa / BT 资源包导入验证
+
+```powershell
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Nyaa"
+dotnet build -p:Platform=x64
+```
+
+只使用有权下载和测试的资源：
+
+1. 从小说库和视频库分别打开 Nyaa 导入，确认搜索、分类、种子数、大小和可信/重制标记可见。
+2. 对搜索结果切换可信发布者、排除重制、有做种者筛选，并切换做种数、时间、下载数、体积、标题排序；确认无需重新请求 RSS 即时更新结果。
+3. 下载合法的小型测试种子，确认进度、速度、peer 数更新；取消后确认未完成的应用私有任务目录被删除。
+4. 加入任务后关闭 Nyaa 对话框，再次打开“下载管理”，确认任务没有被取消；验证暂停、继续、取消、失败重试、打开目录和移除记录。
+5. 分别使用状态筛选与时间、状态、进度、标题排序，确认只改变列表展示，不改变后台任务状态。
+6. 使用单套 `*.epub + 音频 + *.srt`，确认 EPUB 导入、资源复制到书籍私有目录、Sasayaki sidecar 生成均可一次完成。
+7. 使用多个同名资源组，确认只有文件名匹配置信度足够高且不存在近似候选时才自动匹配；歧义资源必须保留警告并跳过自动 Sasayaki 对齐。
+8. 使用 `video.mkv + video.srt` 和 `video.mp4 + video.ja.srt`，确认视频导入并绑定对应字幕；不匹配字幕不得误绑。
+9. 使用 15 MiB 合法 `.torrent` 与超过 32 MiB、包含越界路径的恶意样本，确认合法元数据可进入 peer 连接阶段，大小限制和下载根目录约束仍生效。
+10. 完成后重启应用，确认已导入小说、Sasayaki 匹配和视频字幕仍可用；下载目录只保留已完成任务。

@@ -226,6 +226,36 @@ public class VideoPlayerViewModelSubtitleAppearanceTests
     }
 
     [Fact]
+    public void VideoEnhancementChanges_PersistAsGlobalDefaults()
+    {
+        var appSettings = new AppSettings();
+        VideoSettings? saved = null;
+        var settingsService = CreateSettingsService(appSettings, value => saved = value);
+        var sut = CreateSut(settingsService.Object);
+
+        sut.HardwareDecodingEnabled = false;
+        sut.Volume = 72;
+        sut.DeinterlaceEnabled = true;
+        sut.HdrEnhancementEnabled = true;
+        sut.SetVideoEqualizer("brightness", 12);
+        sut.SetVideoEqualizer("contrast", -8);
+        sut.SetVideoEqualizer("saturation", 15);
+        sut.SetVideoEqualizer("gamma", 4);
+        sut.SetVideoEqualizer("hue", -3);
+
+        saved.Should().NotBeNull();
+        saved!.HardwareDecodingEnabled.Should().BeFalse();
+        saved.Volume.Should().Be(72);
+        saved.DeinterlacingEnabled.Should().BeTrue();
+        saved.HdrEnhancementEnabled.Should().BeTrue();
+        saved.VideoBrightness.Should().Be(12);
+        saved.VideoContrast.Should().Be(-8);
+        saved.VideoSaturation.Should().Be(15);
+        saved.VideoGamma.Should().Be(4);
+        saved.VideoHue.Should().Be(-3);
+    }
+
+    [Fact]
     public async Task RapidSubtitleAppearanceChanges_DoNotOverlapSavesAndRestoreLatestValues()
     {
         var appSettings = new AppSettings();

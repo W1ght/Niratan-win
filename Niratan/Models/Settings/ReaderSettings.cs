@@ -24,6 +24,12 @@ public class ReaderSettings
 
     // --- Layout ---
     public bool ContinuousMode { get; set; } = false;
+    public bool VisualNovelMode { get; set; } = false;
+    public int VisualNovelRevealSpeed { get; set; } = 45;
+    public VisualNovelScreenMode VisualNovelScreenMode { get; set; } = VisualNovelScreenMode.Block;
+    public int VisualNovelSentencesPerScreen { get; set; } = 1;
+    public bool VisualNovelPreserveDialogue { get; set; } = false;
+    public bool VisualNovelClickAdvance { get; set; } = false;
     public bool TwoColumnHorizontalPages { get; set; } = false;
     public bool MouseWheelPageTurn { get; set; } = true;
     public int ChapterSwipeDistance { get; set; } = 20;
@@ -77,7 +83,12 @@ public class ReaderSettings
         $"calc(var(--page-height, 100vh) - {BottomOverlapPx}px)";
 
     public bool UsesTwoColumnHorizontalPages =>
-        TwoColumnHorizontalPages && !VerticalWriting && !ContinuousMode;
+        TwoColumnHorizontalPages && !VerticalWriting && !ContinuousMode && !VisualNovelMode;
+
+    public int NormalizedVisualNovelRevealSpeed => Math.Clamp(VisualNovelRevealSpeed, 0, 120);
+
+    public int NormalizedVisualNovelSentencesPerScreen =>
+        Math.Clamp(VisualNovelSentencesPerScreen, 1, 12);
 
     public string? ImportedFontUrl
     {

@@ -284,6 +284,39 @@ public class VideoDataServiceTests
     }
 
     [Fact]
+    public async Task Migration015_AddsPerVideoInspectorPlaybackColumns()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+
+        await InvokeMigrationAsync("Migration_008", connection, transaction);
+        await InvokeMigrationAsync("Migration_015", connection, transaction);
+        await transaction.CommitAsync(ct);
+
+        var columns = await ScalarAsync(
+            connection,
+            """
+            SELECT COUNT(*) FROM pragma_table_info('VideoItems')
+            WHERE name IN (
+                'SubtitleDelayMilliseconds',
+                'PlaybackSpeed',
+                'AudioDelaySeconds',
+                'AudioSelectionKind',
+                'AudioSelectionTrackId',
+                'AudioSelectionFfIndex',
+                'AudioSelectionTitle',
+                'AudioSelectionLanguage',
+                'AudioSelectionCodec'
+            );
+            """,
+            ct);
+
+        columns.Should().Be(9);
+    }
+
+    [Fact]
     public async Task Migration013_AddsRemoteIdentityAndUniqueIndex()
     {
         var ct = TestContext.Current.CancellationToken;
@@ -414,6 +447,66 @@ public class VideoDataServiceTests
         DbTransaction transaction)
     {
         await InvokeMigrationAsync("Migration_008", connection, transaction);
+    }
+
+    [Fact]
+    public async Task SaveVideoPlaybackStateAsync_PersistsInspectorPlaybackState()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var dbPath = Path.Combine(Path.GetTempPath(), $"niratan-video-delay-{Guid.NewGuid():N}.db");
+        try
+        {
+            var connectionString = $"Data Source={dbPath};Pooling=False";
+            await new DatabaseMigrator(NullLogger<DatabaseMigrator>.Instance, connectionString).MigrateAsync();
+            var service = new VideoDataService(connectionString);
+            await service.UpsertVideoAsync(new VideoItem
+            {
+                Id = "video-delay",
+                Title = "Episode",
+                FilePath = @"D:\Anime\Episode.mkv",
+                ImportedAt = DateTime.UtcNow,
+            }, ct);
+
+            await service.SaveVideoPlaybackStateAsync(
+                "video-delay",
+                new VideoPlaybackState(
+                    42,
+                    120,
+                    VideoSubtitleSelection.None(),
+                    SubtitleDelayMilliseconds: -750,
+                    PlaybackSpeed: 1.5,
+                    AudioDelaySeconds: 0.75,
+                    AudioSelection: new VideoAudioSelection(
+                        VideoAudioSelectionKind.EmbeddedTrack,
+                        TrackId: 2,
+                        FfIndex: 4,
+                        Title: "Japanese",
+                        Language: "ja",
+                        Codec: "aac")),
+                ct);
+
+            var restored = await service.GetVideoAsync("video-delay", ct);
+
+            restored.Should().NotBeNull();
+            restored!.SubtitleDelayMilliseconds.Should().Be(-750);
+            var state = VideoPlaybackState.FromVideoItem(restored);
+            state.SubtitleDelayMilliseconds.Should().Be(-750);
+            state.PlaybackSpeed.Should().Be(1.5);
+            state.AudioDelaySeconds.Should().Be(0.75);
+            state.AudioSelection.Should().BeEquivalentTo(new VideoAudioSelection(
+                VideoAudioSelectionKind.EmbeddedTrack,
+                TrackId: 2,
+                FfIndex: 4,
+                Title: "Japanese",
+                Language: "ja",
+                Codec: "aac"));
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (File.Exists(dbPath))
+                File.Delete(dbPath);
+        }
     }
 
     [Fact]

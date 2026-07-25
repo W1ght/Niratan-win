@@ -165,19 +165,92 @@
                 <toolkit:SettingsCard x:Uid="ReaderLayoutModeCard"
                                       HorizontalAlignment="Stretch"
                                       HorizontalContentAlignment="Stretch"
-                                      Description="Paginated or continuous scrolling"
+                                      Description="Paginated, continuous, or visual novel presentation"
                                       Header="Mode"
                                       HeaderIcon="{ui:FontIcon Glyph=&#xE8A9;}">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <RadioButton x:Uid="ReaderLayoutPaginated"
                                      Content="Paginated"
-                                     IsChecked="{x:Bind ViewModel.ContinuousMode, Mode=TwoWay, Converter={StaticResource BoolNegationConverter}}"
+                                     IsChecked="{x:Bind ViewModel.PaginatedMode, Mode=TwoWay}"
                                      GroupName="LayoutMode" />
                         <RadioButton x:Uid="ReaderLayoutContinuous"
                                      Content="Continuous"
                                      IsChecked="{x:Bind ViewModel.ContinuousMode, Mode=TwoWay}"
                                      GroupName="LayoutMode" />
+                        <RadioButton x:Uid="ReaderLayoutVisualNovel"
+                                     Content="VN"
+                                     IsChecked="{x:Bind ViewModel.VisualNovelMode, Mode=TwoWay}"
+                                     GroupName="LayoutMode" />
                     </StackPanel>
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="ReaderVisualNovelRevealSpeedCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Description="Reveal the current screen character by character; zero is instant"
+                                      Header="Text Reveal Speed"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE916;}"
+                                      Visibility="{x:Bind ViewModel.IsVisualNovelSettingsVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBlock MinWidth="56"
+                                   VerticalAlignment="Center"
+                                   Text="{x:Bind ViewModel.VisualNovelRevealSpeedText, Mode=OneWay}" />
+                        <Slider Width="220" Minimum="0" Maximum="120"
+                                SmallChange="5" StepFrequency="5"
+                                Value="{x:Bind ViewModel.VisualNovelRevealSpeed, Mode=TwoWay}" />
+                    </StackPanel>
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="ReaderVisualNovelScreenModeCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Description="Choose how chapter content is divided into screens"
+                                      Header="Screen Content"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE8A9;}"
+                                      Visibility="{x:Bind ViewModel.IsVisualNovelSettingsVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <RadioButton x:Uid="ReaderVisualNovelScreenModeBlock"
+                                     Content="By Paragraph"
+                                     IsChecked="{x:Bind ViewModel.IsVisualNovelBlockScreenMode, Mode=TwoWay}"
+                                     GroupName="VisualNovelScreenMode" />
+                        <RadioButton x:Uid="ReaderVisualNovelScreenModeSentences"
+                                     Content="By Sentence"
+                                     IsChecked="{x:Bind ViewModel.IsVisualNovelSentenceScreenMode, Mode=TwoWay}"
+                                     GroupName="VisualNovelScreenMode" />
+                    </StackPanel>
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="ReaderVisualNovelSentencesPerScreenCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Description="Maximum sentence group size before viewport fitting"
+                                      Header="Sentences per Screen"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE8D4;}"
+                                      Visibility="{x:Bind ViewModel.IsVisualNovelSentenceSettingsVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBlock MinWidth="32"
+                                   VerticalAlignment="Center"
+                                   TextAlignment="Center"
+                                   Text="{x:Bind ViewModel.VisualNovelSentencesPerScreen, Mode=OneWay}" />
+                        <Slider Width="220" Minimum="1" Maximum="12"
+                                SmallChange="1" StepFrequency="1"
+                                Value="{x:Bind ViewModel.VisualNovelSentencesPerScreen, Mode=TwoWay}" />
+                    </StackPanel>
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="ReaderVisualNovelPreserveDialogueCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Description="Keep Japanese bracketed dialogue together on one screen when possible"
+                                      Header="Keep Dialogue Together"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE8BD;}"
+                                      Visibility="{x:Bind ViewModel.IsVisualNovelSentenceSettingsVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <ToggleSwitch IsOn="{x:Bind ViewModel.VisualNovelPreserveDialogue, Mode=TwoWay}" />
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="ReaderVisualNovelClickAdvanceCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Description="Click blank reader space to reveal or advance"
+                                      Header="Click Blank Space to Advance"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE8B9;}"
+                                      Visibility="{x:Bind ViewModel.IsVisualNovelSettingsVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <ToggleSwitch IsOn="{x:Bind ViewModel.VisualNovelClickAdvance, Mode=TwoWay}" />
                 </toolkit:SettingsCard>
                 <toolkit:SettingsCard x:Uid="ReaderTwoColumnHorizontalPagesCard"
                                       HorizontalAlignment="Stretch"

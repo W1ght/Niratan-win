@@ -539,7 +539,8 @@
 
       const text = targetNode.textContent || '';
       const startOffset = normalizedNodeStartOffsets.get(targetNode) || 0;
-      return startOffset + countNormalizedCharacters(text, offset);
+      const visualNovelOffsetBase = Number(window.__niratanTextMatchableOffsetBase) || 0;
+      return visualNovelOffsetBase + startOffset + countNormalizedCharacters(text, offset);
     },
 
     clearSelection() {
@@ -571,6 +572,12 @@
     if (window.__niratanLookupPopupActive === true && !selectedText) {
       niratanSelection.clearSelection();
       postToHost('lookupDismiss', {});
+    } else if (
+      !selectedText &&
+      window.niratanVisualNovel?.enabled === true &&
+      window.niratanVisualNovel.clickAdvance === true
+    ) {
+      postToHost('pageNavigationRequest', { direction: 'forward' });
     }
   });
 

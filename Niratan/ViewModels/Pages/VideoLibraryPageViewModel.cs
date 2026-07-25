@@ -7,7 +7,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using Niratan.Helpers;
+using Niratan.Messages;
 using Niratan.Models;
 using Niratan.Models.Common;
 using Niratan.Models.Video;
@@ -17,7 +19,8 @@ using Niratan.ViewModels.Components;
 
 namespace Niratan.ViewModels.Pages;
 
-public partial class VideoLibraryPageViewModel : ObservableObject
+public partial class VideoLibraryPageViewModel : ObservableObject,
+    IRecipient<VideoLibraryChangedMessage>
 {
     private readonly IVideoLibraryService _videoLibraryService;
     private readonly IDialogService _dialogService;
@@ -25,6 +28,7 @@ public partial class VideoLibraryPageViewModel : ObservableObject
     private readonly IVideoPlayerWindowService _playerWindowService;
     private readonly IVideoThumbnailService _thumbnailService;
     private readonly IFileRevealService _fileRevealService;
+    private readonly IMessenger _messenger;
     private CancellationTokenSource _cts = new();
     private List<VideoItem> _allVideos = [];
     private List<VideoCollection> _collections = [];
@@ -166,7 +170,8 @@ public partial class VideoLibraryPageViewModel : ObservableObject
         INotificationService notificationService,
         IVideoPlayerWindowService playerWindowService,
         IVideoThumbnailService videoThumbnailService,
-        IFileRevealService fileRevealService)
+        IFileRevealService fileRevealService,
+        IMessenger? messenger = null)
     {
         _videoLibraryService = videoLibraryService;
         _dialogService = dialogService;
@@ -174,6 +179,8 @@ public partial class VideoLibraryPageViewModel : ObservableObject
         _playerWindowService = playerWindowService;
         _thumbnailService = videoThumbnailService;
         _fileRevealService = fileRevealService;
+        _messenger = messenger ?? new WeakReferenceMessenger();
+        _messenger.RegisterAll(this);
     }
 
     public async Task InitializeAsync()
@@ -187,6 +194,8 @@ public partial class VideoLibraryPageViewModel : ObservableObject
         _cts.Cancel();
         UnsubscribeFromPlayerLibraryChanges();
     }
+
+    public void Receive(VideoLibraryChangedMessage message) => _ = LoadVideosAsync();
 
     public IReadOnlyList<VideoSmartRuleMatchOption> AvailableSmartRuleMatches { get; } =
     [

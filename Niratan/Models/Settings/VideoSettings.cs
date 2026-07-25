@@ -13,6 +13,7 @@ public sealed class VideoSettings
 {
     private int _seekIntervalSeconds = 5;
     private int _miningHistoryLimit = 25;
+    private double _volume = 100;
     private double _videoBrightness;
     private double _videoContrast;
     private double _videoSaturation;
@@ -44,6 +45,12 @@ public sealed class VideoSettings
     {
         get => _miningHistoryLimit;
         set => _miningHistoryLimit = Math.Max(0, value);
+    }
+
+    public double Volume
+    {
+        get => _volume;
+        set => _volume = ClampFinite(value, 0, 130, 100);
     }
 
     public bool HardwareDecodingEnabled { get; set; } = true;

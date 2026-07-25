@@ -110,6 +110,12 @@ public sealed partial class VideoLibraryPage : Page
         await ViewModel.OpenResolvedYouTubeAsync(result.Value!);
     }
 
+    private async void ImportNyaaResourcesButton_Click(object sender, RoutedEventArgs e)
+    {
+        await NyaaImportDialog.ShowAsync(XamlRoot);
+        await ViewModel.InitializeAsync();
+    }
+
     private void CreateSmartCollectionSecondaryButton_Click(object sender, RoutedEventArgs e)
     {
         CreateSmartCollectionDialog.Hide();

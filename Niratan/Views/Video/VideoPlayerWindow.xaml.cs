@@ -147,6 +147,7 @@ public sealed partial class VideoPlayerWindow : Window
     private DateTimeOffset _lastProgressSaveAt = DateTimeOffset.MinValue;
     private VideoInspectorTab _selectedInspectorTab = VideoInspectorTab.SubtitleList;
     private readonly VideoSubtitleLookupRequestCoordinator _subtitleLookupCoordinator = new();
+    private readonly VideoLookupPlaybackCoordinator _lookupPlaybackCoordinator = new();
 
     public VideoPlayerViewModel ViewModel { get; }
 
@@ -332,6 +333,18 @@ public sealed partial class VideoPlayerWindow : Window
             var restoreStateTask = LoadPlaybackStateAsync(video, ct);
             var loadVideoTask = ViewModel.LoadVideoAsync(video, ct);
             var restoreState = await restoreStateTask;
+            if (ViewModel.RememberPlaybackState)
+            {
+                ViewModel.PlaybackSpeed = restoreState.PlaybackSpeed;
+                ViewModel.AudioDelaySeconds = restoreState.AudioDelaySeconds;
+                ViewModel.SubtitleDelayMilliseconds = restoreState.SubtitleDelayMilliseconds;
+            }
+            else
+            {
+                ViewModel.PlaybackSpeed = 1;
+                ViewModel.AudioDelaySeconds = 0;
+                ViewModel.SubtitleDelayMilliseconds = 0;
+            }
             var restoreStartPosition = ViewModel.RememberPlaybackState
                 ? restoreState.ResolveRestorePosition(TimeSpan.Zero)
                 : null;
@@ -1016,10 +1029,13 @@ public sealed partial class VideoPlayerWindow : Window
                 return;
 
             ViewModel.StatusText = "Looking up subtitle";
-            await _playbackEngine.SetPausedAsync(true);
-            _isPaused = true;
-            PlayPauseIcon.Glyph = "\uE768";
-            ApplySubtitleAppearance();
+            if (_lookupPlaybackCoordinator.TryPauseForLookup(isPlaying: !_isPaused))
+            {
+                await _playbackEngine.SetPausedAsync(true);
+                _isPaused = true;
+                PlayPauseIcon.Glyph = "\uE768";
+                ApplySubtitleAppearance();
+            }
             if (!IsCurrentSubtitleLookup(lookupRequest))
                 return;
 
@@ -1040,6 +1056,11 @@ public sealed partial class VideoPlayerWindow : Window
                 }
 
                 ViewModel.StatusText = "No dictionary results";
+                if (!_isLookupPopupVisible
+                    && !_subtitleLookupCoordinator.HasPopupCommitCandidates)
+                {
+                    await ResumePlaybackAfterLookupAsync();
+                }
                 return;
             }
 
@@ -1106,6 +1127,11 @@ public sealed partial class VideoPlayerWindow : Window
             }
 
             ViewModel.StatusText = ex.Message;
+            if (!_isLookupPopupVisible
+                && !_subtitleLookupCoordinator.HasPopupCommitCandidates)
+            {
+                await ResumePlaybackAfterLookupAsync();
+            }
         }
     }
 

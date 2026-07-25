@@ -431,6 +431,27 @@ public sealed partial class VideoPlayerWindow
         VideoDictionaryPanelChrome.Visibility = Visibility.Collapsed;
         ApplySubtitleAppearance();
         _ = ClearSubtitleSelectionAsync();
+        _ = ResumePlaybackAfterLookupAsync();
+    }
+
+    private async Task ResumePlaybackAfterLookupAsync()
+    {
+        if (!_lookupPlaybackCoordinator.TryResumeAfterDismiss(isPlaying: !_isPaused))
+            return;
+
+        try
+        {
+            await _playbackEngine.SetPausedAsync(false);
+            _isPaused = false;
+            PlayPauseIcon.Glyph = "\uE769";
+            ApplySubtitleAppearance();
+            ViewModel.StatusText = "Playing";
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "[VideoLookup] Failed to resume playback after lookup dismissal");
+            ViewModel.StatusText = ex.Message;
+        }
     }
 
     private void ResolvePopupShowCancellation(
@@ -776,6 +797,7 @@ public sealed partial class VideoPlayerWindow
         _isLookupPopupVisible = false;
         _ = ClearSubtitleSelectionAsync();
         ApplySubtitleAppearance();
+        _ = ResumePlaybackAfterLookupAsync();
     }
 
     private void UpdateSubtitleAppearanceControls()
