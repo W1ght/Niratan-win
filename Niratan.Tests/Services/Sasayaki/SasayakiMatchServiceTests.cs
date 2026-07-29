@@ -74,6 +74,37 @@ public sealed class SasayakiMatchServiceTests
         match!.Matches.Should().ContainSingle().Which.Text.Should().Be("星を読む");
     }
 
+    [Fact]
+    public async Task MatchAsync_RejectsZeroFilledAudiobookAndSubtitleWithoutWritingSidecars()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var audiobookPath = Path.Combine(temp.Path, "audio.m4b");
+        var subtitlePath = Path.Combine(temp.Path, "audio.srt");
+        await File.WriteAllBytesAsync(audiobookPath, new byte[4096], ct);
+        await File.WriteAllBytesAsync(subtitlePath, new byte[4096], ct);
+        var sidecar = new SasayakiSidecarService();
+        var sut = new SasayakiMatchService(
+            Mock.Of<IEpubParserService>(),
+            sidecar);
+
+        var action = () => sut.MatchAsync(
+            CreateBook(temp.Path),
+            audiobookPath,
+            subtitlePath,
+            SasayakiSettings.DefaultSearchWindow,
+            ct);
+
+        var exception = await action.Should()
+            .ThrowAsync<SasayakiMatchInputException>();
+        exception.Which.Error.Should().Be(
+            SasayakiMatchInputError.UnreadableAudiobookAndSubtitle);
+        File.Exists(Path.Combine(temp.Path, ISasayakiSidecarService.MatchFileName))
+            .Should().BeFalse();
+        File.Exists(Path.Combine(temp.Path, ISasayakiSidecarService.SourceFileName))
+            .Should().BeFalse();
+    }
+
     private static async Task<SasayakiMatchService> CreateSutAsync(
         TempDirectory temp,
         ISasayakiSidecarService sidecar,
@@ -87,6 +118,10 @@ public sealed class SasayakiMatchServiceTests
         await File.WriteAllTextAsync(
             Path.Combine(temp.Path, "audio.srt"),
             "1\n00:00:01,000 --> 00:00:02,000\n星を読む\n",
+            cancellationToken);
+        await File.WriteAllBytesAsync(
+            Path.Combine(temp.Path, "audio.m4b"),
+            [0, 0, 0, 24, (byte)'f', (byte)'t', (byte)'y', (byte)'p'],
             cancellationToken);
 
         var epub = new EpubBook

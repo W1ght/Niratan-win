@@ -15,7 +15,7 @@ Build the native `hoshidicts_c_api.dll` from `native/hoshidicts/` submodule.
 
 ## Important
 
-**Do NOT modify any code under `native/hoshidicts/`.** All dictionary functionality must use the C API DLL via P/Invoke. See agents.md Section 12.
+**Do NOT modify any code under `native/hoshidicts/`.** All dictionary functionality must use the C API DLL via P/Invoke. The repository root `agents.md` owns this invariant.
 
 ## Commands
 

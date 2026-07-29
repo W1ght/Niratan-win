@@ -712,25 +712,29 @@ public sealed partial class VideoPlayerWindow : Window
 
     private async Task JumpToMiningHistoryItemAsync(VideoMiningHistoryItem item)
     {
-        if (string.IsNullOrWhiteSpace(item.VideoPath))
+        var savedVideoIdentity = item.RemoteVideoIdentity?.PersistenceKey ?? item.VideoPath;
+        if (string.IsNullOrWhiteSpace(savedVideoIdentity))
         {
             ViewModel.StatusText = "Open the matching video before using this history item";
             return;
         }
 
-        var isRemoteHistoryItem = YouTubeUrlParser.IsRemoteKey(item.VideoPath);
-        if (!isRemoteHistoryItem && !File.Exists(item.VideoPath))
+        var isRemoteHistoryItem = YouTubeUrlParser.IsRemoteKey(savedVideoIdentity);
+        if (!isRemoteHistoryItem && !File.Exists(savedVideoIdentity))
         {
             ViewModel.StatusText = "The saved video file is no longer available";
             return;
         }
 
         var currentPath = ViewModel.CurrentVideo?.FilePath;
-        if (!string.Equals(NormalizeVideoPath(currentPath ?? ""), NormalizeVideoPath(item.VideoPath), StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(
+                NormalizeVideoPath(currentPath ?? ""),
+                NormalizeVideoPath(savedVideoIdentity),
+                StringComparison.OrdinalIgnoreCase))
         {
             if (isRemoteHistoryItem)
             {
-                var stored = await _videoLibraryService.GetVideoAsync(item.VideoPath);
+                var stored = await _videoLibraryService.GetVideoAsync(savedVideoIdentity);
                 if (!stored.IsSuccess || stored.Value == null)
                 {
                     ViewModel.StatusText = "Add the YouTube video to the library before reopening this history item";
@@ -744,8 +748,10 @@ public sealed partial class VideoPlayerWindow : Window
                 await OpenVideoAsync(new VideoItem
                 {
                     Id = item.Id,
-                    Title = Path.GetFileNameWithoutExtension(item.VideoPath),
-                    FilePath = item.VideoPath,
+                    Title = string.IsNullOrWhiteSpace(item.VideoTitle)
+                        ? Path.GetFileNameWithoutExtension(savedVideoIdentity)
+                        : item.VideoTitle,
+                    FilePath = savedVideoIdentity,
                     SubtitlePath = item.SubtitleSourcePath,
                     ImportedAt = item.CreatedAt,
                 });

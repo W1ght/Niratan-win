@@ -26,6 +26,7 @@ using Niratan.Models.Shortcuts;
 using Niratan.Services.Anki;
 using Niratan.Services.Audio;
 using Niratan.Services.Dictionary;
+using Niratan.Services.Profiles;
 using Niratan.Services.Settings;
 using Niratan.Services.Shortcuts;
 using Niratan.Views.Dialogs;
@@ -179,7 +180,8 @@ public sealed class DictionaryLookupPopup : IDisposable
 
     public DictionaryLookupPopup()
     {
-        _htmlGenerator = new PopupHtmlGenerator();
+        _htmlGenerator = new PopupHtmlGenerator(
+            contentLanguageId: () => App.GetService<IProfileRuntimeService>().ActiveLanguage.Id);
         _lookupService = App.GetService<IDictionaryLookupService>();
         _audioService = App.GetService<IAudioService>();
         _ankiService = App.GetService<IAnkiService>();

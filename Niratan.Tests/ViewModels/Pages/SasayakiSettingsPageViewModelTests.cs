@@ -21,7 +21,7 @@ public sealed class SasayakiSettingsPageViewModelTests
         settings.AutoPauseOnLookup.Should().BeTrue();
         settings.ShowSkipControls.Should().BeFalse();
         settings.EnableSync.Should().BeFalse();
-        settings.SearchWindowSize.Should().Be(SasayakiSettings.DefaultSearchWindow);
+        settings.SearchWindowSize.Should().Be(200);
         settings.PlaybackRate.Should().Be(1.0);
         settings.LightTextColor.Should().Be("#FF000000");
         settings.LightBackgroundColor.Should().Be("#6652C7FA");
@@ -70,5 +70,31 @@ public sealed class SasayakiSettingsPageViewModelTests
         saved.SearchWindowSize.Should().Be(321);
         saved.PlaybackRate.Should().Be(1.25);
         settingsService.Verify(s => s.SaveAsync(), Times.AtLeastOnce);
+    }
+
+    [Fact]
+    public void SearchWindow_UsesNiratanRange()
+    {
+        var appSettings = new AppSettings
+        {
+            SasayakiSettings = new SasayakiSettings { SearchWindowSize = 2000 },
+        };
+        var settingsService = new Mock<ISettingsService>();
+        settingsService.SetupGet(s => s.Current).Returns(appSettings);
+        settingsService
+            .Setup(s => s.Set(
+                It.IsAny<Expression<Func<AppSettings, SasayakiSettings>>>(),
+                It.IsAny<SasayakiSettings>()))
+            .Callback<Expression<Func<AppSettings, SasayakiSettings>>, SasayakiSettings>(
+                (_, value) => appSettings.SasayakiSettings = value);
+        settingsService.Setup(s => s.SaveAsync()).Returns(Task.CompletedTask);
+        var sut = new SasayakiSettingsPageViewModel(settingsService.Object);
+
+        sut.SearchWindowSize.Should().Be(200);
+
+        sut.SearchWindowSizeValue = 1;
+
+        sut.SearchWindowSize.Should().Be(50);
+        appSettings.SasayakiSettings.SearchWindowSize.Should().Be(50);
     }
 }

@@ -1,261 +1,54 @@
-# Niratan Windows 日语 EPUB 阅读器
+# Niratan Win Agent 指南
 
-WinUI 3 + Windows App SDK + C#/.NET 开发的 Windows 原生日语沉浸式 EPUB 阅读器。用户可见行为以 Niratan 为唯一对齐源。
+Niratan Win 是面向 Windows 10+ x64 的原生日语沉浸学习 App。单一 WinUI 3 / .NET 应用始终包含小说、视频和漫画模块，并共享词典、Popup、Profile 和 Anki 流程。
 
----
+`docs/reference/Niratan` 是共有用户可见行为的唯一对齐源。Windows 实现使用原生控件、窗口和输入规则；Niratan 没有的 Windows 扩展必须在本仓库规格或架构文档中明确记录，且不得反向改变共有行为。
 
-## 0. 开发环境
+本文件只保存每个任务都必须知道的产品边界、高后果不变量、仓库陷阱和上下文入口。专项架构、验证矩阵、调查记录和操作步骤按需读取，不在这里重复。
 
-- **目标平台**: Windows 10+ x64
-- **构建**: `dotnet build -p:Platform=x64`
-- **测试**: `dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`
-- **构建+启动**: `.\build-and-run.ps1`
-- **发布版本**: `.\release.ps1 -Version x.y.z`
-- **初始化子模块**: `git submodule update --init --recursive`
-- **UTF-8 初始化**: `.\set-utf8-console.ps1`
-- **读取中日文文档**: Windows PowerShell 5.1 必须显式使用 `Get-Content -Encoding UTF8`；`set-utf8-console.ps1` 只保证控制台输出编码，不改变文件读取解码。
-- **不默认构建 ARM64**
+## 常驻边界
 
-参见 `.claude/skills/` 下的 `/build`、`/run`、`/test`、`/check` 快捷命令。
+- 禁止修改 `native/hoshidicts/` 下的任何代码。字典功能只能通过 C# P/Invoke 调用 `hoshidicts_c_api` 暴露的窄接口。
+- 保护用户的书籍、漫画、视频、sidecar、catalog、阅读/播放进度、Profile、词典、Anki 配置、凭据和 token；不得通过清空、重建或迁移用户数据掩盖 bug。
+- 本地漫画和视频库是非破坏性索引。导入、刷新、移除和验证不得移动、重命名、改写或删除用户源媒体；小说导入后的私有副本也不得被越界访问。
+- EPUB、CBZ/ZIP、Mokuro、字幕、torrent 元数据、远端响应和 WebView2 消息均视为不可信输入。校验路径、来源、大小、格式、跳转和消息类型；native/JS bridge 保持窄、强类型、带版本。
+- 保留当前工作树中与任务无关的改动。未经用户明确要求，不 commit、push、打 tag 或 release。
+- 新增用户可见文案进入 `Niratan/Strings/en-US/Resources.resw` 和 `Niratan/Strings/zh-CN/Resources.resw`；XAML 优先使用 `x:Uid`。
 
----
+## 架构不变量
 
-## 1. 核心规则
+- 保持 `View（XAML + UI-only code-behind）→ ViewModel（状态与命令）→ Service（IO、持久化、网络、字典、Anki、native 工作）`。code-behind 只承载必须依赖 WinUI/WebView2/mpv 的生命周期、输入、窗口和坐标适配；不要扩大现有遗留例外。
+- Reader、Video、Manga 是同一 App 内的模块边界，不是独立产品。共享 Dictionary、Popup、Profile 和 Anki 管线不得反向依赖某个内容来源；快捷键按各窗口现有 scope 处理。
+- 小说正文继续使用 WebView2 + CSS multi-column；不得恢复 foliate-js、自研第二套 EPUB 排版引擎，或用 WinUI 文本控件替代正文渲染。
+- Reader JavaScript 只负责渲染、选择、坐标和事件；字典查询、章节边界、持久化和业务决策留在 native/ViewModel/Service。
+- Video UI 通过现有 playback engine/service 契约操作播放状态；普通 View 或 ViewModel 不直接调用 mpv C API。
+- Manga 通过现有 session、page provider 和 catalog/service 边界读取源内容；page/cover cache 可重建，`catalog.json` 是必须保护的用户状态，源媒体保持只读。
+- 持久化格式及迁移规则以当前模型、服务、契约测试和 `docs/ARCHITECTURE.md` 为准，不在根指令中复制易变 schema。
 
-### 1.1 绝对禁止
+## 仓库特有陷阱
 
-- **禁止修改 `native/hoshidicts/` 下的任何代码。** 这是第三方子模块，字典功能只能通过 C# P/Invoke 调用 `hoshidicts_c_api` DLL 暴露的接口。
-- **禁止自研 EPUB 排版引擎。** 阅读渲染使用 WebView2 + CSS multi-column 分页。
-- **禁止用 WinUI TextBlock/RichTextBlock 替代 WebView2 阅读渲染。**
-- **禁止把 foliate-js 引回主阅读链路。** 已于 2026-05-19 移除。
-- **禁止把字典查询逻辑写进 WebView JavaScript。** JS 只负责渲染、选择文本、提取坐标、发送事件。
-- **禁止在 code-behind 写业务逻辑。**
-- **禁止 ViewModel 直接访问 SQLite。**
+- 默认只构建和测试 x64：`dotnet build -p:Platform=x64`；`dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64`。不默认构建 ARM64。
+- 构建并启动使用 `.\build-and-run.ps1`；原生字典 DLL 由项目构建目标按需确保并复制。
+- Windows PowerShell 5.1 读取中日文文件时显式使用 `Get-Content -Encoding UTF8`。
+- 发布必须使用 `.\release.ps1 -Version x.y.z`；禁止手工创建、移动、删除或复用 `v*` 标签。预览使用 `-PlanOnly`。
+- UI 验证只信任本次构建输出启动的进程。使用 disposable fixture；没有安全数据、账户、服务或硬件时，列出未验证场景，不操作用户现有数据。
 
-### 1.2 分层规则
+## 按需上下文
 
-```
-View (XAML + UI-only code-behind)
-  → ViewModel (状态 + 命令, CommunityToolkit.Mvvm)
-    → Service (IO、数据库、字典、Anki 等实际工作)
-```
+实现、调试、验证、上游对齐、构建或发布任务使用 `.codex/skills/niratan-win-workflow/SKILL.md`，只加载与当前范围匹配的文档。
 
-- ViewModel 只暴露状态和命令。
-- Service 负责 IO、数据库、字典、Anki 等实际工作。
-- 非 Reader 相关服务不要直接调用 WebView2。
+- `docs/ARCHITECTURE.md`：持久架构、模块所有权、数据与安全边界。
+- `docs/VERIFICATION.md`：Reader、Dictionary、Audio、Video、Manga 和导入流程的验证矩阵。
+- `docs/reference/Niratan/AGENTS.md` 与最邻近的 Niratan 源码：共有产品行为。
+- `docs/superpowers/specs/`、`docs/superpowers/plans/`：已批准扩展和历史设计。
+- `docs/CHANGELOG.md`：已解决问题的根因与用户可见结果。
+- `.claude/skills/`：Claude Code 的专项构建、测试和 UI 约定。
 
-### 1.3 安全规则
+只有实现使现有真源失真时才更新对应文档。不要把一次性日志、代码可直接表达的事实或重复命令写回根文件。
 
-- EPUB 内容视为不可信输入。
-- WebView2 禁止任意外部跳转。
-- 限制文件访问，通过受控 virtual host 提供书籍资源。
-- 不要向 JavaScript 暴露宽泛 native API。
-- 校验所有来自 WebView2 的消息。
-- Bridge API 要窄、明确、强类型。
+## 完成契约
 
-### 1.4 行为对齐
-
-- Niratan 是用户可见行为的唯一产品参考和事实源。
-- Windows 实现使用 WinUI 原生控件、交互和响应式规则，不机械复制 SwiftUI 外观。
-- 必须偏离 Niratan 时，在代码或文档中记录 Windows 平台约束和偏差原因。
-- 其他阅读库只可用于解决实现问题，不得覆盖 Niratan 的用户可见行为。
-
----
-
-## 2. 技术栈速查
-
-| 层 | 技术 |
-|---|---|
-| UI 外壳 | WinUI 3 + Windows App SDK + CommunityToolkit.Mvvm |
-| 阅读渲染 | WebView2 + Niratan 行为的 CSS multi-column 分页 |
-| 字典引擎 | hoshidicts (C# P/Invoke), Yomitan 字典导入 |
-| 业务数据 | SQLite + Dapper + Microsoft.Data.Sqlite |
-| IPC | WebView2 `PostWebMessageAsJson` / `WebMessageReceived` |
-| 测试 | xUnit v3 + FluentAssertions + Moq + coverlet |
-| Anki | AnkiConnect HTTP API |
-| 日志 | Serilog |
-
-详细架构说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
-
----
-
-## 3. 架构概览
-
-```
-WinUI 3 / C# App
-  ├─ 书架 UI
-  ├─ 设置 UI
-  ├─ ReaderViewModel
-  ├─ 字典服务 (hoshidicts P/Invoke)
-  ├─ SQLite 本地数据库
-  ├─ EpubParserService (OPF/spine/manifest/TOC 解析)
-  └─ WebView2 ReaderHost
-       ├─ WebResourceRequested 拦截章节 HTML
-       ├─ NovelReaderContentStyles 注入分页 CSS
-       └─ reader-bridge.js (分页/进度/翻页)
-```
-
-字典弹窗架构：
-
-```
-NovelReaderPage
-  → DictionaryPopupOverlay        // 栈、遮罩、定位、关闭策略
-      → root DictionaryLookupPopup
-      → child DictionaryLookupPopup...
-          → PopupHtmlGenerator → popup.js
-```
-
----
-
-## 4. 参考源码
-
-### 4.1 本地参考仓库
-
-```
-docs/reference/Niratan      # 唯一产品行为参考子模块
-```
-
-`Niratan` 作为 git submodule 提交并锁定 revision，用于长期对齐小说、视频、设置、字典、Sasayaki 和统计行为。
-
-### 4.2 速查 grep 模式
-
-```bash
-# 设置首页 / Reader 高级设置
-rg "SettingsHomeView|AdvancedView|AppearanceView|SasayakiSettingsView|StatisticsSettingsView" docs/reference/Niratan/Features/Settings/
-
-# 小说阅读器 / 分页脚本
-rg "ReaderWebView|reader.js|scrollreader.js|continuousMode|readerWheelPageTurnEnabled" docs/reference/Niratan/Features/Reader docs/reference/Niratan/Core docs/reference/Niratan/Models
-
-# 字典、弹窗与嵌套查词
-rg "DictionaryManager|DictionarySearchView|PopupLayout|PopupPresentationCoordinator|tapOutside" docs/reference/Niratan/Core docs/reference/Niratan/Features/Dictionary docs/reference/Niratan/Features/Popup
-
-# Sasayaki / 统计
-rg "Sasayaki|StatisticsAutostartMode|StatisticsDashboard" docs/reference/Niratan/Features docs/reference/Niratan/Models
-
-# 书籍存储 / sidecar
-rg "BookStorage|metadata.json|bookmark.json|bookinfo.json|statistics.json|highlights.json" docs/reference/Niratan/Core docs/reference/Niratan/Features/Bookshelf
-```
-
-### 4.3 hoshidicts 参考
-
-```bash
-# 变形还原 / 查词实现（只读，严禁修改子模块）
-native/hoshidicts/src/language/ja/deinflector.cpp
-native/hoshidicts/src/lookup.cpp
-```
-
----
-
-## 5. 关键约束
-
-### 5.1 阅读器
-
-- 按 spine 章节加载，章节切换由 native/WinUI 侧控制。
-- 分页尺寸必须来自当前 viewport，窗口 resize 后重新计算。
-- 翻页 scroll offset 按 `context.pageSize` 对齐，`column-gap` 不得加进翻页步长。
-- 高 DPI 下横排分页宽度按 CSS `window.innerWidth` 计算，`devicePixelRatio` 禁止乘进 `--page-width`。
-- 安全区使用 reader padding：`--reader-safe-inline` / `--reader-safe-block`。
-- 翻页边界由 native/WinUI 决定章节切换，reader JS 只报告状态。
-
-### 5.2 字典
-
-- 字典查询必须 async，不阻塞 UI 线程。
-- popup 首屏限制词条数量，详细释义按需展开。
-- 缓存最近查询和常见表层词变形还原结果。
-- 弹窗定位对齐 Niratan `PopupLayout`：横排优先上下，竖排优先左右。
-- 弹窗栈行为对齐 Niratan `PopupPresentationCoordinator`：`tapOutside` ≠ dismiss。
-- `scanNonJapaneseText` 默认允许非日文扫描，设置页提供可见开关。
-- Yomitan 字典导入对齐 Niratan 的 `Term` / `Frequency` / `Pitch` 类型目录；启用、排序、删除均按类型独立处理。
-- Windows 上 hoshidicts 遇到非 ASCII 标题/路径或旧 zip 编码导致 code-page/SEH 导入失败时，先保留直导路径，再 retry 生成 lookup-safe 兼容 zip：只保留 `index.json`、`styles.css`、`term_bank_*`、`term_meta_bank_*`、`tag_bank_*`，临时标题改为 ASCII `niratan-import-*`，导入后恢复显示标题，字典类型只以 native `termCount` / `freqCount` / `pitchCount` 为准。
-
-### 5.3 弹窗渲染
-
-- 使用 WinUI 原生外层 + WebView2 渲染词典正文，不要用 WinUI TextBlock 重写 Yomitan structured content。
-- 待渲染时保持 `Opacity=0`，收到 `contentReady` 后切到 `Opacity=1`。
-- 禁止在查词路径里 `await contentReady`，否则 Shift hover 会卡顿。
-- 每次显示生成新 render generation，旧 generation 的 ready 消息必须失效。
-
-### 5.4 EPUB 导入
-
-- 导入后进入应用私有存储，按书籍目录保存。
-- 解包时必须防止 zip slip，所有条目路径限制在目标书籍目录内。
-- 元数据、书签、统计、高亮使用 Niratan 兼容 sidecar JSON：`metadata.json`、`bookmark.json`、`bookinfo.json`、`statistics.json`、`highlights.json`。
-
-### 5.5 代码规范
-
-- 优先做小而可 review 的改动。
-- 没有明确理由不引入第二套数据库技术或 EF Core。
-- 新增依赖时说明原因。
-- C# 优先使用明确模型，避免 `Dictionary<string, object>`。
-- IPC message 要有版本和类型。
-
----
-
-## 6. 验证
-
-### 6.1 快速检查
-
-```powershell
-# 构建 + 测试（/check）
-dotnet build -p:Platform=x64 && dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
-```
-
-### 6.2 Reader 修改后
-
-每次修改 `reader-bridge.js`、reader CSS/HTML、WebView2 宿主、NovelReaderPage 后：
-
-1. 构建并启动 Niratan
-2. UI Automation 打开测试 EPUB（`C:\Users\Wight\Downloads\哈利波特1魔法石.epub`）
-3. 连续翻页检查漂移、裁切、空白页
-4. 调整窗口大小验证 reflow
-5. 捕获诊断状态，确认 `scrollPosition`、`pageCount`、`pageIndex`、`sectionIndex` 一致
-
-详见 [docs/VERIFICATION.md](docs/VERIFICATION.md)。
-
-### 6.3 字典修改后
-
-修改 `JapaneseDeinflector`、`DictionaryLookupService`、`PopupHtmlGenerator`、popup/overlay 后：
-
-1. 运行 `dotnet test --filter "FullyQualifiedName~Dictionary"`
-2. 启动应用，查词验证首次不卡 UI、Shift hover 正常、嵌套查词正常、Yomitan structured content 正确渲染、深色/浅色主题可读
-
-详见 [docs/VERIFICATION.md](docs/VERIFICATION.md)。
-
-### 6.4 发布版本
-
-发布 GitHub 版本或标签时，使用 `.\release.ps1 -Version x.y.z`，不要手工创建、移动、删除或复用 `v*` 标签。
-
-- 发布前必须在干净的 `main` 工作树上运行脚本；未提交改动、非 `main` 分支、已有本地/远端 tag 或已有 GitHub Release 都必须停止。
-- 发布脚本负责更新 `Niratan/Niratan.csproj` 版本、提交版本提交、推送 `main`、创建并推送不可变 `vX.Y.Z` 标签。
-- 发布不在本地跑构建或测试；脚本只触发并等待 GitHub Actions，以 Actions 结果作为发布依据。
-- Actions 失败时不得创建 GitHub Release；先修复问题，再发布新的 patch 版本。
-- 发布资产必须来自对应 tag 的 GitHub Actions artifacts，不使用本地 publish 目录手工打包。
-- 发布前必须验证 `Niratan.Minimal.x64.zip` 内含 `hoshidicts_c_api.dll`，并确认存在 `Niratan.Setup.x64*.exe`。
-- 已发布版本发现问题时，默认发布新的 patch 版本（例如 `v0.1.1`），不要静默替换旧 release 资产；除非用户明确要求，才允许编辑既有 Release。
-- 如需预览发布步骤，使用 `.\release.ps1 -Version x.y.z -PlanOnly`；该模式不得产生 git、GitHub 或文件发布副作用。
-
----
-
-## 7. 文档路由
-
-| 文件 | 内容 | 规则 |
-|---|---|---|
-| `agents.md` | 核心规则 + 约束 + 速查（本文件） | 保持精简，不放架构细节、验证流程、Bug 日志 |
-| `docs/ARCHITECTURE.md` | 技术栈细节、架构决策、数据模型、性能规则、安全规则 | 架构级内容，决策需记录原因 |
-| `docs/VERIFICATION.md` | Reader/字典/音频验证流程、截图规范、AutomationId | 流程级内容，跟着功能迭代更新 |
-| `docs/CHANGELOG.md` | 已修复问题记录 | 只记根因和解决方案，不记流水账 |
-| `.claude/skills/` | 可复用斜杠命令 | 每个 skill 对应一个常见操作 |
-| `docs/superpowers/plans/` | 实现计划 | 计划阶段产物 |
-| `docs/superpowers/specs/` | 功能规格 | 设计阶段产物 |
-
----
-
-## 8. 高风险区域
-
-| 风险 | 区域 |
-|---|---|
-| 高 | WebView2 竖排选择坐标、DPI/多显示器 popup 定位、ruby 文本提取、Yomitan structured content 渲染、hoshidicts native interop、EPUB 安全加载 |
-| 中 | 字体/主题变化后位置锚定、大型 EPUB 性能、WebView2 字体加载 |
-| 低 | 书架 CRUD、设置 UI、基础 AnkiConnect 调用 |
-
----
+- 先检查工作树、最近实现、邻近测试和当前真源，再决定修改。
+- 运行与改动最接近的 contract/test；修改可运行 App 代码后至少完成 x64 build，并打开受影响模块，除非专项验证文档规定更安全的例外。
+- Contract test 不能证明 Reader、Video 或 Manga 的视觉正确性；不得声明未亲自验证的 UI、外部账户、Anki、同步或发布行为可用。
+- 最终回复说明改了什么、验证了什么，以及哪些场景尚未验证。

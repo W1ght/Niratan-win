@@ -114,10 +114,10 @@
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE721;}">
                         <NumberBox Width="160"
                                    AutomationProperties.AutomationId="SasayakiSearchWindowNumberBox"
-                                   Minimum="100"
-                                   Maximum="10000"
-                                   SmallChange="100"
-                                   LargeChange="500"
+                                   Minimum="50"
+                                   Maximum="1000"
+                                   SmallChange="50"
+                                   LargeChange="250"
                                    SpinButtonPlacementMode="Compact"
                                    Value="{x:Bind ViewModel.SearchWindowSizeValue, Mode=TwoWay}" />
                     </toolkit:SettingsCard>

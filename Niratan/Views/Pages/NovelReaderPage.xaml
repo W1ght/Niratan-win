@@ -855,7 +855,7 @@
                                             <TextBlock Grid.Column="1" Text="{Binding SearchWindowSizeValue, Mode=OneWay}" />
                                         </Grid>
                                         <Slider AutomationProperties.AutomationId="NovelReaderSasayakiSearchWindowSlider"
-                                                Minimum="100" Maximum="10000" StepFrequency="100"
+                                                Minimum="50" Maximum="1000" StepFrequency="50"
                                                 IsEnabled="{Binding CanPickFiles}"
                                                 Value="{Binding SearchWindowSizeValue, Mode=TwoWay}" />
                                         <Button AutomationProperties.AutomationId="NovelReaderSasayakiMatchButton"

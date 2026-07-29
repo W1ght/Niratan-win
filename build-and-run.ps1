@@ -6,6 +6,8 @@ $ensureNativeScript = Join-Path $repositoryRoot "scripts\Ensure-NativeHoshidicts
 $outputDirectory = Join-Path $repositoryRoot "Niratan\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64"
 $executable = Join-Path $outputDirectory "Niratan.exe"
 $nativeDll = Join-Path $outputDirectory "hoshidicts_c_api.dll"
+$mihonRuntimeRoot = Join-Path $outputDirectory "MihonBridge"
+$mihonRuntimeManifest = Join-Path $mihonRuntimeRoot "runtime.json"
 
 Write-Host "=== Stopping any existing Niratan ==="
 $expectedExecutable = [System.IO.Path]::GetFullPath($executable)
@@ -37,6 +39,19 @@ if (-not (Test-Path -LiteralPath $executable)) {
 }
 if (-not (Test-Path -LiteralPath $nativeDll)) {
     throw "Native dictionary DLL not found beside Niratan.exe: $nativeDll"
+}
+if (-not (Test-Path -LiteralPath $mihonRuntimeManifest)) {
+    throw "Bundled M-Extension-Server manifest not found: $mihonRuntimeManifest"
+}
+$mihonRuntime = Get-Content -LiteralPath $mihonRuntimeManifest -Raw -Encoding UTF8 |
+    ConvertFrom-Json
+$mihonJava = Join-Path $mihonRuntimeRoot $mihonRuntime.javaExecutable
+$mihonJar = Join-Path $mihonRuntimeRoot $mihonRuntime.serverJar
+if (-not (Test-Path -LiteralPath $mihonJava)) {
+    throw "Bundled M-Extension-Server Java executable not found: $mihonJava"
+}
+if (-not (Test-Path -LiteralPath $mihonJar)) {
+    throw "Bundled M-Extension-Server JAR not found: $mihonJar"
 }
 
 Write-Host "=== Launching Niratan ==="

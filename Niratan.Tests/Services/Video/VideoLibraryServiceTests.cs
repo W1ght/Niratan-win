@@ -31,8 +31,13 @@ public class VideoLibraryServiceTests : IDisposable
         var data = new Mock<IVideoDataService>();
         var savedVideos = new List<VideoItem>();
         data
-            .Setup(service => service.UpsertVideoAsync(It.IsAny<VideoItem>(), It.IsAny<CancellationToken>()))
-            .Callback<VideoItem, CancellationToken>((video, _) => savedVideos.Add(video))
+            .Setup(service => service.ReplaceVideoSourceItemsAsync(
+                It.IsAny<string>(),
+                It.IsAny<IReadOnlyList<VideoItem>>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, IReadOnlyList<VideoItem>, DateTime, CancellationToken>(
+                (_, videos, _, _) => savedVideos.AddRange(videos))
             .Returns(Task.CompletedTask);
         var sut = new VideoLibraryService(data.Object, NullLogger<VideoLibraryService>.Instance);
 
@@ -50,9 +55,10 @@ public class VideoLibraryServiceTests : IDisposable
         data.Verify(service => service.UpsertVideoLibrarySourceAsync(
             It.Is<VideoLibrarySource>(source => source.FolderPath == _directory),
             It.IsAny<CancellationToken>()), Times.Once);
-        data.Verify(service => service.DeleteSourceVideosExceptAsync(
+        data.Verify(service => service.ReplaceVideoSourceItemsAsync(
             It.IsAny<string>(),
-            It.Is<IReadOnlyList<string>>(paths => paths.Count == 2),
+            It.Is<IReadOnlyList<VideoItem>>(videos => videos.Count == 2),
+            It.IsAny<DateTime>(),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 

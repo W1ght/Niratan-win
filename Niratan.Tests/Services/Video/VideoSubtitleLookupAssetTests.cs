@@ -220,6 +220,20 @@ public class VideoSubtitleLookupAssetTests
     }
 
     [Fact]
+    public void VideoSubtitleLookup_UsesEnglishWordBoundaryScanningForEnglishProfile()
+    {
+        var code = ReadVideoPlayerWindowCode();
+        var script = ReadProjectFile("Web", "VideoSubtitle", "subtitle-overlay.js");
+
+        code.Should().Contain(
+            "contentLanguageId = App.GetService<IProfileRuntimeService>().ActiveLanguage.Id");
+        script.Should().Contain("state.contentLanguageId === 'en'");
+        script.Should().Contain("findEnglishWordStart");
+        script.Should().Contain("isEnglishScanBoundaryAt");
+        script.Should().Contain("ENGLISH_WORD_INTERNAL_DELIMITERS");
+    }
+
+    [Fact]
     public void VideoSubtitleLookup_QueuedShowDropReleasesExactCandidate()
     {
         var code = ReadVideoPlayerWindowCode();
@@ -604,6 +618,7 @@ public class VideoSubtitleLookupAssetTests
         code.Should().Contain("VideoBottomChromeAutoHideState");
         code.Should().Contain("_bottomChromeAutoHideTimer.Interval = VideoBottomChromeAutoHideState.DefaultHideDelay;");
         code.Should().Contain("_bottomChromeAutoHideTimer.Tick += BottomChromeAutoHideTimer_Tick;");
+        code.Should().Contain("ShowForPointerMovement(position.X, position.Y)");
         code.Should().Contain("ShowBottomChromeForPointerActivity();");
         code.Should().Contain("HideBottomChromeForPointerLeave();");
         code.Should().Contain("HideBottomChromeForInactivity();");

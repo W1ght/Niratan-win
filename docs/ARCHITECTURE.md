@@ -1,5 +1,7 @@
 # Niratan 架构文档
 
+Niratan Win 是一个同时包含 Reader、Video 和 Manga 的 WinUI 3 应用。三个内容模块拥有独立的资料库与阅读/播放边界，并共享 Dictionary、Popup、Profile、Audio 和 Anki 管线；共享层不得反向依赖某个具体内容来源。快捷键保留各窗口现有 scope，尚未统一的模块不得被文档描述为已经接入。
+
 ## 1. 技术栈详情
 
 ### 1.1 UI 外壳
@@ -34,8 +36,8 @@ foliate-js 已于 2026-05-19 移除，禁止引回主阅读链路。
 | 变形还原 | C# 重实现 | 对齐上游 hoshidicts `src/language/ja/deinflector.cpp` |
 
 重要原则：
-- hoshidicts 作为“字典查询后端”；主 App SQLite 只保存视频业务数据，不保存小说、书架或小说统计。
-- 高频字典查询数据不塞进主 App SQLite。
+- hoshidicts 作为“字典查询后端”；主 App 业务真源使用 Niratan 兼容 JSON，不新建 SQLite 业务库。
+- 高频字典查询数据不塞进主 App 业务存储。
 - `native/hoshidicts/` 不可修改，所有功能通过 C API DLL P/Invoke 实现。
 
 ### 1.4 App 数据存储
@@ -43,11 +45,14 @@ foliate-js 已于 2026-05-19 移除，禁止引回主阅读链路。
 | 项 | 选型 | 原因 |
 |---|---|---|
 | 小说/书架/统计 | Niratan 兼容 JSON sidecar | 每本书可独立迁移、备份和同步，文件即真源 |
-| 视频业务数据 | SQLite | 保留现有视频功能的关系型查询与迁移能力 |
+| 漫画目录/进度 | `Data/Manga/catalog.json` + 可重建缓存 | 源媒体只读，目录、隐藏状态和阅读进度独立持久化 |
+| 视频资料库 | `video_library.json` | 对齐 Niratan 的 source、媒体身份、metadata 和 collection catalog |
+| 视频播放历史 | `video_playback_history.json` | 对齐 Niratan 的进度、完成状态、字幕选择和恢复选项 |
+| 视频挖卡历史 | `video_mining_history.json` | 对齐 Niratan 的字幕上下文、媒体身份和时间字段 |
 | 旧小说迁移 | Dapper + Microsoft.Data.Sqlite（只读入旧表） | 一次性导出后退役旧小说表 |
 | JSON | System.Text.Json + 原子替换 | 强类型、可恢复，不暴露半写文件 |
 
-不引入 EF Core 或第二套数据库技术。外部音频数据库仍按原有只读边界访问，不成为 Niratan 的业务真源。
+SQLite 不再承载视频数据。历史 `niratan.db` 中的视频表不会自动导入 JSON，也不会被新运行时读取或改写；外部音频数据库仍按原有只读边界访问，不成为 Niratan 的业务真源。
 
 ### 1.5 测试
 
@@ -68,33 +73,42 @@ Niratan.slnx
 Niratan/
   App.xaml / App.xaml.cs
   Views/
-    Pages/           NovelReaderPage, NovelLibraryPage, SettingsPage, DictionarySettingsPage
+    Pages/           NovelLibraryPage, MangaLibraryPage, VideoLibraryPage, SettingsPage
+    Manga/           MangaReaderWindow, MangaPageView
+    Video/           VideoPlayerWindow and playback surfaces
     Dialogs/         ReaderAppearanceDialog, ReaderChapterListDialog
     Dictionary/      DictionaryLookupPopup, DictionaryPopupOverlay
   ViewModels/
-    Pages/           NovelReaderPageViewModel, NovelLibraryPageViewModel, SettingsPageViewModel
-    Components/      NovelBookItemViewModel, SasayakiViewModel
+    Pages/           Novel, Manga, Video, Dictionary and Settings page ViewModels
+    Components/      Library item, Sasayaki and shared UI projections
   Models/
-    NovelBook, DictionaryEntry, AnkiTemplate, ...
+    Novel/           Novel books, sidecars, statistics and Reader state
+    Manga/           Manga catalog, pages, text regions and Reader session
+    Video/           Video catalog, playback and mining documents
     Settings/        AppSettings, ReaderSettings, DictionaryDisplaySettings, AudioSettings, AnkiSettings
     Anki/            AnkiMiningPayload
     Sasayaki/        SasayakiModels
     Dictionary/      InstalledDictionary
   Services/
     Novels/          NovelLibraryService, NovelReaderContentStyles, EpubParserService
+    Manga/           MangaLibraryService, MangaSourceIndexer, MangaPageProvider
+    Video/           VideoLibraryService, playback engine, subtitle and mining services
     Dictionary/      DictionaryLookupService, DictionaryImportService, JapaneseDeinflector, PopupHtmlGenerator
     Audio/           AudioService
-    Storage/         VideoDataService, DatabaseMigrator, NovelStorageMigrationService
+    Storage/         VideoDataService, NovelStorageMigrationService
     UI/              NavigationService
     Anki/            AnkiService, AnkiHandlebarRenderer, LapisPreset
     Sasayaki/        SasayakiPlayer, SasayakiMatcher
     Settings/        SettingsService
   Web/
+    NovelReader/     reader-bridge.js, selection.js
     DictionaryPopup/ popup.js
+    VideoSubtitle/   subtitle-overlay.js
   Helpers/           AppDataHelper
 
 Niratan.Tests/
-  Services/          Dictionary tests, Novel tests
+  Services/          Novel, Manga, Video, Dictionary, Storage and integration contracts
+  Web/               Reader and selection runtime contracts
 ```
 
 ---
@@ -374,12 +388,15 @@ Profile 行为对齐 Niratan：global lookup 使用 global active profile，书�
 
 Windows 使用系统文件选择器直接写入用户选择的目标路径，不经过 SwiftUI `fileMover`；这是平台 API 差异，归档内容、命名与完成后的用户可见结果保持一致。
 
-### 6.4 SQLite 边界与旧数据迁移
+### 6.4 JSON 边界与旧 SQLite 数据
 
-- `IVideoDataService` / `VideoDataService` 是主 App SQLite 的唯一业务入口，数据库迁移只创建视频相关表。
+- `IVideoDataService` / `VideoDataService` 是视频 JSON 的唯一业务入口；catalog 与 playback history 分文件、分原子提交，集合成员使用媒体 identity persistence key。
+- 本地视频 identity 是标准化绝对路径；远程视频 identity 是 `remote://<provider>/<id>`。移除 source 或 catalog item 不删除独立播放历史，重新加入同一 identity 后可恢复进度。
+- 进度小于 2 秒不持久化；距离结尾 5 秒以内标记完成；字幕选择独立于进度清理。该边界直接对齐 Niratan `VideoPlaybackHistoryStore`。
+- 应用不再包含或运行视频 SQLite schema migration，全新安装不会创建 `niratan.db`。历史视频 SQLite 数据不迁移、不双写，旧文件由用户自行保留或删除。
 - Windows 视频可选 Anime4K 由 `IAnime4KShaderService` 管理：固定下载 Anime4K `v4.0.1` GLSL，使用 SHA-256 校验并原子写入 `%APPDATA%\Niratan\VideoShaders`；`MpvPlaybackEngine` 只接收强类型预设并通过 `change-list glsl-shaders` 应用，不接受任意 URL、路径或 mpv 配置。入口位于播放器侧边栏“视频增强”，预设仅属于当前播放会话，每次打开视频都强制恢复 `Off`，避免高 GPU 负载被自动继承；这是相对 Niratan macOS 默认画质链路的显式 Windows 可选偏差。
 - 视频打开采用首帧优先路径：来源和必要播放属性应用后立即解除暂停；外部字幕 CPU 解析在线程池执行，章节、轨道轮询、交互字幕与侧边栏投影不得阻塞首帧。底部控制栏层级必须高于透明字幕选择画布，重叠区域由控制栏优先接收输入。
-- 旧 `NovelBooks`、`NovelReadingProgress`、`NovelReaderSettings` 仅由 `NovelStorageMigrationService` 在启动时读取。
+- 仅当物理 `niratan.db` 已存在时，旧 `NovelBooks`、`NovelReadingProgress`、`NovelReaderSettings` 才由 `NovelStorageMigrationService` 在启动时读取；探测不得创建空数据库。
 - 迁移顺序固定为：备份数据库 → 导出 sidecar → 重扫并校验 manifest → 同一事务退役旧小说表 → 最后原子写完成 manifest。
 - 任何导出或校验失败都 fail closed：保留旧表与备份，小说写入切为只读，原始文件不删除。
 - 如果进程在退役旧表后、写 manifest 前中断，下次启动校验文件目录后补写 manifest，不重建小说 SQLite 表。
@@ -421,6 +438,28 @@ Z-Library 获取不是 Niratan 的用户可见行为，而是 Windows 端显式�
 - API redirect 只在 HTTPS 下跟随；credential-bearing POST 不允许跨 origin redirect，下载跨 origin redirect 会移除 session Cookie 和 Referer。
 - 下载先落到系统临时目录，验证后调用 `INovelLibraryService.ImportEpubAsync`；现有私有书籍目录、zip-slip 防护、metadata 与 sidecar 写入仍是唯一导入真源。无论成功或失败都清理临时文件。
 
+### 6.7 漫画 JSON 存储与只读媒体边界
+
+```text
+MangaLibraryPage / MangaReaderWindow
+  → MangaLibraryPageViewModel / MangaReaderViewModel
+    → MangaLibraryService / MangaSourceIndexer / MangaTextRegionService / MangaOcrService
+      → MangaCatalogStore / MangaPageProvider / SuwayomiService / MihonExtensionService
+```
+
+- 漫画目录、阅读进度、隐藏记录和全局 Reader 偏好只写入 `Data/Manga/catalog.json`；`MangaCatalogStore` 使用同目录临时文件和原子替换，不读写旧 `Comics`、`Chapters` 或其他 SQLite 表。
+- 用户选择的图片目录、Mokuro、CBZ/ZIP 和 EPUB 都是只读媒体。移除书库卡片、刷新目录、修改封面或读取 Mokuro 不得移动、重命名、改写或删除源文件。
+- 压缩包页面按需解到 `Data/Manga/Cache/<book-id>/pages`，条目必须命中已索引页、限制单页解压大小并使用由 App 生成的目标文件名。`book-id` 必须验证为单一安全路径段，最终规范化缓存路径必须仍位于 Manga cache root；目录页同样拒绝 rooted path 和 `..` 越界。
+- 普通图片目录只读取直接子级；CBZ/ZIP 排除 `__MACOSX`、`.DS_Store` 和 AppleDouble 项并自然排序。EPUB 页序优先使用 `container.xml → OPF spine → 正文图片引用`，仅在正文未产生页面时才回退到 manifest 图片。
+- Mokuro 页按 `img_path` 配对，文字 `box` / `lines_coords` 转为以图片左上角为原点的归一化坐标。Google Lens 几何也在协议边界保留为 WinUI 左上角坐标，不沿用 AppKit 的左下角转换；Reader 用原生 XAML 图像画布呈现文字命中层，并复用共享 Dictionary Popup、嵌套查词和 Anki 服务。漫画查词先按当前 Profile 语言和 scan length 解析候选词，将候选 UTF-16 起点传给制卡高亮；命中页作为 `{book-cover}` mining 媒体，由 Anki 管线按页面内容哈希生成稳定 `hoshi_manga_page_*` 文件名，不把源绝对路径暴露给 JavaScript，也不使用可能跨书覆盖的源页 basename。
+- 单页、双页和连续布局共用同一个 `MangaReaderViewModel`。阅读方向决定双页排列和物理左右键语义；布局、方向、50%–200% 缩放及源页索引持久化到 JSON。左键命中文字查词，右键移动超过 4 CSS px 后拖动画布，未移动的右键释放打开页菜单；`Ctrl+滚轮` 以 5% 步长缩放。
+- 无 Mokuro 文字层时，用户可在 Reader 明确确认上传披露后启动 Google Lens OCR。图片最长边限制为 1500 px；无需缩放且不超过 16 MiB 的已验证图片保留原始编码，其他页面使用高质量插值缩小，避免不必要的二次有损压缩。当前页优先、随后环绕处理；启动命令只创建受控后台 scan 后立即返回，每完成一页就立刻发布该页文字命中层，当前页无需等待全章即可查词。Lens 段落按左上角坐标重建阅读顺序：竖排从右列到左列且列内从上到下，横排从上行到下行且行内从左到右；服务把同一气泡的相邻列拆成多个段落时，按方向、流向重叠和列/行间距重新聚合为一个文字块，远隔段落保持分离。方向对齐 Niratan，以接近 90° 的旋转或明显纵长的文字框判定，段落方向不足时使用多数行，词级几何可用时用于字符命中框。每页结果以 `google-lens-v3-ja-niratan-layout` 引擎签名、页 identity 和源修改时间写入 `Data/Manga/OCR`，暂停、取消、换书和 generation 变化均禁止旧结果回写当前 UI。重新打开 Reader 时，若 OCR 仍处于显示状态且用户已经接受上传披露，则自动按“当前页到末页、再回到开头”的顺序续扫；每页先读取已完成的 OCR cache，并在内存中兼容聚合已有 v3 分列结果，只有缺页才读取页面 payload 并请求 Google Lens。已有 Mokuro 的页面不发送网络请求。
+- Mihon 生态有两条显式接入路径。Suwayomi 模式继续连接用户自行管理的服务器；`Data/Manga/suwayomi.json` 只保存服务地址、鉴权模式、用户名和凭据 identity，密码/令牌写入 Windows Credential Manager。源浏览、搜索、章节准备、页面缓存与进度回写使用 Suwayomi `/api/v1`；只允许 HTTP/HTTPS，JSON 和图片分别限制为 16 MiB、256 MiB。
+- 直接 Mihon APK 模式对齐 Mangayomi 的桌面分进程方案：主进程不加载 APK、DEX 或 JVM，只通过 `MihonExtensionService` 调用 Niratan 自主管理的 M-Extension-Server sidecar。x64 build/publish 固定包含 M-Extension-Server 1.0.4 与其私有 Java 21 runtime；构建先校验上游 bundle 的固定 SHA-256，再把 runtime、MPL-2.0 和对应源码 notice 复制到输出的 `MihonBridge`。用户界面不提供下载选择、bridge 地址、Java 或 JAR 路径，旧配置中的这些字段不再参与运行。配置保存在 `Data/Manga/mihon.json`，其中 `Repositories[]` 按用户顺序保存多个仓库，旧版单一 `RepositoryUrl` 在读取后无损迁移；APK 与强类型安装清单保存在 `Data/Manga/Extensions`，sidecar 私有工作目录为 `Data/Manga/MihonBridge`。刷新按仓库隔离失败并合并结果，同一 package/source identity 重复时由列表中靠前的仓库优先；移除仓库不删除已经安装的 APK。sidecar 在首次需要执行扩展时使用随机本机端口以及 Windows 分发包要求的内存、`--add-opens` 与 `-noverify` 参数启动，并随服务释放而终止。
+- Mihon 仓库必须使用 HTTPS（测试用回环 HTTP 除外），索引限制为 8 MiB；APK 限制为 64 MiB，写入前校验 ZIP、`AndroidManifest.xml`、DEX、条目数并记录 SHA-256。兼容协议只允许固定的 manga 方法并传 Base64 APK 与字符串 `sourceId`；Niratan 的 MPL-2.0 overlay 在 sidecar 内从 SourceFactory 结果中按 64 位 source ID 精确选择，再交给原 invoker，因而同一 APK 暴露的多语言/多 Source 条目可独立安装和调用。overlay loader 还只在 DEX 转换后的私有临时 JAR 内修复 dex2jar 2.4 对近期 R8 无字段 companion/serializer、可唯一识别的无状态 lambda/interceptor，以及 enum/单例错误实例化父类所产生的构造 owner；不改写用户 APK，也不在 App 主进程执行 DEX。overlay 源码与小型 JAR 随仓库保存，构建按固定 SHA-256 校验并在 class path 中先于固定上游 1.0.4 JAR 加载。Niratan 客户端只接受 `localhost` / `127.0.0.1` / `::1` bridge URL，JSON 限制为 16 MiB，图片限制为 256 MiB。原版 M-Extension-Server 可能监听全部网卡且协议没有认证，UI 必须提示用户检查 Windows 防火墙；客户端的回环限制不能被描述成 sidecar 自身只监听回环。
+- 漫画主页只承载本地/在线书架；来源发现与扩展管理抽为 App 侧边栏一级 `BrowsePage`，对齐 Mangayomi 的 Browse 信息架构。当前 Windows 扩展运行时只覆盖漫画，因此该页只显示“漫画源 / 漫画扩展 / 来源设置”，不提供无实现的动画或小说扩展页签。三者都是同一导航行的平面页签；来源设置在主内容区承载 Suwayomi 连接与凭据、Mihon 仓库和内置 runtime 状态，不使用遮挡列表的 Flyout，也不暴露 M-Extension-Server 下载、bridge 地址或 Java/JAR 路径。Mihon 仓库配置显示为可添加、编辑和移除的列表，不退化为单值输入框或来源下拉框。漫画源把 Suwayomi 与已安装 Mihon 来源合并为按语言分组、可滚动的全宽列表，点击行尾“热门”后才进入复用书架的来源结果页；当前 bridge/service 没有 Latest 契约，不得把 Popular 误标成 Latest。Suwayomi 返回的同源 `iconUrl` 在列表项实现时按需下载并显示，缺少或无效图标使用稳定的来源占位。Mihon 扩展先按 Mangayomi 的 `<repo>/icon/<package>.png` 读取图标；仓库未发布该资产时按需下载对应 APK，只从受大小限制的 `res/` 光栅资源中选取最大候选并缓存，仍失败才显示拼图占位。Mihon 扩展由独立 `MihonExtensionBrowser` 承载，列表按“已安装 / 语言”分组并虚拟化，支持名称/语言/包名搜索、语言筛选、安装状态优先排序和逐行图标安装/更新；多 Source APK 的每个仓库条目按 source ID 独立安装，不把完整仓库塞进 ComboBox。Suwayomi 与 Mihon 的浏览结果都投影为同一个 `RemoteMangaLibraryItemViewModel`，复用 `NovelBookCard`、`UniformGridLayout` 与封面占位；浏览书架在末尾六项进入布局时依据服务 `hasNextPage` 预加载下一页，按 Provider、来源与查询隔离状态并跨页去重。远端卡片点击先打开共用详情面板，显示完整海报、元数据、继续阅读与章节选择，只有用户选择阅读动作后才创建 Reader 会话。Suwayomi 详情通过服务器 `/library` 契约加入或移出书库；直接 Mihon APK 没有服务器书库契约，因此 Windows 扩展把用户明确加入的远端条目保存到 `mihon.json` 的 `Library[]`，并与 Suwayomi `category` 收藏合并显示在在线书架。本地书架仍只来自 `catalog.json`，任何远端收藏都不会写入本地 catalog。
+- Suwayomi 来源图标缓存到 `Data/Manga/Cache/Suwayomi/SourceIcons/<server-id>`，页缓存到 `Data/Manga/Cache/Suwayomi/<chapter-id>`；图标 URL 必须回到同一个 Suwayomi origin 和 `/api/v1`，响应必须是受大小限制的图片。Mihon 扩展图标、封面与章节页按 package/source/book identity 缓存到 `Data/Manga/Cache/Mihon`，并在读取已安装 APK 前校验 SHA-256。两者的 Reader session 都是远程临时会话，不混入本地只读媒体 catalog；Mihon sidecar 没有进度 API，因此其页进度当前不跨会话保存。全局布局、方向、缩放与 OCR 披露仍复用 Manga JSON 偏好。
+
 ## 7. 性能规则
 
 ### 7.1 阅读器
@@ -441,9 +480,11 @@ Z-Library 获取不是 Niratan 的用户可见行为，而是 Windows 端显式�
 
 - 小说 sidecar 使用共享原子 JSON store，写入前校验目录边界。
 - 元数据损坏时不得覆盖原文件，书架归一化必须暂停。
-- 视频 SQLite 使用 WAL mode、migration 和统一的 `AppDbConnectionFactory`。
-- SQLite schema 不得重新引入小说、书架或小说统计表。
-- 没有明确理由不引入 EF Core。
+- 视频 catalog、播放历史和挖卡历史使用 Niratan 兼容强类型 JSON；批量 source 刷新只提交一次 catalog。
+- JSON 解码失败时保留原文件并停止写入，禁止用空模型覆盖损坏数据。
+- 缩略图是可重新生成的 cache，不进入 catalog 真源。
+- SQLite 不得重新成为视频、小说、书架或统计的业务真源。
+- 除非有明确架构理由并得到确认，否则不要引入 EF Core 或第二套业务持久化技术。
 
 ---
 
@@ -473,13 +514,16 @@ JavaScript：
 
 ## 9. 安全规则
 
-- EPUB 内容视为不可信输入。
+- EPUB、CBZ/ZIP、Mokuro、字幕、torrent 元数据、远端响应和 WebView2 消息均视为不可信输入。
 - WebView2 禁止任意外部跳转。
 - 限制文件访问，通过受控 virtual host 提供书籍资源。
 - 不要向 JavaScript 暴露宽泛 native API。
 - 校验所有来自 WebView2 的消息。
 - Bridge API 要窄、明确、强类型。
 - EPUB 解包时防止 zip slip，所有条目路径限制在目标书籍目录内。
+- 漫画目录页必须保持在已选择的源根目录内；归档页只能写入由 App 生成文件名的缓存路径，并受单页解压大小限制。来自 catalog 的书籍 ID 不能未经验证参与缓存路径组合。
+- Mihon APK 与仓库索引属于可执行的不可信输入；扩展只能在回环 sidecar 中执行，仓库、APK、bridge 方法、响应、媒体 URL、大小与 SHA-256 必须在服务边界校验，主进程不得反射加载 APK/JAR。
+- 本地漫画与视频源媒体保持只读；移除 catalog 记录不得删除源文件。
 - WebView 使用受控 origin 加载章节和资源，禁止让 EPUB 内容任意访问本机路径。
 
 ---
@@ -494,10 +538,13 @@ JavaScript：
 | 高 | Yomitan structured content 渲染 | 结构化释义的 HTML 渲染 |
 | 高 | hoshidicts native interop | P/Invoke 打包与内存管理 |
 | 高 | EPUB 安全加载 | 本地资源访问控制 |
+| 高 | Manga 归档与只读源媒体 | 路径越界、解压炸弹和用户文件保护 |
+| 高 | Mihon 扩展 sidecar | 第三方 APK 代码、未认证回环协议、远端响应与进程生命周期 |
+| 高 | Video 原生播放与字幕坐标 | mpv 生命周期、DPI、字幕命中与媒体采集 |
 | 中 | 字体/主题变化后位置锚定 | 版式变化影响阅读进度 |
 | 中 | 大型 EPUB 性能 | 超长章节、大量图片 |
+| 中 | 大型漫画与视频资料库 | 延迟解码、缓存、索引刷新和内存压力 |
 | 中 | WebView2 字体加载 | CORS 类似的资源限制 |
-| 低 | 书架 CRUD | 标准 CRUD 操作 |
 | 低 | 设置 UI | 简单数据绑定 |
 | 低 | 基础 AnkiConnect 调用 | HTTP API 调用 |
 
@@ -508,7 +555,7 @@ JavaScript：
 - 产品行为对齐 Niratan，Windows 端使用固定版本 `YoutubeExplode 6.6.0` 在进程内解析元数据、匿名公开流与发布者字幕；该非官方接口具有易失性，UI 必须明确标注“实验性”。
 - 不使用 YouTube IFrame/Data API 作为播放链路，因为它们不能同时满足主动画质选择、libmpv 分离流播放、字幕查词与音频制卡；禁止引入 yt-dlp、youtube-dl、Deno、Node、converter/helper 下载或子进程。
 - `IRemoteVideoResolver` 是唯一接触 YoutubeExplode 类型的适配边界。其他层只使用 `RemoteVideoIdentity`、`ResolvedRemoteVideoSource`、`VideoPlaybackRequest` 等自有强类型模型。
-- 签名流 URL、字幕 URL、请求 headers 和过期时间只驻留内存；SQLite 仅保存 `remote://youtube/{videoId}` 稳定键、原始/规范 URL、远程身份、缩略图 URL与字幕语言。日志只记录 provider/id，不记录签名 URL。
+- 签名流 URL、字幕 URL、请求 headers 和过期时间只驻留内存；`video_library.json` 仅保存 `remote://youtube/{videoId}` 稳定键、原始/规范 URL、远程身份、缩略图 URL 与字幕语言。日志只记录 provider/id，不记录签名 URL。
 - 视频恢复状态按媒体身份保存进度、字幕选择、播放速度、音频选择及音频/字幕延迟；音轨优先以 ff-index 恢复，并以轨道元数据作唯一匹配回退。音量、硬解、去隔行、HDR、色彩校正和字幕外观是全局偏好；循环、A-B 点、旋转、画面比例、远程临时画质和 Anime4K 是会话态，不自动恢复。
 - 解析缓存以稳定键索引，优先使用流 URL 的 `expire`，提前 5 分钟失效；无过期参数时使用 4 小时 TTL。首次播放失败强制刷新一次，随后仅允许一次 muxed fallback。
 - 匿名 v1 只支持公开、非直播、非播放列表视频，最高 1080p。画质切换重开流但恢复位置、暂停、音量、速度、延迟、循环、宽高比、旋转与字幕覆盖层。
@@ -524,5 +571,5 @@ JavaScript：
 - `INyaaDownloadManager` 持有应用会话内的任务队列。搜索对话框只负责入队，关闭对话框不会取消任务；搜索结果可按可信度/重制/做种状态筛选并按做种数/时间/下载数/体积/标题排序。管理页展示进度与错误，并提供暂停、继续、取消、重试、打开目录、移除记录、状态筛选和排序。
 - `.torrent` 元数据限制为 32 MiB，以覆盖文件数量较多的合法资源包。启动下载前必须验证每个 torrent 文件的规范化路径仍位于该任务目录内；资源包递归扫描跳过 reparse point，并再次执行目录边界校验。
 - `ResourcePackageAnalyzer` 只分类强类型扩展：EPUB、音频、SRT/字幕和视频。单 EPUB + 单音频 + 单 SRT 直接视为高置信度；多资源包使用规范化文件名评分，低分或前两名接近时不得自动匹配。
-- `IResourcePackageImportService` 是唯一编排入口：EPUB 复用 `INovelLibraryService`，有声书/SRT 复制到书籍私有 `Resources/Sasayaki` 后调用 `ISasayakiMatchService`，视频复用 `IVideoLibraryService` 并绑定同名或语言后缀字幕。ViewModel 不直接访问文件存储或 SQLite。
+- `IResourcePackageImportService` 是唯一编排入口：EPUB 复用 `INovelLibraryService`，有声书/SRT 复制到书籍私有 `Resources/Sasayaki` 后调用 `ISasayakiMatchService`，视频复用 `IVideoLibraryService` 并绑定同名或语言后缀字幕。ViewModel 不直接访问文件存储或持久化实现。
 - 下载内容保持不可信。资源包中的可执行文件、脚本和未知格式不会启动或导入；只有用户明确选择的结果才会下载。UI 必须提示用户仅下载有权获取的内容。

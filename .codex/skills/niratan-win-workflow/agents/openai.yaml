@@ -1,0 +1,4 @@
+interface:
+  display_name: "Niratan Win Workflow"
+  short_description: "Route Niratan Win work to scoped project guidance"
+  default_prompt: "Use $niratan-win-workflow to implement and verify a scoped Niratan Win change."

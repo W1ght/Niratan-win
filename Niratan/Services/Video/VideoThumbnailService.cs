@@ -7,7 +7,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Niratan.Helpers;
 using Niratan.Models;
-using Niratan.Services.Storage;
 
 namespace Niratan.Services.Video;
 
@@ -17,7 +16,6 @@ internal sealed class VideoThumbnailService : IVideoThumbnailService
     private static readonly TimeSpan DefaultCaptureTime = TimeSpan.FromSeconds(5);
 
     private readonly IVideoMiningMediaExtractor _extractor;
-    private readonly IVideoDataService _dataService;
     private readonly string _cacheDirectory;
     private readonly SemaphoreSlim _generationGate = new(MaximumConcurrentJobs, MaximumConcurrentJobs);
     private readonly Dictionary<string, Task<string?>> _inFlight = [];
@@ -26,11 +24,9 @@ internal sealed class VideoThumbnailService : IVideoThumbnailService
 
     public VideoThumbnailService(
         IVideoMiningMediaExtractor extractor,
-        IVideoDataService dataService,
         string? cacheDirectory = null)
     {
         _extractor = extractor;
-        _dataService = dataService;
         _cacheDirectory = cacheDirectory ?? Path.Combine(AppDataHelper.GetDataPath(), "VideoThumbnails");
         Directory.CreateDirectory(_cacheDirectory);
     }
@@ -66,12 +62,7 @@ internal sealed class VideoThumbnailService : IVideoThumbnailService
         var outputPath = Path.Combine(_cacheDirectory, $"{cacheKey}.png");
         var cachedPath = GetExistingGeneratedPath(outputPath);
         if (cachedPath != null)
-        {
-            if (!string.Equals(video.ThumbnailPath, cachedPath, StringComparison.OrdinalIgnoreCase))
-                await _dataService.UpdateVideoThumbnailPathAsync(video.Id, cachedPath, ct);
-
             return cachedPath;
-        }
 
         if (!generateIfMissing
             || IsSuspended
@@ -137,7 +128,6 @@ internal sealed class VideoThumbnailService : IVideoThumbnailService
                 File.Copy(generated!, outputPath, overwrite: true);
             }
 
-            await _dataService.UpdateVideoThumbnailPathAsync(video.Id, outputPath, CancellationToken.None);
             return outputPath;
         }
         finally

@@ -24,6 +24,8 @@
   ];
 
   const TTU_MATCHABLE_CHARACTER = /[0-9A-Za-z○◯々-〇〻ぁ-ゖゝ-ゞァ-ヺー０-９Ａ-Ｚａ-ｚｦ-ﾝ\p{Radical}\p{Unified_Ideograph}]/iu;
+  const ENGLISH_SCAN_DELIMITERS = '"“”„‟\'‘’‚‛«»‹›!?—–-‐‑‒/\\|@#$%^&*_+=~`<>';
+  const ENGLISH_WORD_INTERNAL_DELIMITERS = '\'’`-‐‑';
 
   let normalizedOffsetGeneration = 0;
   let normalizedOffsetReadyGeneration = -1;
@@ -88,10 +90,19 @@
     return typeof configured === 'boolean' ? configured : true;
   }
 
+  function contentLanguageId() {
+    const configured = window.__niratanLookupSettings?.contentLanguageId;
+    return typeof configured === 'string' ? configured.toLowerCase() : 'ja';
+  }
+
+  function isEnglishWordChar(char) {
+    return !!char && /[A-Za-z0-9]/.test(char);
+  }
+
   const niratanSelection = {
     selection: null,
     miningContextCache: new WeakMap(),
-    scanDelimiters: '。、！？…※「」『』（）()【】〈〉《》〔〕｛｝{}[]・：；:;,　─\n\r',
+    scanDelimiters: '。、！？…‥「」『』（）()【】〈〉《》〔〕｛｝{}［］[]・：；:;，,.─\n\r',
     sentenceDelimiters: '。！？.!?\n\r',
     trailingSentenceChars: '。、！？…※」』）)]】〉》〕｝}］]',
     brackets: {
@@ -111,6 +122,36 @@
       return /^[\s　]$/.test(char) ||
         this.scanDelimiters.includes(char) ||
         (!scanNonJapaneseTextEnabled() && !this.isCodePointJapanese(char.codePointAt(0)));
+    },
+
+    isEnglishScanBoundaryAt(text, offset) {
+      const char = text[offset];
+      const isInternal = ENGLISH_WORD_INTERNAL_DELIMITERS.includes(char) &&
+        isEnglishWordChar(text[offset - 1]) &&
+        isEnglishWordChar(text[offset + 1]);
+      return this.scanDelimiters.includes(char) ||
+        (ENGLISH_SCAN_DELIMITERS.includes(char) && !isInternal);
+    },
+
+    isScanBoundaryAt(text, offset) {
+      return contentLanguageId() === 'en'
+        ? this.isEnglishScanBoundaryAt(text, offset)
+        : this.isScanBoundary(text[offset]);
+    },
+
+    isHitBoundaryAt(text, offset) {
+      return contentLanguageId() === 'en'
+        ? /^[\s　]$/.test(text[offset]) || this.isEnglishScanBoundaryAt(text, offset)
+        : this.isScanBoundary(text[offset]);
+    },
+
+    findEnglishWordStart(hit) {
+      const text = hit.node.textContent;
+      let offset = hit.offset;
+      while (offset > 0 && !this.isHitBoundaryAt(text, offset - 1)) {
+        offset--;
+      }
+      return { node: hit.node, offset };
     },
 
     isFurigana(node) {
@@ -282,7 +323,7 @@
         charRange.setStart(node, offset);
         charRange.setEnd(node, offset + 1);
         if (this.inCharRange(charRange, x, y)) {
-          if (this.isScanBoundary(text[offset])) return null;
+          if (this.isHitBoundaryAt(text, offset)) return null;
           return { node, offset };
         }
       }
@@ -442,11 +483,14 @@
         return null;
       }
 
-      const hit = this.getCharacterAtPoint(x, y);
-      if (!hit) {
+      const rawHit = this.getCharacterAtPoint(x, y);
+      if (!rawHit) {
         this.clearSelection();
         return null;
       }
+      const hit = contentLanguageId() === 'en'
+        ? this.findEnglishWordStart(rawHit)
+        : rawHit;
 
       if (
         this.selection &&
@@ -474,7 +518,7 @@
 
         while (offset < content.length && text.length < maxLength) {
           const char = content[offset];
-          if (this.isScanBoundary(char)) break;
+          if (this.isScanBoundaryAt(content, offset)) break;
           text += char;
           offset++;
         }

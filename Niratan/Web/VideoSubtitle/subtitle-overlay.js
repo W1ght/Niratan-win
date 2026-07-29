@@ -1,4 +1,7 @@
 (function () {
+  const ENGLISH_SCAN_DELIMITERS = '"“”„‟\'‘’‚‛«»‹›!?—–-‐‑‒/\\|@#$%^&*_+=~`<>';
+  const ENGLISH_WORD_INTERNAL_DELIMITERS = '\'’`-‐‑';
+
   const JAPANESE_RANGES = [
     [0x3040, 0x309f],
     [0x30a0, 0x30ff],
@@ -23,6 +26,7 @@
     text: '',
     scanLength: 64,
     scanNonJapaneseText: true,
+    contentLanguageId: 'ja',
     selection: null,
     lastShiftHoverKey: '',
     lastHoverPoint: null,
@@ -55,8 +59,12 @@
     return JAPANESE_RANGES.some(([start, end]) => codePoint >= start && codePoint <= end);
   }
 
+  function isEnglishWordChar(char) {
+    return !!char && /[A-Za-z0-9]/.test(char);
+  }
+
   const selection = {
-    scanDelimiters: '。、！？…‥「」『』（）()【】〈〉《》〔〕｛｝{}［］[]・：；:;，,.─\n\r"\'“”‘’',
+    scanDelimiters: '。、！？…‥「」『』（）()【】〈〉《》〔〕｛｝{}［］[]・：；:;，,.─\n\r',
     sentenceDelimiters: '。！？.!?\n\r',
     trailingSentenceChars: '。、！？…‥」』）)】〉》〕｝}］]',
 
@@ -64,6 +72,36 @@
       return /^[\s　]$/.test(char) ||
         this.scanDelimiters.includes(char) ||
         (state.scanNonJapaneseText === false && !isCodePointJapanese(char.codePointAt(0)));
+    },
+
+    isEnglishScanBoundaryAt(text, offset) {
+      const char = text[offset];
+      const isInternal = ENGLISH_WORD_INTERNAL_DELIMITERS.includes(char) &&
+        isEnglishWordChar(text[offset - 1]) &&
+        isEnglishWordChar(text[offset + 1]);
+      return this.scanDelimiters.includes(char) ||
+        (ENGLISH_SCAN_DELIMITERS.includes(char) && !isInternal);
+    },
+
+    isScanBoundaryAt(text, offset) {
+      return state.contentLanguageId === 'en'
+        ? this.isEnglishScanBoundaryAt(text, offset)
+        : this.isScanBoundary(text[offset]);
+    },
+
+    isHitBoundaryAt(text, offset) {
+      return state.contentLanguageId === 'en'
+        ? /^[\s　]$/.test(text[offset]) || this.isEnglishScanBoundaryAt(text, offset)
+        : this.isScanBoundary(text[offset]);
+    },
+
+    findEnglishWordStart(hit) {
+      const text = hit.node.textContent;
+      let offset = hit.offset;
+      while (offset > 0 && !this.isHitBoundaryAt(text, offset - 1)) {
+        offset--;
+      }
+      return { node: hit.node, offset };
     },
 
     findContainer(node) {
@@ -136,7 +174,7 @@
         charRange.setStart(node, offset);
         charRange.setEnd(node, offset + 1);
         if (this.inCharRange(charRange, x, y)) {
-          if (this.isScanBoundary(text[offset])) return null;
+          if (this.isHitBoundaryAt(text, offset)) return null;
           return { node, offset };
         }
       }
@@ -204,12 +242,8 @@
     },
 
     selectHit(hit, x, y, anchorRect, policy = clickPolicy) {
-
-      const content = hit.node.textContent;
-      if (hit.offset < content.length && !isCodePointJapanese(content.codePointAt(hit.offset))) {
-        while (hit.offset > 0 && !this.isScanBoundary(content[hit.offset - 1])) {
-          hit.offset--;
-        }
+      if (state.contentLanguageId === 'en') {
+        hit = this.findEnglishWordStart(hit);
       }
 
       const container = this.findContainer(hit.node);
@@ -225,7 +259,7 @@
         const start = offset;
         while (offset < nodeText.length && text.length < state.scanLength) {
           const char = nodeText[offset];
-          if (this.isScanBoundary(char)) break;
+          if (this.isScanBoundaryAt(nodeText, offset)) break;
           text += char;
           offset++;
         }
@@ -331,6 +365,9 @@
     state.text = typeof next.text === 'string' ? next.text : '';
     state.scanLength = Math.min(64, Math.max(1, Number(next.scanLength) || 64));
     state.scanNonJapaneseText = next.scanNonJapaneseText !== false;
+    state.contentLanguageId = typeof next.contentLanguageId === 'string'
+      ? next.contentLanguageId.toLowerCase()
+      : 'ja';
 
     if (previousText !== state.text) {
       selection.clearSelection();

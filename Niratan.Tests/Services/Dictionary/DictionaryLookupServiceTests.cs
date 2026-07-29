@@ -254,6 +254,21 @@ public class DictionaryLookupServiceTests
     }
 
     [Fact]
+    public void PopupHtmlGenerator_UsesEnglishWordBoundaryScanningForEnglishProfile()
+    {
+        var generator = new PopupHtmlGenerator(contentLanguageId: () => "en");
+
+        var html = generator.GenerateShellHtml();
+        var injection = generator.GenerateInjectionScript([], []);
+
+        html.Should().Contain("window.contentLanguageId = \"en\"");
+        html.Should().Contain("findEnglishWordStart");
+        html.Should().Contain("isEnglishScanBoundaryAt");
+        html.Should().Contain("ENGLISH_WORD_INTERNAL_DELIMITERS");
+        injection.Should().Contain("contentLanguageId: \"en\"");
+    }
+
+    [Fact]
     public void PopupHtmlGenerator_OnlyEnablesTwoColumnLayoutWhenConfigured()
     {
         var enabled = new PopupHtmlGenerator().GenerateShellHtml(

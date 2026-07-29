@@ -45,6 +45,12 @@ public sealed partial class NovelBookCard : UserControl
         typeof(NovelBookCard),
         new PropertyMetadata(string.Empty));
 
+    public static readonly DependencyProperty ShowsProgressProperty = DependencyProperty.Register(
+        nameof(ShowsProgress),
+        typeof(bool),
+        typeof(NovelBookCard),
+        new PropertyMetadata(true));
+
     public static readonly DependencyProperty PlaceholderGlyphProperty = DependencyProperty.Register(
         nameof(PlaceholderGlyph),
         typeof(string),
@@ -150,6 +156,12 @@ public sealed partial class NovelBookCard : UserControl
     {
         get => (string)GetValue(OverallProgressTextProperty);
         set => SetValue(OverallProgressTextProperty, value);
+    }
+
+    public bool ShowsProgress
+    {
+        get => (bool)GetValue(ShowsProgressProperty);
+        set => SetValue(ShowsProgressProperty, value);
     }
 
     public string PlaceholderGlyph

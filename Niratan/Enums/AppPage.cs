@@ -3,6 +3,8 @@ namespace Niratan.Enums;
 public enum AppPage
 {
     NovelLibraryPage,
+    MangaLibraryPage,
+    BrowsePage,
     VideoLibraryPage,
     NovelLookupPage,
     ReaderAppearanceSettingsPage,

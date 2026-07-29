@@ -203,6 +203,9 @@
   <data name="ReaderFontImportedMessage" xml:space="preserve"><value>Imported '{0}'.</value></data>
   <data name="ReaderFontDeleteDialogTitle" xml:space="preserve"><value>Delete Reader Font</value></data>
   <data name="ReaderFontDeleteDialogMessage" xml:space="preserve"><value>Delete '{0}'? The font file will be removed from Niratan.</value></data>
+  <data name="ReaderFontDeleteConfirmationTitle.Text" xml:space="preserve"><value>Delete Reader Font</value></data>
+  <data name="ReaderFontDeleteConfirmationCancelButton.Content" xml:space="preserve"><value>Cancel</value></data>
+  <data name="ReaderFontDeleteConfirmationConfirmButton.Content" xml:space="preserve"><value>Delete</value></data>
   <data name="ReaderFontDeletedMessage" xml:space="preserve"><value>Deleted '{0}'.</value></data>
   <data name="ReaderFontSizeCard.Header" xml:space="preserve"><value>Font Size</value></data>
   <data name="ReaderFontSizeCard.Description" xml:space="preserve"><value>Adjust the text size</value></data>
@@ -565,6 +568,9 @@
   <data name="SasayakiMatchSummary" xml:space="preserve"><value>{0}/{1} cues matched ({2:F1}%)</value></data>
   <data name="SasayakiMatchMatching" xml:space="preserve"><value>Matching…</value></data>
   <data name="SasayakiMatchAction" xml:space="preserve"><value>Match</value></data>
+  <data name="SasayakiMatchUnreadableAudiobookAndSubtitle" xml:space="preserve"><value>The selected audiobook and subtitle contain no readable data. Re-copy or repair both source files.</value></data>
+  <data name="SasayakiMatchUnreadableAudiobook" xml:space="preserve"><value>The selected audiobook contains no readable media data. Re-copy or repair the source file.</value></data>
+  <data name="SasayakiMatchInvalidSubtitle" xml:space="preserve"><value>The selected subtitle contains no valid SRT cues. Re-copy or repair the source file.</value></data>
   <data name="NovelReaderSasayakiButton.AutomationProperties.Name" xml:space="preserve"><value>Sasayaki</value></data>
   <data name="SasayakiLoadAudioMenuItem.Text" xml:space="preserve"><value>Load Audio</value></data>
   <data name="SasayakiSkipBackMenuItem.Text" xml:space="preserve"><value>Skip Back 15 Seconds</value></data>
@@ -1323,4 +1329,237 @@
   <data name="NyaaResultSortLargest" xml:space="preserve"><value>Largest</value></data>
   <data name="NyaaResultSortTitle" xml:space="preserve"><value>Title</value></data>
   <data name="NyaaFilteredResultSummary" xml:space="preserve"><value>Showing {0} of {1} results.</value></data>
+  <data name="MangaLibraryOpenMenuItem.Text" xml:space="preserve"><value>Open</value></data>
+  <data name="MangaNavigationItem.Content" xml:space="preserve"><value>Manga</value></data>
+  <data name="BrowseNavigationItem.Content" xml:space="preserve"><value>Browse</value></data>
+  <data name="BrowsePageTitleText.Text" xml:space="preserve"><value>Browse</value></data>
+  <data name="BrowseMangaSourcesTab.Content" xml:space="preserve"><value>Manga sources</value></data>
+  <data name="BrowseMangaExtensionsTab.Content" xml:space="preserve"><value>Manga extensions</value></data>
+  <data name="BrowseSourceSettingsTab.Content" xml:space="preserve"><value>Source settings</value></data>
+  <data name="BrowseSourceOpenActionText.Text" xml:space="preserve"><value>Open</value></data>
+  <data name="BrowseSourcePopularButton.Content" xml:space="preserve"><value>Popular</value></data>
+  <data name="BrowseShowExtensionsButton.Content" xml:space="preserve"><value>Show extensions</value></data>
+  <data name="BrowseConnectionSettingsButtonText.Text" xml:space="preserve"><value>Source settings</value></data>
+  <data name="BrowseConnectionSettingsTitle.Text" xml:space="preserve"><value>Source settings</value></data>
+  <data name="SuwayomiConnectionSettingsExpander.Header" xml:space="preserve"><value>Suwayomi Server</value></data>
+  <data name="BrowseResultsBackButton.ToolTipService.ToolTip" xml:space="preserve"><value>Back to sources</value></data>
+  <data name="BrowseResultsSearchTextBox.PlaceholderText" xml:space="preserve"><value>Search this source</value></data>
+  <data name="MangaLibraryRenameMenuItem.Text" xml:space="preserve"><value>Rename</value></data>
+  <data name="MangaLibraryMarkReadMenuItem.Text" xml:space="preserve"><value>Mark as read</value></data>
+  <data name="MangaLibraryRemoveMenuItem.Text" xml:space="preserve"><value>Remove from library</value></data>
+  <data name="MangaLibraryTitleText.Text" xml:space="preserve"><value>Manga</value></data>
+  <data name="MangaLibrarySubtitleText.Text" xml:space="preserve"><value>Local folders, Mokuro, EPUB, CBZ and ZIP</value></data>
+  <data name="MangaLibraryImportFolderButton.Label" xml:space="preserve"><value>Import folder</value></data>
+  <data name="MangaLibraryImportFileButton.Label" xml:space="preserve"><value>Import manga</value></data>
+  <data name="MangaLibraryRefreshButton.Label" xml:space="preserve"><value>Refresh</value></data>
+  <data name="MangaLibraryRefreshOnlineButton.Label" xml:space="preserve"><value>Refresh</value></data>
+  <data name="MangaLibrarySectionButton.Content" xml:space="preserve"><value>Library</value></data>
+  <data name="MangaBrowseSectionButton.Content" xml:space="preserve"><value>Browse</value></data>
+  <data name="MangaSourcesSectionButton.Content" xml:space="preserve"><value>Manga sources</value></data>
+  <data name="MangaLibraryLocalSurfaceButton.Content" xml:space="preserve"><value>Local</value></data>
+  <data name="MangaLibraryOnlineSurfaceButton.Content" xml:space="preserve"><value>Online</value></data>
+  <data name="MangaLibraryOnlineBrowseButton.Content" xml:space="preserve"><value>Browse / Connect</value></data>
+  <data name="MangaBrowseSourceComboBox.Header" xml:space="preserve"><value>Source</value></data>
+  <data name="MangaBrowseSearchTextBox.Header" xml:space="preserve"><value>Search</value></data>
+  <data name="MangaBrowseSearchTextBox.PlaceholderText" xml:space="preserve"><value>Select a source, then search</value></data>
+  <data name="MangaBrowsePopularButton.Content" xml:space="preserve"><value>Popular</value></data>
+  <data name="MangaBrowseSearchButton.Content" xml:space="preserve"><value>Search</value></data>
+  <data name="MangaBrowseEmptyText.Text" xml:space="preserve"><value>No sources installed. Open manga extensions to install or configure one.</value></data>
+  <data name="MangaSourcesBoundaryInfoBar.Message" xml:space="preserve"><value>Niratan connects to an existing Suwayomi Server. Suwayomi manages Java and Mihon extensions.</value></data>
+  <data name="MangaSourcesServerTextBox.Header" xml:space="preserve"><value>Server</value></data>
+  <data name="MangaSourcesAuthenticationComboBox.Header" xml:space="preserve"><value>Authentication</value></data>
+  <data name="MangaSourcesAuthNoneItem.Content" xml:space="preserve"><value>None</value></data>
+  <data name="MangaSourcesAuthBasicItem.Content" xml:space="preserve"><value>Basic</value></data>
+  <data name="MangaSourcesAuthUiLoginItem.Content" xml:space="preserve"><value>UI login</value></data>
+  <data name="MangaSourcesAuthBearerItem.Content" xml:space="preserve"><value>Bearer token</value></data>
+  <data name="MangaSourcesUsernameTextBox.Header" xml:space="preserve"><value>Username</value></data>
+  <data name="MangaSourcesSecretBox.Header" xml:space="preserve"><value>Password / token</value></data>
+  <data name="MangaSourcesConnectButton.Content" xml:space="preserve"><value>Connect</value></data>
+  <data name="MangaSourcesInstalledSourcesText.Text" xml:space="preserve"><value>Installed sources</value></data>
+  <data name="MangaLibraryRefreshButton.ToolTipService.ToolTip" xml:space="preserve"><value>Refresh</value></data>
+  <data name="MangaLibraryEmptyTitleText.Text" xml:space="preserve"><value>No manga imported</value></data>
+  <data name="MangaLibraryEmptyDescriptionText.Text" xml:space="preserve"><value>Import one image folder, Mokuro source, EPUB, CBZ or ZIP. Niratan keeps the source read-only.</value></data>
+  <data name="MangaLibraryEmptyImportButton.Content" xml:space="preserve"><value>Import manga</value></data>
+  <data name="MangaLibraryTitle" xml:space="preserve"><value>Manga</value></data>
+  <data name="MangaLibraryPageCount" xml:space="preserve"><value>{0} pages</value></data>
+  <data name="MangaLibraryUnread" xml:space="preserve"><value>Unread</value></data>
+  <data name="MangaLibraryRead" xml:space="preserve"><value>Read</value></data>
+  <data name="MangaLibraryImportedMessage" xml:space="preserve"><value>Imported {0}.</value></data>
+  <data name="MangaLibraryImportedTitle" xml:space="preserve"><value>Manga imported</value></data>
+  <data name="MangaLibraryImportFailed" xml:space="preserve"><value>The manga could not be imported.</value></data>
+  <data name="MangaLibraryImportTitle" xml:space="preserve"><value>Manga import</value></data>
+  <data name="MangaLibraryLoadFailed" xml:space="preserve"><value>The manga library could not be loaded.</value></data>
+  <data name="MangaLibraryDialogTitle" xml:space="preserve"><value>Manga library</value></data>
+  <data name="MangaLibraryRenameTitle" xml:space="preserve"><value>Rename manga</value></data>
+  <data name="MangaLibrarySave" xml:space="preserve"><value>Save</value></data>
+  <data name="MangaLibraryCancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="MangaLibraryRenameFailed" xml:space="preserve"><value>Unable to rename manga.</value></data>
+  <data name="MangaLibraryMarkReadFailed" xml:space="preserve"><value>Unable to mark manga as read.</value></data>
+  <data name="MangaLibraryRemoveTitle" xml:space="preserve"><value>Remove manga?</value></data>
+  <data name="MangaLibraryRemoveMessage" xml:space="preserve"><value>This removes the library card only. The original files will not be changed.</value></data>
+  <data name="MangaLibraryRemove" xml:space="preserve"><value>Remove</value></data>
+  <data name="MangaLibraryRemoveFailed" xml:space="preserve"><value>Unable to remove manga.</value></data>
+  <data name="MangaOnlineInitialStatus" xml:space="preserve"><value>Open the online shelf to view manga saved from Mihon or Suwayomi.</value></data>
+  <data name="MangaOnlineEmptyStatus" xml:space="preserve"><value>Your manga library is empty. Add manga from Browse.</value></data>
+  <data name="MangaOnlineLoadedStatus" xml:space="preserve"><value>{0} online manga loaded.</value></data>
+  <data name="MangaReaderPreviousButton.ToolTipService.ToolTip" xml:space="preserve"><value>Previous</value></data>
+  <data name="MangaReaderNextButton.ToolTipService.ToolTip" xml:space="preserve"><value>Next</value></data>
+  <data name="MangaReaderLayoutButton.Content" xml:space="preserve"><value>Layout</value></data>
+  <data name="MangaReaderSinglePageMenuItem.Text" xml:space="preserve"><value>Single page</value></data>
+  <data name="MangaReaderDoublePageMenuItem.Text" xml:space="preserve"><value>Double page</value></data>
+  <data name="MangaReaderContinuousMenuItem.Text" xml:space="preserve"><value>Continuous</value></data>
+  <data name="MangaReaderDirectionButton.Content" xml:space="preserve"><value>Direction</value></data>
+  <data name="MangaReaderRightToLeftMenuItem.Text" xml:space="preserve"><value>Right to left</value></data>
+  <data name="MangaReaderLeftToRightMenuItem.Text" xml:space="preserve"><value>Left to right</value></data>
+  <data name="MangaReaderOcrButton.Content" xml:space="preserve"><value>OCR</value></data>
+  <data name="MangaReaderOcrButton.ToolTipService.ToolTip" xml:space="preserve"><value>Recognize manga text with Google Lens</value></data>
+  <data name="MangaReaderZoomText.Text" xml:space="preserve"><value>Zoom</value></data>
+  <data name="MangaReaderWindowTitle" xml:space="preserve"><value>Niratan Manga</value></data>
+  <data name="MangaReaderOpenFailed" xml:space="preserve"><value>Manga could not be opened.</value></data>
+  <data name="MangaReaderCopyPageImage" xml:space="preserve"><value>Copy page image</value></data>
+  <data name="MangaReaderSavePageImage" xml:space="preserve"><value>Save page image…</value></data>
+  <data name="MangaReaderSuggestedPageFileName" xml:space="preserve"><value>Page {0}</value></data>
+  <data name="MangaReaderPageFileType" xml:space="preserve"><value>Manga page</value></data>
+  <data name="MangaOcrDisclosureTitle" xml:space="preserve"><value>Use Google Lens text recognition?</value></data>
+  <data name="MangaOcrDisclosureContent" xml:space="preserve"><value>Recognizing this manga sends a reduced copy (maximum 1500 px) of every page without Mokuro text to Google. Results are cached locally so unchanged pages are not uploaded again.</value></data>
+  <data name="MangaOcrDisclosureContinue" xml:space="preserve"><value>Continue</value></data>
+  <data name="MangaOcrDisclosureCancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="MangaOcrCancel" xml:space="preserve"><value>Cancel OCR</value></data>
+  <data name="MangaOcrResume" xml:space="preserve"><value>Resume OCR</value></data>
+  <data name="MangaOcrHide" xml:space="preserve"><value>Hide OCR</value></data>
+  <data name="MangaOcrButton" xml:space="preserve"><value>OCR</value></data>
+  <data name="MangaOcrProgress" xml:space="preserve"><value>OCR {0} / {1}</value></data>
+  <data name="MangaOcrPausedStatus" xml:space="preserve"><value>Text recognition paused. Completed pages remain available.</value></data>
+  <data name="MangaOcrCompleteStatus" xml:space="preserve"><value>Text recognition complete.</value></data>
+  <data name="MangaOcrPendingStatus" xml:space="preserve"><value>Text recognition finished with some pages pending. They will be retried next time.</value></data>
+  <data name="SuwayomiInitialStatus" xml:space="preserve"><value>Connect to a user-managed Suwayomi Server to use its installed Mihon sources.</value></data>
+  <data name="SuwayomiNoSourcesStatus" xml:space="preserve"><value>Connected, but no installed sources were found.</value></data>
+  <data name="SuwayomiConnectedStatus" xml:space="preserve"><value>Connected. {0} installed source(s).</value></data>
+  <data name="SuwayomiSelectSourceStatus" xml:space="preserve"><value>Select an installed source first.</value></data>
+  <data name="SuwayomiNoMangaStatus" xml:space="preserve"><value>No manga matched this request.</value></data>
+  <data name="SuwayomiMangaLoadedStatus" xml:space="preserve"><value>{0} manga loaded.</value></data>
+  <data name="SuwayomiSelectMangaStatus" xml:space="preserve"><value>Select a manga first.</value></data>
+  <data name="SuwayomiNoChaptersStatus" xml:space="preserve"><value>No chapters are available.</value></data>
+  <data name="SuwayomiChaptersLoadedStatus" xml:space="preserve"><value>{0} chapter(s) loaded.</value></data>
+  <data name="SuwayomiPreparingChapterStatus" xml:space="preserve"><value>Preparing chapter…</value></data>
+  <data name="SuwayomiChapterReadyStatus" xml:space="preserve"><value>Chapter ready.</value></data>
+  <data name="SuwayomiLoadingStatus" xml:space="preserve"><value>Loading…</value></data>
+  <data name="SuwayomiReadChapterLabel" xml:space="preserve"><value>{0} · read</value></data>
+  <data name="SuwayomiChapterHasNoPages" xml:space="preserve"><value>The selected Suwayomi chapter has no pages.</value></data>
+  <data name="SuwayomiEmptyResponse" xml:space="preserve"><value>Suwayomi returned an empty response.</value></data>
+  <data name="SuwayomiBearerRequired" xml:space="preserve"><value>Suwayomi bearer token is required.</value></data>
+  <data name="SuwayomiAuthenticationFailed" xml:space="preserve"><value>Suwayomi authentication failed.</value></data>
+  <data name="SuwayomiHttpError" xml:space="preserve"><value>Suwayomi Server returned HTTP {0}.</value></data>
+  <data name="SuwayomiResponseTooLarge" xml:space="preserve"><value>The Suwayomi response is too large.</value></data>
+  <data name="SuwayomiInvalidAddress" xml:space="preserve"><value>The Suwayomi Server address is invalid.</value></data>
+  <data name="SuwayomiHttpRequired" xml:space="preserve"><value>Suwayomi Server must use HTTP or HTTPS.</value></data>
+  <data name="SuwayomiCredentialsRequired" xml:space="preserve"><value>Suwayomi credentials are required.</value></data>
+  <data name="SuwayomiNotRemoteChapter" xml:space="preserve"><value>The manga is not a Suwayomi chapter.</value></data>
+  <data name="SuwayomiDifferentServer" xml:space="preserve"><value>This chapter belongs to a different Suwayomi Server.</value></data>
+  <data name="MangaSourcesSuwayomiProviderButton.Content" xml:space="preserve"><value>Suwayomi Server</value></data>
+  <data name="MangaSourcesMihonProviderButton.Content" xml:space="preserve"><value>Mihon APK</value></data>
+  <data name="MihonBrowseSourceComboBox.Header" xml:space="preserve"><value>Source</value></data>
+  <data name="MihonSourcesBoundaryInfoBar.Message" xml:space="preserve"><value>Mihon APKs execute third-party code in the bundled Java sidecar. The runtime starts automatically; install only trusted extensions and verify Windows Firewall.</value></data>
+  <data name="MihonBundledRuntimeInfoBar.Message" xml:space="preserve"><value>M-Extension-Server 1.0.4 and its private Java runtime are included with Niratan. No separate download or path configuration is required.</value></data>
+  <data name="MihonRepositoriesHeader.Text" xml:space="preserve"><value>Extension repositories</value></data>
+  <data name="MihonRepositoriesDescription.Text" xml:space="preserve"><value>Extensions from all repositories appear together in the extension browser.</value></data>
+  <data name="MihonAddRepositoryButton.Content" xml:space="preserve"><value>Add repository</value></data>
+  <data name="MihonRepositoryEmptyText.Text" xml:space="preserve"><value>No extension repositories have been added.</value></data>
+  <data name="MihonEditRepositoryButton.ToolTipService.ToolTip" xml:space="preserve"><value>Edit repository</value></data>
+  <data name="MihonRemoveRepositoryButton.ToolTipService.ToolTip" xml:space="preserve"><value>Remove repository</value></data>
+  <data name="MihonAddRepositoryDialogTitle" xml:space="preserve"><value>Add repository URL</value></data>
+  <data name="MihonEditRepositoryDialogTitle" xml:space="preserve"><value>Edit repository URL</value></data>
+  <data name="MihonRepositoryUrlPlaceholder" xml:space="preserve"><value>URL must end with .json</value></data>
+  <data name="MihonAddRepositoryAction" xml:space="preserve"><value>Add</value></data>
+  <data name="MihonRemoveRepositoryDialogTitle" xml:space="preserve"><value>Remove repository?</value></data>
+  <data name="MihonRemoveRepositoryDialogMessage" xml:space="preserve"><value>Remove “{0}” from the repository list? Installed APKs will be kept.</value></data>
+  <data name="MihonRemoveRepositoryAction" xml:space="preserve"><value>Remove</value></data>
+  <data name="MihonNoRepositoriesStatus" xml:space="preserve"><value>Add a Mihon extension repository to browse extensions.</value></data>
+  <data name="MihonRepositoriesLoadedStatus" xml:space="preserve"><value>{0} source(s) found across {1} repository/repositories.</value></data>
+  <data name="MihonRepositoriesLoadedWithFailuresStatus" xml:space="preserve"><value>{0} source(s) loaded; {1} repository/repositories failed: {2}</value></data>
+  <data name="MihonRepositoryLimitError" xml:space="preserve"><value>At most {0} Mihon repositories can be configured.</value></data>
+  <data name="MihonLibraryLimitError" xml:space="preserve"><value>At most {0} Mihon manga can be saved.</value></data>
+  <data name="MihonRepositoryFallbackName" xml:space="preserve"><value>Mihon repository</value></data>
+  <data name="MihonRepositoryJsonRequiredError" xml:space="preserve"><value>The Mihon repository URL must end with .json.</value></data>
+  <data name="CancelButton" xml:space="preserve"><value>Cancel</value></data>
+  <data name="SaveButton" xml:space="preserve"><value>Save</value></data>
+  <data name="MihonBridgeUrlTextBox.Header" xml:space="preserve"><value>Local bridge</value></data>
+  <data name="MihonConnectButton.Content" xml:space="preserve"><value>Connect / Start</value></data>
+  <data name="MihonJavaPathTextBox.Header" xml:space="preserve"><value>Java executable (optional when the bridge is already running)</value></data>
+  <data name="MihonPickJavaButton.Content" xml:space="preserve"><value>Browse…</value></data>
+  <data name="MihonServerJarPathTextBox.Header" xml:space="preserve"><value>M-Extension-Server JAR (optional when the bridge is already running)</value></data>
+  <data name="MihonPickServerJarButton.Content" xml:space="preserve"><value>Browse…</value></data>
+  <data name="MihonConnectionSettingsExpander.Header" xml:space="preserve"><value>Mihon APK bridge</value></data>
+  <data name="MihonExtensionBrowserTitle.Text" xml:space="preserve"><value>Extension browser</value></data>
+  <data name="MihonExtensionBrowserRefreshButton.Content" xml:space="preserve"><value>Refresh repository</value></data>
+  <data name="MihonRepositorySearchTextBox.Header" xml:space="preserve"><value>Search extensions</value></data>
+  <data name="MihonRepositorySearchTextBox.PlaceholderText" xml:space="preserve"><value>Name, language, package, or website</value></data>
+  <data name="MihonRepositoryLanguageComboBox.Header" xml:space="preserve"><value>Language</value></data>
+  <data name="MihonRepositorySearchField.PlaceholderText" xml:space="preserve"><value>Search extensions</value></data>
+  <data name="MihonExtensionBrowserRefreshIconButton.ToolTipService.ToolTip" xml:space="preserve"><value>Refresh repository</value></data>
+  <data name="MihonAllLanguagesFilter" xml:space="preserve"><value>All languages</value></data>
+  <data name="BrowseOtherSourceGroup" xml:space="preserve"><value>Other</value></data>
+  <data name="MihonInstalledSourceGroup" xml:space="preserve"><value>Installed</value></data>
+  <data name="MihonRepositoryFilteredStatus" xml:space="preserve"><value>Showing {0} of {1} source(s).</value></data>
+  <data name="MihonInstallSourceAction" xml:space="preserve"><value>Install</value></data>
+  <data name="MihonUpdateSourceAction" xml:space="preserve"><value>Update</value></data>
+  <data name="MihonInstalledSourceBadge" xml:space="preserve"><value>Installed</value></data>
+  <data name="MihonNsfwSourceBadge" xml:space="preserve"><value>NSFW</value></data>
+  <data name="MihonInitialStatus" xml:space="preserve"><value>The bundled Mihon runtime starts automatically when an extension is used.</value></data>
+  <data name="MihonConnectingStatus" xml:space="preserve"><value>Connecting to the local Mihon bridge…</value></data>
+  <data name="MihonConnectedStatus" xml:space="preserve"><value>The local Mihon bridge is ready.</value></data>
+  <data name="MihonLoadingRepositoryStatus" xml:space="preserve"><value>Loading the Mihon extension repository…</value></data>
+  <data name="MihonRepositoryLoadedStatus" xml:space="preserve"><value>{0} Mihon source(s) found.</value></data>
+  <data name="MihonInstallingStatus" xml:space="preserve"><value>Downloading and validating the Mihon extension…</value></data>
+  <data name="MihonInstalledStatus" xml:space="preserve"><value>{0} installed.</value></data>
+  <data name="MihonSelectInstalledSourceStatus" xml:space="preserve"><value>Install and select a Mihon source first.</value></data>
+  <data name="MihonNoMangaStatus" xml:space="preserve"><value>No manga matched this request.</value></data>
+  <data name="MihonMangaLoadedStatus" xml:space="preserve"><value>{0} manga loaded from the Mihon extension.</value></data>
+  <data name="MihonPreparingChapterStatus" xml:space="preserve"><value>Preparing a Mihon chapter…</value></data>
+  <data name="MihonNoChaptersStatus" xml:space="preserve"><value>No chapters are available.</value></data>
+  <data name="MihonChapterReadyStatus" xml:space="preserve"><value>Mihon chapter ready.</value></data>
+  <data name="MihonJavaMissingError" xml:space="preserve"><value>The configured Java executable could not be found.</value></data>
+  <data name="MihonServerJarMissingError" xml:space="preserve"><value>The configured M-Extension-Server JAR could not be found.</value></data>
+  <data name="MihonBridgePortRequiredError" xml:space="preserve"><value>The Mihon bridge address must include a fixed local port.</value></data>
+  <data name="MihonBridgeStartFailedError" xml:space="preserve"><value>M-Extension-Server could not be started.</value></data>
+  <data name="MihonBridgeExitedError" xml:space="preserve"><value>M-Extension-Server exited before it became ready.</value></data>
+  <data name="MihonBridgeTimeoutError" xml:space="preserve"><value>M-Extension-Server did not become ready within 10 seconds.</value></data>
+  <data name="MihonBundledRuntimeMissingError" xml:space="preserve"><value>The bundled M-Extension-Server runtime is missing. Reinstall Niratan.</value></data>
+  <data name="MihonBundledRuntimeInvalidError" xml:space="preserve"><value>The bundled M-Extension-Server manifest is invalid. Reinstall Niratan.</value></data>
+  <data name="MihonBundledRuntimeVersionError" xml:space="preserve"><value>The bundled M-Extension-Server version is not supported.</value></data>
+  <data name="MihonBridgeNotRunningError" xml:space="preserve"><value>The bundled Mihon bridge is not running.</value></data>
+  <data name="MihonRepositoryFormatError" xml:space="preserve"><value>The Mihon repository index must be a JSON array.</value></data>
+  <data name="MihonChapterHasNoPagesError" xml:space="preserve"><value>The selected Mihon chapter has no pages.</value></data>
+  <data name="MihonCoverMissingError" xml:space="preserve"><value>The Mihon manga has no cover URL.</value></data>
+  <data name="MihonNotRemoteChapterError" xml:space="preserve"><value>The manga is not a Mihon chapter.</value></data>
+  <data name="MihonExtensionNotInstalledError" xml:space="preserve"><value>The Mihon extension used by this chapter is no longer installed.</value></data>
+  <data name="MihonExtensionChangedError" xml:space="preserve"><value>The Mihon extension changed after this chapter was opened. Reopen the title from Browse.</value></data>
+  <data name="MihonBridgeLoopbackRequiredError" xml:space="preserve"><value>The Mihon bridge must be an HTTP(S) loopback address.</value></data>
+  <data name="MihonRepositoryHttpsRequiredError" xml:space="preserve"><value>The Mihon repository must use HTTPS (HTTP is allowed only on loopback).</value></data>
+  <data name="MihonBridgeEmptyResponseError" xml:space="preserve"><value>The Mihon bridge returned an empty response.</value></data>
+  <data name="MihonBridgeInvalidJsonError" xml:space="preserve"><value>The Mihon bridge returned invalid JSON.</value></data>
+  <data name="MihonResponseTooLargeError" xml:space="preserve"><value>The Mihon response is too large.</value></data>
+  <data name="MihonHttpError" xml:space="preserve"><value>The Mihon endpoint returned HTTP {0}.</value></data>
+  <data name="MihonHttpDetailedError" xml:space="preserve"><value>The Mihon endpoint returned HTTP {0}: {1}</value></data>
+  <data name="MihonInstalledApkInvalidError" xml:space="preserve"><value>The installed Mihon APK is missing or too large.</value></data>
+  <data name="MihonInstalledApkMissingError" xml:space="preserve"><value>The installed Mihon APK could not be found.</value></data>
+  <data name="MihonInstalledApkHashError" xml:space="preserve"><value>The installed Mihon APK no longer matches its recorded hash.</value></data>
+  <data name="MihonInstalledCatalogInvalidError" xml:space="preserve"><value>The installed Mihon extension catalog is invalid.</value></data>
+  <data name="MihonDownloadNotApkError" xml:space="preserve"><value>The extension download is not an APK.</value></data>
+  <data name="MihonInvalidMediaUrlError" xml:space="preserve"><value>The Mihon extension returned an invalid media URL.</value></data>
+  <data name="MihonPrivateMediaUrlError" xml:space="preserve"><value>The Mihon extension returned a local or private media URL.</value></data>
+  <data name="MihonInvalidApkError" xml:space="preserve"><value>The downloaded extension is not a valid APK.</value></data>
+  <data name="MihonApkPayloadMissingError" xml:space="preserve"><value>The downloaded APK is missing its manifest or DEX payload.</value></data>
+  <data name="MihonApkUnreadableError" xml:space="preserve"><value>The downloaded APK cannot be read.</value></data>
+  <data name="MangaRemoteDetailsCloseButton.Content" xml:space="preserve"><value>Close</value></data>
+  <data name="MangaRemoteDetailsContinueButton.Content" xml:space="preserve"><value>Continue reading</value></data>
+  <data name="MangaRemoteDetailsAuthorLabel.Text" xml:space="preserve"><value>Author</value></data>
+  <data name="MangaRemoteDetailsChaptersHeader.Text" xml:space="preserve"><value>Chapters</value></data>
+  <data name="MangaRemoteDetailsLoadingText.Text" xml:space="preserve"><value>Loading manga details…</value></data>
+  <data name="MangaRemoteDetailsNoChaptersText.Text" xml:space="preserve"><value>No chapters are available.</value></data>
+  <data name="MangaRemoteDetailsAddLibraryAction" xml:space="preserve"><value>Add to manga library</value></data>
+  <data name="MangaRemoteDetailsRemoveLibraryAction" xml:space="preserve"><value>Remove from manga library</value></data>
+  <data name="MangaRemoteDetailsAddedLibraryStatus" xml:space="preserve"><value>Added to the manga library.</value></data>
+  <data name="MangaRemoteDetailsRemovedLibraryStatus" xml:space="preserve"><value>Removed from the manga library.</value></data>
+  <data name="MangaRemoteDetailsReadChapterStatus" xml:space="preserve"><value>Read</value></data>
 </root>

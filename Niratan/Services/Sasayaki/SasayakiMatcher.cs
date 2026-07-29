@@ -20,6 +20,8 @@ public sealed partial class SasayakiMatcher
         List<SasayakiCue> cues,
         int searchWindow = SasayakiSettings.DefaultSearchWindow)
     {
+        searchWindow = SasayakiSettings.NormalizeSearchWindow(searchWindow);
+
         // Build global code point array and chapter ranges
         var (globalCodePoints, chapterRanges) = await BuildGlobalCodePointsAsync(book);
 

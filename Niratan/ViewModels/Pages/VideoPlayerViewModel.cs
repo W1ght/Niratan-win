@@ -1166,7 +1166,32 @@ public partial class VideoPlayerViewModel : ObservableObject
             selection.Kind,
             selection.Kind == VideoSubtitleSelectionKind.EmbeddedTrack ? selection.TrackId : null,
             cues.Min(cue => cue.Start),
-            cues.Max(cue => cue.End));
+            cues.Max(cue => cue.End),
+            CurrentVideo.Title,
+            CurrentVideo.GetRemoteIdentity(),
+            ResolveMiningSubtitleFormat(selection));
+    }
+
+    private static string? ResolveMiningSubtitleFormat(VideoSubtitleSelection selection)
+    {
+        if (selection.Kind == VideoSubtitleSelectionKind.EmbeddedTrack)
+            return "embedded";
+        if (selection.Kind == VideoSubtitleSelectionKind.RemoteLanguage)
+            return "webVTT";
+        if (selection.Kind != VideoSubtitleSelectionKind.ExternalFile
+            || string.IsNullOrWhiteSpace(selection.ExternalPath))
+        {
+            return null;
+        }
+
+        return Path.GetExtension(selection.ExternalPath).ToLowerInvariant() switch
+        {
+            ".srt" => "srt",
+            ".vtt" => "webVTT",
+            ".ass" => "ass",
+            ".ssa" => "ssa",
+            _ => null,
+        };
     }
 
     private IReadOnlyList<VideoSubtitleCue> GetCurrentMiningHistoryCues()

@@ -103,11 +103,37 @@ public sealed class SasayakiResourcesViewModelTests
         sut.IsMatching.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task MatchCommand_WhenBothFilesContainNoData_ShowsActionableLocalizedError()
+    {
+        var match = new Mock<ISasayakiMatchService>();
+        var book = Book();
+        var failure = new SasayakiMatchInputException(
+            SasayakiMatchInputError.UnreadableAudiobookAndSubtitle);
+        match.Setup(service => service.MatchAsync(
+                book,
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(failure);
+        var sut = CreateSut(matchService: match.Object);
+        await sut.InitializeAsync(book);
+        sut.AudiobookPath = "D:\\Audio\\book.m4b";
+        sut.SubtitlePath = "D:\\Audio\\book.srt";
+
+        await sut.MatchCommand.ExecuteAsync(null);
+
+        sut.ErrorMessage.Should().NotBeNullOrWhiteSpace();
+        sut.ErrorMessage.Should().NotBe(failure.Message);
+        sut.HasError.Should().BeTrue();
+    }
+
     private static SasayakiResourcesViewModel CreateSut(
         IDialogService? dialogService = null,
         ISasayakiMatchService? matchService = null,
         ISasayakiSidecarService? sidecarService = null,
-        int searchWindow = 2000)
+        int searchWindow = SasayakiSettings.DefaultSearchWindow)
     {
         var sidecar = sidecarService ?? EmptySidecar();
         var settings = Mock.Of<ISettingsService>(service => service.Current == new AppSettings

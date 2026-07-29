@@ -17,6 +17,12 @@ public interface IDialogService
         string placeholder,
         string primaryButtonText,
         string secondaryButtonText);
+    Task<string?> PromptTextAsync(
+        string title,
+        string placeholder,
+        string primaryButtonText,
+        string secondaryButtonText,
+        string initialText);
     Task<bool> ConfirmAsync(string title, string message);
     Task<bool> ConfirmAsync(
         string title,

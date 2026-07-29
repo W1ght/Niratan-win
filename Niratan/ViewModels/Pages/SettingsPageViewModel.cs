@@ -73,6 +73,13 @@ public partial class SettingsPageViewModel : ObservableObject
     public partial bool HideFurigana { get; set; }
 
     public bool CanDeleteSelectedReaderFont => SelectedReaderFont?.IsImported == true;
+    public string ReaderFontDeleteConfirmationMessage =>
+        string.Format(
+            CultureInfo.CurrentCulture,
+            ResourceStringHelper.GetString(
+                "ReaderFontDeleteDialogMessage",
+                "Delete '{0}'? The font file will be removed from Niratan."),
+            SelectedReaderFont?.Name ?? string.Empty);
 
     // --- Reader settings: Layout ---
     [ObservableProperty]
@@ -383,6 +390,7 @@ public partial class SettingsPageViewModel : ObservableObject
         ApplyReaderSetting(s => s.SelectedFont, value.ReaderCssValue);
         ApplyReaderSetting(s => s.SelectedFontFileName, value.ImportedFileName);
         OnPropertyChanged(nameof(CanDeleteSelectedReaderFont));
+        OnPropertyChanged(nameof(ReaderFontDeleteConfirmationMessage));
     }
     partial void OnFontSizeChanged(int value) => ApplyReaderSetting(s => s.FontSize, value);
     partial void OnHideFuriganaChanged(bool value) => ApplyReaderSetting(s => s.HideFurigana, value);
@@ -561,16 +569,6 @@ public partial class SettingsPageViewModel : ObservableObject
 
         try
         {
-            var confirmed = await App.GetService<IDialogService>().ConfirmAsync(
-                ResourceStringHelper.GetString("ReaderFontDeleteDialogTitle", "Delete Reader Font"),
-                string.Format(
-                    CultureInfo.CurrentCulture,
-                    ResourceStringHelper.GetString(
-                        "ReaderFontDeleteDialogMessage",
-                        "Delete '{0}'? The font file will be removed from Niratan."),
-                    selected.Name));
-            if (!confirmed) return;
-
             await _readerFontService.DeleteAsync(fileName);
             RefreshAvailableReaderFonts();
             SelectedReaderFont = JapaneseFontCatalog.FindByReaderCssValue(

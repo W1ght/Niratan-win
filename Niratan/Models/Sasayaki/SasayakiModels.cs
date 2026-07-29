@@ -81,7 +81,12 @@ public sealed class SasayakiPlaybackData
 
 public sealed class SasayakiSettings
 {
-    public const int DefaultSearchWindow = 2000;
+    private const int LegacyDefaultSearchWindow = 2000;
+
+    public const int MinimumSearchWindow = 50;
+    public const int MaximumSearchWindow = 1000;
+    public const int SearchWindowStep = 50;
+    public const int DefaultSearchWindow = 200;
 
     public bool EnableSasayaki { get; set; }
     public bool ReaderShowSasayakiToggle { get; set; }
@@ -95,6 +100,11 @@ public sealed class SasayakiSettings
     public string LightBackgroundColor { get; set; } = "#6652C7FA";
     public string DarkTextColor { get; set; } = "#FFFFFFFF";
     public string DarkBackgroundColor { get; set; } = "#6652C7FA";
+
+    public static int NormalizeSearchWindow(int value) =>
+        value == LegacyDefaultSearchWindow
+            ? DefaultSearchWindow
+            : Math.Clamp(value, MinimumSearchWindow, MaximumSearchWindow);
 }
 
 public sealed class ChapterCodePointRange

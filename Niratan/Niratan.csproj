@@ -18,6 +18,9 @@
     <WindowsAppSDKSelfContained>True</WindowsAppSDKSelfContained>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NativeHoshidictsDll>$(MSBuildProjectDirectory)\..\native\out\hoshidicts_c_api.dll</NativeHoshidictsDll>
+    <MExtensionServerVersion>1.0.4</MExtensionServerVersion>
+    <MExtensionServerRuntimeRoot>$(MSBuildProjectDirectory)\..\artifacts\MExtensionServer\$(MExtensionServerVersion)\runtime</MExtensionServerRuntimeRoot>
+    <EnsureMExtensionServerScript>$(MSBuildProjectDirectory)\..\scripts\Ensure-MExtensionServer.ps1</EnsureMExtensionServerScript>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -61,6 +64,40 @@
       <_NativePublishDll Include="$(NativeHoshidictsDll)" />
     </ItemGroup>
     <Copy SourceFiles="@(_NativePublishDll)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="EnsureMExtensionServer"
+          BeforeTargets="Build;Publish"
+          Condition="'$(Platform)' == 'x64' And '$(DesignTimeBuild)' != 'true'">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(EnsureMExtensionServerScript)&quot; -RepositoryRoot &quot;$(MSBuildProjectDirectory)\..&quot; -Version &quot;$(MExtensionServerVersion)&quot;" />
+  </Target>
+
+  <Target Name="CopyMExtensionServer"
+          AfterTargets="Build"
+          DependsOnTargets="EnsureMExtensionServer"
+          Condition="'$(Platform)' == 'x64'">
+    <ItemGroup>
+      <_MExtensionServerFiles Include="$(MExtensionServerRuntimeRoot)\**\*" />
+    </ItemGroup>
+    <Error Text="Bundled M-Extension-Server runtime manifest not found."
+           Condition="!Exists('$(MExtensionServerRuntimeRoot)\runtime.json')" />
+    <Copy SourceFiles="@(_MExtensionServerFiles)"
+          DestinationFiles="@(_MExtensionServerFiles->'$(TargetDir)MihonBridge\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyMExtensionServerToPublish"
+          AfterTargets="Publish"
+          DependsOnTargets="EnsureMExtensionServer"
+          Condition="'$(Platform)' == 'x64'">
+    <ItemGroup>
+      <_MExtensionServerPublishFiles Include="$(MExtensionServerRuntimeRoot)\**\*" />
+    </ItemGroup>
+    <Error Text="Bundled M-Extension-Server runtime manifest not found."
+           Condition="!Exists('$(MExtensionServerRuntimeRoot)\runtime.json')" />
+    <Copy SourceFiles="@(_MExtensionServerPublishFiles)"
+          DestinationFiles="@(_MExtensionServerPublishFiles->'$(PublishDir)MihonBridge\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
   </Target>
 
   <Target Name="CleanPublish" AfterTargets="Publish">

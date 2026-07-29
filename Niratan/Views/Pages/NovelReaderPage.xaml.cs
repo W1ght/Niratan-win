@@ -1864,7 +1864,8 @@ public sealed partial class NovelReaderPage : Page
             {
                 scanNonJapaneseText = dictionaryDisplaySettings.ScanNonJapaneseText,
                 maxResults = dictionaryDisplaySettings.MaxResults,
-                scanLength = dictionaryDisplaySettings.ScanLength
+                scanLength = dictionaryDisplaySettings.ScanLength,
+                contentLanguageId = ViewModel.ActiveContentLanguageId,
             });
             await sender.ExecuteScriptAsync(
                 $"window.__niratanLookupSettings = {lookupSettings}; window.scanNonJapaneseText = {JsonSerializer.Serialize(dictionaryDisplaySettings.ScanNonJapaneseText)};");

@@ -1048,18 +1048,9 @@ public sealed partial class VideoPlayerWindow
             _protectedRestoreFloor = null;
 
         var selection = ViewModel.GetCurrentSubtitleSelection();
-        var shouldPersistProgress = VideoPlaybackState.ShouldPersistProgress(
-            ViewModel.CurrentPosition,
-            ViewModel.Duration);
         var positionSeconds = ViewModel.CurrentPosition.TotalSeconds;
         var durationSeconds = ViewModel.Duration.TotalSeconds;
-        if (!shouldPersistProgress)
-        {
-            var latest = await _videoLibraryService.GetVideoAsync(ViewModel.CurrentVideo.Id, ct);
-            positionSeconds = latest.Value?.LastPositionSeconds ?? 0;
-            durationSeconds = latest.Value?.DurationSeconds ?? 0;
-        }
-        else if (!double.IsFinite(durationSeconds) || durationSeconds < 0)
+        if (!double.IsFinite(durationSeconds) || durationSeconds < 0)
         {
             durationSeconds = 0;
         }
@@ -1235,6 +1226,10 @@ public sealed partial class VideoPlayerWindow
 
     private void BottomChromePopupRoot_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
+        var position = e.GetCurrentPoint(BottomChromePopupRoot).Position;
+        if (!_bottomChromeAutoHideState.ShowForPointerMovement(position.X, position.Y))
+            return;
+
         ShowBottomChromeForPointerActivity();
     }
 

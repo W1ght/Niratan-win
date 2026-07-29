@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Niratan.Models.Anki;
@@ -186,17 +187,24 @@ public sealed class AnkiService : IAnkiService, IDisposable
             int? videoAudioClipUploadIdx = null;
             var dictMediaIndices = new List<(int idx, string originalFilename)>();
 
-            if (!string.IsNullOrWhiteSpace(context.CoverPath) && File.Exists(context.CoverPath))
+            var picturePath = !string.IsNullOrWhiteSpace(context.MangaPagePath)
+                ? context.MangaPagePath
+                : context.CoverPath;
+            if (!string.IsNullOrWhiteSpace(picturePath) && File.Exists(picturePath))
             {
                 try
                 {
-                    var bytes = await File.ReadAllBytesAsync(context.CoverPath);
+                    var bytes = await File.ReadAllBytesAsync(picturePath);
                     coverUploadIdx = uploads.Count;
-                    uploads.Add((Path.GetFileName(context.CoverPath), bytes));
+                    uploads.Add((
+                        !string.IsNullOrWhiteSpace(context.MangaPagePath)
+                            ? CreateMangaPageMediaFilename(picturePath, bytes)
+                            : Path.GetFileName(picturePath),
+                        bytes));
                 }
                 catch (Exception ex)
                 {
-                    Log.Warning(ex, "[Anki] Failed to read cover image");
+                    Log.Warning(ex, "[Anki] Failed to read picture image");
                 }
             }
 
@@ -383,6 +391,20 @@ public sealed class AnkiService : IAnkiService, IDisposable
 
     public Task<bool> OpenNoteInAnkiAsync(long noteId) =>
         GetClient().OpenNoteInAnkiAsync(noteId);
+
+    internal static string CreateMangaPageMediaFilename(
+        string path,
+        byte[] bytes)
+    {
+        var extension = Path.GetExtension(path).ToLowerInvariant();
+        if (extension is not (".png" or ".jpg" or ".jpeg" or ".gif"
+            or ".webp" or ".avif"))
+        {
+            extension = ".png";
+        }
+        var hash = Convert.ToHexString(SHA1.HashData(bytes)).ToLowerInvariant();
+        return $"hoshi_manga_page_{hash}{extension}";
+    }
 
     public Task<bool> OpenNotesInAnkiAsync(IReadOnlyList<long> noteIds) =>
         GetClient().OpenNotesInAnkiAsync(noteIds);

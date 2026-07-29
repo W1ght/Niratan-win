@@ -42,6 +42,16 @@
                                     Content="Videos"
                                     Icon="Video"
                                     Tag="Niratan.Views.Pages.VideoLibraryPage" />
+                <NavigationViewItem x:Uid="MangaNavigationItem"
+                                    AutomationProperties.AutomationId="MangaNavItem"
+                                    Content="Manga"
+                                    Icon="Pictures"
+                                    Tag="Niratan.Views.Pages.MangaLibraryPage" />
+                <NavigationViewItem x:Uid="BrowseNavigationItem"
+                                    AutomationProperties.AutomationId="BrowseNavItem"
+                                    Content="Browse"
+                                    Icon="World"
+                                    Tag="Niratan.Views.Pages.BrowsePage" />
                 <NavigationViewItem AutomationProperties.AutomationId="NovelLookupNavItem"
                                     x:Uid="NovelLookupNavItem"
                                     Content="Lookup"

@@ -1230,31 +1230,25 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     {
         try
         {
-            var visibleVideos = Videos.Take(24).Select(row => row.Video).ToList();
-            var savedThumbnail = false;
+            var visibleRows = Videos.Take(24).ToList();
 
-            foreach (var video in visibleVideos)
+            foreach (var row in visibleRows)
             {
                 token.ThrowIfCancellationRequested();
-                var result = await _thumbnailService.EnsureThumbnailAsync(video, generateIfMissing: true, token);
+                var result = await _thumbnailService.EnsureThumbnailAsync(
+                    row.Video,
+                    generateIfMissing: true,
+                    token);
                 if (string.IsNullOrWhiteSpace(result))
                     continue;
 
-                if (IsPersistedGeneratedThumbnailChange(video, result))
-                    savedThumbnail = true;
+                row.ApplyGeneratedThumbnail(result);
             }
-
-            if (savedThumbnail && !token.IsCancellationRequested)
-                await LoadVideosAsync();
         }
         catch (OperationCanceledException)
         {
         }
     }
-
-    private static bool IsPersistedGeneratedThumbnailChange(VideoItem video, string resultPath) =>
-        !string.Equals(video.ThumbnailPath, resultPath, StringComparison.OrdinalIgnoreCase)
-        && !string.Equals(video.PosterPath, resultPath, StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed record VideoLibrarySortOptionItem(

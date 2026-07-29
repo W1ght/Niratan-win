@@ -50,8 +50,8 @@ When changing deinflector rules, also check:
 
 Reference:
 ```
-docs/reference/hoshi/Niratan-Reader-Android/third_party/hoshidicts-kotlin-bridge/app/src/main/cpp/hoshidicts/src/deinflector.cpp
-docs/reference/hoshi/Niratan-Reader-Android/third_party/hoshidicts-kotlin-bridge/app/src/main/cpp/hoshidicts/src/lookup.cpp
+native/hoshidicts/src/language/ja/deinflector.cpp
+native/hoshidicts/src/lookup.cpp
 ```
 
 ## Commands

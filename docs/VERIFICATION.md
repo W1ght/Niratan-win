@@ -1,6 +1,6 @@
 # Niratan 验证流程
 
-本文档包含 Reader 渲染验证、字典查词验证、音频验证的完整流程。修改相关代码后必须按对应节验证。
+本文档包含小说 Reader、字典与音频、Video、Manga 和资源导入的验证流程。修改相关代码后只加载并执行受影响模块对应的章节。
 
 ---
 
@@ -131,11 +131,15 @@ YYYY-MM-DD-uia-tree.txt
 自动化测试至少覆盖：
 
 - 新导入 EPUB 写入私有 `<book-id>` 目录，并生成合法 `metadata.json`；重新扫描后书名、封面、Profile、字符进度不变。
-- `bookmark.json` 的章节/字符位置在关闭 Reader、重启应用后可恢复，单次保存不产生第二条 SQLite 写入。
-- 旧 SQLite fixture 首次迁移前生成 `niratan.db.pre-novel-files-v1.bak`，导出校验成功后旧小说表被退役，视频表仍存在。
+- `bookmark.json` 的章节/字符位置在关闭 Reader、重启应用后可恢复，单次保存只产生一次原子 sidecar 提交。
+- 旧 SQLite fixture 首次迁移前生成 `niratan.db.pre-novel-files-v1.bak`，导出校验成功后旧小说表被退役；其中的视频表保持原样，但运行时不读取也不导入。
 - 强制导出失败时，备份和旧小说表仍存在，小说库进入只读状态；修复 fixture 后重试可完成。
 - 缺失 JSON 可按定义初始化；损坏 `metadata.json`/`shelves.json` 必须保留原字节并显示可恢复警告，不能被自动覆盖。
-- fresh database 只创建视频业务表，不创建 `NovelBooks`、`NovelReadingProgress` 或 `NovelReaderSettings`。
+- AppData 中没有 `niratan.db` 时，启动后仍不得创建该文件。
+- 首次导入本地和远程视频分别写入 `video_library.json`；首次保存有效进度写入独立的 `video_playback_history.json`。
+- 原有视频 SQLite 数据不迁移、不双写；JSON 资料库应从空状态开始。
+- 进度 `1.9s` 不保存，距离结尾 `5s` 标记完成，清理进度不清理字幕选择；移除并重新加入同一媒体 identity 后仍可恢复独立历史。
+- 损坏 `video_library.json` 时保留原字节并拒绝覆盖；source 批量刷新只产生一次 catalog 原子替换。
 
 所有破坏性故障测试必须使用复制到临时目录的 fixture，禁止直接修改用户 AppData。
 
@@ -256,7 +260,7 @@ dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter
 8. 验证 Book Ranking 最多 12 行，以及自定义书架/Unshelved 对比；损坏 sidecar 时必须显示可见警告。
 9. 重开 Dashboard 验证 `statistics_dashboard_cache_v1.json` 先命中再后台重读 sidecar；新 snapshot 发布后 UI 更新且缓存被替换。
    自动化测试必须创建第二个 cache 实例从磁盘读取 snapshot，不能只验证同一实例的内存命中。
-10. 使用包含非空 `bookContributions` 的 `statistics_dashboard_cache_v1.json` 重启并进入 Dashboard；缓存必须正常反序列化。再放入结构有效但模型不兼容的派生缓存，确认只删除该缓存并从各书 `statistics.json` 重建，应用不得退出，原始 sidecar、EPUB 和视频 SQLite 均不得改变。
+10. 使用包含非空 `bookContributions` 的 `statistics_dashboard_cache_v1.json` 重启并进入 Dashboard；缓存必须正常反序列化。再放入结构有效但模型不兼容的派生缓存，确认只删除该缓存并从各书 `statistics.json` 重建，应用不得退出，原始 sidecar、EPUB 和视频 JSON 均不得改变。
 11. 从小说 CommandBar 进入 Statistics，确认书架 rail、排序、导入和书架管理退出布局；使用 Bookshelf 按钮返回后，原 rail 和书籍卡仍可操作。
 12. 验证全宽 Range & Trend，以及 Today、Goal、This Week、Reading Calendar、Selected Range、Speed Summary、Book Ranking、Shelf Comparison 全部存在；趋势图高度固定为 260 effective pixels，纵轴显示 0、三个中间刻度和最大值，横轴显示当前窗口首/中/末标签；切换字符、时长、速度时单位正确，Bar/Line 切换不改变其他卡片数据。
 13. 分别把窗口调整到 `>=1260`、`840..1259` 和 `<840` effective pixels，确认三列、两列、单列状态生效，无裁切、重叠或第二个纵向滚动条；Today 目标环保持 118×118 effective pixels；This Week 卡片高度随自身内容收紧，不得因同一 Grid 行中的更高卡片而纵向拉伸；Calendar 保持 12×12 effective-pixel 方块、4-pixel 可见间距和七行紧凑布局，只允许横向滚动。点击不同日期后，选中范围与详情必须同步更新。
@@ -530,3 +534,43 @@ dotnet build -p:Platform=x64
 8. 使用 `video.mkv + video.srt` 和 `video.mp4 + video.ja.srt`，确认视频导入并绑定对应字幕；不匹配字幕不得误绑。
 9. 使用 15 MiB 合法 `.torrent` 与超过 32 MiB、包含越界路径的恶意样本，确认合法元数据可进入 peer 连接阶段，大小限制和下载根目录约束仍生效。
 10. 完成后重启应用，确认已导入小说、Sasayaki 匹配和视频字幕仍可用；下载目录只保留已完成任务。
+
+---
+
+## 8. 漫画验证
+
+```powershell
+dotnet build Niratan/Niratan.csproj -p:Platform=x64
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Manga"
+.\build-and-run.ps1
+```
+
+UI Automation 使用现有 `ImportMangaFolderButton`、`ImportMangaFileButton`、`RefreshMangaLibraryButton`、`MangaLibraryLocalSurfaceButton`、`MangaLibraryOnlineSurfaceButton`、`BrowseNavItem`、`BrowseMangaSourcesTab`、`BrowseMangaExtensionsTab`、`BrowseSourceSettingsTab`、`BrowseSourcesList`、`BrowseSourcePopularButton`、`BrowseResultsBackButton`、`MangaBrowseSearchTextBox`、`MangaBrowsePopularButton`、`MangaBrowseSearchButton`、`MangaSourcesServerTextBox`、`MangaSourcesSecretBox`、`MangaSourcesConnectButton`、`MihonConnectionSettingsExpander`、`MihonRepositoriesList`、`MihonAddRepositoryButton`、动态 `MihonRepository_<id>_Edit` / `MihonRepository_<id>_Remove`、`MihonExtensionBrowserRefreshButton`、`MihonRepositorySearchTextBox`、`MihonRepositoryLanguageComboBox`、`MihonRepositorySourcesList`、动态 `MihonRepositorySource_<package>_<source-id>` / `MangaBook_<book-id>` / `SuwayomiManga_<manga-id>` / `MihonManga_<identity>` / `<provider>MangaDetails_<identity>` / `RemoteMangaChapter_<identity>`、`RemoteMangaDetailsOverlay`、`MangaRemoteDetailsCloseButton`、`MangaRemoteDetailsContinueButton`、`MangaRemoteDetailsLibraryButton`、`MangaRemoteDetailsChaptersList`、`MangaPreviousPageButton`、`MangaNextPageButton`、`MangaLayoutButton`、`MangaDirectionButton`、`MangaGoogleOcrButton`、`MangaZoomSlider` 和 `MangaPageNumberBox`；Mihon runtime 没有下载、地址或路径选择控件，新增可操作控件时补稳定的 `AutomationId`，不要依赖屏幕坐标。
+
+自动化至少覆盖：
+
+1. 图片目录只索引直接子级并按自然顺序排列。
+2. CBZ/ZIP 排除 `__MACOSX`、`.DS_Store` 和 `._*`，无图片时明确失败。
+3. EPUB 按 OPF spine 与正文引用确定页序，封面或装饰资源不混入正文。
+4. Mokuro 按图片文件名优先、页索引回退匹配，并把字符偏移与归一化坐标保留下来。
+5. 压缩包只解出请求页；目录页越过源根目录必须拒绝。
+6. 伪造 `catalog.json` 中 rooted、`..` 或多路径段的书籍 ID 必须在创建目录前失败；Manga cache root 外的 sentinel 文件保持字节不变。
+7. `catalog.json` 原子 round-trip；损坏 JSON 不得静默重置或覆盖。
+8. Google Lens protobuf fixture 保留段落、行、词级几何、UTF-16 字符偏移与归一化坐标；竖排按右到左列序和上到下字序，横排按上到下行序和左到右字序；相邻、同方向且流向重叠的分列段落合并为一个连续 UTF-16 文字块，远隔气泡不得误并，已有 v3 cache 读取时完成同样聚合且不重新上传；方向以接近 90° 的旋转或明显纵长框判定，段落不足时使用多数行；OCR cache manifest 变化后旧页失效，当前 manifest 的已完成页可在新 service 实例中恢复。Reader 重新打开且 OCR 仍为显示状态时必须自动续扫，并在读取任何页面 payload 前先检查该页缓存，只有缺页才联网；未接受上传披露不得自动启动。漫画点击还必须按当前 Profile 语言和 scan length 解析查询候选及制卡 UTF-16 起点；两本漫画即使页 basename 相同，Anki 页面媒体也必须按内容生成不同的稳定 `hoshi_manga_page_*` 文件名。
+9. Suwayomi URL 只接受 HTTP/HTTPS 并移除 `/api/v1` / `/api/graphql` 后缀；Basic/Bearer/UI Login 鉴权、响应大小限制、页面 MIME 扩展和重复读取缓存使用 mock HTTP 验证。来源图标还需验证只接受同 origin 的 `/api/v1` URL、图片 MIME，并按 server/source identity 缓存。
+10. bundled runtime manifest 只接受受 runtime root 约束的相对 Java/JAR/overlay 路径，拒绝 rooted path、`..` 越界、不匹配版本和 overlay SHA-256；构建脚本锁定 M-Extension-Server 1.0.4、上游 bundle 与 Niratan overlay 的固定 SHA-256，仓库保存 overlay 源码，build/publish 输出同时包含 `runtime.json`、Java、上游 JAR、overlay JAR、MPL-2.0 和 notice。仓库只接受 HTTPS（回环测试例外）且索引 URL 必须以 `.json` 结尾；mock 多仓库验证按配置顺序合并、package/source identity 去重、单仓库失败不丢失其他结果、旧 `RepositoryUrl` 无损迁移，以及字符串/数值 source ID、APK URL、单 Source/多 Source 索引。安装测试覆盖 APK ZIP/manifest/DEX 校验、SHA-256 与原子安装清单；mock `/dalvik` 验证固定 manga 方法、Base64 APK、字符串 `sourceId` 和强类型响应。再用当前 Keiyoushi MangaDex 多 Source APK 在一次性 sidecar 中验证：错误 source ID 返回结构化失败，日文 source ID 的 `headersManga` 和 `getPopularManga` 成功，且热门结果只请求并返回日文内容。
+
+手动验证使用一次性测试源，不修改用户正式漫画：
+
+1. 分别导入普通图片目录、Mokuro 文件、CBZ/ZIP 和图片型 EPUB，确认书架封面、标题、页数与错误提示。
+2. 移除卡片后确认源文件仍在原位且字节不变；重新显式导入同一路径可恢复卡片和已有进度。
+3. 打开独立 Reader，验证单页、双页、连续布局，右到左/左到右排列、键盘左右键语义和页码跳转。
+4. 左键点击 Mokuro/OCR 字符查词；按住右键移动超过 4 px 拖动画面；右键不移动释放打开复制/保存菜单；拖动后不得误开菜单。
+5. 在 50%、100%、200% 缩放及调整窗口大小后检查页面完整显示、双页中缝、滚动和页码一致；`Ctrl+滚轮` 每次改变 5%，普通滚轮仍按布局翻页/滚动。
+6. 在分页模式用鼠标滚轮翻页，确认 250ms 节流；连续模式滚动后关闭并重开，确认恢复到最近可见源页。
+7. 打开带 Mokuro 的页面，悬停文字确认整块浮现；点击字符确认共享 Popup、嵌套查词和音频可用，制卡 `{book-cover}` 使用当前漫画页。
+8. 对无 Mokuro 的一次性测试页点击 OCR，确认披露明确说明会上传缩小后的页面；拒绝时不联网，接受后启动命令立即返回。当前页完成时文字层和左键查词必须立刻可用，不等待剩余页；其余页继续后台识别。完成部分页面后保持 OCR 显示并关闭 Reader，再次打开时已完成页必须先从缓存出现、未完成页自动继续识别且已缓存页不重新下载或上传；手动暂停/恢复也复用已完成缓存。不得用用户正式漫画做网络验证。
+9. 启动一次性 Suwayomi Server，验证侧边栏“浏览”是独立一级入口，漫画页只保留本地/在线书架且在线空状态可跳转到浏览模块。浏览页“漫画源 / 漫画扩展 / 来源设置”是同一导航行的三个平面页签，设置在主内容区展开且不出现 Flyout、横向滚动或内容裁切。书架内“本地/在线”切换正常，在线书架合并 `category` 收藏、去重并显示缓存封面，本地 `catalog.json` 不新增远程项目。在“来源设置”内验证 None/Basic/UI Login/Bearer；在“漫画源”内验证 Suwayomi 与已安装 Mihon 来源合并为按语言分组的全宽列表，不出现来源 ComboBox，真实 Suwayomi 图标在行实现时出现、无图标来源保持占位。用来源数足够多的一次性 fixture 验证鼠标滚轮和垂直滚动条；点击行尾“热门”后才进入 Popular/Search 书架结果，返回后仍显示来源列表。点击来源结果或在线书架海报时必须先显示完整详情海报、作者/简介、继续阅读、加入/移出在线书库与章节列表，不得立即打开 Reader；“继续阅读”和指定章节分别打开正确章节，书库动作回写 Suwayomi 且不改本地 `catalog.json`。滚动到末尾六项时应自动请求下一页、去重追加且不跳回顶部，直到 `hasNextPage=false`。切换 Provider、漫画源、查询或快速切换详情后不得混入旧分页、元数据或章节结果。继续验证按页读取和进度回写；断网后已缓存页仍可读。
+10. 使用一次性 App 数据和可信测试仓库验证 Mihon APK：确认安装目录直接包含固定版本的私有 Java、上游 JAR 与 Niratan overlay JAR，来源设置中不出现 runtime 下载、bridge 地址、Java/JAR 路径或手动启动控件；旧单仓库仍自动显示为列表项，并可添加、编辑、移除多个仓库，移除仓库后已安装 APK 保留。首次安装或使用扩展时确认 Niratan 自动启动 sidecar，使用随机本机端口、overlay 优先 class path、Windows 分发包要求的 `--add-opens` 与 Java 21 `-noverify` 参数，关闭 App 后子进程终止。“漫画扩展”主体直接显示所有仓库合并后按“已安装 / 语言”分组的全宽虚拟列表。刷新仓库后验证鼠标滚轮、垂直滚动条、搜索、语言筛选、安装状态排序和行尾图标安装/更新，不再出现仓库来源下拉框或无效的兼容筛选；仓库图标 404 时应从 APK 的受限 `res/` 光栅候选生成缓存图标，确实无图才显示拼图占位。安装单 Source APK 时，无法读取可选 headers 不得阻止安装清单落盘；用多语言测试 APK 分别安装两个非首位 source ID，确认 Popular/Search、详情海报、章节和页面均来自各自语言 Source，安装清单按 package/source identity 共存且复用同 SHA-256 APK。直接 Mihon 来源卡片也必须先打开详情，显示“加入漫画库”按钮，并由“继续阅读”或指定章节进入 Reader；加入后重启应用仍显示在在线书架，详情按钮切换为“移出漫画库”，移出后条目消失。该 Windows 扩展只更新 `mihon.json` 的 `Library[]`，不得改本地 `catalog.json`。回到“漫画源”后验证来源列表、自动预取下一页和 Reader 均复用现有书架/Reader；HTTP 公网仓库、损坏 APK、APK 被替换、未知 source ID 和显式私网 IP 媒体 URL必须失败。不得对用户正式漫画源或正式扩展目录执行此验证。
+11. 点击空白区域或按 `Esc` 关闭 Popup；翻页、缩放或切换布局后旧 Popup 不得停留在失效坐标。
+12. 检查 `%APPDATA%\Niratan\Data\Manga`：除 `catalog.json`、`suwayomi.json` 与 App 缓存外，直接 Mihon 模式只新增 `mihon.json`（仓库和 `Library[]` 收藏）、`Extensions/installed.json`、经 SHA-256 命名的 APK 与 `MihonBridge` 私有工作目录；不创建或更新 `niratan.db`，本地漫画源目录内不生成 sidecar。`suwayomi.json` 不含密码或 token；Niratan 安装目录的 `MihonBridge` 只包含固定 runtime、许可证与 notice，不包含用户安装的 APK。

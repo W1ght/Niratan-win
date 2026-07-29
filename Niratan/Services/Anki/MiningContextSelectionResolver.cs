@@ -53,6 +53,7 @@ public static class MiningContextSelectionResolver
         DocumentTitle = source.DocumentTitle,
         CoverPath = source.CoverPath,
         CoverTag = source.CoverTag,
+        MangaPagePath = source.MangaPagePath,
         SasayakiAudioPath = source.SasayakiAudioPath,
         SasayakiAudioTag = source.SasayakiAudioTag,
         SentenceOffset = source.SentenceOffset,

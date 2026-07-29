@@ -15,6 +15,7 @@ public class MiningContextSelectionResolverTests
             SentenceOffset = 4,
             DocumentTitle = "小説",
             CoverTag = "<img src=\"cover.jpg\">",
+            MangaPagePath = @"D:\cache\manga\page.jpg",
         };
         var selection = new MiningContextSelection(
         [
@@ -32,6 +33,7 @@ public class MiningContextSelectionResolverTests
         result.SentenceOffset.Should().Be("一つ目。\n".Length + 4);
         result.DocumentTitle.Should().Be("小説");
         result.CoverTag.Should().Be("<img src=\"cover.jpg\">");
+        result.MangaPagePath.Should().Be(@"D:\cache\manga\page.jpg");
     }
 
     [Fact]

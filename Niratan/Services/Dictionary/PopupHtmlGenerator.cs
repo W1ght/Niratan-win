@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml;
 using Niratan.Enums;
 using Niratan.Helpers;
 using Niratan.Models.Dictionary;
+using Niratan.Models.Profiles;
 using Niratan.Models.Settings;
 
 namespace Niratan.Services.Dictionary;
@@ -16,11 +17,15 @@ public sealed class PopupHtmlGenerator
     private readonly string _popupCss;
     private readonly string _popupJs;
     private readonly Func<bool> _isSystemThemeDark;
+    private readonly Func<string> _contentLanguageId;
 
-    public PopupHtmlGenerator(Func<bool>? isSystemThemeDark = null)
+    public PopupHtmlGenerator(
+        Func<bool>? isSystemThemeDark = null,
+        Func<string>? contentLanguageId = null)
     {
         _isSystemThemeDark = isSystemThemeDark ?? (() =>
             Application.Current?.RequestedTheme == ApplicationTheme.Dark);
+        _contentLanguageId = contentLanguageId ?? (() => ContentLanguageProfile.Japanese.Id);
 
         var webDir = Path.Combine(AppContext.BaseDirectory, "Web", "DictionaryPopup");
 
@@ -55,6 +60,10 @@ public sealed class PopupHtmlGenerator
         var collapsedDictionariesJson = SerializeCollapsedDictionaries(settings.CollapsedDictionariesOrDefault);
         var popupScaleDeclarations = DictionaryPopupScaleCss.BuildDeclarations(settings.PopupScale);
         var customCss = BuildConfiguredCss(settings);
+        var contentLanguageId = ContentLanguageProfile.Normalize(_contentLanguageId()).Id;
+        var englishScanDelimitersJson = JsonSerializer.Serialize(
+            "\"“”„‟'‘’‚‛«»‹›!?—–-‐‑‒/\\|@#$%^&*_+=~`<>");
+        var englishWordInternalDelimitersJson = JsonSerializer.Serialize("'’`-‐‑");
 
         var (bgColor, textColor) = GetThemeColors(themeMode);
 
@@ -98,6 +107,7 @@ window.collapseMode = '{settings.CollapseModeText}';
 window.collapsedDictionaries = {collapsedDictionariesJson};
 window.showExpressionTags = {BoolToJs(settings.ShowExpressionTags)};
 window.scanNonJapaneseText = {BoolToJs(settings.ScanNonJapaneseText)};
+window.contentLanguageId = {JsonSerializer.Serialize(contentLanguageId)};
 window.maxResults = {settings.MaxResults};
 window.scanLength = {settings.ScanLength};
 window.popupRenderGeneration = {renderGeneration};
@@ -122,14 +132,44 @@ window.viewAnkiNoteLabel = {JsonSerializer.Serialize(ViewAnkiNoteLabel)};
 (function () {{
   var CJK_RANGES = [[0x4e00, 0x9fff], [0x3400, 0x4dbf], [0xf900, 0xfaff]];
   var JAPANESE_RANGES = [[0x3040, 0x309f], [0x30a0, 0x30ff], [0xff66, 0xff9f], [0x30fb, 0x30fc], [0xff61, 0xff65], [0x3000, 0x303f], [0xff10, 0xff19], [0xff21, 0xff3a], [0xff41, 0xff5a], [0xff01, 0xff0f], [0xff1a, 0xff1f], [0xff3b, 0xff3f], [0xff5b, 0xff60], [0xffe0, 0xffee]].concat(CJK_RANGES);
+  var ENGLISH_SCAN_DELIMITERS = {englishScanDelimitersJson};
+  var ENGLISH_WORD_INTERNAL_DELIMITERS = {englishWordInternalDelimitersJson};
+  var SCAN_DELIMITERS = '。、！？…‥「」『』（）()【】〈〉《》〔〕｛｝{{}}［］[]・：；:;，,.─\n\r';
   function isCodePointJapanese(cp) {{
     for (var i = 0; i < JAPANESE_RANGES.length; i++) {{ if (cp >= JAPANESE_RANGES[i][0] && cp <= JAPANESE_RANGES[i][1]) return true; }}
     return false;
   }}
   function isScanBoundary(ch) {{
     if (/^[\s　]$/.test(ch)) return true;
-    return '。、！？…※「」『』（）()【】〈〉《》〔〕｛｝{{}}[]・：；:;,─\n\r'.indexOf(ch) >= 0 ||
+    return SCAN_DELIMITERS.indexOf(ch) >= 0 ||
       (window.scanNonJapaneseText === false && !isCodePointJapanese(ch.codePointAt(0)));
+  }}
+  function isEnglishWordChar(ch) {{
+    return !!ch && /[A-Za-z0-9]/.test(ch);
+  }}
+  function isEnglishScanBoundaryAt(text, offset) {{
+    var ch = text[offset];
+    var isInternal = ENGLISH_WORD_INTERNAL_DELIMITERS.indexOf(ch) >= 0 &&
+      isEnglishWordChar(text[offset - 1]) &&
+      isEnglishWordChar(text[offset + 1]);
+    return SCAN_DELIMITERS.indexOf(ch) >= 0 ||
+      (ENGLISH_SCAN_DELIMITERS.indexOf(ch) >= 0 && !isInternal);
+  }}
+  function isScanBoundaryAt(text, offset) {{
+    return window.contentLanguageId === 'en'
+      ? isEnglishScanBoundaryAt(text, offset)
+      : isScanBoundary(text[offset]);
+  }}
+  function isHitBoundaryAt(text, offset) {{
+    return window.contentLanguageId === 'en'
+      ? /^[\s　]$/.test(text[offset]) || isEnglishScanBoundaryAt(text, offset)
+      : isScanBoundary(text[offset]);
+  }}
+  function findEnglishWordStart(hit) {{
+    var text = hit.node.textContent;
+    var offset = hit.offset;
+    while (offset > 0 && !isHitBoundaryAt(text, offset - 1)) offset--;
+    return {{ node: hit.node, offset: offset }};
   }}
   function isFurigana(node) {{
     var el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
@@ -199,7 +239,7 @@ window.viewAnkiNoteLabel = {JsonSerializer.Serialize(ViewAnkiNoteLabel)};
         charRange.setStart(node, offset);
         charRange.setEnd(node, offset + 1);
         if (inCharRange(charRange, x, y)) {{
-          if (isScanBoundary(text[offset])) return null;
+          if (isHitBoundaryAt(text, offset)) return null;
           return {{ node: node, offset: offset }};
         }}
       }}
@@ -243,8 +283,11 @@ window.viewAnkiNoteLabel = {JsonSerializer.Serialize(ViewAnkiNoteLabel)};
     }},
     selectText: function (x, y, maxLen) {{
       maxLen = maxLen || 16;
-      var hit = this.getCharacterAtPoint(x, y);
-      if (!hit) {{ sel = null; return null; }}
+      var rawHit = this.getCharacterAtPoint(x, y);
+      if (!rawHit) {{ sel = null; return null; }}
+      var hit = window.contentLanguageId === 'en'
+        ? findEnglishWordStart(rawHit)
+        : rawHit;
 
       var startNode = hit.node;
       var node = startNode;
@@ -254,7 +297,7 @@ window.viewAnkiNoteLabel = {JsonSerializer.Serialize(ViewAnkiNoteLabel)};
         var content = node.textContent;
         var start = offset;
         while (offset < content.length && text.length < maxLen) {{
-          if (isScanBoundary(content[offset])) break;
+          if (isScanBoundaryAt(content, offset)) break;
           text += content[offset];
           offset++;
         }}
@@ -368,6 +411,7 @@ window.viewAnkiNoteLabel = {JsonSerializer.Serialize(ViewAnkiNoteLabel)};
         var collapsedDictionariesJson = SerializeCollapsedDictionaries(settings.CollapsedDictionariesOrDefault);
         var popupScaleDeclarations = DictionaryPopupScaleCss.BuildDeclarations(settings.PopupScale);
         var customCss = BuildConfiguredCss(settings);
+        var contentLanguageId = ContentLanguageProfile.Normalize(_contentLanguageId()).Id;
         var (bgColor, textColor) = GetThemeColors(themeMode);
 
         var runtime = $@"{{
@@ -386,6 +430,7 @@ window.viewAnkiNoteLabel = {JsonSerializer.Serialize(ViewAnkiNoteLabel)};
         collapsedDictionaries: {collapsedDictionariesJson},
         showExpressionTags: {BoolToJs(settings.ShowExpressionTags)},
         scanNonJapaneseText: {BoolToJs(settings.ScanNonJapaneseText)},
+        contentLanguageId: {JsonSerializer.Serialize(contentLanguageId)},
         maxResults: {settings.MaxResults},
         scanLength: {settings.ScanLength},
         customCSS: {JsonSerializer.Serialize(customCss)},
@@ -433,6 +478,7 @@ window.collapseMode = '{settings.CollapseModeText}';
 window.collapsedDictionaries = {collapsedDictionariesJson};
 window.showExpressionTags = {BoolToJs(settings.ShowExpressionTags)};
 window.scanNonJapaneseText = {BoolToJs(settings.ScanNonJapaneseText)};
+window.contentLanguageId = {JsonSerializer.Serialize(contentLanguageId)};
 window.maxResults = {settings.MaxResults};
 window.scanLength = {settings.ScanLength};
 window.customCSS = {JsonSerializer.Serialize(customCss)};

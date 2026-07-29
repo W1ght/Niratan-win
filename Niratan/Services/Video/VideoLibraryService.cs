@@ -19,10 +19,36 @@ internal sealed class VideoLibraryService : IVideoLibraryService
     private static readonly HashSet<string> SupportedVideoExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".mkv",
-        ".mp4",
         ".webm",
         ".avi",
+        ".m4v",
+        ".mp4",
         ".mov",
+        ".qt",
+        ".mpg",
+        ".mpeg",
+        ".ts",
+        ".m2ts",
+        ".mts",
+        ".3gp",
+        ".ogv",
+        ".wmv",
+        ".asf",
+        ".flv",
+        ".m4b",
+        ".m4a",
+        ".mp3",
+        ".flac",
+        ".opus",
+        ".ogg",
+        ".oga",
+        ".weba",
+        ".wav",
+        ".aac",
+        ".aiff",
+        ".aif",
+        ".ape",
+        ".wv",
     };
 
     private static readonly string[] SubtitleExtensions = [".srt", ".vtt", ".ass", ".ssa"];
@@ -236,7 +262,7 @@ internal sealed class VideoLibraryService : IVideoLibraryService
         {
             RecurseSubdirectories = true,
             IgnoreInaccessible = true,
-            AttributesToSkip = FileAttributes.System,
+            AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint,
         };
 
         var result = await ExecuteAsync(
@@ -250,18 +276,11 @@ internal sealed class VideoLibraryService : IVideoLibraryService
                     .Select(path => CreateVideoItemFromPath(path, rootPath, source.Id, scannedAt))
                     .ToList();
 
-                foreach (var video in videos)
-                {
-                    token.ThrowIfCancellationRequested();
-                    await _dataService.UpsertVideoAsync(video, token);
-                }
-
-                await _dataService.DeleteSourceVideosExceptAsync(
+                await _dataService.ReplaceVideoSourceItemsAsync(
                     source.Id,
-                    videos.Select(video => video.FilePath).ToList(),
+                    videos,
+                    scannedAt,
                     token);
-                await _dataService.UpdateVideoLibrarySourceScanStateAsync(
-                    source.Id, scannedAt, null, token);
                 source.LastScannedAt = scannedAt;
                 source.LastError = null;
 

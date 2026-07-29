@@ -7,7 +7,7 @@
 ![Architecture](https://img.shields.io/badge/architecture-x64-lightgrey)
 ![License](https://img.shields.io/github/license/W1ght/Niratan-win)
 
-Niratan Win 是 [Niratan](https://github.com/W1ght/Niratan) 面向 Windows 的原生实现，把 EPUB 阅读、Yomitan 风格查词、Sasayaki 有声书、本地字幕视频学习和 AnkiConnect 制卡放在同一个桌面工作流中。
+Niratan Win 是 [Niratan](https://github.com/W1ght/Niratan) 面向 Windows 的原生实现，把 EPUB 阅读、漫画阅读、Yomitan 风格查词、Sasayaki 有声书、字幕视频学习和 AnkiConnect 制卡放在同一个桌面工作流中。
 
 Windows 版本使用 WinUI 3 构建原生界面，并以 Niratan 作为用户可见行为的对齐源；针对窗口、输入方式和系统控件的差异采用符合 Windows 习惯的交互。
 
@@ -27,7 +27,7 @@ Windows 版本使用 WinUI 3 构建原生界面，并以 Niratan 作为用户可
 
 - 通过 hoshidicts 导入和查询 Yomitan 格式的术语、频率与音高词典。
 - 支持点击查词、文本选择查词、Shift 悬停查词和弹窗内嵌套查词。
-- 阅读器、独立查词页、视频字幕和跨应用全局查词复用同一套词典渲染与 Profile 配置。
+- 小说、漫画、独立查词页、视频字幕和跨应用全局查词复用同一套词典渲染与 Profile 配置。
 - 弹窗支持 Yomitan structured content，并可按词典类型独立启用、排序和删除。
 
 ### Sasayaki 有声书
@@ -43,23 +43,30 @@ Windows 版本使用 WinUI 3 构建原生界面，并以 Niratan 作为用户可
 - 支持内嵌字幕以及 SRT / VTT / ASS / SSA 等外挂字幕。
 - 提供实验性的 YouTube 链接播放，并支持可用的发布者字幕。
 
+### 漫画阅读
+
+- 以只读方式索引图片目录、Mokuro、CBZ/ZIP 和图片型 EPUB，不移动或改写源媒体。
+- 独立阅读窗口支持单页、双页、连续布局、左右阅读方向、缩放和进度恢复。
+- Mokuro 文字区域支持字符命中、共享词典 Popup、嵌套查词和漫画页图片制卡。
+- 漫画目录与进度使用独立 JSON catalog，压缩包页面按需解压到应用缓存。
+
 ### Anki 与同步
 
 - 通过 AnkiConnect 创建卡片，支持字段映射、模板、重复检查和媒体字段。
-- 小说卡片可附带本地单词音频、有声书音频和书籍封面；视频卡片可附带截图和字幕音频片段。
+- 小说卡片可附带本地单词音频、有声书音频和书籍封面；漫画卡片可附带当前页；视频卡片可附带截图和字幕音频片段。
 - 可选 ッツ Sync / Google Drive 同步书籍、阅读进度、统计、高亮和相关学习数据。
 - 支持本地数据备份与恢复。
 
 ### Windows 桌面体验
 
 - 基于 WinUI 3、Windows App SDK 和 WebView2 的 Windows 原生界面。
-- 主窗口中的阅读器采用响应式布局；视频播放器与全局查词提供独立窗口体验。
+- 主窗口中的小说书架采用响应式布局；小说 Reader、漫画 Reader、视频播放器与全局查词提供相应的原生窗口体验。
 - 提供中英文界面、Profile、统一快捷键、主题和更新检查。
 
 ## 为什么选择 Niratan Win
 
-- 阅读、查词、听书、字幕视频学习和制卡可以在同一个 Windows 应用中完成。
-- 小说与视频共用词典、弹窗、Profile 和 Anki 管线，减少重复配置。
+- 小说、漫画、查词、听书、字幕视频学习和制卡可以在同一个 Windows 应用中完成。
+- 小说、漫画与视频共用词典、弹窗、Profile 和 Anki 管线，减少重复配置。
 - WebView2 负责可靠的日文竖排、ruby 和 EPUB 分页，外层交互保持 WinUI 原生体验。
 - 书籍、词典、视频和大部分学习数据默认保存在本机；同步与 AnkiConnect 均为可选能力。
 
@@ -75,14 +82,14 @@ Windows 版本使用 WinUI 3 构建原生界面，并以 Niratan 作为用户可
 ## 快速开始
 
 1. 首次启动后，在“设置 → 词典”中下载推荐词典，或导入 Yomitan 格式的词典压缩包。
-2. 在“小说”页面拖入或选择一个 EPUB 文件，打开书籍开始阅读。
+2. 在“小说”页面导入 EPUB，或在“漫画”页面导入图片目录、Mokuro、CBZ/ZIP 或图片型 EPUB。
 3. 点击文字、选择文本或按住 `Shift` 悬停进行查词。
 4. 如需制卡，在“设置 → Anki”中配置 AnkiConnect 和字段映射。
-5. Sasayaki、视频学习、全局查词和 Google Drive 同步均可按需启用。
+5. Sasayaki、视频学习、漫画阅读、全局查词和 Google Drive 同步均可按需启用。
 
 ## 开发状态
 
-Niratan Win 正在持续对齐 Niratan 的阅读、词典、Sasayaki、视频、同步、统计和制卡体验。正式版本以 GitHub Releases 中的安装包和压缩包为准，用户可见变化记录在 Release Notes 与 [变更日志](docs/CHANGELOG.md) 中。
+Niratan Win 正在持续对齐 Niratan 的小说、漫画、词典、Sasayaki、视频、同步、统计和制卡体验。正式版本以 GitHub Releases 中的安装包和压缩包为准，用户可见变化记录在 Release Notes 与 [变更日志](docs/CHANGELOG.md) 中。
 
 Niratan 是产品行为的唯一参考；Windows 版本不会机械复制 SwiftUI 外观，而是使用 WinUI 原生控件、交互和响应式规则实现相同行为。
 
@@ -118,7 +125,7 @@ dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 
 ## 隐私与数据
 
-- 本地书籍、词典、视频文件、设置和学习数据默认保存在用户电脑上。
+- 本地书籍、漫画、词典、视频文件、设置和学习数据默认保存在用户电脑上；漫画和视频源媒体按非破坏性索引处理。
 - Google Drive 同步仅在用户显式启用并完成授权后访问云端数据。
 - Anki 制卡只连接用户配置的 AnkiConnect 地址；默认场景为本机 Anki。
 - 全局查词只在用户触发已配置的快捷键时读取当前选中的文本。
@@ -126,7 +133,7 @@ dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64
 
 ## 反馈与功能请求
 
-如果你在 Windows 阅读、查词、听书、同步、视频学习或 Anki 制卡中遇到问题，欢迎通过 [GitHub Issues](https://github.com/W1ght/Niratan-win/issues) 反馈。请尽量附上 Niratan Win 版本、Windows 版本、复现步骤和相关日志。
+如果你在 Windows 小说/漫画阅读、查词、听书、同步、视频学习或 Anki 制卡中遇到问题，欢迎通过 [GitHub Issues](https://github.com/W1ght/Niratan-win/issues) 反馈。请尽量附上 Niratan Win 版本、Windows 版本、复现步骤和相关日志。
 
 ## 鸣谢
 - [Manhhao/Hoshi-Reader](https://github.com/Manhhao/Hoshi-Reader)：原 Hoshi Reader 项目。

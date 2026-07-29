@@ -119,6 +119,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
     public string StatisticsTrackingButtonText => IsStatisticsTracking ? "Pause" : "Start";
     public bool IsEnglishStatisticsContent =>
         _profileRuntime.ActiveLanguage.Id == ContentLanguageProfile.English.Id;
+    public string ActiveContentLanguageId => _profileRuntime.ActiveLanguage.Id;
     public string StatisticsSessionCharactersText =>
         FormatStatisticsCount(SessionStatistics.CharactersRead);
     public string StatisticsSessionSpeedText =>

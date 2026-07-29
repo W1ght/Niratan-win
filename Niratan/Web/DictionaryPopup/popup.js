@@ -1778,6 +1778,7 @@ function capturePopupRuntime() {
     collapsedDictionaries: window.collapsedDictionaries,
     showExpressionTags: window.showExpressionTags,
     scanNonJapaneseText: window.scanNonJapaneseText,
+    contentLanguageId: window.contentLanguageId,
     maxResults: window.maxResults,
     scanLength: window.scanLength,
     customCSS: window.customCSS,
@@ -1808,6 +1809,7 @@ function applyPopupRuntime(runtime) {
   window.collapsedDictionaries = runtime.collapsedDictionaries;
   window.showExpressionTags = runtime.showExpressionTags;
   window.scanNonJapaneseText = runtime.scanNonJapaneseText;
+  window.contentLanguageId = runtime.contentLanguageId;
   window.maxResults = runtime.maxResults;
   window.scanLength = runtime.scanLength;
   window.customCSS = runtime.customCSS;

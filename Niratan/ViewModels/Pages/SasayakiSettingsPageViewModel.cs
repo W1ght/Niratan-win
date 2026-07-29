@@ -9,9 +9,6 @@ namespace Niratan.ViewModels.Pages;
 
 public partial class SasayakiSettingsPageViewModel : ObservableObject
 {
-    private const int MinimumSearchWindowSize = 100;
-    private const int MaximumSearchWindowSize = 10000;
-
     private readonly ISettingsService _settingsService;
     private bool _isInitializing = true;
 
@@ -129,7 +126,7 @@ public partial class SasayakiSettingsPageViewModel : ObservableObject
     public void OnNavigatedFrom() => SaveSettings();
 
     private static int ClampSearchWindow(int value) =>
-        Math.Clamp(value, MinimumSearchWindowSize, MaximumSearchWindowSize);
+        SasayakiSettings.NormalizeSearchWindow(value);
 
     private static Color ParseColor(string? value, string fallback)
     {

@@ -49,6 +49,21 @@ internal class DialogService : IDialogService
         string primaryButtonText,
         string secondaryButtonText)
     {
+        return await PromptTextAsync(
+            title,
+            placeholder,
+            primaryButtonText,
+            secondaryButtonText,
+            string.Empty);
+    }
+
+    public async Task<string?> PromptTextAsync(
+        string title,
+        string placeholder,
+        string primaryButtonText,
+        string secondaryButtonText,
+        string initialText)
+    {
         if (_xamlRoot == null)
             throw new InvalidOperationException("XamlRoot must be initialized.");
 
@@ -56,6 +71,9 @@ internal class DialogService : IDialogService
         {
             PlaceholderText = placeholder,
             MinWidth = 360,
+            Text = initialText,
+            SelectionStart = 0,
+            SelectionLength = initialText.Length,
         };
 
         var dialog = new ContentDialog

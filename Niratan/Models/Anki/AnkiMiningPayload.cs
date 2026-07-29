@@ -122,6 +122,7 @@ public sealed class AnkiMiningContext
     public string? DocumentTitle { get; set; }
     public string? CoverPath { get; set; }
     public string? CoverTag { get; set; }
+    public string? MangaPagePath { get; set; }
     public string? SasayakiAudioPath { get; set; }
     public string? SasayakiAudioTag { get; set; }
     public int? SentenceOffset { get; set; }

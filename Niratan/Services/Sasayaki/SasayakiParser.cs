@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Niratan.Models.Sasayaki;
 
@@ -10,9 +11,11 @@ namespace Niratan.Services.Sasayaki;
 
 public sealed class SasayakiParser
 {
-    public async Task<List<SasayakiCue>> ParseAsync(string srtFilePath)
+    public async Task<List<SasayakiCue>> ParseAsync(
+        string srtFilePath,
+        CancellationToken cancellationToken = default)
     {
-        var text = await File.ReadAllTextAsync(srtFilePath);
+        var text = await File.ReadAllTextAsync(srtFilePath, cancellationToken);
         return Parse(text);
     }
 

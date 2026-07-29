@@ -93,7 +93,7 @@ public sealed record VideoPlaybackState(
     double AudioDelaySeconds = 0,
     VideoAudioSelection? AudioSelection = null)
 {
-    public const double MinimumPersistablePositionSeconds = 5;
+    public const double MinimumPersistablePositionSeconds = 2;
     public const int MinimumSubtitleDelayMilliseconds = -10_000;
     public const int MaximumSubtitleDelayMilliseconds = 10_000;
 

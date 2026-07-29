@@ -15,7 +15,7 @@ public sealed class VideoItemViewModelTests
             Id = "video-1",
             Title = "Episode 1",
             FilePath = @"D:\Videos\episode1.mkv",
-            LastPositionSeconds = 2,
+            LastPositionSeconds = 1.9,
             DurationSeconds = 2406,
         });
 

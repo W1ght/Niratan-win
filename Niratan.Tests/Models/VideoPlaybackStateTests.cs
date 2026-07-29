@@ -15,7 +15,7 @@ public class VideoPlaybackStateTests
 
     [Theory]
     [InlineData(0)]
-    [InlineData(2)]
+    [InlineData(1.999)]
     public void ShouldPersistProgress_IgnoresNearStartSnapshots(double positionSeconds)
     {
         VideoPlaybackState.ShouldPersistProgress(

@@ -1459,6 +1459,9 @@ public class NovelReaderWebAssetTests
         sasayakiXaml.Should().Contain("x:Uid=\"SasayakiSyncSectionHeader\"");
         sasayakiXaml.Should().Contain("AutomationProperties.AutomationId=\"SasayakiEnableSyncToggle\"");
         sasayakiXaml.Should().Contain("AutomationProperties.AutomationId=\"SasayakiSearchWindowNumberBox\"");
+        sasayakiXaml.Should().Contain("Minimum=\"50\"");
+        sasayakiXaml.Should().Contain("Maximum=\"1000\"");
+        sasayakiXaml.Should().Contain("SmallChange=\"50\"");
         sasayakiXaml.Should().Contain("AutomationProperties.AutomationId=\"SasayakiLightTextColorPicker\"");
         sasayakiXaml.Should().Contain("AutomationProperties.AutomationId=\"SasayakiDarkBackgroundColorPicker\"");
         sasayakiXaml.Should().Contain("IsOn=\"{x:Bind ViewModel.EnableSasayaki, Mode=TwoWay}\"");
@@ -1935,10 +1938,14 @@ public class NovelReaderWebAssetTests
         script.Should().Contain("!this.isCodePointJapanese(char.codePointAt(0))");
         script.Should().Contain("getScanLength");
         script.Should().Contain("window.__niratanLookupSettings?.scanLength");
+        script.Should().Contain("window.__niratanLookupSettings?.contentLanguageId");
+        script.Should().Contain("findEnglishWordStart");
+        script.Should().Contain("isEnglishScanBoundaryAt");
         script.Should().NotContain("||\n        !isCodePointJapanese(char.codePointAt(0));");
         readerCode.Should().Contain("scanNonJapaneseText");
         readerCode.Should().Contain("maxResults");
         readerCode.Should().Contain("scanLength");
+        readerCode.Should().Contain("contentLanguageId = ViewModel.ActiveContentLanguageId");
         readerCode.Should().Contain("dictionaryDisplaySettings.MaxResults");
         readerCode.Should().Contain("dictionaryDisplaySettings.ScanLength");
         readerCode.Should().Contain("Current.DictionaryDisplaySettings");
@@ -2801,6 +2808,7 @@ public class NovelReaderWebAssetTests
         readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiOpenAudiobookButton\"");
         readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiOpenSubtitleButton\"");
         readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiSearchWindowSlider\"");
+        readerXaml.Should().Contain("Minimum=\"50\" Maximum=\"1000\" StepFrequency=\"50\"");
         readerXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelReaderSasayakiMatchButton\"");
         resourcesViewModel.Should().Contain("ISasayakiMatchService");
         resourcesViewModel.Should().Contain("OpenFilePickerAsync(");
@@ -2808,6 +2816,8 @@ public class NovelReaderWebAssetTests
         appCode.Should().Contain("AddTransient<SasayakiResourcesViewModel>");
         enResources.Should().NotContain("NovelBookMatchSasayakiMenuItem.Text");
         zhResources.Should().NotContain("NovelBookMatchSasayakiMenuItem.Text");
+        enResources.Should().Contain("SasayakiMatchUnreadableAudiobookAndSubtitle");
+        zhResources.Should().Contain("SasayakiMatchUnreadableAudiobookAndSubtitle");
     }
 
     [Fact]
@@ -2831,10 +2841,6 @@ public class NovelReaderWebAssetTests
         var appSettings = File.ReadAllText(
             Path.Combine(ProjectRoot, "Models", "Settings", "AppSettings.cs")
         );
-        var databaseMigrator = File.ReadAllText(
-            Path.Combine(ProjectRoot, "Services", "Storage", "DatabaseMigrator.cs")
-        );
-
         libraryXaml.Should().Contain("AllowDrop=\"True\"");
         libraryXaml.Should().Contain("DragOver=\"NovelLibrary_DragOver\"");
         libraryXaml.Should().Contain("Drop=\"NovelLibrary_Drop\"");
@@ -2860,7 +2866,6 @@ public class NovelReaderWebAssetTests
         libraryService.Should().Contain("SaveNovelBookOrderAsync");
         bookStorageService.Should().Contain("SaveBookOrderAsync");
         appSettings.Should().Contain("NovelLibrarySortOption");
-        databaseMigrator.Should().Contain("new Migration_008()");
     }
 
     [Fact]

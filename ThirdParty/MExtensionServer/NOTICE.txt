@@ -1,0 +1,26 @@
+M-Extension-Server bundled component
+====================================
+
+Niratan includes the Windows x64 runtime bundle from:
+https://github.com/kodjodevf/M-Extension-Server
+
+Bundled version: 1.0.4
+Source commit: e86c8c627a628f71b52cfa70cd1435cacc96c190
+License: Mozilla Public License 2.0
+
+The corresponding source is available at:
+https://github.com/kodjodevf/M-Extension-Server/tree/e86c8c627a628f71b52cfa70cd1435cacc96c190
+
+Niratan loads the MPL-2.0 compatibility overlay in the adjacent `overlay`
+directory before the upstream server JAR. The overlay adds a string-valued
+`sourceId` request field, selects that source from multi-source APKs before
+delegating to the upstream invoker, and repairs a narrow invalid constructor
+pattern produced by dex2jar for recent R8 output.
+
+M-Extension-Server includes AndroidCompat and code derived from the Mihon,
+Aniyomi, and Suwayomi projects. Their notices and applicable licenses are
+described by the upstream project:
+https://github.com/kodjodevf/M-Extension-Server/blob/e86c8c627a628f71b52cfa70cd1435cacc96c190/README.md
+
+The bundled JRE carries its own legal notices under the runtime's legal
+directory.

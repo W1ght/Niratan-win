@@ -79,6 +79,9 @@ internal sealed class NovelStorageMigrationService : INovelStorageMigrationServi
     {
         try
         {
+            if (!LegacyDatabaseExists())
+                return await CompleteWithoutLegacyTableAsync(ct);
+
             if (!await LegacyTableExistsAsync(ct))
                 return await CompleteWithoutLegacyTableAsync(ct);
 
@@ -120,6 +123,14 @@ internal sealed class NovelStorageMigrationService : INovelStorageMigrationServi
                 "Novel storage migration failed; novel writes are disabled");
             return new NovelStorageMigrationResult(false, true, ex.Message, 0);
         }
+    }
+
+    private bool LegacyDatabaseExists()
+    {
+        var builder = new SqliteConnectionStringBuilder(_connectionString);
+        return !string.IsNullOrWhiteSpace(builder.DataSource)
+               && builder.DataSource != ":memory:"
+               && File.Exists(Path.GetFullPath(builder.DataSource));
     }
 
     private async Task<NovelStorageMigrationResult> CompleteWithoutLegacyTableAsync(

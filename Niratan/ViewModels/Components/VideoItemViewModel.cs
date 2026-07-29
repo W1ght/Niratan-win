@@ -92,6 +92,24 @@ public sealed partial class VideoItemViewModel : ObservableObject
 
     public bool HasPoster => HasArtwork;
 
+    public bool ApplyGeneratedThumbnail(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)
+            || string.Equals(Video.PosterPath, path, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(Video.ThumbnailPath, path, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        Video.ThumbnailPath = path;
+        OnPropertyChanged(nameof(ArtworkPath));
+        OnPropertyChanged(nameof(ArtworkImage));
+        OnPropertyChanged(nameof(HasArtwork));
+        OnPropertyChanged(nameof(PosterImage));
+        OnPropertyChanged(nameof(HasPoster));
+        return true;
+    }
+
     private bool HasMeaningfulProgress =>
         Video.LastPositionSeconds >= VideoPlaybackState.MinimumPersistablePositionSeconds;
 

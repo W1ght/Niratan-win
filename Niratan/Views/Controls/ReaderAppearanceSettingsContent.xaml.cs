@@ -21,6 +21,9 @@ public sealed partial class ReaderAppearanceSettingsContent : UserControl
             ViewModel.FontSize--;
     }
 
+    private void ReaderFontDeleteConfirmationButton_Click(object sender, RoutedEventArgs e) =>
+        ReaderDeleteFontConfirmationFlyout.Hide();
+
     private void FontSizeIncrease_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel.FontSize < 60)

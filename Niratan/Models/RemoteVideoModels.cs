@@ -1,16 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 
 namespace Niratan.Models;
 
 public sealed record RemoteVideoIdentity(
-    string ProviderId,
-    string RemoteId,
-    string OriginalUrl,
-    string CanonicalUrl,
+    [property: JsonPropertyName("providerID")] string ProviderId,
+    [property: JsonPropertyName("remoteID")] string RemoteId,
+    [property: JsonPropertyName("originalURL")] string OriginalUrl,
+    [property: JsonPropertyName("canonicalURL")] string CanonicalUrl,
     string Title,
-    string? ThumbnailUrl,
+    [property: JsonPropertyName("thumbnailURL")] string? ThumbnailUrl,
     TimeSpan? Duration)
 {
     public string PersistenceKey => $"remote://{ProviderId}/{RemoteId}";

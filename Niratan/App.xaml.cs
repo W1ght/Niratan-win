@@ -20,6 +20,7 @@ using Niratan.Services.Backup;
 using Niratan.Services.Dictionary;
 using Niratan.Services.GameControllers;
 using Niratan.Services.Logging;
+using Niratan.Services.Manga;
 using Niratan.Services.Nyaa;
 using Niratan.Services.Novels;
 using Niratan.Services.Profiles;
@@ -151,6 +152,8 @@ public partial class App : Application
         services.AddTransient<TtuSyncSettingsPageViewModel>();
         services.AddTransient<AnkiSettingsPageViewModel>();
         services.AddTransient<NovelLibraryPageViewModel>();
+        services.AddTransient<MangaLibraryPageViewModel>();
+        services.AddTransient<MangaReaderViewModel>();
         services.AddTransient<NovelShelfManagementViewModel>();
         services.AddTransient<NyaaImportDialogViewModel>();
         services.AddTransient<ZLibraryDialogViewModel>();
@@ -191,6 +194,18 @@ public partial class App : Application
         services.AddSingleton<IEpubParserService, EpubParserService>();
         services.AddSingleton<INovelEpubImportService, NovelEpubImportService>();
         services.AddSingleton<INovelLibraryService, NovelLibraryService>();
+        services.AddSingleton<MangaSourceIndexer>();
+        services.AddSingleton<IMangaCatalogStore>(_ =>
+            new MangaCatalogStore(AppDataHelper.GetMangaCatalogPath()));
+        services.AddSingleton<IMangaPageProvider, MangaPageProvider>();
+        services.AddSingleton<IMangaTextRegionService, MangaTextRegionService>();
+        services.AddSingleton<IMangaOcrService, MangaOcrService>();
+        services.AddSingleton<ISuwayomiService, SuwayomiService>();
+        services.AddSingleton<IMihonExtensionService, MihonExtensionService>();
+        services.AddSingleton<MangaLibraryService>();
+        services.AddSingleton<IMangaLibraryService>(provider =>
+            provider.GetRequiredService<MangaLibraryService>());
+        services.AddSingleton<IMangaReaderWindowService, MangaReaderWindowService>();
         services.AddSingleton<NyaaRssParser>();
         services.AddSingleton<INyaaClient, NyaaRssClient>();
         services.AddSingleton<ResourcePackageAnalyzer>();
@@ -289,13 +304,6 @@ public partial class App : Application
             GetService<IGameControllerService>().Start();
 
             StartHangWatchdog();
-
-            var migrator = new DatabaseMigrator(
-                GetService<ILogger<DatabaseMigrator>>(),
-                $"Data Source={Path.Combine(AppDataHelper.GetDataPath(), "niratan.db")}"
-            );
-            await migrator.MigrateAsync();
-            Log.Information("Database ready");
 
             var novelMigrationResult = await GetService<INovelStorageMigrationService>()
                 .MigrateAsync();

@@ -15,9 +15,6 @@ namespace Niratan.ViewModels.Components;
 
 public partial class SasayakiResourcesViewModel : ObservableObject
 {
-    private const double MinimumSearchWindow = 100;
-    private const double MaximumSearchWindow = 10000;
-
     private readonly IDialogService _dialogService;
     private readonly ISasayakiMatchService _matchService;
     private readonly ISasayakiSidecarService _sidecarService;
@@ -120,10 +117,8 @@ public partial class SasayakiResourcesViewModel : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(book);
         _book = book;
-        SearchWindowSizeValue = Math.Clamp(
-            _settingsService.Current.SasayakiSettings.SearchWindowSize,
-            MinimumSearchWindow,
-            MaximumSearchWindow);
+        SearchWindowSizeValue = SasayakiSettings.NormalizeSearchWindow(
+            _settingsService.Current.SasayakiSettings.SearchWindowSize);
 
         var bookRootPath = ResolveBookRootPath(book);
         var matchTask = _sidecarService.LoadMatchAsync(bookRootPath, _cts.Token);
@@ -187,6 +182,25 @@ public partial class SasayakiResourcesViewModel : ObservableObject
         }
         catch (OperationCanceledException) when (_cts.IsCancellationRequested)
         {
+        }
+        catch (SasayakiMatchInputException ex)
+        {
+            ErrorMessage = ex.Error switch
+            {
+                SasayakiMatchInputError.UnreadableAudiobookAndSubtitle =>
+                    ResourceStringHelper.GetString(
+                        "SasayakiMatchUnreadableAudiobookAndSubtitle",
+                        "The selected audiobook and subtitle contain no readable data. Re-copy or repair both source files."),
+                SasayakiMatchInputError.UnreadableAudiobook =>
+                    ResourceStringHelper.GetString(
+                        "SasayakiMatchUnreadableAudiobook",
+                        "The selected audiobook contains no readable media data. Re-copy or repair the source file."),
+                SasayakiMatchInputError.InvalidSubtitle =>
+                    ResourceStringHelper.GetString(
+                        "SasayakiMatchInvalidSubtitle",
+                        "The selected subtitle contains no valid SRT cues. Re-copy or repair the source file."),
+                _ => ex.Message,
+            };
         }
         catch (Exception ex)
         {

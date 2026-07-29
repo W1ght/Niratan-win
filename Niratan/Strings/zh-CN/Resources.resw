@@ -203,6 +203,9 @@
   <data name="ReaderFontImportedMessage" xml:space="preserve"><value>已导入“{0}”。</value></data>
   <data name="ReaderFontDeleteDialogTitle" xml:space="preserve"><value>删除阅读字体</value></data>
   <data name="ReaderFontDeleteDialogMessage" xml:space="preserve"><value>确定删除“{0}”吗？该字体文件将从 Niratan 中移除。</value></data>
+  <data name="ReaderFontDeleteConfirmationTitle.Text" xml:space="preserve"><value>删除阅读字体</value></data>
+  <data name="ReaderFontDeleteConfirmationCancelButton.Content" xml:space="preserve"><value>取消</value></data>
+  <data name="ReaderFontDeleteConfirmationConfirmButton.Content" xml:space="preserve"><value>删除</value></data>
   <data name="ReaderFontDeletedMessage" xml:space="preserve"><value>已删除“{0}”。</value></data>
   <data name="ReaderFontSizeCard.Header" xml:space="preserve"><value>字号</value></data>
   <data name="ReaderFontSizeCard.Description" xml:space="preserve"><value>调整正文大小</value></data>
@@ -565,6 +568,9 @@
   <data name="SasayakiMatchSummary" xml:space="preserve"><value>已匹配 {0}/{1} 条（{2:F1}%）</value></data>
   <data name="SasayakiMatchMatching" xml:space="preserve"><value>正在匹配…</value></data>
   <data name="SasayakiMatchAction" xml:space="preserve"><value>匹配</value></data>
+  <data name="SasayakiMatchUnreadableAudiobookAndSubtitle" xml:space="preserve"><value>所选有声书和字幕都没有可读取的数据。请重新复制或修复这两个源文件。</value></data>
+  <data name="SasayakiMatchUnreadableAudiobook" xml:space="preserve"><value>所选有声书没有可读取的媒体数据。请重新复制或修复源文件。</value></data>
+  <data name="SasayakiMatchInvalidSubtitle" xml:space="preserve"><value>所选字幕不包含有效的 SRT 条目。请重新复制或修复源文件。</value></data>
   <data name="NovelReaderSasayakiButton.AutomationProperties.Name" xml:space="preserve"><value>Sasayaki</value></data>
   <data name="SasayakiLoadAudioMenuItem.Text" xml:space="preserve"><value>加载音频</value></data>
   <data name="SasayakiSkipBackMenuItem.Text" xml:space="preserve"><value>后退 15 秒</value></data>
@@ -1323,4 +1329,237 @@
   <data name="NyaaResultSortLargest" xml:space="preserve"><value>体积最大</value></data>
   <data name="NyaaResultSortTitle" xml:space="preserve"><value>按标题</value></data>
   <data name="NyaaFilteredResultSummary" xml:space="preserve"><value>显示 {0}/{1} 项结果。</value></data>
+  <data name="MangaLibraryOpenMenuItem.Text" xml:space="preserve"><value>打开</value></data>
+  <data name="MangaNavigationItem.Content" xml:space="preserve"><value>漫画</value></data>
+  <data name="BrowseNavigationItem.Content" xml:space="preserve"><value>浏览</value></data>
+  <data name="BrowsePageTitleText.Text" xml:space="preserve"><value>浏览</value></data>
+  <data name="BrowseMangaSourcesTab.Content" xml:space="preserve"><value>漫画源</value></data>
+  <data name="BrowseMangaExtensionsTab.Content" xml:space="preserve"><value>漫画扩展</value></data>
+  <data name="BrowseSourceSettingsTab.Content" xml:space="preserve"><value>来源设置</value></data>
+  <data name="BrowseSourceOpenActionText.Text" xml:space="preserve"><value>打开</value></data>
+  <data name="BrowseSourcePopularButton.Content" xml:space="preserve"><value>热门</value></data>
+  <data name="BrowseShowExtensionsButton.Content" xml:space="preserve"><value>显示扩展</value></data>
+  <data name="BrowseConnectionSettingsButtonText.Text" xml:space="preserve"><value>来源设置</value></data>
+  <data name="BrowseConnectionSettingsTitle.Text" xml:space="preserve"><value>来源设置</value></data>
+  <data name="SuwayomiConnectionSettingsExpander.Header" xml:space="preserve"><value>Suwayomi Server</value></data>
+  <data name="BrowseResultsBackButton.ToolTipService.ToolTip" xml:space="preserve"><value>返回漫画源</value></data>
+  <data name="BrowseResultsSearchTextBox.PlaceholderText" xml:space="preserve"><value>搜索当前漫画源</value></data>
+  <data name="MangaLibraryRenameMenuItem.Text" xml:space="preserve"><value>重命名</value></data>
+  <data name="MangaLibraryMarkReadMenuItem.Text" xml:space="preserve"><value>标记为已读</value></data>
+  <data name="MangaLibraryRemoveMenuItem.Text" xml:space="preserve"><value>从媒体库移除</value></data>
+  <data name="MangaLibraryTitleText.Text" xml:space="preserve"><value>漫画</value></data>
+  <data name="MangaLibrarySubtitleText.Text" xml:space="preserve"><value>本地文件夹、Mokuro、EPUB、CBZ 和 ZIP</value></data>
+  <data name="MangaLibraryImportFolderButton.Label" xml:space="preserve"><value>导入文件夹</value></data>
+  <data name="MangaLibraryImportFileButton.Label" xml:space="preserve"><value>导入漫画</value></data>
+  <data name="MangaLibraryRefreshButton.Label" xml:space="preserve"><value>刷新</value></data>
+  <data name="MangaLibraryRefreshOnlineButton.Label" xml:space="preserve"><value>刷新</value></data>
+  <data name="MangaLibrarySectionButton.Content" xml:space="preserve"><value>书架</value></data>
+  <data name="MangaBrowseSectionButton.Content" xml:space="preserve"><value>浏览</value></data>
+  <data name="MangaSourcesSectionButton.Content" xml:space="preserve"><value>漫画源</value></data>
+  <data name="MangaLibraryLocalSurfaceButton.Content" xml:space="preserve"><value>本地</value></data>
+  <data name="MangaLibraryOnlineSurfaceButton.Content" xml:space="preserve"><value>在线</value></data>
+  <data name="MangaLibraryOnlineBrowseButton.Content" xml:space="preserve"><value>浏览/连接</value></data>
+  <data name="MangaBrowseSourceComboBox.Header" xml:space="preserve"><value>漫画源</value></data>
+  <data name="MangaBrowseSearchTextBox.Header" xml:space="preserve"><value>搜索</value></data>
+  <data name="MangaBrowseSearchTextBox.PlaceholderText" xml:space="preserve"><value>先选择漫画源，再进行搜索</value></data>
+  <data name="MangaBrowsePopularButton.Content" xml:space="preserve"><value>热门</value></data>
+  <data name="MangaBrowseSearchButton.Content" xml:space="preserve"><value>搜索</value></data>
+  <data name="MangaBrowseEmptyText.Text" xml:space="preserve"><value>尚未安装漫画源，请前往“漫画扩展”安装或配置。</value></data>
+  <data name="MangaSourcesBoundaryInfoBar.Message" xml:space="preserve"><value>Niratan 连接现有的 Suwayomi Server；Java 与 Mihon 扩展由 Suwayomi 管理。</value></data>
+  <data name="MangaSourcesServerTextBox.Header" xml:space="preserve"><value>服务器</value></data>
+  <data name="MangaSourcesAuthenticationComboBox.Header" xml:space="preserve"><value>身份验证</value></data>
+  <data name="MangaSourcesAuthNoneItem.Content" xml:space="preserve"><value>无</value></data>
+  <data name="MangaSourcesAuthBasicItem.Content" xml:space="preserve"><value>基础验证</value></data>
+  <data name="MangaSourcesAuthUiLoginItem.Content" xml:space="preserve"><value>界面登录</value></data>
+  <data name="MangaSourcesAuthBearerItem.Content" xml:space="preserve"><value>Bearer 令牌</value></data>
+  <data name="MangaSourcesUsernameTextBox.Header" xml:space="preserve"><value>用户名</value></data>
+  <data name="MangaSourcesSecretBox.Header" xml:space="preserve"><value>密码/令牌</value></data>
+  <data name="MangaSourcesConnectButton.Content" xml:space="preserve"><value>连接</value></data>
+  <data name="MangaSourcesInstalledSourcesText.Text" xml:space="preserve"><value>已安装的漫画源</value></data>
+  <data name="MangaLibraryRefreshButton.ToolTipService.ToolTip" xml:space="preserve"><value>刷新</value></data>
+  <data name="MangaLibraryEmptyTitleText.Text" xml:space="preserve"><value>尚未导入漫画</value></data>
+  <data name="MangaLibraryEmptyDescriptionText.Text" xml:space="preserve"><value>导入图片文件夹、Mokuro 源、EPUB、CBZ 或 ZIP。Niratan 只读访问原始文件。</value></data>
+  <data name="MangaLibraryEmptyImportButton.Content" xml:space="preserve"><value>导入漫画</value></data>
+  <data name="MangaLibraryTitle" xml:space="preserve"><value>漫画</value></data>
+  <data name="MangaLibraryPageCount" xml:space="preserve"><value>{0} 页</value></data>
+  <data name="MangaLibraryUnread" xml:space="preserve"><value>未读</value></data>
+  <data name="MangaLibraryRead" xml:space="preserve"><value>已读</value></data>
+  <data name="MangaLibraryImportedMessage" xml:space="preserve"><value>已导入《{0}》。</value></data>
+  <data name="MangaLibraryImportedTitle" xml:space="preserve"><value>漫画已导入</value></data>
+  <data name="MangaLibraryImportFailed" xml:space="preserve"><value>无法导入漫画。</value></data>
+  <data name="MangaLibraryImportTitle" xml:space="preserve"><value>导入漫画</value></data>
+  <data name="MangaLibraryLoadFailed" xml:space="preserve"><value>无法加载漫画媒体库。</value></data>
+  <data name="MangaLibraryDialogTitle" xml:space="preserve"><value>漫画媒体库</value></data>
+  <data name="MangaLibraryRenameTitle" xml:space="preserve"><value>重命名漫画</value></data>
+  <data name="MangaLibrarySave" xml:space="preserve"><value>保存</value></data>
+  <data name="MangaLibraryCancel" xml:space="preserve"><value>取消</value></data>
+  <data name="MangaLibraryRenameFailed" xml:space="preserve"><value>无法重命名漫画。</value></data>
+  <data name="MangaLibraryMarkReadFailed" xml:space="preserve"><value>无法将漫画标记为已读。</value></data>
+  <data name="MangaLibraryRemoveTitle" xml:space="preserve"><value>移除漫画？</value></data>
+  <data name="MangaLibraryRemoveMessage" xml:space="preserve"><value>这里只会移除媒体库中的卡片，不会更改原始文件。</value></data>
+  <data name="MangaLibraryRemove" xml:space="preserve"><value>移除</value></data>
+  <data name="MangaLibraryRemoveFailed" xml:space="preserve"><value>无法移除漫画。</value></data>
+  <data name="MangaOnlineInitialStatus" xml:space="preserve"><value>打开在线书架即可查看从 Mihon 或 Suwayomi 收藏的漫画。</value></data>
+  <data name="MangaOnlineEmptyStatus" xml:space="preserve"><value>漫画库为空，请从浏览页加入漫画。</value></data>
+  <data name="MangaOnlineLoadedStatus" xml:space="preserve"><value>已加载 {0} 部在线漫画。</value></data>
+  <data name="MangaReaderPreviousButton.ToolTipService.ToolTip" xml:space="preserve"><value>上一页</value></data>
+  <data name="MangaReaderNextButton.ToolTipService.ToolTip" xml:space="preserve"><value>下一页</value></data>
+  <data name="MangaReaderLayoutButton.Content" xml:space="preserve"><value>布局</value></data>
+  <data name="MangaReaderSinglePageMenuItem.Text" xml:space="preserve"><value>单页</value></data>
+  <data name="MangaReaderDoublePageMenuItem.Text" xml:space="preserve"><value>双页</value></data>
+  <data name="MangaReaderContinuousMenuItem.Text" xml:space="preserve"><value>连续滚动</value></data>
+  <data name="MangaReaderDirectionButton.Content" xml:space="preserve"><value>阅读方向</value></data>
+  <data name="MangaReaderRightToLeftMenuItem.Text" xml:space="preserve"><value>从右到左</value></data>
+  <data name="MangaReaderLeftToRightMenuItem.Text" xml:space="preserve"><value>从左到右</value></data>
+  <data name="MangaReaderOcrButton.Content" xml:space="preserve"><value>文字识别</value></data>
+  <data name="MangaReaderOcrButton.ToolTipService.ToolTip" xml:space="preserve"><value>使用 Google Lens 识别漫画文字</value></data>
+  <data name="MangaReaderZoomText.Text" xml:space="preserve"><value>缩放</value></data>
+  <data name="MangaReaderWindowTitle" xml:space="preserve"><value>Niratan 漫画</value></data>
+  <data name="MangaReaderOpenFailed" xml:space="preserve"><value>无法打开漫画。</value></data>
+  <data name="MangaReaderCopyPageImage" xml:space="preserve"><value>复制页面图片</value></data>
+  <data name="MangaReaderSavePageImage" xml:space="preserve"><value>保存页面图片…</value></data>
+  <data name="MangaReaderSuggestedPageFileName" xml:space="preserve"><value>第 {0} 页</value></data>
+  <data name="MangaReaderPageFileType" xml:space="preserve"><value>漫画页面</value></data>
+  <data name="MangaOcrDisclosureTitle" xml:space="preserve"><value>使用 Google Lens 文字识别？</value></data>
+  <data name="MangaOcrDisclosureContent" xml:space="preserve"><value>识别时会将每个不含 Mokuro 文本的页面缩小至最长边不超过 1500 像素后发送给 Google。结果会缓存在本地，未变化的页面不会重复上传。</value></data>
+  <data name="MangaOcrDisclosureContinue" xml:space="preserve"><value>继续</value></data>
+  <data name="MangaOcrDisclosureCancel" xml:space="preserve"><value>取消</value></data>
+  <data name="MangaOcrCancel" xml:space="preserve"><value>暂停识别</value></data>
+  <data name="MangaOcrResume" xml:space="preserve"><value>继续识别</value></data>
+  <data name="MangaOcrHide" xml:space="preserve"><value>隐藏识别结果</value></data>
+  <data name="MangaOcrButton" xml:space="preserve"><value>文字识别</value></data>
+  <data name="MangaOcrProgress" xml:space="preserve"><value>文字识别 {0} / {1}</value></data>
+  <data name="MangaOcrPausedStatus" xml:space="preserve"><value>文字识别已暂停，已完成页面仍可立即查词。</value></data>
+  <data name="MangaOcrCompleteStatus" xml:space="preserve"><value>文字识别已完成。</value></data>
+  <data name="MangaOcrPendingStatus" xml:space="preserve"><value>文字识别已结束，仍有部分页面待处理，下次将自动重试。</value></data>
+  <data name="SuwayomiInitialStatus" xml:space="preserve"><value>连接到你管理的 Suwayomi Server，以使用其中已安装的 Mihon 源。</value></data>
+  <data name="SuwayomiNoSourcesStatus" xml:space="preserve"><value>已连接，但没有找到已安装的源。</value></data>
+  <data name="SuwayomiConnectedStatus" xml:space="preserve"><value>连接成功，共 {0} 个已安装的源。</value></data>
+  <data name="SuwayomiSelectSourceStatus" xml:space="preserve"><value>请先选择一个已安装的源。</value></data>
+  <data name="SuwayomiNoMangaStatus" xml:space="preserve"><value>没有找到符合条件的漫画。</value></data>
+  <data name="SuwayomiMangaLoadedStatus" xml:space="preserve"><value>已加载 {0} 部漫画。</value></data>
+  <data name="SuwayomiSelectMangaStatus" xml:space="preserve"><value>请先选择一部漫画。</value></data>
+  <data name="SuwayomiNoChaptersStatus" xml:space="preserve"><value>没有可用章节。</value></data>
+  <data name="SuwayomiChaptersLoadedStatus" xml:space="preserve"><value>已加载 {0} 个章节。</value></data>
+  <data name="SuwayomiPreparingChapterStatus" xml:space="preserve"><value>正在准备章节…</value></data>
+  <data name="SuwayomiChapterReadyStatus" xml:space="preserve"><value>章节已就绪。</value></data>
+  <data name="SuwayomiLoadingStatus" xml:space="preserve"><value>正在加载…</value></data>
+  <data name="SuwayomiReadChapterLabel" xml:space="preserve"><value>{0} · 已读</value></data>
+  <data name="SuwayomiChapterHasNoPages" xml:space="preserve"><value>所选 Suwayomi 章节没有页面。</value></data>
+  <data name="SuwayomiEmptyResponse" xml:space="preserve"><value>Suwayomi 返回了空响应。</value></data>
+  <data name="SuwayomiBearerRequired" xml:space="preserve"><value>需要填写 Suwayomi Bearer 令牌。</value></data>
+  <data name="SuwayomiAuthenticationFailed" xml:space="preserve"><value>Suwayomi 身份验证失败。</value></data>
+  <data name="SuwayomiHttpError" xml:space="preserve"><value>Suwayomi Server 返回 HTTP {0}。</value></data>
+  <data name="SuwayomiResponseTooLarge" xml:space="preserve"><value>Suwayomi 响应超过安全大小限制。</value></data>
+  <data name="SuwayomiInvalidAddress" xml:space="preserve"><value>Suwayomi Server 地址无效。</value></data>
+  <data name="SuwayomiHttpRequired" xml:space="preserve"><value>Suwayomi Server 必须使用 HTTP 或 HTTPS。</value></data>
+  <data name="SuwayomiCredentialsRequired" xml:space="preserve"><value>需要填写 Suwayomi 用户名和凭据。</value></data>
+  <data name="SuwayomiNotRemoteChapter" xml:space="preserve"><value>当前漫画不是 Suwayomi 章节。</value></data>
+  <data name="SuwayomiDifferentServer" xml:space="preserve"><value>该章节属于另一台 Suwayomi Server。</value></data>
+  <data name="MangaSourcesSuwayomiProviderButton.Content" xml:space="preserve"><value>Suwayomi Server</value></data>
+  <data name="MangaSourcesMihonProviderButton.Content" xml:space="preserve"><value>Mihon APK</value></data>
+  <data name="MihonBrowseSourceComboBox.Header" xml:space="preserve"><value>漫画源</value></data>
+  <data name="MihonSourcesBoundaryInfoBar.Message" xml:space="preserve"><value>Mihon APK 会在内置 Java sidecar 中执行第三方代码。运行时会自动启动；请只安装可信扩展并检查 Windows 防火墙。</value></data>
+  <data name="MihonBundledRuntimeInfoBar.Message" xml:space="preserve"><value>Niratan 已内置 M-Extension-Server 1.0.4 及其私有 Java 运行时，无需另行下载或配置路径。</value></data>
+  <data name="MihonRepositoriesHeader.Text" xml:space="preserve"><value>扩展仓库</value></data>
+  <data name="MihonRepositoriesDescription.Text" xml:space="preserve"><value>所有仓库中的扩展会合并显示在扩展浏览页。</value></data>
+  <data name="MihonAddRepositoryButton.Content" xml:space="preserve"><value>添加仓库</value></data>
+  <data name="MihonRepositoryEmptyText.Text" xml:space="preserve"><value>尚未添加扩展仓库。</value></data>
+  <data name="MihonEditRepositoryButton.ToolTipService.ToolTip" xml:space="preserve"><value>编辑仓库</value></data>
+  <data name="MihonRemoveRepositoryButton.ToolTipService.ToolTip" xml:space="preserve"><value>移除仓库</value></data>
+  <data name="MihonAddRepositoryDialogTitle" xml:space="preserve"><value>添加仓库 URL</value></data>
+  <data name="MihonEditRepositoryDialogTitle" xml:space="preserve"><value>编辑仓库 URL</value></data>
+  <data name="MihonRepositoryUrlPlaceholder" xml:space="preserve"><value>URL 必须以 .json 结尾</value></data>
+  <data name="MihonAddRepositoryAction" xml:space="preserve"><value>添加</value></data>
+  <data name="MihonRemoveRepositoryDialogTitle" xml:space="preserve"><value>移除仓库？</value></data>
+  <data name="MihonRemoveRepositoryDialogMessage" xml:space="preserve"><value>从仓库列表移除“{0}”？已安装的 APK 会保留。</value></data>
+  <data name="MihonRemoveRepositoryAction" xml:space="preserve"><value>移除</value></data>
+  <data name="MihonNoRepositoriesStatus" xml:space="preserve"><value>请先添加 Mihon 扩展仓库，再浏览扩展。</value></data>
+  <data name="MihonRepositoriesLoadedStatus" xml:space="preserve"><value>已从 {1} 个仓库找到 {0} 个漫画源。</value></data>
+  <data name="MihonRepositoriesLoadedWithFailuresStatus" xml:space="preserve"><value>已加载 {0} 个漫画源；{1} 个仓库失败：{2}</value></data>
+  <data name="MihonRepositoryLimitError" xml:space="preserve"><value>最多只能配置 {0} 个 Mihon 仓库。</value></data>
+  <data name="MihonLibraryLimitError" xml:space="preserve"><value>最多可保存 {0} 部 Mihon 漫画。</value></data>
+  <data name="MihonRepositoryFallbackName" xml:space="preserve"><value>Mihon 仓库</value></data>
+  <data name="MihonRepositoryJsonRequiredError" xml:space="preserve"><value>Mihon 仓库 URL 必须以 .json 结尾。</value></data>
+  <data name="CancelButton" xml:space="preserve"><value>取消</value></data>
+  <data name="SaveButton" xml:space="preserve"><value>保存</value></data>
+  <data name="MihonBridgeUrlTextBox.Header" xml:space="preserve"><value>本机桥接服务</value></data>
+  <data name="MihonConnectButton.Content" xml:space="preserve"><value>连接/启动</value></data>
+  <data name="MihonJavaPathTextBox.Header" xml:space="preserve"><value>Java 可执行文件（桥接服务已运行时可不填）</value></data>
+  <data name="MihonPickJavaButton.Content" xml:space="preserve"><value>浏览…</value></data>
+  <data name="MihonServerJarPathTextBox.Header" xml:space="preserve"><value>M-Extension-Server JAR（桥接服务已运行时可不填）</value></data>
+  <data name="MihonPickServerJarButton.Content" xml:space="preserve"><value>浏览…</value></data>
+  <data name="MihonConnectionSettingsExpander.Header" xml:space="preserve"><value>Mihon APK 桥接</value></data>
+  <data name="MihonExtensionBrowserTitle.Text" xml:space="preserve"><value>扩展浏览</value></data>
+  <data name="MihonExtensionBrowserRefreshButton.Content" xml:space="preserve"><value>刷新仓库</value></data>
+  <data name="MihonRepositorySearchTextBox.Header" xml:space="preserve"><value>搜索漫画源</value></data>
+  <data name="MihonRepositorySearchTextBox.PlaceholderText" xml:space="preserve"><value>名称、语言、包名或网站</value></data>
+  <data name="MihonRepositoryLanguageComboBox.Header" xml:space="preserve"><value>语言</value></data>
+  <data name="MihonRepositorySearchField.PlaceholderText" xml:space="preserve"><value>搜索扩展</value></data>
+  <data name="MihonExtensionBrowserRefreshIconButton.ToolTipService.ToolTip" xml:space="preserve"><value>刷新仓库</value></data>
+  <data name="MihonAllLanguagesFilter" xml:space="preserve"><value>全部语言</value></data>
+  <data name="BrowseOtherSourceGroup" xml:space="preserve"><value>其他</value></data>
+  <data name="MihonInstalledSourceGroup" xml:space="preserve"><value>已安装</value></data>
+  <data name="MihonRepositoryFilteredStatus" xml:space="preserve"><value>显示 {0} / {1} 个漫画源。</value></data>
+  <data name="MihonInstallSourceAction" xml:space="preserve"><value>安装</value></data>
+  <data name="MihonUpdateSourceAction" xml:space="preserve"><value>更新</value></data>
+  <data name="MihonInstalledSourceBadge" xml:space="preserve"><value>已安装</value></data>
+  <data name="MihonNsfwSourceBadge" xml:space="preserve"><value>NSFW</value></data>
+  <data name="MihonInitialStatus" xml:space="preserve"><value>使用扩展时会自动启动内置 Mihon 运行时。</value></data>
+  <data name="MihonConnectingStatus" xml:space="preserve"><value>正在连接本机 Mihon 桥接服务…</value></data>
+  <data name="MihonConnectedStatus" xml:space="preserve"><value>本机 Mihon 桥接服务已就绪。</value></data>
+  <data name="MihonLoadingRepositoryStatus" xml:space="preserve"><value>正在加载 Mihon 扩展仓库…</value></data>
+  <data name="MihonRepositoryLoadedStatus" xml:space="preserve"><value>找到 {0} 个 Mihon 漫画源。</value></data>
+  <data name="MihonInstallingStatus" xml:space="preserve"><value>正在下载并校验 Mihon 扩展…</value></data>
+  <data name="MihonInstalledStatus" xml:space="preserve"><value>已安装 {0}。</value></data>
+  <data name="MihonSelectInstalledSourceStatus" xml:space="preserve"><value>请先安装并选择一个 Mihon 漫画源。</value></data>
+  <data name="MihonNoMangaStatus" xml:space="preserve"><value>没有符合条件的漫画。</value></data>
+  <data name="MihonMangaLoadedStatus" xml:space="preserve"><value>已从 Mihon 扩展加载 {0} 部漫画。</value></data>
+  <data name="MihonPreparingChapterStatus" xml:space="preserve"><value>正在准备 Mihon 章节…</value></data>
+  <data name="MihonNoChaptersStatus" xml:space="preserve"><value>没有可用章节。</value></data>
+  <data name="MihonChapterReadyStatus" xml:space="preserve"><value>Mihon 章节已就绪。</value></data>
+  <data name="MihonJavaMissingError" xml:space="preserve"><value>找不到已配置的 Java 可执行文件。</value></data>
+  <data name="MihonServerJarMissingError" xml:space="preserve"><value>找不到已配置的 M-Extension-Server JAR。</value></data>
+  <data name="MihonBridgePortRequiredError" xml:space="preserve"><value>Mihon 桥接地址必须包含固定的本机端口。</value></data>
+  <data name="MihonBridgeStartFailedError" xml:space="preserve"><value>无法启动 M-Extension-Server。</value></data>
+  <data name="MihonBridgeExitedError" xml:space="preserve"><value>M-Extension-Server 在就绪前已经退出。</value></data>
+  <data name="MihonBridgeTimeoutError" xml:space="preserve"><value>M-Extension-Server 未能在 10 秒内就绪。</value></data>
+  <data name="MihonBundledRuntimeMissingError" xml:space="preserve"><value>内置 M-Extension-Server 运行时缺失，请重新安装 Niratan。</value></data>
+  <data name="MihonBundledRuntimeInvalidError" xml:space="preserve"><value>内置 M-Extension-Server 清单无效，请重新安装 Niratan。</value></data>
+  <data name="MihonBundledRuntimeVersionError" xml:space="preserve"><value>不支持当前内置 M-Extension-Server 版本。</value></data>
+  <data name="MihonBridgeNotRunningError" xml:space="preserve"><value>内置 Mihon 桥接服务尚未运行。</value></data>
+  <data name="MihonRepositoryFormatError" xml:space="preserve"><value>Mihon 仓库索引必须是 JSON 数组。</value></data>
+  <data name="MihonChapterHasNoPagesError" xml:space="preserve"><value>所选 Mihon 章节没有页面。</value></data>
+  <data name="MihonCoverMissingError" xml:space="preserve"><value>该 Mihon 漫画没有封面地址。</value></data>
+  <data name="MihonNotRemoteChapterError" xml:space="preserve"><value>当前漫画不是 Mihon 章节。</value></data>
+  <data name="MihonExtensionNotInstalledError" xml:space="preserve"><value>用于打开该章节的 Mihon 扩展已不再安装。</value></data>
+  <data name="MihonExtensionChangedError" xml:space="preserve"><value>打开章节后 Mihon 扩展发生了变化，请从“浏览”重新打开。</value></data>
+  <data name="MihonBridgeLoopbackRequiredError" xml:space="preserve"><value>Mihon 桥接服务必须使用 HTTP(S) 回环地址。</value></data>
+  <data name="MihonRepositoryHttpsRequiredError" xml:space="preserve"><value>Mihon 仓库必须使用 HTTPS（只有回环测试可使用 HTTP）。</value></data>
+  <data name="MihonBridgeEmptyResponseError" xml:space="preserve"><value>Mihon 桥接服务返回了空响应。</value></data>
+  <data name="MihonBridgeInvalidJsonError" xml:space="preserve"><value>Mihon 桥接服务返回了无效 JSON。</value></data>
+  <data name="MihonResponseTooLargeError" xml:space="preserve"><value>Mihon 响应超过安全大小限制。</value></data>
+  <data name="MihonHttpError" xml:space="preserve"><value>Mihon 端点返回 HTTP {0}。</value></data>
+  <data name="MihonHttpDetailedError" xml:space="preserve"><value>Mihon 端点返回 HTTP {0}：{1}</value></data>
+  <data name="MihonInstalledApkInvalidError" xml:space="preserve"><value>已安装的 Mihon APK 缺失或超过大小限制。</value></data>
+  <data name="MihonInstalledApkMissingError" xml:space="preserve"><value>找不到已安装的 Mihon APK。</value></data>
+  <data name="MihonInstalledApkHashError" xml:space="preserve"><value>已安装的 Mihon APK 与记录的哈希不一致。</value></data>
+  <data name="MihonInstalledCatalogInvalidError" xml:space="preserve"><value>已安装的 Mihon 扩展清单无效。</value></data>
+  <data name="MihonDownloadNotApkError" xml:space="preserve"><value>扩展下载地址不是 APK。</value></data>
+  <data name="MihonInvalidMediaUrlError" xml:space="preserve"><value>Mihon 扩展返回了无效的媒体地址。</value></data>
+  <data name="MihonPrivateMediaUrlError" xml:space="preserve"><value>Mihon 扩展返回了本机或私网媒体地址。</value></data>
+  <data name="MihonInvalidApkError" xml:space="preserve"><value>下载的扩展不是有效 APK。</value></data>
+  <data name="MihonApkPayloadMissingError" xml:space="preserve"><value>下载的 APK 缺少 manifest 或 DEX 内容。</value></data>
+  <data name="MihonApkUnreadableError" xml:space="preserve"><value>无法读取下载的 APK。</value></data>
+  <data name="MangaRemoteDetailsCloseButton.Content" xml:space="preserve"><value>关闭</value></data>
+  <data name="MangaRemoteDetailsContinueButton.Content" xml:space="preserve"><value>继续阅读</value></data>
+  <data name="MangaRemoteDetailsAuthorLabel.Text" xml:space="preserve"><value>作者</value></data>
+  <data name="MangaRemoteDetailsChaptersHeader.Text" xml:space="preserve"><value>章节</value></data>
+  <data name="MangaRemoteDetailsLoadingText.Text" xml:space="preserve"><value>正在加载漫画详情…</value></data>
+  <data name="MangaRemoteDetailsNoChaptersText.Text" xml:space="preserve"><value>没有可用章节。</value></data>
+  <data name="MangaRemoteDetailsAddLibraryAction" xml:space="preserve"><value>加入漫画库</value></data>
+  <data name="MangaRemoteDetailsRemoveLibraryAction" xml:space="preserve"><value>移出漫画库</value></data>
+  <data name="MangaRemoteDetailsAddedLibraryStatus" xml:space="preserve"><value>已加入漫画库。</value></data>
+  <data name="MangaRemoteDetailsRemovedLibraryStatus" xml:space="preserve"><value>已移出漫画库。</value></data>
+  <data name="MangaRemoteDetailsReadChapterStatus" xml:space="preserve"><value>已读</value></data>
 </root>

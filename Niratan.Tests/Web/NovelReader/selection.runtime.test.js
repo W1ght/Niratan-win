@@ -385,6 +385,45 @@ secondCueNode.forceExtractFallback = true;
 const selectionSource = fs.readFileSync(selectionPath, "utf8");
 vm.runInContext(selectionSource, context, { filename: selectionPath });
 
+window.__niratanLookupSettings = { contentLanguageId: "en" };
+const englishText = new FakeText("A well-known author's test—case.");
+const englishWordStart = window.niratanSelection.findEnglishWordStart({
+  node: englishText,
+  offset: 9,
+});
+assert.equal(englishWordStart.node, englishText);
+assert.equal(
+  englishWordStart.offset,
+  2,
+  "English lookup must rewind from the clicked character to the complete word start",
+);
+assert.equal(
+  window.niratanSelection.isScanBoundaryAt(englishText.textContent, 6),
+  false,
+  "an internal hyphen between alphanumeric characters must remain inside an English word",
+);
+assert.equal(
+  window.niratanSelection.isScanBoundaryAt(englishText.textContent, 19),
+  false,
+  "an internal apostrophe between alphanumeric characters must remain inside an English word",
+);
+assert.equal(
+  window.niratanSelection.isHitBoundaryAt(englishText.textContent, 1),
+  true,
+  "English hit testing must reject whitespace",
+);
+assert.equal(
+  window.niratanSelection.isScanBoundaryAt(englishText.textContent, 26),
+  true,
+  "English forward scanning must stop at dash punctuation between words",
+);
+assert.equal(
+  window.niratanSelection.isScanBoundaryAt(englishText.textContent, 31),
+  true,
+  "English forward scanning must stop at sentence punctuation",
+);
+window.__niratanLookupSettings = { contentLanguageId: "ja" };
+
 function dispatchClick(targetElement, x, y) {
   document.dispatchEvent(Object.assign(new FakeEvent("click"), {
     target: targetElement,

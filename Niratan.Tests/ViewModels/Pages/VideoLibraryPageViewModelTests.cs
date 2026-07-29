@@ -177,7 +177,7 @@ public class VideoLibraryPageViewModelTests
         {
             Videos =
             [
-                new VideoItem { Id = "start", Title = "Start", FilePath = @"D:\Videos\start.mkv", LastPositionSeconds = 2, DurationSeconds = 2406 },
+                new VideoItem { Id = "start", Title = "Start", FilePath = @"D:\Videos\start.mkv", LastPositionSeconds = 1.9, DurationSeconds = 2406 },
                 new VideoItem { Id = "continue", Title = "Continue", FilePath = @"D:\Videos\continue.mkv", LastPositionSeconds = 10, DurationSeconds = 100 },
             ],
         };
@@ -408,6 +408,44 @@ public class VideoLibraryPageViewModelTests
         finally
         {
             File.Delete(posterPath);
+        }
+    }
+
+    [Fact]
+    public async Task GenerateMissingThumbnails_UpdatesCardWithoutReloadingLibrary()
+    {
+        var thumbnailPath = Path.GetTempFileName();
+        try
+        {
+            var service = new RecordingVideoLibraryService
+            {
+                Videos =
+                [
+                    new VideoItem
+                    {
+                        Id = "generated",
+                        Title = "Generated",
+                        FilePath = @"D:\Anime\generated.mkv",
+                    },
+                ],
+            };
+            var thumbnail = new RecordingVideoThumbnailService
+            {
+                EnsureThumbnail = _ => Task.FromResult<string?>(thumbnailPath),
+            };
+            var sut = CreateSut(videoService: service, thumbnailService: thumbnail);
+
+            await sut.InitializeAsync();
+            await thumbnail.WaitForCallsAsync(1, TestContext.Current.CancellationToken);
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+
+            service.LoadCount.Should().Be(1);
+            sut.Videos.Should().ContainSingle()
+                .Which.ArtworkPath.Should().Be(thumbnailPath);
+        }
+        finally
+        {
+            File.Delete(thumbnailPath);
         }
     }
 

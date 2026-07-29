@@ -29,6 +29,12 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore
 
+    - name: Cache bundled M-Extension-Server
+      uses: actions/cache@v4
+      with:
+        path: artifacts/MExtensionServer
+        key: m-extension-server-windows-x64-v1.0.4-4bdd8e068914a769b4ff132080210d2a8be806e9c401a577dd700cb662a302ee-edf198c73f7ffa54e356396833d4c0a34d86366cd59aa0edae9d1559e7960d7c
+
     - name: Run Unit Tests
       run: dotnet test Niratan.Tests/Niratan.Tests.csproj --no-restore -c Debug --verbosity normal -p:Platform=x64 --logger trx
 
@@ -55,6 +61,21 @@ jobs:
         if (-not (Test-Path (Join-Path $publishDir.FullName 'hoshidicts_c_api.dll'))) {
           throw "Native dictionary DLL missing from minimal publish output"
         }
+        $runtimeRoot = Join-Path $publishDir.FullName 'MihonBridge'
+        $manifestPath = Join-Path $runtimeRoot 'runtime.json'
+        if (-not (Test-Path $manifestPath)) {
+          throw "Bundled M-Extension-Server manifest missing from minimal publish output"
+        }
+        $runtime = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if (-not (Test-Path (Join-Path $runtimeRoot $runtime.javaExecutable))) {
+          throw "Bundled M-Extension-Server Java executable missing from minimal publish output"
+        }
+        if (-not (Test-Path (Join-Path $runtimeRoot $runtime.serverJar))) {
+          throw "Bundled M-Extension-Server JAR missing from minimal publish output"
+        }
+        if (-not (Test-Path (Join-Path $runtimeRoot $runtime.overlayJar))) {
+          throw "Bundled Niratan M-Extension-Server overlay missing from minimal publish output"
+        }
         Compress-Archive -Path (Join-Path $publishDir.FullName '*') -DestinationPath Niratan.Minimal.x64.zip
 
     - name: Publish Full for Setup
@@ -72,6 +93,21 @@ jobs:
         }
         if (-not (Test-Path (Join-Path $publishDir.FullName 'hoshidicts_c_api.dll'))) {
           throw "Native dictionary DLL missing from full publish output"
+        }
+        $runtimeRoot = Join-Path $publishDir.FullName 'MihonBridge'
+        $manifestPath = Join-Path $runtimeRoot 'runtime.json'
+        if (-not (Test-Path $manifestPath)) {
+          throw "Bundled M-Extension-Server manifest missing from full publish output"
+        }
+        $runtime = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if (-not (Test-Path (Join-Path $runtimeRoot $runtime.javaExecutable))) {
+          throw "Bundled M-Extension-Server Java executable missing from full publish output"
+        }
+        if (-not (Test-Path (Join-Path $runtimeRoot $runtime.serverJar))) {
+          throw "Bundled M-Extension-Server JAR missing from full publish output"
+        }
+        if (-not (Test-Path (Join-Path $runtimeRoot $runtime.overlayJar))) {
+          throw "Bundled Niratan M-Extension-Server overlay missing from full publish output"
         }
 
     - name: Compile Inno Setup

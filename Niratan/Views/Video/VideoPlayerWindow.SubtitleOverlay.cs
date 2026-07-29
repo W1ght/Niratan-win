@@ -17,6 +17,7 @@ using Niratan.Helpers;
 using Niratan.Models.Settings;
 using Niratan.Models.Shortcuts;
 using Niratan.Services.Settings;
+using Niratan.Services.Profiles;
 using Niratan.Services.Video;
 using Niratan.Views.Controls;
 using Niratan.Views.Dictionary;
@@ -87,6 +88,7 @@ public sealed partial class VideoPlayerWindow
             lookupHighlightTextColor = ViewModel.SubtitleLookupHighlightTextColorHex,
             scanLength = Math.Clamp(displaySettings.ScanLength, 1, 64),
             scanNonJapaneseText = displaySettings.ScanNonJapaneseText,
+            contentLanguageId = App.GetService<IProfileRuntimeService>().ActiveLanguage.Id,
         };
 
         try

@@ -51,6 +51,33 @@ public static class AppDataHelper
     public static string GetNovelBooksPath() =>
         EnsureDirectory(Path.Combine(GetDataPath(), "Novels"));
 
+    public static string GetMangaDataPath() =>
+        EnsureDirectory(Path.Combine(GetDataPath(), "Manga"));
+
+    public static string GetMangaCachePath() =>
+        EnsureDirectory(Path.Combine(GetMangaDataPath(), "Cache"));
+
+    public static string GetMangaOcrCachePath() =>
+        EnsureDirectory(Path.Combine(GetMangaDataPath(), "OCR"));
+
+    public static string GetSuwayomiConfigurationPath() =>
+        Path.Combine(GetMangaDataPath(), "suwayomi.json");
+
+    public static string GetMihonConfigurationPath() =>
+        Path.Combine(GetMangaDataPath(), "mihon.json");
+
+    public static string GetMihonExtensionsPath() =>
+        EnsureDirectory(Path.Combine(GetMangaDataPath(), "Extensions"));
+
+    public static string GetMihonInstalledExtensionsPath() =>
+        Path.Combine(GetMihonExtensionsPath(), "installed.json");
+
+    public static string GetMihonBridgeDataPath() =>
+        EnsureDirectory(Path.Combine(GetMangaDataPath(), "MihonBridge"));
+
+    public static string GetMangaCatalogPath() =>
+        Path.Combine(GetMangaDataPath(), "catalog.json");
+
     public static string GetGoogleDriveCoverCachePath() =>
         EnsureDirectory(Path.Combine(GetAppDataPath(), "Cache", "GoogleDriveCovers"));
 

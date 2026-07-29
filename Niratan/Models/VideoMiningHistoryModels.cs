@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text.Json.Serialization;
 
 namespace Niratan.Models;
 
@@ -11,7 +12,10 @@ public sealed record VideoMiningHistoryCapture(
     VideoSubtitleSelectionKind SubtitleSelectionKind,
     int? EmbeddedSubtitleTrackId,
     TimeSpan CueStart,
-    TimeSpan CueEnd);
+    TimeSpan CueEnd,
+    string? VideoTitle = null,
+    RemoteVideoIdentity? RemoteVideoIdentity = null,
+    string? SubtitleFormat = null);
 
 public sealed class VideoMiningHistoryItem
 {
@@ -19,17 +23,31 @@ public sealed class VideoMiningHistoryItem
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public string SubtitleText { get; set; } = "";
     public string VideoFileName { get; set; } = "";
+    public string VideoTitle { get; set; } = "";
     public string? VideoPath { get; set; }
+    public RemoteVideoIdentity? RemoteVideoIdentity { get; set; }
     public string SubtitleSourceName { get; set; } = "";
     public string? SubtitleSourcePath { get; set; }
+    public string? SubtitleFormat { get; set; }
     public VideoSubtitleSelectionKind SubtitleSelectionKind { get; set; }
     public int? EmbeddedSubtitleTrackId { get; set; }
+
+    [JsonPropertyName("cueStart")]
     public double CueStartSeconds { get; set; }
+
+    [JsonPropertyName("cueEnd")]
     public double CueEndSeconds { get; set; }
 
+    [JsonIgnore]
     public TimeSpan CueStart => TimeSpan.FromSeconds(Math.Max(0, CueStartSeconds));
+
+    [JsonIgnore]
     public TimeSpan CueEnd => TimeSpan.FromSeconds(Math.Max(0, CueEndSeconds));
+
+    [JsonIgnore]
     public string CueStartText => VideoTimeText.Format(CueStart);
+
+    [JsonIgnore]
     public string AutomationName => $"{SubtitleText}, {CueStartText}";
 
     public static VideoMiningHistoryItem FromCapture(
@@ -48,11 +66,16 @@ public sealed class VideoMiningHistoryItem
             CreatedAt = createdAt ?? DateTime.UtcNow,
             SubtitleText = capture.SubtitleText,
             VideoFileName = videoFileName,
-            VideoPath = capture.VideoPath,
+            VideoTitle = string.IsNullOrWhiteSpace(capture.VideoTitle)
+                ? videoFileName
+                : capture.VideoTitle,
+            VideoPath = capture.RemoteVideoIdentity == null ? capture.VideoPath : null,
+            RemoteVideoIdentity = capture.RemoteVideoIdentity,
             SubtitleSourceName = string.IsNullOrWhiteSpace(capture.SubtitleSourceName)
                 ? videoFileName
                 : capture.SubtitleSourceName,
             SubtitleSourcePath = capture.SubtitleSourcePath,
+            SubtitleFormat = capture.SubtitleFormat,
             SubtitleSelectionKind = capture.SubtitleSelectionKind,
             EmbeddedSubtitleTrackId = capture.EmbeddedSubtitleTrackId,
             CueStartSeconds = Math.Max(0, capture.CueStart.TotalSeconds),

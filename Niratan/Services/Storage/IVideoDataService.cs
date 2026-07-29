@@ -57,11 +57,11 @@ public interface IVideoDataService
         string? lastError,
         CancellationToken ct = default);
     Task DeleteVideoLibrarySourceAsync(string sourceId, CancellationToken ct = default);
-    Task DeleteSourceVideosExceptAsync(
+    Task ReplaceVideoSourceItemsAsync(
         string sourceId,
-        IReadOnlyList<string> retainedFilePaths,
+        IReadOnlyList<VideoItem> videos,
+        DateTime scannedAt,
         CancellationToken ct = default);
-    Task UpdateVideoThumbnailPathAsync(string videoId, string? thumbnailPath, CancellationToken ct = default);
     Task UpdateVideoFavoriteAsync(string videoId, bool isFavorite, CancellationToken ct = default);
     Task MarkVideoWatchedAsync(
         string videoId,
