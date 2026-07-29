@@ -15,6 +15,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Niratan.Helpers;
 using Niratan.Models.Manga;
+using Niratan.Models.Manga.Protos;
+using ContentWarning = Niratan.Models.Manga.Protos.ContentWarning;
 
 namespace Niratan.Services.Manga;
 
@@ -574,6 +576,37 @@ internal sealed class MihonExtensionService : IMihonExtensionService, IDisposabl
             await response.Content.ReadAsStreamAsync(ct),
             MaximumRepositoryBytes,
             ct);
+        bytes = DecompressIfGzipped(bytes);
+        if (bytes.Length > 0 && (bytes[0] == (byte)'[' || bytes[0] == (byte)'{'))
+            return ParseJsonRepositoryIndex(
+                bytes, indexUri, repository, installedKeys);
+        return ParseProtobufRepositoryIndex(
+            bytes, repository, installedKeys);
+    }
+
+    /// <summary>
+    /// If <paramref name="data"/> starts with the gzip magic bytes
+    /// (<c>1F 8B</c>), decompress and return the result. Otherwise
+    /// return the data unchanged.
+    /// </summary>
+    private static byte[] DecompressIfGzipped(byte[] data)
+    {
+        if (data.Length < 2 || data[0] != 0x1F || data[1] != 0x8B)
+            return data;
+
+        using var input = new MemoryStream(data);
+        using var gzip = new GZipStream(input, CompressionMode.Decompress);
+        using var output = new MemoryStream();
+        gzip.CopyTo(output);
+        return output.ToArray();
+    }
+
+    private static IReadOnlyList<MihonExtensionSource> ParseJsonRepositoryIndex(
+        byte[] bytes,
+        Uri indexUri,
+        MihonRepositoryConfiguration repository,
+        HashSet<string> installedKeys)
+    {
         using var document = JsonDocument.Parse(bytes, new JsonDocumentOptions
         {
             MaxDepth = 32,
@@ -645,7 +678,81 @@ internal sealed class MihonExtensionService : IMihonExtensionService, IDisposabl
                         : repository.Name,
                     IsNsfw = isNsfw,
                     IsInstalled = installedKeys.Contains(
-                        $"{packageId}\u001f{sourceId}"),
+                        $"{packageId}{sourceId}"),
+                    PackageSourceCount = sourceCount,
+                });
+            }
+        }
+
+        return sources
+            .OrderBy(source => source.Lang, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(source => source.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+    }
+
+    private static IReadOnlyList<MihonExtensionSource> ParseProtobufRepositoryIndex(
+        byte[] bytes,
+        MihonRepositoryConfiguration repository,
+        HashSet<string> installedKeys)
+    {
+        var store = NetworkExtensionStore.Parser.ParseFrom(bytes);
+
+        if (store.ExtensionList?.Extensions is not { Count: > 0 } extensions)
+            return Array.Empty<MihonExtensionSource>();
+
+        var repositoryName = string.IsNullOrWhiteSpace(repository.Name)
+            ? GetRepositoryDisplayName(repository.IndexUrl)
+            : repository.Name;
+
+        var sources = new List<MihonExtensionSource>();
+        foreach (var ext in extensions)
+        {
+            // Skip anime extensions (same filter as JSON path).
+            if (ext.PackageName.StartsWith(
+                    "eu.kanade.tachiyomi.animeextension",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            string apkFileName;
+            try
+            {
+                apkFileName = Path.GetFileName(
+                    new Uri(ext.Resources.ApkUrl).AbsolutePath);
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (!IsSafeFileName(apkFileName))
+                continue;
+
+            // Mirror Mihon's ContentWarning threshold: >= MIXED is NSFW.
+            var isNsfw = ext.ContentWarning >= ContentWarning.Mixed;
+            var sourceCount = ext.Sources.Count;
+
+            foreach (var src in ext.Sources)
+            {
+                var sourceId = src.Id.ToString();
+                sources.Add(new MihonExtensionSource
+                {
+                    Id = sourceId,
+                    Name = src.Name,
+                    Lang = src.Language,
+                    BaseUrl = src.HomeUrl,
+                    PackageName = ext.PackageName,
+                    PackageDisplayName = ext.Name,
+                    Version = ext.VersionName,
+                    ApkFileName = apkFileName,
+                    ApkDownloadUrl = ext.Resources.ApkUrl,
+                    IconDownloadUrl = ext.Resources.IconUrl,
+                    RepositoryId = repository.Id,
+                    RepositoryName = repositoryName,
+                    IsNsfw = isNsfw,
+                    IsInstalled = installedKeys.Contains(
+                        $"{ext.PackageName}{sourceId}"),
                     PackageSourceCount = sourceCount,
                 });
             }
@@ -1128,12 +1235,15 @@ internal sealed class MihonExtensionService : IMihonExtensionService, IDisposabl
         var uri = NormalizeRepositoryUri(value);
         if (!uri.AbsolutePath.EndsWith(
                 ".json",
+                StringComparison.OrdinalIgnoreCase)
+            && !uri.AbsolutePath.EndsWith(
+                ".pb",
                 StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException(
                 ResourceStringHelper.GetString(
-                    "MihonRepositoryJsonRequiredError",
-                    "The Mihon repository URL must end with .json."));
+                    "MihonRepositoryIndexFormatError",
+                    "The Mihon repository URL must end with .json or .pb."));
         }
         return uri;
     }

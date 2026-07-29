@@ -44,9 +44,7 @@
   </PropertyGroup>
 
   <!-- Copy native hoshidicts DLL to output directory if it exists -->
-  <Target Name="EnsureNativeHoshidicts"
-          BeforeTargets="CopyNativeHoshidicts"
-          Condition="'$(Platform)' == 'x64' And !Exists('$(NativeHoshidictsDll)')">
+  <Target Name="EnsureNativeHoshidicts" BeforeTargets="CopyNativeHoshidicts" Condition="'$(Platform)' == 'x64' And !Exists('$(NativeHoshidictsDll)')">
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\scripts\Ensure-NativeHoshidicts.ps1&quot; -RepositoryRoot &quot;$(MSBuildProjectDirectory)\..&quot;" />
   </Target>
 
@@ -58,46 +56,31 @@
   </Target>
 
   <Target Name="CopyNativeHoshidictsToPublish" AfterTargets="Publish" Condition="'$(Platform)' == 'x64'">
-    <Error Text="Native dictionary DLL not found. Run .\build-native.ps1 before publishing."
-           Condition="!Exists('$(NativeHoshidictsDll)')" />
+    <Error Text="Native dictionary DLL not found. Run .\build-native.ps1 before publishing." Condition="!Exists('$(NativeHoshidictsDll)')" />
     <ItemGroup>
       <_NativePublishDll Include="$(NativeHoshidictsDll)" />
     </ItemGroup>
     <Copy SourceFiles="@(_NativePublishDll)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
   </Target>
 
-  <Target Name="EnsureMExtensionServer"
-          BeforeTargets="Build;Publish"
-          Condition="'$(Platform)' == 'x64' And '$(DesignTimeBuild)' != 'true'">
+  <Target Name="EnsureMExtensionServer" BeforeTargets="Build;Publish" Condition="'$(Platform)' == 'x64' And '$(DesignTimeBuild)' != 'true'">
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(EnsureMExtensionServerScript)&quot; -RepositoryRoot &quot;$(MSBuildProjectDirectory)\..&quot; -Version &quot;$(MExtensionServerVersion)&quot;" />
   </Target>
 
-  <Target Name="CopyMExtensionServer"
-          AfterTargets="Build"
-          DependsOnTargets="EnsureMExtensionServer"
-          Condition="'$(Platform)' == 'x64'">
+  <Target Name="CopyMExtensionServer" AfterTargets="Build" DependsOnTargets="EnsureMExtensionServer" Condition="'$(Platform)' == 'x64'">
     <ItemGroup>
       <_MExtensionServerFiles Include="$(MExtensionServerRuntimeRoot)\**\*" />
     </ItemGroup>
-    <Error Text="Bundled M-Extension-Server runtime manifest not found."
-           Condition="!Exists('$(MExtensionServerRuntimeRoot)\runtime.json')" />
-    <Copy SourceFiles="@(_MExtensionServerFiles)"
-          DestinationFiles="@(_MExtensionServerFiles->'$(TargetDir)MihonBridge\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
+    <Error Text="Bundled M-Extension-Server runtime manifest not found." Condition="!Exists('$(MExtensionServerRuntimeRoot)\runtime.json')" />
+    <Copy SourceFiles="@(_MExtensionServerFiles)" DestinationFiles="@(_MExtensionServerFiles->'$(TargetDir)MihonBridge\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 
-  <Target Name="CopyMExtensionServerToPublish"
-          AfterTargets="Publish"
-          DependsOnTargets="EnsureMExtensionServer"
-          Condition="'$(Platform)' == 'x64'">
+  <Target Name="CopyMExtensionServerToPublish" AfterTargets="Publish" DependsOnTargets="EnsureMExtensionServer" Condition="'$(Platform)' == 'x64'">
     <ItemGroup>
       <_MExtensionServerPublishFiles Include="$(MExtensionServerRuntimeRoot)\**\*" />
     </ItemGroup>
-    <Error Text="Bundled M-Extension-Server runtime manifest not found."
-           Condition="!Exists('$(MExtensionServerRuntimeRoot)\runtime.json')" />
-    <Copy SourceFiles="@(_MExtensionServerPublishFiles)"
-          DestinationFiles="@(_MExtensionServerPublishFiles->'$(PublishDir)MihonBridge\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
+    <Error Text="Bundled M-Extension-Server runtime manifest not found." Condition="!Exists('$(MExtensionServerRuntimeRoot)\runtime.json')" />
+    <Copy SourceFiles="@(_MExtensionServerPublishFiles)" DestinationFiles="@(_MExtensionServerPublishFiles->'$(PublishDir)MihonBridge\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 
   <Target Name="CleanPublish" AfterTargets="Publish">
@@ -148,6 +131,7 @@
     <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.2.251219" />
     <PackageReference Include="Dapper" Version="2.1.72" />
     <PackageReference Include="Endpne.LibMPV.Windows" Version="0.41.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.35.1" />
     <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
