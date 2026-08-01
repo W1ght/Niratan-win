@@ -380,9 +380,9 @@ Profile 行为对齐 Niratan：global lookup 使用 global active profile，书�
 
 设置页备份行为以 Niratan `BackupView` 为准，由 `BackupService` 负责文件 IO，ViewModel 只负责命令、进度和文件选择：
 
-- 书籍和词典分别导出无父目录的 `.hoshi` ZIP；文件名使用 `Books_yyyy-MM-dd_HH-mm-ss.hoshi` 与 `Dictionaries_yyyy-MM-dd_HH-mm-ss.hoshi`。
-- 书籍恢复覆盖整个 `Data/Novels` 收藏。词典恢复覆盖物理 `dictionaries` 收藏，同时通过 `.hoshi-profiles` 合并 Profile 索引，并覆盖备份中同 ID Profile 的 `dictionary-settings.json` 与 `dictionaries/dictionary-config.json`。
-- `.hoshi` 恢复先在受控临时目录解包，拒绝绝对路径、zip slip 和符号链接；目标目录在同卷准备 replacement，再以 `current → previous`、`replacement → current` 交换，失败时回滚。
+- 书籍和词典分别导出无父目录的 `.niratan` ZIP；文件名使用 `Books_yyyy-MM-dd_HH-mm-ss.niratan` 与 `Dictionaries_yyyy-MM-dd_HH-mm-ss.niratan`。恢复文件选择器继续接受旧 `.hoshi` 备份。
+- 书籍恢复覆盖整个 `Data/Novels` 收藏。词典恢复覆盖物理 `dictionaries` 收藏，同时通过 `.niratan-profiles` 合并 Profile 索引，并覆盖备份中同 ID Profile 的 `dictionary-settings.json` 与 `dictionaries/dictionary-config.json`；旧 `.hoshi-profiles` 元数据目录仍可读取。
+- `.niratan` 与旧 `.hoshi` 恢复先在受控临时目录解包，拒绝绝对路径、zip slip 和符号链接；目标目录在同卷准备 replacement，再以 `current → previous`、`replacement → current` 交换，失败时回滚。
 - 词典目录替换前先清空 hoshidicts session，提交后重新加载 Profile 设置并重建 native query，避免 Windows 文件句柄阻止替换或继续引用旧集合。
 - ッツ Backup ZIP 保持 Niratan 的顶层“每书一目录”布局；导出包含 `bookdata_1_6_*`、封面、`statistics_1_6_*` 与 `progress_1_6_*`，导入按原始书名添加新书，并覆盖已有书籍的统计和进度。
 
@@ -451,7 +451,7 @@ MangaLibraryPage / MangaReaderWindow
 - 用户选择的图片目录、Mokuro、CBZ/ZIP 和 EPUB 都是只读媒体。移除书库卡片、刷新目录、修改封面或读取 Mokuro 不得移动、重命名、改写或删除源文件。
 - 压缩包页面按需解到 `Data/Manga/Cache/<book-id>/pages`，条目必须命中已索引页、限制单页解压大小并使用由 App 生成的目标文件名。`book-id` 必须验证为单一安全路径段，最终规范化缓存路径必须仍位于 Manga cache root；目录页同样拒绝 rooted path 和 `..` 越界。
 - 普通图片目录只读取直接子级；CBZ/ZIP 排除 `__MACOSX`、`.DS_Store` 和 AppleDouble 项并自然排序。EPUB 页序优先使用 `container.xml → OPF spine → 正文图片引用`，仅在正文未产生页面时才回退到 manifest 图片。
-- Mokuro 页按 `img_path` 配对，文字 `box` / `lines_coords` 转为以图片左上角为原点的归一化坐标。Google Lens 几何也在协议边界保留为 WinUI 左上角坐标，不沿用 AppKit 的左下角转换；Reader 用原生 XAML 图像画布呈现文字命中层，并复用共享 Dictionary Popup、嵌套查词和 Anki 服务。漫画查词先按当前 Profile 语言和 scan length 解析候选词，将候选 UTF-16 起点传给制卡高亮；命中页作为 `{book-cover}` mining 媒体，由 Anki 管线按页面内容哈希生成稳定 `hoshi_manga_page_*` 文件名，不把源绝对路径暴露给 JavaScript，也不使用可能跨书覆盖的源页 basename。
+- Mokuro 页按 `img_path` 配对，文字 `box` / `lines_coords` 转为以图片左上角为原点的归一化坐标。Google Lens 几何也在协议边界保留为 WinUI 左上角坐标，不沿用 AppKit 的左下角转换；Reader 用原生 XAML 图像画布呈现文字命中层，并复用共享 Dictionary Popup、嵌套查词和 Anki 服务。漫画查词先按当前 Profile 语言和 scan length 解析候选词，将候选 UTF-16 起点传给制卡高亮；命中页作为 `{book-cover}` mining 媒体，由 Anki 管线按页面内容哈希生成稳定 `niratan_manga_page_*` 文件名，不把源绝对路径暴露给 JavaScript，也不使用可能跨书覆盖的源页 basename。
 - 单页、双页和连续布局共用同一个 `MangaReaderViewModel`。阅读方向决定双页排列和物理左右键语义；布局、方向、50%–200% 缩放及源页索引持久化到 JSON。左键命中文字查词，右键移动超过 4 CSS px 后拖动画布，未移动的右键释放打开页菜单；`Ctrl+滚轮` 以 5% 步长缩放。
 - 无 Mokuro 文字层时，用户可在 Reader 明确确认上传披露后启动 Google Lens OCR。图片最长边限制为 1500 px；无需缩放且不超过 16 MiB 的已验证图片保留原始编码，其他页面使用高质量插值缩小，避免不必要的二次有损压缩。当前页优先、随后环绕处理；启动命令只创建受控后台 scan 后立即返回，每完成一页就立刻发布该页文字命中层，当前页无需等待全章即可查词。Lens 段落按左上角坐标重建阅读顺序：竖排从右列到左列且列内从上到下，横排从上行到下行且行内从左到右；服务把同一气泡的相邻列拆成多个段落时，按方向、流向重叠和列/行间距重新聚合为一个文字块，远隔段落保持分离。方向对齐 Niratan，以接近 90° 的旋转或明显纵长的文字框判定，段落方向不足时使用多数行，词级几何可用时用于字符命中框。每页结果以 `google-lens-v3-ja-niratan-layout` 引擎签名、页 identity 和源修改时间写入 `Data/Manga/OCR`，暂停、取消、换书和 generation 变化均禁止旧结果回写当前 UI。重新打开 Reader 时，若 OCR 仍处于显示状态且用户已经接受上传披露，则自动按“当前页到末页、再回到开头”的顺序续扫；每页先读取已完成的 OCR cache，并在内存中兼容聚合已有 v3 分列结果，只有缺页才读取页面 payload 并请求 Google Lens。已有 Mokuro 的页面不发送网络请求。
 - Mihon 生态有两条显式接入路径。Suwayomi 模式继续连接用户自行管理的服务器；`Data/Manga/suwayomi.json` 只保存服务地址、鉴权模式、用户名和凭据 identity，密码/令牌写入 Windows Credential Manager。源浏览、搜索、章节准备、页面缓存与进度回写使用 Suwayomi `/api/v1`；只允许 HTTP/HTTPS，JSON 和图片分别限制为 16 MiB、256 MiB。

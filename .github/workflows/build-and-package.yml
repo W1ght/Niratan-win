@@ -115,6 +115,24 @@ jobs:
       run: |
         & "iscc.exe" Packaging/Niratan.iss
 
+    - name: Verify packaged icons
+      shell: pwsh
+      run: |
+        $publishExe = Get-ChildItem -Path Niratan/bin -Recurse -File -Filter Niratan.exe |
+          Where-Object { $_.FullName -like '*\x64\Release\*win-x64*\publish\Niratan.exe' } |
+          Sort-Object LastWriteTime -Descending |
+          Select-Object -First 1
+        if (-not $publishExe) {
+          throw "Published Niratan.exe not found"
+        }
+        $setupExe = Get-ChildItem -Path Packaging -File -Filter 'Niratan.Setup.x64*.exe' |
+          Select-Object -First 1
+        if (-not $setupExe) {
+          throw "Compiled Niratan Setup executable not found"
+        }
+        .\scripts\Test-PackagedIcon.ps1 -ExpectedIcon .\Niratan.ico -TargetExecutable $publishExe.FullName
+        .\scripts\Test-PackagedIcon.ps1 -ExpectedIcon .\Niratan.ico -TargetExecutable $setupExe.FullName
+
     - name: Upload Minimal Zip
       uses: actions/upload-artifact@v4
       with:

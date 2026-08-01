@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace Niratan.Services.Backup;
 
-public enum HoshiBackupTarget
+public enum NiratanBackupTarget
 {
     Books,
     Dictionaries,
@@ -14,13 +14,13 @@ public sealed record TtuBackupImportResult(int AddedBooks, int UpdatedBooks);
 
 public interface IBackupService
 {
-    Task CreateHoshiBackupAsync(
-        HoshiBackupTarget target,
+    Task CreateNiratanBackupAsync(
+        NiratanBackupTarget target,
         string destinationPath,
         CancellationToken ct = default);
 
-    Task RestoreHoshiBackupAsync(
-        HoshiBackupTarget target,
+    Task RestoreNiratanBackupAsync(
+        NiratanBackupTarget target,
         string archivePath,
         CancellationToken ct = default);
 

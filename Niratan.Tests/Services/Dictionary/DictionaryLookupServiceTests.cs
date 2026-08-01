@@ -474,6 +474,23 @@ public class DictionaryLookupServiceTests
     }
 
     [Fact]
+    public void PopupStyles_PreserveEmSizedDictionaryImages()
+    {
+        var stylesheet = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "Web",
+            "DictionaryPopup",
+            "popup.css"));
+        const string selector = ".gloss-image-link[data-size-units=\"em\"] .gloss-image-container {";
+        var ruleStart = stylesheet.IndexOf(selector, StringComparison.Ordinal);
+        var ruleEnd = stylesheet.IndexOf('}', ruleStart);
+
+        ruleStart.Should().BeGreaterThanOrEqualTo(0);
+        ruleEnd.Should().BeGreaterThan(ruleStart);
+        stylesheet[ruleStart..ruleEnd].Should().Contain("font-size: 1em;");
+    }
+
+    [Fact]
     public void PopupScript_EmitsLookupAndRenderTimingDiagnostics()
     {
         var script = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Web", "DictionaryPopup", "popup.js"));

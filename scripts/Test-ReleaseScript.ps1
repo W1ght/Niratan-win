@@ -56,6 +56,7 @@ $workflowContent = Get-Content -LiteralPath $workflowPath -Raw -Encoding UTF8
 Assert-True ($workflowContent -match 'contents:\s*write') 'Packaging workflow must have release write permission.'
 Assert-True ($workflowContent -match 'dotnet\s+test') 'Packaging workflow must run tests before release.'
 Assert-True ($workflowContent -match 'hoshidicts_c_api\.dll') 'Packaging workflow must verify the native dictionary DLL before release.'
+Assert-True ($workflowContent -match 'Test-PackagedIcon\.ps1') 'Packaging workflow must verify published application and Setup icons before release.'
 Assert-True ($workflowContent -match 'softprops/action-gh-release@v2') 'Packaging workflow must create the GitHub Release directly.'
 
 Write-Host 'Release script behavior checks passed.'

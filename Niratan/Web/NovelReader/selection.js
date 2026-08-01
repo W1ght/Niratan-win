@@ -497,8 +497,10 @@
         hit.node === this.selection.startNode &&
         hit.offset === this.selection.startOffset
       ) {
-        this.clearSelection();
-        return null;
+        // Reuse the active lookup anchor. Clearing it here makes the click handler
+        // treat the same word as a blank click, dismiss the popup, and immediately
+        // recreate it on the next pointer event.
+        return this.selection.text;
       }
 
       this.clearSelection();
@@ -627,18 +629,20 @@
 
   // Hover + Shift handler
   let lastHoverPoint = null;
-  let lastShiftHoverKey = '';
+  let lastShiftHoverNode = null;
+  let lastShiftHoverOffset = -1;
   let shiftHoverTimer = 0;
   function lookupAtPoint(x, y) {
     const hit = niratanSelection.getCharacterAtPoint(x, y);
     if (!hit) {
-      lastShiftHoverKey = '';
+      lastShiftHoverNode = null;
+      lastShiftHoverOffset = -1;
       return;
     }
 
-    const key = `${x}:${y}:${hit.offset}:${hit.node.textContent}`;
-    if (key === lastShiftHoverKey) return;
-    lastShiftHoverKey = key;
+    if (hit.node === lastShiftHoverNode && hit.offset === lastShiftHoverOffset) return;
+    lastShiftHoverNode = hit.node;
+    lastShiftHoverOffset = hit.offset;
     niratanSelection.selectText(x, y, getScanLength());
   }
 
@@ -655,7 +659,8 @@
     if (!e.shiftKey) {
       if (shiftHoverTimer) clearTimeout(shiftHoverTimer);
       shiftHoverTimer = 0;
-      lastShiftHoverKey = '';
+      lastShiftHoverNode = null;
+      lastShiftHoverOffset = -1;
       return;
     }
     scheduleLookupAtPoint(e.clientX, e.clientY);

@@ -8,15 +8,21 @@ public sealed class AppUpdatePackagingContractTests
         Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 
     [Fact]
-    public void Installer_UsesHoshiDirectoryAndStarIcon()
+    public void Installer_UsesNiratanDirectoryAndRootIcon()
     {
         var script = File.ReadAllText(Path.Combine(RepositoryRoot, "Packaging", "Niratan.iss"));
 
-        script.Should().Contain(@"DefaultDirName={autopf}\Hoshi");
+        script.Should().Contain(@"DefaultDirName={autopf}\Niratan");
         script.Should().Contain("UsePreviousAppDir=no");
-        script.Should().Contain(@"SetupIconFile=..\Niratan\Assets\AppIcon.ico");
-        File.Exists(Path.Combine(RepositoryRoot, "Niratan", "Assets", "AppIcon.ico"))
-            .Should().BeTrue();
+        script.Should().Contain(@"SetupIconFile=..\Niratan.ico");
+
+        var rootIcon = File.ReadAllBytes(Path.Combine(RepositoryRoot, "Niratan.ico"));
+        var appIcon = File.ReadAllBytes(Path.Combine(
+            RepositoryRoot,
+            "Niratan",
+            "Assets",
+            "AppIcon.ico"));
+        appIcon.Should().Equal(rootIcon);
     }
 
     [Fact]
@@ -32,6 +38,8 @@ public sealed class AppUpdatePackagingContractTests
         xaml.Should().Contain("AppUpdateInstallButton");
         xaml.Should().Contain("AppUpdateChooseDownloadDirectoryButton");
         xaml.Should().Contain("UpdateDownloadProgress");
+        xaml.Should().Contain("ms-appx:///Assets/AppIcon.png");
+        xaml.Should().Contain("ShowAsMonochrome=\"False\"");
         xaml.Should().NotContain("AppUpdateOpenButton");
     }
 

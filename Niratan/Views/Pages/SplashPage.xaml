@@ -12,5 +12,5 @@
            Height="128"
            HorizontalAlignment="Center"
            VerticalAlignment="Center"
-           Source="/Assets/Square44x44Logo.altform-unplated_targetsize-256.png" />
+           Source="/Assets/AppIcon.png" />
 </Page>

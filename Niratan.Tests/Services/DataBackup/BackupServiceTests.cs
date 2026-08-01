@@ -20,14 +20,14 @@ public sealed class BackupServiceTests
         Directory.CreateDirectory(Path.Combine(books, "book-a"));
         await File.WriteAllTextAsync(Path.Combine(books, "book-a", "metadata.json"), "original", ct);
         var service = CreateService(books, dictionaries, profiles);
-        var archive = Path.Combine(temp.Path, "Books.hoshi");
+        var archive = Path.Combine(temp.Path, "Books.niratan");
 
-        await service.CreateHoshiBackupAsync(HoshiBackupTarget.Books, archive, ct);
+        await service.CreateNiratanBackupAsync(NiratanBackupTarget.Books, archive, ct);
         Directory.Delete(Path.Combine(books, "book-a"), recursive: true);
         Directory.CreateDirectory(Path.Combine(books, "book-b"));
         await File.WriteAllTextAsync(Path.Combine(books, "book-b", "metadata.json"), "replacement", ct);
 
-        await service.RestoreHoshiBackupAsync(HoshiBackupTarget.Books, archive, ct);
+        await service.RestoreNiratanBackupAsync(NiratanBackupTarget.Books, archive, ct);
 
         File.ReadAllText(Path.Combine(books, "book-a", "metadata.json")).Should().Be("original");
         Directory.Exists(Path.Combine(books, "book-b")).Should().BeFalse();
@@ -41,7 +41,7 @@ public sealed class BackupServiceTests
         var books = Path.Combine(temp.Path, "Novels");
         Directory.CreateDirectory(books);
         await File.WriteAllTextAsync(Path.Combine(books, "keep.txt"), "safe", ct);
-        var archive = Path.Combine(temp.Path, "unsafe.hoshi");
+        var archive = Path.Combine(temp.Path, "unsafe.niratan");
         using (var zip = ZipFile.Open(archive, ZipArchiveMode.Create))
             zip.CreateEntry("../escaped.txt");
         var service = CreateService(
@@ -49,7 +49,10 @@ public sealed class BackupServiceTests
             Path.Combine(temp.Path, "dictionaries"),
             Path.Combine(temp.Path, "Profiles"));
 
-        var action = () => service.RestoreHoshiBackupAsync(HoshiBackupTarget.Books, archive, ct);
+        var action = () => service.RestoreNiratanBackupAsync(
+            NiratanBackupTarget.Books,
+            archive,
+            ct);
 
         await action.Should().ThrowAsync<InvalidDataException>();
         File.ReadAllText(Path.Combine(books, "keep.txt")).Should().Be("safe");
@@ -69,8 +72,18 @@ public sealed class BackupServiceTests
         imported.Profiles.Add(new NiratanProfile("custom-imported", "Imported", "ja"));
         await WriteProfilesAsync(profiles, imported, "custom-imported", "imported-config", ct);
         var service = CreateService(books, dictionaries, profiles);
-        var archive = Path.Combine(temp.Path, "Dictionaries.hoshi");
-        await service.CreateHoshiBackupAsync(HoshiBackupTarget.Dictionaries, archive, ct);
+        var archive = Path.Combine(temp.Path, "Dictionaries.niratan");
+        await service.CreateNiratanBackupAsync(NiratanBackupTarget.Dictionaries, archive, ct);
+
+        using (var zip = ZipFile.OpenRead(archive))
+        {
+            zip.Entries.Should().Contain(entry =>
+                entry.FullName.StartsWith(".niratan-profiles/", StringComparison.Ordinal));
+            zip.Entries.Should().NotContain(entry =>
+                entry.FullName.StartsWith(".hoshi-profiles/", StringComparison.Ordinal));
+        }
+        var legacyArchive = Path.Combine(temp.Path, "Dictionaries-legacy.niratan");
+        CopyAsLegacyProfileMetadataArchive(archive, legacyArchive);
 
         Directory.Delete(dictionaries, recursive: true);
         WriteDictionary(dictionaries, "Current");
@@ -78,7 +91,10 @@ public sealed class BackupServiceTests
         current.Profiles.Add(new NiratanProfile("custom-current", "Current", "ja"));
         await WriteProfilesAsync(profiles, current, "custom-current", "current-config", ct);
 
-        await service.RestoreHoshiBackupAsync(HoshiBackupTarget.Dictionaries, archive, ct);
+        await service.RestoreNiratanBackupAsync(
+            NiratanBackupTarget.Dictionaries,
+            legacyArchive,
+            ct);
 
         Directory.Exists(Path.Combine(dictionaries, "Term", "Original")).Should().BeTrue();
         Directory.Exists(Path.Combine(dictionaries, "Term", "Current")).Should().BeFalse();
@@ -100,6 +116,23 @@ public sealed class BackupServiceTests
             books,
             dictionaries,
             profiles);
+
+    private static void CopyAsLegacyProfileMetadataArchive(string source, string destination)
+    {
+        using var input = ZipFile.OpenRead(source);
+        using var output = ZipFile.Open(destination, ZipArchiveMode.Create);
+        foreach (var entry in input.Entries)
+        {
+            var legacyName = entry.FullName.Replace(
+                ".niratan-profiles/",
+                ".hoshi-profiles/",
+                StringComparison.Ordinal);
+            var copiedEntry = output.CreateEntry(legacyName, CompressionLevel.SmallestSize);
+            using var inputStream = entry.Open();
+            using var outputStream = copiedEntry.Open();
+            inputStream.CopyTo(outputStream);
+        }
+    }
 
     private static void WriteDictionary(string root, string name)
     {

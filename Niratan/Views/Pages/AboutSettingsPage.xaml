@@ -33,8 +33,11 @@
                     <toolkit:SettingsExpander x:Uid="SettingsAboutExpander"
                                               HorizontalAlignment="Stretch"
                                               HorizontalContentAlignment="Stretch"
-                                              Header="Niratan"
-                                              HeaderIcon="{ui:BitmapIcon Source=ms-appx:///Assets/Square44x44Logo.altform-lightunplated_targetsize-32.png}">
+                                              Header="Niratan">
+                        <toolkit:SettingsExpander.HeaderIcon>
+                            <BitmapIcon ShowAsMonochrome="False"
+                                        UriSource="ms-appx:///Assets/AppIcon.png" />
+                        </toolkit:SettingsExpander.HeaderIcon>
                         <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" IsTextSelectionEnabled="True">
                             <Run x:Uid="SettingsAboutVersionRun" Text="Version" />
                             <Run Text="{x:Bind ViewModel.NiratanVersion, Mode=OneTime}" />

@@ -185,7 +185,7 @@
                         <TextBox x:Uid="AnkiTagsTextBox"
                                  Width="360"
                                  AutomationProperties.Name="Tags"
-                                 PlaceholderText="hoshi japanese"
+                                 PlaceholderText="niratan japanese"
                                  Text="{x:Bind ViewModel.Tags, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     </toolkit:SettingsCard>
 

@@ -50,7 +50,7 @@
   <data name="AnkiTagsCard.Header" xml:space="preserve"><value>标签</value></data>
   <data name="AnkiTagsCard.Description" xml:space="preserve"><value>添加到每张卡片的标签，可用空格、逗号或分号分隔</value></data>
   <data name="AnkiTagsTextBox.AutomationProperties.Name" xml:space="preserve"><value>标签</value></data>
-  <data name="AnkiTagsTextBox.PlaceholderText" xml:space="preserve"><value>hoshi japanese</value></data>
+  <data name="AnkiTagsTextBox.PlaceholderText" xml:space="preserve"><value>niratan japanese</value></data>
   <data name="AnkiDuplicateSectionHeader.Text" xml:space="preserve"><value>重复处理</value></data>
   <data name="AnkiAllowDupesCard.Header" xml:space="preserve"><value>允许重复</value></data>
   <data name="AnkiAllowDupesCard.Description" xml:space="preserve"><value>允许创建重复卡片</value></data>
@@ -209,6 +209,8 @@
   <data name="ReaderFontDeletedMessage" xml:space="preserve"><value>已删除“{0}”。</value></data>
   <data name="ReaderFontSizeCard.Header" xml:space="preserve"><value>字号</value></data>
   <data name="ReaderFontSizeCard.Description" xml:space="preserve"><value>调整正文大小</value></data>
+  <data name="ReaderFontWeightCard.Header" xml:space="preserve"><value>字重</value></data>
+  <data name="ReaderFontWeightCard.Description" xml:space="preserve"><value>调整阅读正文的字重</value></data>
   <data name="ReaderHideFuriganaCard.Header" xml:space="preserve"><value>隐藏假名注音</value></data>
   <data name="ReaderHideFuriganaCard.Description" xml:space="preserve"><value>隐藏汉字上方的 ruby 注音</value></data>
   <data name="ReaderLayoutSectionHeader.Text" xml:space="preserve"><value>阅读布局</value></data>
@@ -1172,7 +1174,7 @@
   <data name="BackupTtuExportButton.Content" xml:space="preserve"><value>导出</value></data>
   <data name="BackupTtuImportButton.Content" xml:space="preserve"><value>导入</value></data>
   <data name="BackupTtuImportHelpText.Text" xml:space="preserve"><value>导入备份会添加新书，并覆盖已有书籍的统计数据和阅读进度。</value></data>
-  <data name="BackupHoshiFileType" xml:space="preserve"><value>Niratan 备份</value></data>
+  <data name="BackupNiratanFileType" xml:space="preserve"><value>Niratan 备份</value></data>
   <data name="BackupTtuFileType" xml:space="preserve"><value>TTU 备份</value></data>
   <data name="BackupStatusArchiving" xml:space="preserve"><value>正在归档...</value></data>
   <data name="BackupStatusRestoring" xml:space="preserve"><value>正在恢复...</value></data>

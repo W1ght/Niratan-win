@@ -2195,6 +2195,7 @@ public sealed partial class NovelReaderPage : Page
                     await HandleLookupRequestAsync(root.GetProperty("payload"));
                     break;
                 case "lookupDismiss":
+                    Interlocked.Increment(ref _lookupRequestVersion);
                     _popupOverlay?.Dismiss();
                     await SetLookupPopupActiveAsync(false);
                     break;
@@ -3107,6 +3108,11 @@ public sealed partial class NovelReaderPage : Page
         {
             await NovelWebView.CoreWebView2.ExecuteScriptAsync(
                 $"window.__niratanLookupPopupActive = {JsonSerializer.Serialize(active)};");
+            if (!active)
+            {
+                await NovelWebView.CoreWebView2.ExecuteScriptAsync(
+                    "window.niratanSelection?.clearSelection();");
+            }
         }
         catch (Exception ex)
         {

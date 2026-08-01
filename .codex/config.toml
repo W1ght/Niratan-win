@@ -2,4 +2,4 @@
 inherit = "core"
 
 [shell_environment_policy.set]
-HOSHI_NOVEL_READER_ARTIFACT_DIR = "${projectDir}/docs/superpowers/artifacts/novel-reader"
+NIRATAN_NOVEL_READER_ARTIFACT_DIR = "${projectDir}/docs/superpowers/artifacts/novel-reader"

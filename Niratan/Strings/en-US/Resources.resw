@@ -50,7 +50,7 @@
   <data name="AnkiTagsCard.Header" xml:space="preserve"><value>Tags</value></data>
   <data name="AnkiTagsCard.Description" xml:space="preserve"><value>Space, comma, or semicolon separated tags added to each card</value></data>
   <data name="AnkiTagsTextBox.AutomationProperties.Name" xml:space="preserve"><value>Tags</value></data>
-  <data name="AnkiTagsTextBox.PlaceholderText" xml:space="preserve"><value>hoshi japanese</value></data>
+  <data name="AnkiTagsTextBox.PlaceholderText" xml:space="preserve"><value>niratan japanese</value></data>
   <data name="AnkiDuplicateSectionHeader.Text" xml:space="preserve"><value>Duplicate Handling</value></data>
   <data name="AnkiAllowDupesCard.Header" xml:space="preserve"><value>Allow Duplicates</value></data>
   <data name="AnkiAllowDupesCard.Description" xml:space="preserve"><value>Allow creating duplicate cards</value></data>
@@ -209,6 +209,8 @@
   <data name="ReaderFontDeletedMessage" xml:space="preserve"><value>Deleted '{0}'.</value></data>
   <data name="ReaderFontSizeCard.Header" xml:space="preserve"><value>Font Size</value></data>
   <data name="ReaderFontSizeCard.Description" xml:space="preserve"><value>Adjust the text size</value></data>
+  <data name="ReaderFontWeightCard.Header" xml:space="preserve"><value>Font Weight</value></data>
+  <data name="ReaderFontWeightCard.Description" xml:space="preserve"><value>Adjust the reader text weight</value></data>
   <data name="ReaderHideFuriganaCard.Header" xml:space="preserve"><value>Hide Furigana</value></data>
   <data name="ReaderHideFuriganaCard.Description" xml:space="preserve"><value>Hide ruby text above kanji</value></data>
   <data name="ReaderLayoutSectionHeader.Text" xml:space="preserve"><value>Reader Layout</value></data>
@@ -1172,7 +1174,7 @@
   <data name="BackupTtuExportButton.Content" xml:space="preserve"><value>Export</value></data>
   <data name="BackupTtuImportButton.Content" xml:space="preserve"><value>Import</value></data>
   <data name="BackupTtuImportHelpText.Text" xml:space="preserve"><value>Importing a backup adds new books and overwrites the statistics and reading progress of books already present.</value></data>
-  <data name="BackupHoshiFileType" xml:space="preserve"><value>Niratan backup</value></data>
+  <data name="BackupNiratanFileType" xml:space="preserve"><value>Niratan backup</value></data>
   <data name="BackupTtuFileType" xml:space="preserve"><value>TTU backup</value></data>
   <data name="BackupStatusArchiving" xml:space="preserve"><value>Archiving...</value></data>
   <data name="BackupStatusRestoring" xml:space="preserve"><value>Restoring...</value></data>

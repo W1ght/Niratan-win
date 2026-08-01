@@ -42,10 +42,12 @@ public sealed class ProfileSettingsStoreTests
             FontFamily: "NiratanImportedABC123",
             FontFileName: "dictionary-font.woff2");
         reader.Current.FontSize = 28;
+        reader.Current.FontWeight = 600;
         await store.ActivateAsync(english.Id, TestContext.Current.CancellationToken);
 
         settings.Current.DictionaryDisplaySettings.MaxResults.Should().Be(16);
         reader.Current.FontSize.Should().Be(new ReaderSettings().FontSize);
+        reader.Current.FontWeight.Should().Be(new ReaderSettings().FontWeight);
 
         await store.ActivateAsync("default-ja", TestContext.Current.CancellationToken);
         settings.Current.DictionaryDisplaySettings.Should().Match<DictionaryDisplaySettings>(value =>
@@ -58,6 +60,7 @@ public sealed class ProfileSettingsStoreTests
             && value.FontFamily == "NiratanImportedABC123"
             && value.FontFileName == "dictionary-font.woff2");
         reader.Current.FontSize.Should().Be(28);
+        reader.Current.FontWeight.Should().Be(600);
     }
 
     [Fact]

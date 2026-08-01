@@ -281,9 +281,9 @@ dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter
 手动验证：
 
 1. 打开“设置 → 备份”，确认书籍、词典、ッツ Backup 三个分区和 Backup/Restore、Export/Import 操作均可用，处理中显示不可重复触发的进度遮罩。
-2. 备份书籍后导入或删除一本书，再恢复 `.hoshi`；返回书架确认当前收藏被备份内容完整覆盖，EPUB、封面、书签、统计、高亮和 Sasayaki sidecar 均可读。
+2. 备份书籍后导入或删除一本书，再恢复 `.niratan`；返回书架确认当前收藏被备份内容完整覆盖，EPUB、封面、书签、统计、高亮和 Sasayaki sidecar 均可读；另用一份旧 `.hoshi` fixture 确认兼容恢复。
 3. 在两个 Profile 中设置不同词典顺序、启用状态和折叠规则并备份词典；再修改集合和 Profile 配置后恢复，确认物理词典被覆盖、备份中的 Profile 配置恢复、只存在于当前环境的 Profile 仍保留，并立即可查词。
-4. 将带 `../`、绝对路径或 Unix symlink entry 的伪造 `.hoshi` 传给恢复，确认显示错误、应用目录外没有新文件，当前书籍/词典收藏未改变。
+4. 将带 `../`、绝对路径或 Unix symlink entry 的伪造 `.niratan` 传给恢复，确认显示错误、应用目录外没有新文件，当前书籍/词典收藏未改变。
 5. 导出 ッツ ZIP，确认每本 EPUB 目录包含 `bookdata_1_6_*`，有数据时同时包含 `statistics_1_6_*`、`progress_1_6_*` 与封面；在 TTU Reader 或 Niratan 导入确认正文、CSS、图片和章节可读。
 6. 导入同一 ッツ ZIP：不存在的原始书名应新增，已存在的原始书名不得重复创建，只覆盖 `statistics.json` 与 `bookmark.json`；返回书架确认统计与阅读进度刷新。
 
@@ -556,7 +556,7 @@ UI Automation 使用现有 `ImportMangaFolderButton`、`ImportMangaFileButton`�
 5. 压缩包只解出请求页；目录页越过源根目录必须拒绝。
 6. 伪造 `catalog.json` 中 rooted、`..` 或多路径段的书籍 ID 必须在创建目录前失败；Manga cache root 外的 sentinel 文件保持字节不变。
 7. `catalog.json` 原子 round-trip；损坏 JSON 不得静默重置或覆盖。
-8. Google Lens protobuf fixture 保留段落、行、词级几何、UTF-16 字符偏移与归一化坐标；竖排按右到左列序和上到下字序，横排按上到下行序和左到右字序；相邻、同方向且流向重叠的分列段落合并为一个连续 UTF-16 文字块，远隔气泡不得误并，已有 v3 cache 读取时完成同样聚合且不重新上传；方向以接近 90° 的旋转或明显纵长框判定，段落不足时使用多数行；OCR cache manifest 变化后旧页失效，当前 manifest 的已完成页可在新 service 实例中恢复。Reader 重新打开且 OCR 仍为显示状态时必须自动续扫，并在读取任何页面 payload 前先检查该页缓存，只有缺页才联网；未接受上传披露不得自动启动。漫画点击还必须按当前 Profile 语言和 scan length 解析查询候选及制卡 UTF-16 起点；两本漫画即使页 basename 相同，Anki 页面媒体也必须按内容生成不同的稳定 `hoshi_manga_page_*` 文件名。
+8. Google Lens protobuf fixture 保留段落、行、词级几何、UTF-16 字符偏移与归一化坐标；竖排按右到左列序和上到下字序，横排按上到下行序和左到右字序；相邻、同方向且流向重叠的分列段落合并为一个连续 UTF-16 文字块，远隔气泡不得误并，已有 v3 cache 读取时完成同样聚合且不重新上传；方向以接近 90° 的旋转或明显纵长框判定，段落不足时使用多数行；OCR cache manifest 变化后旧页失效，当前 manifest 的已完成页可在新 service 实例中恢复。Reader 重新打开且 OCR 仍为显示状态时必须自动续扫，并在读取任何页面 payload 前先检查该页缓存，只有缺页才联网；未接受上传披露不得自动启动。漫画点击还必须按当前 Profile 语言和 scan length 解析查询候选及制卡 UTF-16 起点；两本漫画即使页 basename 相同，Anki 页面媒体也必须按内容生成不同的稳定 `niratan_manga_page_*` 文件名。
 9. Suwayomi URL 只接受 HTTP/HTTPS 并移除 `/api/v1` / `/api/graphql` 后缀；Basic/Bearer/UI Login 鉴权、响应大小限制、页面 MIME 扩展和重复读取缓存使用 mock HTTP 验证。来源图标还需验证只接受同 origin 的 `/api/v1` URL、图片 MIME，并按 server/source identity 缓存。
 10. bundled runtime manifest 只接受受 runtime root 约束的相对 Java/JAR/overlay 路径，拒绝 rooted path、`..` 越界、不匹配版本和 overlay SHA-256；构建脚本锁定 M-Extension-Server 1.0.4、上游 bundle 与 Niratan overlay 的固定 SHA-256，仓库保存 overlay 源码，build/publish 输出同时包含 `runtime.json`、Java、上游 JAR、overlay JAR、MPL-2.0 和 notice。仓库只接受 HTTPS（回环测试例外）且索引 URL 必须以 `.json` 结尾；mock 多仓库验证按配置顺序合并、package/source identity 去重、单仓库失败不丢失其他结果、旧 `RepositoryUrl` 无损迁移，以及字符串/数值 source ID、APK URL、单 Source/多 Source 索引。安装测试覆盖 APK ZIP/manifest/DEX 校验、SHA-256 与原子安装清单；mock `/dalvik` 验证固定 manga 方法、Base64 APK、字符串 `sourceId` 和强类型响应。再用当前 Keiyoushi MangaDex 多 Source APK 在一次性 sidecar 中验证：错误 source ID 返回结构化失败，日文 source ID 的 `headersManga` 和 `getPopularManga` 成功，且热门结果只请求并返回日文内容。
 

@@ -1068,6 +1068,11 @@ public class NovelReaderWebAssetTests
         appearanceContentXaml.Should().Contain("x:Uid=\"ReaderMouseWheelPageTurnCard\"");
         appearanceContentXaml.Should().Contain("AutomationProperties.AutomationId=\"ReaderMouseWheelPageTurnToggle\"");
         appearanceContentXaml.Should().Contain("IsOn=\"{x:Bind ViewModel.MouseWheelPageTurn, Mode=TwoWay}\"");
+        appearanceContentXaml.Should().Contain("x:Uid=\"ReaderFontWeightCard\"");
+        appearanceContentXaml.Should().Contain("AutomationProperties.AutomationId=\"ReaderFontWeightNumberBox\"");
+        appearanceContentXaml.Should().Contain("Value=\"{x:Bind ViewModel.FontWeightValue, Mode=TwoWay}\"");
+        readerSettingsCode.Should().Contain("int FontWeight { get; set; } = 400");
+        settingsViewModelCode.Should().Contain("ApplyReaderSetting(s => s.FontWeight");
         readerSettingsCode.Should().Contain("bool MouseWheelPageTurn { get; set; } = true");
         settingsViewModelCode.Should().Contain("MouseWheelPageTurn");
         settingsViewModelCode.Should().Contain("ApplyReaderSetting(s => s.MouseWheelPageTurn, value)");
@@ -1917,12 +1922,14 @@ public class NovelReaderWebAssetTests
         script.Should().Contain("scheduleLookupAtPoint(e.clientX, e.clientY)");
         script.Should().Contain("window.__niratanLookupPopupActive === true");
         script.Should().Contain("&& !selectedText");
+        script.Should().Contain("return this.selection.text;");
         script.Should().Contain("postToHost('lookupDismiss'");
         readerCode.Should().Contain("window.__niratanLookupSettings");
         readerCode.Should().Contain("case \"lookupDismiss\":");
         readerCode.Should().Contain("DictionaryPopupCanvasInputMode.VisibleHostsOnly");
         readerCode.Should().Contain("SetLookupPopupActiveAsync(true)");
         readerCode.Should().Contain("SetLookupPopupActiveAsync(false)");
+        readerCode.Should().Contain("window.niratanSelection?.clearSelection()");
         settingsCode.Should().NotContain("DesktopLookupHoverDelayMs");
     }
 

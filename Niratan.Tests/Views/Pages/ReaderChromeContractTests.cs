@@ -28,7 +28,37 @@ public sealed class ReaderChromeContractTests
         titleBar.Elements().Should().BeEmpty();
         xaml.Should().NotContain("GlobalSearchBox");
         xaml.Should().NotContain("Square44x44Logo");
-        xaml.Should().NotContain("Text=\"Niratan\"");
+    }
+
+    [Fact]
+    public void NavigationPane_ShowsLargeNiratanBrandingOnItsOwnRow()
+    {
+        var xaml = ReadProjectFile("Views", "Pages", "NavigationPage.xaml");
+        var document = XDocument.Parse(xaml);
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var navigationView = document.Descendants(presentation + "NavigationView").Single();
+        navigationView.Attribute("IsBackButtonVisible")?.Value.Should().Be("Collapsed");
+
+        var customContent = navigationView.Element(
+            presentation + "NavigationView.PaneCustomContent");
+        customContent.Should().NotBeNull();
+
+        var brandRow = customContent!.Descendants(presentation + "Grid").Single();
+        brandRow.Attribute("Height")?.Value.Should().Be("56");
+        brandRow.Attribute("Visibility")?.Value.Should().Be(
+            "{x:Bind NavigationViewControl.IsPaneOpen, Mode=OneWay}");
+
+        var brandHeader = brandRow.Descendants(presentation + "StackPanel").Single();
+        brandHeader.Attribute("Orientation")?.Value.Should().Be("Horizontal");
+        var icon = brandHeader.Descendants(presentation + "Image").Single();
+        icon.Attribute("Source")?.Value.Should().Be("/Assets/AppIcon.png");
+        icon.Attribute("Width")?.Value.Should().Be("32");
+        icon.Attribute("Height")?.Value.Should().Be("32");
+        brandHeader.Descendants(presentation + "TextBlock")
+            .Single()
+            .Attribute("Text")?.Value.Should().Be("Niratan");
     }
 
     [Fact]

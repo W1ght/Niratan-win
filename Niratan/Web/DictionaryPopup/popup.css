@@ -391,6 +391,10 @@ html[data-niratan-color-scheme="dark"] .gloss-image-link[data-appearance="monoch
     filter: brightness(0) invert(1);
 }
 
+.gloss-image-link[data-size-units="em"] .gloss-image-container {
+    font-size: 1em;
+}
+
 .glossary-group {
     position: relative;
     margin-top: var(--popup-space-5);

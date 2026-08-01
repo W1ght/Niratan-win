@@ -783,7 +783,7 @@ function getDictionaryEntries() {
   });
 }
 
-window.hoshiFocusDictionaryEntry = function (index, smooth) {
+window.niratanFocusDictionaryEntry = function (index, smooth) {
   var entries = getDictionaryEntries();
   if (!entries.length) return false;
 
@@ -800,12 +800,12 @@ window.hoshiFocusDictionaryEntry = function (index, smooth) {
   return true;
 };
 
-window.hoshiMoveDictionaryEntry = function (direction, count) {
+window.niratanMoveDictionaryEntry = function (direction, count) {
   direction = Number(direction);
   count = Number(count);
   if (!Number.isFinite(direction) || direction === 0) return false;
   count = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 1;
-  return window.hoshiFocusDictionaryEntry(
+  return window.niratanFocusDictionaryEntry(
     currentDictionaryEntryIndex + (direction > 0 ? count : -count),
     true);
 };

@@ -864,7 +864,7 @@ public sealed class DictionaryLookupPopup : IDisposable
             return false;
 
         var result = await _contentWebView.CoreWebView2.ExecuteScriptAsync(
-            $"window.hoshiMoveDictionaryEntry?.({Math.Sign(direction)}, {Math.Clamp(count, 1, 10)})");
+            $"window.niratanMoveDictionaryEntry?.({Math.Sign(direction)}, {Math.Clamp(count, 1, 10)})");
         return string.Equals(result, "true", StringComparison.OrdinalIgnoreCase);
     }
 

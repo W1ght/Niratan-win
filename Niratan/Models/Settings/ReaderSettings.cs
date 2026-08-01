@@ -19,6 +19,7 @@ public class ReaderSettings
     public bool VerticalWriting { get; set; } = true;
     public string SelectedFont { get; set; } = JapaneseFontCatalog.DefaultReaderCssValue;
     public string? SelectedFontFileName { get; set; }
+    public int FontWeight { get; set; } = 400;
     public int FontSize { get; set; } = 22;
     public bool HideFurigana { get; set; } = false;
 
@@ -86,6 +87,8 @@ public class ReaderSettings
         TwoColumnHorizontalPages && !VerticalWriting && !ContinuousMode && !VisualNovelMode;
 
     public int NormalizedVisualNovelRevealSpeed => Math.Clamp(VisualNovelRevealSpeed, 0, 120);
+
+    public int NormalizedFontWeight => Math.Clamp(FontWeight, 100, 900);
 
     public int NormalizedVisualNovelSentencesPerScreen =>
         Math.Clamp(VisualNovelSentencesPerScreen, 1, 12);

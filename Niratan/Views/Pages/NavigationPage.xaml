@@ -18,6 +18,7 @@
         <NavigationView x:Name="NavigationViewControl"
                         BackRequested="NavigationViewControl_BackRequested"
                         IsBackEnabled="{x:Bind ViewModel.IsBackEnabled, Mode=OneWay}"
+                        IsBackButtonVisible="Collapsed"
                         IsSettingsVisible="False"
                         ItemInvoked="NavigationViewControl_ItemInvoked"
                         OpenPaneLength="200"
@@ -29,6 +30,24 @@
                 <Thickness x:Key="NavigationViewHeaderMargin">36,30,36,0</Thickness>
                 <CornerRadius x:Key="NavigationViewContentGridCornerRadius">0</CornerRadius>
             </NavigationView.Resources>
+
+            <NavigationView.PaneCustomContent>
+                <Grid Height="56"
+                      Padding="16,0,8,0"
+                      AutomationProperties.AutomationId="NiratanBrandHeader"
+                      Visibility="{x:Bind NavigationViewControl.IsPaneOpen, Mode=OneWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Image Width="32"
+                               Height="32"
+                               AutomationProperties.Name="Niratan icon"
+                               Source="/Assets/AppIcon.png" />
+                        <TextBlock VerticalAlignment="Center"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Text="Niratan" />
+                    </StackPanel>
+                </Grid>
+            </NavigationView.PaneCustomContent>
 
             <NavigationView.MenuItems>
                 <NavigationViewItem AutomationProperties.AutomationId="NovelNavItem"

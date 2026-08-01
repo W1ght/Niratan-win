@@ -25,7 +25,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={autopf}\Hoshi
+DefaultDirName={autopf}\Niratan
 UsePreviousAppDir=no
 UninstallDisplayIcon={app}\{#MyAppExeName}
 
@@ -39,7 +39,7 @@ PrivilegesRequiredOverridesAllowed=dialog
 
 OutputDir=.
 OutputBaseFilename={#MyAppName}.Setup.{#MyArch}
-SetupIconFile=..\Niratan\Assets\AppIcon.ico
+SetupIconFile=..\Niratan.ico
 
 Compression=lzma
 SolidCompression=yes

@@ -15,8 +15,8 @@ public sealed class AnkiMangaMiningContextTests
             @"D:\cache\book-b\000001.jpg",
             [4, 5, 6]);
 
-        first.Should().StartWith("hoshi_manga_page_").And.EndWith(".jpg");
-        second.Should().StartWith("hoshi_manga_page_").And.EndWith(".jpg");
+        first.Should().StartWith("niratan_manga_page_").And.EndWith(".jpg");
+        second.Should().StartWith("niratan_manga_page_").And.EndWith(".jpg");
         first.Should().NotBe(second);
     }
 

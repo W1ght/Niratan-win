@@ -259,12 +259,23 @@ const document = {
     const nodes = collectTextNodes(root).filter(node =>
       filter.acceptNode(node) === 1);
     let index = -1;
+    let currentNode = root;
     return {
-      currentNode: root,
+      get currentNode() { return currentNode; },
+      set currentNode(value) {
+        currentNode = value;
+        index = nodes.indexOf(value);
+      },
       nextNode() {
         counters.nextNodes += 1;
         index += 1;
-        return nodes[index] || null;
+        currentNode = nodes[index] || null;
+        return currentNode;
+      },
+      previousNode() {
+        index -= 1;
+        currentNode = nodes[index] || null;
+        return currentNode;
       },
     };
   },
@@ -526,6 +537,33 @@ assert.equal(
   Array.from(target.textContent.slice(0, targetLocalOffset)).length,
   "post-rebuild lookup may scan only the target Text node prefix",
 );
+
+window.niratanSelection.clearSelection();
+const originalGetCharacterAtPoint = window.niratanSelection.getCharacterAtPoint;
+window.niratanSelection.getCharacterAtPoint = () => ({ node: target, offset: 0 });
+const beforeRepeatedLookup = outbound.length;
+const firstSelectedText = window.niratanSelection.selectText(15, 15, 16);
+assert.ok(firstSelectedText, "the first lookup must select reader text");
+assert.equal(outbound.length, beforeRepeatedLookup + 1, "the first lookup must reach native");
+
+const repeatedSelectedText = window.niratanSelection.selectText(16, 15, 16);
+assert.equal(repeatedSelectedText, firstSelectedText, "the same selection must remain active");
+assert.equal(
+  outbound.length,
+  beforeRepeatedLookup + 1,
+  "the same selection must not issue another native lookup",
+);
+assert.ok(window.niratanSelection.selection, "duplicate lookup suppression must keep the highlight state");
+
+window.niratanSelection.clearSelection();
+window.niratanSelection.selectText(15, 15, 16);
+assert.equal(
+  outbound.length,
+  beforeRepeatedLookup + 2,
+  "an explicitly cleared selection must allow the word to be looked up again",
+);
+window.niratanSelection.clearSelection();
+window.niratanSelection.getCharacterAtPoint = originalGetCharacterAtPoint;
 
 async function verifySasayakiFallbackInvalidation() {
   const bridgeSource = fs.readFileSync(bridgePath, "utf8");

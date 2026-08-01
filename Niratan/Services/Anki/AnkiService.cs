@@ -403,7 +403,7 @@ public sealed class AnkiService : IAnkiService, IDisposable
             extension = ".png";
         }
         var hash = Convert.ToHexString(SHA1.HashData(bytes)).ToLowerInvariant();
-        return $"hoshi_manga_page_{hash}{extension}";
+        return $"niratan_manga_page_{hash}{extension}";
     }
 
     public Task<bool> OpenNotesInAnkiAsync(IReadOnlyList<long> noteIds) =>

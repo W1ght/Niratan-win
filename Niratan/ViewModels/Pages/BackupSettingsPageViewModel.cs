@@ -35,16 +35,16 @@ public partial class BackupSettingsPageViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private Task BackupBooksAsync() => BackupHoshiAsync(HoshiBackupTarget.Books);
+    private Task BackupBooksAsync() => BackupNiratanAsync(NiratanBackupTarget.Books);
 
     [RelayCommand]
-    private Task RestoreBooksAsync() => RestoreHoshiAsync(HoshiBackupTarget.Books);
+    private Task RestoreBooksAsync() => RestoreNiratanAsync(NiratanBackupTarget.Books);
 
     [RelayCommand]
-    private Task BackupDictionariesAsync() => BackupHoshiAsync(HoshiBackupTarget.Dictionaries);
+    private Task BackupDictionariesAsync() => BackupNiratanAsync(NiratanBackupTarget.Dictionaries);
 
     [RelayCommand]
-    private Task RestoreDictionariesAsync() => RestoreHoshiAsync(HoshiBackupTarget.Dictionaries);
+    private Task RestoreDictionariesAsync() => RestoreNiratanAsync(NiratanBackupTarget.Dictionaries);
 
     [RelayCommand]
     private async Task ExportTtuAsync()
@@ -52,7 +52,7 @@ public partial class BackupSettingsPageViewModel : ObservableObject
         if (IsBusy)
             return;
         var path = await _dialogService.SaveFilePickerAsync(
-            $"hoshi_ttu_export_{Timestamp()}",
+            $"niratan_ttu_export_{Timestamp()}",
             ResourceStringHelper.GetString("BackupTtuFileType", "TTU backup"),
             ".zip");
         if (path == null)
@@ -101,15 +101,15 @@ public partial class BackupSettingsPageViewModel : ObservableObject
             });
     }
 
-    private async Task BackupHoshiAsync(HoshiBackupTarget target)
+    private async Task BackupNiratanAsync(NiratanBackupTarget target)
     {
         if (IsBusy)
             return;
-        var collectionName = target == HoshiBackupTarget.Books ? "Books" : "Dictionaries";
+        var collectionName = target == NiratanBackupTarget.Books ? "Books" : "Dictionaries";
         var path = await _dialogService.SaveFilePickerAsync(
             $"{collectionName}_{Timestamp()}",
-            ResourceStringHelper.GetString("BackupHoshiFileType", "Niratan backup"),
-            ".hoshi");
+            ResourceStringHelper.GetString("BackupNiratanFileType", "Niratan backup"),
+            ".niratan");
         if (path == null)
             return;
 
@@ -117,18 +117,18 @@ public partial class BackupSettingsPageViewModel : ObservableObject
             ResourceStringHelper.GetString("BackupStatusArchiving", "Archiving..."),
             async () =>
             {
-                await _backupService.CreateHoshiBackupAsync(target, path);
+                await _backupService.CreateNiratanBackupAsync(target, path);
                 _notifications.ShowSuccess(
                     ResourceStringHelper.GetString("BackupCreatedMessage", "Backup created."),
                     ResourceStringHelper.GetString("BackupCompletedTitle", "Backup complete"));
             });
     }
 
-    private async Task RestoreHoshiAsync(HoshiBackupTarget target)
+    private async Task RestoreNiratanAsync(NiratanBackupTarget target)
     {
         if (IsBusy)
             return;
-        var path = await _dialogService.OpenFilePickerAsync(".hoshi");
+        var path = await _dialogService.OpenFilePickerAsync(".niratan", ".hoshi");
         if (path == null)
             return;
 
@@ -136,7 +136,7 @@ public partial class BackupSettingsPageViewModel : ObservableObject
             ResourceStringHelper.GetString("BackupStatusRestoring", "Restoring..."),
             async () =>
             {
-                await _backupService.RestoreHoshiBackupAsync(target, path);
+                await _backupService.RestoreNiratanBackupAsync(target, path);
                 _notifications.ShowSuccess(
                     ResourceStringHelper.GetString("BackupRestoredMessage", "Backup restored."),
                     ResourceStringHelper.GetString("BackupRestoreCompletedTitle", "Restore complete"));

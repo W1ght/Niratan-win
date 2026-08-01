@@ -67,6 +67,24 @@ public partial class SettingsPageViewModel : ObservableObject
     public partial JapaneseFontOption SelectedReaderFont { get; set; } = null!;
 
     [ObservableProperty]
+    public partial int FontWeight { get; set; }
+
+    public double FontWeightValue
+    {
+        get => FontWeight;
+        set
+        {
+            if (!double.IsFinite(value))
+                return;
+
+            FontWeight = Math.Clamp(
+                (int)Math.Round(value / 100d, MidpointRounding.AwayFromZero) * 100,
+                100,
+                900);
+        }
+    }
+
+    [ObservableProperty]
     public partial int FontSize { get; set; }
 
     [ObservableProperty]
@@ -298,6 +316,7 @@ public partial class SettingsPageViewModel : ObservableObject
                                  && string.Equals(font.ImportedFileName, s.SelectedFontFileName, StringComparison.Ordinal))
                              ?? JapaneseFontCatalog.FindByReaderCssValue(s.SelectedFont)
                              ?? AvailableReaderFonts[0];
+        FontWeight = s.NormalizedFontWeight;
         FontSize = s.FontSize;
         HideFurigana = s.HideFurigana;
 
@@ -391,6 +410,11 @@ public partial class SettingsPageViewModel : ObservableObject
         ApplyReaderSetting(s => s.SelectedFontFileName, value.ImportedFileName);
         OnPropertyChanged(nameof(CanDeleteSelectedReaderFont));
         OnPropertyChanged(nameof(ReaderFontDeleteConfirmationMessage));
+    }
+    partial void OnFontWeightChanged(int value)
+    {
+        OnPropertyChanged(nameof(FontWeightValue));
+        ApplyReaderSetting(s => s.FontWeight, Math.Clamp(value, 100, 900));
     }
     partial void OnFontSizeChanged(int value) => ApplyReaderSetting(s => s.FontSize, value);
     partial void OnHideFuriganaChanged(bool value) => ApplyReaderSetting(s => s.HideFurigana, value);

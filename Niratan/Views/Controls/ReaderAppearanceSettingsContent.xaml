@@ -160,6 +160,21 @@
                         </Button>
                     </StackPanel>
                 </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="ReaderFontWeightCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Description="Adjust the reader text weight"
+                                      Header="Font Weight"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE8D2;}">
+                    <NumberBox Width="160"
+                               AutomationProperties.AutomationId="ReaderFontWeightNumberBox"
+                               Minimum="100"
+                               Maximum="900"
+                               SmallChange="100"
+                               LargeChange="200"
+                               SpinButtonPlacementMode="Compact"
+                               Value="{x:Bind ViewModel.FontWeightValue, Mode=TwoWay}" />
+                </toolkit:SettingsCard>
                 <toolkit:SettingsCard x:Uid="ReaderFontSizeCard"
                                       HorizontalAlignment="Stretch"
                                       HorizontalContentAlignment="Stretch"

@@ -26,11 +26,19 @@ public sealed class BackupService : IBackupService
     private const int MaximumArchiveEntries = 250_000;
     private const long MaximumExtractedBytes = 512L * 1024 * 1024 * 1024;
     private const long ReservedFreeSpaceBytes = 512L * 1024 * 1024;
-    internal const string ProfileMetadataDirectoryName = ".hoshi-profiles";
+    internal const string ProfileMetadataDirectoryName = ".niratan-profiles";
+    internal const string LegacyProfileMetadataDirectoryName = ".hoshi-profiles";
     private const string ProfilesIndexFileName = "profiles.json";
     private const string DictionarySettingsFileName = "dictionary-settings.json";
     private const string DictionaryConfigDirectoryName = "dictionaries";
     private const string DictionaryConfigFileName = "dictionary-config.json";
+
+    private static readonly HashSet<string> ProfileMetadataDirectoryNames = new(
+        StringComparer.Ordinal)
+    {
+        ProfileMetadataDirectoryName,
+        LegacyProfileMetadataDirectoryName,
+    };
 
     private static readonly JsonSerializerOptions ProfileJsonOptions = new()
     {
@@ -101,17 +109,17 @@ public sealed class BackupService : IBackupService
         _ttuConverter = ttuConverter;
     }
 
-    public async Task CreateHoshiBackupAsync(
-        HoshiBackupTarget target,
+    public async Task CreateNiratanBackupAsync(
+        NiratanBackupTarget target,
         string destinationPath,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationPath);
-        var source = target == HoshiBackupTarget.Books ? _booksRoot : _dictionaryRoot;
+        var source = target == NiratanBackupTarget.Books ? _booksRoot : _dictionaryRoot;
         if (!Directory.Exists(source))
             throw new DirectoryNotFoundException($"The {target.ToString().ToLowerInvariant()} collection does not exist.");
 
-        var staging = target == HoshiBackupTarget.Dictionaries
+        var staging = target == NiratanBackupTarget.Dictionaries
             ? CreateTemporaryDirectory("niratan-dictionary-backup")
             : null;
         try
@@ -133,8 +141,8 @@ public sealed class BackupService : IBackupService
         }
     }
 
-    public async Task RestoreHoshiBackupAsync(
-        HoshiBackupTarget target,
+    public async Task RestoreNiratanBackupAsync(
+        NiratanBackupTarget target,
         string archivePath,
         CancellationToken ct = default)
     {
@@ -150,7 +158,7 @@ public sealed class BackupService : IBackupService
                 ct).ConfigureAwait(false);
             var payload = ResolvePayloadRoot(extracted, target);
 
-            if (target == HoshiBackupTarget.Books)
+            if (target == NiratanBackupTarget.Books)
             {
                 await Task.Run(
                     () => ReplaceDirectoryAtomically(payload, _booksRoot, excludedName: null, ct),
@@ -373,7 +381,9 @@ public sealed class BackupService : IBackupService
 
     private async Task CreateDictionaryStagingAsync(string staging, CancellationToken ct)
     {
-        await Task.Run(() => CopyDirectoryContents(_dictionaryRoot, staging, excludedName: ProfileMetadataDirectoryName, ct), ct)
+        await Task.Run(
+                () => CopyDirectoryContents(_dictionaryRoot, staging, ProfileMetadataDirectoryNames, ct),
+                ct)
             .ConfigureAwait(false);
 
         var indexPath = Path.Combine(_profilesRoot, ProfilesIndexFileName);
@@ -421,7 +431,7 @@ public sealed class BackupService : IBackupService
         var profilesCommitted = false;
         try
         {
-            CopyDirectoryContents(payload, replacement, ProfileMetadataDirectoryName, ct);
+            CopyDirectoryContents(payload, replacement, ProfileMetadataDirectoryNames, ct);
             await PrepareMergedProfilesAsync(payload, profilesReplacement, ct).ConfigureAwait(false);
             if (_dictionaryLookup != null)
                 await _dictionaryLookup.SuspendForCollectionReplacementAsync().ConfigureAwait(false);
@@ -478,7 +488,7 @@ public sealed class BackupService : IBackupService
     {
         TryDeleteDirectory(prepared);
         if (Directory.Exists(_profilesRoot))
-            CopyDirectoryContents(_profilesRoot, prepared, excludedName: null, ct);
+            CopyDirectoryContents(_profilesRoot, prepared, excludedNames: null, ct);
         else
             Directory.CreateDirectory(prepared);
 
@@ -486,7 +496,7 @@ public sealed class BackupService : IBackupService
         var current = File.Exists(currentIndexPath)
             ? await ReadProfileIndexAsync(currentIndexPath, ct).ConfigureAwait(false)
             : ProfileIndex.CreateDefault();
-        var metadataRoot = Path.Combine(payload, ProfileMetadataDirectoryName);
+        var metadataRoot = ResolveProfileMetadataRoot(payload);
         var importedIndexPath = Path.Combine(metadataRoot, ProfilesIndexFileName);
         if (File.Exists(importedIndexPath))
         {
@@ -539,7 +549,7 @@ public sealed class BackupService : IBackupService
     private static void ValidateDictionaryPayload(string root)
     {
         var hasPayload = File.Exists(Path.Combine(root, DictionaryConfigFileName))
-            || Directory.Exists(Path.Combine(root, ProfileMetadataDirectoryName));
+            || ProfileMetadataDirectoryNames.Any(name => Directory.Exists(Path.Combine(root, name)));
         foreach (var type in new[] { "Term", "Frequency", "Pitch" })
         {
             var typeRoot = Path.Combine(root, type);
@@ -568,23 +578,39 @@ public sealed class BackupService : IBackupService
             throw new InvalidDataException("The backup does not contain a dictionary collection.");
     }
 
-    private static string ResolvePayloadRoot(string extracted, HoshiBackupTarget target)
+    private static string ResolvePayloadRoot(string extracted, NiratanBackupTarget target)
     {
         var entries = Directory.EnumerateFileSystemEntries(extracted).ToList();
-        if (target == HoshiBackupTarget.Dictionaries && LooksLikeDictionaryPayload(extracted))
+        if (target == NiratanBackupTarget.Dictionaries && LooksLikeDictionaryPayload(extracted))
             return extracted;
-        if (target == HoshiBackupTarget.Books && LooksLikeBooksPayload(extracted))
+        if (target == NiratanBackupTarget.Books && LooksLikeBooksPayload(extracted))
             return extracted;
         if (entries.Count == 1 && Directory.Exists(entries[0]))
             return entries[0];
-        if (target == HoshiBackupTarget.Books)
+        if (target == NiratanBackupTarget.Books)
             return extracted;
         throw new InvalidDataException("The backup does not contain a dictionary collection.");
     }
 
     private static bool LooksLikeDictionaryPayload(string root) =>
-        new[] { "Term", "Frequency", "Pitch", DictionaryConfigFileName, ProfileMetadataDirectoryName }
+        new[]
+        {
+            "Term",
+            "Frequency",
+            "Pitch",
+            DictionaryConfigFileName,
+            ProfileMetadataDirectoryName,
+            LegacyProfileMetadataDirectoryName,
+        }
             .Any(name => Directory.Exists(Path.Combine(root, name)) || File.Exists(Path.Combine(root, name)));
+
+    private static string ResolveProfileMetadataRoot(string payload)
+    {
+        var current = Path.Combine(payload, ProfileMetadataDirectoryName);
+        return Directory.Exists(current)
+            ? current
+            : Path.Combine(payload, LegacyProfileMetadataDirectoryName);
+    }
 
     private static bool LooksLikeBooksPayload(string root) =>
         File.Exists(Path.Combine(root, "book_order.json"))
@@ -675,7 +701,13 @@ public sealed class BackupService : IBackupService
         var previous = GetPreviousPath(destination);
         try
         {
-            CopyDirectoryContents(payload, replacement, excludedName, ct);
+            CopyDirectoryContents(
+                payload,
+                replacement,
+                excludedName is null
+                    ? null
+                    : new HashSet<string>(StringComparer.Ordinal) { excludedName },
+                ct);
             ReplacePreparedDirectory(replacement, destination, previous);
             TryDeleteDirectory(previous);
         }
@@ -721,7 +753,7 @@ public sealed class BackupService : IBackupService
     private static void CopyDirectoryContents(
         string source,
         string destination,
-        string? excludedName,
+        IReadOnlySet<string>? excludedNames,
         CancellationToken ct)
     {
         Directory.CreateDirectory(destination);
@@ -729,7 +761,7 @@ public sealed class BackupService : IBackupService
         {
             ct.ThrowIfCancellationRequested();
             var relative = Path.GetRelativePath(source, directory);
-            if (IsExcluded(relative, excludedName))
+            if (IsExcluded(relative, excludedNames))
                 continue;
             Directory.CreateDirectory(Path.Combine(destination, relative));
         }
@@ -737,7 +769,7 @@ public sealed class BackupService : IBackupService
         {
             ct.ThrowIfCancellationRequested();
             var relative = Path.GetRelativePath(source, file);
-            if (IsExcluded(relative, excludedName))
+            if (IsExcluded(relative, excludedNames))
                 continue;
             var output = Path.Combine(destination, relative);
             Directory.CreateDirectory(Path.GetDirectoryName(output)!);
@@ -745,10 +777,12 @@ public sealed class BackupService : IBackupService
         }
     }
 
-    private static bool IsExcluded(string relativePath, string? excludedName) =>
-        excludedName != null
-        && relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0]
-            .Equals(excludedName, StringComparison.Ordinal);
+    private static bool IsExcluded(
+        string relativePath,
+        IReadOnlySet<string>? excludedNames) =>
+        excludedNames?.Contains(
+            relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0])
+        == true;
 
     private static async Task<ProfileIndex> ReadProfileIndexAsync(string path, CancellationToken ct)
     {

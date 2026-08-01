@@ -73,4 +73,20 @@ public sealed class NovelReaderContentStylesTests
         css.Should().Contain("@font-face");
         css.Should().Contain("https://niratan-reader-fonts.local/book.otf");
     }
+
+    [Fact]
+    public void GenerateCss_OverridesPublisherFontsAndAppliesReaderFontWeight()
+    {
+        var css = NovelReaderContentStyles.GenerateCss(
+            new ReaderSettings
+            {
+                SelectedFont = "'Yu Gothic', sans-serif",
+                FontWeight = 650,
+            },
+            ThemeMode.Light);
+
+        css.Should().Contain("body, body *");
+        css.Should().Contain("font-family: 'Yu Gothic', sans-serif !important;");
+        css.Should().Contain("font-weight: 650 !important;");
+    }
 }

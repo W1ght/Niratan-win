@@ -11,6 +11,21 @@ public sealed class ReaderSettingsTests
         var settings = new ReaderSettings();
 
         settings.SelectedFont.Should().Be("'Klee One', 'Yu Mincho', serif");
+        settings.FontWeight.Should().Be(400);
+        settings.NormalizedFontWeight.Should().Be(400);
+    }
+
+    [Theory]
+    [InlineData(-1, 100)]
+    [InlineData(100, 100)]
+    [InlineData(450, 450)]
+    [InlineData(900, 900)]
+    [InlineData(1000, 900)]
+    public void FontWeight_IsNormalizedForReaderCss(int value, int expected)
+    {
+        var settings = new ReaderSettings { FontWeight = value };
+
+        settings.NormalizedFontWeight.Should().Be(expected);
     }
 
     [Fact]

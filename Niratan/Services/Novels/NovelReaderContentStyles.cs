@@ -73,10 +73,19 @@ public static class NovelReaderContentStyles
             sb.Append('\n');
         }
 
-        // Body: font, size, writing mode, column layout, padding
+        // EPUB styles commonly set font-family on descendants, so the reader choice
+        // must override the complete chapter tree rather than relying on inheritance.
+        sb.Append(Css($$"""
+            body, body * {
+                font-family: {{settings.SelectedFont}} !important;
+            }
+            """));
+        sb.Append('\n');
+
+        // Body: weight, size, writing mode, column layout, padding
         sb.Append(Css($$"""
             body {
-                font-family: {{settings.SelectedFont}} !important;
+                font-weight: {{settings.NormalizedFontWeight}} !important;
                 font-size: {{settings.FontSize}}px !important;
                 -webkit-text-size-adjust: none !important;
                 box-sizing: border-box !important;
