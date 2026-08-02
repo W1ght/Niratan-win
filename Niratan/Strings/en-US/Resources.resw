@@ -412,6 +412,10 @@
   <data name="VideoPlayerPreviousSubtitleButton.Label" xml:space="preserve"><value>Previous</value></data>
   <data name="VideoPlayerNextSubtitleButton.AutomationProperties.Name" xml:space="preserve"><value>Next subtitle</value></data>
   <data name="VideoPlayerNextSubtitleButton.Label" xml:space="preserve"><value>Next</value></data>
+  <data name="VideoPlayerPreviousEpisodeButton.AutomationProperties.Name" xml:space="preserve"><value>Previous episode</value></data>
+  <data name="VideoPlayerPreviousEpisodeButton.Label" xml:space="preserve"><value>Previous episode</value></data>
+  <data name="VideoPlayerNextEpisodeButton.AutomationProperties.Name" xml:space="preserve"><value>Next episode</value></data>
+  <data name="VideoPlayerNextEpisodeButton.Label" xml:space="preserve"><value>Next episode</value></data>
   <data name="VideoPlayerProgressSlider.AutomationProperties.Name" xml:space="preserve"><value>Playback position</value></data>
   <data name="VideoPlayerVolumeSlider.AutomationProperties.Name" xml:space="preserve"><value>Volume</value></data>
   <data name="VideoPlayerInspectorButton.AutomationProperties.Name" xml:space="preserve"><value>Inspector</value></data>
@@ -1564,4 +1568,137 @@
   <data name="MangaRemoteDetailsAddedLibraryStatus" xml:space="preserve"><value>Added to the manga library.</value></data>
   <data name="MangaRemoteDetailsRemovedLibraryStatus" xml:space="preserve"><value>Removed from the manga library.</value></data>
   <data name="MangaRemoteDetailsReadChapterStatus" xml:space="preserve"><value>Read</value></data>
+  <data name="VideoMetadataSectionHeader.Text" xml:space="preserve"><value>Library metadata</value></data>
+  <data name="VideoMetadataPrivacyCard.Header" xml:space="preserve"><value>Online metadata privacy</value></data>
+  <data name="VideoMetadataPrivacyCard.Description" xml:space="preserve"><value>Allow Niratan to send only parsed titles, years, episode numbers, and external IDs. Videos, subtitles, NFO contents, and local paths are never uploaded.</value></data>
+  <data name="VideoMetadataPrivacyToggle.Header" xml:space="preserve"><value>Enable online metadata queries</value></data>
+  <data name="VideoMetadataProvidersCard.Header" xml:space="preserve"><value>Metadata providers</value></data>
+  <data name="VideoMetadataProvidersCard.Description" xml:space="preserve"><value>Local NFO and artwork always remain read-only. Provider failures never clear existing metadata.</value></data>
+  <data name="VideoMetadataTmdbToggle.Header" xml:space="preserve"><value>TMDB — movies, drama, and mainstream anime</value></data>
+  <data name="VideoMetadataTvMazeToggle.Header" xml:space="preserve"><value>TVmaze — television fallback (CC BY-SA)</value></data>
+  <data name="VideoMetadataAniListToggle.Header" xml:space="preserve"><value>AniList — anime identities, aliases, and tags</value></data>
+  <data name="VideoMetadataAniDbToggle.Header" xml:space="preserve"><value>AniDB — weekly official title index</value></data>
+  <data name="VideoMetadataBangumiToggle.Header" xml:space="preserve"><value>Bangumi — anime and Japanese drama supplement</value></data>
+  <data name="VideoMetadataTvDbDisabledText.Text" xml:space="preserve"><value>TheTVDB: waiting for an approved Niratan project license</value></data>
+  <data name="VideoMetadataTmdbCredentialCard.Header" xml:space="preserve"><value>TMDB credential</value></data>
+  <data name="VideoMetadataTmdbCredentialCard.Description" xml:space="preserve"><value>Stored only in Windows Credential Manager. This product uses the TMDB API but is not endorsed or certified by TMDB.</value></data>
+  <data name="VideoMetadataTmdbTokenBox.PlaceholderText" xml:space="preserve"><value>TMDB v4 Read Token</value></data>
+  <data name="VideoMetadataSaveTmdbTokenButton.Content" xml:space="preserve"><value>Save token</value></data>
+  <data name="VideoMetadataClearTmdbTokenButton.Content" xml:space="preserve"><value>Clear</value></data>
+  <data name="VideoMetadataTmdbAttributionLink.Content" xml:space="preserve"><value>TMDB source</value></data>
+  <data name="VideoMetadataBangumiCredentialCard.Header" xml:space="preserve"><value>Bangumi credential</value></data>
+  <data name="VideoMetadataBangumiCredentialCard.Description" xml:space="preserve"><value>An optional token stored only in Windows Credential Manager.</value></data>
+  <data name="VideoMetadataBangumiTokenBox.PlaceholderText" xml:space="preserve"><value>Optional Bangumi token</value></data>
+  <data name="VideoMetadataSaveBangumiTokenButton.Content" xml:space="preserve"><value>Save token</value></data>
+  <data name="VideoMetadataClearBangumiTokenButton.Content" xml:space="preserve"><value>Clear</value></data>
+  <data name="VideoMetadataProviderTermsLink.Content" xml:space="preserve"><value>Provider terms</value></data>
+  <data name="VideoMetadataCredentialConfigured" xml:space="preserve"><value>Configured</value></data>
+  <data name="VideoMetadataCredentialMissing" xml:space="preserve"><value>Not configured</value></data>
+  <data name="VideoMetadataCredentialOptional" xml:space="preserve"><value>Optional</value></data>
+  <data name="VideoLibraryHomeNavItem.Content" xml:space="preserve"><value>Home</value></data>
+  <data name="VideoLibraryMoviesNavItem.Content" xml:space="preserve"><value>Movies</value></data>
+  <data name="VideoLibraryAnimeNavItem.Content" xml:space="preserve"><value>Anime</value></data>
+  <data name="VideoLibraryUnorganizedNavItem.Content" xml:space="preserve"><value>Unorganized</value></data>
+  <data name="VideoLibrarySourcesNavItem.Content" xml:space="preserve"><value>Sources</value></data>
+  <data name="VideoLibraryViewHome" xml:space="preserve"><value>Home</value></data>
+  <data name="VideoLibraryViewMovies" xml:space="preserve"><value>Movies</value></data>
+  <data name="VideoLibraryViewAnime" xml:space="preserve"><value>Anime</value></data>
+  <data name="VideoLibraryViewUnorganized" xml:space="preserve"><value>Unorganized</value></data>
+  <data name="VideoLibraryViewSources" xml:space="preserve"><value>Sources</value></data>
+  <data name="VideoMetadataExternalIdsLabel.Text" xml:space="preserve"><value>External IDs</value></data>
+  <data name="VideoMetadataRefreshSelectedButton.Content" xml:space="preserve"><value>Refresh metadata</value></data>
+  <data name="VideoMetadataReviewCandidatesLabel.Text" xml:space="preserve"><value>Match candidates</value></data>
+  <data name="VideoMetadataBindCandidateButton.Content" xml:space="preserve"><value>Preview and bind</value></data>
+  <data name="VideoMetadataConsentDialogTitle" xml:space="preserve"><value>Enable online metadata?</value></data>
+  <data name="VideoMetadataConsentDialogMessage" xml:space="preserve"><value>Niratan sends only the parsed title, year, episode numbers and external IDs. It never uploads video, subtitle, NFO content or local paths.</value></data>
+  <data name="VideoMetadataConsentDialogAccept" xml:space="preserve"><value>Enable</value></data>
+  <data name="VideoMetadataConsentDialogCancel" xml:space="preserve"><value>Not now</value></data>
+  <data name="VideoMetadataRematchPreviewTitle" xml:space="preserve"><value>Confirm rematch</value></data>
+  <data name="VideoMetadataRematchConfirm" xml:space="preserve"><value>Bind and lock</value></data>
+  <data name="VideoMetadataRematchCancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="VideoLibrarySaveSourceSettingsButton.Content" xml:space="preserve"><value>Save</value></data>
+  <data name="VideoLibrarySourceLanguageBox.Header" xml:space="preserve"><value>Language</value></data>
+  <data name="VideoLibrarySourceProviderOrderBox.Header" xml:space="preserve"><value>Provider order</value></data>
+  <data name="VideoLibrarySourceProviderOrderBox.PlaceholderText" xml:space="preserve"><value>local, tmdb, tvmaze</value></data>
+  <data name="VideoLibraryHomeContinueWatchingHeading.Text" xml:space="preserve"><value>Continue watching</value></data>
+  <data name="VideoLibraryHomeNextEpisodeHeading.Text" xml:space="preserve"><value>Next up</value></data>
+  <data name="VideoLibraryHomeRecentlyAddedHeading.Text" xml:space="preserve"><value>Recently added media</value></data>
+  <data name="VideoLibraryInvalidProviderOrderTitle" xml:space="preserve"><value>Invalid provider order</value></data>
+  <data name="VideoLibraryInvalidProviderOrderMessage" xml:space="preserve"><value>Unknown metadata provider: {0}</value></data>
+  <data name="VideoLibrarySourceRegionBox.Header" xml:space="preserve"><value>Region</value></data>
+  <data name="VideoLibrarySourceTypeAuto" xml:space="preserve"><value>Auto</value></data>
+  <data name="VideoLibrarySourceTypeAnime" xml:space="preserve"><value>Anime</value></data>
+  <data name="VideoLibrarySourceTypeDrama" xml:space="preserve"><value>Japanese Drama / TV</value></data>
+  <data name="VideoLibrarySourceTypeMovie" xml:space="preserve"><value>Movie</value></data>
+  <data name="VideoMetadataTmdbNoticeText.Text" xml:space="preserve"><value>This product uses the TMDB API but is not endorsed or certified by TMDB.</value></data>
+  <data name="VideoMetadataTvMazeLink.Content" xml:space="preserve"><value>TVmaze</value></data>
+  <data name="VideoMetadataAniListLink.Content" xml:space="preserve"><value>AniList</value></data>
+  <data name="VideoMetadataAniDbLink.Content" xml:space="preserve"><value>AniDB</value></data>
+  <data name="VideoMetadataBangumiLink.Content" xml:space="preserve"><value>Bangumi</value></data>
+  <data name="VideoMetadataTvDbLink.Content" xml:space="preserve"><value>TheTVDB</value></data>
+  <data name="VideoLibraryFullScanSourceButton.ToolTipService.ToolTip" xml:space="preserve"><value>Full scan</value></data>
+  <data name="VideoLibraryPauseSourceScanButton.ToolTipService.ToolTip" xml:space="preserve"><value>Pause scan</value></data>
+  <data name="VideoLibraryResumeSourceScanButton.ToolTipService.ToolTip" xml:space="preserve"><value>Resume scan</value></data>
+  <data name="VideoLibraryCancelSourceScanButton.ToolTipService.ToolTip" xml:space="preserve"><value>Cancel scan</value></data>
+  <data name="VideoLibraryScanStageEnumerating" xml:space="preserve"><value>Discovering files</value></data>
+  <data name="VideoLibraryScanStageAnalyzing" xml:space="preserve"><value>Reading metadata</value></data>
+  <data name="VideoLibraryScanStageCommitting" xml:space="preserve"><value>Saving catalog</value></data>
+  <data name="VideoLibraryScanStageCompleted" xml:space="preserve"><value>Scan complete</value></data>
+  <data name="VideoLibraryScanRateFormat" xml:space="preserve"><value>{0:0.0} items/s</value></data>
+  <data name="VideoMetadataStageSearching" xml:space="preserve"><value>Searching providers</value></data>
+  <data name="VideoMetadataStageMatching" xml:space="preserve"><value>Matching candidates</value></data>
+  <data name="VideoMetadataStageDetails" xml:space="preserve"><value>Loading details</value></data>
+  <data name="VideoMetadataStageArtwork" xml:space="preserve"><value>Caching artwork</value></data>
+  <data name="VideoMetadataStageCompleted" xml:space="preserve"><value>Metadata refresh complete</value></data>
+  <data name="VideoLibraryManageSourcesButton.Label" xml:space="preserve"><value>Sources</value></data>
+  <data name="VideoLibrarySourcesPrivacyInfo.Title" xml:space="preserve"><value>Online metadata</value></data>
+  <data name="VideoLibrarySourcesPrivacyInfo.Message" xml:space="preserve"><value>Online scraping runs only after privacy consent. Local scanning and NFO discovery remain available.</value></data>
+  <data name="VideoLibraryRemoveSourceButton.ToolTipService.ToolTip" xml:space="preserve"><value>Remove source</value></data>
+  <data name="VideoLibraryRemoveSourceButton.AutomationProperties.Name" xml:space="preserve"><value>Remove source</value></data>
+  <data name="VideoLibrarySourceMediaTypeBox.Header" xml:space="preserve"><value>Media type</value></data>
+  <data name="VideoLibrarySaveSourceSettingsButton.Label" xml:space="preserve"><value>Save settings</value></data>
+  <data name="VideoLibraryRefreshSourceButton.Label" xml:space="preserve"><value>Scan changes</value></data>
+  <data name="VideoLibraryFullScanSourceButton.Label" xml:space="preserve"><value>Full scan</value></data>
+  <data name="VideoLibraryScrapeSourceButton.Label" xml:space="preserve"><value>Scrape metadata</value></data>
+  <data name="VideoLibraryCancelScrapeSourceButton.Label" xml:space="preserve"><value>Cancel scraping</value></data>
+  <data name="VideoLibraryPauseSourceScanButton.Label" xml:space="preserve"><value>Pause scan</value></data>
+  <data name="VideoLibraryResumeSourceScanButton.Label" xml:space="preserve"><value>Resume scan</value></data>
+  <data name="VideoLibraryCancelSourceScanButton.Label" xml:space="preserve"><value>Cancel scan</value></data>
+  <data name="VideoLibraryRevealSourceButton.Label" xml:space="preserve"><value>Open folder</value></data>
+  <data name="VideoMetadataBatchStageQueued" xml:space="preserve"><value>Metadata refresh queued</value></data>
+  <data name="VideoMetadataBatchStageRunning" xml:space="preserve"><value>Scraping metadata in background</value></data>
+  <data name="VideoMetadataBatchStageCompleted" xml:space="preserve"><value>Metadata refresh complete</value></data>
+  <data name="VideoMetadataBatchStageCancelled" xml:space="preserve"><value>Metadata refresh cancelled</value></data>
+  <data name="VideoMetadataBatchStageFailed" xml:space="preserve"><value>Metadata refresh failed</value></data>
+  <data name="VideoMetadataSourceProgressFormat" xml:space="preserve"><value>{0} · {1} / {2} · {3} matched · {4} review</value></data>
+  <data name="VideoMetadataBackgroundProgressFormat" xml:space="preserve"><value>Scraping metadata{0} · {1} / {2} · {3} matched · {4} review</value></data>
+  <data name="VideoLibrarySourceStatusFormat" xml:space="preserve"><value>{0} videos · {1} in progress · {2} missing</value></data>
+  <data name="VideoLibrarySourceLastScannedFormat" xml:space="preserve"><value>Last scanned {0:g}</value></data>
+  <data name="VideoLibrarySourceNeverScanned" xml:space="preserve"><value>Never scanned</value></data>
+  <data name="VideoLibrarySourceDefaultProviderRoute" xml:space="preserve"><value>Default provider route</value></data>
+  <data name="VideoLibraryHomeMyMediaHeading.Text" xml:space="preserve"><value>My media</value></data>
+  <data name="VideoLibraryHomeMoviesTile.Text" xml:space="preserve"><value>Movies</value></data>
+  <data name="VideoLibraryHomeSeriesTile.Text" xml:space="preserve"><value>Series</value></data>
+  <data name="VideoLibraryHomeAnimeTile.Text" xml:space="preserve"><value>Anime</value></data>
+  <data name="VideoLibraryHomeCollectionsTile.Text" xml:space="preserve"><value>Collections</value></data>
+  <data name="VideoLibraryDetailsHeading.Text" xml:space="preserve"><value>Video details</value></data>
+  <data name="VideoLibraryDetailsPlayButton.Content" xml:space="preserve"><value>Play</value></data>
+  <data name="VideoLibraryDetailsPlayFromBeginningButton.Content" xml:space="preserve"><value>Play from beginning</value></data>
+  <data name="VideoLibraryDetailsGenresLabel.Text" xml:space="preserve"><value>Genres</value></data>
+  <data name="VideoLibraryDetailsCastLabel.Text" xml:space="preserve"><value>Cast</value></data>
+  <data name="VideoLibraryDetailsProviderLink.Content" xml:space="preserve"><value>Metadata source</value></data>
+  <data name="VideoLibraryDetailsMediaInfoLabel.Text" xml:space="preserve"><value>Media</value></data>
+  <data name="VideoLibraryBackToSeriesButton.Content" xml:space="preserve"><value>Back to series</value></data>
+  <data name="VideoLibrarySeriesPlayButton.Content" xml:space="preserve"><value>Play</value></data>
+  <data name="VideoLibrarySeriesRefreshButton.Content" xml:space="preserve"><value>Refresh metadata</value></data>
+  <data name="VideoLibrarySeasonsHeading.Text" xml:space="preserve"><value>Seasons</value></data>
+  <data name="VideoLibraryEpisodesHeading.Text" xml:space="preserve"><value>Episodes</value></data>
+  <data name="VideoLibrarySpecialFeaturesHeading.Text" xml:space="preserve"><value>Special features</value></data>
+  <data name="VideoLibrarySeriesEpisodeCountFormat" xml:space="preserve"><value>{0} episodes</value></data>
+  <data name="VideoLibrarySeasonTitleFormat" xml:space="preserve"><value>Season {0}</value></data>
+  <data name="VideoLibrarySpecialsHeading" xml:space="preserve"><value>Specials</value></data>
+  <data name="VideoLibraryAbsoluteOrderHeading" xml:space="preserve"><value>Absolute order</value></data>
+  <data name="VideoLibraryTagsHeading.Text" xml:space="preserve"><value>Tags</value></data>
+  <data name="VideoLibraryStudiosHeading.Text" xml:space="preserve"><value>Studios</value></data>
+  <data name="VideoLibraryMoreLikeThisHeading.Text" xml:space="preserve"><value>More like this</value></data>
 </root>

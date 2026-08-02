@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Text.Json.Serialization;
 
@@ -141,10 +142,20 @@ public sealed record VideoMiningMediaSource(
         new(stream.Url, stream.HttpHeaders, true);
 }
 
+public sealed record VideoLibraryPlaybackQueueEntry(
+    string IdentityKey,
+    Guid? CatalogAssetId,
+    Guid? CatalogNodeId);
+
+public sealed record VideoLibraryPlaybackContext(
+    ImmutableArray<VideoLibraryPlaybackQueueEntry> Queue,
+    int CurrentIndex);
+
 public sealed record VideoPlaybackLaunchRequest(
     VideoItem Video,
     IReadOnlyList<VideoItem> Playlist,
-    ResolvedRemoteVideoSource? ResolvedRemoteSource = null);
+    ResolvedRemoteVideoSource? ResolvedRemoteSource = null,
+    VideoLibraryPlaybackContext? LibraryContext = null);
 
 public sealed class VideoMediaLoadedEventArgs : EventArgs;
 

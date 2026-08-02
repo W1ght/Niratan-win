@@ -81,6 +81,9 @@ public static class AppDataHelper
     public static string GetGoogleDriveCoverCachePath() =>
         EnsureDirectory(Path.Combine(GetAppDataPath(), "Cache", "GoogleDriveCovers"));
 
+    public static string GetVideoMetadataArtworkCachePath() =>
+        EnsureDirectory(Path.Combine(GetAppDataPath(), "Cache", "VideoMetadataArtwork"));
+
     public static string GetNovelBookPath(string bookId) =>
         EnsureDirectory(Path.Combine(GetNovelBooksPath(), bookId));
 

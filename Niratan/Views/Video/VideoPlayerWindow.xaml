@@ -177,6 +177,14 @@
                                         Spacing="2"
                                         HorizontalAlignment="Center"
                                         VerticalAlignment="Center">
+                                <AppBarButton x:Name="PreviousEpisodeButton"
+                                              x:Uid="VideoPlayerPreviousEpisodeButton"
+                                              AutomationProperties.AutomationId="VideoPlayerPreviousEpisodeButton"
+                                              Style="{StaticResource VideoTransportButtonStyle}"
+                                              Click="PreviousEpisodeButton_Click"
+                                              Label="Previous episode">
+                                    <AppBarButton.Icon><FontIcon Glyph="&#xE892;" /></AppBarButton.Icon>
+                                </AppBarButton>
                                 <AppBarButton x:Name="PreviousSubtitleButton"
                                               x:Uid="VideoPlayerPreviousSubtitleButton"
                                               AutomationProperties.AutomationId="VideoPlayerPreviousSubtitleButton"
@@ -230,6 +238,14 @@
                                     <AppBarButton.Icon>
                                         <FontIcon Glyph="&#xE76C;" />
                                     </AppBarButton.Icon>
+                                </AppBarButton>
+                                <AppBarButton x:Name="NextEpisodeButton"
+                                              x:Uid="VideoPlayerNextEpisodeButton"
+                                              AutomationProperties.AutomationId="VideoPlayerNextEpisodeButton"
+                                              Style="{StaticResource VideoTransportButtonStyle}"
+                                              Click="NextEpisodeButton_Click"
+                                              Label="Next episode">
+                                    <AppBarButton.Icon><FontIcon Glyph="&#xE893;" /></AppBarButton.Icon>
                                 </AppBarButton>
                             </StackPanel>
 

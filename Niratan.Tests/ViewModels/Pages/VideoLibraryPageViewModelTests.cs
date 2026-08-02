@@ -13,6 +13,33 @@ namespace Niratan.Tests.ViewModels.Pages;
 public class VideoLibraryPageViewModelTests
 {
     [Fact]
+    public void ContinueWatching_ShowsOnlyMostRecentlyPlayedEpisodePerSeries()
+    {
+        var seriesId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        var episode1 = new VideoItem
+        {
+            Id = "episode-1", CatalogSeriesNodeId = seriesId, IsAvailable = true,
+            DurationSeconds = 1_200, LastPositionSeconds = 120, LastOpenedAt = now.AddMinutes(-10),
+        };
+        var episode3 = new VideoItem
+        {
+            Id = "episode-3", CatalogSeriesNodeId = seriesId, IsAvailable = true,
+            DurationSeconds = 1_200, LastPositionSeconds = 300, LastOpenedAt = now,
+        };
+        var movie = new VideoItem
+        {
+            Id = "movie", IsAvailable = true, DurationSeconds = 7_200,
+            LastPositionSeconds = 900, LastOpenedAt = now.AddMinutes(-5),
+        };
+
+        var result = VideoLibraryPageViewModel.BuildContinueWatchingItems(
+            [episode1, movie, episode3], 6);
+
+        result.Select(video => video.Id).Should().Equal("episode-3", "movie");
+    }
+
+    [Fact]
     public async Task InitializeAsync_LoadsVideos()
     {
         var service = new RecordingVideoLibraryService

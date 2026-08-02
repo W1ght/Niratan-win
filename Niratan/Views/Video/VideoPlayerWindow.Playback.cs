@@ -127,6 +127,16 @@ public sealed partial class VideoPlayerWindow
         await SeekToSubtitleAsync(ViewModel.GetNextSubtitleStart());
     }
 
+    private async void PreviousEpisodeButton_Click(object sender, RoutedEventArgs e)
+    {
+        await OpenAdjacentEpisodeAsync(-1);
+    }
+
+    private async void NextEpisodeButton_Click(object sender, RoutedEventArgs e)
+    {
+        await OpenAdjacentEpisodeAsync(1);
+    }
+
     private async void FullScreenButton_Click(object sender, RoutedEventArgs e)
     {
         ToggleFullScreen();

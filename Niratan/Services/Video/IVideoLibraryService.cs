@@ -48,6 +48,9 @@ public interface IVideoLibraryService
     Task<Result> RemoveSourceAsync(string sourceId, CancellationToken ct = default) =>
         Task.FromResult(Result.Success());
 
+    Task<Result> UpdateSourceSettingsAsync(VideoLibrarySource source, CancellationToken ct = default) =>
+        Task.FromResult(Result.Success());
+
     Task<Result<int>> RemoveMissingVideosAsync(CancellationToken ct = default) =>
         Task.FromResult(Result<int>.Success(0));
 

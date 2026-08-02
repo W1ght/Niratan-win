@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging.Abstractions;
 using FluentAssertions;
 using Niratan.Models;
 using Niratan.Models.Video;
@@ -47,8 +49,9 @@ public sealed class VideoDataServiceTests
                     Codec: "aac")),
             ct);
 
-        File.Exists(catalogPath).Should().BeTrue();
+        File.Exists(catalogPath).Should().BeFalse();
         File.Exists(historyPath).Should().BeTrue();
+        File.Exists(Path.ChangeExtension(catalogPath, ".sqlite3")).Should().BeTrue();
         File.Exists(Path.Combine(temp.Path, "niratan.db")).Should().BeFalse();
 
         var reloaded = new VideoDataService(catalogPath, historyPath);
@@ -64,7 +67,7 @@ public sealed class VideoDataServiceTests
     }
 
     [Fact]
-    public async Task VideoDataService_WritesNiratanCatalogShapeAndMacAbsoluteDates()
+    public async Task VideoDataService_WritesSQLiteCatalogAndSourceConfiguration()
     {
         var ct = TestContext.Current.CancellationToken;
         using var temp = new TempDirectory();
@@ -78,21 +81,25 @@ public sealed class VideoDataServiceTests
             FolderPath = sourcePath,
             CreatedAt = new DateTime(2026, 7, 28, 0, 0, 0, DateTimeKind.Utc),
             LastScannedAt = new DateTime(2026, 7, 28, 1, 0, 0, DateTimeKind.Utc),
+            MediaType = VideoLibraryMediaType.Anime,
+            Language = "ja-JP",
+            Region = "JP",
+            ProviderOrder = ["anilist", "anidb", "bangumi", "tmdb"],
         };
 
         var service = new VideoDataService(catalogPath, historyPath);
         await service.UpsertVideoLibrarySourceAsync(source, ct);
 
-        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(catalogPath, ct));
-        var root = document.RootElement;
-        var storedSource = root.GetProperty("sources")[0];
-        storedSource.GetProperty("path").GetString().Should().Be(Path.GetFullPath(sourcePath));
-        storedSource.GetProperty("bookmark").GetString().Should().Be("");
-        storedSource.GetProperty("createdAt").ValueKind.Should().Be(JsonValueKind.Number);
-        root.TryGetProperty("items", out _).Should().BeTrue();
-        root.TryGetProperty("remoteItems", out _).Should().BeTrue();
-        root.TryGetProperty("itemMetadataByPath", out _).Should().BeTrue();
-        root.TryGetProperty("collections", out _).Should().BeTrue();
+        var databasePath = Path.ChangeExtension(catalogPath, ".sqlite3");
+        await using var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");
+        await connection.OpenAsync(ct);
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT folder_path || '|' || media_type || '|' || language || '|' || region FROM library_sources;";
+        (await command.ExecuteScalarAsync(ct)).Should().Be($"{Path.GetFullPath(sourcePath)}|anime|ja-JP|JP");
+        command.CommandText = "SELECT group_concat(provider_id, ',') FROM source_provider_routes ORDER BY ordinal;";
+        (await command.ExecuteScalarAsync(ct)).Should().Be("anilist,anidb,bangumi,tmdb");
+        command.CommandText = "PRAGMA user_version;";
+        (await command.ExecuteScalarAsync(ct)).Should().Be(1L);
     }
 
     [Fact]
@@ -125,15 +132,11 @@ public sealed class VideoDataServiceTests
         var stored = (await reloaded.GetVideoCollectionsAsync(ct)).Single();
         stored.ItemIds.Should().Equal(Path.GetFullPath(videoPath));
 
-        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(catalogPath, ct));
-        document.RootElement.GetProperty("collections")[0]
-            .GetProperty("itemPaths")[0]
-            .GetString()
-            .Should().Be(Path.GetFullPath(videoPath));
+        File.Exists(catalogPath).Should().BeFalse();
     }
 
     [Fact]
-    public async Task RemovingSource_RemovesCatalogItemButPreservesPlaybackHistory()
+    public async Task RemovingSource_MarksCatalogItemUnavailableAndPreservesPlaybackHistory()
     {
         var ct = TestContext.Current.CancellationToken;
         using var temp = new TempDirectory();
@@ -165,7 +168,9 @@ public sealed class VideoDataServiceTests
             ct);
 
         await service.DeleteVideoLibrarySourceAsync(source.Id, ct);
-        (await service.GetVideoAsync(videoPath, ct)).Should().BeNull();
+        var unavailable = await service.GetVideoAsync(videoPath, ct);
+        unavailable.Should().NotBeNull();
+        unavailable!.IsAvailable.Should().BeFalse();
 
         using var history = JsonDocument.Parse(await File.ReadAllTextAsync(historyPath, ct));
         history.RootElement.GetProperty("playbackStates")
@@ -273,8 +278,15 @@ public sealed class VideoDataServiceTests
         await File.WriteAllTextAsync(catalogPath, invalid, ct);
         var service = new VideoDataService(catalogPath, historyPath);
 
-        var action = () => service.GetVideosAsync(ct: ct);
-        await action.Should().ThrowAsync<InvalidDataException>();
+        var databasePath = Path.ChangeExtension(catalogPath, ".sqlite3");
+        await using var repository = new SQLiteVideoCatalogRepository(
+            databasePath,
+            catalogPath,
+            logger: NullLogger<SQLiteVideoCatalogRepository>.Instance);
+        var initialized = await repository.InitializeAsync(ct);
+        initialized.Mode.Should().Be(VideoCatalogMode.LegacyReadOnly);
+        initialized.MigrationError.Should().NotBeNullOrWhiteSpace();
+        File.Exists(databasePath).Should().BeFalse();
         (await File.ReadAllTextAsync(catalogPath, ct)).Should().Be(invalid);
     }
 }

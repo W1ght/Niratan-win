@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Niratan.Helpers;
 using Niratan.Models.Settings;
 using Niratan.Services.Settings;
+using Niratan.Services.Video;
 
 namespace Niratan.ViewModels.Pages;
 
@@ -14,6 +15,7 @@ public sealed record VideoSubtitleMaskModeOption(VideoSubtitleMaskMode Mode, str
 public partial class VideoSettingsPageViewModel : ObservableObject
 {
     private readonly ISettingsService _settingsService;
+    private readonly IVideoMetadataCredentialStore? _credentialStore;
     private bool _isInitializing = true;
 
     public IReadOnlyList<JapaneseFontOption> AvailableSubtitleFonts { get; } = JapaneseFontCatalog.Fonts;
@@ -32,6 +34,40 @@ public partial class VideoSettingsPageViewModel : ObservableObject
 
     [ObservableProperty]
     public partial bool AutoPlayNextEpisode { get; set; }
+
+    [ObservableProperty]
+    public partial bool OnlineMetadataConsentAccepted { get; set; }
+
+    [ObservableProperty]
+    public partial bool TmdbMetadataEnabled { get; set; }
+
+    [ObservableProperty]
+    public partial bool TvMazeMetadataEnabled { get; set; }
+
+    [ObservableProperty]
+    public partial bool AniListMetadataEnabled { get; set; }
+
+    [ObservableProperty]
+    public partial bool AniDbMetadataEnabled { get; set; }
+
+    [ObservableProperty]
+    public partial bool BangumiMetadataEnabled { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TmdbCredentialStatusText))]
+    public partial bool HasTmdbToken { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BangumiCredentialStatusText))]
+    public partial bool HasBangumiToken { get; set; }
+
+    public string TmdbCredentialStatusText => HasTmdbToken
+        ? ResourceStringHelper.GetString("VideoMetadataCredentialConfigured", "Configured")
+        : ResourceStringHelper.GetString("VideoMetadataCredentialMissing", "Not configured");
+
+    public string BangumiCredentialStatusText => HasBangumiToken
+        ? ResourceStringHelper.GetString("VideoMetadataCredentialConfigured", "Configured")
+        : ResourceStringHelper.GetString("VideoMetadataCredentialOptional", "Optional");
 
     [ObservableProperty]
     public partial bool RememberPlaybackState { get; set; }
@@ -163,15 +199,32 @@ public partial class VideoSettingsPageViewModel : ObservableObject
     public partial string SubtitleMaskHiddenOpacityText { get; set; } = "0%";
 
     public VideoSettingsPageViewModel(ISettingsService settingsService)
+        : this(settingsService, null)
+    {
+    }
+
+    public VideoSettingsPageViewModel(
+        ISettingsService settingsService,
+        IVideoMetadataCredentialStore? credentialStore)
     {
         _settingsService = settingsService;
+        _credentialStore = credentialStore;
         LoadSettings();
         _isInitializing = false;
+        _ = RefreshCredentialStatusAsync();
     }
 
     private void LoadSettings()
     {
         var settings = _settingsService.Current.VideoSettings ?? new VideoSettings();
+        settings.Metadata ??= new VideoMetadataSettings();
+
+        OnlineMetadataConsentAccepted = settings.Metadata.OnlineConsentAccepted;
+        TmdbMetadataEnabled = settings.Metadata.TmdbEnabled;
+        TvMazeMetadataEnabled = settings.Metadata.TvMazeEnabled;
+        AniListMetadataEnabled = settings.Metadata.AniListEnabled;
+        AniDbMetadataEnabled = settings.Metadata.AniDbEnabled;
+        BangumiMetadataEnabled = settings.Metadata.BangumiEnabled;
 
         AutoPlayNextEpisode = settings.AutoPlayNextEpisode;
         RememberPlaybackState = settings.RememberPlaybackState;
@@ -237,11 +290,27 @@ public partial class VideoSettingsPageViewModel : ObservableObject
                 SubtitleMaskMode = SelectedSubtitleMaskMode,
                 SubtitleMaskBlurRadius = SubtitleMaskBlurRadius,
                 SubtitleMaskHiddenOpacity = SubtitleMaskHiddenOpacity,
+                Metadata = new VideoMetadataSettings
+                {
+                    OnlineConsentAccepted = OnlineMetadataConsentAccepted,
+                    TmdbEnabled = TmdbMetadataEnabled,
+                    TvMazeEnabled = TvMazeMetadataEnabled,
+                    AniListEnabled = AniListMetadataEnabled,
+                    AniDbEnabled = AniDbMetadataEnabled,
+                    BangumiEnabled = BangumiMetadataEnabled,
+                    TvDbEnabled = false,
+                },
             });
         _ = _settingsService.SaveAsync();
     }
 
     partial void OnAutoPlayNextEpisodeChanged(bool value) => SaveSettings();
+    partial void OnOnlineMetadataConsentAcceptedChanged(bool value) => SaveSettings();
+    partial void OnTmdbMetadataEnabledChanged(bool value) => SaveSettings();
+    partial void OnTvMazeMetadataEnabledChanged(bool value) => SaveSettings();
+    partial void OnAniListMetadataEnabledChanged(bool value) => SaveSettings();
+    partial void OnAniDbMetadataEnabledChanged(bool value) => SaveSettings();
+    partial void OnBangumiMetadataEnabledChanged(bool value) => SaveSettings();
     partial void OnRememberPlaybackStateChanged(bool value) => SaveSettings();
     partial void OnSeekIntervalSecondsChanged(int value)
     {
@@ -347,6 +416,33 @@ public partial class VideoSettingsPageViewModel : ObservableObject
     }
 
     public void OnNavigatedFrom() => SaveSettings();
+
+    public async Task SaveProviderTokenAsync(string providerId, string token)
+    {
+        if (_credentialStore == null)
+            return;
+        if (string.IsNullOrWhiteSpace(token))
+            await _credentialStore.DeleteAsync(providerId, "token");
+        else
+            await _credentialStore.WriteAsync(providerId, "token", token.Trim());
+        await RefreshCredentialStatusAsync();
+    }
+
+    public async Task ClearProviderTokenAsync(string providerId)
+    {
+        if (_credentialStore == null)
+            return;
+        await _credentialStore.DeleteAsync(providerId, "token");
+        await RefreshCredentialStatusAsync();
+    }
+
+    private async Task RefreshCredentialStatusAsync()
+    {
+        if (_credentialStore == null)
+            return;
+        HasTmdbToken = !string.IsNullOrWhiteSpace(await _credentialStore.ReadAsync("tmdb", "token"));
+        HasBangumiToken = !string.IsNullOrWhiteSpace(await _credentialStore.ReadAsync("bangumi", "token"));
+    }
 
     private static int RoundInt(double value, int fallback) =>
         double.IsFinite(value)

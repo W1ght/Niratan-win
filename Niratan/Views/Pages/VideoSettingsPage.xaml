@@ -433,6 +433,91 @@
                                        Style="{StaticResource VideoSettingsValueTextStyle}" />
                         </StackPanel>
                     </toolkit:SettingsCard>
+
+                    <TextBlock x:Uid="VideoMetadataSectionHeader"
+                               Style="{StaticResource VideoSectionHeaderStyle}"
+                               Text="Library metadata" />
+
+                    <toolkit:SettingsCard x:Uid="VideoMetadataPrivacyCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE72E;}">
+                        <ToggleSwitch x:Uid="VideoMetadataPrivacyToggle"
+                                      AutomationProperties.AutomationId="VideoMetadataPrivacyToggle"
+                                      IsOn="{x:Bind ViewModel.OnlineMetadataConsentAccepted, Mode=TwoWay}" />
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="VideoMetadataProvidersCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE774;}">
+                        <StackPanel Width="360" Spacing="8">
+                            <ToggleSwitch x:Uid="VideoMetadataTmdbToggle"
+                                          IsOn="{x:Bind ViewModel.TmdbMetadataEnabled, Mode=TwoWay}" />
+                            <ToggleSwitch x:Uid="VideoMetadataTvMazeToggle"
+                                          IsOn="{x:Bind ViewModel.TvMazeMetadataEnabled, Mode=TwoWay}" />
+                            <ToggleSwitch x:Uid="VideoMetadataAniListToggle"
+                                          IsOn="{x:Bind ViewModel.AniListMetadataEnabled, Mode=TwoWay}" />
+                            <ToggleSwitch x:Uid="VideoMetadataAniDbToggle"
+                                          IsOn="{x:Bind ViewModel.AniDbMetadataEnabled, Mode=TwoWay}" />
+                            <ToggleSwitch x:Uid="VideoMetadataBangumiToggle"
+                                          IsOn="{x:Bind ViewModel.BangumiMetadataEnabled, Mode=TwoWay}" />
+                            <TextBlock x:Uid="VideoMetadataTvDbDisabledText"
+                                       Text="TheTVDB: waiting for project authorization"
+                                       TextWrapping="Wrap" />
+                            <TextBlock x:Uid="VideoMetadataTmdbNoticeText"
+                                       Text="This product uses the TMDB API but is not endorsed or certified by TMDB."
+                                       TextWrapping="Wrap"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <HyperlinkButton x:Uid="VideoMetadataTvMazeLink" NavigateUri="https://www.tvmaze.com/api" />
+                                <HyperlinkButton x:Uid="VideoMetadataAniListLink" NavigateUri="https://anilist.co/" />
+                                <HyperlinkButton x:Uid="VideoMetadataAniDbLink" NavigateUri="https://anidb.net/" />
+                                <HyperlinkButton x:Uid="VideoMetadataBangumiLink" NavigateUri="https://bgm.tv/" />
+                                <HyperlinkButton x:Uid="VideoMetadataTvDbLink" NavigateUri="https://thetvdb.com/" />
+                            </StackPanel>
+                        </StackPanel>
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="VideoMetadataTmdbCredentialCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8D7;}">
+                        <StackPanel Width="420" Spacing="8">
+                            <TextBlock Text="{x:Bind ViewModel.TmdbCredentialStatusText, Mode=OneWay}" />
+                            <PasswordBox x:Name="TmdbTokenBox"
+                                         x:Uid="VideoMetadataTmdbTokenBox"
+                                         AutomationProperties.AutomationId="VideoMetadataTmdbTokenBox" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button x:Uid="VideoMetadataSaveTmdbTokenButton"
+                                        Click="SaveTmdbTokenButton_Click" />
+                                <Button x:Uid="VideoMetadataClearTmdbTokenButton"
+                                        Click="ClearTmdbTokenButton_Click" />
+                                <HyperlinkButton x:Uid="VideoMetadataTmdbAttributionLink"
+                                                 NavigateUri="https://www.themoviedb.org/" />
+                            </StackPanel>
+                        </StackPanel>
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="VideoMetadataBangumiCredentialCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8D7;}">
+                        <StackPanel Width="420" Spacing="8">
+                            <TextBlock Text="{x:Bind ViewModel.BangumiCredentialStatusText, Mode=OneWay}" />
+                            <PasswordBox x:Name="BangumiTokenBox"
+                                         x:Uid="VideoMetadataBangumiTokenBox"
+                                         AutomationProperties.AutomationId="VideoMetadataBangumiTokenBox" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button x:Uid="VideoMetadataSaveBangumiTokenButton"
+                                        Click="SaveBangumiTokenButton_Click" />
+                                <Button x:Uid="VideoMetadataClearBangumiTokenButton"
+                                        Click="ClearBangumiTokenButton_Click" />
+                                <HyperlinkButton x:Uid="VideoMetadataProviderTermsLink"
+                                                 NavigateUri="https://www.tvmaze.com/api" />
+                            </StackPanel>
+                        </StackPanel>
+                    </toolkit:SettingsCard>
                 </StackPanel>
             </Grid>
         </ScrollViewer>

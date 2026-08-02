@@ -36,7 +36,7 @@ foliate-js 已于 2026-05-19 移除，禁止引回主阅读链路。
 | 变形还原 | C# 重实现 | 对齐上游 hoshidicts `src/language/ja/deinflector.cpp` |
 
 重要原则：
-- hoshidicts 作为“字典查询后端”；主 App 业务真源使用 Niratan 兼容 JSON，不新建 SQLite 业务库。
+- hoshidicts 作为“字典查询后端”；业务真源按模块选择：小说/漫画继续使用 Niratan 兼容 JSON，视频目录使用本应用拥有的 SQLite；字典后端不得直接访问任何业务库。
 - 高频字典查询数据不塞进主 App 业务存储。
 - `native/hoshidicts/` 不可修改，所有功能通过 C API DLL P/Invoke 实现。
 
@@ -46,13 +46,13 @@ foliate-js 已于 2026-05-19 移除，禁止引回主阅读链路。
 |---|---|---|
 | 小说/书架/统计 | Niratan 兼容 JSON sidecar | 每本书可独立迁移、备份和同步，文件即真源 |
 | 漫画目录/进度 | `Data/Manga/catalog.json` + 可重建缓存 | 源媒体只读，目录、隐藏状态和阅读进度独立持久化 |
-| 视频资料库 | `video_library.json` | 对齐 Niratan 的 source、媒体身份、metadata 和 collection catalog |
+| 视频资料库 | `video_library.sqlite3`（SQLite/WAL） | source、层级节点、资产、匹配、metadata、artwork、集合与任务的事务真源 |
 | 视频播放历史 | `video_playback_history.json` | 对齐 Niratan 的进度、完成状态、字幕选择和恢复选项 |
 | 视频挖卡历史 | `video_mining_history.json` | 对齐 Niratan 的字幕上下文、媒体身份和时间字段 |
 | 旧小说迁移 | Dapper + Microsoft.Data.Sqlite（只读入旧表） | 一次性导出后退役旧小说表 |
 | JSON | System.Text.Json + 原子替换 | 强类型、可恢复，不暴露半写文件 |
 
-SQLite 不再承载视频数据。历史 `niratan.db` 中的视频表不会自动导入 JSON，也不会被新运行时读取或改写；外部音频数据库仍按原有只读边界访问，不成为 Niratan 的业务真源。
+`video_library.json` 只作为一次性 legacy v0 输入和迁移失败时的只读恢复视图；成功迁移后 SQLite 是唯一 catalog 真源，不双写也不回退到过期 JSON。历史 `niratan.db` 不属于新视频库；外部音频数据库仍按原有只读边界访问。
 
 ### 1.5 测试
 
@@ -388,12 +388,20 @@ Profile 行为对齐 Niratan：global lookup 使用 global active profile，书�
 
 Windows 使用系统文件选择器直接写入用户选择的目标路径，不经过 SwiftUI `fileMover`；这是平台 API 差异，归档内容、命名与完成后的用户可见结果保持一致。
 
-### 6.4 JSON 边界与旧 SQLite 数据
+### 6.4 视频 SQLite catalog 与独立 JSON 历史
 
-- `IVideoDataService` / `VideoDataService` 是视频 JSON 的唯一业务入口；catalog 与 playback history 分文件、分原子提交，集合成员使用媒体 identity persistence key。
-- 本地视频 identity 是标准化绝对路径；远程视频 identity 是 `remote://<provider>/<id>`。移除 source 或 catalog item 不删除独立播放历史，重新加入同一 identity 后可恢复进度。
+- `IVideoCatalogRepository` / `SQLiteVideoCatalogRepository` 是 catalog 唯一持久化入口。单消费者 `Channel` 串行 SQLite 操作，连接启用 WAL、外键和 5 秒 busy timeout；UI 只消费不可变 `VideoCatalogSnapshot`，SQL 错误保留最后成功快照并作为持久错误展示。
+- `video_library.sqlite3` 保存来源与 provider route、movie/series/season/episode 节点、资产多对多关系、external ID/alias、metadata provenance/锁定、artwork、用户数据、标签/集合、Review 候选、任务 generation、provider cache 与 migration ledger。扫描和网络在仓库队列外执行，只用短事务提交结果。
+- `IVideoPlaybackHistoryStore` 继续逐字节兼容 `video_playback_history.json`；`video_mining_history.json` 也不迁移。本地 identity 是标准化绝对路径，远程 identity 是 `remote://<provider>/<id>`；移除 source 或资产不可用不删除历史。
 - 进度小于 2 秒不持久化；距离结尾 5 秒以内标记完成；字幕选择独立于进度清理。该边界直接对齐 Niratan `VideoPlaybackHistoryStore`。
-- 应用不再包含或运行视频 SQLite schema migration，全新安装不会创建 `niratan.db`。历史视频 SQLite 数据不迁移、不双写，旧文件由用户自行保留或删除。
+- legacy JSON 在进程级锁内完整解析、验证并哈希，导入 app-owned 临时库的单一事务；数量、`foreign_key_check`、`quick_check` 与 ledger 全部成功后才原子提升。原 JSON 永不修改、重命名或删除；失败回滚并只读展示 legacy snapshot，成功后不再读取它。
+- 增量扫描每次枚举来源以发现新增/缺失，只重解析大小或 mtime 变化的资产；旧 catalog 中仍绑定 `unmatched` 的已解析分集会在下一次增量扫描执行一次兼容性重解析，提升为 series/season/episode 后即恢复普通增量规则。任务按“发现文件 / 读取元数据 / 保存 catalog”分段上报；文件分析最多四路并行，结果仍按自然路径顺序以短事务分批提交，UI 进度节流而不逐文件重载 snapshot。只有完整枚举才标记未见资产不可用；取消、权限/I/O 错误和迟到 generation 都不能制造丢失。来源重叠以多对多 membership 去重，媒体目录和 NFO/图片 sidecar 始终只读。
+- `IVideoFileNameParser` 仅对匹配副本执行 NFKC/全角数字规范化，识别季集、多集、绝对集数、第 N 話、第 N 期、cour、SP/OVA/OAD/NCOP/NCED、电影年份与显式 TMDB/TVDB/AniDB/AniList/MAL/Bangumi ID。
+- metadata 合并顺序固定为用户锁定/人工绑定、Local NFO/图片、主 provider、补充 provider 填空。显式 ID 直接锁定；多个 provider 对同一年份的精确动画别名可作为联合确认，随后优先用 TMDB 投影丰富系列详情与图片，年份相冲突的重拍仍进入 Review。模糊匹配要求总分至少 0.92、领先至少 0.15且无年份/编号硬冲突，否则保留完整候选进入 Needs Review。Unorganized 只表示没有集合覆盖，与 Review 分离。
+- 在线 provider 通过 `IVideoMetadataTransport` 的 HTTPS host allowlist、并发门、请求间隔、Retry-After、条件缓存、最多三次幂等重试和取消访问；凭据只进 Windows Credential Manager，30 天 normalized cache 在 SQLite，poster/backdrop/logo、首屏演员头像和相关推荐海报经原子 2 GiB LRU cache。图片下载每个 URL 并发去重，TMDB 同时不超过四路，UI 永不直连 provider CDN。首次联网前必须取得隐私同意。
+- metadata 刷新是独立于页面生命周期的后台 `catalog_jobs` 任务：来源扫描完成后只为新增/变化、尚未尝试或 TTL 已过期的可用视频排队，最近一次完整任务同时作为未匹配结果的 30 天负缓存；手动“刮削元数据”才强制刷新整个来源。离开 Video 页面不会取消任务，取消来源刮削则只终止该任务并保留已有详情。不同资产最多两路并行，同一 provider 查询仍服从 transport 并发门、请求间隔和 `Retry-After`；相同的幂等查询以 cache key 合并，等待者在首个请求写入 30 天 catalog cache 后直接复用。候选始终按来源 route 顺序进入评分。
+- 扫描和后台刮削进度同时投影在 Video 顶部任务条；来源管理使用主内容区全宽卡片，不使用固定宽度 `ContentDialog`，并显示扫描/刮削各自的计数、匹配数、待确认数、失败及取消入口。
+- Home 采用 Jellyfin 式媒体中心层级：`My media` 快捷库、`Continue watching`、`Next up`、`Recently added media` 独立横向行，空行隐藏，首页不再重复渲染完整资料库列表。Continue Watching 按系列折叠，仅保留该系列最近播放的一集，并优先横版 thumb/backdrop；系列书架按 series node 聚合并使用竖版 poster。系列详情使用横版 hero、竖版 poster 和可选 logo，投影标题/原题、标语、简介、年份区间、分级、评分、状态、类型、标签、工作室、季、正篇、Specials、演员、相关推荐及 provider 归属；图片只读取本地 sidecar 或应用图片缓存，不由 UI 直接加载 provider URL。
 - Windows 视频可选 Anime4K 由 `IAnime4KShaderService` 管理：固定下载 Anime4K `v4.0.1` GLSL，使用 SHA-256 校验并原子写入 `%APPDATA%\Niratan\VideoShaders`；`MpvPlaybackEngine` 只接收强类型预设并通过 `change-list glsl-shaders` 应用，不接受任意 URL、路径或 mpv 配置。入口位于播放器侧边栏“视频增强”，预设仅属于当前播放会话，每次打开视频都强制恢复 `Off`，避免高 GPU 负载被自动继承；这是相对 Niratan macOS 默认画质链路的显式 Windows 可选偏差。
 - 视频打开采用首帧优先路径：来源和必要播放属性应用后立即解除暂停；外部字幕 CPU 解析在线程池执行，章节、轨道轮询、交互字幕与侧边栏投影不得阻塞首帧。底部控制栏层级必须高于透明字幕选择画布，重叠区域由控制栏优先接收输入。
 - 仅当物理 `niratan.db` 已存在时，旧 `NovelBooks`、`NovelReadingProgress`、`NovelReaderSettings` 才由 `NovelStorageMigrationService` 在启动时读取；探测不得创建空数据库。
@@ -480,10 +488,9 @@ MangaLibraryPage / MangaReaderWindow
 
 - 小说 sidecar 使用共享原子 JSON store，写入前校验目录边界。
 - 元数据损坏时不得覆盖原文件，书架归一化必须暂停。
-- 视频 catalog、播放历史和挖卡历史使用 Niratan 兼容强类型 JSON；批量 source 刷新只提交一次 catalog。
-- JSON 解码失败时保留原文件并停止写入，禁止用空模型覆盖损坏数据。
-- 缩略图是可重新生成的 cache，不进入 catalog 真源。
-- SQLite 不得重新成为视频、小说、书架或统计的业务真源。
+- 视频 catalog 使用独立 SQLite，播放/挖卡历史保持 Niratan 兼容 JSON；小说、书架、统计和漫画仍不得迁入该库。
+- legacy catalog JSON 解码或结构验证失败时保留原字节并进入只读恢复，禁止用空模型覆盖；成功迁移后数据库错误不得回退 JSON。
+- provider 图片和 mpv 帧缩略图是可重新生成的 cache；选择和 provenance 进入 catalog，但缓存文件本身不是用户数据真源。
 - 除非有明确架构理由并得到确认，否则不要引入 EF Core 或第二套业务持久化技术。
 
 ---
@@ -555,7 +562,7 @@ JavaScript：
 - 产品行为对齐 Niratan，Windows 端使用固定版本 `YoutubeExplode 6.6.0` 在进程内解析元数据、匿名公开流与发布者字幕；该非官方接口具有易失性，UI 必须明确标注“实验性”。
 - 不使用 YouTube IFrame/Data API 作为播放链路，因为它们不能同时满足主动画质选择、libmpv 分离流播放、字幕查词与音频制卡；禁止引入 yt-dlp、youtube-dl、Deno、Node、converter/helper 下载或子进程。
 - `IRemoteVideoResolver` 是唯一接触 YoutubeExplode 类型的适配边界。其他层只使用 `RemoteVideoIdentity`、`ResolvedRemoteVideoSource`、`VideoPlaybackRequest` 等自有强类型模型。
-- 签名流 URL、字幕 URL、请求 headers 和过期时间只驻留内存；`video_library.json` 仅保存 `remote://youtube/{videoId}` 稳定键、原始/规范 URL、远程身份、缩略图 URL 与字幕语言。日志只记录 provider/id，不记录签名 URL。
+- 签名流 URL、字幕 URL、请求 headers 和过期时间只驻留内存；视频 SQLite 仅保存 `remote://youtube/{videoId}` 稳定键、原始/规范 URL、远程身份、缩略图 URL 与字幕语言。日志只记录 provider/id，不记录签名 URL。
 - 视频恢复状态按媒体身份保存进度、字幕选择、播放速度、音频选择及音频/字幕延迟；音轨优先以 ff-index 恢复，并以轨道元数据作唯一匹配回退。音量、硬解、去隔行、HDR、色彩校正和字幕外观是全局偏好；循环、A-B 点、旋转、画面比例、远程临时画质和 Anime4K 是会话态，不自动恢复。
 - 解析缓存以稳定键索引，优先使用流 URL 的 `expire`，提前 5 分钟失效；无过期参数时使用 4 小时 TTL。首次播放失败强制刷新一次，随后仅允许一次 muxed fallback。
 - 匿名 v1 只支持公开、非直播、非播放列表视频，最高 1080p。画质切换重开流但恢复位置、暂停、音量、速度、延迟、循环、宽高比、旋转与字幕覆盖层。

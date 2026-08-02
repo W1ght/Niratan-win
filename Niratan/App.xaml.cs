@@ -183,8 +183,48 @@ public partial class App : Application
             provider.GetRequiredService<ProfileRuntimeService>());
         services.AddSingleton<IShortcutService, ShortcutService>();
         services.AddSingleton<IGameControllerService, GameControllerService>();
-        services.AddSingleton<IVideoDataService, VideoDataService>();
         services.AddSingleton<INiratanJsonFileStore, NiratanJsonFileStore>();
+        services.AddSingleton<IVideoCatalogRepository, SQLiteVideoCatalogRepository>();
+        services.AddSingleton<IVideoPlaybackHistoryStore, VideoPlaybackHistoryStore>();
+        services.AddSingleton<IVideoFileNameParser, VideoFileNameParser>();
+        services.AddSingleton<LocalVideoMetadataProvider>();
+        services.AddSingleton<ILocalVideoMetadataProvider>(provider =>
+            provider.GetRequiredService<LocalVideoMetadataProvider>());
+        services.AddSingleton<IVideoMetadataProvider>(provider =>
+            provider.GetRequiredService<LocalVideoMetadataProvider>());
+        services.AddSingleton<IVideoMetadataMatcher, VideoMetadataMatcher>();
+        services.AddSingleton<IVideoMetadataCoordinator, VideoMetadataCoordinator>();
+        services.AddSingleton<IVideoLibraryScanCoordinator, VideoLibraryScanCoordinator>();
+        services.AddSingleton<IVideoMetadataTransport, VideoMetadataTransport>();
+        services.AddSingleton<IVideoMetadataCredentialStore, WindowsCredentialVideoMetadataStore>();
+        services.AddSingleton<IVideoArtworkCache, VideoArtworkCache>();
+        services.AddSingleton<TmdbVideoMetadataProvider>();
+        services.AddSingleton<TvMazeVideoMetadataProvider>();
+        services.AddSingleton<AniListVideoMetadataProvider>();
+        services.AddSingleton<AniDbTitleIndexProvider>();
+        services.AddSingleton<BangumiVideoMetadataProvider>();
+        services.AddSingleton<TvDbLicenseGatedProvider>();
+        services.AddSingleton<IVideoMetadataProvider>(provider => provider.GetRequiredService<TmdbVideoMetadataProvider>());
+        services.AddSingleton<IVideoMetadataProvider>(provider => provider.GetRequiredService<TvMazeVideoMetadataProvider>());
+        services.AddSingleton<IVideoMetadataProvider>(provider => provider.GetRequiredService<AniListVideoMetadataProvider>());
+        services.AddSingleton<IVideoMetadataProvider>(provider => provider.GetRequiredService<AniDbTitleIndexProvider>());
+        services.AddSingleton<IVideoMetadataProvider>(provider => provider.GetRequiredService<BangumiVideoMetadataProvider>());
+        services.AddSingleton<IVideoMetadataProvider>(provider => provider.GetRequiredService<TvDbLicenseGatedProvider>());
+        services.AddSingleton<IVideoMetadataSearchProvider>(provider => provider.GetRequiredService<TmdbVideoMetadataProvider>());
+        services.AddSingleton<IVideoMetadataSearchProvider>(provider => provider.GetRequiredService<TvMazeVideoMetadataProvider>());
+        services.AddSingleton<IVideoMetadataSearchProvider>(provider => provider.GetRequiredService<AniListVideoMetadataProvider>());
+        services.AddSingleton<IVideoMetadataSearchProvider>(provider => provider.GetRequiredService<AniDbTitleIndexProvider>());
+        services.AddSingleton<IVideoMetadataSearchProvider>(provider => provider.GetRequiredService<BangumiVideoMetadataProvider>());
+        services.AddSingleton<IVideoMetadataSearchProvider>(provider => provider.GetRequiredService<TvDbLicenseGatedProvider>());
+        services.AddSingleton<IVideoMetadataDetailsProvider>(provider => provider.GetRequiredService<TmdbVideoMetadataProvider>());
+        services.AddSingleton<IVideoMetadataDetailsProvider>(provider => provider.GetRequiredService<TvMazeVideoMetadataProvider>());
+        services.AddSingleton<IVideoMetadataDetailsProvider>(provider => provider.GetRequiredService<AniListVideoMetadataProvider>());
+        services.AddSingleton<IVideoMetadataDetailsProvider>(provider => provider.GetRequiredService<BangumiVideoMetadataProvider>());
+        services.AddSingleton<IVideoMetadataDetailsProvider>(provider => provider.GetRequiredService<TvDbLicenseGatedProvider>());
+        services.AddSingleton<IVideoArtworkProvider>(provider => provider.GetRequiredService<TmdbVideoMetadataProvider>());
+        services.AddSingleton<IVideoArtworkProvider>(provider => provider.GetRequiredService<TvMazeVideoMetadataProvider>());
+        services.AddSingleton<IVideoArtworkProvider>(provider => provider.GetRequiredService<TvDbLicenseGatedProvider>());
+        services.AddSingleton<IVideoDataService, VideoDataService>();
         services.AddSingleton<INovelBookStorageService, NovelBookStorageService>();
         services.AddSingleton<INovelShelfService, NovelShelfService>();
         services.AddSingleton<INovelStorageMigrationService, NovelStorageMigrationService>();
@@ -226,6 +266,7 @@ public partial class App : Application
         services.AddSingleton<IVideoThumbnailService, VideoThumbnailService>();
         services.AddSingleton<IVideoSubtitleTranscriptExtractor, FfmpegVideoSubtitleTranscriptExtractor>();
         services.AddSingleton<IVideoPlayerWindowService, VideoPlayerWindowService>();
+        services.AddSingleton<IVideoSameFolderPlaylistResolver, VideoSameFolderPlaylistResolver>();
         services.AddSingleton<SubtitleParserService>();
         services.AddSingleton<INovelBookSidecarService, NovelBookSidecarService>();
         services.AddSingleton<IReaderImageGalleryService, ReaderImageGalleryService>();
@@ -381,7 +422,8 @@ public partial class App : Application
             ImportedAt = DateTime.UtcNow,
         };
 
-        await GetService<IVideoPlayerWindowService>().OpenAsync(video);
+        var playlist = GetService<IVideoSameFolderPlaylistResolver>().Resolve(options.VideoPath);
+        await GetService<IVideoPlayerWindowService>().OpenAsync(video, playlist.Count > 0 ? playlist : [video]);
     }
 
     private async Task InitializeAppAsync()

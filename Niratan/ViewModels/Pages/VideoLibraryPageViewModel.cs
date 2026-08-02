@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -15,6 +16,7 @@ using Niratan.Models.Common;
 using Niratan.Models.Video;
 using Niratan.Services.UI;
 using Niratan.Services.Video;
+using Niratan.Services.Settings;
 using Niratan.ViewModels.Components;
 
 namespace Niratan.ViewModels.Pages;
@@ -28,12 +30,18 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     private readonly IVideoPlayerWindowService _playerWindowService;
     private readonly IVideoThumbnailService _thumbnailService;
     private readonly IFileRevealService _fileRevealService;
+    private readonly IVideoLibraryScanCoordinator? _scanCoordinator;
+    private readonly IVideoMetadataCoordinator? _metadataCoordinator;
+    private readonly ISettingsService? _settingsService;
     private readonly IMessenger _messenger;
     private CancellationTokenSource _cts = new();
+    private CancellationTokenSource _scanCts = new();
     private List<VideoItem> _allVideos = [];
     private List<VideoCollection> _collections = [];
     private List<VideoLibrarySource> _sources = [];
     private readonly HashSet<string> _selectedVideoIds = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<Guid, VideoLibraryScanProgress> _latestScanProgress = [];
+    private SynchronizationContext? _uiContext;
     private string? _activeFolderPath;
     private string? _activeCollectionId;
     private string? _activeSeriesName;
@@ -42,6 +50,7 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NoVideos))]
+    [NotifyPropertyChangedFor(nameof(ShowNoVideos))]
     public partial ObservableCollection<VideoItemViewModel> Videos { get; set; } = new();
 
     [ObservableProperty]
@@ -55,6 +64,28 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
 
     [ObservableProperty]
     public partial ObservableCollection<VideoLibrarySourceSummary> SourceSummaries { get; set; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasHomeContinueWatching))]
+    public partial ObservableCollection<VideoItemViewModel> HomeContinueWatching { get; set; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasHomeRecentlyAdded))]
+    public partial ObservableCollection<VideoItemViewModel> HomeRecentlyAdded { get; set; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasHomeNextEpisodes))]
+    public partial ObservableCollection<VideoItemViewModel> HomeNextEpisodes { get; set; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSeriesCards))]
+    public partial ObservableCollection<VideoSeriesViewModel> SeriesCards { get; set; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSeriesBrowseView))]
+    [NotifyPropertyChangedFor(nameof(IsSeriesDetailView))]
+    [NotifyPropertyChangedFor(nameof(IsLibraryBrowseView))]
+    public partial VideoSeriesViewModel? SelectedSeries { get; set; }
 
     [ObservableProperty]
     public partial ObservableCollection<VideoCollectionMembershipOption> ManualCollectionOptions { get; set; } = new();
@@ -94,20 +125,55 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     public partial VideoLibrarySortOption SelectedSortOption { get; set; } = VideoLibrarySortOption.Recent;
 
     [ObservableProperty]
-    public partial VideoLibraryView SelectedLibraryView { get; set; } = VideoLibraryView.All;
+    public partial VideoLibraryView SelectedLibraryView { get; set; } = VideoLibraryView.Home;
 
     [ObservableProperty]
     public partial VideoLibraryLayoutMode SelectedLayoutMode { get; set; } = VideoLibraryLayoutMode.List;
 
     [ObservableProperty]
-    public partial string CurrentViewTitle { get; set; } = GetViewTitle(VideoLibraryView.All);
+    public partial string CurrentViewTitle { get; set; } = GetViewTitle(VideoLibraryView.Home);
 
     [ObservableProperty]
     public partial string CurrentViewSubtitle { get; set; } = "";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NoVideos))]
+    [NotifyPropertyChangedFor(nameof(ShowNoVideos))]
+    [NotifyPropertyChangedFor(nameof(ShowCatalogLoading))]
     public partial bool IsContentLoading { get; set; }
+
+    [ObservableProperty]
+    public partial bool HasActiveScan { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsActiveScanIndeterminate { get; set; }
+
+    [ObservableProperty]
+    public partial double ActiveScanProgress { get; set; }
+
+    [ObservableProperty]
+    public partial string ActiveScanText { get; set; } = "";
+
+    [ObservableProperty]
+    public partial bool HasActiveMetadataRefresh { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsMetadataRefreshIndeterminate { get; set; }
+
+    [ObservableProperty]
+    public partial double MetadataRefreshProgress { get; set; }
+
+    [ObservableProperty]
+    public partial string MetadataRefreshText { get; set; } = "";
+
+    [ObservableProperty]
+    public partial bool HasBackgroundMetadataTask { get; set; }
+
+    [ObservableProperty]
+    public partial double BackgroundMetadataProgress { get; set; }
+
+    [ObservableProperty]
+    public partial string BackgroundMetadataText { get; set; } = "";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SmartCollectionPreviewRows))]
@@ -129,6 +195,14 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         new(VideoLibrarySortOption.Folder, ResourceStringHelper.GetString("VideoLibrarySortFolder", "Folder")),
     ];
 
+    public IReadOnlyList<VideoLibraryMediaTypeOption> SourceMediaTypeOptions { get; } =
+    [
+        new(VideoLibraryMediaType.Auto, ResourceStringHelper.GetString("VideoLibrarySourceTypeAuto", "Auto")),
+        new(VideoLibraryMediaType.Anime, ResourceStringHelper.GetString("VideoLibrarySourceTypeAnime", "Anime")),
+        new(VideoLibraryMediaType.JapaneseDramaTv, ResourceStringHelper.GetString("VideoLibrarySourceTypeDrama", "Japanese Drama / TV")),
+        new(VideoLibraryMediaType.Movie, ResourceStringHelper.GetString("VideoLibrarySourceTypeMovie", "Movie")),
+    ];
+
     public IReadOnlyList<VideoSmartRuleFieldOption> AvailableSmartRuleFields { get; } =
     [
         new(VideoSmartRuleField.FileName, ResourceStringHelper.GetString("VideoLibrarySmartRuleFieldFileName", "File name")),
@@ -140,6 +214,8 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     ];
 
     public bool NoVideos => !IsContentLoading && Videos.Count == 0;
+    public bool ShowNoVideos => NoVideos && IsLibraryBrowseView;
+    public bool ShowCatalogLoading => IsContentLoading && IsVideoCatalogView;
     public bool HasSelectedVideo => SelectedVideo != null;
     public bool HasSelection => SelectedVideoCount > 0;
     public bool HasSources => SourceSummaries.Count > 0;
@@ -149,6 +225,26 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     public bool IsFoldersView => SelectedLibraryView == VideoLibraryView.Folders;
     public bool IsCollectionsView => SelectedLibraryView == VideoLibraryView.Collections;
     public bool IsTagsView => SelectedLibraryView == VideoLibraryView.Tags;
+    public bool IsHomeView => SelectedLibraryView == VideoLibraryView.Home;
+    public bool IsSourcesView => SelectedLibraryView == VideoLibraryView.Sources;
+    public bool IsVideoCatalogView => !IsSourcesView;
+    public bool IsSeriesBrowseView => SelectedLibraryView == VideoLibraryView.Series && SelectedSeries == null;
+    public bool IsSeriesDetailView => SelectedLibraryView == VideoLibraryView.Series && SelectedSeries != null;
+    public bool IsLibraryBrowseView => IsVideoCatalogView && !IsHomeView && SelectedLibraryView != VideoLibraryView.Series;
+    public bool HasSeriesCards => SeriesCards.Count > 0;
+    public bool HasHomeContinueWatching => HomeContinueWatching.Count > 0;
+    public bool HasHomeNextEpisodes => HomeNextEpisodes.Count > 0;
+    public bool HasHomeRecentlyAdded => HomeRecentlyAdded.Count > 0;
+    public string HomeMoviesCountText => FormatVideoCount(_allVideos.Count(video =>
+        video.LibraryMediaType == VideoLibraryMediaType.Movie || video.CatalogNodeKind == VideoCatalogNodeKind.Movie));
+    public string HomeSeriesCountText => FormatVideoCount(_allVideos
+        .Where(video => video.CatalogSeriesNodeId.HasValue && video.LibraryMediaType != VideoLibraryMediaType.Anime)
+        .Select(video => video.CatalogSeriesNodeId).Distinct().Count());
+    public string HomeAnimeCountText => FormatVideoCount(_allVideos.Count(video =>
+        video.LibraryMediaType == VideoLibraryMediaType.Anime));
+    public string HomeCollectionsCountText => FormatVideoCount(_collections.Count);
+    public bool IsOnlineMetadataEnabled =>
+        _settingsService?.Current.VideoSettings.Metadata.OnlineConsentAccepted == true;
     public IReadOnlyList<VideoItemViewModel> SmartCollectionPreviewRows
     {
         get
@@ -172,6 +268,54 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         IVideoThumbnailService videoThumbnailService,
         IFileRevealService fileRevealService,
         IMessenger? messenger = null)
+        : this(
+            videoLibraryService,
+            dialogService,
+            notificationService,
+            playerWindowService,
+            videoThumbnailService,
+            fileRevealService,
+            null,
+            null,
+            null,
+            messenger)
+    {
+    }
+
+    public VideoLibraryPageViewModel(
+        IVideoLibraryService videoLibraryService,
+        IDialogService dialogService,
+        INotificationService notificationService,
+        IVideoPlayerWindowService playerWindowService,
+        IVideoThumbnailService videoThumbnailService,
+        IFileRevealService fileRevealService,
+        IVideoLibraryScanCoordinator? scanCoordinator,
+        IMessenger? messenger = null)
+        : this(
+            videoLibraryService,
+            dialogService,
+            notificationService,
+            playerWindowService,
+            videoThumbnailService,
+            fileRevealService,
+            scanCoordinator,
+            null,
+            null,
+            messenger)
+    {
+    }
+
+    public VideoLibraryPageViewModel(
+        IVideoLibraryService videoLibraryService,
+        IDialogService dialogService,
+        INotificationService notificationService,
+        IVideoPlayerWindowService playerWindowService,
+        IVideoThumbnailService videoThumbnailService,
+        IFileRevealService fileRevealService,
+        IVideoLibraryScanCoordinator? scanCoordinator,
+        IVideoMetadataCoordinator? metadataCoordinator,
+        ISettingsService? settingsService,
+        IMessenger? messenger = null)
     {
         _videoLibraryService = videoLibraryService;
         _dialogService = dialogService;
@@ -179,20 +323,57 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         _playerWindowService = playerWindowService;
         _thumbnailService = videoThumbnailService;
         _fileRevealService = fileRevealService;
+        _scanCoordinator = scanCoordinator;
+        _metadataCoordinator = metadataCoordinator;
+        _settingsService = settingsService;
         _messenger = messenger ?? new WeakReferenceMessenger();
         _messenger.RegisterAll(this);
     }
 
     public async Task InitializeAsync()
     {
+        _uiContext ??= SynchronizationContext.Current;
         SubscribeToPlayerLibraryChanges();
+        SubscribeToScanProgress();
+        SubscribeToMetadataProgress();
         await LoadVideosAsync();
+        if (_metadataCoordinator != null)
+        {
+            foreach (var progress in _metadataCoordinator.ActiveBatchProgress)
+                ApplyMetadataBatchProgress(progress);
+        }
+        if (_scanCoordinator != null)
+            _ = RefreshSourcesInBackgroundAsync();
     }
 
     public void OnNavigatedFrom()
     {
         _cts.Cancel();
+        _scanCts.Cancel();
         UnsubscribeFromPlayerLibraryChanges();
+        UnsubscribeFromScanProgress();
+        UnsubscribeFromMetadataProgress();
+    }
+
+    private async Task RefreshSourcesInBackgroundAsync()
+    {
+        try
+        {
+            _scanCts.Cancel();
+            _scanCts.Dispose();
+            _scanCts = new CancellationTokenSource();
+            await _scanCoordinator!.ScanAllAsync(fullScan: false, _scanCts.Token);
+            await LoadVideosAsync();
+            if (_metadataCoordinator != null && IsOnlineMetadataEnabled)
+                await _metadataCoordinator.QueueAllSourcesAsync(forceRefresh: false, CancellationToken.None);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError(ex.Message, "Video library scan failed");
+        }
     }
 
     public void Receive(VideoLibraryChangedMessage message) => _ = LoadVideosAsync();
@@ -271,6 +452,8 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         if (!result.IsSuccess && !result.IsCancelled)
             _notificationService.ShowError(result.Error!, result.ErrorTitle!);
         await LoadVideosAsync();
+        if (result.IsSuccess && _metadataCoordinator != null && IsOnlineMetadataEnabled)
+            await _metadataCoordinator.QueueAllSourcesAsync(forceRefresh: false, CancellationToken.None);
     }
 
     [RelayCommand]
@@ -280,6 +463,26 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         if (!result.IsSuccess && !result.IsCancelled)
             _notificationService.ShowError(result.Error!, result.ErrorTitle!);
         await LoadVideosAsync();
+        if (result.IsSuccess && _metadataCoordinator != null && IsOnlineMetadataEnabled
+            && Guid.TryParse(summary.Source.Id, out var sourceId))
+            await _metadataCoordinator.QueueSourceRefreshAsync(sourceId, forceRefresh: false, CancellationToken.None);
+    }
+
+    [RelayCommand]
+    private async Task RefreshSourceMetadataAsync(VideoLibrarySourceSummary summary)
+    {
+        if (_metadataCoordinator == null || !Guid.TryParse(summary.Source.Id, out var sourceId))
+            return;
+        if (!await EnsureOnlineMetadataConsentAsync())
+            return;
+        await _metadataCoordinator.QueueSourceRefreshAsync(sourceId, forceRefresh: true, CancellationToken.None);
+    }
+
+    [RelayCommand]
+    private async Task CancelSourceMetadataAsync(VideoLibrarySourceSummary summary)
+    {
+        if (_metadataCoordinator != null && Guid.TryParse(summary.Source.Id, out var sourceId))
+            await _metadataCoordinator.CancelSourceRefreshAsync(sourceId, CancellationToken.None);
     }
 
     [RelayCommand]
@@ -350,9 +553,18 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
             ? CloneForPlayback(item.Video, lastPositionSeconds: 0)
             : item.Video;
 
+        var playlist = Videos.Select(row => row.Video).ToList();
+        var currentIndex = playlist.FindIndex(candidate =>
+            string.Equals(candidate.Id, item.Video.Id, StringComparison.OrdinalIgnoreCase));
+        var context = new VideoLibraryPlaybackContext(
+            playlist.Select(candidate => new VideoLibraryPlaybackQueueEntry(
+                    candidate.Id,
+                    candidate.CatalogAssetId,
+                    candidate.CatalogNodeId))
+                .ToImmutableArray(),
+            Math.Max(0, currentIndex));
         await _playerWindowService.OpenAsync(
-            video,
-            Videos.Select(video => video.Video).ToList(),
+            new VideoPlaybackLaunchRequest(video, playlist, LibraryContext: context),
             _cts.Token);
     }
 
@@ -513,6 +725,142 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     private void CloseVideoDetails() => SelectedVideo = null;
 
     [RelayCommand]
+    private async Task RefreshSelectedMetadataAsync()
+    {
+        if (SelectedVideo?.Video.CatalogAssetId is not Guid assetId || _metadataCoordinator == null)
+            return;
+        var allowNetwork = await EnsureOnlineMetadataConsentAsync();
+        try
+        {
+            var result = await _metadataCoordinator.RefreshAssetAsync(assetId, allowNetwork, _cts.Token);
+            if (!string.IsNullOrWhiteSpace(result.Error))
+                _notificationService.ShowError(result.Error, "Metadata refresh");
+            await LoadVideosAsync();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError(ex.Message, "Metadata refresh");
+        }
+        finally
+        {
+            HasActiveMetadataRefresh = false;
+        }
+    }
+
+    private async Task<bool> EnsureOnlineMetadataConsentAsync()
+    {
+        if (IsOnlineMetadataEnabled)
+            return true;
+        var accepted = await _dialogService.ConfirmAsync(
+            ResourceStringHelper.GetString("VideoMetadataConsentDialogTitle", "Enable online metadata?"),
+            ResourceStringHelper.GetString(
+                "VideoMetadataConsentDialogMessage",
+                "Niratan sends only the parsed title, year, episode numbers and external IDs. It never uploads video, subtitle, NFO content or local paths."),
+            ResourceStringHelper.GetString("VideoMetadataConsentDialogAccept", "Enable"),
+            ResourceStringHelper.GetString("VideoMetadataConsentDialogCancel", "Not now"));
+        if (accepted && _settingsService != null)
+        {
+            _settingsService.Current.VideoSettings.Metadata.OnlineConsentAccepted = true;
+            await _settingsService.SaveAsync();
+            OnPropertyChanged(nameof(IsOnlineMetadataEnabled));
+        }
+        return accepted;
+    }
+
+    [RelayCommand]
+    private async Task SaveSourceSettingsAsync(VideoLibrarySourceSummary summary)
+    {
+        if (!summary.TryApplyProviderOrder(out var invalidProvider))
+        {
+            _notificationService.ShowError(
+                ResourceStringHelper.FormatString(
+                    "VideoLibraryInvalidProviderOrderMessage",
+                    "Unknown metadata provider: {0}",
+                    invalidProvider ?? ""),
+                ResourceStringHelper.GetString(
+                    "VideoLibraryInvalidProviderOrderTitle",
+                    "Invalid provider order"));
+            return;
+        }
+        var result = await _videoLibraryService.UpdateSourceSettingsAsync(summary.Source, _cts.Token);
+        if (!result.IsSuccess && !result.IsCancelled)
+            _notificationService.ShowError(result.Error!, result.ErrorTitle!);
+        await LoadVideosAsync();
+    }
+
+    [RelayCommand]
+    private async Task FullScanSourceAsync(VideoLibrarySourceSummary summary)
+    {
+        if (_scanCoordinator == null || !Guid.TryParse(summary.Source.Id, out var sourceId))
+            return;
+        await _scanCoordinator.ScanSourceAsync(sourceId, fullScan: true, _cts.Token);
+        await LoadVideosAsync();
+    }
+
+    [RelayCommand]
+    private async Task CancelSourceScanAsync(VideoLibrarySourceSummary summary)
+    {
+        if (_scanCoordinator != null && Guid.TryParse(summary.Source.Id, out var sourceId))
+            await _scanCoordinator.CancelAsync(sourceId, _cts.Token);
+    }
+
+    [RelayCommand]
+    private async Task PauseSourceScanAsync(VideoLibrarySourceSummary summary)
+    {
+        if (_scanCoordinator != null && Guid.TryParse(summary.Source.Id, out var sourceId))
+            await _scanCoordinator.PauseAsync(sourceId, _cts.Token);
+    }
+
+    [RelayCommand]
+    private async Task ResumeSourceScanAsync(VideoLibrarySourceSummary summary)
+    {
+        if (_scanCoordinator != null && Guid.TryParse(summary.Source.Id, out var sourceId))
+            await _scanCoordinator.ResumeAsync(sourceId, _cts.Token);
+    }
+
+    [RelayCommand]
+    private async Task BindMatchCandidateAsync(VideoMatchCandidateSnapshot candidate)
+    {
+        if (SelectedVideo?.Video is not { CatalogAssetId: Guid assetId } video || _metadataCoordinator == null)
+            return;
+        var kind = video.LibraryMediaType == VideoLibraryMediaType.Anime
+            ? VideoMetadataMediaKind.Anime
+            : video.CatalogNodeKind == VideoCatalogNodeKind.Movie
+                ? VideoMetadataMediaKind.Movie
+                : VideoMetadataMediaKind.Series;
+        var proposed = new VideoMetadataCandidate(
+            candidate.ProviderId,
+            candidate.ProviderItemId,
+            kind,
+            candidate.Title,
+            null,
+            candidate.Year,
+            video.SeasonNumber,
+            video.EpisodeNumber,
+            video.AbsoluteEpisodeNumber,
+            [],
+            ImmutableDictionary<string, string>.Empty
+                .WithComparers(StringComparer.OrdinalIgnoreCase)
+                .Add(candidate.ProviderId, candidate.ProviderItemId),
+            null);
+        var preview = await _metadataCoordinator.PreviewRematchAsync(assetId, proposed, _cts.Token);
+        var diff = string.Join(Environment.NewLine, preview.FieldChanges.Select(change =>
+            $"{change.Field}: {change.CurrentValue ?? "—"} → {change.ProposedValue ?? "—"}"));
+        var confirmed = await _dialogService.ConfirmAsync(
+            ResourceStringHelper.GetString("VideoMetadataRematchPreviewTitle", "Confirm rematch"),
+            $"{preview.ProposedHierarchy}{Environment.NewLine}{diff}",
+            ResourceStringHelper.GetString("VideoMetadataRematchConfirm", "Bind and lock"),
+            ResourceStringHelper.GetString("VideoMetadataRematchCancel", "Cancel"));
+        if (!confirmed)
+            return;
+        await _metadataCoordinator.ConfirmRematchAsync(preview, _cts.Token);
+        await LoadVideosAsync();
+    }
+
+    [RelayCommand]
     private async Task SaveVideoDetailsAsync()
     {
         if (SelectedVideo == null)
@@ -671,11 +1019,31 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
                 : VideoLibraryView.All;
 
         SelectedLibraryView = view;
+        SelectedSeries = null;
         _activeFolderPath = null;
         _activeCollectionId = null;
         _activeSeriesName = null;
         _activeTag = null;
         ApplyVisibleVideos();
+    }
+
+    [RelayCommand]
+    private void SelectSeries(VideoSeriesViewModel series)
+    {
+        SelectedLibraryView = VideoLibraryView.Series;
+        SelectedSeries = series;
+        SelectedVideo = series.PrimaryPlayItem;
+        CurrentViewTitle = series.Title;
+        CurrentViewSubtitle = series.FactsText;
+    }
+
+    [RelayCommand]
+    private void BackToSeries()
+    {
+        SelectedSeries = null;
+        SelectedVideo = null;
+        CurrentViewTitle = GetViewTitle(VideoLibraryView.Series);
+        CurrentViewSubtitle = FormatVideoCount(SeriesCards.Count);
     }
 
     [RelayCommand]
@@ -902,6 +1270,147 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         _isSubscribedToPlayerLibraryChanges = false;
     }
 
+    private void SubscribeToScanProgress()
+    {
+        if (_scanCoordinator != null)
+            _scanCoordinator.ProgressChanged -= OnScanProgressChanged;
+        if (_scanCoordinator != null)
+            _scanCoordinator.ProgressChanged += OnScanProgressChanged;
+    }
+
+    private void UnsubscribeFromScanProgress()
+    {
+        if (_scanCoordinator != null)
+            _scanCoordinator.ProgressChanged -= OnScanProgressChanged;
+    }
+
+    private void SubscribeToMetadataProgress()
+    {
+        if (_metadataCoordinator != null)
+            _metadataCoordinator.ProgressChanged -= OnMetadataProgressChanged;
+        if (_metadataCoordinator != null)
+            _metadataCoordinator.ProgressChanged += OnMetadataProgressChanged;
+        if (_metadataCoordinator != null)
+        {
+            _metadataCoordinator.BatchProgressChanged -= OnMetadataBatchProgressChanged;
+            _metadataCoordinator.BatchProgressChanged += OnMetadataBatchProgressChanged;
+        }
+    }
+
+    private void UnsubscribeFromMetadataProgress()
+    {
+        if (_metadataCoordinator != null)
+            _metadataCoordinator.ProgressChanged -= OnMetadataProgressChanged;
+        if (_metadataCoordinator != null)
+            _metadataCoordinator.BatchProgressChanged -= OnMetadataBatchProgressChanged;
+    }
+
+    private void OnMetadataBatchProgressChanged(object? sender, VideoMetadataBatchProgress progress)
+    {
+        if (_uiContext != null && SynchronizationContext.Current != _uiContext)
+        {
+            _uiContext.Post(_ => ApplyMetadataBatchProgress(progress), null);
+            return;
+        }
+        ApplyMetadataBatchProgress(progress);
+    }
+
+    private void ApplyMetadataBatchProgress(VideoMetadataBatchProgress progress)
+    {
+        SourceSummaries.FirstOrDefault(summary =>
+                Guid.TryParse(summary.Source.Id, out var id) && id == progress.SourceId)
+            ?.UpdateMetadataProgress(progress);
+        var active = _metadataCoordinator?.ActiveBatchProgress
+            .Where(item => item.State is VideoCatalogJobState.Running or VideoCatalogJobState.Queued)
+            .OrderByDescending(item => item.TotalCount - item.ProcessedCount)
+            .FirstOrDefault();
+        HasBackgroundMetadataTask = active != null;
+        if (active == null)
+            return;
+        BackgroundMetadataProgress = active.TotalCount > 0
+            ? Math.Clamp(active.ProcessedCount * 100d / active.TotalCount, 0, 100)
+            : 100;
+        var sourceName = SourceSummaries.FirstOrDefault(summary =>
+            Guid.TryParse(summary.Source.Id, out var id) && id == active.SourceId)?.Source.Name;
+        BackgroundMetadataText = ResourceStringHelper.FormatString(
+            "VideoMetadataBackgroundProgressFormat",
+            "Scraping metadata{0} · {1} / {2} · {3} matched · {4} review",
+            string.IsNullOrWhiteSpace(sourceName) ? "" : $" · {sourceName}",
+            active.ProcessedCount,
+            active.TotalCount,
+            active.MatchedCount,
+            active.NeedsReviewCount);
+    }
+
+    private void OnMetadataProgressChanged(object? sender, VideoMetadataRefreshProgress progress)
+    {
+        if (_uiContext != null && SynchronizationContext.Current != _uiContext)
+        {
+            _uiContext.Post(_ => ApplyMetadataProgress(progress), null);
+            return;
+        }
+        ApplyMetadataProgress(progress);
+    }
+
+    private void ApplyMetadataProgress(VideoMetadataRefreshProgress progress)
+    {
+        if (HasBackgroundMetadataTask)
+            return;
+        HasActiveMetadataRefresh = progress.Stage != VideoMetadataRefreshStage.Completed;
+        IsMetadataRefreshIndeterminate = progress.TotalProviders <= 0
+                                         || progress.Stage is not VideoMetadataRefreshStage.Searching;
+        MetadataRefreshProgress = progress.TotalProviders > 0
+            ? Math.Clamp(progress.CompletedProviders * 100d / progress.TotalProviders, 0, 100)
+            : 0;
+        var stage = progress.Stage switch
+        {
+            VideoMetadataRefreshStage.Searching => ResourceStringHelper.GetString(
+                "VideoMetadataStageSearching", "Searching providers"),
+            VideoMetadataRefreshStage.Matching => ResourceStringHelper.GetString(
+                "VideoMetadataStageMatching", "Matching candidates"),
+            VideoMetadataRefreshStage.Details => ResourceStringHelper.GetString(
+                "VideoMetadataStageDetails", "Loading details"),
+            VideoMetadataRefreshStage.Artwork => ResourceStringHelper.GetString(
+                "VideoMetadataStageArtwork", "Caching artwork"),
+            _ => ResourceStringHelper.GetString("VideoMetadataStageCompleted", "Metadata refresh complete"),
+        };
+        var itemTitle = _allVideos.FirstOrDefault(video => video.CatalogAssetId == progress.AssetId)?.Title;
+        MetadataRefreshText = string.IsNullOrWhiteSpace(itemTitle)
+            ? stage
+            : $"{stage} · {itemTitle}";
+    }
+
+    private void OnScanProgressChanged(object? sender, VideoLibraryScanProgress progress)
+    {
+        if (_uiContext != null && SynchronizationContext.Current != _uiContext)
+        {
+            _uiContext.Post(_ => ApplyScanProgress(progress), null);
+            return;
+        }
+        ApplyScanProgress(progress);
+    }
+
+    private void ApplyScanProgress(VideoLibraryScanProgress progress)
+    {
+        _latestScanProgress[progress.SourceId] = progress;
+        SourceSummaries.FirstOrDefault(summary =>
+                Guid.TryParse(summary.Source.Id, out var id) && id == progress.SourceId)
+            ?.UpdateProgress(progress);
+
+        var active = _latestScanProgress.Values
+            .Where(item => item.State is VideoCatalogJobState.Running or VideoCatalogJobState.Paused)
+            .OrderByDescending(item => item.Generation)
+            .FirstOrDefault();
+        HasActiveScan = active != null;
+        if (active == null)
+            return;
+        IsActiveScanIndeterminate = active.TotalCount is not > 0;
+        ActiveScanProgress = active.TotalCount is > 0
+            ? Math.Clamp(active.ProcessedCount * 100d / active.TotalCount.Value, 0, 100)
+            : 0;
+        ActiveScanText = VideoLibrarySourceSummary.FormatProgress(active);
+    }
+
     private async void OnPlayerLibraryChanged(object? sender, EventArgs e) =>
         await LoadVideosAsync();
 
@@ -924,9 +1433,17 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     partial void OnSelectedLibraryViewChanged(VideoLibraryView value)
     {
         CurrentViewTitle = GetViewTitle(value);
+        OnPropertyChanged(nameof(IsHomeView));
         OnPropertyChanged(nameof(IsFoldersView));
         OnPropertyChanged(nameof(IsCollectionsView));
         OnPropertyChanged(nameof(IsTagsView));
+        OnPropertyChanged(nameof(IsSourcesView));
+        OnPropertyChanged(nameof(IsVideoCatalogView));
+        OnPropertyChanged(nameof(IsSeriesBrowseView));
+        OnPropertyChanged(nameof(IsSeriesDetailView));
+        OnPropertyChanged(nameof(IsLibraryBrowseView));
+        OnPropertyChanged(nameof(ShowNoVideos));
+        OnPropertyChanged(nameof(ShowCatalogLoading));
     }
 
     partial void OnSourceSummariesChanged(ObservableCollection<VideoLibrarySourceSummary> value) =>
@@ -934,6 +1451,8 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
 
     private void ApplyVisibleVideos()
     {
+        RebuildHomeSections();
+        RebuildSeriesCards();
         var filtered = FilterVideos(_allVideos).ToList();
         Videos = new ObservableCollection<VideoItemViewModel>(
             SortVideos(filtered).Select(video => new VideoItemViewModel(
@@ -942,6 +1461,80 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         CurrentViewSubtitle = FormatVideoCount(Videos.Count);
         OnPropertyChanged(nameof(SmartCollectionPreviewRows));
         _ = GenerateMissingThumbnailsForVisibleVideosAsync(_cts.Token);
+    }
+
+    private void RebuildSeriesCards()
+    {
+        var selectedId = SelectedSeries?.Id;
+        SeriesCards = new ObservableCollection<VideoSeriesViewModel>(_allVideos
+            .Where(video => video.CatalogSeriesNodeId.HasValue
+                            && video.LibraryMediaType != VideoLibraryMediaType.Anime)
+            .GroupBy(video => video.CatalogSeriesNodeId!.Value)
+            .Select(group => new VideoSeriesViewModel(group.Key, group))
+            .OrderBy(series => series.Title, StringComparer.CurrentCultureIgnoreCase));
+        SelectedSeries = selectedId.HasValue
+            ? SeriesCards.FirstOrDefault(series => series.Id == selectedId.Value)
+            : null;
+        if (SelectedLibraryView == VideoLibraryView.Series && SelectedSeries == null)
+            CurrentViewSubtitle = FormatVideoCount(SeriesCards.Count);
+    }
+
+    private void RebuildHomeSections()
+    {
+        HomeContinueWatching = new ObservableCollection<VideoItemViewModel>(
+            BuildContinueWatchingItems(_allVideos, 6)
+                .Select(video => new VideoItemViewModel(video)));
+        HomeRecentlyAdded = new ObservableCollection<VideoItemViewModel>(
+            _allVideos
+                .Where(video => video.IsAvailable)
+                .OrderByDescending(video => video.ImportedAt)
+                .Take(6)
+                .Select(video => new VideoItemViewModel(video)));
+        HomeNextEpisodes = new ObservableCollection<VideoItemViewModel>(
+            BuildNextEpisodes().Take(6).Select(video => new VideoItemViewModel(video)));
+    }
+
+    internal static IReadOnlyList<VideoItem> BuildContinueWatchingItems(
+        IEnumerable<VideoItem> videos,
+        int limit)
+    {
+        return videos
+            .Where(video => video.IsAvailable && HasProgress(video) && !video.IsWatched)
+            .GroupBy(video => video.CatalogSeriesNodeId.HasValue
+                ? $"series:{video.CatalogSeriesNodeId.Value:D}"
+                : $"asset:{video.Id}", StringComparer.OrdinalIgnoreCase)
+            .Select(group => group
+                .OrderByDescending(video => video.LastOpenedAt ?? video.ImportedAt)
+                .First())
+            .OrderByDescending(video => video.LastOpenedAt ?? video.ImportedAt)
+            .Take(limit)
+            .ToList();
+    }
+
+    private IEnumerable<VideoItem> BuildNextEpisodes()
+    {
+        return _allVideos
+            .Where(video => video.CatalogSeriesNodeId.HasValue
+                            && video.CatalogNodeKind == VideoCatalogNodeKind.Episode
+                            && video.IsAvailable
+                            && (!video.IsSpecialEpisode || video.AbsoluteEpisodeNumber.HasValue))
+            .GroupBy(video => video.CatalogSeriesNodeId!.Value)
+            .Select(group =>
+            {
+                var ordered = group
+                    .OrderBy(video => video.AbsoluteEpisodeNumber ?? int.MaxValue)
+                    .ThenBy(video => video.SeasonNumber ?? int.MaxValue)
+                    .ThenBy(video => video.EpisodeNumber ?? int.MaxValue)
+                    .ThenBy(video => video.FilePath, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                var anchor = ordered.FindLastIndex(video => video.IsWatched || HasProgress(video));
+                return anchor >= 0
+                    ? ordered.Skip(anchor + 1).FirstOrDefault(video => !video.IsWatched)
+                    : null;
+            })
+            .Where(video => video != null)
+            .Select(video => video!)
+            .OrderByDescending(video => video.ImportedAt);
     }
 
     private IEnumerable<VideoItem> FilterVideos(IEnumerable<VideoItem> videos)
@@ -956,12 +1549,18 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         SelectedLibraryView switch
         {
             VideoLibraryView.ContinueWatching => HasProgress(video) && !video.IsWatched,
+            VideoLibraryView.Movies => video.CatalogNodeKind == VideoCatalogNodeKind.Movie,
+            VideoLibraryView.Anime => video.LibraryMediaType == VideoLibraryMediaType.Anime,
             VideoLibraryView.Unwatched => !HasProgress(video) && !video.IsWatched,
             VideoLibraryView.Finished => video.IsWatched,
             VideoLibraryView.Watched => video.IsWatched,
             VideoLibraryView.Recent => video.LastOpenedAt.HasValue,
             VideoLibraryView.Favorites => video.IsFavorite,
-            VideoLibraryView.NeedsReview => !IsCoveredByAnyCollection(video),
+            VideoLibraryView.NeedsReview => video.NeedsReview,
+            VideoLibraryView.Unorganized => video.IsUnorganized,
+            VideoLibraryView.Series when string.IsNullOrWhiteSpace(_activeSeriesName) =>
+                video.CatalogSeriesNodeId.HasValue
+                && video.LibraryMediaType != VideoLibraryMediaType.Anime,
             VideoLibraryView.Folders when !string.IsNullOrWhiteSpace(_activeFolderPath) =>
                 string.Equals(video.SourceFolderPath, _activeFolderPath, StringComparison.OrdinalIgnoreCase),
             VideoLibraryView.Series when !string.IsNullOrWhiteSpace(_activeSeriesName) =>
@@ -1036,12 +1635,27 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
                 var sourceVideos = _allVideos
                     .Where(video => string.Equals(video.SourceId, source.Id, StringComparison.OrdinalIgnoreCase))
                     .ToList();
-                return new VideoLibrarySourceSummary(
+                var summary = new VideoLibrarySourceSummary(
                     source,
                     sourceVideos.Count,
                     sourceVideos.Count(video => HasProgress(video) && !video.IsWatched),
                     sourceVideos.Count(video => !video.IsRemote && !File.Exists(video.FilePath)));
+                if (Guid.TryParse(source.Id, out var sourceId)
+                    && _latestScanProgress.TryGetValue(sourceId, out var progress))
+                    summary.UpdateProgress(progress);
+                if (Guid.TryParse(source.Id, out sourceId))
+                {
+                    var metadataProgress = _metadataCoordinator?.ActiveBatchProgress
+                        .FirstOrDefault(item => item.SourceId == sourceId);
+                    if (metadataProgress != null)
+                        summary.UpdateMetadataProgress(metadataProgress);
+                }
+                return summary;
             }));
+        OnPropertyChanged(nameof(HomeMoviesCountText));
+        OnPropertyChanged(nameof(HomeSeriesCountText));
+        OnPropertyChanged(nameof(HomeAnimeCountText));
+        OnPropertyChanged(nameof(HomeCollectionsCountText));
     }
 
     private static bool MatchesSearch(VideoItem video, string query) =>
@@ -1050,6 +1664,9 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         || Contains(video.OriginalUrl, query)
         || Contains(video.SourceFolderPath, query)
         || Contains(video.CollectionName, query)
+        || Contains(video.OriginalTitle, query)
+        || Contains(video.LocalizedSubtitle, query)
+        || video.ExternalIds.Any(pair => Contains(pair.Key, query) || Contains(pair.Value, query))
         || SplitTags(video.Tags).Any(tag => Contains(tag, query));
 
     private static bool Contains(string? value, string query) =>
@@ -1076,6 +1693,9 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     private static string GetViewTitle(VideoLibraryView value) =>
         value switch
         {
+            VideoLibraryView.Home => ResourceStringHelper.GetString("VideoLibraryViewHome", "Home"),
+            VideoLibraryView.Movies => ResourceStringHelper.GetString("VideoLibraryViewMovies", "Movies"),
+            VideoLibraryView.Anime => ResourceStringHelper.GetString("VideoLibraryViewAnime", "Anime"),
             VideoLibraryView.ContinueWatching => ResourceStringHelper.GetString(
                 "VideoLibraryViewContinueWatching",
                 "Continue Watching"),
@@ -1084,6 +1704,8 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
             VideoLibraryView.Recent => ResourceStringHelper.GetString("VideoLibraryViewRecent", "Recent"),
             VideoLibraryView.Favorites => ResourceStringHelper.GetString("VideoLibraryViewFavorites", "Favorites"),
             VideoLibraryView.NeedsReview => ResourceStringHelper.GetString("VideoLibraryViewNeedsReview", "Needs Review"),
+            VideoLibraryView.Unorganized => ResourceStringHelper.GetString("VideoLibraryViewUnorganized", "Unorganized"),
+            VideoLibraryView.Sources => ResourceStringHelper.GetString("VideoLibraryViewSources", "Sources"),
             VideoLibraryView.Watched => ResourceStringHelper.GetString("VideoLibraryViewWatched", "Watched"),
             VideoLibraryView.Folders => ResourceStringHelper.GetString("VideoLibraryViewFolders", "Folders"),
             VideoLibraryView.Series => ResourceStringHelper.GetString("VideoLibraryViewSeries", "Series"),
@@ -1220,7 +1842,9 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     }
 
     private static string? SeriesName(VideoItem video) =>
-        !string.IsNullOrWhiteSpace(video.CollectionName)
+        !string.IsNullOrWhiteSpace(video.CatalogSeriesTitle)
+            ? video.CatalogSeriesTitle
+            : !string.IsNullOrWhiteSpace(video.CollectionName)
             ? video.CollectionName
             : string.IsNullOrWhiteSpace(video.SourceFolderPath)
                 ? null
@@ -1255,6 +1879,10 @@ public sealed record VideoLibrarySortOptionItem(
     VideoLibrarySortOption Value,
     string DisplayName);
 
+public sealed record VideoLibraryMediaTypeOption(
+    VideoLibraryMediaType Value,
+    string DisplayName);
+
 public sealed record VideoSmartRuleFieldOption(
     VideoSmartRuleField Value,
     string DisplayName);
@@ -1269,17 +1897,177 @@ public sealed record VideoLibraryFilterRow(
     string MetadataText,
     VideoCollectionKind? CollectionKind = null);
 
-public sealed record VideoLibrarySourceSummary(
-    VideoLibrarySource Source,
-    int ItemCount,
-    int InProgressCount,
-    int MissingCount)
+public sealed partial class VideoLibrarySourceSummary : ObservableObject
 {
-    public string StatusText => $"{ItemCount} videos • {InProgressCount} in progress • {MissingCount} missing";
+    private static readonly Dictionary<string, string> ProviderIds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["local"] = "local",
+        ["tmdb"] = "tmdb",
+        ["tvmaze"] = "tvmaze",
+        ["anilist"] = "anilist",
+        ["anidb"] = "anidb",
+        ["bangumi"] = "bangumi",
+        ["tvdb"] = "tvdb",
+    };
+
+    public VideoLibrarySourceSummary(VideoLibrarySource source, int itemCount, int inProgressCount, int missingCount)
+    {
+        Source = source;
+        ItemCount = itemCount;
+        InProgressCount = inProgressCount;
+        MissingCount = missingCount;
+        MediaTypeDraft = source.MediaType;
+        ProviderOrderDraft = string.Join(", ", source.ProviderOrder);
+    }
+
+    public VideoLibrarySource Source { get; }
+    public int ItemCount { get; }
+    public int InProgressCount { get; }
+    public int MissingCount { get; }
+    public VideoLibraryMediaType? MediaTypeDraft { get; set; }
+    public int MediaTypeSelectedIndex
+    {
+        get => (int)(MediaTypeDraft ?? VideoLibraryMediaType.Auto);
+        set
+        {
+            if (Enum.IsDefined(typeof(VideoLibraryMediaType), value))
+                MediaTypeDraft = (VideoLibraryMediaType)value;
+        }
+    }
+    public string ProviderOrderDraft { get; set; }
+    public string StatusText => ResourceStringHelper.FormatString(
+        "VideoLibrarySourceStatusFormat",
+        "{0} videos · {1} in progress · {2} missing",
+        ItemCount, InProgressCount, MissingCount);
     public string LastScannedText => Source.LastScannedAt.HasValue
-        ? $"Last scanned {Source.LastScannedAt.Value.ToLocalTime():g}"
-        : "Never scanned";
+        ? ResourceStringHelper.FormatString(
+            "VideoLibrarySourceLastScannedFormat",
+            "Last scanned {0:g}",
+            Source.LastScannedAt.Value.ToLocalTime())
+        : ResourceStringHelper.GetString("VideoLibrarySourceNeverScanned", "Never scanned");
     public bool HasError => !string.IsNullOrWhiteSpace(Source.LastError);
+    public string ProviderOrderText => Source.ProviderOrder.Count == 0
+        ? ResourceStringHelper.GetString("VideoLibrarySourceDefaultProviderRoute", "Default provider route")
+        : string.Join(" → ", Source.ProviderOrder);
+
+    [ObservableProperty]
+    public partial bool IsScanProgressVisible { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsScanIndeterminate { get; set; }
+
+    [ObservableProperty]
+    public partial double ScanProgressValue { get; set; }
+
+    [ObservableProperty]
+    public partial string ScanProgressText { get; set; } = "";
+
+    [ObservableProperty]
+    public partial string CurrentItemText { get; set; } = "";
+
+    [ObservableProperty]
+    public partial bool IsMetadataProgressVisible { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsMetadataIndeterminate { get; set; }
+
+    [ObservableProperty]
+    public partial double MetadataProgressValue { get; set; }
+
+    [ObservableProperty]
+    public partial string MetadataProgressText { get; set; } = "";
+
+    [ObservableProperty]
+    public partial string MetadataErrorText { get; set; } = "";
+
+    public bool HasMetadataError => !string.IsNullOrWhiteSpace(MetadataErrorText);
+
+    public void UpdateProgress(VideoLibraryScanProgress progress)
+    {
+        IsScanProgressVisible = progress.State is VideoCatalogJobState.Running or VideoCatalogJobState.Paused;
+        IsScanIndeterminate = progress.TotalCount is not > 0;
+        ScanProgressValue = progress.TotalCount is > 0
+            ? Math.Clamp(progress.ProcessedCount * 100d / progress.TotalCount.Value, 0, 100)
+            : 0;
+        ScanProgressText = FormatProgress(progress);
+        CurrentItemText = string.IsNullOrWhiteSpace(progress.CurrentPath)
+            ? ""
+            : Path.GetFileName(progress.CurrentPath);
+    }
+
+    public static string FormatProgress(VideoLibraryScanProgress progress)
+    {
+        var stage = progress.Stage switch
+        {
+            VideoLibraryScanStage.Enumerating => ResourceStringHelper.GetString(
+                "VideoLibraryScanStageEnumerating", "Discovering files"),
+            VideoLibraryScanStage.Analyzing => ResourceStringHelper.GetString(
+                "VideoLibraryScanStageAnalyzing", "Reading metadata"),
+            VideoLibraryScanStage.Committing => ResourceStringHelper.GetString(
+                "VideoLibraryScanStageCommitting", "Saving catalog"),
+            _ => ResourceStringHelper.GetString("VideoLibraryScanStageCompleted", "Scan complete"),
+        };
+        var count = progress.TotalCount is > 0
+            ? $"{progress.ProcessedCount:N0} / {progress.TotalCount.Value:N0}"
+            : $"{progress.ProcessedCount:N0}";
+        var speed = progress.ItemsPerSecond > 0.05
+            ? ResourceStringHelper.FormatString(
+                "VideoLibraryScanRateFormat", "{0:0.0} items/s", progress.ItemsPerSecond)
+            : "";
+        return string.Join(" · ", new[] { stage, count, speed }.Where(value => !string.IsNullOrWhiteSpace(value)));
+    }
+
+    public void UpdateMetadataProgress(VideoMetadataBatchProgress progress)
+    {
+        IsMetadataProgressVisible = progress.State is VideoCatalogJobState.Running
+            or VideoCatalogJobState.Queued
+            or VideoCatalogJobState.Failed;
+        IsMetadataIndeterminate = progress.TotalCount <= 0
+                                  && progress.State is VideoCatalogJobState.Running or VideoCatalogJobState.Queued;
+        MetadataProgressValue = progress.TotalCount > 0
+            ? Math.Clamp(progress.ProcessedCount * 100d / progress.TotalCount, 0, 100)
+            : 0;
+        var state = progress.State switch
+        {
+            VideoCatalogJobState.Queued => ResourceStringHelper.GetString(
+                "VideoMetadataBatchStageQueued", "Metadata refresh queued"),
+            VideoCatalogJobState.Completed => ResourceStringHelper.GetString(
+                "VideoMetadataBatchStageCompleted", "Metadata refresh complete"),
+            VideoCatalogJobState.Cancelled => ResourceStringHelper.GetString(
+                "VideoMetadataBatchStageCancelled", "Metadata refresh cancelled"),
+            VideoCatalogJobState.Failed => ResourceStringHelper.GetString(
+                "VideoMetadataBatchStageFailed", "Metadata refresh failed"),
+            _ => ResourceStringHelper.GetString(
+                "VideoMetadataBatchStageRunning", "Scraping metadata in background"),
+        };
+        MetadataProgressText = ResourceStringHelper.FormatString(
+            "VideoMetadataSourceProgressFormat",
+            "{0} · {1} / {2} · {3} matched · {4} review",
+            state,
+            progress.ProcessedCount,
+            progress.TotalCount,
+            progress.MatchedCount,
+            progress.NeedsReviewCount);
+        MetadataErrorText = progress.Error ?? "";
+        OnPropertyChanged(nameof(HasMetadataError));
+    }
+
+    public bool TryApplyProviderOrder(out string? invalidProvider)
+    {
+        var parsed = ProviderOrderDraft
+            .Split([',', ';', '\n', '\r', '→'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .ToList();
+        invalidProvider = parsed.FirstOrDefault(provider => !ProviderIds.ContainsKey(provider));
+        if (invalidProvider != null)
+            return false;
+        Source.ProviderOrder = parsed
+            .Select(provider => ProviderIds[provider])
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        Source.MediaType = MediaTypeDraft ?? Source.MediaType;
+        ProviderOrderDraft = string.Join(", ", Source.ProviderOrder);
+        return true;
+    }
 }
 
 public sealed partial class VideoCollectionMembershipOption : ObservableObject

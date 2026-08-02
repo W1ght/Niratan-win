@@ -1,5 +1,18 @@
 # Third-party notices
 
+## Video metadata services
+
+Niratan queries these services on demand after explicit user consent. It does not mirror their databases, does not upload media/sidecar content, and retains source links with normalized metadata. Each service remains governed by its current terms:
+
+- TMDB: movie/TV text and artwork. This product uses the TMDB API but is not endorsed or certified by TMDB. https://www.themoviedb.org/ and https://developer.themoviedb.org/docs/faq
+- TVmaze: TV text, episodes and artwork under the API's CC BY-SA attribution terms. https://www.tvmaze.com/api
+- AniList: on-demand anime identity, aliases, tags and cross IDs; images disabled by default. https://anilist.gitbook.io/anilist-apiv2-docs/docs/guide/terms-of-use
+- AniDB: weekly official title index only; no unregistered real-time detail client. https://wiki.anidb.net/API
+- Bangumi: on-demand anime/Japanese drama supplemental text; images disabled by default. https://bangumi.github.io/api/
+- TheTVDB: adapter and offline fixtures are present, but production use remains disabled until Niratan receives project authorization. https://thetvdb.com/api-information
+
+No Jikan/MAL HTML scraping, OpenSubtitles, Fanart.tv or AniBridge dataset is used in this phase.
+
 ## MonoTorrent 3.0.2
 
 - Project: https://github.com/alanmcgovern/monotorrent

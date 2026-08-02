@@ -24,7 +24,9 @@ public class VideoLibraryPageAssetTests
         xaml.Should().Contain("Padding=\"20,14,28,16\"");
         xaml.Should().NotContain("VideoLibraryTitleBarBackground");
         xaml.Should().NotContain("Margin=\"0,-32,0,0\"");
-        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryAllNavItem\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryHomeNavItem\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryMoviesNavItem\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryAnimeNavItem\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryContinueWatchingNavItem\"");
         xaml.Should().NotContain("AutomationProperties.AutomationId=\"VideoLibraryWatchedNavItem\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibrarySearchBox\"");
@@ -46,12 +48,24 @@ public class VideoLibraryPageAssetTests
         xaml.Should().Contain("AutomationProperties.AutomationId=\"ManageVideoSourcesButton\"");
         xaml.Should().Contain("Command=\"{x:Bind ViewModel.MarkSelectedWatchedCommand}\"");
         xaml.Should().Contain("Command=\"{x:Bind ViewModel.SaveVideoDetailsCommand}\"");
-        xaml.Should().Contain("VideoLibraryUnwatchedNavItem");
-        xaml.Should().Contain("VideoLibraryFinishedNavItem");
-        xaml.Should().Contain("VideoLibraryRecentNavItem");
+        xaml.Should().NotContain("VideoLibraryUnwatchedNavItem");
+        xaml.Should().NotContain("VideoLibraryFinishedNavItem");
+        xaml.Should().NotContain("VideoLibraryRecentNavItem");
         xaml.Should().Contain("VideoLibraryNeedsReviewNavItem");
         xaml.Should().Contain("VideoLibraryFavoritesNavItem");
         xaml.Should().Contain("VideoLibrarySeriesNavItem");
+        xaml.Should().Contain("VideoLibraryUnorganizedNavItem");
+        xaml.Should().Contain("VideoLibrarySourcesNavItem");
+        xaml.Should().Contain("Command=\"{x:Bind ViewModel.RefreshSelectedMetadataCommand}\"");
+        xaml.Should().Contain("ViewModel.ActiveScanText, Mode=OneWay");
+        xaml.Should().Contain("ViewModel.MetadataRefreshText, Mode=OneWay");
+        xaml.Should().Contain("IsIndeterminate=\"{x:Bind IsScanIndeterminate, Mode=OneWay}\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryHomeSections\"");
+        xaml.Should().Contain("ItemsSource=\"{x:Bind ViewModel.HomeNextEpisodes, Mode=OneWay}\"");
+        xaml.Should().Contain("x:Uid=\"VideoLibrarySourceProviderOrderBox\"");
+        xaml.Should().Contain("SelectedIndex=\"{x:Bind MediaTypeSelectedIndex, Mode=TwoWay}\"");
+        xaml.Should().NotContain("SelectedValue=\"{x:Bind Source.MediaType, Mode=TwoWay}\"");
+        xaml.Should().Contain("Command=\"{Binding ViewModel.BindMatchCandidateCommand, ElementName=ThisPage}\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryFolderFilters\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryCollectionFilters\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryTagFilters\"");
@@ -100,6 +114,34 @@ public class VideoLibraryPageAssetTests
     }
 
     [Fact]
+    public void VideoLibraryPage_UsesFullWidthSourcesPageAndVisibleBackgroundProgress()
+    {
+        var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml"));
+        var codeBehind = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml.cs"));
+
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibrarySourcesPage\"");
+        xaml.Should().Contain("ViewModel.BackgroundMetadataProgress");
+        xaml.Should().Contain("ViewModel.RefreshSourceMetadataCommand");
+        xaml.Should().Contain("ViewModel.CancelSourceMetadataCommand");
+        xaml.Should().NotContain("ManageVideoSourcesDialog");
+        codeBehind.Should().NotContain("ManageVideoSourcesDialog");
+    }
+
+    [Fact]
+    public void VideoLibraryPage_HomeMatchesMediaHubSectionsWithoutDuplicatingBrowseList()
+    {
+        var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml"));
+
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryHomePage\"");
+        xaml.Should().Contain("x:Uid=\"VideoLibraryHomeMyMediaHeading\"");
+        xaml.Should().Contain("ViewModel.HomeContinueWatching");
+        xaml.Should().Contain("ViewModel.HomeNextEpisodes");
+        xaml.Should().Contain("ViewModel.HomeRecentlyAdded");
+        xaml.Should().Contain("Visibility=\"{x:Bind ViewModel.IsLibraryBrowseView");
+        xaml.Should().Contain("HorizontalScrollMode=\"Enabled\"");
+    }
+
+    [Fact]
     public void VideoLibraryPage_UsesLocalizedVisibleText()
     {
         var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml"));
@@ -112,18 +154,16 @@ public class VideoLibraryPageAssetTests
         {
             "VideoLibrarySecondaryNavigationView",
             "VideoLibrarySectionHeader",
-            "VideoLibraryAllNavItem",
+            "VideoLibraryHomeNavItem",
+            "VideoLibraryMoviesNavItem",
+            "VideoLibraryAnimeNavItem",
             "VideoLibraryContinueWatchingNavItem",
-            "VideoLibraryUnwatchedNavItem",
-            "VideoLibraryFinishedNavItem",
-            "VideoLibraryRecentNavItem",
             "VideoLibraryNeedsReviewNavItem",
             "VideoLibraryFavoritesNavItem",
             "VideoLibrarySeriesNavItem",
-            "VideoLibraryOrganizeSectionHeader",
-            "VideoLibraryFoldersNavItem",
             "VideoLibraryCollectionsNavItem",
-            "VideoLibraryTagsNavItem",
+            "VideoLibraryUnorganizedNavItem",
+            "VideoLibrarySourcesNavItem",
             "VideoLibraryLayoutList",
             "VideoLibraryLayoutPosters",
             "VideoLibrarySearchBox",
@@ -153,17 +193,16 @@ public class VideoLibraryPageAssetTests
         foreach (var key in new[]
         {
             "VideoLibrarySecondaryNavigationView.PaneTitle",
-            "VideoLibraryAllNavItem.Content",
+            "VideoLibraryHomeNavItem.Content",
+            "VideoLibraryMoviesNavItem.Content",
+            "VideoLibraryAnimeNavItem.Content",
             "VideoLibraryContinueWatchingNavItem.Content",
-            "VideoLibraryUnwatchedNavItem.Content",
-            "VideoLibraryFinishedNavItem.Content",
-            "VideoLibraryRecentNavItem.Content",
             "VideoLibraryNeedsReviewNavItem.Content",
             "VideoLibraryFavoritesNavItem.Content",
             "VideoLibrarySeriesNavItem.Content",
-            "VideoLibraryFoldersNavItem.Content",
             "VideoLibraryCollectionsNavItem.Content",
-            "VideoLibraryTagsNavItem.Content",
+            "VideoLibraryUnorganizedNavItem.Content",
+            "VideoLibrarySourcesNavItem.Content",
             "VideoLibraryLayoutList",
             "VideoLibraryLayoutPosters",
             "VideoLibrarySearchBox.PlaceholderText",

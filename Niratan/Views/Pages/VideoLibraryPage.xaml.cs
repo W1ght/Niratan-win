@@ -71,12 +71,6 @@ public sealed partial class VideoLibraryPage : Page
         _ = CreateSmartCollectionDialog.ShowAsync();
     }
 
-    private void ManageVideoSourcesButton_Click(object sender, RoutedEventArgs e)
-    {
-        ManageVideoSourcesDialog.XamlRoot = XamlRoot;
-        _ = ManageVideoSourcesDialog.ShowAsync();
-    }
-
     private void EditSmartCollectionMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not VideoLibraryFilterRow row
@@ -130,18 +124,22 @@ public sealed partial class VideoLibraryPage : Page
     {
         VideoLibrarySecondaryNavigationView.SelectedItem = view switch
         {
+            VideoLibraryView.Home => VideoLibraryHomeNavItem,
+            VideoLibraryView.Movies => VideoLibraryMoviesNavItem,
+            VideoLibraryView.Anime => VideoLibraryAnimeNavItem,
             VideoLibraryView.ContinueWatching => VideoLibraryContinueWatchingNavItem,
-            VideoLibraryView.Watched => VideoLibraryFinishedNavItem,
-            VideoLibraryView.Unwatched => VideoLibraryUnwatchedNavItem,
-            VideoLibraryView.Finished => VideoLibraryFinishedNavItem,
-            VideoLibraryView.Recent => VideoLibraryRecentNavItem,
+            VideoLibraryView.Watched => VideoLibraryHomeNavItem,
+            VideoLibraryView.Unwatched => VideoLibraryHomeNavItem,
+            VideoLibraryView.Finished => VideoLibraryHomeNavItem,
+            VideoLibraryView.Recent => VideoLibraryHomeNavItem,
             VideoLibraryView.NeedsReview => VideoLibraryNeedsReviewNavItem,
+            VideoLibraryView.Unorganized => VideoLibraryUnorganizedNavItem,
             VideoLibraryView.Favorites => VideoLibraryFavoritesNavItem,
             VideoLibraryView.Series => VideoLibrarySeriesNavItem,
-            VideoLibraryView.Folders => VideoLibraryFoldersNavItem,
+            VideoLibraryView.Folders => VideoLibraryHomeNavItem,
             VideoLibraryView.Collections => VideoLibraryCollectionsNavItem,
-            VideoLibraryView.Tags => VideoLibraryTagsNavItem,
-            _ => VideoLibraryAllNavItem,
+            VideoLibraryView.Sources => VideoLibrarySourcesNavItem,
+            _ => VideoLibraryHomeNavItem,
         };
     }
 }

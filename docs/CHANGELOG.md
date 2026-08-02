@@ -1,5 +1,15 @@
 # Changelog
 
+## 视频资料库升级为 SQLite 与日系 metadata 核心
+
+**根因**：原 JSON-only catalog 只能表达平面文件与轻量集合，无法原子保存电影/剧集/季/集层级、重叠来源、多版本/多集绑定、Review 候选、字段来源、provider cache 和可恢复扫描 generation；“Needs Review”还误用了未加入集合的语义。
+
+**解决**：新增 actor-like 单消费者 SQLite catalog 仓库并从严格验证的 `video_library.json` 单事务迁移，保留原 JSON 与独立播放历史字节不变；增量扫描、日系文件名/NFO 解析、确定性匹配、真正的 Needs Review、Unorganized、人工 diff 后锁定、Local/TMDB/TVmaze/AniList/AniDB/Bangumi 与许可门控 TVDB 已进入同一业务门面。在线请求使用凭据保险库、保守限速、Retry-After、30 天条件缓存和 2 GiB 原子图片缓存，媒体与 sidecar 始终只读。资料库详情、来源任务、隐私/provider 设置和 playback context 同步接入，资料库外打开继续使用同目录自然排序回退；mpv 与播放历史格式未改变。
+
+**扫描与刮削体验**：进入 Video 后不再等待完整目录枚举才出现反馈；来源管理从会裁切控件的固定弹窗改为主内容区全宽卡片。扫描完成会把未匹配或 TTL 过期资产交给独立后台刮削任务，离开页面仍继续；Video 顶部和来源卡片显示处理数、总数、匹配数、待确认数、错误与取消入口。文件分析采用最多四路有界并行，刮削采用最多两路资产并行；同一资产的 provider 搜索继续并行并服从各自限速，相同幂等查询会合并为一次网络请求，候选合并保持 route 顺序。
+
+**首页、系列详情与缓存**：Home 改为 Jellyfin 风格的“我的媒体 / 继续观看 / 接下来播放 / 最近添加的媒体”横向分区，不再在首页下方重复整个文件列表；同一系列只显示最近播放的一集并优先横图。系列书架以 series node 聚合并显示竖版海报，详情使用横版 hero、竖版 poster 与 logo，展示完整标题、标语、简介、年份区间、分级、评分、状态、类型、标签、工作室、季、正篇、Specials、带缓存头像的演员、带缓存海报的相关推荐和 provider 来源。动画的 AniList/AniDB/Bangumi/TMDB 精确结果可联合确认，并优先用 TMDB 填充完整详情和图片；重拍年份冲突仍须人工确认。旧版本误存为 unmatched 的日系分集会在下一次普通增量扫描自动提升为 series/season/episode，并一次性失效旧负缓存重新刮削。30 天响应缓存、2 GiB 图片 LRU 和完成任务负缓存共同阻止每次进入 Video 重复刮削；新增/变化、过期或用户手动强制刷新仍会重新查询。
+
 ## 漫画 OCR 同一气泡只显示一列
 
 **根因**：Google Lens 会把同一竖排气泡的相邻文字列返回为多个 paragraph，Windows 解码器却直接把每个 paragraph 当成独立文字块；悬停和查词因此只能取得其中一列，例如把“あんたの落とし物じゃないの?”拆成三个互不关联的块。

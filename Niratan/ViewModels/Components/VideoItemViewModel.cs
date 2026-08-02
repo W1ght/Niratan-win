@@ -62,7 +62,28 @@ public sealed partial class VideoItemViewModel : ObservableObject
 
     public BitmapImage? ArtworkImage => LoadPoster(ArtworkPath, Video.RemoteThumbnailUrl);
 
+    public string? LandscapeArtworkPath =>
+        ExistingPath(Video.ThumbPath)
+        ?? ExistingPath(Video.SeriesThumbPath)
+        ?? ExistingPath(Video.BackdropPath)
+        ?? ExistingPath(Video.ThumbnailPath)
+        ?? ExistingPath(Video.PosterPath);
+
+    public BitmapImage? LandscapeArtworkImage => LoadPoster(LandscapeArtworkPath, Video.RemoteThumbnailUrl);
+
+    public bool HasLandscapeArtwork => LandscapeArtworkImage != null;
+
     public bool HasArtwork => ArtworkImage != null;
+    public BitmapImage? BackdropImage => LoadLocalImage(Video.BackdropPath);
+    public bool HasBackdrop => BackdropImage != null;
+
+    public string MetadataFactsText => string.Join(" · ", new[]
+    {
+        Video.CatalogNumberingText,
+        Video.ReleaseYear?.ToString(CultureInfo.CurrentCulture),
+        Video.RuntimeText,
+        Video.Genres.FirstOrDefault(),
+    }.Where(value => !string.IsNullOrWhiteSpace(value)));
 
     public string FileSizeText => Video.FileSizeBytes <= 0 ? "" : FormatByteCount(Video.FileSizeBytes);
 
@@ -105,6 +126,9 @@ public sealed partial class VideoItemViewModel : ObservableObject
         OnPropertyChanged(nameof(ArtworkPath));
         OnPropertyChanged(nameof(ArtworkImage));
         OnPropertyChanged(nameof(HasArtwork));
+        OnPropertyChanged(nameof(LandscapeArtworkPath));
+        OnPropertyChanged(nameof(LandscapeArtworkImage));
+        OnPropertyChanged(nameof(HasLandscapeArtwork));
         OnPropertyChanged(nameof(PosterImage));
         OnPropertyChanged(nameof(HasPoster));
         return true;
@@ -168,6 +192,20 @@ public sealed partial class VideoItemViewModel : ObservableObject
                 && remoteUri.Scheme == Uri.UriSchemeHttps)
                 return new BitmapImage(remoteUri);
             return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static BitmapImage? LoadLocalImage(string? path)
+    {
+        try
+        {
+            return !string.IsNullOrWhiteSpace(path) && File.Exists(path)
+                ? new BitmapImage(new Uri(path))
+                : null;
         }
         catch
         {

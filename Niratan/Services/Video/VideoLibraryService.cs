@@ -56,11 +56,22 @@ internal sealed class VideoLibraryService : IVideoLibraryService
     private static readonly string[] FolderPosterNames = ["cover", "poster", "folder"];
 
     private readonly IVideoDataService _dataService;
+    private readonly IVideoLibraryScanCoordinator? _scanCoordinator;
     private readonly ILogger<VideoLibraryService> _logger;
 
     public VideoLibraryService(IVideoDataService dataService, ILogger<VideoLibraryService> logger)
     {
         _dataService = dataService;
+        _logger = logger;
+    }
+
+    public VideoLibraryService(
+        IVideoDataService dataService,
+        IVideoLibraryScanCoordinator scanCoordinator,
+        ILogger<VideoLibraryService> logger)
+    {
+        _dataService = dataService;
+        _scanCoordinator = scanCoordinator;
         _logger = logger;
     }
 
@@ -230,17 +241,27 @@ internal sealed class VideoLibraryService : IVideoLibraryService
             "Error removing video source",
             ct);
 
+    public async Task<Result> UpdateSourceSettingsAsync(
+        VideoLibrarySource source,
+        CancellationToken ct = default) =>
+        await ExecuteAsync(
+            token => _dataService.UpsertVideoLibrarySourceAsync(source, token),
+            "Error updating video source",
+            ct);
+
     public async Task<Result<int>> RemoveMissingVideosAsync(CancellationToken ct = default) =>
         await ExecuteAsync(
             async token =>
             {
-                var videos = await _dataService.GetVideosAsync(ct: token);
-                var missingIds = videos
-                    .Where(video => !video.IsRemote && !File.Exists(video.FilePath))
-                    .Select(video => video.Id)
-                    .ToList();
-                await _dataService.DeleteVideosAsync(missingIds, token);
-                return Result<int>.Success(missingIds.Count);
+                var before = await _dataService.GetVideosAsync(ct: token);
+                if (_scanCoordinator != null)
+                    await _scanCoordinator.ScanAllAsync(fullScan: true, token);
+                var after = await _dataService.GetVideosAsync(ct: token);
+                var newlyUnavailable = after.Count(video =>
+                    !video.IsRemote
+                    && !video.IsAvailable
+                    && before.Any(previous => previous.Id == video.Id && previous.IsAvailable));
+                return Result<int>.Success(newlyUnavailable);
             },
             "Error removing missing videos",
             ct);
@@ -255,6 +276,26 @@ internal sealed class VideoLibraryService : IVideoLibraryService
             await _dataService.UpdateVideoLibrarySourceScanStateAsync(
                 source.Id, source.LastScannedAt, error, ct);
             return Result<VideoSourceRefreshResult>.Failure(error, "Refresh failed");
+        }
+
+        if (_scanCoordinator != null && Guid.TryParse(source.Id, out var sourceGuid))
+        {
+            return await ExecuteAsync(
+                async token =>
+                {
+                    await _scanCoordinator.ScanSourceAsync(sourceGuid, fullScan: false, token);
+                    var refreshedSource = await _dataService.GetVideoLibrarySourceAsync(source.Id, token) ?? source;
+                    var videos = (await _dataService.GetVideosAsync(ct: token))
+                        .Where(video => video.SourceId == source.Id
+                                        || (!video.IsRemote && Path.GetFullPath(video.FilePath).StartsWith(
+                                            Path.TrimEndingDirectorySeparator(source.FolderPath) + Path.DirectorySeparatorChar,
+                                            StringComparison.OrdinalIgnoreCase)))
+                        .ToList();
+                    return Result<VideoSourceRefreshResult>.Success(
+                        new VideoSourceRefreshResult(refreshedSource, videos.Count, videos));
+                },
+                "Error scanning video folder",
+                ct);
         }
 
         var rootPath = source.FolderPath;

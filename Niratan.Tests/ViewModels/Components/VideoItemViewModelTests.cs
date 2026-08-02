@@ -87,4 +87,26 @@ public sealed class VideoItemViewModelTests
             File.Delete(thumbnailPath);
         }
     }
+
+    [Fact]
+    public void LandscapeArtwork_PrefersScrapedSeriesBackdropOverGeneratedFrame()
+    {
+        var seriesBackdrop = Path.GetTempFileName();
+        var generatedFrame = Path.GetTempFileName();
+        try
+        {
+            var sut = new VideoItemViewModel(new VideoItem
+            {
+                SeriesThumbPath = seriesBackdrop,
+                ThumbnailPath = generatedFrame,
+            });
+
+            sut.LandscapeArtworkPath.Should().Be(seriesBackdrop);
+        }
+        finally
+        {
+            File.Delete(seriesBackdrop);
+            File.Delete(generatedFrame);
+        }
+    }
 }

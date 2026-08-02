@@ -42,4 +42,28 @@ public sealed partial class VideoSettingsPage : Page
     {
         Frame.Navigate(typeof(KeyboardShortcutsSettingsPage), SettingsNavigationMode.Embedded);
     }
+
+    private async void SaveTmdbTokenButton_Click(object sender, RoutedEventArgs e)
+    {
+        await ViewModel.SaveProviderTokenAsync("tmdb", TmdbTokenBox.Password);
+        TmdbTokenBox.Password = string.Empty;
+    }
+
+    private async void ClearTmdbTokenButton_Click(object sender, RoutedEventArgs e)
+    {
+        await ViewModel.ClearProviderTokenAsync("tmdb");
+        TmdbTokenBox.Password = string.Empty;
+    }
+
+    private async void SaveBangumiTokenButton_Click(object sender, RoutedEventArgs e)
+    {
+        await ViewModel.SaveProviderTokenAsync("bangumi", BangumiTokenBox.Password);
+        BangumiTokenBox.Password = string.Empty;
+    }
+
+    private async void ClearBangumiTokenButton_Click(object sender, RoutedEventArgs e)
+    {
+        await ViewModel.ClearProviderTokenAsync("bangumi");
+        BangumiTokenBox.Password = string.Empty;
+    }
 }

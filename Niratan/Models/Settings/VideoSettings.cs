@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace Niratan.Models.Settings;
 
@@ -34,6 +35,7 @@ public sealed class VideoSettings
 
     public bool AutoPlayNextEpisode { get; set; } = true;
     public bool RememberPlaybackState { get; set; } = true;
+    public VideoMetadataSettings Metadata { get; set; } = new();
 
     public int SeekIntervalSeconds
     {
@@ -166,7 +168,12 @@ public sealed class VideoSettings
         set => _subtitleMaskHiddenOpacity = ClampFinite(value, 0, 1, 0);
     }
 
-    public VideoSettings Clone() => (VideoSettings)MemberwiseClone();
+    public VideoSettings Clone()
+    {
+        var clone = (VideoSettings)MemberwiseClone();
+        clone.Metadata = Metadata.Clone();
+        return clone;
+    }
 
     private static int Clamp(int value, int min, int max) => Math.Clamp(value, min, max);
 
@@ -207,4 +214,37 @@ public sealed class VideoSettings
 
         return "#" + hex.ToUpperInvariant();
     }
+}
+
+public sealed class VideoMetadataSettings
+{
+    public bool OnlineConsentAccepted { get; set; }
+    public bool TmdbEnabled { get; set; } = true;
+    public bool TvMazeEnabled { get; set; } = true;
+    public bool AniListEnabled { get; set; } = true;
+    public bool AniDbEnabled { get; set; } = true;
+    public bool BangumiEnabled { get; set; } = true;
+    public bool TvDbEnabled { get; set; }
+    public Dictionary<string, bool> ArtworkEnabled { get; set; } = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["local"] = true,
+        ["tmdb"] = true,
+        ["tvmaze"] = true,
+        ["anilist"] = false,
+        ["anidb"] = false,
+        ["bangumi"] = false,
+        ["tvdb"] = false,
+    };
+
+    public VideoMetadataSettings Clone() => new()
+    {
+        OnlineConsentAccepted = OnlineConsentAccepted,
+        TmdbEnabled = TmdbEnabled,
+        TvMazeEnabled = TvMazeEnabled,
+        AniListEnabled = AniListEnabled,
+        AniDbEnabled = AniDbEnabled,
+        BangumiEnabled = BangumiEnabled,
+        TvDbEnabled = false,
+        ArtworkEnabled = new Dictionary<string, bool>(ArtworkEnabled, StringComparer.OrdinalIgnoreCase),
+    };
 }

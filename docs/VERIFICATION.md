@@ -136,10 +136,10 @@ YYYY-MM-DD-uia-tree.txt
 - 强制导出失败时，备份和旧小说表仍存在，小说库进入只读状态；修复 fixture 后重试可完成。
 - 缺失 JSON 可按定义初始化；损坏 `metadata.json`/`shelves.json` 必须保留原字节并显示可恢复警告，不能被自动覆盖。
 - AppData 中没有 `niratan.db` 时，启动后仍不得创建该文件。
-- 首次导入本地和远程视频分别写入 `video_library.json`；首次保存有效进度写入独立的 `video_playback_history.json`。
-- 原有视频 SQLite 数据不迁移、不双写；JSON 资料库应从空状态开始。
+- 首次启动将合法 `video_library.json` 在单事务迁入 `video_library.sqlite3`；原 JSON 和 `video_playback_history.json` 前后 SHA-256 不变，SQLite `user_version=1`、`quick_check=ok`、外键检查为空且 migration ledger 数量正确。
+- 缺失 legacy JSON 创建空 SQLite catalog；损坏、未来版本、重复 identity、未知引用或故障注入必须回滚并显示 legacy 只读 snapshot。并发/重复迁移只能产生一个健康正式库，且不双写 JSON。
 - 进度 `1.9s` 不保存，距离结尾 `5s` 标记完成，清理进度不清理字幕选择；移除并重新加入同一媒体 identity 后仍可恢复独立历史。
-- 损坏 `video_library.json` 时保留原字节并拒绝覆盖；source 批量刷新只产生一次 catalog 原子替换。
+- 迁移成功后的 SQLite 故障必须保留最后成功 snapshot 并显示持久错误，不得回退 legacy JSON。
 
 所有破坏性故障测试必须使用复制到临时目录的 fixture，禁止直接修改用户 AppData。
 
@@ -468,7 +468,35 @@ dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter
 
 ---
 
-## 5. Video Anime4K 验证
+## 5. Video 资料库、扫描与 metadata 验证
+
+```powershell
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~VideoDataServiceTests|FullyQualifiedName~SQLiteVideoCatalogRepositoryTests|FullyQualifiedName~VideoFileNameParserTests|FullyQualifiedName~VideoMetadataMatcherTests|FullyQualifiedName~VideoMetadataProviderTests|FullyQualifiedName~VideoLibrary"
+dotnet build -p:Platform=x64
+```
+
+自动化与 disposable fixture 至少确认：
+
+1. 迁移覆盖空库、本地/远程资产、Profile/字幕/海报、手动/智能集合、双重 membership、orphan、损坏/未来版本、重复 identity、并发与失败重试；源 JSON、播放历史和测试媒体哈希不变。
+2. 增量扫描只重解析新增或大小/mtime 变化资产；唯一例外是旧 catalog 中仍绑定 unmatched 的已解析分集，下一次普通增量扫描必须将其提升为同一 series 下的 season/episode，随后不再重复解析。枚举阶段立即显示不定进度，数量确定后显示“已处理 / 总数”、阶段、当前文件名与吞吐率。sidecar 分析并发不超过四路，进度节流且 catalog 按批提交；完整枚举才标记缺失。取消、暂停/恢复、部分枚举失败、来源删除、嵌套/重叠来源和迟到 generation 不清空用户数据或误写旧结果。
+3. 文件名 fixture 覆盖 `S01E02`、`1x02`、全角第 N 話、多集范围、绝对集、cour、第 N 期、SP/OVA/OAD/NCOP/NCED、年份/重拍与显式 external ID；未知括号标签保留。
+4. Local NFO 使用禁用 DTD/外部实体的受限 XML，超限或越界 sidecar 失败关闭；迁移、扫描、刷新和移除来源前后视频、音频、字幕、NFO 与图片哈希一致。
+5. 匹配确认显式 ID 锁定，唯一精确别名需要年份/季集佐证，模糊阈值为 `0.92 / 0.15` 且拒绝硬冲突；人工 rematch 必须先显示身份、层级和字段 diff。
+6. Provider 测试只使用注入式 handler 和固定 JSON/XML/图片 fixture；覆盖 401 不重试、429/Retry-After、5xx/超时退避、取消、30 天 cache、ETag/Last-Modified、图片大小/格式/原子替换与旧详情保留。多个 provider 搜索同时启动但不突破各自 transport 限速；故意让后置 provider 先返回时，评分候选仍保持 route 顺序。CI 不访问实时网络。
+
+人工验证使用 disposable 动画、日剧、电影与音频目录：
+
+1. 首次打开 Video 自动增量扫描；主页面和来源页可见当前阶段、计数/总数、吞吐率及当前文件名。来源管理必须占用主内容区并随窗口宽度布局，不得回到固定宽度弹窗或裁切操作按钮；可调整 Auto/Anime/日剧/Movie、语言/区域，执行增量/完整扫描、暂停、恢复、取消并看到错误状态。
+2. Home、Movies、Series、Anime、Continue Watching、Favorites、Needs Review、Unorganized、Collections、Sources 语义分别正确；Needs Review 显示候选分数/证据/外部 ID，Unorganized 仅表示未被集合覆盖。
+3. 首次在线刷新显示传输披露；拒绝后 Local NFO 仍工作。确认后增量扫描自动把未匹配或已过期资产放入独立后台刮削任务；离开并重新进入 Video 后任务继续且进度可恢复显示。顶部任务条和来源卡片持续显示处理数/总数、匹配数、待确认数与错误，并可按来源取消。手动刮削强制刷新来源。不同资产并发不超过两路，相同幂等 provider 查询只产生一次网络请求，仍服从 provider 限速与 `Retry-After`。详情显示日文原题、当前语言副题、简介、年份、层级、进度、provider 来源链接和缓存海报。
+4. 同一未匹配来源完成一次自动刮削后，未变化资产在 30 天内重新进入 Video 不再发起搜索；新增/mtime 变化、TTL 过期或手动强制刷新才重新尝试。响应 cache、未匹配负 cache 和图片 LRU 均使用离线 fixture 验证，凭据不得进入 cache key、SQLite payload 或日志。
+5. Home 只显示“我的媒体 / 继续观看 / 接下来播放 / 最近添加的媒体”横向分区，空分区隐藏且不在下方重复整库列表；窄窗口可横向滚动而不裁切卡片。同一系列先播放第 1 集、再播放第 3 集后，Continue Watching 只显示第 3 集并使用缓存横图。Series 书架每个 series node 只显示一张竖版海报；进入详情后显示横版 hero、竖版 poster、可选 logo、标题/原题、标语、简介、年份区间、分级、评分、状态、类型、标签、工作室、季、正篇、Specials、演员、相关推荐、external IDs、provider 归属和本地媒体信息。
+4. 人工候选绑定先预览 diff，确认后锁定；刷新不覆盖用户标题/本地字段、不改变资产绑定，断网、错误 token 或单 provider 429 不清空旧详情。
+5. 从资料库按层级播放可上一/下一项和自动连播，Specials 不自动插入正篇；多集文件队列只出现一次。文件关联打开使用同目录自然排序，远程或枚举失败退回单项。
+
+Provider smoke test 只在合法网络与凭据可用时执行；逐项记录 TMDB token、Bangumi token、TVDB 项目授权、实际 Retry-After、图片 CDN 和账号路径是否实测。不得用用户现有媒体或 AppData 做破坏性验证。
+
+### 5.1 Video Anime4K 验证
 
 ```powershell
 dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Anime4K|FullyQualifiedName~VideoEnhancement|FullyQualifiedName~MpvNative"

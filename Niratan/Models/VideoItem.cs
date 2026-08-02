@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using Niratan.Models.Video;
 
 namespace Niratan.Models;
 
@@ -18,6 +21,70 @@ public class VideoItem
     public string? SourceFolderPath { get; set; }
     public string? SourceId { get; set; }
     public DateTime? LastSeenAt { get; set; }
+    public bool IsAvailable { get; set; } = true;
+    public Guid? CatalogAssetId { get; set; }
+    public Guid? CatalogNodeId { get; set; }
+    public Guid? CatalogSeriesNodeId { get; set; }
+    public string? CatalogSeriesTitle { get; set; }
+    public VideoCatalogNodeKind CatalogNodeKind { get; set; } = VideoCatalogNodeKind.Unmatched;
+    public VideoLibraryMediaType LibraryMediaType { get; set; } = VideoLibraryMediaType.Auto;
+    public string? OriginalTitle { get; set; }
+    public string? LocalizedSubtitle { get; set; }
+    public string? Overview { get; set; }
+    public int? ReleaseYear { get; set; }
+    public int? SeasonNumber { get; set; }
+    public int? EpisodeNumber { get; set; }
+    public int? AbsoluteEpisodeNumber { get; set; }
+    public bool IsSpecialEpisode { get; set; }
+    public bool IdentityLocked { get; set; }
+    public bool NeedsReview { get; set; }
+    public bool IsUnorganized { get; set; }
+    public IReadOnlyDictionary<string, string> ExternalIds { get; set; } =
+        new Dictionary<string, string>();
+    public IReadOnlyList<VideoMatchCandidateSnapshot> MatchCandidates { get; set; } =
+        Array.Empty<VideoMatchCandidateSnapshot>();
+    public IReadOnlyList<string> Genres { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> Actors { get; set; } = Array.Empty<string>();
+    public IReadOnlyDictionary<string, string> ProviderSourceUrls { get; set; } =
+        new Dictionary<string, string>();
+    public string? BackdropPath { get; set; }
+    public string? ThumbPath { get; set; }
+    public string? LogoPath { get; set; }
+    public string? SeriesPosterPath { get; set; }
+    public string? SeriesThumbPath { get; set; }
+    public string? Tagline { get; set; }
+    public string? OfficialRating { get; set; }
+    public double? CommunityRating { get; set; }
+    public int? EndYear { get; set; }
+    public string? SeriesStatus { get; set; }
+    public IReadOnlyList<string> MetadataTags { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> Studios { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<VideoPersonCredit> People { get; set; } = Array.Empty<VideoPersonCredit>();
+    public IReadOnlyList<VideoRelatedItem> RelatedItems { get; set; } = Array.Empty<VideoRelatedItem>();
+    public string GenresText => string.Join(" · ", Genres);
+    public string ActorsText => string.Join(" · ", Actors);
+    public bool HasGenres => Genres.Count > 0;
+    public bool HasActors => Actors.Count > 0;
+    public bool HasProviderSources => ProviderSourceUrls.Count > 0;
+    public bool HasOverview => !string.IsNullOrWhiteSpace(Overview);
+    public string ProviderAttributionText => string.Join(" · ", ProviderSourceUrls.Keys.Select(id => id.ToUpperInvariant()));
+    public Uri? PrimaryProviderSourceUri => Uri.TryCreate(ProviderSourceUrls.Values.FirstOrDefault(), UriKind.Absolute, out var uri)
+        ? uri
+        : null;
+    public string RuntimeText => DurationSeconds > 0
+        ? TimeSpan.FromSeconds(DurationSeconds).ToString(DurationSeconds >= 3600 ? @"h\h\ mm\m" : @"m\m")
+        : "";
+
+    public string CatalogNumberingText => CatalogNodeKind switch
+    {
+        VideoCatalogNodeKind.Episode when SeasonNumber.HasValue && EpisodeNumber.HasValue =>
+            $"S{SeasonNumber:00}E{EpisodeNumber:00}",
+        VideoCatalogNodeKind.Episode when AbsoluteEpisodeNumber.HasValue => $"#{AbsoluteEpisodeNumber}",
+        _ => ReleaseYear?.ToString() ?? "",
+    };
+
+    public string ExternalIdsText =>
+        string.Join(", ", ExternalIds.Select(pair => $"{pair.Key}: {pair.Value}"));
     public string? PosterPath { get; set; }
     public string? ThumbnailPath { get; set; }
     public string? Tags { get; set; }

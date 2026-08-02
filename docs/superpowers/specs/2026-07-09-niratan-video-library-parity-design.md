@@ -1,5 +1,7 @@
 # Niratan Video Library Parity Design
 
+> Superseded for catalog architecture and online metadata by the 2026-08 Video Library & Japanese Metadata phase-one implementation documented in `docs/ARCHITECTURE.md`. The non-destructive media boundary and reusable collection/thumbnail behavior remain valid; the former sidebar taxonomy and “no internet metadata” non-goal do not.
+
 ## Goal
 
 Bring the Windows video library closer to Niratan's local video library without turning this increment into a full macOS port. The first version should make browsing feel like Niratan: a library sidebar, list/poster layout switching, generated thumbnails, and lightweight manual or smart collections.

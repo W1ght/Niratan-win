@@ -412,6 +412,10 @@
   <data name="VideoPlayerPreviousSubtitleButton.Label" xml:space="preserve"><value>上一句</value></data>
   <data name="VideoPlayerNextSubtitleButton.AutomationProperties.Name" xml:space="preserve"><value>下一句字幕</value></data>
   <data name="VideoPlayerNextSubtitleButton.Label" xml:space="preserve"><value>下一句</value></data>
+  <data name="VideoPlayerPreviousEpisodeButton.AutomationProperties.Name" xml:space="preserve"><value>上一集</value></data>
+  <data name="VideoPlayerPreviousEpisodeButton.Label" xml:space="preserve"><value>上一集</value></data>
+  <data name="VideoPlayerNextEpisodeButton.AutomationProperties.Name" xml:space="preserve"><value>下一集</value></data>
+  <data name="VideoPlayerNextEpisodeButton.Label" xml:space="preserve"><value>下一集</value></data>
   <data name="VideoPlayerProgressSlider.AutomationProperties.Name" xml:space="preserve"><value>播放位置</value></data>
   <data name="VideoPlayerVolumeSlider.AutomationProperties.Name" xml:space="preserve"><value>音量</value></data>
   <data name="VideoPlayerInspectorButton.AutomationProperties.Name" xml:space="preserve"><value>检查器</value></data>
@@ -1564,4 +1568,137 @@
   <data name="MangaRemoteDetailsAddedLibraryStatus" xml:space="preserve"><value>已加入漫画库。</value></data>
   <data name="MangaRemoteDetailsRemovedLibraryStatus" xml:space="preserve"><value>已移出漫画库。</value></data>
   <data name="MangaRemoteDetailsReadChapterStatus" xml:space="preserve"><value>已读</value></data>
+  <data name="VideoMetadataSectionHeader.Text" xml:space="preserve"><value>资料库元数据</value></data>
+  <data name="VideoMetadataPrivacyCard.Header" xml:space="preserve"><value>在线元数据隐私</value></data>
+  <data name="VideoMetadataPrivacyCard.Description" xml:space="preserve"><value>仅允许 Niratan 发送解析后的标题、年份、集数和外部 ID；绝不上传视频、字幕、NFO 内容或本地路径。</value></data>
+  <data name="VideoMetadataPrivacyToggle.Header" xml:space="preserve"><value>启用在线元数据查询</value></data>
+  <data name="VideoMetadataProvidersCard.Header" xml:space="preserve"><value>元数据提供器</value></data>
+  <data name="VideoMetadataProvidersCard.Description" xml:space="preserve"><value>本地 NFO 与图片始终只读；任何提供器失败都不会清空已有元数据。</value></data>
+  <data name="VideoMetadataTmdbToggle.Header" xml:space="preserve"><value>TMDB — 电影、日剧与主流动画</value></data>
+  <data name="VideoMetadataTvMazeToggle.Header" xml:space="preserve"><value>TVmaze — 电视补充（CC BY-SA）</value></data>
+  <data name="VideoMetadataAniListToggle.Header" xml:space="preserve"><value>AniList — 动画身份、别名与标签</value></data>
+  <data name="VideoMetadataAniDbToggle.Header" xml:space="preserve"><value>AniDB — 每周官方标题索引</value></data>
+  <data name="VideoMetadataBangumiToggle.Header" xml:space="preserve"><value>Bangumi — 动画与日剧补充</value></data>
+  <data name="VideoMetadataTvDbDisabledText.Text" xml:space="preserve"><value>TheTVDB：等待 Niratan 获得批准的项目授权</value></data>
+  <data name="VideoMetadataTmdbCredentialCard.Header" xml:space="preserve"><value>TMDB 凭据</value></data>
+  <data name="VideoMetadataTmdbCredentialCard.Description" xml:space="preserve"><value>仅保存在 Windows 凭据管理器。本产品使用 TMDB API，但不受 TMDB 认可或认证。</value></data>
+  <data name="VideoMetadataTmdbTokenBox.PlaceholderText" xml:space="preserve"><value>TMDB v4 Read Token</value></data>
+  <data name="VideoMetadataSaveTmdbTokenButton.Content" xml:space="preserve"><value>保存 Token</value></data>
+  <data name="VideoMetadataClearTmdbTokenButton.Content" xml:space="preserve"><value>清除</value></data>
+  <data name="VideoMetadataTmdbAttributionLink.Content" xml:space="preserve"><value>TMDB 来源</value></data>
+  <data name="VideoMetadataBangumiCredentialCard.Header" xml:space="preserve"><value>Bangumi 凭据</value></data>
+  <data name="VideoMetadataBangumiCredentialCard.Description" xml:space="preserve"><value>可选 Token，仅保存在 Windows 凭据管理器。</value></data>
+  <data name="VideoMetadataBangumiTokenBox.PlaceholderText" xml:space="preserve"><value>可选 Bangumi Token</value></data>
+  <data name="VideoMetadataSaveBangumiTokenButton.Content" xml:space="preserve"><value>保存 Token</value></data>
+  <data name="VideoMetadataClearBangumiTokenButton.Content" xml:space="preserve"><value>清除</value></data>
+  <data name="VideoMetadataProviderTermsLink.Content" xml:space="preserve"><value>提供器条款</value></data>
+  <data name="VideoMetadataCredentialConfigured" xml:space="preserve"><value>已配置</value></data>
+  <data name="VideoMetadataCredentialMissing" xml:space="preserve"><value>未配置</value></data>
+  <data name="VideoMetadataCredentialOptional" xml:space="preserve"><value>可选</value></data>
+  <data name="VideoLibraryHomeNavItem.Content" xml:space="preserve"><value>首页</value></data>
+  <data name="VideoLibraryMoviesNavItem.Content" xml:space="preserve"><value>电影</value></data>
+  <data name="VideoLibraryAnimeNavItem.Content" xml:space="preserve"><value>动画</value></data>
+  <data name="VideoLibraryUnorganizedNavItem.Content" xml:space="preserve"><value>未整理</value></data>
+  <data name="VideoLibrarySourcesNavItem.Content" xml:space="preserve"><value>来源</value></data>
+  <data name="VideoLibraryViewHome" xml:space="preserve"><value>首页</value></data>
+  <data name="VideoLibraryViewMovies" xml:space="preserve"><value>电影</value></data>
+  <data name="VideoLibraryViewAnime" xml:space="preserve"><value>动画</value></data>
+  <data name="VideoLibraryViewUnorganized" xml:space="preserve"><value>未整理</value></data>
+  <data name="VideoLibraryViewSources" xml:space="preserve"><value>来源</value></data>
+  <data name="VideoMetadataExternalIdsLabel.Text" xml:space="preserve"><value>外部 ID</value></data>
+  <data name="VideoMetadataRefreshSelectedButton.Content" xml:space="preserve"><value>刷新元数据</value></data>
+  <data name="VideoMetadataReviewCandidatesLabel.Text" xml:space="preserve"><value>匹配候选</value></data>
+  <data name="VideoMetadataBindCandidateButton.Content" xml:space="preserve"><value>预览并绑定</value></data>
+  <data name="VideoMetadataConsentDialogTitle" xml:space="preserve"><value>启用在线元数据？</value></data>
+  <data name="VideoMetadataConsentDialogMessage" xml:space="preserve"><value>Niratan 只发送解析后的标题、年份、集数和外部 ID；不会上传视频、字幕、NFO 内容或本地路径。</value></data>
+  <data name="VideoMetadataConsentDialogAccept" xml:space="preserve"><value>启用</value></data>
+  <data name="VideoMetadataConsentDialogCancel" xml:space="preserve"><value>暂不</value></data>
+  <data name="VideoMetadataRematchPreviewTitle" xml:space="preserve"><value>确认重新匹配</value></data>
+  <data name="VideoMetadataRematchConfirm" xml:space="preserve"><value>绑定并锁定</value></data>
+  <data name="VideoMetadataRematchCancel" xml:space="preserve"><value>取消</value></data>
+  <data name="VideoLibrarySaveSourceSettingsButton.Content" xml:space="preserve"><value>保存</value></data>
+  <data name="VideoLibrarySourceLanguageBox.Header" xml:space="preserve"><value>语言</value></data>
+  <data name="VideoLibrarySourceProviderOrderBox.Header" xml:space="preserve"><value>提供器顺序</value></data>
+  <data name="VideoLibrarySourceProviderOrderBox.PlaceholderText" xml:space="preserve"><value>local, tmdb, tvmaze</value></data>
+  <data name="VideoLibraryHomeContinueWatchingHeading.Text" xml:space="preserve"><value>继续观看</value></data>
+  <data name="VideoLibraryHomeNextEpisodeHeading.Text" xml:space="preserve"><value>接下来播放</value></data>
+  <data name="VideoLibraryHomeRecentlyAddedHeading.Text" xml:space="preserve"><value>最近添加的媒体</value></data>
+  <data name="VideoLibraryInvalidProviderOrderTitle" xml:space="preserve"><value>提供器顺序无效</value></data>
+  <data name="VideoLibraryInvalidProviderOrderMessage" xml:space="preserve"><value>未知的元数据提供器：{0}</value></data>
+  <data name="VideoLibrarySourceRegionBox.Header" xml:space="preserve"><value>区域</value></data>
+  <data name="VideoLibrarySourceTypeAuto" xml:space="preserve"><value>自动</value></data>
+  <data name="VideoLibrarySourceTypeAnime" xml:space="preserve"><value>动画</value></data>
+  <data name="VideoLibrarySourceTypeDrama" xml:space="preserve"><value>日剧 / 电视</value></data>
+  <data name="VideoLibrarySourceTypeMovie" xml:space="preserve"><value>电影</value></data>
+  <data name="VideoMetadataTmdbNoticeText.Text" xml:space="preserve"><value>本产品使用 TMDB API，但未经 TMDB 认可或认证。</value></data>
+  <data name="VideoMetadataTvMazeLink.Content" xml:space="preserve"><value>TVmaze</value></data>
+  <data name="VideoMetadataAniListLink.Content" xml:space="preserve"><value>AniList</value></data>
+  <data name="VideoMetadataAniDbLink.Content" xml:space="preserve"><value>AniDB</value></data>
+  <data name="VideoMetadataBangumiLink.Content" xml:space="preserve"><value>Bangumi</value></data>
+  <data name="VideoMetadataTvDbLink.Content" xml:space="preserve"><value>TheTVDB</value></data>
+  <data name="VideoLibraryFullScanSourceButton.ToolTipService.ToolTip" xml:space="preserve"><value>完整扫描</value></data>
+  <data name="VideoLibraryPauseSourceScanButton.ToolTipService.ToolTip" xml:space="preserve"><value>暂停扫描</value></data>
+  <data name="VideoLibraryResumeSourceScanButton.ToolTipService.ToolTip" xml:space="preserve"><value>继续扫描</value></data>
+  <data name="VideoLibraryCancelSourceScanButton.ToolTipService.ToolTip" xml:space="preserve"><value>取消扫描</value></data>
+  <data name="VideoLibraryScanStageEnumerating" xml:space="preserve"><value>正在发现文件</value></data>
+  <data name="VideoLibraryScanStageAnalyzing" xml:space="preserve"><value>正在读取元数据</value></data>
+  <data name="VideoLibraryScanStageCommitting" xml:space="preserve"><value>正在保存资料库</value></data>
+  <data name="VideoLibraryScanStageCompleted" xml:space="preserve"><value>扫描完成</value></data>
+  <data name="VideoLibraryScanRateFormat" xml:space="preserve"><value>{0:0.0} 项/秒</value></data>
+  <data name="VideoMetadataStageSearching" xml:space="preserve"><value>正在查询元数据源</value></data>
+  <data name="VideoMetadataStageMatching" xml:space="preserve"><value>正在匹配候选</value></data>
+  <data name="VideoMetadataStageDetails" xml:space="preserve"><value>正在获取详情</value></data>
+  <data name="VideoMetadataStageArtwork" xml:space="preserve"><value>正在缓存图片</value></data>
+  <data name="VideoMetadataStageCompleted" xml:space="preserve"><value>元数据刷新完成</value></data>
+  <data name="VideoLibraryManageSourcesButton.Label" xml:space="preserve"><value>来源</value></data>
+  <data name="VideoLibrarySourcesPrivacyInfo.Title" xml:space="preserve"><value>在线元数据</value></data>
+  <data name="VideoLibrarySourcesPrivacyInfo.Message" xml:space="preserve"><value>在线刮削只会在同意隐私提示后运行；本地扫描和 NFO 发现始终可用。</value></data>
+  <data name="VideoLibraryRemoveSourceButton.ToolTipService.ToolTip" xml:space="preserve"><value>移除来源</value></data>
+  <data name="VideoLibraryRemoveSourceButton.AutomationProperties.Name" xml:space="preserve"><value>移除来源</value></data>
+  <data name="VideoLibrarySourceMediaTypeBox.Header" xml:space="preserve"><value>媒体类型</value></data>
+  <data name="VideoLibrarySaveSourceSettingsButton.Label" xml:space="preserve"><value>保存设置</value></data>
+  <data name="VideoLibraryRefreshSourceButton.Label" xml:space="preserve"><value>扫描变更</value></data>
+  <data name="VideoLibraryFullScanSourceButton.Label" xml:space="preserve"><value>完整扫描</value></data>
+  <data name="VideoLibraryScrapeSourceButton.Label" xml:space="preserve"><value>刮削元数据</value></data>
+  <data name="VideoLibraryCancelScrapeSourceButton.Label" xml:space="preserve"><value>取消刮削</value></data>
+  <data name="VideoLibraryPauseSourceScanButton.Label" xml:space="preserve"><value>暂停扫描</value></data>
+  <data name="VideoLibraryResumeSourceScanButton.Label" xml:space="preserve"><value>继续扫描</value></data>
+  <data name="VideoLibraryCancelSourceScanButton.Label" xml:space="preserve"><value>取消扫描</value></data>
+  <data name="VideoLibraryRevealSourceButton.Label" xml:space="preserve"><value>打开文件夹</value></data>
+  <data name="VideoMetadataBatchStageQueued" xml:space="preserve"><value>元数据刷新已排队</value></data>
+  <data name="VideoMetadataBatchStageRunning" xml:space="preserve"><value>正在后台刮削元数据</value></data>
+  <data name="VideoMetadataBatchStageCompleted" xml:space="preserve"><value>元数据刷新完成</value></data>
+  <data name="VideoMetadataBatchStageCancelled" xml:space="preserve"><value>元数据刷新已取消</value></data>
+  <data name="VideoMetadataBatchStageFailed" xml:space="preserve"><value>元数据刷新失败</value></data>
+  <data name="VideoMetadataSourceProgressFormat" xml:space="preserve"><value>{0} · {1} / {2} · 已匹配 {3} · 待确认 {4}</value></data>
+  <data name="VideoMetadataBackgroundProgressFormat" xml:space="preserve"><value>正在刮削元数据{0} · {1} / {2} · 已匹配 {3} · 待确认 {4}</value></data>
+  <data name="VideoLibrarySourceStatusFormat" xml:space="preserve"><value>{0} 个视频 · {1} 个播放中 · {2} 个不可用</value></data>
+  <data name="VideoLibrarySourceLastScannedFormat" xml:space="preserve"><value>上次扫描 {0:g}</value></data>
+  <data name="VideoLibrarySourceNeverScanned" xml:space="preserve"><value>尚未扫描</value></data>
+  <data name="VideoLibrarySourceDefaultProviderRoute" xml:space="preserve"><value>默认元数据源路由</value></data>
+  <data name="VideoLibraryHomeMyMediaHeading.Text" xml:space="preserve"><value>我的媒体</value></data>
+  <data name="VideoLibraryHomeMoviesTile.Text" xml:space="preserve"><value>电影</value></data>
+  <data name="VideoLibraryHomeSeriesTile.Text" xml:space="preserve"><value>系列</value></data>
+  <data name="VideoLibraryHomeAnimeTile.Text" xml:space="preserve"><value>动画</value></data>
+  <data name="VideoLibraryHomeCollectionsTile.Text" xml:space="preserve"><value>集合</value></data>
+  <data name="VideoLibraryDetailsHeading.Text" xml:space="preserve"><value>视频详情</value></data>
+  <data name="VideoLibraryDetailsPlayButton.Content" xml:space="preserve"><value>播放</value></data>
+  <data name="VideoLibraryDetailsPlayFromBeginningButton.Content" xml:space="preserve"><value>从头播放</value></data>
+  <data name="VideoLibraryDetailsGenresLabel.Text" xml:space="preserve"><value>类型</value></data>
+  <data name="VideoLibraryDetailsCastLabel.Text" xml:space="preserve"><value>演员</value></data>
+  <data name="VideoLibraryDetailsProviderLink.Content" xml:space="preserve"><value>元数据来源</value></data>
+  <data name="VideoLibraryDetailsMediaInfoLabel.Text" xml:space="preserve"><value>媒体信息</value></data>
+  <data name="VideoLibraryBackToSeriesButton.Content" xml:space="preserve"><value>返回系列</value></data>
+  <data name="VideoLibrarySeriesPlayButton.Content" xml:space="preserve"><value>播放</value></data>
+  <data name="VideoLibrarySeriesRefreshButton.Content" xml:space="preserve"><value>刷新元数据</value></data>
+  <data name="VideoLibrarySeasonsHeading.Text" xml:space="preserve"><value>季</value></data>
+  <data name="VideoLibraryEpisodesHeading.Text" xml:space="preserve"><value>分集</value></data>
+  <data name="VideoLibrarySpecialFeaturesHeading.Text" xml:space="preserve"><value>特殊内容</value></data>
+  <data name="VideoLibrarySeriesEpisodeCountFormat" xml:space="preserve"><value>{0} 集</value></data>
+  <data name="VideoLibrarySeasonTitleFormat" xml:space="preserve"><value>第 {0} 季</value></data>
+  <data name="VideoLibrarySpecialsHeading" xml:space="preserve"><value>特别篇</value></data>
+  <data name="VideoLibraryAbsoluteOrderHeading" xml:space="preserve"><value>绝对集数</value></data>
+  <data name="VideoLibraryTagsHeading.Text" xml:space="preserve"><value>标签</value></data>
+  <data name="VideoLibraryStudiosHeading.Text" xml:space="preserve"><value>工作室</value></data>
+  <data name="VideoLibraryMoreLikeThisHeading.Text" xml:space="preserve"><value>更多类似作品</value></data>
 </root>
