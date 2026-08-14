@@ -37,6 +37,13 @@ public sealed class CompactColorPickerContractTests
             "Resources.resw"));
 
         appearance.Should().Contain("xmlns:controls=\"using:Niratan.Views.Controls\"");
+        appearance.Should().Contain("AutomationProperties.AutomationId=\"ReaderColorThemeComboBox\"");
+        appearance.Should().Contain("SelectedItem=\"{x:Bind ViewModel.SelectedReaderTheme, Mode=TwoWay}\"");
+        appearance.Should().NotContain("x:Uid=\"SettingsApplicationThemeCard\"");
+        appearance.Should().Contain("AutomationProperties.AutomationId=\"ReaderSystemLightSepiaToggle\"");
+        appearance.Should().Contain("AutomationProperties.AutomationId=\"ReaderSepiaInvertToggle\"");
+        appearance.Should().Contain("AutomationProperties.AutomationId=\"ReaderCustomInterfaceThemeComboBox\"");
+        appearance.Should().Contain("Visibility=\"{x:Bind ViewModel.IsSepiaInvertVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}\"");
         appearance.Should().Contain("<controls:CompactColorPicker AutomationProperties.AutomationId=\"ReaderCustomBackgroundColorPicker\"");
         appearance.Should().Contain("AutomationProperties.AutomationId=\"ReaderCustomTextColorPicker\"");
         appearance.Should().Contain("AutomationProperties.AutomationId=\"ReaderCustomInfoColorPicker\"");
@@ -44,7 +51,10 @@ public sealed class CompactColorPickerContractTests
 
         foreach (var resources in new[] { english, chinese })
         {
-            resources.Should().Contain("ReaderCustomColorsCard.Header");
+            resources.Should().Contain("ReaderColorThemeCard.Header");
+            resources.Should().Contain("ReaderSystemLightSepiaCard.Header");
+            resources.Should().Contain("ReaderSepiaInvertCard.Header");
+            resources.Should().Contain("ReaderCustomInterfaceThemeCard.Header");
             resources.Should().Contain("ReaderCustomBackgroundColorCard.Header");
             resources.Should().Contain("ReaderCustomTextColorCard.Header");
             resources.Should().Contain("ReaderCustomInfoColorCard.Header");

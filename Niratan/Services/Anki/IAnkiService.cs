@@ -23,6 +23,20 @@ public interface IAnkiService
         await DuplicateCheckExpressionAsync(expression)
             ? AnkiDuplicateLookupResult.Duplicate()
             : AnkiDuplicateLookupResult.NotDuplicate();
+    async Task<IReadOnlyDictionary<string, AnkiDuplicateLookupResult>> DuplicateLookupExpressionsAsync(
+        IReadOnlyList<string> expressions)
+    {
+        var results = new Dictionary<string, AnkiDuplicateLookupResult>(System.StringComparer.Ordinal);
+        foreach (var expression in expressions)
+        {
+            if (string.IsNullOrWhiteSpace(expression) || results.ContainsKey(expression))
+                continue;
+
+            results[expression] = await DuplicateLookupExpressionAsync(expression);
+        }
+
+        return results;
+    }
     Task<bool> DuplicateCheckExpressionAsync(string expression);
     Task<bool> DuplicateCheckAsync(string rawPayloadJson);
     Task<string?> GetWritableMediaDirectoryAsync();

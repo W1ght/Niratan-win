@@ -583,6 +583,8 @@ public class NovelReaderWebAssetTests
         pendingRootPath.Should().Contain("forwardStack.length = 0;");
         sharedPromotionPath.Should().NotContain("backStack.length = 0;");
         sharedPromotionPath.Should().NotContain("forwardStack.length = 0;");
+        sharedPromotionPath.Should().Contain(
+            "requestRenderedDuplicateChecks(liveContainer, true);");
 
         var redirectStart = popupJs.IndexOf(
             "window.niratanRedirectResults = function",
@@ -1059,8 +1061,8 @@ public class NovelReaderWebAssetTests
         appearanceDialogXaml.Should().NotContain("PrimaryButtonText=\"Done\"");
         appearanceContentXaml.Should().Contain("BooleanToVisibilityConverter");
         appearanceContentXaml.Should().NotContain("Shift Hover Delay");
-        appearanceContentXaml.Should().NotContain("Visibility=\"{x:Bind ViewModel.IsSystemSepiaLightVisible, Mode=OneWay}\"");
-        appearanceContentXaml.Should().NotContain("Visibility=\"{x:Bind ViewModel.IsSepiaInvertVisible, Mode=OneWay}\"");
+        appearanceContentXaml.Should().Contain("Visibility=\"{x:Bind ViewModel.IsSystemLightSepiaVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}\"");
+        appearanceContentXaml.Should().Contain("Visibility=\"{x:Bind ViewModel.IsSepiaInvertVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}\"");
         appearanceContentXaml.Should().NotContain("Visibility=\"{x:Bind ViewModel.IsSwipeDistanceVisible, Mode=OneWay}\"");
         appearanceContentXaml.Should().NotContain("Visibility=\"{x:Bind ViewModel.IsLineHeightVisible, Mode=OneWay}\"");
         appearanceContentXaml.Should().NotContain("Visibility=\"{x:Bind ViewModel.IsCharacterSpacingVisible, Mode=OneWay}\"");
@@ -2731,21 +2733,26 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
-    public void DictionaryPopupMineButton_IgnoresClicksWhilePending()
+    public void DictionaryPopupMineButton_DisablesOnlyCurrentAttemptAndRejectsLateResults()
     {
         var popupJs = File.ReadAllText(
             Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.js")
         );
 
         popupJs.Should().Contain("if (slot.dataset.state === 'pending' || slot.dataset.enabled === 'false') return;");
-        popupJs.Should().Contain("if (!mineSlot || mineSlot.dataset.state === 'pending') return;");
-        popupJs.Should().Contain("let miningRequestPending = false;");
-        popupJs.Should().Contain("if (miningRequestPending) return;");
-        popupJs.Should().Contain("miningRequestPending = true;");
-        popupJs.Should().Contain("if ((kind === 'mine' || kind === 'context') && miningRequestPending) return;");
-        popupJs.Should().Contain("catch (e) {");
-        popupJs.Should().Contain("miningRequestPending = false;");
-        popupJs.Replace("\r\n", "\n").Should().Contain("window.onMineComplete = function (entryIndex, result) {\n  applyMiningResult(entryIndex, result);");
+        popupJs.Should().Contain("if (!activeSlot || activeSlot.dataset.miningAttemptId) return null;");
+        popupJs.Should().Contain("updateButtonSlot(clickedSlot, {");
+        popupJs.Should().Contain("clickedSlot.setAttribute('aria-busy', 'true');");
+        popupJs.Should().Contain("postPopupMessage('miningFeedback', {");
+        popupJs.Should().Contain("slot.removeAttribute('aria-busy');");
+        popupJs.Should().Contain("function miningAttemptMatches(entryIndex, renderGeneration, pageRevision, attemptId, expression)");
+        popupJs.Should().Contain("function releaseEntryMiningAttempt(");
+        popupJs.Should().Contain("requestDuplicateCheck(\n    entryIndex,");
+        popupJs.Should().Contain("mineSlot.getAttribute('aria-busy') === 'true'");
+        popupJs.Should().NotContain("miningRequestPending");
+        popupJs.Should().Contain("window.onMineComplete = function (");
+        popupJs.Should().Contain("window.onContextMineComplete = function (");
+        popupJs.Should().Contain("window.onContextMiningReleased = function (");
     }
 
     [Fact]
@@ -2893,6 +2900,12 @@ public class NovelReaderWebAssetTests
         var dashboardCode = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Controls", "NovelStatisticsDashboardView.xaml.cs")
         );
+        var bookDetailXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Controls", "NovelStatisticsBookDetailPanel.xaml")
+        );
+        var bookDetailCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Controls", "NovelStatisticsBookDetailPanel.xaml.cs")
+        );
         var trendChartXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Controls", "NovelStatisticsTrendChart.xaml")
         );
@@ -3013,6 +3026,7 @@ public class NovelReaderWebAssetTests
         dashboardXaml.Should().Contain("ItemHeight=\"16\"");
         dashboardXaml.Should().Contain("MaximumRowsOrColumns=\"7\"");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsBookRankingCard\"");
+        dashboardXaml.Should().Contain("ImageFailed=\"BookCover_ImageFailed\"");
         dashboardXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsShelfComparisonCard\"");
         dashboardXaml.Should().NotContain("AccentStrokeColorDefaultBrush");
         dashboardXaml.Should().NotContain("VisualStateManager.VisualStateGroups");
@@ -3027,6 +3041,37 @@ public class NovelReaderWebAssetTests
         dashboardCode.Should().Contain("if (_layoutMode == layoutMode)");
         dashboardCode.Should().NotContain("DispatcherQueue.TryEnqueue");
         dashboardCode.Should().Contain("Grid.SetColumn");
+        dashboardCode.Should().Contain("CreateBookDetailLoadingContent");
+        dashboardCode.Should().Contain("NovelStatisticsBookDetailLoadingStatus");
+        dashboardCode.Should().Contain("dialog.Closed += OnDialogClosed");
+        dashboardCode.Should().Contain("ReferenceEquals(_bookStatisticsDialog, dialog)");
+        dashboardCode.IndexOf("_bookStatisticsDialog = dialog;", StringComparison.Ordinal)
+            .Should().BeLessThan(
+                dashboardCode.IndexOf("LoadBookStatisticsAsync", StringComparison.Ordinal));
+        bookDetailXaml.Should().NotContain("MaxWidth=\"720\"");
+        bookDetailXaml.Should().Contain("MinHeight=\"0\"");
+        bookDetailXaml.Should().Contain("x:Name=\"BookStatisticsMetricsGrid\"");
+        bookDetailXaml.Should().Contain("x:Name=\"BookStatisticsEditorGrid\"");
+        bookDetailXaml.Should().Contain("x:Name=\"CharactersInput\"");
+        bookDetailXaml.Should().Contain("x:Name=\"DeleteSelectedDayButton\"");
+        bookDetailXaml.Should().Contain("x:Name=\"DeleteAllStatisticsButton\"");
+        bookDetailXaml.Should().Contain("ImageFailed=\"BookCover_ImageFailed\"");
+        bookDetailCode.Should().Contain("CompactMetricsBreakpoint");
+        bookDetailCode.Should().Contain("CompactEditorBreakpoint");
+        bookDetailCode.Should().Contain("UpdateBookStatisticsDayAsync");
+        bookDetailCode.Should().Contain("DeleteAllBookStatisticsAsync");
+        bookDetailCode.Should().Contain("ApplyAdaptiveLayout");
+        dashboardCode.Should().Contain("ContentDialogMaxWidth");
+        dashboardCode.Should().Contain("HorizontalAlignment = HorizontalAlignment.Center");
+        dashboardXaml.Should().Contain("ColumnDefinitions=\"40,*,108,16\"");
+        enResources.Should().Contain("name=\"NovelStatisticsBookDetailLoading\"");
+        zhResources.Should().Contain("name=\"NovelStatisticsBookDetailLoading\"");
+        enResources.Should().Contain("name=\"NovelStatisticsBookDetailDayAccessibleFormat\"");
+        zhResources.Should().Contain("name=\"NovelStatisticsBookDetailDayAccessibleFormat\"");
+        dashboardViewModel.Should().Contain(
+            "ResourceStringHelper.GetString(\n                    \"NovelStatisticsBookDetailUnavailable\"");
+        dashboardViewModel.Should().Contain(
+            "ResourceStringHelper.FormatString(\n                \"NovelStatisticsBookDetailActiveDaysFormat\"");
         trendChartXaml.Should().Contain("AutomationProperties.AutomationId=\"NovelStatisticsTrendChart\"");
         trendChartXaml.Should().Contain("Height=\"260\"");
         trendChartCode.Should().Contain("Polyline");

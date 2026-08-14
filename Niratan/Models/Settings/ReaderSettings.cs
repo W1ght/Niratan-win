@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Text.Json.Serialization;
 using Niratan.Enums;
 using Microsoft.UI.Xaml;
 
@@ -9,11 +10,52 @@ namespace Niratan.Models.Settings;
 public class ReaderSettings
 {
     // --- Theme ---
+    public ReaderTheme? Theme { get; set; }
+    public ThemeMode? CustomInterfaceTheme { get; set; }
+    public bool SystemLightSepia { get; set; } = false;
+    public bool SepiaInvertInDark { get; set; } = false;
+
+    // Retained as a migration bridge for settings written by v0.6.x. A null Theme
+    // resolves from these flags so existing selections survive the unified picker.
     public bool SepiaMode { get; set; } = false;
     public bool UseCustomColors { get; set; } = false;
     public string CustomBackgroundColor { get; set; } = "#FFFFFF";
     public string CustomTextColor { get; set; } = "#000000";
     public string CustomInfoColor { get; set; } = "#999999";
+
+    [JsonIgnore]
+    public ReaderTheme EffectiveTheme => Theme
+        ?? (UseCustomColors
+            ? ReaderTheme.Custom
+            : SepiaMode ? ReaderTheme.Sepia : ReaderTheme.System);
+
+    [JsonIgnore]
+    public bool UsesCustomColors => EffectiveTheme == ReaderTheme.Custom;
+
+    public ReaderTheme ResolveUnifiedTheme(ThemeMode legacyAppTheme)
+    {
+        if (Theme.HasValue || SepiaMode || UseCustomColors)
+            return EffectiveTheme;
+
+        return legacyAppTheme switch
+        {
+            ThemeMode.Light => ReaderTheme.Light,
+            ThemeMode.Dark => ReaderTheme.Dark,
+            _ => ReaderTheme.System,
+        };
+    }
+
+    public ThemeMode ResolveInterfaceTheme(ThemeMode customFallback)
+    {
+        return EffectiveTheme switch
+        {
+            ReaderTheme.Light => ThemeMode.Light,
+            ReaderTheme.Dark => ThemeMode.Dark,
+            ReaderTheme.Sepia => SepiaInvertInDark ? ThemeMode.System : ThemeMode.Light,
+            ReaderTheme.Custom => CustomInterfaceTheme ?? customFallback,
+            _ => ThemeMode.System,
+        };
+    }
 
     // --- Text ---
     public bool VerticalWriting { get; set; } = true;
@@ -117,37 +159,67 @@ public class ReaderSettings
         return Application.Current.RequestedTheme == ApplicationTheme.Dark;
     }
 
-    public uint BackgroundColor(ThemeMode themeMode)
+    private bool UsesInvertedSepia(ThemeMode themeMode) =>
+        EffectiveTheme == ReaderTheme.Sepia && SepiaInvertInDark && IsDark(themeMode);
+
+    private bool UsesSystemLightSepia(ThemeMode themeMode) =>
+        EffectiveTheme == ReaderTheme.System && SystemLightSepia && !IsDark(themeMode);
+
+    public uint BackgroundColor(ThemeMode themeMode) => EffectiveTheme switch
     {
-        if (UseCustomColors && TryParseColor(CustomBackgroundColor, out var custom)) return custom;
-        if (SepiaMode) return 0xFFF2E2C9;
-        return IsDark(themeMode) ? 0xFF000000 : 0xFFFFFFFF;
-    }
+        ReaderTheme.Light => 0xFFFFFFFF,
+        ReaderTheme.Dark => 0xFF000000,
+        ReaderTheme.Sepia => UsesInvertedSepia(themeMode) ? 0xFF18150C : 0xFFF2E2C9,
+        ReaderTheme.Custom when TryParseColor(CustomBackgroundColor, out var custom) => custom,
+        ReaderTheme.Custom => 0xFFFFFFFF,
+        ReaderTheme.System when UsesSystemLightSepia(themeMode) => 0xFFF2E2C9,
+        _ => IsDark(themeMode) ? 0xFF000000 : 0xFFFFFFFF,
+    };
 
-    public string TextColorCss(ThemeMode themeMode)
+    public string TextColorCss(ThemeMode themeMode) => EffectiveTheme switch
     {
-        if (UseCustomColors && TryNormalizeCssColor(CustomTextColor, out var custom)) return custom;
-        if (SepiaMode) return "#332A1B";
-        return IsDark(themeMode) ? "#fff" : "#000";
-    }
+        ReaderTheme.Light => "#000",
+        ReaderTheme.Dark => "#fff",
+        ReaderTheme.Sepia => UsesInvertedSepia(themeMode) ? "#F2E2C9" : "#332A1B",
+        ReaderTheme.Custom when TryNormalizeCssColor(CustomTextColor, out var custom) => custom,
+        ReaderTheme.Custom => "#000",
+        ReaderTheme.System when UsesSystemLightSepia(themeMode) => "#332A1B",
+        _ => IsDark(themeMode) ? "#fff" : "#000",
+    };
 
-    public string InfoColorCss(ThemeMode themeMode)
+    public string InfoColorCss(ThemeMode themeMode) => EffectiveTheme switch
     {
-        if (UseCustomColors && TryNormalizeCssColor(CustomInfoColor, out var custom)) return custom;
-        if (SepiaMode) return "#74664F";
-        return IsDark(themeMode) ? "#A6A6A6" : "#666666";
-    }
+        ReaderTheme.Light => "#666666",
+        ReaderTheme.Dark => "#A6A6A6",
+        ReaderTheme.Sepia => UsesInvertedSepia(themeMode) ? "#F2E2C9" : "#74664F",
+        ReaderTheme.Custom when TryNormalizeCssColor(CustomInfoColor, out var custom) => custom,
+        ReaderTheme.Custom => "#999999",
+        ReaderTheme.System when UsesSystemLightSepia(themeMode) => "#74664F",
+        _ => IsDark(themeMode) ? "#A6A6A6" : "#666666",
+    };
 
-    public uint InfoColor(ThemeMode themeMode)
+    public uint InfoColor(ThemeMode themeMode) => EffectiveTheme switch
     {
-        if (UseCustomColors && TryParseColor(CustomInfoColor, out var custom)) return custom;
-        if (SepiaMode) return 0xFF74664F;
-        return IsDark(themeMode) ? 0xFFA6A6A6 : 0xFF666666;
-    }
+        ReaderTheme.Light => 0xFF666666,
+        ReaderTheme.Dark => 0xFFA6A6A6,
+        ReaderTheme.Sepia => UsesInvertedSepia(themeMode) ? 0xFFF2E2C9 : 0xFF74664F,
+        ReaderTheme.Custom when TryParseColor(CustomInfoColor, out var custom) => custom,
+        ReaderTheme.Custom => 0xFF999999,
+        ReaderTheme.System when UsesSystemLightSepia(themeMode) => 0xFF74664F,
+        _ => IsDark(themeMode) ? 0xFFA6A6A6 : 0xFF666666,
+    };
 
-    public bool UsesDarkInterface(ThemeMode themeMode) => IsDark(themeMode);
+    public bool UsesDarkInterface(ThemeMode themeMode) => EffectiveTheme switch
+    {
+        ReaderTheme.Light => false,
+        ReaderTheme.Dark => true,
+        ReaderTheme.Sepia => UsesInvertedSepia(themeMode),
+        _ => IsDark(themeMode),
+    };
 
-    public bool UsesSepiaLightContent() => SepiaMode;
+    public bool UsesSepiaLightContent(ThemeMode themeMode) =>
+        EffectiveTheme == ReaderTheme.Sepia && !UsesInvertedSepia(themeMode)
+        || UsesSystemLightSepia(themeMode);
 
     private static bool TryNormalizeCssColor(string? value, out string color)
     {

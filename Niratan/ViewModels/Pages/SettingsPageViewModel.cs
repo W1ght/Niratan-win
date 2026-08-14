@@ -32,18 +32,22 @@ public partial class SettingsPageViewModel : ObservableObject
 
     public string NiratanVersion { get; } = AppInfoHelper.Version;
 
-    // --- App settings ---
-    public ThemeMode[] AvailableThemeModes { get; } = Enum.GetValues<ThemeMode>();
+    // --- Unified app and reader theme ---
+    public ReaderTheme[] AvailableReaderThemes { get; } = Enum.GetValues<ReaderTheme>();
+    public ThemeMode[] AvailableInterfaceThemeModes { get; } =
+        [ThemeMode.System, ThemeMode.Light, ThemeMode.Dark];
 
     [ObservableProperty]
-    public partial ThemeMode SelectedThemeMode { get; set; }
-
-    // --- Reader settings: Theme ---
-    [ObservableProperty]
-    public partial bool SepiaMode { get; set; }
+    public partial ReaderTheme SelectedReaderTheme { get; set; }
 
     [ObservableProperty]
-    public partial bool UseCustomReaderColors { get; set; }
+    public partial ThemeMode SelectedCustomInterfaceTheme { get; set; }
+
+    [ObservableProperty]
+    public partial bool SystemLightSepia { get; set; }
+
+    [ObservableProperty]
+    public partial bool SepiaInvertInDark { get; set; }
 
     [ObservableProperty]
     public partial Windows.UI.Color CustomReaderBackgroundColor { get; set; }
@@ -54,7 +58,11 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty]
     public partial Windows.UI.Color CustomReaderInfoColor { get; set; }
 
-    public bool AreCustomReaderColorsVisible => UseCustomReaderColors;
+    public bool IsSepiaInvertVisible => SelectedReaderTheme == ReaderTheme.Sepia;
+
+    public bool IsSystemLightSepiaVisible => SelectedReaderTheme == ReaderTheme.System;
+
+    public bool AreCustomReaderColorsVisible => SelectedReaderTheme == ReaderTheme.Custom;
 
     // --- Reader settings: Text ---
     [ObservableProperty]
@@ -299,12 +307,12 @@ public partial class SettingsPageViewModel : ObservableObject
 
     private async Task LoadSettingsAsync()
     {
-        SelectedThemeMode = _settingsService.Current.Theme;
-
         var s = _readerSettingsService.Current;
 
-        SepiaMode = s.SepiaMode;
-        UseCustomReaderColors = s.UseCustomColors;
+        SelectedReaderTheme = s.ResolveUnifiedTheme(_settingsService.Current.Theme);
+        SelectedCustomInterfaceTheme = s.CustomInterfaceTheme ?? _settingsService.Current.Theme;
+        SystemLightSepia = s.SystemLightSepia;
+        SepiaInvertInDark = s.SepiaInvertInDark;
         CustomReaderBackgroundColor = ParseColor(s.CustomBackgroundColor, 0xFFFFFFFF);
         CustomReaderTextColor = ParseColor(s.CustomTextColor, 0xFF000000);
         CustomReaderInfoColor = ParseColor(s.CustomInfoColor, 0xFF999999);
@@ -378,14 +386,42 @@ public partial class SettingsPageViewModel : ObservableObject
         _settingsService.Set(s => s.DictionaryDisplaySettings, update(current));
     }
 
-    partial void OnSelectedThemeModeChanged(ThemeMode value) => ApplySetting(s => s.Theme, value);
-
-    partial void OnSepiaModeChanged(bool value) => ApplyReaderSetting(s => s.SepiaMode, value);
-
-    partial void OnUseCustomReaderColorsChanged(bool value)
+    partial void OnSelectedReaderThemeChanged(ReaderTheme value)
     {
-        ApplyReaderSetting(s => s.UseCustomColors, value);
+        ApplyReaderSetting(s => s.Theme, (ReaderTheme?)value);
+        ApplyReaderSetting(s => s.SepiaMode, value == ReaderTheme.Sepia);
+        ApplyReaderSetting(s => s.UseCustomColors, value == ReaderTheme.Custom);
+        if (value == ReaderTheme.Custom)
+            ApplyReaderSetting(s => s.CustomInterfaceTheme, (ThemeMode?)SelectedCustomInterfaceTheme);
+
+        ApplyUnifiedApplicationTheme();
+        OnPropertyChanged(nameof(IsSystemLightSepiaVisible));
+        OnPropertyChanged(nameof(IsSepiaInvertVisible));
         OnPropertyChanged(nameof(AreCustomReaderColorsVisible));
+    }
+
+    partial void OnSelectedCustomInterfaceThemeChanged(ThemeMode value)
+    {
+        ApplyReaderSetting(s => s.CustomInterfaceTheme, (ThemeMode?)value);
+        if (SelectedReaderTheme == ReaderTheme.Custom)
+            ApplySetting(s => s.Theme, value);
+    }
+
+    partial void OnSystemLightSepiaChanged(bool value) =>
+        ApplyReaderSetting(s => s.SystemLightSepia, value);
+
+    partial void OnSepiaInvertInDarkChanged(bool value)
+    {
+        ApplyReaderSetting(s => s.SepiaInvertInDark, value);
+        if (SelectedReaderTheme == ReaderTheme.Sepia)
+            ApplyUnifiedApplicationTheme();
+    }
+
+    private void ApplyUnifiedApplicationTheme()
+    {
+        var interfaceTheme = _readerSettingsService.Current.ResolveInterfaceTheme(
+            SelectedCustomInterfaceTheme);
+        ApplySetting(s => s.Theme, interfaceTheme);
     }
 
     partial void OnCustomReaderBackgroundColorChanged(Windows.UI.Color value) =>

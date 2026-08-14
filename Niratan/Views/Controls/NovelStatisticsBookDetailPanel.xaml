@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl x:Class="Niratan.Views.Controls.NovelStatisticsBookDetailPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="using:Niratan.Helpers.UI.Converters"
+             xmlns:viewModels="using:Niratan.ViewModels.Components"
+             MinWidth="0"
+             MinHeight="0"
+             HorizontalAlignment="Stretch"
+             VerticalAlignment="Stretch">
+
+    <UserControl.Resources>
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <Style x:Key="BookStatisticsMetricStyle" TargetType="Border">
+            <Setter Property="Padding" Value="12" />
+            <Setter Property="Background" Value="{ThemeResource SubtleFillColorSecondaryBrush}" />
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
+        <DataTemplate x:Key="BookStatisticsDayTemplate"
+                      x:DataType="viewModels:NovelStatisticsBookDayDisplay">
+            <Grid MinWidth="0" Padding="12,10"
+                  RowDefinitions="Auto,Auto" RowSpacing="5"
+                  AutomationProperties.Name="{x:Bind AccessibleText}">
+                <TextBlock FontWeight="SemiBold" Text="{x:Bind DateText}"
+                           TextTrimming="CharacterEllipsis" />
+                <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="{x:Bind CharactersText}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="1"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="{x:Bind DurationText}" TextTrimming="CharacterEllipsis" />
+                </Grid>
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <ScrollViewer HorizontalContentAlignment="Stretch"
+                  HorizontalScrollBarVisibility="Disabled"
+                  HorizontalScrollMode="Disabled"
+                  VerticalContentAlignment="Stretch"
+                  VerticalScrollBarVisibility="Auto"
+                  VerticalScrollMode="Auto">
+    <Grid x:Name="BookStatisticsLayoutRoot" MinWidth="0"
+          HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+          RowDefinitions="Auto,Auto,Auto,*" RowSpacing="14">
+        <Grid ColumnDefinitions="64,*" ColumnSpacing="16">
+            <Border Width="56" Height="78"
+                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                    CornerRadius="7">
+                <Grid>
+                    <Image Source="{Binding Book.CoverImage}"
+                           ImageFailed="BookCover_ImageFailed" Stretch="UniformToFill"
+                           Visibility="{Binding Book.HasCover, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    <FontIcon FontSize="24" Glyph="&#xE8F1;" Opacity="0.45"
+                              Visibility="{Binding Book.HasNoCover, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                </Grid>
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                <TextBlock FontSize="22" FontWeight="SemiBold" MaxLines="2"
+                           Text="{Binding Title}" TextWrapping="WrapWholeWords" />
+                <TextBlock x:Uid="NovelStatisticsBookDetailSubtitle"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+        </Grid>
+
+        <InfoBar x:Name="BookStatisticsErrorBar" Grid.Row="1"
+                 IsClosable="True" IsOpen="{Binding HasError}"
+                 Message="{Binding ErrorMessage}" Severity="Warning" />
+
+        <Grid x:Name="BookStatisticsMetricsGrid" Grid.Row="2"
+              ColumnDefinitions="*,*,*,*" RowDefinitions="Auto" ColumnSpacing="10">
+            <Border x:Name="CharactersMetricCard" Style="{StaticResource BookStatisticsMetricStyle}">
+                <StackPanel Spacing="4">
+                    <TextBlock x:Uid="NovelStatisticsBookDetailCharacters"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="{Binding TotalCharactersText}" />
+                </StackPanel>
+            </Border>
+            <Border x:Name="DurationMetricCard" Grid.Column="1"
+                    Style="{StaticResource BookStatisticsMetricStyle}">
+                <StackPanel Spacing="4">
+                    <TextBlock x:Uid="NovelStatisticsBookDetailDuration"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="{Binding TotalDurationText}" />
+                </StackPanel>
+            </Border>
+            <Border x:Name="SpeedMetricCard" Grid.Column="2"
+                    Style="{StaticResource BookStatisticsMetricStyle}">
+                <StackPanel Spacing="4">
+                    <TextBlock x:Uid="NovelStatisticsBookDetailSpeed"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="{Binding AverageSpeedText}" />
+                </StackPanel>
+            </Border>
+            <Border x:Name="ActiveDaysMetricCard" Grid.Column="3"
+                    Style="{StaticResource BookStatisticsMetricStyle}">
+                <StackPanel Spacing="4">
+                    <TextBlock x:Uid="NovelStatisticsBookDetailActiveDays"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="{Binding ActiveDaysText}" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <Grid x:Name="BookStatisticsEditorGrid" Grid.Row="3" MinHeight="390"
+              ColumnDefinitions="320,*" ColumnSpacing="18">
+            <Border x:Name="DaysPane"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="10">
+                <Grid RowDefinitions="Auto,*">
+                    <TextBlock x:Uid="NovelStatisticsBookDetailDays"
+                               Margin="14,12,14,8" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                    <ListView x:Name="BookStatisticsDaysList" Grid.Row="1"
+                              AutomationProperties.AutomationId="NovelStatisticsBookDetailDaysList"
+                              IsItemClickEnabled="True" ItemClick="BookStatisticsDaysList_ItemClick"
+                              ItemTemplate="{StaticResource BookStatisticsDayTemplate}"
+                              ItemsSource="{Binding Days}" SelectionMode="Single">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="MinWidth" Value="0" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                    </ListView>
+                    <StackPanel x:Name="NoDaysPanel" Grid.Row="1"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Spacing="8" Visibility="Collapsed">
+                        <FontIcon FontSize="28" Glyph="&#xE787;" Opacity="0.45" />
+                        <TextBlock x:Uid="NovelStatisticsBookDetailNoRecords"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border x:Name="EditorPane" Grid.Column="1"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="10" Padding="18">
+                <Grid>
+                    <Grid x:Name="BookStatisticsEditorContent"
+                          RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="16">
+                        <TextBlock x:Name="SelectedDateText" FontSize="20" FontWeight="SemiBold" />
+                        <Grid Grid.Row="1" ColumnDefinitions="*,*,*" ColumnSpacing="12">
+                            <NumberBox x:Name="CharactersInput"
+                                       x:Uid="NovelStatisticsBookDetailCharactersInput"
+                                       AutomationProperties.AutomationId="NovelStatisticsBookDetailCharactersInput"
+                                       Minimum="0" SpinButtonPlacementMode="Compact" />
+                            <NumberBox x:Name="HoursInput" Grid.Column="1"
+                                       x:Uid="NovelStatisticsBookDetailHoursInput"
+                                       AutomationProperties.AutomationId="NovelStatisticsBookDetailHoursInput"
+                                       Minimum="0" SpinButtonPlacementMode="Compact" />
+                            <NumberBox x:Name="MinutesInput" Grid.Column="2"
+                                       x:Uid="NovelStatisticsBookDetailMinutesInput"
+                                       AutomationProperties.AutomationId="NovelStatisticsBookDetailMinutesInput"
+                                       Minimum="0" Maximum="59" SpinButtonPlacementMode="Compact" />
+                        </Grid>
+                        <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                            <Button x:Name="DeleteSelectedDayButton"
+                                    x:Uid="NovelStatisticsBookDetailDeleteDay"
+                                    AutomationProperties.AutomationId="NovelStatisticsBookDetailDeleteDay"
+                                    Click="DeleteSelectedDay_Click"
+                                    Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                            <Button x:Name="SaveSelectedDayButton" Grid.Column="2"
+                                    x:Uid="NovelStatisticsBookDetailSave"
+                                    AutomationProperties.AutomationId="NovelStatisticsBookDetailSave"
+                                    Click="SaveSelectedDay_Click"
+                                    Style="{StaticResource AccentButtonStyle}" />
+                        </Grid>
+                        <Border x:Name="DeleteConfirmationPanel" Grid.Row="3"
+                                VerticalAlignment="Top" Padding="14"
+                                Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                CornerRadius="8" Visibility="Collapsed">
+                            <StackPanel Spacing="12">
+                                <TextBlock x:Name="DeleteConfirmationText" TextWrapping="Wrap" />
+                                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
+                                    <Button x:Uid="NovelStatisticsBookDetailCancel" Click="CancelDelete_Click" />
+                                    <Button x:Name="ConfirmDeleteButton"
+                                            x:Uid="NovelStatisticsBookDetailConfirmDelete"
+                                            Click="ConfirmDelete_Click"
+                                            Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <Button x:Name="DeleteAllStatisticsButton" Grid.Row="4"
+                                x:Uid="NovelStatisticsBookDetailDeleteAll"
+                                AutomationProperties.AutomationId="NovelStatisticsBookDetailDeleteAll"
+                                Click="DeleteAllStatistics_Click"
+                                HorizontalAlignment="Left"
+                                Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                    </Grid>
+
+                    <StackPanel x:Name="NoSelectionPanel"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Spacing="10" Visibility="Collapsed">
+                        <FontIcon FontSize="32" Glyph="&#xE787;" Opacity="0.45" />
+                        <TextBlock x:Uid="NovelStatisticsBookDetailSelectDay"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ProgressRing x:Name="MutationProgressRing" Width="40" Height="40"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  IsActive="False" Visibility="Collapsed" />
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+    </ScrollViewer>
+</UserControl>

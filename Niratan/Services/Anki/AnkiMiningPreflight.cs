@@ -14,11 +14,18 @@ public sealed record AnkiMiningPreflightResult(
     bool IsDuplicate,
     string? ErrorMessage,
     AnkiMiningMediaNeeds MediaNeeds,
-    string? DirectMediaDirectory = null)
+    string? DirectMediaDirectory = null,
+    System.Collections.Generic.IReadOnlyList<long>? DuplicateNoteIds = null)
 {
     public static AnkiMiningPreflightResult Failure(string message) =>
         new(false, false, message, new AnkiMiningMediaNeeds(false, false, false));
 
-    public static AnkiMiningPreflightResult Duplicate() =>
-        new(false, true, null, new AnkiMiningMediaNeeds(false, false, false));
+    public static AnkiMiningPreflightResult Duplicate(
+        System.Collections.Generic.IReadOnlyList<long>? noteIds = null) =>
+        new(
+            false,
+            true,
+            null,
+            new AnkiMiningMediaNeeds(false, false, false),
+            DuplicateNoteIds: noteIds ?? []);
 }

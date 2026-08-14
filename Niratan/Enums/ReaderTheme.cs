@@ -6,4 +6,5 @@ public enum ReaderTheme
     Light,
     Dark,
     Sepia,
+    Custom,
 }

@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using CommunityToolkit.Mvvm.ComponentModel;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Niratan.Helpers;
 using Niratan.Models;
@@ -11,26 +12,28 @@ using Niratan.Models.Video;
 
 namespace Niratan.ViewModels.Components;
 
-public sealed class VideoSeriesViewModel
+public sealed class VideoSeriesViewModel : ObservableObject
 {
-    private readonly IReadOnlyList<VideoItem> _episodes;
+    private readonly IReadOnlyList<VideoItem> _sourceVideos;
+    private ObservableCollection<VideoItemViewModel> _episodes = new();
+    private VideoSeasonViewModel? _selectedSeason;
 
     public VideoSeriesViewModel(Guid id, IEnumerable<VideoItem> videos)
     {
         Id = id;
-        _episodes = videos
-            .OrderBy(video => video.AbsoluteEpisodeNumber ?? int.MaxValue)
-            .ThenBy(video => video.SeasonNumber ?? int.MaxValue)
-            .ThenBy(video => video.EpisodeNumber ?? int.MaxValue)
-            .ThenBy(video => video.FilePath, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        var representative = _episodes
+        _sourceVideos = videos.ToList();
+        var representative = _sourceVideos
             .OrderByDescending(MetadataWeight)
             .ThenByDescending(video => video.LastOpenedAt ?? video.ImportedAt)
             .First();
+        var hasSeriesOwner = representative.CatalogSeriesNodeId.HasValue;
         Title = representative.CatalogSeriesTitle ?? representative.Title;
-        OriginalTitle = representative.OriginalTitle;
-        Overview = representative.Overview;
+        OriginalTitle = hasSeriesOwner
+            ? representative.CatalogSeriesOriginalTitle
+            : representative.OriginalTitle;
+        Overview = hasSeriesOwner
+            ? representative.CatalogSeriesOverview
+            : representative.Overview;
         Genres = representative.Genres;
         Actors = representative.Actors;
         Tags = representative.MetadataTags;
@@ -45,28 +48,39 @@ public sealed class VideoSeriesViewModel
         Status = representative.SeriesStatus;
         EndYear = representative.EndYear;
         ProviderSourceUrls = representative.ProviderSourceUrls;
-        PosterPath = FirstExisting(_episodes.Select(video => video.SeriesPosterPath ?? video.PosterPath));
-        BackdropPath = FirstExisting(_episodes.Select(video => video.SeriesThumbPath ?? video.BackdropPath));
-        LogoPath = FirstExisting(_episodes.Select(video => video.LogoPath));
+        PosterPath = FirstExisting(_sourceVideos.Select(video => video.SeriesPosterPath ?? video.PosterPath));
+        BackdropPath = FirstExisting(_sourceVideos.Select(video => video.SeriesThumbPath ?? video.BackdropPath));
+        LogoPath = FirstExisting(_sourceVideos.Select(video => video.LogoPath));
 
-        Episodes = new ObservableCollection<VideoItemViewModel>(_episodes
-            .Where(video => !video.IsSpecialEpisode)
+        RegularEpisodes = new ObservableCollection<VideoItemViewModel>(CollapseLogicalEntries(
+                _sourceVideos.Where(video => !IsSpecialEntry(video)))
+            .OrderBy(video => video.SeasonNumber ?? int.MaxValue)
+            .ThenBy(video => video.EpisodeNumber ?? video.AbsoluteEpisodeNumber ?? int.MaxValue)
+            .ThenBy(video => video.AbsoluteEpisodeNumber ?? int.MaxValue)
+            .ThenBy(video => video.FilePath, StringComparer.OrdinalIgnoreCase)
             .Select(video => new VideoItemViewModel(video)));
-        SpecialFeatures = new ObservableCollection<VideoItemViewModel>(_episodes
-            .Where(video => video.IsSpecialEpisode)
+        SpecialFeatures = new ObservableCollection<VideoItemViewModel>(CollapseLogicalEntries(
+                _sourceVideos.Where(IsSpecialEntry))
+            .OrderBy(video => video.EpisodeNumber ?? video.AbsoluteEpisodeNumber ?? int.MaxValue)
+            .ThenBy(video => video.Title, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(video => video.FilePath, StringComparer.OrdinalIgnoreCase)
             .Select(video => new VideoItemViewModel(video)));
-        Seasons = new ObservableCollection<VideoSeasonViewModel>(_episodes
-            .Where(video => !video.IsSpecialEpisode && video.SeasonNumber.HasValue)
-            .GroupBy(video => video.SeasonNumber)
+        Seasons = new ObservableCollection<VideoSeasonViewModel>(RegularEpisodes
+            .GroupBy(item => item.Video.SeasonNumber)
             .OrderBy(group => group.Key ?? int.MaxValue)
-            .Select(group => new VideoSeasonViewModel(group.Key, group.Count(), PosterPath)));
-        FirstEpisode = Episodes.FirstOrDefault();
-        ContinueEpisode = Episodes
+            .Select(group => new VideoSeasonViewModel(group.Key, group, PosterPath)));
+        FirstEpisode = RegularEpisodes.FirstOrDefault();
+        ContinueEpisode = RegularEpisodes
             .Where(item => item.Video.LastPositionSeconds >= VideoPlaybackState.MinimumPersistablePositionSeconds
                            && !item.Video.IsWatched)
             .OrderByDescending(item => item.Video.LastOpenedAt ?? item.Video.ImportedAt)
             .FirstOrDefault();
         PrimaryPlayItem = ContinueEpisode ?? FirstEpisode;
+
+        if (Seasons.Count > 0)
+            SelectSeason(Seasons[0]);
+        else
+            Episodes = new ObservableCollection<VideoItemViewModel>(RegularEpisodes);
     }
 
     public Guid Id { get; }
@@ -88,13 +102,23 @@ public sealed class VideoSeriesViewModel
     public string? PosterPath { get; }
     public string? BackdropPath { get; }
     public string? LogoPath { get; }
-    public ObservableCollection<VideoItemViewModel> Episodes { get; }
+    public ObservableCollection<VideoItemViewModel> RegularEpisodes { get; }
+    public ObservableCollection<VideoItemViewModel> Episodes
+    {
+        get => _episodes;
+        private set => SetProperty(ref _episodes, value);
+    }
     public ObservableCollection<VideoItemViewModel> SpecialFeatures { get; }
     public ObservableCollection<VideoSeasonViewModel> Seasons { get; }
+    public VideoSeasonViewModel? SelectedSeason
+    {
+        get => _selectedSeason;
+        private set => SetProperty(ref _selectedSeason, value);
+    }
     public VideoItemViewModel? FirstEpisode { get; }
     public VideoItemViewModel? ContinueEpisode { get; }
     public VideoItemViewModel? PrimaryPlayItem { get; }
-    public int EpisodeCount => _episodes.Count;
+    public int EpisodeCount => RegularEpisodes.Count;
     public bool HasOverview => !string.IsNullOrWhiteSpace(Overview);
     public bool HasOriginalTitle => !string.IsNullOrWhiteSpace(OriginalTitle)
                                     && !string.Equals(OriginalTitle, Title, StringComparison.CurrentCultureIgnoreCase);
@@ -110,7 +134,7 @@ public sealed class VideoSeriesViewModel
     public bool HasStatus => !string.IsNullOrWhiteSpace(Status);
     public bool HasRelatedItems => RelatedItems.Count > 0;
     public bool HasProviderSources => ProviderSourceUrls.Count > 0;
-    public bool HasSeasons => Seasons.Count > 0;
+    public bool HasSeasons => Seasons.Any(season => season.SeasonNumber.HasValue);
     public bool HasSpecialFeatures => SpecialFeatures.Count > 0;
     public bool HasBackdrop => BackdropImage != null;
     public bool HasPoster => PosterImage != null;
@@ -136,7 +160,20 @@ public sealed class VideoSeriesViewModel
     {
         get
         {
-            var years = _episodes.Select(video => video.ReleaseYear).Where(year => year.HasValue).Select(year => year!.Value).ToList();
+            var years = _sourceVideos
+                .Select(video => video.CatalogSeriesReleaseYear)
+                .Where(year => year.HasValue)
+                .Select(year => year!.Value)
+                .Distinct()
+                .ToList();
+            if (years.Count == 0 && !_sourceVideos.Any(video => video.CatalogSeriesNodeId.HasValue))
+            {
+                years = _sourceVideos
+                    .Select(video => video.ReleaseYear)
+                    .Where(year => year.HasValue)
+                    .Select(year => year!.Value)
+                    .ToList();
+            }
             if (years.Count == 0)
                 return "";
             var first = years.Min();
@@ -149,6 +186,48 @@ public sealed class VideoSeriesViewModel
     public BitmapImage? PosterImage => LoadLocalImage(PosterPath);
     public BitmapImage? BackdropImage => LoadLocalImage(BackdropPath);
     public BitmapImage? LogoImage => LoadLocalImage(LogoPath);
+
+    public void SelectSeason(int? seasonNumber)
+    {
+        var season = Seasons.FirstOrDefault(candidate => candidate.SeasonNumber == seasonNumber);
+        if (season != null)
+            SelectSeason(season);
+    }
+
+    public bool ContainsRegularEpisode(VideoItem video) => RegularEpisodes.Any(item =>
+        string.Equals(item.Video.Id, video.Id, StringComparison.OrdinalIgnoreCase));
+
+    public bool ContainsSpecialFeature(VideoItem video) => SpecialFeatures.Any(item =>
+        string.Equals(item.Video.Id, video.Id, StringComparison.OrdinalIgnoreCase));
+
+    internal static bool IsSpecialEntry(VideoItem video) =>
+        video.IsSpecialEpisode || video.SeasonNumber == 0;
+
+    private void SelectSeason(VideoSeasonViewModel season)
+    {
+        foreach (var candidate in Seasons)
+            candidate.IsSelected = false;
+        season.IsSelected = true;
+        SelectedSeason = season;
+        Episodes = new ObservableCollection<VideoItemViewModel>(season.Episodes);
+    }
+
+    internal static IEnumerable<VideoItem> CollapseLogicalEntries(IEnumerable<VideoItem> videos) =>
+        videos
+            .GroupBy(
+                video => video.CatalogNodeId.HasValue
+                    ? $"node:{video.CatalogNodeId.Value:D}"
+                    : $"asset:{video.Id}",
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group => group
+                .OrderByDescending(video => video.IsAvailable)
+                .ThenByDescending(video => video.IsWatched)
+                .ThenByDescending(video =>
+                    video.LastPositionSeconds >= VideoPlaybackState.MinimumPersistablePositionSeconds)
+                .ThenByDescending(video => video.LastOpenedAt ?? DateTime.MinValue)
+                .ThenByDescending(video => video.ImportedAt)
+                .ThenBy(video => video.FilePath, StringComparer.OrdinalIgnoreCase)
+                .First());
 
     private static int MetadataWeight(VideoItem video) =>
         (video.HasOverview ? 2 : 0)
@@ -175,12 +254,18 @@ public sealed class VideoSeriesViewModel
     }
 }
 
-public sealed class VideoSeasonViewModel
+public sealed class VideoSeasonViewModel : ObservableObject
 {
-    public VideoSeasonViewModel(int? seasonNumber, int episodeCount, string? posterPath)
+    private bool _isSelected;
+
+    public VideoSeasonViewModel(
+        int? seasonNumber,
+        IEnumerable<VideoItemViewModel> episodes,
+        string? posterPath)
     {
         SeasonNumber = seasonNumber;
-        EpisodeCount = episodeCount;
+        Episodes = episodes.ToList();
+        EpisodeCount = Episodes.Count;
         Title = seasonNumber switch
         {
             0 => ResourceStringHelper.GetString("VideoLibrarySpecialsHeading", "Specials"),
@@ -196,10 +281,19 @@ public sealed class VideoSeasonViewModel
     }
 
     public int? SeasonNumber { get; }
+    public IReadOnlyList<VideoItemViewModel> Episodes { get; }
     public int EpisodeCount { get; }
     public string Title { get; }
     public BitmapImage? PosterImage { get; }
     public bool HasPoster => PosterImage != null;
+    public bool IsSelected
+    {
+        get => _isSelected;
+        internal set => SetProperty(ref _isSelected, value);
+    }
+    public string AutomationId => SeasonNumber.HasValue
+        ? $"VideoLibrarySeason_{SeasonNumber.Value}"
+        : "VideoLibrarySeason_Absolute";
     public string EpisodeCountText => string.Format(
         CultureInfo.CurrentCulture,
         ResourceStringHelper.GetString("VideoLibrarySeriesEpisodeCountFormat", "{0} episodes"),

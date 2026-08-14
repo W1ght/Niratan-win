@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Diagnostics;
@@ -146,6 +145,7 @@ internal sealed class VideoLibraryScanCoordinator : IVideoLibraryScanCoordinator
                 .Where(node => node.Kind == VideoCatalogNodeKind.Unmatched)
                 .Select(node => node.Id)
                 .ToHashSet();
+            var nodesById = snapshot.Nodes.ToDictionary(node => node.Id);
             var lastEnumerationPublish = TimeSpan.Zero;
             var (paths, enumerationError) = await Task.Run(
                 () => EnumerateSourceFiles(source.FolderPath, token, (count, path) =>
@@ -160,6 +160,8 @@ internal sealed class VideoLibraryScanCoordinator : IVideoLibraryScanCoordinator
                 token);
             Publish(sourceId, generation, VideoCatalogJobState.Running,
                 VideoLibraryScanStage.Analyzing, 0, paths.Count, 0, 0, null, enumerationError);
+            var parsedIdentities = VideoScanBundleClassifier.Parse(
+                paths, source.FolderPath, source.MediaType, _parser);
 
             for (var offset = 0; offset < paths.Count; offset += CommitBatchSize)
             {
@@ -181,7 +183,7 @@ internal sealed class VideoLibraryScanCoordinator : IVideoLibraryScanCoordinator
                         await pauseState.WaitAsync(itemToken);
                         var result = await AnalyzePathAsync(
                             paths[offset + index], source, existingByIdentity, unmatchedNodeIds,
-                            fullScan, itemToken);
+                            nodesById, parsedIdentities, fullScan, itemToken);
                         analyzed[index] = result.Asset;
                         if (result.Changed)
                             Interlocked.Increment(ref changedCount);
@@ -324,6 +326,8 @@ internal sealed class VideoLibraryScanCoordinator : IVideoLibraryScanCoordinator
         VideoCatalogSourceSnapshot source,
         IReadOnlyDictionary<string, VideoCatalogAssetSnapshot> existingByIdentity,
         IReadOnlySet<Guid> unmatchedNodeIds,
+        IReadOnlyDictionary<Guid, VideoCatalogNodeSnapshot> nodesById,
+        IReadOnlyDictionary<string, ParsedVideoIdentity> parsedIdentities,
         bool fullScan,
         CancellationToken token)
     {
@@ -331,20 +335,21 @@ internal sealed class VideoLibraryScanCoordinator : IVideoLibraryScanCoordinator
         var identity = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
         var modified = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero);
         existingByIdentity.TryGetValue(identity, out var existing);
-        // Catalog v1 initially stored parsed episodic assets under unmatched nodes. Repair those
-        // records once during the next incremental scan even when the media file itself is unchanged.
-        var needsCatalogRepair = existing?.NodeIds.Any(unmatchedNodeIds.Contains) == true;
-        var changed = fullScan
-                      || needsCatalogRepair
-                      || existing is null
-                      || existing.FileSize != info.Length
-                      || existing.ModifiedAt != modified;
-        var parentFolder = ResolveParentFolder(identity, source.FolderPath);
-        ParsedVideoIdentity parsed;
-        LocalVideoMetadata? local = null;
-        if (changed)
+        var parsed = parsedIdentities[identity];
+        var hasUnmatchedBinding = existing?.NodeIds.Any(unmatchedNodeIds.Contains) == true;
+        var hasCompatibilityReparseSignal = existing is
         {
-            parsed = _parser.Parse(identity, source.FolderPath, source.MediaType);
+            Kind: VideoMediaAssetKind.LocalFile,
+            ModifiedAt: null,
+        };
+        var fileChanged = fullScan
+                          || existing is null
+                          || existing.FileSize != info.Length
+                          || existing.ModifiedAt != modified;
+        var parentFolder = ResolveParentFolder(identity, source.FolderPath);
+        LocalVideoMetadata? local = null;
+        if (fileChanged)
+        {
             try
             {
                 local = await _localMetadata.ReadAsync(identity, source.FolderPath, token);
@@ -354,32 +359,33 @@ internal sealed class VideoLibraryScanCoordinator : IVideoLibraryScanCoordinator
                 _logger.LogWarning(ex, "Ignored invalid local metadata for video asset");
             }
         }
-        else
-        {
-            parsed = new ParsedVideoIdentity(
-                existing!.Title,
-                existing.Title,
-                parentFolder,
-                null,
-                null,
-                existing.EpisodeStart,
-                existing.EpisodeEnd,
-                null,
-                null,
-                null,
-                ParsedVideoSpecialKind.None,
-                existing.EpisodeStart != existing.EpisodeEnd,
-                existing.EpisodeStart.HasValue,
-                ImmutableDictionary<string, string>.Empty,
-                []);
-        }
+        // Compatibility repairs clear modified_at as a one-shot reparse signal. Rebuild episodic
+        // ownership even when its old Episode fields happen to look valid: earlier metadata matching
+        // could still have attached that Episode to a release-name Series. Local NFO numbering is
+        // valid episode evidence even when the filename itself has no number.
+        var hasEffectiveEpisodeEvidence = parsed.HasEpisodeEvidence
+                                          || local?.EpisodeNumber.HasValue == true
+                                          || local?.AbsoluteEpisodeNumber.HasValue == true;
+        var hasLegacyEpisodicBinding = existing?.NodeIds.Any(id =>
+            nodesById.GetValueOrDefault(id)?.Kind is VideoCatalogNodeKind.Series
+                or VideoCatalogNodeKind.Season
+                or VideoCatalogNodeKind.Episode) == true;
+        var needsMovieHierarchyRepair = source.MediaType == VideoLibraryMediaType.Movie
+                                        && hasCompatibilityReparseSignal
+                                        && hasLegacyEpisodicBinding;
+        var needsCatalogRepair = hasUnmatchedBinding
+                                 || hasCompatibilityReparseSignal && hasEffectiveEpisodeEvidence
+                                 || needsMovieHierarchyRepair;
+        var hierarchyChanged = existing != null
+                               && HasHierarchyChanged(existing, parsed, local, nodesById);
+        var changed = fileChanged || needsCatalogRepair || hierarchyChanged;
 
         return (new VideoScanAsset(
             new VideoCatalogAssetUpsert(
                 identity,
                 VideoMediaAssetKind.LocalFile,
                 identity,
-                changed ? parsed.NormalizedTitle : existing!.Title,
+                parsed.NormalizedTitle,
                 parentFolder,
                 info.Length,
                 modified,
@@ -395,7 +401,48 @@ internal sealed class VideoLibraryScanCoordinator : IVideoLibraryScanCoordinator
                     && !Path.GetFileNameWithoutExtension(pathValue).Contains("backdrop", StringComparison.OrdinalIgnoreCase))),
             parsed,
             local,
-            SkipMetadataProcessing: !changed), changed);
+            SkipMetadataProcessing: !changed,
+            RebuildHierarchy: needsCatalogRepair || hierarchyChanged), changed);
+    }
+
+    private static bool HasHierarchyChanged(
+        VideoCatalogAssetSnapshot existing,
+        ParsedVideoIdentity parsed,
+        LocalVideoMetadata? local,
+        IReadOnlyDictionary<Guid, VideoCatalogNodeSnapshot> nodesById)
+    {
+        if (!string.Equals(existing.Title, parsed.NormalizedTitle, StringComparison.Ordinal)
+            || existing.EpisodeStart != parsed.EpisodeStart
+            || existing.EpisodeEnd != parsed.EpisodeEnd)
+            return true;
+        if (!parsed.HasEpisodeEvidence
+            && local?.EpisodeNumber.HasValue != true
+            && local?.AbsoluteEpisodeNumber.HasValue != true)
+            return false;
+
+        var episodeNodes = existing.NodeIds
+            .Select(id => nodesById.GetValueOrDefault(id))
+            .Where(node => node?.Kind == VideoCatalogNodeKind.Episode)
+            .Cast<VideoCatalogNodeSnapshot>()
+            .ToList();
+        if (episodeNodes.Count != 1)
+            return true;
+        // An unchanged incremental scan intentionally does not reread NFO. Do not treat a
+        // persisted local season/episode override as parser drift when that local evidence is
+        // unavailable; filename/asset identity changes above still trigger lightweight repair.
+        if (local == null)
+            return false;
+
+        var isSpecial = parsed.SpecialKind != ParsedVideoSpecialKind.None;
+        var season = isSpecial ? 0 : local.SeasonNumber ?? parsed.SeasonNumber;
+        var episode = local.EpisodeNumber
+                      ?? local.AbsoluteEpisodeNumber
+                      ?? parsed.EpisodeStart
+                      ?? parsed.AbsoluteEpisodeNumber;
+        var episodeNode = episodeNodes[0];
+        return episodeNode.IsSpecial != isSpecial
+               || (season.HasValue && episodeNode.SeasonNumber != season)
+               || episodeNode.EpisodeNumber != episode;
     }
 
     private static double CalculateRate(int count, TimeSpan elapsed) =>

@@ -72,6 +72,9 @@ public class VideoLibraryPageAssetTests
         xaml.Should().Contain("Source=\"{x:Bind ArtworkImage");
         xaml.Should().Contain("Command=\"{Binding ViewModel.OpenVideoCommand, ElementName=ThisPage}\"");
         xaml.Should().Contain("Command=\"{Binding ViewModel.OpenVideoFromBeginningCommand, ElementName=ThisPage}\"");
+        xaml.Should().Contain("Command=\"{Binding ViewModel.SelectSeriesSeasonCommand, ElementName=ThisPage}\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"{x:Bind AutomationId, Mode=OneTime}\"");
+        xaml.Should().Contain("IsChecked=\"{x:Bind IsSelected, Mode=OneWay}\"");
         xaml.Should().Contain("Command=\"{Binding ViewModel.ToggleFavoriteCommand, ElementName=ThisPage}\"");
         xaml.Should().Contain("Command=\"{Binding ViewModel.MarkWatchedCommand, ElementName=ThisPage}\"");
         xaml.Should().Contain("Command=\"{Binding ViewModel.ClearProgressCommand, ElementName=ThisPage}\"");
@@ -93,6 +96,49 @@ public class VideoLibraryPageAssetTests
         AssertFilterPanelWidth(document, x, "VideoLibraryFolderFilters", "228");
         AssertFilterPanelWidth(document, x, "VideoLibraryCollectionFilters", "228");
         AssertFilterPanelWidth(document, x, "VideoLibraryTagFilters", "188");
+    }
+
+    [Fact]
+    public void VideoLibraryPage_HomeVideoCardsKeepOneFixedLandscapeWidth()
+    {
+        var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml"));
+        var document = XDocument.Parse(xaml);
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var template = document.Descendants()
+            .Single(element =>
+                element.Name.LocalName == "DataTemplate"
+                && (string?)element.Attribute(x + "Key") == "VideoPosterItemTemplate");
+        var card = template.Elements().Single(element => element.Name.LocalName == "Grid");
+        var button = card.Elements().Single(element => element.Name.LocalName == "Button");
+        var artwork = button.Descendants()
+            .Single(element =>
+                element.Name.LocalName == "Border"
+                && (string?)element.Attribute("Height") == "124");
+        var title = button.Descendants()
+            .Single(element =>
+                element.Name.LocalName == "TextBlock"
+                && (string?)element.Attribute(x + "Name") == "VideoPosterTitleText");
+
+        card.Attribute("Width")?.Value.Should().Be("220");
+        card.Attribute("MaxWidth")?.Value.Should().Be("220");
+        card.Attribute("Margin")?.Value.Should().Be("0,0,12,0");
+        button.Attribute("Width")?.Value.Should().Be("220");
+        button.Attribute("MaxWidth")?.Value.Should().Be("220");
+        artwork.Attribute("Width")?.Value.Should().Be("220");
+        artwork.Attribute("Height")?.Value.Should().Be("124");
+        title.Attribute("Width")?.Value.Should().Be("220");
+        title.Attribute("MaxWidth")?.Value.Should().Be("220");
+        title.Attribute("MaxLines")?.Value.Should().Be("2");
+
+        var homeItems = document.Descendants()
+            .Where(element => element.Name.LocalName == "ItemsControl")
+            .Where(element => ((string?)element.Attribute("ItemsSource"))?.Contains("ViewModel.Home", StringComparison.Ordinal) == true)
+            .ToList();
+
+        homeItems.Should().HaveCount(3);
+        homeItems.Should().OnlyContain(element =>
+            (string?)element.Attribute("ItemTemplate") == "{StaticResource VideoPosterItemTemplate}");
     }
 
     [Fact]

@@ -174,7 +174,7 @@
   <data name="ReaderAppearancePageTitle.Text" xml:space="preserve"><value>外观</value></data>
   <data name="ReaderAppearancePanelDialog.Title" xml:space="preserve"><value>外观</value></data>
   <data name="ReaderAppearancePanelDialog.CloseButtonText" xml:space="preserve"><value>关闭</value></data>
-  <data name="ReaderThemeSectionHeader.Text" xml:space="preserve"><value>阅读主题</value></data>
+  <data name="ReaderThemeSectionHeader.Text" xml:space="preserve"><value>主题</value></data>
   <data name="ReaderSepiaModeCard.Header" xml:space="preserve"><value>棕褐色模式</value></data>
   <data name="ReaderSepiaModeCard.Description" xml:space="preserve"><value>使用棕褐色背景和文字配色阅读</value></data>
   <data name="ReaderCustomColorsCard.Header" xml:space="preserve"><value>自定义颜色</value></data>
@@ -182,14 +182,15 @@
   <data name="ReaderCustomBackgroundColorCard.Header" xml:space="preserve"><value>背景颜色</value></data>
   <data name="ReaderCustomTextColorCard.Header" xml:space="preserve"><value>正文颜色</value></data>
   <data name="ReaderCustomInfoColorCard.Header" xml:space="preserve"><value>信息文字颜色</value></data>
-  <data name="ReaderColorThemeCard.Header" xml:space="preserve"><value>颜色主题</value></data>
-  <data name="ReaderColorThemeCard.Description" xml:space="preserve"><value>选择阅读颜色主题</value></data>
+  <data name="ReaderColorThemeCard.Header" xml:space="preserve"><value>主题</value></data>
+  <data name="ReaderColorThemeCard.Description" xml:space="preserve"><value>选择应用和阅读主题</value></data>
   <data name="ReaderEInkModeCard.Header" xml:space="preserve"><value>电子墨水模式</value></data>
   <data name="ReaderEInkModeCard.Description" xml:space="preserve"><value>适合电子墨水屏的高对比黑白显示</value></data>
   <data name="ReaderSystemLightSepiaCard.Header" xml:space="preserve"><value>浅色系统使用棕褐色</value></data>
   <data name="ReaderSystemLightSepiaCard.Description" xml:space="preserve"><value>系统处于浅色模式时改用棕褐色阅读主题</value></data>
   <data name="ReaderSepiaInvertCard.Header" xml:space="preserve"><value>系统深色时反转棕褐色</value></data>
   <data name="ReaderSepiaInvertCard.Description" xml:space="preserve"><value>系统处于深色模式时反转棕褐色主题</value></data>
+  <data name="ReaderCustomInterfaceThemeCard.Header" xml:space="preserve"><value>界面主题</value></data>
   <data name="ReaderTextSectionHeader.Text" xml:space="preserve"><value>阅读文字</value></data>
   <data name="ReaderTextOrientationCard.Header" xml:space="preserve"><value>文字方向</value></data>
   <data name="ReaderTextOrientationCard.Description" xml:space="preserve"><value>竖排或横排阅读</value></data>
@@ -557,6 +558,8 @@
   <data name="StatisticsEnableToggle.Description" xml:space="preserve"><value>显示统计控件并保存阅读历史 sidecar</value></data>
   <data name="StatisticsAutostartModeComboBox.Header" xml:space="preserve"><value>自动开始</value></data>
   <data name="StatisticsAutostartModeComboBox.Description" xml:space="preserve"><value>手动开始、翻页时开始或打开阅读器时开始统计</value></data>
+  <data name="StatisticsResetTimeCard.Header" xml:space="preserve"><value>重置时间</value></data>
+  <data name="StatisticsResetTimeCard.Description" xml:space="preserve"><value>在此时间之前记录的阅读统计计入前一天。</value></data>
   <data name="StatisticsSyncSectionHeader.Text" xml:space="preserve"><value>同步</value></data>
   <data name="StatisticsEnableSyncToggle.Header" xml:space="preserve"><value>ッツ Sync</value></data>
   <data name="StatisticsEnableSyncToggle.Description" xml:space="preserve"><value>启用统计同步元数据</value></data>
@@ -1105,6 +1108,32 @@
   <data name="NovelStatisticsCalendarTitle.Text" xml:space="preserve"><value>阅读日历</value></data>
   <data name="NovelStatisticsCalendarRecentYear.Text" xml:space="preserve"><value>最近一年</value></data>
   <data name="NovelStatisticsRankingTitle.Text" xml:space="preserve"><value>书籍排行</value></data>
+  <data name="NovelStatisticsMoreBooksButton.Content" xml:space="preserve"><value>更多书籍</value></data>
+  <data name="NovelStatisticsBookDetailDialogTitle" xml:space="preserve"><value>书籍统计</value></data>
+  <data name="NovelStatisticsBookDetailClose" xml:space="preserve"><value>关闭</value></data>
+  <data name="NovelStatisticsBookDetailLoading" xml:space="preserve"><value>正在加载书籍统计…</value></data>
+  <data name="NovelStatisticsBookDetailSubtitle.Text" xml:space="preserve"><value>每日阅读统计</value></data>
+  <data name="NovelStatisticsBookDetailCharacters.Text" xml:space="preserve"><value>字符数</value></data>
+  <data name="NovelStatisticsBookDetailDuration.Text" xml:space="preserve"><value>时长</value></data>
+  <data name="NovelStatisticsBookDetailSpeed.Text" xml:space="preserve"><value>速度</value></data>
+  <data name="NovelStatisticsBookDetailActiveDays.Text" xml:space="preserve"><value>活跃天数</value></data>
+  <data name="NovelStatisticsBookDetailDays.Text" xml:space="preserve"><value>每日记录</value></data>
+  <data name="NovelStatisticsBookDetailNoRecords.Text" xml:space="preserve"><value>无阅读记录</value></data>
+  <data name="NovelStatisticsBookDetailUnavailable" xml:space="preserve"><value>无法读取这本书的统计；sidecar 保持未修改。</value></data>
+  <data name="NovelStatisticsBookDetailActiveDaysFormat" xml:space="preserve"><value>{0} 天</value></data>
+  <data name="NovelStatisticsBookDetailDayAccessibleFormat" xml:space="preserve"><value>{0}，{1} 个字符，{2}，{3}</value></data>
+  <data name="NovelStatisticsBookDetailCharactersInput.Header" xml:space="preserve"><value>阅读字符数</value></data>
+  <data name="NovelStatisticsBookDetailHoursInput.Header" xml:space="preserve"><value>小时</value></data>
+  <data name="NovelStatisticsBookDetailMinutesInput.Header" xml:space="preserve"><value>分钟</value></data>
+  <data name="NovelStatisticsBookDetailDeleteDay.Content" xml:space="preserve"><value>删除当天数据</value></data>
+  <data name="NovelStatisticsBookDetailSave.Content" xml:space="preserve"><value>保存</value></data>
+  <data name="NovelStatisticsBookDetailCancel.Content" xml:space="preserve"><value>取消</value></data>
+  <data name="NovelStatisticsBookDetailConfirmDelete.Content" xml:space="preserve"><value>删除</value></data>
+  <data name="NovelStatisticsBookDetailDeleteAll.Content" xml:space="preserve"><value>删除全部统计</value></data>
+  <data name="NovelStatisticsBookDetailSelectDay.Text" xml:space="preserve"><value>选择一天以编辑其统计数据。</value></data>
+  <data name="NovelStatisticsBookDetailDeleteDayConfirmation" xml:space="preserve"><value>确定删除所选日期的统计数据吗？此操作无法撤销。</value></data>
+  <data name="NovelStatisticsBookDetailDeleteAllConfirmation" xml:space="preserve"><value>确定删除这本书的全部统计数据吗？此操作无法撤销。</value></data>
+  <data name="NovelStatisticsBookDetailMutationFailedFormat" xml:space="preserve"><value>无法更新统计数据：{0}</value></data>
   <data name="NovelStatisticsShelfTitle.Text" xml:space="preserve"><value>书架对比</value></data>
   <data name="NovelStatisticsLoadingText.Text" xml:space="preserve"><value>正在加载统计…</value></data>
   <data name="NovelStatisticsEmptyTitle.Text" xml:space="preserve"><value>暂无阅读统计</value></data>
@@ -1160,6 +1189,17 @@
   <data name="YouTubeSubtitleLoadFailed" xml:space="preserve"><value>无法加载此发布者字幕轨道。</value></data>
   <data name="YouTubeSubtitleLoading" xml:space="preserve"><value>正在加载发布者字幕...</value></data>
   <data name="DictionaryPopupViewAddedNoteInAnki" xml:space="preserve"><value>在 Anki 中查看已添加的笔记</value></data>
+  <data name="DictionaryPopupAnkiCardAddedTitle" xml:space="preserve"><value>卡片已添加</value></data>
+  <data name="DictionaryPopupAnkiDuplicateFoundTitle" xml:space="preserve"><value>发现重复卡片</value></data>
+  <data name="DictionaryPopupAnkiSentToAnkiTitle" xml:space="preserve"><value>已发送至 Anki</value></data>
+  <data name="DictionaryPopupAnkiAddFailedTitle" xml:space="preserve"><value>添加失败</value></data>
+  <data name="DictionaryPopupAnkiPreparingCardMessage" xml:space="preserve"><value>正在准备卡片…</value></data>
+  <data name="DictionaryPopupAnkiPrepareCardFailedFormat" xml:space="preserve"><value>无法准备卡片：{0}</value></data>
+  <data name="DictionaryPopupAnkiAddedMessage" xml:space="preserve"><value>已添加到 Anki。</value></data>
+  <data name="DictionaryPopupAnkiAlreadyExistsMessage" xml:space="preserve"><value>已存在于 Anki 中。</value></data>
+  <data name="DictionaryPopupAnkiAddCardFailedMessage" xml:space="preserve"><value>添加卡片失败。</value></data>
+  <data name="DictionaryPopupAnkiActivePopupChangedMessage" xml:space="preserve"><value>查词结果已变化，请重新添加卡片。</value></data>
+  <data name="DictionaryPopupUnknownErrorMessage" xml:space="preserve"><value>未知错误</value></data>
   <data name="BackupSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>返回</value></data>
   <data name="BackupSettingsPageTitle.Text" xml:space="preserve"><value>备份</value></data>
   <data name="BackupBooksSectionHeader.Text" xml:space="preserve"><value>书籍</value></data>

@@ -26,6 +26,12 @@ public sealed class AnkiMiningPayload
     [JsonPropertyName("renderGeneration")]
     public long RenderGeneration { get; set; } = -1;
 
+    [JsonPropertyName("pageRevision")]
+    public long PageRevision { get; set; } = -1;
+
+    [JsonPropertyName("attemptId")]
+    public long AttemptId { get; set; } = -1;
+
     [JsonPropertyName("expression")]
     public string Expression { get; set; } = "";
 

@@ -1,6 +1,7 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Niratan.Models.Settings;
+using Niratan.Services.Novels;
 using Niratan.Services.Settings;
 
 namespace Niratan.ViewModels.Pages;
@@ -30,6 +31,9 @@ public partial class StatisticsSettingsPageViewModel : ObservableObject
     public partial StatisticsAutostartMode SelectedAutostartMode { get; set; }
 
     [ObservableProperty]
+    public partial TimeSpan? ResetTime { get; set; }
+
+    [ObservableProperty]
     public partial bool EnableSync { get; set; }
 
     [ObservableProperty]
@@ -55,6 +59,7 @@ public partial class StatisticsSettingsPageViewModel : ObservableObject
 
         EnableStatistics = settings.EnableStatistics;
         SelectedAutostartMode = settings.AutostartMode;
+        ResetTime = TimeSpan.FromMinutes(settings.ResetTimeMinutes);
         EnableSync = settings.EnableSync;
         SelectedSyncMode = settings.SyncMode;
     }
@@ -70,6 +75,8 @@ public partial class StatisticsSettingsPageViewModel : ObservableObject
             {
                 EnableStatistics = EnableStatistics,
                 AutostartMode = SelectedAutostartMode,
+                ResetTimeMinutes = NovelStatisticsDayBoundary.NormalizeResetMinutes(
+                    (int)Math.Round((ResetTime ?? TimeSpan.Zero).TotalMinutes)),
                 DailyTargetType = current.DailyTargetType,
                 DailyCharacterTarget = current.DailyCharacterTarget,
                 DailyDurationTargetMinutes = current.DailyDurationTargetMinutes,
@@ -87,6 +94,7 @@ public partial class StatisticsSettingsPageViewModel : ObservableObject
         SaveSettings();
     }
     partial void OnSelectedAutostartModeChanged(StatisticsAutostartMode value) => SaveSettings();
+    partial void OnResetTimeChanged(TimeSpan? value) => SaveSettings();
     partial void OnEnableSyncChanged(bool value) => SaveSettings();
     partial void OnSelectedSyncModeChanged(StatisticsSyncMode value) => SaveSettings();
 

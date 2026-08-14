@@ -25,7 +25,9 @@ using Niratan.ViewModels.Components;
 
 namespace Niratan.ViewModels.Pages;
 
-public partial class NovelReaderPageViewModel : ObservableObject
+public partial class NovelReaderPageViewModel
+    : ObservableObject,
+      INovelStatisticsActiveReader
 {
     private readonly INovelLibraryService _novelLibraryService;
     private readonly INotificationService _notificationService;
@@ -34,6 +36,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
     private readonly INovelBookSidecarService _novelBookSidecarService;
     private readonly IReaderImageGalleryService? _readerImageGalleryService;
     private readonly IReaderStatisticsSession _statisticsSession;
+    private readonly INovelStatisticsMutationCoordinator? _statisticsMutationCoordinator;
     private readonly IProfileRuntimeService _profileRuntime;
     private readonly ISettingsService _settingsService;
     private readonly IReaderAutoSyncCoordinator _readerAutoSyncCoordinator;
@@ -170,7 +173,8 @@ public partial class NovelReaderPageViewModel : ObservableObject
         IReaderAutoSyncCoordinator readerAutoSyncCoordinator,
         ReaderNavigationTransactionCoordinator navigationTransactions,
         IReaderImageGalleryService? readerImageGalleryService = null,
-        IReaderSettingsService? readerSettingsService = null
+        IReaderSettingsService? readerSettingsService = null,
+        INovelStatisticsMutationCoordinator? statisticsMutationCoordinator = null
     )
     {
         _novelLibraryService = novelLibraryService;
@@ -186,6 +190,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
         _readerAutoSyncCoordinator = readerAutoSyncCoordinator;
         _navigationTransactions = navigationTransactions;
         _readerSettingsService = readerSettingsService;
+        _statisticsMutationCoordinator = statisticsMutationCoordinator;
     }
 
     public async Task InitializeAsync(
@@ -199,6 +204,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
             return;
         }
 
+        _statisticsMutationCoordinator?.Unregister(this);
         CurrentBook = result.Value;
 
         if (CurrentBook != null)
@@ -315,6 +321,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
     {
         if (string.IsNullOrWhiteSpace(CurrentBook?.ExtractedPath))
         {
+            _statisticsMutationCoordinator?.Unregister(this);
             var empty = ReaderStatisticsMath.Empty(
                 ReaderTitle,
                 DateOnly.FromDateTime(DateTime.Now));
@@ -333,6 +340,76 @@ public partial class NovelReaderPageViewModel : ObservableObject
             ReaderTitle,
             new ReaderStatisticsPosition(CurrentCharacterCount),
             ct);
+        _statisticsMutationCoordinator?.Register(this);
+    }
+
+    public string? ActiveStatisticsBookId => CurrentBook?.Id;
+
+    public Task ExecuteExternalStatisticsMutationAsync(
+        Func<CancellationToken, Task> mutation,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(mutation);
+
+        Task operation;
+        TaskCompletionSource admission;
+        lock (_saveGate)
+        {
+            if (_readerWriterClosed)
+                return ExecuteMutationAfterReaderCloseAsync(mutation, ct);
+
+            admission = CreateWriterAdmission();
+            operation = RunExternalStatisticsMutationAsync(
+                admission.Task,
+                _writerTail,
+                CurrentCharacterCount,
+                mutation,
+                ct);
+            _writerTail = operation;
+        }
+
+        admission.TrySetResult();
+        return operation;
+    }
+
+    private async Task ExecuteMutationAfterReaderCloseAsync(
+        Func<CancellationToken, Task> mutation,
+        CancellationToken ct)
+    {
+        await _lifecycleCheckpointLock.WaitAsync(ct);
+        _lifecycleCheckpointLock.Release();
+        ct.ThrowIfCancellationRequested();
+        await mutation(ct);
+    }
+
+    private async Task RunExternalStatisticsMutationAsync(
+        Task admission,
+        Task previousWriter,
+        int position,
+        Func<CancellationToken, Task> mutation,
+        CancellationToken ct)
+    {
+        await admission;
+        await AwaitPreviousWriterCompletionAsync(previousWriter);
+        ct.ThrowIfCancellationRequested();
+        var readerPosition = new ReaderStatisticsPosition(position);
+        await _statisticsSession.CheckpointAsync(
+            readerPosition,
+            ReaderStatisticsCheckpointReason.ExternalMutation,
+            ct);
+        try
+        {
+            await mutation(ct);
+        }
+        finally
+        {
+            if (_statisticsSession is IExternalMutableReaderStatisticsSession reloadable)
+            {
+                await reloadable.ReloadAfterExternalMutationAsync(
+                    readerPosition,
+                    CancellationToken.None);
+            }
+        }
     }
 
     public void StartStatisticsTracking(DateTimeOffset? now = null)
@@ -661,6 +738,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
                 navigationSettlement = _navigationTransactions.HandleBridgeErrorAsync();
                 _readerWriterClosed = true;
                 _lifecycleWriterBarrier = true;
+                _statisticsMutationCoordinator?.Unregister(this);
                 _saveCts?.Cancel();
                 deferredStatistics = Task.WhenAll(
                     _deferredNavigationStatisticsMutations.ToArray());
@@ -686,6 +764,7 @@ public partial class NovelReaderPageViewModel : ObservableObject
             admission.TrySetResult();
             await boundary;
             _didCompleteLifecycleClose = true;
+            _statisticsMutationCoordinator?.Unregister(this);
         }
         finally
         {

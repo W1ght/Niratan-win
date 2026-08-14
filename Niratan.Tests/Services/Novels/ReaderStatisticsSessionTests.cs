@@ -8,6 +8,42 @@ namespace Niratan.Tests.Services.Novels;
 public sealed class ReaderStatisticsSessionTests
 {
     [Fact]
+    public async Task ReloadAfterExternalMutation_PreservesSessionAndTrackingButRefreshesBookTotals()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var clock = ClockAtLocal(new DateTimeOffset(2026, 7, 11, 8, 0, 0, TimeSpan.FromHours(8)));
+        var edited = new NovelReadingStatistic(
+            "Book",
+            "2026-07-11",
+            900,
+            450,
+            7_200,
+            7_200,
+            7_200,
+            7_200,
+            99);
+        var sidecars = new Mock<INovelStatisticsSidecarService>();
+        sidecars.SetupSequence(x => x.LoadAsync("root", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([])
+            .ReturnsAsync([edited]);
+        var session = new ReaderStatisticsSession(sidecars.Object, clock);
+        await session.LoadAsync("root", "Book", new ReaderStatisticsPosition(100), ct);
+        session.Start(new ReaderStatisticsPosition(100));
+        clock.Advance(TimeSpan.FromMinutes(1));
+        session.Tick(new ReaderStatisticsPosition(130));
+
+        await session.ReloadAfterExternalMutationAsync(
+            new ReaderStatisticsPosition(130),
+            ct);
+
+        session.State.IsTracking.Should().BeTrue();
+        session.State.Session.CharactersRead.Should().Be(30);
+        session.State.Today.Should().Be(edited);
+        session.State.AllTime.CharactersRead.Should().Be(900);
+        session.State.History.Should().ContainSingle().Which.Should().Be(edited);
+    }
+
+    [Fact]
     public async Task LoadStartAndCheckpoint_ProjectsAndSavesOneCanonicalHistory()
     {
         var ct = TestContext.Current.CancellationToken;
@@ -131,6 +167,52 @@ public sealed class ReaderStatisticsSessionTests
         session.State.History.Select(x => x.DateKey).Should().Equal("2026-07-11", "2026-07-12");
         session.State.History[0].Should().Be(prior);
         session.State.AllTime.CharactersRead.Should().Be(120);
+    }
+
+    [Fact]
+    public async Task ConfiguredResetTime_AttributesEarlyMorningReadingToPreviousDay()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var clock = ClockAtLocal(new DateTimeOffset(2026, 7, 12, 3, 30, 0, TimeSpan.FromHours(8)));
+        var sidecars = new Mock<INovelStatisticsSidecarService>();
+        sidecars.Setup(x => x.LoadAsync("root", ct)).ReturnsAsync([]);
+        var session = new ReaderStatisticsSession(sidecars.Object, clock, () => 4 * 60);
+
+        await session.LoadAsync("root", "Book", new ReaderStatisticsPosition(10), ct);
+        session.Start(new ReaderStatisticsPosition(10));
+        clock.Advance(TimeSpan.FromMinutes(1));
+        await session.CheckpointAsync(
+            new ReaderStatisticsPosition(20),
+            ReaderStatisticsCheckpointReason.ReadingMovement,
+            ct);
+
+        session.State.Today.DateKey.Should().Be("2026-07-11");
+        session.State.History.Should().ContainSingle(item => item.DateKey == "2026-07-11");
+    }
+
+    [Fact]
+    public async Task ConfiguredResetTime_RollsActiveSessionAtTheConfiguredBoundary()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var clock = ClockAtLocal(new DateTimeOffset(2026, 7, 12, 3, 59, 59, TimeSpan.FromHours(8)));
+        var prior = Statistic("2026-07-11", characters: 100, readingTime: 100, modified: 10);
+        var sidecars = new Mock<INovelStatisticsSidecarService>();
+        sidecars.Setup(x => x.LoadAsync("root", ct)).ReturnsAsync([prior]);
+        var session = new ReaderStatisticsSession(sidecars.Object, clock, () => 4 * 60);
+        await session.LoadAsync("root", "Book", new ReaderStatisticsPosition(100), ct);
+        session.Start(new ReaderStatisticsPosition(100));
+
+        clock.Advance(TimeSpan.FromSeconds(2));
+        await session.CheckpointAsync(
+            new ReaderStatisticsPosition(120),
+            ReaderStatisticsCheckpointReason.ReadingMovement,
+            ct);
+
+        session.State.Today.DateKey.Should().Be("2026-07-12");
+        session.State.Today.CharactersRead.Should().Be(20);
+        session.State.History.Select(item => item.DateKey)
+            .Should().Equal("2026-07-11", "2026-07-12");
+        session.State.History[0].Should().Be(prior);
     }
 
     [Fact]

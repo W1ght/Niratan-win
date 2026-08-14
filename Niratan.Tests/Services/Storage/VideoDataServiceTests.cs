@@ -1,16 +1,74 @@
+using System.Collections.Immutable;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using FluentAssertions;
+using Moq;
 using Niratan.Models;
 using Niratan.Models.Video;
 using Niratan.Services.Storage;
+using Niratan.Services.Video;
 using Niratan.Tests.TestUtils;
 
 namespace Niratan.Tests.Services.Storage;
 
 public sealed class VideoDataServiceTests
 {
+    [Fact]
+    public async Task CatalogProjection_PrefersUserTitleAndKeepsSeriesOwnerMetadataSeparate()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var seriesId = Guid.NewGuid();
+        var episodeId = Guid.NewGuid();
+        var plainAssetId = Guid.NewGuid();
+        var titledAssetId = Guid.NewGuid();
+        var snapshot = VideoCatalogSnapshot.Empty() with
+        {
+            Nodes =
+            [
+                new VideoCatalogNodeSnapshot(
+                    seriesId, null, VideoCatalogNodeKind.Series, "作品", "シリーズ原題", "シリーズ副題", "シリーズ概要",
+                    2024, null, null, null, false, false, [],
+                    ImmutableDictionary<string, string>.Empty),
+                new VideoCatalogNodeSnapshot(
+                    episodeId, seriesId, VideoCatalogNodeKind.Episode, "第4話", "単話原題", "単話副題", "単話概要",
+                    2025, 1, 4, null, false, false, [],
+                    ImmutableDictionary<string, string>.Empty),
+            ],
+            Assets =
+            [
+                Asset(plainAssetId, @"D:\Anime\plain.mkv", episodeId, displayTitle: null),
+                Asset(titledAssetId, @"D:\Anime\titled.mkv", episodeId, displayTitle: "ユーザー題"),
+            ],
+        };
+        var catalog = new Mock<IVideoCatalogRepository>();
+        catalog.Setup(repository => repository.GetSnapshotAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(snapshot);
+        var history = new Mock<IVideoPlaybackHistoryStore>();
+        history.Setup(store => store.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new VideoPlaybackHistoryEntry(
+                new VideoPlaybackState(0, 0, VideoSubtitleSelection.None()), null, false));
+        var service = new VideoDataService(
+            catalog.Object,
+            history.Object,
+            Mock.Of<IVideoFileNameParser>());
+
+        var videos = await service.GetVideosAsync(ct: ct);
+
+        var plainVideo = videos.Single(video => video.CatalogAssetId == plainAssetId);
+        plainVideo.Title.Should().Be("第4話");
+        plainVideo.OriginalTitle.Should().Be("単話原題");
+        plainVideo.Overview.Should().Be("単話概要");
+        plainVideo.ReleaseYear.Should().Be(2025);
+        plainVideo.CatalogSeriesTitle.Should().Be("作品");
+        plainVideo.CatalogSeriesOriginalTitle.Should().Be("シリーズ原題");
+        plainVideo.CatalogSeriesOverview.Should().Be("シリーズ概要");
+        plainVideo.CatalogSeriesReleaseYear.Should().Be(2024);
+        plainVideo.EpisodeEnd.Should().Be(5);
+        plainVideo.CatalogNumberingText.Should().Be("S01E04–E05");
+        videos.Single(video => video.CatalogAssetId == titledAssetId).Title.Should().Be("ユーザー題");
+    }
+
     [Fact]
     public async Task VideoDataService_PersistsCatalogAndPlaybackInSeparateNiratanFiles()
     {
@@ -289,4 +347,39 @@ public sealed class VideoDataServiceTests
         File.Exists(databasePath).Should().BeFalse();
         (await File.ReadAllTextAsync(catalogPath, ct)).Should().Be(invalid);
     }
+
+    private static VideoCatalogAssetSnapshot Asset(
+        Guid id,
+        string identity,
+        Guid nodeId,
+        string? displayTitle) => new(
+        id,
+        identity,
+        VideoMediaAssetKind.LocalFile,
+        identity,
+        "作品",
+        "Anime",
+        1,
+        null,
+        DateTimeOffset.UtcNow,
+        DateTimeOffset.UtcNow,
+        VideoMediaAvailability.Available,
+        4,
+        5,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        displayTitle,
+        false,
+        [],
+        null,
+        null,
+        null,
+        [],
+        [nodeId],
+        []);
 }

@@ -151,10 +151,16 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                     FROM catalog_nodes parent JOIN ancestry child ON child.parent_id=parent.id
                 )
                 SELECT id FROM ancestry
+                WHERE @RequireExact=0 OR kind=@DesiredKind
                 ORDER BY CASE WHEN kind=@DesiredKind THEN 0 ELSE 1 END,depth
                 LIMIT 1;
                 """,
-                new { Asset = assetId.ToString("D"), DesiredKind = desiredKind }, transaction);
+                new
+                {
+                    Asset = assetId.ToString("D"),
+                    DesiredKind = desiredKind,
+                    RequireExact = ownerKind == VideoMetadataMediaKind.Movie ? 1 : 0,
+                }, transaction);
             if (nodeId == null)
                 return;
             var hasSelected = await connection.ExecuteScalarAsync<long>(
@@ -374,7 +380,8 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                     batch.SourceId,
                     item.ParsedIdentity,
                     item.LocalMetadata,
-                    applyMetadata: !item.SkipMetadataProcessing);
+                    applyMetadata: !item.SkipMetadataProcessing,
+                    rebuildHierarchy: item.RebuildHierarchy);
             }
 
             var now = ToDb(DateTimeOffset.UtcNow);
@@ -453,6 +460,8 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                         Now = now,
                     }, transaction);
             }
+            if (batch.IsFinal && batch.EnumerationCompleted)
+                await PruneEmptyAutomaticNodesAsync(connection, (SqliteTransaction)transaction);
             await transaction.CommitAsync(ct);
             _lastSnapshot = await ReadSnapshotAsync(ct);
             return true;
@@ -687,11 +696,12 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
             }
         }, ct);
 
-    public Task ApplyMetadataMatchAsync(
+    public Task<bool> ApplyMetadataMatchAsync(
         Guid assetId,
         VideoMetadataCandidate candidate,
         VideoMetadataDetails? details,
         bool lockIdentity,
+        bool preserveExistingHierarchy,
         CancellationToken ct = default) =>
         WriteAsync(async (connection, transaction) =>
         {
@@ -721,6 +731,64 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 candidate.SourceUrl,
                 DateTimeOffset.UtcNow,
                 DateTimeOffset.UtcNow.AddDays(30))).WithInitializedCollections();
+            var allowLockedIdentityReplacement = lockIdentity && !preserveExistingHierarchy;
+
+            var isExplicitMovieSource = await connection.ExecuteScalarAsync<long>(
+                """
+                SELECT COUNT(*) FROM source_assets sa
+                JOIN library_sources s ON s.id=sa.source_id
+                WHERE sa.asset_id=@Asset AND s.media_type='movie';
+                """,
+                new { Asset = assetId.ToString("D") }, transaction) > 0;
+            Guid? structuredSeries = null;
+            var hasAutomaticRebindRisk = false;
+            if (preserveExistingHierarchy)
+            {
+                structuredSeries = await FindBoundAncestorNodeIdAsync(
+                    connection, transaction, assetId, "series");
+                var hasEpisodicHierarchy = await connection.ExecuteScalarAsync<long>(
+                    """
+                    WITH RECURSIVE ancestry(id,parent_id,kind) AS (
+                        SELECT n.id,n.parent_id,n.kind
+                        FROM catalog_nodes n
+                        JOIN node_assets na ON na.node_id=n.id
+                        WHERE na.asset_id=@Asset
+                        UNION ALL
+                        SELECT parent.id,parent.parent_id,parent.kind
+                        FROM catalog_nodes parent
+                        JOIN ancestry child ON child.parent_id=parent.id
+                    )
+                    SELECT COUNT(*) FROM ancestry WHERE kind IN ('series','season','episode');
+                    """,
+                    new { Asset = assetId.ToString("D") }, transaction) > 0;
+                var hasBoundMovie = await connection.ExecuteScalarAsync<long>(
+                    """
+                    SELECT COUNT(*) FROM catalog_nodes n
+                    JOIN node_assets na ON na.node_id=n.id
+                    WHERE na.asset_id=@Asset AND n.kind='movie';
+                    """,
+                    new { Asset = assetId.ToString("D") }, transaction) > 0;
+                hasAutomaticRebindRisk = !structuredSeries.HasValue
+                                         && (hasEpisodicHierarchy || hasBoundMovie);
+                if (hasEpisodicHierarchy && metadata.MediaKind == VideoMetadataMediaKind.Movie)
+                {
+                    var rebuild = isExplicitMovieSource
+                        ? await GetHierarchyRebuildDecisionAsync(connection, transaction, assetId)
+                        : HierarchyRebuildDecision.Denied;
+                    var otherHierarchyAssets = isExplicitMovieSource
+                        ? await CountOtherHierarchyAssetsAsync(connection, transaction, assetId)
+                        : 1;
+                    if (!rebuild.CanRebuild
+                        || rebuild.PreservedSeriesId.HasValue
+                        || otherHierarchyAssets != 0)
+                    {
+                        // Keep candidates intact so an unsafe automatic Movie result remains in
+                        // Needs Review. Only an explicit Movie source with an unprotected,
+                        // single-asset legacy hierarchy may be corrected automatically.
+                        return false;
+                    }
+                }
+            }
 
             var lockedTarget = await connection.QuerySingleOrDefaultAsync<LockedNodeRow>(
                 """
@@ -735,7 +803,7 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 SELECT a.id,a.kind FROM ancestry a
                 JOIN external_ids e ON e.node_id=a.id
                 WHERE e.provider_id=@Provider AND e.external_id=@ExternalId
-                  AND (a.identity_locked=1 OR e.is_identity_locked=1)
+                  AND e.is_identity_locked=1
                 ORDER BY CASE a.kind WHEN 'series' THEN 0 WHEN 'movie' THEN 0 WHEN 'season' THEN 1 ELSE 2 END
                 LIMIT 1;
                 """,
@@ -745,28 +813,84 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                     Provider = metadata.ProviderId,
                     ExternalId = metadata.ProviderItemId,
                 }, transaction);
-            if (lockedTarget != null)
+            if (lockedTarget != null
+                && IsMetadataKindCompatibleWithNode(lockedTarget.kind, metadata.MediaKind))
             {
+                var lockedTargetId = Guid.Parse(lockedTarget.id);
+                var identityProvidersToLock = await ResolveIdentityProvidersToLockAsync(
+                    connection, transaction, lockedTargetId, metadata.ProviderId,
+                    lockIdentity, preserveExistingHierarchy);
                 await ApplyNodeMetadataAsync(
                     connection,
                     transaction,
-                    Guid.Parse(lockedTarget.id),
+                    lockedTargetId,
                     lockedTarget.kind,
                     metadata,
-                    lockIdentity: true);
+                    identityProvidersToLock,
+                    allowLockedIdentityReplacement);
                 await connection.ExecuteAsync(
                     "DELETE FROM match_candidates WHERE asset_id=@Asset;",
                     new { Asset = assetId.ToString("D") }, transaction);
-                return;
+                return true;
+            }
+
+            if (preserveExistingHierarchy
+                && metadata.MediaKind != VideoMetadataMediaKind.Movie
+                && hasAutomaticRebindRisk)
+            {
+                var rebuildDecision = await GetHierarchyRebuildDecisionAsync(
+                    connection, transaction, assetId);
+                if (!rebuildDecision.CanRebuild)
+                    return false;
+            }
+
+            // Series/anime matches enrich the scanner-owned series identity. They must not
+            // rebuild an already structured local Series -> Season -> Episode hierarchy: series
+            // providers normally return no season number, which previously flattened every
+            // episode under the series and made regular videos collide with PV/menu assets.
+            if (preserveExistingHierarchy
+                && (metadata.MediaKind is VideoMetadataMediaKind.Series or VideoMetadataMediaKind.Anime))
+            {
+                if (structuredSeries.HasValue)
+                {
+                    var identityProvidersToLock = await ResolveIdentityProvidersToLockAsync(
+                        connection, transaction, structuredSeries.Value, metadata.ProviderId,
+                        lockIdentity, preserveExistingHierarchy);
+                    await ApplyNodeMetadataAsync(
+                        connection,
+                        transaction,
+                        structuredSeries.Value,
+                        "series",
+                        metadata,
+                        identityProvidersToLock,
+                        allowLockedIdentityReplacement);
+                    await connection.ExecuteAsync(
+                        "DELETE FROM match_candidates WHERE asset_id=@Asset;",
+                        new { Asset = assetId.ToString("D") }, transaction);
+                    return true;
+                }
             }
 
             var targetNodes = new List<Guid>();
             if (metadata.MediaKind == VideoMetadataMediaKind.Movie)
             {
-                var nodeId = currentNodes.Count == 1
+                var reuseCurrentNode = false;
+                Guid nodeId;
+                if (currentNodes.Count == 1)
+                {
+                    reuseCurrentNode = await connection.ExecuteScalarAsync<long>(
+                        """
+                        SELECT CASE WHEN
+                            (SELECT COUNT(*) FROM node_assets WHERE node_id=@Node)=1
+                            AND NOT EXISTS(SELECT 1 FROM catalog_nodes WHERE parent_id=@Node)
+                            THEN 1 ELSE 0 END;
+                        """,
+                        new { Node = currentNodes[0] }, transaction) != 0;
+                }
+                nodeId = reuseCurrentNode
                     ? Guid.Parse(currentNodes[0])
                     : Guid.NewGuid();
-                if (currentNodes.Count != 1)
+                if (!reuseCurrentNode)
                 {
                     await connection.ExecuteAsync(
                         """
@@ -777,17 +901,46 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                         {
                             Id = nodeId.ToString("D"),
                             metadata.Title,
-                            Locked = lockIdentity ? 1 : 0,
+                            Locked = allowLockedIdentityReplacement ? 1 : 0,
                             Now = ToDb(DateTimeOffset.UtcNow),
                         }, transaction);
                 }
-                await ApplyNodeMetadataAsync(connection, transaction, nodeId, "movie", metadata, lockIdentity);
+                if (reuseCurrentNode)
+                {
+                    await connection.ExecuteAsync(
+                        "UPDATE catalog_nodes SET parent_id=NULL WHERE id=@Node;",
+                        new { Node = nodeId.ToString("D") }, transaction);
+                }
+                var identityProvidersToLock = await ResolveIdentityProvidersToLockAsync(
+                    connection, transaction, nodeId, metadata.ProviderId,
+                    lockIdentity, preserveExistingHierarchy);
+                await ApplyNodeMetadataAsync(
+                    connection, transaction, nodeId, "movie", metadata,
+                    identityProvidersToLock, allowLockedIdentityReplacement);
                 targetNodes.Add(nodeId);
             }
             else
             {
+                var episodeStart = assetRow.episode_start
+                                   ?? metadata.EpisodeNumber
+                                   ?? metadata.AbsoluteEpisodeNumber;
+                Guid? reusableUnmatchedNodeId = null;
+                if (currentNodes.Count == 1)
+                {
+                    var reusable = await connection.ExecuteScalarAsync<string?>(
+                        """
+                        SELECT n.id FROM catalog_nodes n
+                        WHERE n.id=@Node AND n.kind='unmatched'
+                          AND (SELECT COUNT(*) FROM node_assets na WHERE na.node_id=n.id)=1;
+                        """,
+                        new { Node = currentNodes[0] }, transaction);
+                    if (Guid.TryParse(reusable, out var reusableId))
+                        reusableUnmatchedNodeId = reusableId;
+                }
                 var seriesId = await FindOrCreateSeriesNodeAsync(
-                    connection, transaction, assetId, metadata, lockIdentity);
+                    connection, transaction, assetId, metadata,
+                    episodeStart.HasValue ? null : reusableUnmatchedNodeId,
+                    lockIdentity, preserveExistingHierarchy, allowLockedIdentityReplacement);
                 var currentEpisodeTitle = await connection.ExecuteScalarAsync<string?>(
                     """
                     SELECT n.primary_title FROM catalog_nodes n
@@ -796,8 +949,6 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                     ORDER BY na.ordinal LIMIT 1;
                     """,
                     new { Asset = assetId.ToString("D") }, transaction);
-                var episodeStart = assetRow.episode_start ?? metadata.EpisodeNumber;
-                var episodeEnd = assetRow.episode_end ?? episodeStart;
                 if (!episodeStart.HasValue)
                 {
                     targetNodes.Add(seriesId);
@@ -807,22 +958,24 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                     Guid? seasonId = null;
                     if (metadata.SeasonNumber.HasValue)
                         seasonId = await FindOrCreateSeasonNodeAsync(connection, transaction, seriesId, metadata.SeasonNumber.Value);
-                    for (var episode = episodeStart.Value; episode <= episodeEnd.GetValueOrDefault(episodeStart.Value); episode++)
-                    {
-                        var episodeId = await FindOrCreateEpisodeNodeAsync(
-                            connection,
-                            transaction,
-                            seriesId,
-                            seasonId,
-                            metadata,
-                            episode,
-                            episode == episodeStart.Value && !string.IsNullOrWhiteSpace(currentEpisodeTitle)
-                                ? currentEpisodeTitle
-                                : $"Episode {episode}",
-                            lockIdentity,
-                            applyMetadata: metadata.MediaKind == VideoMetadataMediaKind.Episode);
-                        targetNodes.Add(episodeId);
-                    }
+                    var episodeId = await FindOrCreateEpisodeNodeAsync(
+                        connection,
+                        transaction,
+                        seriesId,
+                        seasonId,
+                        metadata,
+                        episodeStart.Value,
+                        !string.IsNullOrWhiteSpace(currentEpisodeTitle)
+                            ? currentEpisodeTitle
+                            : assetRow.episode_end is { } end && end != episodeStart.Value
+                                ? $"Episodes {episodeStart.Value}-{end}"
+                                : $"Episode {episodeStart.Value}",
+                        reusableUnmatchedNodeId,
+                        lockIdentity,
+                        preserveExistingHierarchy,
+                        allowLockedIdentityReplacement,
+                        applyMetadata: metadata.MediaKind == VideoMetadataMediaKind.Episode);
+                    targetNodes.Add(episodeId);
                 }
             }
 
@@ -841,27 +994,111 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                         Ordinal = ordinal++,
                     }, transaction);
             }
-            foreach (var oldNode in currentNodes)
-            {
-                await connection.ExecuteAsync(
-                    """
-                    DELETE FROM catalog_nodes
-                    WHERE id=@Node AND kind='unmatched'
-                      AND NOT EXISTS(SELECT 1 FROM node_assets WHERE node_id=@Node);
-                    """,
-                    new { Node = oldNode }, transaction);
-            }
+            // All detached nodes go through the same provenance-aware pruning path. A former
+            // unmatched node can already own local NFO fields, selected local artwork, locked
+            // identities, or user data; deleting it here would bypass those protections.
+            await PruneEmptyAutomaticNodesAsync(connection, transaction);
             await connection.ExecuteAsync(
                 "DELETE FROM match_candidates WHERE asset_id=@Asset;",
                 new { Asset = assetId.ToString("D") }, transaction);
+            return true;
         }, ct);
+
+    private static async Task<ImmutableHashSet<string>> ResolveIdentityProvidersToLockAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid nodeId,
+        string selectedProviderId,
+        bool lockIdentity,
+        bool preserveExistingHierarchy)
+    {
+        var empty = ImmutableHashSet<string>.Empty.WithComparer(StringComparer.OrdinalIgnoreCase);
+        if (!lockIdentity)
+            return empty;
+        if (!preserveExistingHierarchy)
+            return empty.Add(selectedProviderId);
+
+        var providers = await connection.QueryAsync<string>(
+            """
+            SELECT provider_id FROM external_ids
+            WHERE node_id=@Node AND is_identity_locked=1;
+            """,
+            new { Node = nodeId.ToString("D") }, transaction);
+        return providers.ToImmutableHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static bool IsMetadataKindCompatibleWithNode(
+        string nodeKind,
+        VideoMetadataMediaKind metadataKind) => metadataKind switch
+    {
+        VideoMetadataMediaKind.Movie => string.Equals(nodeKind, "movie", StringComparison.OrdinalIgnoreCase),
+        VideoMetadataMediaKind.Series or VideoMetadataMediaKind.Anime =>
+            string.Equals(nodeKind, "series", StringComparison.OrdinalIgnoreCase),
+        VideoMetadataMediaKind.Season => string.Equals(nodeKind, "season", StringComparison.OrdinalIgnoreCase),
+        VideoMetadataMediaKind.Episode => string.Equals(nodeKind, "episode", StringComparison.OrdinalIgnoreCase),
+        _ => false,
+    };
+
+    private static async Task<Guid?> FindBoundAncestorNodeIdAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid assetId,
+        string kind)
+    {
+        var id = await connection.ExecuteScalarAsync<string?>(
+            """
+            WITH RECURSIVE ancestry(id,parent_id,kind) AS (
+                SELECT n.id,n.parent_id,n.kind
+                FROM catalog_nodes n
+                JOIN node_assets na ON na.node_id=n.id
+                WHERE na.asset_id=@Asset
+                UNION ALL
+                SELECT parent.id,parent.parent_id,parent.kind
+                FROM catalog_nodes parent
+                JOIN ancestry child ON child.parent_id=parent.id
+            )
+            SELECT id FROM ancestry WHERE kind=@Kind LIMIT 1;
+            """,
+            new { Asset = assetId.ToString("D"), Kind = kind }, transaction);
+        return Guid.TryParse(id, out var parsed) ? parsed : null;
+    }
+
+    private static Task<long> CountOtherHierarchyAssetsAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid assetId) =>
+        connection.ExecuteScalarAsync<long>(
+            """
+            WITH RECURSIVE ancestry(id,parent_id) AS (
+                SELECT n.id,n.parent_id
+                FROM catalog_nodes n JOIN node_assets na ON na.node_id=n.id
+                WHERE na.asset_id=@Asset
+                UNION
+                SELECT parent.id,parent.parent_id
+                FROM catalog_nodes parent JOIN ancestry child ON child.parent_id=parent.id
+            ), roots(id) AS (
+                SELECT id FROM ancestry WHERE parent_id IS NULL
+            ), descendants(id) AS (
+                SELECT id FROM roots
+                UNION ALL
+                SELECT child.id FROM catalog_nodes child
+                JOIN descendants parent ON child.parent_id=parent.id
+            )
+            SELECT COUNT(DISTINCT na.asset_id)
+            FROM descendants d JOIN node_assets na ON na.node_id=d.id
+            WHERE na.asset_id<>@Asset;
+            """,
+            new { Asset = assetId.ToString("D") }, transaction);
 
     private static async Task<Guid> FindOrCreateSeriesNodeAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
         Guid assetId,
         VideoMetadataDetails metadata,
-        bool lockIdentity)
+        Guid? reusableUnmatchedNodeId,
+        bool lockIdentity,
+        bool preserveExistingHierarchy,
+        bool allowLockedIdentityReplacement)
     {
         var existing = await connection.ExecuteScalarAsync<string?>(
             """
@@ -887,23 +1124,39 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 """,
                 new { Asset = assetId.ToString("D") }, transaction);
         }
-        var id = Guid.TryParse(existing, out var parsed) ? parsed : Guid.NewGuid();
+        var id = Guid.TryParse(existing, out var parsed)
+            ? parsed
+            : reusableUnmatchedNodeId ?? Guid.NewGuid();
         if (existing == null)
         {
-            await connection.ExecuteAsync(
-                """
-                INSERT INTO catalog_nodes(id,kind,primary_title,is_special,identity_locked,created_at,updated_at)
-                VALUES(@Id,'series',@Title,0,@Locked,@Now,@Now);
-                """,
-                new
-                {
-                    Id = id.ToString("D"),
-                    metadata.Title,
-                    Locked = lockIdentity ? 1 : 0,
-                    Now = ToDb(DateTimeOffset.UtcNow),
-                }, transaction);
+            if (reusableUnmatchedNodeId.HasValue)
+            {
+                await connection.ExecuteAsync(
+                    "UPDATE catalog_nodes SET parent_id=NULL WHERE id=@Id;",
+                    new { Id = id.ToString("D") }, transaction);
+            }
+            else
+            {
+                await connection.ExecuteAsync(
+                    """
+                    INSERT INTO catalog_nodes(id,kind,primary_title,is_special,identity_locked,created_at,updated_at)
+                    VALUES(@Id,'series',@Title,0,@Locked,@Now,@Now);
+                    """,
+                    new
+                    {
+                        Id = id.ToString("D"),
+                        metadata.Title,
+                        Locked = allowLockedIdentityReplacement ? 1 : 0,
+                        Now = ToDb(DateTimeOffset.UtcNow),
+                    }, transaction);
+            }
         }
-        await ApplyNodeMetadataAsync(connection, transaction, id, "series", metadata, lockIdentity);
+        var identityProvidersToLock = await ResolveIdentityProvidersToLockAsync(
+            connection, transaction, id, metadata.ProviderId,
+            lockIdentity, preserveExistingHierarchy);
+        await ApplyNodeMetadataAsync(
+            connection, transaction, id, "series", metadata,
+            identityProvidersToLock, allowLockedIdentityReplacement);
         return id;
     }
 
@@ -945,7 +1198,10 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         VideoMetadataDetails metadata,
         int episodeNumber,
         string title,
+        Guid? reusableUnmatchedNodeId,
         bool lockIdentity,
+        bool preserveExistingHierarchy,
+        bool allowLockedIdentityReplacement,
         bool applyMetadata)
     {
         var parent = seasonId ?? seriesId;
@@ -961,43 +1217,71 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 Episode = episodeNumber,
                 Absolute = metadata.AbsoluteEpisodeNumber,
             }, transaction);
-        var id = Guid.TryParse(existing, out var parsed) ? parsed : Guid.NewGuid();
+        var id = Guid.TryParse(existing, out var parsed)
+            ? parsed
+            : reusableUnmatchedNodeId ?? Guid.NewGuid();
         if (existing == null)
         {
-            await connection.ExecuteAsync(
-                """
-                INSERT INTO catalog_nodes(
-                    id,parent_id,kind,primary_title,original_title,subtitle,overview,year,
-                    season_number,episode_number,absolute_episode_number,is_special,identity_locked,created_at,updated_at)
-                VALUES(@Id,@Parent,'episode',@Title,@Original,@Subtitle,@Overview,@Year,
-                    @Season,@Episode,@Absolute,@Special,@Locked,@Now,@Now);
-                """,
-                new
-                {
-                    Id = id.ToString("D"),
-                    Parent = parent.ToString("D"),
-                    Title = title,
-                    Original = applyMetadata ? metadata.OriginalTitle : null,
-                    Subtitle = applyMetadata ? metadata.Subtitle : null,
-                    Overview = applyMetadata ? metadata.Overview : null,
-                    Year = applyMetadata ? metadata.Year : null,
-                    Season = metadata.SeasonNumber,
-                    Episode = episodeNumber,
-                    Absolute = metadata.AbsoluteEpisodeNumber,
-                    Special = metadata.SeasonNumber == 0 ? 1 : 0,
-                    Locked = applyMetadata && lockIdentity ? 1 : 0,
-                    Now = ToDb(DateTimeOffset.UtcNow),
-                }, transaction);
+            var values = new
+            {
+                Id = id.ToString("D"),
+                Parent = parent.ToString("D"),
+                Title = title,
+                Original = applyMetadata ? metadata.OriginalTitle : null,
+                Subtitle = applyMetadata ? metadata.Subtitle : null,
+                Overview = applyMetadata ? metadata.Overview : null,
+                Year = applyMetadata ? metadata.Year : null,
+                Season = metadata.SeasonNumber,
+                Episode = episodeNumber,
+                Absolute = metadata.AbsoluteEpisodeNumber,
+                Special = metadata.SeasonNumber == 0 ? 1 : 0,
+                Locked = applyMetadata && allowLockedIdentityReplacement ? 1 : 0,
+                Now = ToDb(DateTimeOffset.UtcNow),
+            };
+            if (reusableUnmatchedNodeId.HasValue)
+            {
+                await connection.ExecuteAsync(
+                    """
+                    UPDATE catalog_nodes SET parent_id=@Parent,kind='episode',
+                        primary_title=CASE WHEN EXISTS(
+                            SELECT 1 FROM metadata_field_values f
+                            WHERE f.node_id=@Id AND f.field='title' AND f.provider_id='local')
+                            THEN primary_title ELSE @Title END,
+                        original_title=COALESCE(@Original,original_title),
+                        subtitle=COALESCE(@Subtitle,subtitle),overview=COALESCE(@Overview,overview),
+                        year=COALESCE(@Year,year),season_number=@Season,episode_number=@Episode,
+                        absolute_episode_number=@Absolute,is_special=@Special,
+                        identity_locked=MAX(identity_locked,@Locked),updated_at=@Now
+                    WHERE id=@Id;
+                    """,
+                    values, transaction);
+            }
+            else
+            {
+                await connection.ExecuteAsync(
+                    """
+                    INSERT INTO catalog_nodes(
+                        id,parent_id,kind,primary_title,original_title,subtitle,overview,year,
+                        season_number,episode_number,absolute_episode_number,is_special,identity_locked,created_at,updated_at)
+                    VALUES(@Id,@Parent,'episode',@Title,@Original,@Subtitle,@Overview,@Year,
+                        @Season,@Episode,@Absolute,@Special,@Locked,@Now,@Now);
+                    """,
+                    values, transaction);
+            }
         }
         if (applyMetadata)
         {
+            var identityProvidersToLock = await ResolveIdentityProvidersToLockAsync(
+                connection, transaction, id, metadata.ProviderId,
+                lockIdentity, preserveExistingHierarchy);
             await ApplyNodeMetadataAsync(
                 connection,
                 transaction,
                 id,
                 "episode",
                 metadata with { EpisodeNumber = episodeNumber },
-                lockIdentity);
+                identityProvidersToLock,
+                allowLockedIdentityReplacement);
         }
         return id;
     }
@@ -1008,28 +1292,62 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         Guid nodeId,
         string kind,
         VideoMetadataDetails metadata,
-        bool lockIdentity)
+        ImmutableHashSet<string> identityProvidersToLock,
+        bool allowLockedIdentityReplacement)
     {
-        var localTitle = await connection.ExecuteScalarAsync<string?>(
-            "SELECT value FROM metadata_field_values WHERE node_id=@Node AND field='title' AND provider_id='local';",
-            new { Node = nodeId.ToString("D") }, transaction);
-        var title = localTitle ?? metadata.Title;
+        metadata = MetadataForNodeKind(metadata, kind);
+        var protectedFields = (await connection.QueryAsync<MetadataFieldValueRow>(
+                """
+                SELECT field,value,priority,is_locked,updated_at
+                FROM metadata_field_values
+                WHERE node_id=@Node AND value IS NOT NULL AND TRIM(value)<>''
+                  AND (provider_id='local' OR is_locked=1)
+                  AND field IN ('title','originalTitle','subtitle','overview','year');
+                """,
+                new { Node = nodeId.ToString("D") }, transaction))
+            .GroupBy(field => field.field, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderByDescending(field => field.is_locked)
+                    .ThenByDescending(field => field.priority)
+                    .ThenByDescending(field => field.updated_at, StringComparer.Ordinal)
+                    .First().value,
+                StringComparer.OrdinalIgnoreCase);
+        var title = protectedFields.GetValueOrDefault("title") ?? metadata.Title;
+        var originalTitle = protectedFields.GetValueOrDefault("originalTitle") ?? metadata.OriginalTitle;
+        var subtitle = protectedFields.GetValueOrDefault("subtitle") ?? metadata.Subtitle;
+        var overview = protectedFields.GetValueOrDefault("overview") ?? metadata.Overview;
+        var year = int.TryParse(
+            protectedFields.GetValueOrDefault("year"),
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out var protectedYear)
+            ? protectedYear
+            : metadata.Year;
         var now = ToDb(DateTimeOffset.UtcNow);
         await connection.ExecuteAsync(
             """
             UPDATE catalog_nodes SET kind=@Kind,primary_title=@Title,
                 original_title=COALESCE(@Original,original_title),subtitle=COALESCE(@Subtitle,subtitle),
                 overview=COALESCE(@Overview,overview),year=COALESCE(@Year,year),
-                season_number=COALESCE(@Season,season_number),episode_number=COALESCE(@Episode,episode_number),
-                absolute_episode_number=COALESCE(@Absolute,absolute_episode_number),
+                season_number=CASE WHEN @Kind IN ('series','movie') THEN NULL
+                                   ELSE COALESCE(@Season,season_number) END,
+                episode_number=CASE WHEN @Kind IN ('series','season','movie') THEN NULL
+                                    ELSE COALESCE(@Episode,episode_number) END,
+                absolute_episode_number=CASE WHEN @Kind IN ('series','season','movie') THEN NULL
+                                             ELSE COALESCE(@Absolute,absolute_episode_number) END,
+                is_special=CASE WHEN @Kind IN ('series','movie') THEN 0 ELSE is_special END,
                 identity_locked=MAX(identity_locked,@Locked),updated_at=@Now WHERE id=@Node;
             """,
             new
             {
                 Node = nodeId.ToString("D"), Kind = kind, Title = title,
-                Original = metadata.OriginalTitle, metadata.Subtitle, metadata.Overview, metadata.Year,
+                Original = originalTitle, Subtitle = subtitle, Overview = overview, Year = year,
                 Season = metadata.SeasonNumber, Episode = metadata.EpisodeNumber,
-                Absolute = metadata.AbsoluteEpisodeNumber, Locked = lockIdentity ? 1 : 0, Now = now,
+                Absolute = metadata.AbsoluteEpisodeNumber,
+                Locked = identityProvidersToLock.Count > 0 ? 1 : 0,
+                Now = now,
             }, transaction);
         var ids = metadata.ExternalIds.SetItem(metadata.ProviderId, metadata.ProviderItemId);
         foreach (var pair in ids)
@@ -1038,13 +1356,18 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 """
                 INSERT INTO external_ids(node_id,provider_id,external_id,is_identity_locked)
                 VALUES(@Node,@Provider,@ExternalId,@Locked)
-                ON CONFLICT(node_id,provider_id) DO UPDATE SET external_id=excluded.external_id,
+                ON CONFLICT(node_id,provider_id) DO UPDATE SET
+                    external_id=CASE
+                        WHEN external_ids.is_identity_locked=1 AND @ReplaceLocked=0
+                        THEN external_ids.external_id ELSE excluded.external_id END,
                     is_identity_locked=MAX(external_ids.is_identity_locked,excluded.is_identity_locked);
                 """,
                 new
                 {
                     Node = nodeId.ToString("D"), Provider = pair.Key, ExternalId = pair.Value,
-                    Locked = lockIdentity ? 1 : 0,
+                    Locked = identityProvidersToLock.Contains(pair.Key) ? 1 : 0,
+                    ReplaceLocked = allowLockedIdentityReplacement
+                                    && identityProvidersToLock.Contains(pair.Key) ? 1 : 0,
                 }, transaction);
         }
         foreach (var alias in metadata.Aliases.Add(metadata.Title).Where(value => !string.IsNullOrWhiteSpace(value)).Distinct())
@@ -1103,6 +1426,24 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         }
     }
 
+    private static VideoMetadataDetails MetadataForNodeKind(
+        VideoMetadataDetails metadata,
+        string kind) => kind switch
+    {
+        "series" or "movie" => metadata with
+        {
+            SeasonNumber = null,
+            EpisodeNumber = null,
+            AbsoluteEpisodeNumber = null,
+        },
+        "season" => metadata with
+        {
+            EpisodeNumber = null,
+            AbsoluteEpisodeNumber = null,
+        },
+        _ => metadata,
+    };
+
     private async Task<VideoCatalogInitializationResult> InitializeCoreAsync(CancellationToken ct)
     {
         if (_initialized)
@@ -1132,6 +1473,10 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         {
             var legacy = await _legacyReader.ReadAsync(_legacyCatalogPath, ct);
             await MigrateLegacyAsync(legacy, ct);
+            // A freshly created schema already contains all current behavior fixes. Record/apply
+            // compatibility work before the first scan so the next launch cannot invalidate the
+            // metadata cache and force a second full hierarchy reparse.
+            await ApplyCompatibilityRepairsAsync(ct);
             _lastSnapshot = await ReadSnapshotAsync(ct);
             _initialized = true;
             return new VideoCatalogInitializationResult(
@@ -1186,6 +1531,29 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
             }
             _lastSnapshot = await ReadSnapshotAsync(ct);
             return true;
+        }, ct);
+
+    private Task<T> WriteAsync<T>(
+        Func<SqliteConnection, SqliteTransaction, Task<T>> operation,
+        CancellationToken ct) =>
+        EnqueueAsync(async () =>
+        {
+            await EnsureWritableCoreAsync(ct);
+            await using var connection = await OpenConnectionAsync(ct);
+            await using var transaction = await connection.BeginTransactionAsync(ct);
+            T result;
+            try
+            {
+                result = await operation(connection, (SqliteTransaction)transaction);
+                await transaction.CommitAsync(ct);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+                throw;
+            }
+            _lastSnapshot = await ReadSnapshotAsync(ct);
+            return result;
         }, ct);
 
     private async Task MigrateLegacyAsync(
@@ -1626,8 +1994,36 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         Guid sourceId,
         ParsedVideoIdentity parsed,
         LocalVideoMetadata? local,
-        bool applyMetadata)
+        bool applyMetadata,
+        bool rebuildHierarchy)
     {
+        var sourceMediaType = await connection.ExecuteScalarAsync<string?>(
+            "SELECT media_type FROM library_sources WHERE id=@Source;",
+            new { Source = sourceId.ToString("D") }, transaction);
+        var isMovieSource = string.Equals(sourceMediaType, "movie", StringComparison.OrdinalIgnoreCase);
+        if (isMovieSource)
+        {
+            parsed = parsed with
+            {
+                SeasonNumber = null,
+                EpisodeStart = null,
+                EpisodeEnd = null,
+                AbsoluteEpisodeNumber = null,
+                SpecialKind = ParsedVideoSpecialKind.None,
+                IsMultiEpisode = false,
+                HasEpisodeEvidence = false,
+                EpisodeTitle = null,
+            };
+            if (local != null)
+            {
+                local = local with
+                {
+                    SeasonNumber = null,
+                    EpisodeNumber = null,
+                    AbsoluteEpisodeNumber = null,
+                };
+            }
+        }
         await connection.ExecuteAsync(
             "UPDATE media_assets SET episode_start=@Start, episode_end=@End WHERE id=@Asset;",
             new { Start = parsed.EpisodeStart, End = parsed.EpisodeEnd, Asset = assetId.ToString("D") }, transaction);
@@ -1642,13 +2038,112 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         if (nodeRows.Count == 0)
             return;
 
-        var episodeStart = local?.EpisodeNumber ?? parsed.EpisodeStart ?? parsed.AbsoluteEpisodeNumber;
-        if (episodeStart.HasValue
-            && nodeRows.All(node => string.Equals(node.kind, "unmatched", StringComparison.OrdinalIgnoreCase)))
+        if (isMovieSource && rebuildHierarchy)
+        {
+            var hasLegacyEpisodicHierarchy = await connection.ExecuteScalarAsync<long>(
+                """
+                WITH RECURSIVE ancestry(id,parent_id,kind) AS (
+                    SELECT n.id,n.parent_id,n.kind
+                    FROM catalog_nodes n JOIN node_assets na ON na.node_id=n.id
+                    WHERE na.asset_id=@Asset
+                    UNION
+                    SELECT parent.id,parent.parent_id,parent.kind
+                    FROM catalog_nodes parent JOIN ancestry child ON child.parent_id=parent.id
+                )
+                SELECT COUNT(*) FROM ancestry WHERE kind IN ('series','season','episode');
+                """,
+                new { Asset = assetId.ToString("D") }, transaction) > 0;
+            if (hasLegacyEpisodicHierarchy)
+            {
+                var movieRebuildDecision = await GetHierarchyRebuildDecisionAsync(
+                    connection, transaction, assetId);
+                var otherHierarchyAssets = await CountOtherHierarchyAssetsAsync(
+                    connection, transaction, assetId);
+                var canRepair = nodeRows.Count == 1
+                                && movieRebuildDecision.CanRebuild
+                                && !movieRebuildDecision.PreservedSeriesId.HasValue
+                                && otherHierarchyAssets == 0;
+                await connection.ExecuteAsync(
+                    """
+                    UPDATE catalog_jobs
+                    SET state='cancelled',
+                        error='Superseded by explicit Movie hierarchy repair.',
+                        updated_at=@Now
+                    WHERE source_id=@Source AND kind='metadata_refresh' AND state='completed';
+                    """,
+                    new { Source = sourceId.ToString("D"), Now = ToDb(DateTimeOffset.UtcNow) },
+                    transaction);
+                if (!canRepair)
+                    return;
+
+                var reusableNodeId = nodeRows[0].id;
+                await connection.ExecuteAsync(
+                    """
+                    UPDATE catalog_nodes SET parent_id=NULL,kind='unmatched',primary_title=@Title,
+                        original_title=NULL,subtitle=NULL,overview=NULL,year=@Year,
+                        season_number=NULL,episode_number=NULL,absolute_episode_number=NULL,
+                        is_special=0,updated_at=@Now
+                    WHERE id=@Node;
+                    DELETE FROM metadata_snapshots WHERE node_id=@Node;
+                    DELETE FROM metadata_field_values
+                    WHERE node_id=@Node AND provider_id<>'local' AND is_locked=0;
+                    DELETE FROM artwork WHERE node_id=@Node AND provider_id<>'local';
+                    DELETE FROM external_ids WHERE node_id=@Node AND is_identity_locked=0;
+                    DELETE FROM catalog_aliases WHERE node_id=@Node;
+                    DELETE FROM match_candidates WHERE asset_id=@Asset;
+                    """,
+                    new
+                    {
+                        Node = reusableNodeId,
+                        Asset = assetId.ToString("D"),
+                        Title = parsed.NormalizedTitle,
+                        parsed.Year,
+                        Now = ToDb(DateTimeOffset.UtcNow),
+                    }, transaction);
+                await PruneEmptyAutomaticNodesAsync(connection, transaction);
+                nodeRows = (await connection.QueryAsync<BoundNodeRow>(
+                    """
+                    SELECT n.id,n.kind FROM catalog_nodes n
+                    JOIN node_assets na ON na.node_id=n.id
+                    WHERE na.asset_id=@Asset ORDER BY na.ordinal;
+                    """,
+                    new { Asset = assetId.ToString("D") }, transaction)).ToList();
+            }
+        }
+
+        var episodeStart = local?.EpisodeNumber
+                           ?? local?.AbsoluteEpisodeNumber
+                           ?? parsed.EpisodeStart
+                           ?? parsed.AbsoluteEpisodeNumber;
+        var isUnnumberedSupplemental = parsed.SpecialKind != ParsedVideoSpecialKind.None
+                                       && !episodeStart.HasValue;
+        var unmatchedOnly = nodeRows.All(node =>
+            string.Equals(node.kind, "unmatched", StringComparison.OrdinalIgnoreCase));
+        var rebuild = !unmatchedOnly && rebuildHierarchy
+            ? await GetHierarchyRebuildDecisionAsync(connection, transaction, assetId)
+            : HierarchyRebuildDecision.Denied;
+        if ((episodeStart.HasValue || isUnnumberedSupplemental)
+            && (unmatchedOnly
+                || rebuild.CanRebuild))
         {
             await PromoteLocalEpisodeHierarchyAsync(
-                connection, transaction, assetId, sourceId, nodeRows, parsed, local, episodeStart.Value);
+                connection, transaction, assetId, sourceId, nodeRows, parsed, local,
+                episodeStart, rebuild.PreservedSeriesId);
             return;
+        }
+
+        if (applyMetadata && !unmatchedOnly && local != null)
+        {
+            foreach (var episodeNode in nodeRows.Where(node =>
+                         string.Equals(node.kind, "episode", StringComparison.OrdinalIgnoreCase)))
+            {
+                await RefreshAutomaticEpisodeFromLocalMetadataAsync(
+                    connection, transaction, episodeNode.id, local);
+            }
+            var seriesId = await FindBoundAncestorNodeIdAsync(
+                connection, transaction, assetId, "series");
+            if (seriesId.HasValue)
+                await ApplyLocalArtworkAsync(connection, transaction, seriesId.Value.ToString("D"), local);
         }
 
         if (!applyMetadata || nodeRows.Any(node => !string.Equals(node.kind, "unmatched", StringComparison.OrdinalIgnoreCase)))
@@ -1692,7 +2187,8 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 INSERT INTO external_ids(node_id,provider_id,external_id,is_identity_locked)
                 VALUES(@Node,@Provider,@ExternalId,@Locked)
                 ON CONFLICT(node_id,provider_id) DO UPDATE SET
-                    external_id=excluded.external_id,
+                    external_id=CASE WHEN external_ids.is_identity_locked=1
+                                     THEN external_ids.external_id ELSE excluded.external_id END,
                     is_identity_locked=MAX(external_ids.is_identity_locked,excluded.is_identity_locked);
                 """,
                 new
@@ -1707,6 +2203,142 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
             await ApplyLocalMetadataAsync(connection, transaction, nodeId, local);
     }
 
+    private static async Task RefreshAutomaticEpisodeFromLocalMetadataAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string nodeId,
+        LocalVideoMetadata local)
+    {
+        await connection.ExecuteAsync(
+            """
+            UPDATE catalog_nodes SET
+                primary_title=CASE
+                    WHEN @Title IS NOT NULL AND NOT EXISTS(
+                        SELECT 1 FROM metadata_field_values f
+                        WHERE f.node_id=catalog_nodes.id AND f.field='title' AND f.is_locked=1)
+                    THEN @Title ELSE primary_title END,
+                original_title=CASE
+                    WHEN @OriginalTitle IS NOT NULL AND NOT EXISTS(
+                        SELECT 1 FROM metadata_field_values f
+                        WHERE f.node_id=catalog_nodes.id AND f.field='originalTitle' AND f.is_locked=1)
+                    THEN @OriginalTitle ELSE original_title END,
+                overview=CASE
+                    WHEN @Overview IS NOT NULL AND NOT EXISTS(
+                        SELECT 1 FROM metadata_field_values f
+                        WHERE f.node_id=catalog_nodes.id AND f.field='overview' AND f.is_locked=1)
+                    THEN @Overview ELSE overview END,
+                year=CASE
+                    WHEN @Year IS NOT NULL AND NOT EXISTS(
+                        SELECT 1 FROM metadata_field_values f
+                        WHERE f.node_id=catalog_nodes.id AND f.field='year' AND f.is_locked=1)
+                    THEN @Year ELSE year END,
+                updated_at=@Now
+            WHERE id=@Node AND kind='episode' AND identity_locked=0
+              AND NOT EXISTS(SELECT 1 FROM external_ids e
+                             WHERE e.node_id=catalog_nodes.id AND e.is_identity_locked=1)
+              AND NOT EXISTS(SELECT 1 FROM node_user_data u WHERE u.node_id=catalog_nodes.id);
+            """,
+            new
+            {
+                Node = nodeId,
+                Title = string.IsNullOrWhiteSpace(local.Title) ? null : local.Title,
+                OriginalTitle = local.OriginalTitle,
+                Overview = local.Overview,
+                Year = local.Year,
+                Now = ToDb(DateTimeOffset.UtcNow),
+            }, transaction);
+        await ApplyLocalMetadataAsync(connection, transaction, nodeId, local);
+    }
+
+    private sealed record HierarchyRebuildDecision(bool CanRebuild, Guid? PreservedSeriesId)
+    {
+        public static HierarchyRebuildDecision Denied { get; } = new(false, null);
+    }
+
+    private static async Task<HierarchyRebuildDecision> GetHierarchyRebuildDecisionAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid assetId)
+    {
+        var boundKinds = (await connection.QueryAsync<string>(
+            "SELECT n.kind FROM catalog_nodes n JOIN node_assets na ON na.node_id=n.id WHERE na.asset_id=@Asset;",
+            new { Asset = assetId.ToString("D") }, transaction)).ToList();
+        if (boundKinds.Count == 0
+            || boundKinds.Any(kind => kind is not ("unmatched" or "episode" or "season" or "series" or "movie")))
+            return HierarchyRebuildDecision.Denied;
+        if (boundKinds.Any(kind => string.Equals(kind, "movie", StringComparison.OrdinalIgnoreCase)))
+        {
+            var hasSeriesAncestor = await connection.ExecuteScalarAsync<long>(
+                """
+                WITH RECURSIVE ancestry(id,parent_id,kind) AS (
+                    SELECT n.id,n.parent_id,n.kind
+                    FROM catalog_nodes n JOIN node_assets na ON na.node_id=n.id
+                    WHERE na.asset_id=@Asset
+                    UNION
+                    SELECT parent.id,parent.parent_id,parent.kind
+                    FROM catalog_nodes parent JOIN ancestry child ON child.parent_id=parent.id
+                )
+                SELECT COUNT(*) FROM ancestry WHERE kind='series';
+                """,
+                new { Asset = assetId.ToString("D") }, transaction);
+            if (hasSeriesAncestor == 0)
+                return HierarchyRebuildDecision.Denied;
+        }
+        var protectedChild = await connection.ExecuteScalarAsync<long>(
+            """
+            WITH RECURSIVE ancestry(id,parent_id,kind,identity_locked) AS (
+                SELECT n.id,n.parent_id,n.kind,n.identity_locked
+                FROM catalog_nodes n JOIN node_assets na ON na.node_id=n.id
+                WHERE na.asset_id=@Asset
+                UNION
+                SELECT parent.id,parent.parent_id,parent.kind,parent.identity_locked
+                FROM catalog_nodes parent JOIN ancestry child ON child.parent_id=parent.id
+            )
+            SELECT COUNT(*) FROM ancestry a
+            WHERE a.kind IN ('episode','season','movie')
+              AND (a.identity_locked=1
+                   OR EXISTS(SELECT 1 FROM external_ids e WHERE e.node_id=a.id AND e.is_identity_locked=1)
+                   OR EXISTS(SELECT 1 FROM metadata_field_values f
+                             WHERE f.node_id=a.id AND (f.is_locked=1 OR f.provider_id='local'))
+                   OR EXISTS(SELECT 1 FROM artwork art
+                             WHERE art.node_id=a.id AND art.provider_id='local')
+                   OR EXISTS(SELECT 1 FROM node_user_data u WHERE u.node_id=a.id));
+            """,
+            new { Asset = assetId.ToString("D") }, transaction);
+        if (protectedChild != 0)
+            return HierarchyRebuildDecision.Denied;
+
+        var currentSeries = await connection.QuerySingleOrDefaultAsync<RebuildSeriesRow>(
+            """
+            WITH RECURSIVE ancestry(id,parent_id,kind) AS (
+                SELECT n.id,n.parent_id,n.kind
+                FROM catalog_nodes n JOIN node_assets na ON na.node_id=n.id
+                WHERE na.asset_id=@Asset
+                UNION
+                SELECT parent.id,parent.parent_id,parent.kind
+                FROM catalog_nodes parent JOIN ancestry child ON child.parent_id=parent.id
+            )
+            SELECT s.id,
+                   CASE WHEN s.identity_locked=1
+                          OR EXISTS(SELECT 1 FROM external_ids e
+                                    WHERE e.node_id=s.id AND e.is_identity_locked=1)
+                          OR EXISTS(SELECT 1 FROM metadata_field_values f
+                                    WHERE f.node_id=s.id AND (f.is_locked=1 OR f.provider_id='local'))
+                          OR EXISTS(SELECT 1 FROM artwork art
+                                    WHERE art.node_id=s.id AND art.provider_id='local')
+                          OR EXISTS(SELECT 1 FROM node_user_data u WHERE u.node_id=s.id)
+                        THEN 1 ELSE 0 END AS preserve
+            FROM ancestry a JOIN catalog_nodes s ON s.id=a.id
+            WHERE a.kind='series' LIMIT 1;
+            """,
+            new { Asset = assetId.ToString("D") }, transaction);
+        return new HierarchyRebuildDecision(
+            true,
+            currentSeries is { preserve: not 0 } && Guid.TryParse(currentSeries.id, out var seriesId)
+                ? seriesId
+                : null);
+    }
+
     private static async Task PromoteLocalEpisodeHierarchyAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
@@ -1715,38 +2347,43 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         IReadOnlyList<BoundNodeRow> previousNodes,
         ParsedVideoIdentity parsed,
         LocalVideoMetadata? local,
-        int episodeStart)
+        int? episodeStart,
+        Guid? preservedSeriesId)
     {
         var seriesTitle = string.IsNullOrWhiteSpace(parsed.NormalizedTitle)
             ? parsed.FolderTitle ?? parsed.OriginalName
             : parsed.NormalizedTitle;
         var normalizedTitle = NormalizeTitle(seriesTitle);
         var year = local?.Year ?? parsed.Year;
-        var existingSeries = await connection.ExecuteScalarAsync<string?>(
-            """
-            WITH RECURSIVE descendants(root_id,node_id) AS (
-                SELECT id,id FROM catalog_nodes WHERE kind='series'
-                UNION ALL
-                SELECT d.root_id,child.id FROM descendants d
-                JOIN catalog_nodes child ON child.parent_id=d.node_id
-            )
-            SELECT series.id FROM catalog_nodes series
-            JOIN catalog_aliases alias ON alias.node_id=series.id
-            JOIN descendants d ON d.root_id=series.id
-            JOIN node_assets na ON na.node_id=d.node_id
-            JOIN source_assets sa ON sa.asset_id=na.asset_id
-            WHERE series.kind='series' AND alias.provider_id='filename'
-              AND alias.normalized_alias=@NormalizedTitle
-              AND COALESCE(series.year,-1)=COALESCE(@Year,-1)
-              AND sa.source_id=@SourceId
-            ORDER BY series.created_at LIMIT 1;
-            """,
-            new
-            {
-                NormalizedTitle = normalizedTitle,
-                Year = year,
-                SourceId = sourceId.ToString("D"),
-            }, transaction);
+        var existingSeries = preservedSeriesId?.ToString("D")
+            ?? await connection.ExecuteScalarAsync<string?>(
+                """
+                WITH RECURSIVE descendants(root_id,node_id) AS (
+                    SELECT id,id FROM catalog_nodes WHERE kind='series'
+                    UNION ALL
+                    SELECT d.root_id,child.id FROM descendants d
+                    JOIN catalog_nodes child ON child.parent_id=d.node_id
+                )
+                SELECT series.id FROM catalog_nodes series
+                JOIN catalog_aliases alias ON alias.node_id=series.id
+                JOIN descendants d ON d.root_id=series.id
+                JOIN node_assets na ON na.node_id=d.node_id
+                JOIN source_assets sa ON sa.asset_id=na.asset_id
+                WHERE series.kind='series'
+                  AND alias.normalized_alias=@NormalizedTitle
+                  AND (series.year IS NULL OR @Year IS NULL OR series.year=@Year)
+                  AND sa.source_id=@SourceId
+                ORDER BY series.identity_locked DESC,
+                         EXISTS(SELECT 1 FROM metadata_snapshots m WHERE m.node_id=series.id) DESC,
+                         series.created_at
+                LIMIT 1;
+                """,
+                new
+                {
+                    NormalizedTitle = normalizedTitle,
+                    Year = year,
+                    SourceId = sourceId.ToString("D"),
+                }, transaction);
         var seriesId = Guid.TryParse(existingSeries, out var parsedSeriesId)
             ? parsedSeriesId
             : Guid.NewGuid();
@@ -1787,7 +2424,9 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 INSERT INTO external_ids(node_id,provider_id,external_id,is_identity_locked)
                 VALUES(@Node,@Provider,@ExternalId,1)
                 ON CONFLICT(node_id,provider_id) DO UPDATE SET
-                    external_id=excluded.external_id,is_identity_locked=1;
+                    external_id=CASE WHEN external_ids.is_identity_locked=1
+                                     THEN external_ids.external_id ELSE excluded.external_id END,
+                    is_identity_locked=1;
                 """,
                 new
                 {
@@ -1799,21 +2438,29 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         if (local != null)
             await ApplyLocalArtworkAsync(connection, transaction, seriesId.ToString("D"), local);
 
-        var seasonNumber = local?.SeasonNumber ?? parsed.SeasonNumber;
-        if (!seasonNumber.HasValue && parsed.SpecialKind != ParsedVideoSpecialKind.None)
-            seasonNumber = 0;
+        var seasonNumber = parsed.SpecialKind != ParsedVideoSpecialKind.None
+            ? 0
+            : local?.SeasonNumber ?? parsed.SeasonNumber;
         Guid? seasonId = seasonNumber.HasValue
             ? await FindOrCreateSeasonNodeAsync(connection, transaction, seriesId, seasonNumber.Value)
             : null;
         var parentId = seasonId ?? seriesId;
-        var episodeEnd = Math.Max(episodeStart, parsed.EpisodeEnd ?? episodeStart);
-        var targetNodes = new List<Guid>();
-        for (var episodeNumber = episodeStart; episodeNumber <= episodeEnd; episodeNumber++)
-        {
-            var absoluteNumber = parsed.AbsoluteEpisodeNumber.HasValue
-                ? parsed.AbsoluteEpisodeNumber + (episodeNumber - episodeStart)
-                : local?.AbsoluteEpisodeNumber;
-            var existingEpisode = await connection.ExecuteScalarAsync<string?>(
+        // Jellyfin models S01E01-E02 as one logical episode entry backed by one media
+        // asset. The ending number stays on media_assets; expanding the range into multiple
+        // nodes duplicated the same file in details and playback queues. Supplemental assets
+        // such as trailers and featurettes remain unnumbered: scan order is not an episode ID.
+        var absoluteNumber = local?.AbsoluteEpisodeNumber ?? parsed.AbsoluteEpisodeNumber;
+        var episodeTitle = !string.IsNullOrWhiteSpace(local?.Title)
+            ? local.Title
+            : !string.IsNullOrWhiteSpace(parsed.EpisodeTitle)
+                ? parsed.EpisodeTitle
+                : episodeStart.HasValue && parsed.IsMultiEpisode
+                    ? $"Episodes {episodeStart}-{parsed.EpisodeEnd}"
+                    : episodeStart.HasValue
+                        ? $"Episode {episodeStart}"
+                        : parsed.OriginalName;
+        var existingEpisode = episodeStart.HasValue
+            ? await connection.ExecuteScalarAsync<string?>(
                 """
                 SELECT id FROM catalog_nodes
                 WHERE parent_id=@Parent AND kind='episode' AND episode_number=@Episode
@@ -1823,92 +2470,162 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 new
                 {
                     Parent = parentId.ToString("D"),
-                    Episode = episodeNumber,
+                    Episode = episodeStart,
                     Absolute = absoluteNumber,
-                }, transaction);
-            var episodeId = Guid.TryParse(existingEpisode, out var parsedEpisodeId)
-                ? parsedEpisodeId
-                : Guid.NewGuid();
-            if (existingEpisode == null)
-            {
-                await connection.ExecuteAsync(
-                    """
-                    INSERT INTO catalog_nodes(
-                        id,parent_id,kind,primary_title,original_title,overview,year,season_number,
-                        episode_number,absolute_episode_number,is_special,identity_locked,created_at,updated_at)
-                    VALUES(@Id,@Parent,'episode',@Title,@OriginalTitle,@Overview,@Year,@Season,
-                        @Episode,@Absolute,@Special,0,@Now,@Now);
-                    """,
-                    new
-                    {
-                        Id = episodeId.ToString("D"),
-                        Parent = parentId.ToString("D"),
-                        Title = episodeNumber == episodeStart && !string.IsNullOrWhiteSpace(local?.Title)
-                            ? local.Title
-                            : $"Episode {episodeNumber}",
-                        OriginalTitle = episodeNumber == episodeStart ? local?.OriginalTitle : null,
-                        Overview = episodeNumber == episodeStart ? local?.Overview : null,
-                        Year = year,
-                        Season = seasonNumber,
-                        Episode = episodeNumber,
-                        Absolute = absoluteNumber,
-                        Special = parsed.SpecialKind == ParsedVideoSpecialKind.None ? 0 : 1,
-                        Now = now,
-                    }, transaction);
-            }
-            await connection.ExecuteAsync(
+                }, transaction)
+            : await connection.ExecuteScalarAsync<string?>(
                 """
-                INSERT OR IGNORE INTO catalog_aliases(node_id,provider_id,alias,normalized_alias)
-                VALUES(@Node,'filename',@Alias,@NormalizedAlias);
+                SELECT n.id FROM catalog_nodes n
+                JOIN node_assets na ON na.node_id=n.id
+                WHERE na.asset_id=@Asset AND n.parent_id=@Parent AND n.kind='episode'
+                  AND n.episode_number IS NULL AND n.is_special=1
+                LIMIT 1;
                 """,
                 new
                 {
-                    Node = episodeId.ToString("D"),
-                    Alias = parsed.OriginalName,
-                    NormalizedAlias = NormalizeTitle(parsed.OriginalName),
+                    Asset = assetId.ToString("D"),
+                    Parent = parentId.ToString("D"),
                 }, transaction);
-            if (local != null && episodeNumber == episodeStart)
-                await ApplyLocalMetadataAsync(connection, transaction, episodeId.ToString("D"), local);
-            targetNodes.Add(episodeId);
+        var episodeId = Guid.TryParse(existingEpisode, out var parsedEpisodeId)
+            ? parsedEpisodeId
+            : Guid.NewGuid();
+        if (existingEpisode == null)
+        {
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO catalog_nodes(
+                    id,parent_id,kind,primary_title,original_title,overview,year,season_number,
+                    episode_number,absolute_episode_number,is_special,identity_locked,created_at,updated_at)
+                VALUES(@Id,@Parent,'episode',@Title,@OriginalTitle,@Overview,@Year,@Season,
+                    @Episode,@Absolute,@Special,0,@Now,@Now);
+                """,
+                new
+                {
+                    Id = episodeId.ToString("D"),
+                    Parent = parentId.ToString("D"),
+                    Title = episodeTitle,
+                    OriginalTitle = local?.OriginalTitle,
+                    Overview = local?.Overview,
+                    Year = year,
+                    Season = seasonNumber,
+                    Episode = episodeStart,
+                    Absolute = absoluteNumber,
+                    Special = parsed.SpecialKind == ParsedVideoSpecialKind.None ? 0 : 1,
+                    Now = now,
+                }, transaction);
         }
+        else
+        {
+            // Compatibility reparses may reuse the surviving logical episode. Refresh only
+            // automatic fields: explicit/user locks and provider-resolved titles remain authoritative.
+            await connection.ExecuteAsync(
+                """
+                UPDATE catalog_nodes SET
+                    primary_title=CASE
+                        WHEN NOT EXISTS(
+                            SELECT 1 FROM metadata_field_values f
+                            WHERE f.node_id=catalog_nodes.id AND f.field='title' AND f.is_locked=1)
+                         AND (@HasLocalTitle=1 OR NOT EXISTS(
+                            SELECT 1 FROM metadata_field_values f
+                            WHERE f.node_id=catalog_nodes.id AND f.field='title'))
+                        THEN @Title ELSE primary_title END,
+                    original_title=CASE
+                        WHEN @OriginalTitle IS NOT NULL AND NOT EXISTS(
+                            SELECT 1 FROM metadata_field_values f
+                            WHERE f.node_id=catalog_nodes.id AND f.field='originalTitle' AND f.is_locked=1)
+                        THEN @OriginalTitle ELSE original_title END,
+                    overview=CASE
+                        WHEN @Overview IS NOT NULL AND NOT EXISTS(
+                            SELECT 1 FROM metadata_field_values f
+                            WHERE f.node_id=catalog_nodes.id AND f.field='overview' AND f.is_locked=1)
+                        THEN @Overview ELSE overview END,
+                    year=CASE
+                        WHEN @Year IS NOT NULL AND NOT EXISTS(
+                            SELECT 1 FROM metadata_field_values f
+                            WHERE f.node_id=catalog_nodes.id AND f.field='year' AND f.is_locked=1)
+                        THEN @Year ELSE year END,
+                    season_number=@Season,
+                    episode_number=@Episode,
+                    absolute_episode_number=@Absolute,
+                    is_special=@Special,
+                    updated_at=@Now
+                WHERE id=@Id AND identity_locked=0
+                  AND NOT EXISTS(SELECT 1 FROM external_ids e
+                                 WHERE e.node_id=catalog_nodes.id AND e.is_identity_locked=1)
+                  AND NOT EXISTS(SELECT 1 FROM node_user_data u WHERE u.node_id=catalog_nodes.id);
+                """,
+                new
+                {
+                    Id = episodeId.ToString("D"),
+                    Title = episodeTitle,
+                    HasLocalTitle = string.IsNullOrWhiteSpace(local?.Title) ? 0 : 1,
+                    OriginalTitle = local?.OriginalTitle,
+                    Overview = local?.Overview,
+                    Year = year,
+                    Season = seasonNumber,
+                    Episode = episodeStart,
+                    Absolute = absoluteNumber,
+                    Special = parsed.SpecialKind == ParsedVideoSpecialKind.None ? 0 : 1,
+                    Now = now,
+                }, transaction);
+        }
+        await connection.ExecuteAsync(
+            """
+            INSERT OR IGNORE INTO catalog_aliases(node_id,provider_id,alias,normalized_alias)
+            VALUES(@Node,'filename',@Alias,@NormalizedAlias);
+            """,
+            new
+            {
+                Node = episodeId.ToString("D"),
+                Alias = parsed.OriginalName,
+                NormalizedAlias = NormalizeTitle(parsed.OriginalName),
+            }, transaction);
+        if (local != null)
+            await ApplyLocalMetadataAsync(connection, transaction, episodeId.ToString("D"), local);
 
         await connection.ExecuteAsync(
             "DELETE FROM node_assets WHERE asset_id=@Asset;",
             new { Asset = assetId.ToString("D") }, transaction);
-        for (var ordinal = 0; ordinal < targetNodes.Count; ordinal++)
-        {
-            await connection.ExecuteAsync(
-                "INSERT INTO node_assets(node_id,asset_id,is_preferred,ordinal) VALUES(@Node,@Asset,1,@Ordinal);",
-                new
-                {
-                    Node = targetNodes[ordinal].ToString("D"),
-                    Asset = assetId.ToString("D"),
-                    Ordinal = ordinal,
-                }, transaction);
-        }
+        await connection.ExecuteAsync(
+            "INSERT INTO node_assets(node_id,asset_id,is_preferred,ordinal) VALUES(@Node,@Asset,1,0);",
+            new { Node = episodeId.ToString("D"), Asset = assetId.ToString("D") }, transaction);
         foreach (var previous in previousNodes)
         {
             await connection.ExecuteAsync(
                 """
-                DELETE FROM catalog_nodes WHERE id=@Node AND kind='unmatched'
-                  AND NOT EXISTS(SELECT 1 FROM node_assets WHERE node_id=@Node);
+                DELETE FROM catalog_nodes WHERE id=@Node AND kind IN ('unmatched','episode')
+                  AND identity_locked=0
+                  AND NOT EXISTS(SELECT 1 FROM node_assets WHERE node_id=@Node)
+                  AND NOT EXISTS(SELECT 1 FROM metadata_snapshots WHERE node_id=@Node)
+                  AND NOT EXISTS(SELECT 1 FROM metadata_field_values WHERE node_id=@Node)
+                  AND NOT EXISTS(SELECT 1 FROM artwork WHERE node_id=@Node)
+                  AND NOT EXISTS(SELECT 1 FROM external_ids WHERE node_id=@Node)
+                  AND NOT EXISTS(SELECT 1 FROM node_user_data WHERE node_id=@Node);
                 """,
                 new { Node = previous.id }, transaction);
         }
         await connection.ExecuteAsync(
             "DELETE FROM match_candidates WHERE asset_id=@Asset;",
             new { Asset = assetId.ToString("D") }, transaction);
-        await connection.ExecuteAsync(
-            """
-            UPDATE catalog_jobs
-            SET state='cancelled', error='Superseded by catalog hierarchy repair.', updated_at=@Now
-            WHERE source_id=@Source AND kind='metadata_refresh' AND state='completed';
-            """,
-            new
-            {
-                Source = sourceId.ToString("D"),
-                Now = ToDb(DateTimeOffset.UtcNow),
-            }, transaction);
+        var bindingChanged = previousNodes.Count != 1
+                             || !string.Equals(
+                                 previousNodes[0].id,
+                                 episodeId.ToString("D"),
+                                 StringComparison.OrdinalIgnoreCase);
+        if (bindingChanged)
+        {
+            await connection.ExecuteAsync(
+                """
+                UPDATE catalog_jobs
+                SET state='cancelled', error='Superseded by catalog hierarchy repair.', updated_at=@Now
+                WHERE source_id=@Source AND kind='metadata_refresh' AND state='completed';
+                """,
+                new
+                {
+                    Source = sourceId.ToString("D"),
+                    Now = ToDb(DateTimeOffset.UtcNow),
+                }, transaction);
+        }
     }
 
     private static async Task ApplyLocalMetadataAsync(
@@ -1938,6 +2655,55 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         }
         await ApplyLocalArtworkAsync(connection, transaction, nodeId, local);
     }
+
+    private static Task PruneEmptyAutomaticNodesAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction) =>
+        connection.ExecuteAsync(
+            """
+            DELETE FROM catalog_nodes
+            WHERE kind IN ('unmatched','episode','movie')
+              AND identity_locked=0
+              AND NOT EXISTS(SELECT 1 FROM node_assets na WHERE na.node_id=catalog_nodes.id)
+              AND NOT EXISTS(SELECT 1 FROM catalog_nodes child WHERE child.parent_id=catalog_nodes.id)
+              AND NOT EXISTS(SELECT 1 FROM external_ids e
+                             WHERE e.node_id=catalog_nodes.id AND e.is_identity_locked=1)
+              AND NOT EXISTS(SELECT 1 FROM metadata_field_values f
+                             WHERE f.node_id=catalog_nodes.id
+                               AND (f.is_locked=1 OR f.provider_id='local'))
+              AND NOT EXISTS(SELECT 1 FROM artwork a
+                             WHERE a.node_id=catalog_nodes.id AND a.provider_id='local')
+              AND NOT EXISTS(SELECT 1 FROM node_user_data u WHERE u.node_id=catalog_nodes.id);
+
+            DELETE FROM catalog_nodes
+            WHERE kind='season'
+              AND identity_locked=0
+              AND NOT EXISTS(SELECT 1 FROM node_assets na WHERE na.node_id=catalog_nodes.id)
+              AND NOT EXISTS(SELECT 1 FROM catalog_nodes child WHERE child.parent_id=catalog_nodes.id)
+              AND NOT EXISTS(SELECT 1 FROM external_ids e
+                             WHERE e.node_id=catalog_nodes.id AND e.is_identity_locked=1)
+              AND NOT EXISTS(SELECT 1 FROM metadata_field_values f
+                             WHERE f.node_id=catalog_nodes.id
+                               AND (f.is_locked=1 OR f.provider_id='local'))
+              AND NOT EXISTS(SELECT 1 FROM artwork a
+                             WHERE a.node_id=catalog_nodes.id AND a.provider_id='local')
+              AND NOT EXISTS(SELECT 1 FROM node_user_data u WHERE u.node_id=catalog_nodes.id);
+
+            DELETE FROM catalog_nodes
+            WHERE kind='series'
+              AND identity_locked=0
+              AND NOT EXISTS(SELECT 1 FROM node_assets na WHERE na.node_id=catalog_nodes.id)
+              AND NOT EXISTS(SELECT 1 FROM catalog_nodes child WHERE child.parent_id=catalog_nodes.id)
+              AND NOT EXISTS(SELECT 1 FROM external_ids e
+                             WHERE e.node_id=catalog_nodes.id AND e.is_identity_locked=1)
+              AND NOT EXISTS(SELECT 1 FROM metadata_field_values f
+                             WHERE f.node_id=catalog_nodes.id
+                               AND (f.is_locked=1 OR f.provider_id='local'))
+              AND NOT EXISTS(SELECT 1 FROM artwork a
+                             WHERE a.node_id=catalog_nodes.id AND a.provider_id='local')
+              AND NOT EXISTS(SELECT 1 FROM node_user_data u WHERE u.node_id=catalog_nodes.id);
+            """,
+            transaction: transaction);
 
     private static async Task ApplyLocalArtworkAsync(
         SqliteConnection connection,
@@ -2075,7 +2841,13 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 details is { Tags.IsDefault: false } ? details.Tags : [],
                 details is { Studios.IsDefault: false } ? details.Studios : [],
                 people,
-                relatedItems);
+                relatedItems)
+            {
+                IdentityLockedProviders = externalRows
+                    .Where(external => external.node_id == row.id && external.is_identity_locked != 0)
+                    .Select(external => external.provider_id)
+                    .ToImmutableHashSet(StringComparer.OrdinalIgnoreCase),
+            };
         })
             .ToImmutableArray();
 
@@ -2174,7 +2946,7 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
 
     private async Task ApplyCompatibilityRepairsAsync(CancellationToken ct)
     {
-        const string category = "series-rich-details-routing-v5";
+        const string category = "anilist-null-id-search-v9";
         await using var connection = await OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
         var applied = await connection.ExecuteScalarAsync<long>(
@@ -2183,13 +2955,14 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         if (applied != 0)
         {
             await transaction.RollbackAsync(ct);
+            await ApplyEpisodicBundleCompatibilityRepairAsync(ct);
             return;
         }
         var now = ToDb(DateTimeOffset.UtcNow);
         await connection.ExecuteAsync(
             """
             UPDATE catalog_jobs
-            SET state='cancelled', error='Superseded by rich series metadata routing upgrade.', updated_at=@Now
+            SET state='cancelled', error='Superseded by AniList null-ID search fix.', updated_at=@Now
             WHERE kind='metadata_refresh' AND state='completed'
               AND source_id IN (
                 SELECT DISTINCT sa.source_id
@@ -2213,12 +2986,15 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                       JOIN descendants parent ON child.parent_id=parent.id
                   )
                   SELECT 1 FROM descendants d
-                  JOIN node_assets na ON na.node_id=d.id
-              )
-              AND NOT EXISTS (SELECT 1 FROM external_ids e WHERE e.node_id=catalog_nodes.id)
-              AND NOT EXISTS (SELECT 1 FROM metadata_snapshots m WHERE m.node_id=catalog_nodes.id)
-              AND NOT EXISTS (SELECT 1 FROM artwork a WHERE a.node_id=catalog_nodes.id)
-              AND NOT EXISTS (SELECT 1 FROM node_user_data u WHERE u.node_id=catalog_nodes.id);
+                  JOIN catalog_nodes protected ON protected.id=d.id
+                  WHERE protected.identity_locked=1
+                     OR EXISTS(SELECT 1 FROM node_assets na WHERE na.node_id=d.id)
+                     OR EXISTS(SELECT 1 FROM external_ids e WHERE e.node_id=d.id)
+                     OR EXISTS(SELECT 1 FROM metadata_snapshots m WHERE m.node_id=d.id)
+                     OR EXISTS(SELECT 1 FROM metadata_field_values f WHERE f.node_id=d.id)
+                     OR EXISTS(SELECT 1 FROM artwork a WHERE a.node_id=d.id)
+                     OR EXISTS(SELECT 1 FROM node_user_data u WHERE u.node_id=d.id)
+              );
             INSERT INTO migration_audit(id,category,details_json,created_at)
             VALUES(@Id,@Category,@Details,@Now);
             """,
@@ -2226,7 +3002,49 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
             {
                 Id = Guid.NewGuid().ToString("D"),
                 Category = category,
-                Details = "{\"reason\":\"retry lightweight title-index matches through rich details providers and remove empty duplicate scaffolds\"}",
+                Details = "{\"reason\":\"retry AniList title searches without null ID filters and remove empty duplicate scaffolds\"}",
+                Now = now,
+            }, transaction);
+        await transaction.CommitAsync(ct);
+        await ApplyEpisodicBundleCompatibilityRepairAsync(ct);
+    }
+
+    private async Task ApplyEpisodicBundleCompatibilityRepairAsync(CancellationToken ct)
+    {
+        // v10 used the model name "local_file" even though media_assets.kind stores "local",
+        // so existing installations consumed the audit marker without reparsing a single asset.
+        // Use a new marker; never reuse the already-recorded broken repair.
+        const string category = "jellyfin-folder-hierarchy-v11";
+        await using var connection = await OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        var applied = await connection.ExecuteScalarAsync<long>(
+            "SELECT COUNT(*) FROM migration_audit WHERE category=@Category;",
+            new { Category = category }, transaction);
+        if (applied != 0)
+        {
+            await transaction.RollbackAsync(ct);
+            return;
+        }
+        var now = ToDb(DateTimeOffset.UtcNow);
+        await connection.ExecuteAsync(
+            """
+            UPDATE media_assets
+            SET modified_at=NULL
+            WHERE kind='local';
+            UPDATE catalog_nodes
+            SET season_number=NULL,episode_number=NULL,absolute_episode_number=NULL
+            WHERE kind IN ('series','movie');
+            UPDATE catalog_nodes
+            SET episode_number=NULL,absolute_episode_number=NULL
+            WHERE kind='season';
+            INSERT INTO migration_audit(id,category,details_json,created_at)
+            VALUES(@Id,@Category,@Details,@Now);
+            """,
+            new
+            {
+                Id = Guid.NewGuid().ToString("D"),
+                Category = category,
+                Details = "{\"reason\":\"reparse local assets with folder-first series ownership while preserving source media and user state\"}",
                 Now = now,
             }, transaction);
         await transaction.CommitAsync(ct);
@@ -2587,6 +3405,7 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
     private sealed class TagLinkRow { public string asset_id { get; set; } = ""; public string name { get; set; } = ""; }
     private sealed class AliasRow { public string node_id { get; set; } = ""; public string alias { get; set; } = ""; }
     private sealed class ExternalIdRow { public string node_id { get; set; } = ""; public string provider_id { get; set; } = ""; public string external_id { get; set; } = ""; public int is_identity_locked { get; set; } }
+    private sealed class MetadataFieldValueRow { public string field { get; set; } = ""; public string value { get; set; } = ""; public int priority { get; set; } public int is_locked { get; set; } public string updated_at { get; set; } = ""; }
     private sealed class MetadataSnapshotRow
     {
         public string node_id { get; set; } = ""; public string provider_id { get; set; } = "";
@@ -2625,6 +3444,7 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
     private sealed class CandidateRow { public string id { get; set; } = ""; public string asset_id { get; set; } = ""; public string provider_id { get; set; } = ""; public string provider_item_id { get; set; } = ""; public string title { get; set; } = ""; public int? year { get; set; } public double score { get; set; } public double title_score { get; set; } public string evidence { get; set; } = ""; public int hard_conflict { get; set; } public string created_at { get; set; } = ""; }
     private sealed class BoundNodeRow { public string id { get; set; } = ""; public string kind { get; set; } = "unmatched"; }
     private sealed class LockedNodeRow { public string id { get; set; } = ""; public string kind { get; set; } = "unmatched"; }
+    private sealed class RebuildSeriesRow { public string id { get; set; } = ""; public int preserve { get; set; } }
     private sealed class JobRow { public string id { get; set; } = ""; public string? source_id { get; set; } public string kind { get; set; } = "incremental_scan"; public string state { get; set; } = "queued"; public long generation { get; set; } public int processed_count { get; set; } public int total_count { get; set; } public string? error { get; set; } public string created_at { get; set; } = ""; public string updated_at { get; set; } = ""; }
     private sealed class ProviderCacheRow { public string cache_key { get; set; } = ""; public string provider_id { get; set; } = ""; public string? etag { get; set; } public string? last_modified { get; set; } public byte[]? payload { get; set; } public string? content_type { get; set; } public string fetched_at { get; set; } = ""; public string expires_at { get; set; } = ""; }
 

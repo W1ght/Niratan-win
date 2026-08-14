@@ -6,8 +6,10 @@ using System.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Niratan.Models.Anki;
+using Niratan.Models.DTO;
 using Niratan.Models.Settings;
 using Niratan.Services.Dictionary;
 using Niratan.Services.Settings;
@@ -17,44 +19,105 @@ namespace Niratan.Services.Anki;
 
 public sealed class AnkiService : IAnkiService, IDisposable
 {
+    private sealed record CachedDuplicateLookup(
+        AnkiDuplicateLookupResult Result,
+        DateTimeOffset ExpiresAt,
+        long SettingsGeneration);
+
+    private sealed record SavedDuplicateLookupEntry(
+        IReadOnlyList<long> NoteIds,
+        long SettingsGeneration);
+
+    private sealed record PreparedMedia(string Filename, byte[] Data);
+
+    private sealed record PreparedDictionaryMedia(
+        string OriginalFilename,
+        string Filename,
+        byte[] Data);
+
+    private readonly record struct MiningSubmissionKey(
+        long SettingsGeneration,
+        string Expression);
+
+    private sealed class MiningSubmissionGateEntry
+    {
+        public SemaphoreSlim Semaphore { get; } = new(1, 1);
+        public int ReferenceCount { get; set; }
+    }
+
+    private static readonly TimeSpan DuplicateCacheDuration = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan NotDuplicateCacheDuration = TimeSpan.FromSeconds(12);
+    private const int MaxDuplicateLookupCacheEntries = 512;
+
     private readonly ISettingsService _settingsService;
     private readonly IDictionaryLookupService _dictionaryLookupService;
+    private readonly Func<string, AnkiConnectClient> _clientFactory;
+    private readonly object _clientLock = new();
+    private readonly object _miningSubmissionGatesLock = new();
+    private readonly SemaphoreSlim _duplicateLookupGate = new(1, 1);
+    private readonly Dictionary<MiningSubmissionKey, MiningSubmissionGateEntry> _miningSubmissionGates = [];
     private AnkiConnectClient? _client;
     private AnkiSettings _settings;
-    private string? _cachedWritableMediaDirectory;
-    private readonly ConcurrentDictionary<string, byte> _savedExpressions = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, long[]> _savedNoteIds = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, Lazy<Task<AnkiDuplicateLookupResult>>> _duplicateLookups =
+    private Task<string?>? _writableMediaDirectoryTask;
+    private long _settingsGeneration;
+    private int _disposed;
+    private readonly ConcurrentDictionary<string, SavedDuplicateLookupEntry> _savedDuplicateLookups =
+        new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, CachedDuplicateLookup> _duplicateLookupCache =
         new(StringComparer.Ordinal);
 
     public AnkiSettings Settings => _settings;
 
     public AnkiService(ISettingsService settingsService, IDictionaryLookupService dictionaryLookupService)
+        : this(settingsService, dictionaryLookupService, static url => new AnkiConnectClient(url))
+    {
+    }
+
+    internal AnkiService(
+        ISettingsService settingsService,
+        IDictionaryLookupService dictionaryLookupService,
+        Func<string, AnkiConnectClient> clientFactory)
     {
         _settingsService = settingsService;
         _dictionaryLookupService = dictionaryLookupService;
+        _clientFactory = clientFactory;
         _settings = settingsService.Current.AnkiSettings;
+        _settingsService.SettingChanged += SettingsService_SettingChanged;
     }
 
     public void UpdateSettings(AnkiSettings settings)
     {
-        _settings = settings;
-        _client?.Dispose();
-        _client = null;
-        _cachedWritableMediaDirectory = null;
-        _duplicateLookups.Clear();
+        lock (_clientLock)
+        {
+            _settings = settings;
+            Interlocked.Increment(ref _settingsGeneration);
+            _client?.Dispose();
+            _client = null;
+            _writableMediaDirectoryTask = null;
+        }
+        _savedDuplicateLookups.Clear();
+        _duplicateLookupCache.Clear();
+    }
+
+    private void SettingsService_SettingChanged(object? sender, SettingsChangedEventArgs args)
+    {
+        if (args.PropertyName is nameof(AppSettings.AnkiSettings) or nameof(ISettingsService.Current))
+            UpdateSettings(_settingsService.Current.AnkiSettings);
     }
 
     private AnkiConnectClient GetClient()
     {
-        if (_client == null)
+        lock (_clientLock)
         {
-            var url = _settings.AnkiConnectUrl;
-            if (string.IsNullOrWhiteSpace(url))
-                url = "http://localhost:8765";
-            _client = new AnkiConnectClient(url);
+            if (_client == null)
+            {
+                var url = _settings.AnkiConnectUrl;
+                if (string.IsNullOrWhiteSpace(url))
+                    url = "http://localhost:8765";
+                _client = _clientFactory(url);
+            }
+            return _client;
         }
-        return _client;
     }
 
     public async Task<bool> IsAvailableAsync()
@@ -105,8 +168,9 @@ public sealed class AnkiService : IAnkiService, IDisposable
 
             if (!_settings.AllowDupes)
             {
-                if (await DuplicateCheckExpressionAsync(payload.Expression))
-                    return AnkiMiningPreflightResult.Duplicate();
+                var duplicateLookup = await DuplicateLookupExpressionAsync(payload.Expression);
+                if (duplicateLookup.IsDuplicate)
+                    return AnkiMiningPreflightResult.Duplicate(duplicateLookup.NoteIds);
             }
 
             var needs = AnkiFieldMappingResolver.ResolveMediaNeedsForMining(
@@ -130,7 +194,17 @@ public sealed class AnkiService : IAnkiService, IDisposable
         var totalSw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            if (!_settings.IsConfigured)
+            long settingsGeneration;
+            AnkiSettings settings;
+            AnkiConnectClient? client;
+            lock (_clientLock)
+            {
+                settingsGeneration = Volatile.Read(ref _settingsGeneration);
+                settings = AnkiSettings.Clone(_settings);
+                client = settings.IsConfigured ? GetClient() : null;
+            }
+
+            if (!settings.IsConfigured || client == null)
             {
                 Log.Warning("[Anki] Not configured");
                 return null;
@@ -139,44 +213,51 @@ public sealed class AnkiService : IAnkiService, IDisposable
             var payload = AnkiMiningPayload.FromJson(rawPayloadJson);
 
             // Resolve deck
-            var deck = ResolveDeck();
+            var deck = ResolveDeck(settings);
             if (deck == null)
             {
                 Log.Warning("[Anki] Deck not found (id={DeckId}, name={DeckName})",
-                    _settings.SelectedDeckId, _settings.SelectedDeckName);
+                    settings.SelectedDeckId, settings.SelectedDeckName);
                 return null;
             }
 
             // Resolve note type
-            var noteType = ResolveNoteType();
+            var noteType = ResolveNoteType(settings);
             if (noteType == null)
             {
                 Log.Warning("[Anki] Note type not found (id={NoteTypeId}, name={NoteTypeName})",
-                    _settings.SelectedNoteTypeId, _settings.SelectedNoteTypeName);
+                    settings.SelectedNoteTypeId, settings.SelectedNoteTypeName);
                 return null;
             }
 
-            var client = GetClient();
+            var requiredMediaNeeds = AnkiFieldMappingResolver.ResolveMediaNeedsForMining(
+                noteType,
+                settings.FieldMappings,
+                context);
+            var requiresBookCover = AnkiFieldMappingResolver.ResolveForMining(
+                    noteType,
+                    settings.FieldMappings,
+                    context)
+                .Values
+                .Any(template => template.Contains("{book-cover}", StringComparison.Ordinal));
+            var isVideoMiningContext = !string.IsNullOrWhiteSpace(context.VideoFileName)
+                || !string.IsNullOrWhiteSpace(context.VideoTimestamp)
+                || !string.IsNullOrWhiteSpace(context.VideoSubtitle)
+                || !string.IsNullOrWhiteSpace(context.VideoScreenshotPath)
+                || !string.IsNullOrWhiteSpace(context.VideoScreenshotTag)
+                || !string.IsNullOrWhiteSpace(context.VideoAudioClipPath)
+                || !string.IsNullOrWhiteSpace(context.VideoAudioClipTag);
 
-            // --- Phase 1: Resolve/download remote audio (separate HTTP, not AnkiConnect) ---
+            // Start independent media work together. Remote word audio and the
+            // collection.media lookup no longer hold up local/dictionary reads.
             var audioSw = System.Diagnostics.Stopwatch.StartNew();
-            AnkiAudioDownloadResult? remoteAudio = null;
-            if (!string.IsNullOrWhiteSpace(payload.Audio))
-            {
-                try
-                {
-                    remoteAudio = await s_audioDownloader.DownloadAsync(payload.Audio);
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "[Anki] Failed to resolve/download audio");
-                }
-            }
-            audioSw.Stop();
-            Log.Information("[Anki] audioResolve/download completed in {ElapsedMs}ms hasAudio={HasAudio}",
-                audioSw.ElapsedMilliseconds, remoteAudio != null);
+            var remoteAudioTask = DownloadRemoteAudioAsync(payload.Audio);
+            var shouldResolveDirectMediaDirectory = HasPotentialMedia(payload, context, settings);
+            var directMediaDirectoryTask = shouldResolveDirectMediaDirectory
+                ? GetWritableMediaDirectoryAsync()
+                : Task.FromResult<string?>(null);
 
-            // --- Phase 2: Collect all media for batched upload ---
+            // --- Phase 1: Resolve local and dictionary media concurrently ---
             var mediaReadSw = System.Diagnostics.Stopwatch.StartNew();
             var uploads = new List<(string filename, byte[] data)>();
             // Track which upload indices correspond to what
@@ -190,113 +271,84 @@ public sealed class AnkiService : IAnkiService, IDisposable
             var picturePath = !string.IsNullOrWhiteSpace(context.MangaPagePath)
                 ? context.MangaPagePath
                 : context.CoverPath;
-            if (!string.IsNullOrWhiteSpace(picturePath) && File.Exists(picturePath))
-            {
-                try
-                {
-                    var bytes = await File.ReadAllBytesAsync(picturePath);
-                    coverUploadIdx = uploads.Count;
-                    uploads.Add((
-                        !string.IsNullOrWhiteSpace(context.MangaPagePath)
-                            ? CreateMangaPageMediaFilename(picturePath, bytes)
-                            : Path.GetFileName(picturePath),
-                        bytes));
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "[Anki] Failed to read picture image");
-                }
-            }
+            var hadSasayakiAudioPath = !string.IsNullOrWhiteSpace(context.SasayakiAudioPath);
+            var isMangaPicture = !string.IsNullOrWhiteSpace(context.MangaPagePath);
+            var pictureTask = ReadLocalMediaAsync(
+                picturePath,
+                (path, bytes) => isMangaPicture
+                    ? CreateMangaPageMediaFilename(path, bytes)
+                    : CreateCoverMediaFilename(path, bytes),
+                "picture image");
+            var sasayakiAudioTask = ReadLocalMediaAsync(
+                context.SasayakiAudioPath,
+                static (path, _) => Path.GetFileName(path),
+                "sasayaki audio");
+            var videoScreenshotTask = ReadLocalMediaAsync(
+                context.VideoScreenshotPath,
+                static (path, _) => Path.GetFileName(path),
+                "video screenshot");
+            var videoAudioClipTask = ReadLocalMediaAsync(
+                context.VideoAudioClipPath,
+                static (path, _) => Path.GetFileName(path),
+                "video audio clip");
+            var dictionaryMediaTask = settings.EmbedMedia
+                ? ResolveDictionaryMediaListAsync(payload.DictionaryMediaList)
+                : Task.FromResult<IReadOnlyList<PreparedDictionaryMedia>>([]);
 
-            if (!string.IsNullOrWhiteSpace(context.SasayakiAudioPath) && File.Exists(context.SasayakiAudioPath))
-            {
-                try
-                {
-                    var bytes = await File.ReadAllBytesAsync(context.SasayakiAudioPath);
-                    sasayakiAudioUploadIdx = uploads.Count;
-                    uploads.Add((Path.GetFileName(context.SasayakiAudioPath), bytes));
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "[Anki] Failed to read sasayaki audio");
-                }
-            }
+            await Task.WhenAll(
+                pictureTask,
+                sasayakiAudioTask,
+                videoScreenshotTask,
+                videoAudioClipTask,
+                dictionaryMediaTask);
 
-            if (!string.IsNullOrWhiteSpace(context.VideoScreenshotPath) && File.Exists(context.VideoScreenshotPath))
+            AddPreparedMedia(await pictureTask, ref coverUploadIdx, uploads);
+            AddPreparedMedia(await sasayakiAudioTask, ref sasayakiAudioUploadIdx, uploads);
+            AddPreparedMedia(await videoScreenshotTask, ref videoScreenshotUploadIdx, uploads);
+            AddPreparedMedia(await videoAudioClipTask, ref videoAudioClipUploadIdx, uploads);
+            foreach (var media in await dictionaryMediaTask)
             {
-                try
-                {
-                    var bytes = await File.ReadAllBytesAsync(context.VideoScreenshotPath);
-                    videoScreenshotUploadIdx = uploads.Count;
-                    uploads.Add((Path.GetFileName(context.VideoScreenshotPath), bytes));
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "[Anki] Failed to read video screenshot");
-                }
-            }
-
-            if (!string.IsNullOrWhiteSpace(context.VideoAudioClipPath) && File.Exists(context.VideoAudioClipPath))
-            {
-                try
-                {
-                    var bytes = await File.ReadAllBytesAsync(context.VideoAudioClipPath);
-                    videoAudioClipUploadIdx = uploads.Count;
-                    uploads.Add((Path.GetFileName(context.VideoAudioClipPath), bytes));
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "[Anki] Failed to read video audio clip");
-                }
-            }
-
-            if (remoteAudio != null)
-            {
-                audioUploadIdx = uploads.Count;
-                uploads.Add((remoteAudio.Filename, remoteAudio.Bytes));
-            }
-
-            if (_settings.EmbedMedia)
-            {
-                foreach (var media in payload.DictionaryMediaList)
-                {
-                    try
-                    {
-                        var mediaBytes = await ResolveDictionaryMediaAsync(media);
-                        if (mediaBytes != null)
-                        {
-                            dictMediaIndices.Add((uploads.Count, media.Filename));
-                            uploads.Add((media.Filename, mediaBytes));
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Warning(ex, "[Anki] Failed to read dictionary media {Filename}", media.Filename);
-                    }
-                }
+                dictMediaIndices.Add((uploads.Count, media.OriginalFilename));
+                uploads.Add((media.Filename, media.Data));
             }
             mediaReadSw.Stop();
             Log.Information("[Anki] mediaRead completed in {ElapsedMs}ms uploadCount={UploadCount}",
                 mediaReadSw.ElapsedMilliseconds, uploads.Count);
 
-            // --- Phase 3: Batch upload all media in one request ---
+            // Direct writes for already-prepared local media can overlap the
+            // remaining word-audio download.
             var mediaUploadSw = System.Diagnostics.Stopwatch.StartNew();
-            List<string> storedNames = [];
-            if (uploads.Count > 0)
+            var directMediaDirectory = await directMediaDirectoryTask;
+            var directWriteTasks = StartDirectMediaWrites(uploads, directMediaDirectory);
+            var remoteAudio = await remoteAudioTask;
+            audioSw.Stop();
+            Log.Information("[Anki] audioResolve/download completed in {ElapsedMs}ms hasAudio={HasAudio}",
+                audioSw.ElapsedMilliseconds, remoteAudio != null);
+            if (remoteAudio != null)
             {
-                try
+                audioUploadIdx = uploads.Count;
+                uploads.Add((remoteAudio.Filename, remoteAudio.Bytes));
+                if (!string.IsNullOrWhiteSpace(directMediaDirectory))
                 {
-                    storedNames = await client.StoreMediaFilesAsync(uploads);
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "[Anki] Batch media upload failed ({Count} files)", uploads.Count);
-                    storedNames = [];
+                    directWriteTasks.Add(AnkiDirectMediaStore.WriteBytesAsync(
+                        directMediaDirectory,
+                        remoteAudio.Filename,
+                        remoteAudio.Bytes));
                 }
             }
+
+            // --- Phase 2: Direct-write concurrently; batch-upload only fallbacks ---
+            var storedNames = await StoreMediaFilesAsync(
+                client,
+                uploads,
+                directMediaDirectory,
+                directWriteTasks);
             mediaUploadSw.Stop();
-            Log.Information("[Anki] mediaUpload completed in {ElapsedMs}ms uploadCount={UploadCount}",
-                mediaUploadSw.ElapsedMilliseconds, uploads.Count);
+            Log.Information(
+                "[Anki] mediaStore completed in {ElapsedMs}ms mediaCount={MediaCount} direct={Direct}",
+                mediaUploadSw.ElapsedMilliseconds,
+                uploads.Count,
+                !string.IsNullOrWhiteSpace(directMediaDirectory));
 
             if (coverUploadIdx is int coverIdx
                 && coverIdx < storedNames.Count
@@ -305,14 +357,44 @@ public sealed class AnkiService : IAnkiService, IDisposable
                 context.CoverTag = AnkiMediaMarkup.ForFieldPlaceholder(storedNames[coverIdx]);
             }
 
-            if (videoScreenshotUploadIdx is int screenshotIdx && screenshotIdx < storedNames.Count)
+            if (videoScreenshotUploadIdx is int screenshotIdx
+                && screenshotIdx < storedNames.Count
+                && !string.IsNullOrWhiteSpace(storedNames[screenshotIdx]))
                 context.VideoScreenshotTag = AnkiMediaMarkup.ForFieldPlaceholder(storedNames[screenshotIdx]);
 
-            if (videoAudioClipUploadIdx is int videoAudioIdx && videoAudioIdx < storedNames.Count)
+            if (videoAudioClipUploadIdx is int videoAudioIdx
+                && videoAudioIdx < storedNames.Count
+                && !string.IsNullOrWhiteSpace(storedNames[videoAudioIdx]))
                 context.VideoAudioClipTag = AnkiMediaMarkup.ForFieldPlaceholder(storedNames[videoAudioIdx]);
 
-            if (sasayakiAudioUploadIdx is int sasayakiAudioIdx && sasayakiAudioIdx < storedNames.Count)
+            if (sasayakiAudioUploadIdx is int sasayakiAudioIdx
+                && sasayakiAudioIdx < storedNames.Count
+                && !string.IsNullOrWhiteSpace(storedNames[sasayakiAudioIdx]))
                 context.SasayakiAudioTag = AnkiMediaMarkup.ForFieldPlaceholder(storedNames[sasayakiAudioIdx]);
+
+            // A local path must never escape into an Anki field. Generated media is
+            // represented only by a ready collection.media filename/tag.
+            context.SasayakiAudioPath = null;
+            context.VideoScreenshotPath = null;
+            context.VideoAudioClipPath = null;
+
+            if ((isVideoMiningContext
+                 && requiredMediaNeeds.NeedsVideoScreenshot
+                 && string.IsNullOrWhiteSpace(context.VideoScreenshotTag))
+                || (isVideoMiningContext
+                    && requiredMediaNeeds.NeedsVideoAudioClip
+                    && string.IsNullOrWhiteSpace(context.VideoAudioClipTag))
+                || (!isVideoMiningContext
+                    && requiresBookCover
+                    && !string.IsNullOrWhiteSpace(picturePath)
+                    && string.IsNullOrWhiteSpace(context.CoverTag))
+                || (requiredMediaNeeds.NeedsSasayakiAudio
+                    && hadSasayakiAudioPath
+                    && string.IsNullOrWhiteSpace(context.SasayakiAudioTag)))
+            {
+                Log.Warning("[Anki] Required mining media was not ready; note submission skipped");
+                return null;
+            }
 
             // --- Phase 4: Build mediaPayload and dictionaryMediaTags from upload results ---
             var mediaPayload = payload;
@@ -342,7 +424,7 @@ public sealed class AnkiService : IAnkiService, IDisposable
             // --- Phase 5: Render field templates ---
             var fieldMappings = AnkiFieldMappingResolver.ResolveForMining(
                 noteType,
-                _settings.FieldMappings,
+                settings.FieldMappings,
                 context);
             var renderedFields = new Dictionary<string, string>();
             foreach (var (fieldName, template) in fieldMappings)
@@ -366,20 +448,68 @@ public sealed class AnkiService : IAnkiService, IDisposable
             }
 
             // --- Phase 6: Add note (+ optional sync) ---
+            if (settings.AllowDupes && !string.IsNullOrWhiteSpace(payload.Expression))
+                _duplicateLookupCache.TryRemove(payload.Expression, out _);
             var addNoteSw = System.Diagnostics.Stopwatch.StartNew();
-            var noteId = await client.AddNoteWithOptionalSyncAsync(
-                deck, noteType, renderedFields, _settings, _settings.AnkiConnectForceSync);
+            long? noteId;
+            if (!settings.AllowDupes && !string.IsNullOrWhiteSpace(payload.Expression))
+            {
+                var submissionKey = new MiningSubmissionKey(
+                    settingsGeneration,
+                    payload.Expression);
+                var submissionGate = await AcquireMiningSubmissionGateAsync(submissionKey);
+                try
+                {
+                    if (settingsGeneration != Volatile.Read(ref _settingsGeneration))
+                        return null;
+
+                    var finalDuplicateLookup = await ForceDuplicateLookupForSubmissionAsync(
+                        payload.Expression,
+                        settingsGeneration,
+                        settings,
+                        deck,
+                        noteType,
+                        client);
+                    if (settingsGeneration != Volatile.Read(ref _settingsGeneration)
+                        || finalDuplicateLookup.IsDuplicate)
+                    {
+                        return null;
+                    }
+
+                    noteId = await client.AddNoteWithOptionalSyncAsync(
+                        deck,
+                        noteType,
+                        renderedFields,
+                        settings,
+                        settings.AnkiConnectForceSync);
+                    if (!noteId.HasValue)
+                        _duplicateLookupCache.TryRemove(payload.Expression, out _);
+                    CacheSuccessfulMiningResult(payload.Expression, noteId, settingsGeneration);
+                }
+                finally
+                {
+                    ReleaseMiningSubmissionGate(submissionKey, submissionGate);
+                }
+            }
+            else
+            {
+                if (settingsGeneration != Volatile.Read(ref _settingsGeneration))
+                    return null;
+
+                noteId = await client.AddNoteWithOptionalSyncAsync(
+                    deck,
+                    noteType,
+                    renderedFields,
+                    settings,
+                    settings.AnkiConnectForceSync);
+                CacheSuccessfulMiningResult(payload.Expression, noteId, settingsGeneration);
+            }
             addNoteSw.Stop();
             Log.Information("[Anki] addNote completed in {ElapsedMs}ms success={Success} noteId={NoteId}",
                 addNoteSw.ElapsedMilliseconds, noteId.HasValue, noteId);
 
             Log.Information("[Anki] Mine completed: expression={Expression}, success={Success}, noteId={NoteId}, total={TotalMs}ms, audioResolveDownload={AudioMs}ms, mediaRead={MediaReadMs}ms, mediaUpload={MediaUploadMs}ms, addNote={AddNoteMs}ms, batchCount={BatchCount}",
                 payload.Expression, noteId.HasValue, noteId, totalSw.ElapsedMilliseconds, audioSw.ElapsedMilliseconds, mediaReadSw.ElapsedMilliseconds, mediaUploadSw.ElapsedMilliseconds, addNoteSw.ElapsedMilliseconds, uploads.Count);
-            if (noteId is long addedNoteId && !string.IsNullOrWhiteSpace(payload.Expression))
-            {
-                _savedExpressions[payload.Expression] = 0;
-                _savedNoteIds[payload.Expression] = [addedNoteId];
-            }
             return noteId;
         }
         catch (Exception ex)
@@ -391,6 +521,169 @@ public sealed class AnkiService : IAnkiService, IDisposable
 
     public Task<bool> OpenNoteInAnkiAsync(long noteId) =>
         GetClient().OpenNoteInAnkiAsync(noteId);
+
+    private static async Task<AnkiAudioDownloadResult?> DownloadRemoteAudioAsync(string audioSource)
+    {
+        if (string.IsNullOrWhiteSpace(audioSource))
+            return null;
+
+        try
+        {
+            return await s_audioDownloader.DownloadAsync(audioSource);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "[Anki] Failed to resolve/download audio");
+            return null;
+        }
+    }
+
+    private static async Task<PreparedMedia?> ReadLocalMediaAsync(
+        string? path,
+        Func<string, byte[], string> filenameFactory,
+        string description)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            return null;
+
+        try
+        {
+            var bytes = await File.ReadAllBytesAsync(path);
+            if (bytes.Length == 0)
+                return null;
+
+            return new PreparedMedia(filenameFactory(path, bytes), bytes);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "[Anki] Failed to read {Description}", description);
+            return null;
+        }
+    }
+
+    private async Task<IReadOnlyList<PreparedDictionaryMedia>> ResolveDictionaryMediaListAsync(
+        IReadOnlyList<DictionaryMedia> dictionaryMedia)
+    {
+        var prepared = new List<PreparedDictionaryMedia>(dictionaryMedia.Count);
+        foreach (var media in dictionaryMedia)
+        {
+            try
+            {
+                var bytes = await ResolveDictionaryMediaAsync(media);
+                if (bytes is not { Length: > 0 })
+                    continue;
+
+                var originalFilename = string.IsNullOrWhiteSpace(media.Filename)
+                    ? Path.GetFileName(media.Path)
+                    : media.Filename;
+                if (string.IsNullOrWhiteSpace(originalFilename))
+                    continue;
+
+                prepared.Add(new PreparedDictionaryMedia(
+                    originalFilename,
+                    CreateDictionaryMediaFilename(
+                        originalFilename,
+                        bytes),
+                    bytes));
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[Anki] Failed to read dictionary media {Filename}", media.Filename);
+            }
+        }
+
+        return prepared;
+    }
+
+    private static void AddPreparedMedia(
+        PreparedMedia? media,
+        ref int? uploadIndex,
+        List<(string filename, byte[] data)> uploads)
+    {
+        if (media == null)
+            return;
+
+        uploadIndex = uploads.Count;
+        uploads.Add((media.Filename, media.Data));
+    }
+
+    private static bool HasPotentialMedia(
+        AnkiMiningPayload payload,
+        AnkiMiningContext context,
+        AnkiSettings settings) =>
+        !string.IsNullOrWhiteSpace(payload.Audio)
+        || !string.IsNullOrWhiteSpace(context.MangaPagePath)
+        || !string.IsNullOrWhiteSpace(context.CoverPath)
+        || !string.IsNullOrWhiteSpace(context.SasayakiAudioPath)
+        || !string.IsNullOrWhiteSpace(context.VideoScreenshotPath)
+        || !string.IsNullOrWhiteSpace(context.VideoAudioClipPath)
+        || (settings.EmbedMedia && payload.DictionaryMediaList.Count > 0);
+
+    private static List<Task<string?>> StartDirectMediaWrites(
+        IReadOnlyList<(string filename, byte[] data)> media,
+        string? directMediaDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(directMediaDirectory))
+            return [];
+
+        return media
+            .Select(item => AnkiDirectMediaStore.WriteBytesAsync(
+                directMediaDirectory,
+                item.filename,
+                item.data))
+            .ToList();
+    }
+
+    private static async Task<List<string>> StoreMediaFilesAsync(
+        AnkiConnectClient client,
+        List<(string filename, byte[] data)> media,
+        string? directMediaDirectory,
+        IReadOnlyList<Task<string?>> directWrites)
+    {
+        if (media.Count == 0)
+            return [];
+
+        var storedNames = Enumerable.Repeat("", media.Count).ToList();
+        var fallbackIndices = new List<int>();
+        if (!string.IsNullOrWhiteSpace(directMediaDirectory))
+        {
+            var directNames = await Task.WhenAll(directWrites);
+            for (var index = 0; index < media.Count; index++)
+            {
+                if (index < directNames.Length
+                    && !string.IsNullOrWhiteSpace(directNames[index]))
+                    storedNames[index] = directNames[index]!;
+                else
+                    fallbackIndices.Add(index);
+            }
+        }
+        else
+        {
+            fallbackIndices.AddRange(Enumerable.Range(0, media.Count));
+        }
+
+        if (fallbackIndices.Count == 0)
+            return storedNames;
+
+        try
+        {
+            var fallbackFiles = fallbackIndices
+                .Select(index => media[index])
+                .ToList();
+            var fallbackNames = await client.StoreMediaFilesAsync(fallbackFiles);
+            for (var index = 0; index < fallbackIndices.Count && index < fallbackNames.Count; index++)
+                storedNames[fallbackIndices[index]] = fallbackNames[index];
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(
+                ex,
+                "[Anki] Batch media upload fallback failed ({Count} files)",
+                fallbackIndices.Count);
+        }
+
+        return storedNames;
+    }
 
     internal static string CreateMangaPageMediaFilename(
         string path,
@@ -404,6 +697,144 @@ public sealed class AnkiService : IAnkiService, IDisposable
         }
         var hash = Convert.ToHexString(SHA1.HashData(bytes)).ToLowerInvariant();
         return $"niratan_manga_page_{hash}{extension}";
+    }
+
+    internal static string CreateCoverMediaFilename(string path, byte[] bytes) =>
+        CreateContentAddressedMediaFilename("niratan_cover", path, bytes, ".png");
+
+    internal static string CreateDictionaryMediaFilename(string path, byte[] bytes) =>
+        CreateContentAddressedMediaFilename("niratan_dict", path, bytes, ".bin");
+
+    private static string CreateContentAddressedMediaFilename(
+        string prefix,
+        string sourceName,
+        byte[] bytes,
+        string fallbackExtension)
+    {
+        var extension = Path.GetExtension(sourceName).ToLowerInvariant();
+        if (extension.Length is < 2 or > 12
+            || extension.Skip(1).Any(ch => !char.IsAsciiLetterOrDigit(ch)))
+        {
+            extension = fallbackExtension;
+        }
+
+        var hash = Convert.ToHexString(SHA1.HashData(bytes)).ToLowerInvariant();
+        return $"{prefix}_{hash}{extension}";
+    }
+
+    private async Task<MiningSubmissionGateEntry> AcquireMiningSubmissionGateAsync(
+        MiningSubmissionKey key)
+    {
+        MiningSubmissionGateEntry gate;
+        lock (_miningSubmissionGatesLock)
+        {
+            if (!_miningSubmissionGates.TryGetValue(key, out gate!))
+            {
+                gate = new MiningSubmissionGateEntry();
+                _miningSubmissionGates[key] = gate;
+            }
+
+            gate.ReferenceCount++;
+        }
+
+        try
+        {
+            await gate.Semaphore.WaitAsync();
+            return gate;
+        }
+        catch
+        {
+            ReleaseMiningSubmissionGateReference(key, gate);
+            throw;
+        }
+    }
+
+    private void ReleaseMiningSubmissionGate(
+        MiningSubmissionKey key,
+        MiningSubmissionGateEntry gate)
+    {
+        gate.Semaphore.Release();
+        ReleaseMiningSubmissionGateReference(key, gate);
+    }
+
+    private void ReleaseMiningSubmissionGateReference(
+        MiningSubmissionKey key,
+        MiningSubmissionGateEntry gate)
+    {
+        var dispose = false;
+        lock (_miningSubmissionGatesLock)
+        {
+            gate.ReferenceCount--;
+            if (gate.ReferenceCount == 0
+                && _miningSubmissionGates.TryGetValue(key, out var current)
+                && ReferenceEquals(current, gate))
+            {
+                _miningSubmissionGates.Remove(key);
+                dispose = true;
+            }
+        }
+
+        if (dispose)
+            gate.Semaphore.Dispose();
+    }
+
+    private async Task<AnkiDuplicateLookupResult> ForceDuplicateLookupForSubmissionAsync(
+        string expression,
+        long settingsGeneration,
+        AnkiSettings settings,
+        AnkiDeck deck,
+        AnkiNoteType noteType,
+        AnkiConnectClient client)
+    {
+        if (TryGetCachedDuplicateLookup(expression, settingsGeneration, out var cached)
+            && cached.IsDuplicate)
+        {
+            return cached;
+        }
+
+        var firstField = noteType.Fields.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(firstField))
+            return AnkiDuplicateLookupResult.NotDuplicate();
+
+        var canAdd = await client.CanAddNotesAsync(
+            deck,
+            noteType,
+            [new Dictionary<string, string> { [firstField] = expression }],
+            settings);
+        if (canAdd.Count > 0 && canAdd[0])
+        {
+            var notDuplicate = AnkiDuplicateLookupResult.NotDuplicate();
+            CacheDuplicateLookup(expression, notDuplicate, settingsGeneration);
+            return notDuplicate;
+        }
+
+        var query = BuildDuplicateSearchQuery(expression, deck, noteType, settings);
+        var noteIdsByQuery = await client.FindNotesAsync([query]);
+        var noteIds = noteIdsByQuery.Count > 0
+            ? noteIdsByQuery[0]
+                .Where(noteId => noteId > 0)
+                .Distinct()
+                .ToArray()
+            : [];
+        var duplicate = AnkiDuplicateLookupResult.Duplicate(noteIds);
+        SaveDuplicateLookup(expression, noteIds, settingsGeneration);
+        CacheDuplicateLookup(expression, duplicate, settingsGeneration);
+        return duplicate;
+    }
+
+    private void CacheSuccessfulMiningResult(
+        string expression,
+        long? noteId,
+        long settingsGeneration)
+    {
+        if (noteId is not long addedNoteId || string.IsNullOrWhiteSpace(expression))
+            return;
+
+        SaveDuplicateLookup(expression, [addedNoteId], settingsGeneration);
+        CacheDuplicateLookup(
+            expression,
+            AnkiDuplicateLookupResult.Duplicate([addedNoteId]),
+            settingsGeneration);
     }
 
     public Task<bool> OpenNotesInAnkiAsync(IReadOnlyList<long> noteIds) =>
@@ -428,69 +859,281 @@ public sealed class AnkiService : IAnkiService, IDisposable
         if (string.IsNullOrWhiteSpace(expression))
             return AnkiDuplicateLookupResult.NotDuplicate();
 
-        var pending = _duplicateLookups.GetOrAdd(
-            expression,
-            key => new Lazy<Task<AnkiDuplicateLookupResult>>(
-                () => DuplicateLookupExpressionCoreAsync(key),
-                System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));
-        try
-        {
-            return await pending.Value;
-        }
-        finally
-        {
-            _duplicateLookups.TryRemove(
-                new KeyValuePair<string, Lazy<Task<AnkiDuplicateLookupResult>>>(expression, pending));
-        }
+        var results = await DuplicateLookupExpressionsAsync([expression]);
+        return results.TryGetValue(expression, out var result)
+            ? result
+            : AnkiDuplicateLookupResult.NotDuplicate();
     }
 
     public async Task<bool> DuplicateCheckExpressionAsync(string expression) =>
         (await DuplicateLookupExpressionAsync(expression)).IsDuplicate;
 
-    private async Task<AnkiDuplicateLookupResult> DuplicateLookupExpressionCoreAsync(string expression)
+    public async Task<IReadOnlyDictionary<string, AnkiDuplicateLookupResult>> DuplicateLookupExpressionsAsync(
+        IReadOnlyList<string> expressions)
     {
+        var uniqueExpressions = expressions
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var fastGeneration = Volatile.Read(ref _settingsGeneration);
+        var results = BuildCachedDuplicateLookupResults(
+            uniqueExpressions,
+            fastGeneration,
+            out var missing);
+        if (missing.Length == 0
+            && fastGeneration == Volatile.Read(ref _settingsGeneration))
+        {
+            return results;
+        }
+
+        var settingsGeneration = fastGeneration;
+        await _duplicateLookupGate.WaitAsync();
         try
         {
-            if (!_settings.IsConfigured)
-                return SavedDuplicateLookup(expression);
+            AnkiSettings settings;
+            AnkiConnectClient? client;
+            lock (_clientLock)
+            {
+                settingsGeneration = Volatile.Read(ref _settingsGeneration);
+                settings = AnkiSettings.Clone(_settings);
+                client = settings.IsConfigured ? GetClient() : null;
+            }
 
-            var deck = ResolveDeck();
-            var noteType = ResolveNoteType();
+            // Rebuild every result after acquiring the lane. A profile switch while
+            // waiting invalidates both the misses and the cache hits collected above.
+            results = BuildCachedDuplicateLookupResults(
+                uniqueExpressions,
+                settingsGeneration,
+                out missing);
+            if (settingsGeneration != Volatile.Read(ref _settingsGeneration))
+                return BuildCurrentSavedDuplicateLookupResults(uniqueExpressions);
+            if (missing.Length == 0)
+                return results;
+
+            if (!settings.IsConfigured)
+            {
+                foreach (var expression in missing)
+                    results[expression] = SavedDuplicateLookup(expression, settingsGeneration);
+                return settingsGeneration == Volatile.Read(ref _settingsGeneration)
+                    ? results
+                    : BuildCurrentSavedDuplicateLookupResults(uniqueExpressions);
+            }
+
+            var deck = ResolveDeck(settings);
+            var noteType = ResolveNoteType(settings);
             var firstField = noteType?.Fields.FirstOrDefault();
             if (deck == null || noteType == null || string.IsNullOrWhiteSpace(firstField))
-                return SavedDuplicateLookup(expression);
-
-            var fields = new Dictionary<string, string>
             {
-                [firstField] = expression,
-            };
-            var canAdd = await GetClient().CanAddNotesAsync(deck, noteType, fields, _settings);
-            if (canAdd)
-                return AnkiDuplicateLookupResult.NotDuplicate();
+                foreach (var expression in missing)
+                    results[expression] = SavedDuplicateLookup(expression, settingsGeneration);
+                return settingsGeneration == Volatile.Read(ref _settingsGeneration)
+                    ? results
+                    : BuildCurrentSavedDuplicateLookupResults(uniqueExpressions);
+            }
 
-            _savedExpressions[expression] = 0;
-            var query = BuildDuplicateSearchQuery(expression, deck, noteType, _settings);
-            var noteIds = await GetClient().FindNotesAsync(query);
-            var distinctNoteIds = noteIds
-                .Where(noteId => noteId > 0)
-                .Distinct()
+            var fields = missing
+                .Select(expression => new Dictionary<string, string>
+                {
+                    [firstField] = expression,
+                })
                 .ToArray();
-            if (distinctNoteIds.Length > 0)
-                _savedNoteIds[expression] = distinctNoteIds;
-            return AnkiDuplicateLookupResult.Duplicate(distinctNoteIds);
+            var canAdd = await client!.CanAddNotesAsync(deck, noteType, fields, settings);
+            var duplicateExpressions = missing
+                .Where((_, index) => index >= canAdd.Count || !canAdd[index])
+                .ToArray();
+            var duplicateQueries = duplicateExpressions
+                .Select(expression => BuildDuplicateSearchQuery(expression, deck, noteType, settings))
+                .ToArray();
+            var duplicateNoteIds = await client.FindNotesAsync(duplicateQueries);
+
+            // A profile/settings switch can dispose the old client while its request is
+            // already in flight. Never let a late result populate or represent the new
+            // profile's cache.
+            if (settingsGeneration != Volatile.Read(ref _settingsGeneration))
+                return BuildCurrentSavedDuplicateLookupResults(uniqueExpressions);
+
+            var duplicateIndex = 0;
+            for (var index = 0; index < missing.Length; index++)
+            {
+                AnkiDuplicateLookupResult result;
+                if (index < canAdd.Count && canAdd[index])
+                {
+                    result = AnkiDuplicateLookupResult.NotDuplicate();
+                }
+                else
+                {
+                    var noteIds = duplicateIndex < duplicateNoteIds.Count
+                        ? duplicateNoteIds[duplicateIndex]
+                            .Where(noteId => noteId > 0)
+                            .Distinct()
+                            .ToArray()
+                        : [];
+                    duplicateIndex++;
+                    SaveDuplicateLookup(missing[index], noteIds, settingsGeneration);
+                    result = AnkiDuplicateLookupResult.Duplicate(noteIds);
+                }
+
+                results[missing[index]] = result;
+                CacheDuplicateLookup(missing[index], result, settingsGeneration);
+            }
+
+            return settingsGeneration == Volatile.Read(ref _settingsGeneration)
+                ? results
+                : BuildCurrentSavedDuplicateLookupResults(uniqueExpressions);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "[Anki] DuplicateLookupExpressionAsync failed");
-            return SavedDuplicateLookup(expression);
+            Log.Error(ex, "[Anki] DuplicateLookupExpressionsAsync failed");
+            var fallbackGeneration = Volatile.Read(ref _settingsGeneration);
+            if (fallbackGeneration != settingsGeneration)
+                return BuildCurrentSavedDuplicateLookupResults(uniqueExpressions);
+
+            foreach (var expression in missing)
+                results[expression] = SavedDuplicateLookup(expression, fallbackGeneration);
+            return results;
+        }
+        finally
+        {
+            _duplicateLookupGate.Release();
         }
     }
 
-    private AnkiDuplicateLookupResult SavedDuplicateLookup(string expression) =>
-        _savedExpressions.ContainsKey(expression)
-            ? AnkiDuplicateLookupResult.Duplicate(
-                _savedNoteIds.TryGetValue(expression, out var noteIds) ? noteIds : [])
+    private Dictionary<string, AnkiDuplicateLookupResult> BuildCachedDuplicateLookupResults(
+        IReadOnlyList<string> expressions,
+        long settingsGeneration,
+        out string[] missing)
+    {
+        var results = new Dictionary<string, AnkiDuplicateLookupResult>(StringComparer.Ordinal);
+        foreach (var expression in expressions)
+        {
+            if (string.IsNullOrWhiteSpace(expression))
+                results[expression] = AnkiDuplicateLookupResult.NotDuplicate();
+            else if (TryGetCachedDuplicateLookup(expression, settingsGeneration, out var cached))
+                results[expression] = cached;
+        }
+
+        missing = expressions
+            .Where(expression => !results.ContainsKey(expression))
+            .ToArray();
+        return results;
+    }
+
+    private IReadOnlyDictionary<string, AnkiDuplicateLookupResult> BuildCurrentSavedDuplicateLookupResults(
+        IReadOnlyList<string> expressions)
+    {
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var settingsGeneration = Volatile.Read(ref _settingsGeneration);
+            var results = expressions.ToDictionary(
+                expression => expression,
+                expression => string.IsNullOrWhiteSpace(expression)
+                    ? AnkiDuplicateLookupResult.NotDuplicate()
+                    : SavedDuplicateLookup(expression, settingsGeneration),
+                StringComparer.Ordinal);
+            if (settingsGeneration == Volatile.Read(ref _settingsGeneration))
+                return results;
+        }
+
+        return expressions.ToDictionary(
+            expression => expression,
+            _ => AnkiDuplicateLookupResult.NotDuplicate(),
+            StringComparer.Ordinal);
+    }
+
+    private bool TryGetCachedDuplicateLookup(
+        string expression,
+        long settingsGeneration,
+        out AnkiDuplicateLookupResult result)
+    {
+        result = AnkiDuplicateLookupResult.NotDuplicate();
+        if (!_duplicateLookupCache.TryGetValue(expression, out var cached))
+            return false;
+        if (cached.SettingsGeneration != settingsGeneration
+            || cached.ExpiresAt <= DateTimeOffset.UtcNow)
+        {
+            if (cached.SettingsGeneration <= settingsGeneration
+                || cached.ExpiresAt <= DateTimeOffset.UtcNow)
+            {
+                _duplicateLookupCache.TryRemove(
+                    new KeyValuePair<string, CachedDuplicateLookup>(expression, cached));
+            }
+            return false;
+        }
+
+        result = cached.Result;
+        return true;
+    }
+
+    private void CacheDuplicateLookup(
+        string expression,
+        AnkiDuplicateLookupResult result,
+        long settingsGeneration)
+    {
+        if (settingsGeneration != Volatile.Read(ref _settingsGeneration))
+            return;
+
+        if (_duplicateLookupCache.Count >= MaxDuplicateLookupCacheEntries)
+        {
+            var oldest = _duplicateLookupCache
+                .OrderBy(pair => pair.Value.ExpiresAt)
+                .FirstOrDefault();
+            if (!string.IsNullOrEmpty(oldest.Key))
+            {
+                _duplicateLookupCache.TryRemove(
+                    new KeyValuePair<string, CachedDuplicateLookup>(oldest.Key, oldest.Value));
+            }
+        }
+
+        var duration = result.IsDuplicate
+            ? DuplicateCacheDuration
+            : NotDuplicateCacheDuration;
+        var cached = new CachedDuplicateLookup(
+            result,
+            DateTimeOffset.UtcNow + duration,
+            settingsGeneration);
+        _duplicateLookupCache.AddOrUpdate(
+            expression,
+            cached,
+            (_, existing) => existing.SettingsGeneration > settingsGeneration ? existing : cached);
+    }
+
+    private void SaveDuplicateLookup(
+        string expression,
+        IReadOnlyList<long> noteIds,
+        long settingsGeneration)
+    {
+        if (string.IsNullOrWhiteSpace(expression))
+            return;
+
+        var distinctNoteIds = noteIds
+            .Where(noteId => noteId > 0)
+            .Distinct()
+            .ToArray();
+        var saved = new SavedDuplicateLookupEntry(distinctNoteIds, settingsGeneration);
+        _savedDuplicateLookups.AddOrUpdate(
+            expression,
+            saved,
+            (_, existing) =>
+            {
+                if (existing.SettingsGeneration > settingsGeneration)
+                    return existing;
+                if (existing.SettingsGeneration < settingsGeneration)
+                    return saved;
+
+                return new SavedDuplicateLookupEntry(
+                    existing.NoteIds.Concat(distinctNoteIds).Distinct().ToArray(),
+                    settingsGeneration);
+            });
+    }
+
+    private AnkiDuplicateLookupResult SavedDuplicateLookup(
+        string expression,
+        long settingsGeneration)
+    {
+        return _savedDuplicateLookups.TryGetValue(expression, out var saved)
+               && saved.SettingsGeneration == settingsGeneration
+            ? AnkiDuplicateLookupResult.Duplicate(saved.NoteIds)
             : AnkiDuplicateLookupResult.NotDuplicate();
+    }
 
     internal static string BuildDuplicateSearchQuery(
         string expression,
@@ -534,18 +1177,20 @@ public sealed class AnkiService : IAnkiService, IDisposable
     private static string QuoteAnkiSearchTerm(string term) =>
         $"\"{term.Replace("\"", "", StringComparison.Ordinal)}\"";
 
-    public async Task<string?> GetWritableMediaDirectoryAsync()
+    public Task<string?> GetWritableMediaDirectoryAsync()
     {
-        if (IsWritableDirectory(_cachedWritableMediaDirectory))
-            return _cachedWritableMediaDirectory;
+        lock (_clientLock)
+            return _writableMediaDirectoryTask ??= ResolveWritableMediaDirectoryAsync();
+    }
 
+    private async Task<string?> ResolveWritableMediaDirectoryAsync()
+    {
         try
         {
             var mediaDirectory = await GetClient().GetMediaDirPathAsync();
             if (!IsWritableDirectory(mediaDirectory))
                 return null;
 
-            _cachedWritableMediaDirectory = mediaDirectory;
             return mediaDirectory;
         }
         catch (Exception ex)
@@ -604,22 +1249,26 @@ public sealed class AnkiService : IAnkiService, IDisposable
         }
     }
 
-    private AnkiDeck? ResolveDeck()
+    private AnkiDeck? ResolveDeck() => ResolveDeck(_settings);
+
+    private static AnkiDeck? ResolveDeck(AnkiSettings settings)
     {
-        var decks = _settings.AvailableDecks;
+        var decks = settings.AvailableDecks;
         if (decks.Count == 0) return null;
 
-        return decks.FirstOrDefault(d => d.Id == _settings.SelectedDeckId)
-               ?? decks.FirstOrDefault(d => d.Name == _settings.SelectedDeckName);
+        return decks.FirstOrDefault(d => d.Id == settings.SelectedDeckId)
+               ?? decks.FirstOrDefault(d => d.Name == settings.SelectedDeckName);
     }
 
-    private AnkiNoteType? ResolveNoteType()
+    private AnkiNoteType? ResolveNoteType() => ResolveNoteType(_settings);
+
+    private static AnkiNoteType? ResolveNoteType(AnkiSettings settings)
     {
-        var noteTypes = _settings.AvailableNoteTypes;
+        var noteTypes = settings.AvailableNoteTypes;
         if (noteTypes.Count == 0) return null;
 
-        return noteTypes.FirstOrDefault(nt => nt.Id == _settings.SelectedNoteTypeId)
-               ?? noteTypes.FirstOrDefault(nt => nt.Name == _settings.SelectedNoteTypeName);
+        return noteTypes.FirstOrDefault(nt => nt.Id == settings.SelectedNoteTypeId)
+               ?? noteTypes.FirstOrDefault(nt => nt.Name == settings.SelectedNoteTypeName);
     }
 
     private static readonly HttpClient s_audioHttpClient = new()
@@ -669,7 +1318,18 @@ public sealed class AnkiService : IAnkiService, IDisposable
 
     public void Dispose()
     {
-        _client?.Dispose();
-        _client = null;
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
+
+        _settingsService.SettingChanged -= SettingsService_SettingChanged;
+        lock (_clientLock)
+        {
+            _client?.Dispose();
+            _client = null;
+            _writableMediaDirectoryTask = null;
+        }
+        _savedDuplicateLookups.Clear();
+        _duplicateLookupCache.Clear();
+        _duplicateLookupGate.Dispose();
     }
 }

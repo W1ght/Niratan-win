@@ -177,7 +177,7 @@ public sealed class VideoMetadataCoordinatorConcurrencyTests
         var series = new VideoCatalogNodeSnapshot(
             seriesId, null, VideoCatalogNodeKind.Series, "Himouto! Umaru chan", null,
             null, null, 2015, null, null, null, false, false, [],
-            ImmutableDictionary<string, string>.Empty);
+            ImmutableDictionary<string, string>.Empty.Add("anilist", "20987"));
         var episode = new VideoCatalogNodeSnapshot(
             episodeId, seriesId, VideoCatalogNodeKind.Episode, "Episode 8", null,
             null, null, null, null, 8, 8, false, false, [],
@@ -215,8 +215,178 @@ public sealed class VideoMetadataCoordinatorConcurrencyTests
 
         provider.Query!.Title.Should().Be("Himouto! Umaru chan");
         provider.Query.EpisodeNumber.Should().Be(8);
+        provider.Query.ExternalIds.Should().Contain("anilist", "20987");
         parsedIdentity!.NormalizedTitle.Should().Be("Himouto! Umaru chan");
         parsedIdentity.EpisodeStart.Should().Be(8);
+        parsedIdentity.ExternalIds.Should().BeEmpty(
+            "provider-discovered IDs are query hints until the identity is explicitly locked");
+    }
+
+    [Fact]
+    public async Task LockedSeries_OnlyUsesIndividuallyLockedExternalIdsAsExplicitEvidence()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var sourceId = Guid.NewGuid();
+        var assetId = Guid.NewGuid();
+        var seriesId = Guid.NewGuid();
+        var episodeId = Guid.NewGuid();
+        var source = new VideoCatalogSourceSnapshot(
+            sourceId, "Anime", @"C:\Anime", @"C:\Anime", VideoLibraryMediaType.Anime,
+            "ja-JP", "JP", ["anilist"], 1, DateTimeOffset.UtcNow, null, null);
+        var series = new VideoCatalogNodeSnapshot(
+            seriesId, null, VideoCatalogNodeKind.Series, "Himouto! Umaru chan", null,
+            null, null, 2015, null, null, null, false, true, [],
+            ImmutableDictionary<string, string>.Empty
+                .Add("anilist", "20987")
+                .Add("tmdb", "67126"))
+        {
+            IdentityLockedProviders = ImmutableHashSet.Create(
+                StringComparer.OrdinalIgnoreCase, "anilist"),
+        };
+        var episode = new VideoCatalogNodeSnapshot(
+            episodeId, seriesId, VideoCatalogNodeKind.Episode, "Episode 8", null,
+            null, null, null, null, 8, 8, false, false, [],
+            ImmutableDictionary<string, string>.Empty);
+        var asset = new VideoCatalogAssetSnapshot(
+            assetId, @"C:\Anime\Himouto - 08.mkv", VideoMediaAssetKind.LocalFile,
+            @"C:\Anime\Himouto - 08.mkv", "Himouto! Umaru chan", "Anime", 1,
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow,
+            VideoMediaAvailability.Available, 8, 8, null, null, null, null, null, null,
+            null, null, false, [], null, null, null, [sourceId], [episodeId], []);
+        var snapshot = VideoCatalogSnapshot.Empty() with
+        {
+            Sources = [source], Assets = [asset], Nodes = [series, episode],
+        };
+        var repository = new Mock<IVideoCatalogRepository>();
+        repository.Setup(item => item.GetSnapshotAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(snapshot);
+        repository.Setup(item => item.ReplaceMatchCandidatesAsync(
+                assetId, It.IsAny<IReadOnlyList<VideoMatchCandidateSnapshot>>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        ParsedVideoIdentity? parsedIdentity = null;
+        var matcher = new Mock<IVideoMetadataMatcher>();
+        matcher.Setup(item => item.Score(
+                It.IsAny<ParsedVideoIdentity>(), VideoMetadataMediaKind.Anime,
+                It.IsAny<IReadOnlyList<VideoMetadataCandidate>>()))
+            .Callback<ParsedVideoIdentity, VideoMetadataMediaKind, IReadOnlyList<VideoMetadataCandidate>>(
+                (parsed, _, _) => parsedIdentity = parsed)
+            .Returns([]);
+        var provider = new RecordingSearchProvider();
+        var coordinator = new VideoMetadataCoordinator(
+            repository.Object, matcher.Object, [provider], [],
+            NullLogger<VideoMetadataCoordinator>.Instance);
+
+        await coordinator.RefreshAssetAsync(assetId, allowNetwork: true, ct);
+
+        provider.Query!.ExternalIds.Should().Contain("anilist", "20987");
+        provider.Query.ExternalIds.Should().Contain("tmdb", "67126");
+        parsedIdentity!.ExternalIds.Should().ContainSingle();
+        parsedIdentity.ExternalIds.Should().Contain("anilist", "20987");
+        parsedIdentity.ExternalIds.Should().NotContainKey("tmdb");
+    }
+
+    [Fact]
+    public async Task UnnumberedSupplementalInAutoSource_RoutesThroughSeriesAncestor()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var sourceId = Guid.NewGuid();
+        var seriesId = Guid.NewGuid();
+        var seasonId = Guid.NewGuid();
+        var episodeId = Guid.NewGuid();
+        var assetId = Guid.NewGuid();
+        var source = new VideoCatalogSourceSnapshot(
+            sourceId, "Auto", @"C:\Library", @"C:\Library",
+            VideoLibraryMediaType.Auto, "ja-JP", "JP", ["anilist"], 1,
+            DateTimeOffset.UtcNow, null, null);
+        var series = new VideoCatalogNodeSnapshot(
+            seriesId, null, VideoCatalogNodeKind.Series, "作品", null, null, null,
+            2024, null, null, null, false, false, [],
+            ImmutableDictionary<string, string>.Empty);
+        var season = new VideoCatalogNodeSnapshot(
+            seasonId, seriesId, VideoCatalogNodeKind.Season, "Specials", null, null, null,
+            null, 0, null, null, true, false, [],
+            ImmutableDictionary<string, string>.Empty);
+        var supplemental = new VideoCatalogNodeSnapshot(
+            episodeId, seasonId, VideoCatalogNodeKind.Episode, "PV 01", null, null, null,
+            null, 0, null, null, true, false, [],
+            ImmutableDictionary<string, string>.Empty);
+        var asset = new VideoCatalogAssetSnapshot(
+            assetId, @"C:\Library\作品\PV\PV 01.mkv", VideoMediaAssetKind.LocalFile,
+            @"C:\Library\作品\PV\PV 01.mkv", "作品", "作品", 1,
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow,
+            VideoMediaAvailability.Available, null, null, null, null, null, null, null,
+            null, null, null, false, [], null, null, null, [sourceId], [episodeId], []);
+        var snapshot = VideoCatalogSnapshot.Empty() with
+        {
+            Sources = [source], Nodes = [series, season, supplemental], Assets = [asset],
+        };
+        var repository = new Mock<IVideoCatalogRepository>();
+        repository.Setup(item => item.GetSnapshotAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(snapshot);
+        repository.Setup(item => item.ReplaceMatchCandidatesAsync(
+                assetId, It.IsAny<IReadOnlyList<VideoMatchCandidateSnapshot>>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var matcher = new Mock<IVideoMetadataMatcher>();
+        matcher.Setup(item => item.Score(
+                It.IsAny<ParsedVideoIdentity>(), VideoMetadataMediaKind.Series,
+                It.IsAny<IReadOnlyList<VideoMetadataCandidate>>()))
+            .Returns([]);
+        var provider = new RecordingSearchProvider();
+        var coordinator = new VideoMetadataCoordinator(
+            repository.Object, matcher.Object, [provider], [],
+            NullLogger<VideoMetadataCoordinator>.Instance);
+
+        await coordinator.RefreshAssetAsync(assetId, allowNetwork: true, ct);
+
+        provider.Query.Should().NotBeNull();
+        provider.Query!.MediaKind.Should().Be(VideoMetadataMediaKind.Series);
+        provider.Query.Title.Should().Be("作品");
+        matcher.Verify(item => item.Score(
+            It.IsAny<ParsedVideoIdentity>(), VideoMetadataMediaKind.Series,
+            It.IsAny<IReadOnlyList<VideoMetadataCandidate>>()), Times.Once);
+    }
+
+    [Fact]
+    public void NeedsMetadata_UsesSeriesAncestorSnapshotForEpisodeAssets()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var seriesId = Guid.NewGuid();
+        var episodeId = Guid.NewGuid();
+        var asset = new VideoCatalogAssetSnapshot(
+            Guid.NewGuid(), @"C:\Anime\Show S01E01.mkv", VideoMediaAssetKind.LocalFile,
+            @"C:\Anime\Show S01E01.mkv", "Show", "Anime", 1,
+            now.AddDays(-2), now.AddDays(-3), now.AddDays(-2),
+            VideoMediaAvailability.Available, 1, 1, null, null, null, null, null,
+            null, null, null, false, [], null, null, null, [], [episodeId], []);
+        var series = new VideoCatalogNodeSnapshot(
+            seriesId, null, VideoCatalogNodeKind.Series, "Show", null, null, null,
+            2024, null, null, null, false, false, [],
+            ImmutableDictionary<string, string>.Empty.Add("anilist", "42"),
+            MetadataExpiresAt: now.AddDays(1));
+        var episode = new VideoCatalogNodeSnapshot(
+            episodeId, seriesId, VideoCatalogNodeKind.Episode, "Episode 1", null,
+            null, null, null, 1, 1, null, false, false, [],
+            ImmutableDictionary<string, string>.Empty);
+
+        VideoMetadataCoordinator.NeedsMetadata(
+                asset,
+                new[] { series, episode }.ToDictionary(node => node.Id),
+                now)
+            .Should().BeFalse("the series metadata snapshot is still fresh");
+
+        VideoMetadataCoordinator.NeedsMetadata(
+                asset,
+                new[] { series with { MetadataExpiresAt = now.AddMinutes(-1) }, episode }
+                    .ToDictionary(node => node.Id),
+                now)
+            .Should().BeTrue("an expired series owner must refresh its episode-backed assets");
+
+        VideoMetadataCoordinator.NeedsMetadata(
+                asset,
+                new[] { series with { MetadataExpiresAt = null }, episode }
+                    .ToDictionary(node => node.Id),
+                lastCompletedRefresh: null)
+            .Should().BeTrue("an explicit ID without a fetched snapshot still needs its first refresh");
     }
 
     private sealed class SearchConcurrencyProbe

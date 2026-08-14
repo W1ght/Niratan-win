@@ -139,7 +139,12 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         if (IsAudio(asset.Location))
             return new VideoMetadataRefreshResult(assetId, false, false, null, null, []);
 
-        var nodes = snapshot.Nodes.Where(node => asset.NodeIds.Contains(node.Id)).ToList();
+        var nodesById = snapshot.Nodes.ToDictionary(node => node.Id);
+        var nodes = asset.NodeIds
+            .Select(id => nodesById.GetValueOrDefault(id))
+            .Where(node => node != null)
+            .Select(node => node!)
+            .ToList();
         var route = ResolveRoute(snapshot, asset, nodes);
         if (route.MediaKind == null)
         {
@@ -158,7 +163,18 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         var identityNode = route.MediaKind is VideoMetadataMediaKind.Series or VideoMetadataMediaKind.Anime
             ? FindAncestor(snapshot, primaryNode, VideoCatalogNodeKind.Series) ?? primaryNode
             : primaryNode;
-        var externalIds = identityNode?.ExternalIds ?? ImmutableDictionary<string, string>.Empty;
+        var queryExternalIds = identityNode?.ExternalIds ?? ImmutableDictionary<string, string>.Empty;
+        // Provider-discovered IDs are useful query hints, but only individually locked IDs are
+        // explicit identity evidence. A node-level lock must not promote every provider ID on
+        // that node into a permanent identity lock.
+        var trustedIdentityExternalIds = identityNode == null
+            ? ImmutableDictionary<string, string>.Empty
+            : queryExternalIds
+                .Where(pair => identityNode.IdentityLockedProviders.Contains(pair.Key))
+                .ToImmutableDictionary(
+                    pair => pair.Key,
+                    pair => pair.Value,
+                    StringComparer.OrdinalIgnoreCase);
         var query = new VideoMetadataSearchQuery(
             identityNode?.PrimaryTitle ?? asset.Title,
             route.MediaKind.Value,
@@ -168,7 +184,7 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
             primaryNode?.AbsoluteEpisodeNumber,
             route.Language,
             route.Region,
-            externalIds);
+            queryExternalIds);
         var candidates = new List<VideoMetadataCandidate>();
         var errors = new List<string>();
         var searchable = route.ProviderIds
@@ -218,7 +234,7 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         }
 
         Publish(assetId, VideoMetadataRefreshStage.Matching, searchable.Length, searchable.Length);
-        var parsed = ToParsedIdentity(asset, primaryNode, externalIds) with
+        var parsed = ToParsedIdentity(asset, primaryNode, trustedIdentityExternalIds) with
         {
             NormalizedTitle = identityNode?.PrimaryTitle ?? asset.Title,
             Year = identityNode?.Year ?? primaryNode?.Year,
@@ -273,12 +289,24 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
                 errors.Add($"{detailsProvider.DisplayName}: {ex.Message}");
             }
         }
-        await _repository.ApplyMetadataMatchAsync(
+        var applied = await _repository.ApplyMetadataMatchAsync(
             assetId,
             primaryCandidate,
             details,
             accepted.IsIdentityLocked,
+            preserveExistingHierarchy: true,
             ct);
+        if (!applied)
+        {
+            Publish(assetId, VideoMetadataRefreshStage.Completed, 1, 1, primaryCandidate.ProviderId);
+            return new VideoMetadataRefreshResult(
+                assetId,
+                false,
+                true,
+                null,
+                errors.Count == 0 ? null : string.Join(Environment.NewLine, errors),
+                scored);
+        }
         Publish(assetId, VideoMetadataRefreshStage.Artwork, 0, 1, primaryCandidate.ProviderId);
         try
         {
@@ -304,7 +332,7 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         VideoMetadataMatchScore accepted,
         IReadOnlyList<VideoMetadataMatchScore> scored)
     {
-        if (accepted.IsIdentityLocked || routeKind != VideoMetadataMediaKind.Anime)
+        if (routeKind != VideoMetadataMediaKind.Anime)
             return accepted.Candidate;
         var detailPriority = new[] { "tmdb", "anilist", "bangumi", "tvmaze" };
         var richCandidate = scored
@@ -498,20 +526,19 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         }
     }
 
-    private static bool NeedsMetadata(
+    internal static bool NeedsMetadata(
         VideoCatalogAssetSnapshot asset,
         IReadOnlyDictionary<Guid, VideoCatalogNodeSnapshot> nodesById,
         DateTimeOffset? lastCompletedRefresh)
     {
-        var nodes = asset.NodeIds
+        var directNodes = asset.NodeIds
             .Select(id => nodesById.GetValueOrDefault(id))
             .Where(node => node != null)
             .Select(node => node!)
             .ToArray();
-        var unmatched = nodes.Length == 0
-                        || nodes.All(node => node.Kind == VideoCatalogNodeKind.Unmatched
-                                             || node.ExternalIds.Count == 0);
-        if (unmatched)
+        var nodes = CollectAncestry(directNodes, nodesById);
+        var hasMetadataSnapshot = nodes.Any(node => node.MetadataExpiresAt.HasValue);
+        if (!hasMetadataSnapshot)
         {
             // A completed source job is also the negative-result cache. Do not search
             // unchanged unresolved assets again on every Video navigation; a new or
@@ -522,6 +549,26 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         }
         return nodes.Any(node => node.MetadataExpiresAt is { } expiresAt
                                  && expiresAt <= DateTimeOffset.UtcNow);
+    }
+
+    private static ImmutableArray<VideoCatalogNodeSnapshot> CollectAncestry(
+        IEnumerable<VideoCatalogNodeSnapshot> directNodes,
+        IReadOnlyDictionary<Guid, VideoCatalogNodeSnapshot> nodesById)
+    {
+        var result = ImmutableArray.CreateBuilder<VideoCatalogNodeSnapshot>();
+        var seen = new HashSet<Guid>();
+        foreach (var directNode in directNodes)
+        {
+            VideoCatalogNodeSnapshot? current = directNode;
+            while (current != null && seen.Add(current.Id))
+            {
+                result.Add(current);
+                current = current.ParentId is { } parentId
+                    ? nodesById.GetValueOrDefault(parentId)
+                    : null;
+            }
+        }
+        return result.ToImmutable();
     }
 
     private static string? CompactErrors(IEnumerable<string> errors)
@@ -719,6 +766,7 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
             preview.Candidate,
             details,
             lockIdentity: true,
+            preserveExistingHierarchy: false,
             ct);
     }
 
@@ -733,16 +781,19 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
             .ThenBy(item => item!.CreatedAt)
             .FirstOrDefault();
         var type = source?.MediaType ?? VideoLibraryMediaType.Auto;
-        var kind = type switch
-        {
-            VideoLibraryMediaType.Movie => VideoMetadataMediaKind.Movie,
-            VideoLibraryMediaType.Anime => VideoMetadataMediaKind.Anime,
-            VideoLibraryMediaType.JapaneseDramaTv => VideoMetadataMediaKind.Series,
-            _ when nodes.Any(node => node.AbsoluteEpisodeNumber.HasValue) => VideoMetadataMediaKind.Anime,
-            _ when asset.EpisodeStart.HasValue || nodes.Any(node => node.EpisodeNumber.HasValue) => VideoMetadataMediaKind.Series,
-            _ when nodes.Any(node => node.Year.HasValue) => VideoMetadataMediaKind.Movie,
-            _ => (VideoMetadataMediaKind?)null,
-        };
+        var evidenceNodes = CollectRouteEvidenceNodes(snapshot, nodes);
+        var hasAnimeIdentity = evidenceNodes
+            .SelectMany(node => node.ExternalIds.Keys)
+            .Any(providerId => providerId.Equals("anidb", StringComparison.OrdinalIgnoreCase)
+                               || providerId.Equals("anilist", StringComparison.OrdinalIgnoreCase)
+                               || providerId.Equals("mal", StringComparison.OrdinalIgnoreCase));
+        var kind = ResolveMediaKind(
+            type,
+            hasAnimeIdentity,
+            evidenceNodes.Any(node => node.AbsoluteEpisodeNumber.HasValue),
+            evidenceNodes.Any(node => node.Kind is VideoCatalogNodeKind.Series or VideoCatalogNodeKind.Season),
+            asset.EpisodeStart.HasValue || evidenceNodes.Any(node => node.EpisodeNumber.HasValue),
+            evidenceNodes.Any(node => node.Year.HasValue));
         var defaults = type switch
         {
             VideoLibraryMediaType.Anime => new[] { "anilist", "anidb", "bangumi", "tmdb" },
@@ -758,6 +809,46 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
             source?.Language ?? "ja-JP",
             source?.Region ?? "JP",
             source is { ProviderOrder.Length: > 0 } ? source.ProviderOrder : defaults.ToImmutableArray());
+    }
+
+    internal static VideoMetadataMediaKind? ResolveMediaKind(
+        VideoLibraryMediaType sourceType,
+        bool hasAnimeExternalIdentity,
+        bool hasAbsoluteEpisodeEvidence,
+        bool hasSeriesHierarchyEvidence,
+        bool hasEpisodeEvidence,
+        bool hasYearEvidence) => sourceType switch
+    {
+        VideoLibraryMediaType.Movie => VideoMetadataMediaKind.Movie,
+        VideoLibraryMediaType.Anime => VideoMetadataMediaKind.Anime,
+        VideoLibraryMediaType.JapaneseDramaTv => VideoMetadataMediaKind.Series,
+        _ when hasAnimeExternalIdentity => VideoMetadataMediaKind.Anime,
+        _ when hasAbsoluteEpisodeEvidence => VideoMetadataMediaKind.Anime,
+        _ when hasSeriesHierarchyEvidence => VideoMetadataMediaKind.Series,
+        _ when hasEpisodeEvidence => VideoMetadataMediaKind.Series,
+        _ when hasYearEvidence => VideoMetadataMediaKind.Movie,
+        _ => null,
+    };
+
+    internal static ImmutableArray<VideoCatalogNodeSnapshot> CollectRouteEvidenceNodes(
+        VideoCatalogSnapshot snapshot,
+        IReadOnlyList<VideoCatalogNodeSnapshot> directNodes)
+    {
+        var byId = snapshot.Nodes.ToDictionary(node => node.Id);
+        var evidence = ImmutableArray.CreateBuilder<VideoCatalogNodeSnapshot>();
+        var seen = new HashSet<Guid>();
+        foreach (var directNode in directNodes)
+        {
+            VideoCatalogNodeSnapshot? current = directNode;
+            while (current != null && seen.Add(current.Id))
+            {
+                evidence.Add(current);
+                current = current.ParentId is { } parentId
+                    ? byId.GetValueOrDefault(parentId)
+                    : null;
+            }
+        }
+        return evidence.ToImmutable();
     }
 
     private static ParsedVideoIdentity ToParsedIdentity(

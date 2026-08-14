@@ -106,6 +106,14 @@ public sealed class ProfileSettingsStore
             ct);
 
         var appSettings = Clone(_settings.Current);
+        var unifiedTheme = readerSettings.ResolveUnifiedTheme(appSettings.Theme);
+        readerSettings.Theme = unifiedTheme;
+        if (unifiedTheme == Niratan.Enums.ReaderTheme.Custom
+            && readerSettings.CustomInterfaceTheme is null)
+        {
+            readerSettings.CustomInterfaceTheme = appSettings.Theme;
+        }
+        appSettings.Theme = readerSettings.ResolveInterfaceTheme(appSettings.Theme);
         appSettings.DictionaryDisplaySettings = CloneDictionaryDisplaySettings(dictionarySettings);
         appSettings.AnkiSettings = AnkiSettings.WithGlobalTransportFrom(
             _settings.Current.AnkiSettings,

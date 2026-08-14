@@ -104,7 +104,11 @@ public sealed record VideoCatalogNodeSnapshot(
     ImmutableArray<string> Tags = default,
     ImmutableArray<string> Studios = default,
     ImmutableArray<VideoPersonCredit> People = default,
-    ImmutableArray<VideoRelatedItem> RelatedItems = default);
+    ImmutableArray<VideoRelatedItem> RelatedItems = default)
+{
+    public ImmutableHashSet<string> IdentityLockedProviders { get; init; } =
+        ImmutableHashSet<string>.Empty.WithComparer(StringComparer.OrdinalIgnoreCase);
+}
 
 public sealed record VideoCatalogAssetSnapshot(
     Guid Id,
@@ -253,7 +257,8 @@ public sealed record VideoScanAsset(
     VideoCatalogAssetUpsert Asset,
     ParsedVideoIdentity ParsedIdentity,
     LocalVideoMetadata? LocalMetadata = null,
-    bool SkipMetadataProcessing = false);
+    bool SkipMetadataProcessing = false,
+    bool RebuildHierarchy = false);
 
 public sealed record VideoScanBatch(
     Guid SourceId,

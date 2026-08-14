@@ -7,6 +7,31 @@ namespace Niratan.Tests.Services.Anki;
 public class MiningContextSelectionResolverTests
 {
     [Fact]
+    public void Clone_CreatesAnAttemptLocalMutableContext()
+    {
+        var source = new AnkiMiningContext
+        {
+            Sentence = "source sentence",
+            VideoScreenshotPath = "source.png",
+            VideoScreenshotTag = "source-tag",
+            SasayakiAudioPath = "source.mp3",
+            SasayakiAudioTag = "source-audio-tag",
+        };
+
+        var clone = MiningContextSelectionResolver.Clone(source);
+        clone.VideoScreenshotPath = "attempt.png";
+        clone.VideoScreenshotTag = "attempt-tag";
+        clone.SasayakiAudioPath = "attempt.mp3";
+        clone.SasayakiAudioTag = "attempt-audio-tag";
+
+        clone.Should().NotBeSameAs(source);
+        source.VideoScreenshotPath.Should().Be("source.png");
+        source.VideoScreenshotTag.Should().Be("source-tag");
+        source.SasayakiAudioPath.Should().Be("source.mp3");
+        source.SasayakiAudioTag.Should().Be("source-audio-tag");
+    }
+
+    [Fact]
     public void Apply_JoinsNovelSentencesAndRebasesTargetOffset()
     {
         var source = new AnkiMiningContext

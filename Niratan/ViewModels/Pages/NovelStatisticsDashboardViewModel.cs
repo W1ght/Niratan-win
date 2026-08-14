@@ -12,17 +12,25 @@ using Niratan.Models.Novel;
 using Niratan.Models.Settings;
 using Niratan.Services.Novels;
 using Niratan.Services.Settings;
+using Niratan.ViewModels.Components;
 
 namespace Niratan.ViewModels.Pages;
 
 public partial class NovelStatisticsDashboardViewModel : ObservableObject
 {
+    private const int BookRankingPageSize = 12;
+
     private readonly INovelStatisticsDashboardService _dashboardService;
     private readonly ISettingsService _settingsService;
+    private readonly INovelStatisticsSidecarService? _statisticsSidecarService;
+    private readonly INovelStatisticsMutationCoordinator? _statisticsMutationCoordinator;
     private readonly TimeProvider _timeProvider;
+    private readonly NovelStatisticsBookCoverCache _bookCoverCache;
     private NovelStatisticsDashboardSnapshot? _snapshot;
     private IReadOnlyList<NovelStatisticsDateRange> _selectableRanges = [];
     private NovelShelfState _shelfState = new([], []);
+    private IReadOnlyDictionary<string, NovelBook> _booksById =
+        new Dictionary<string, NovelBook>(StringComparer.Ordinal);
     private bool _isInitializing = true;
     private bool _isUpdatingProjection;
     private bool _isUpdatingRangeState;
@@ -33,7 +41,22 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
     public NovelStatisticsDashboardViewModel(
         INovelStatisticsDashboardService dashboardService,
         ISettingsService settingsService)
-        : this(dashboardService, settingsService, TimeProvider.System)
+        : this(dashboardService, settingsService, null, TimeProvider.System)
+    {
+    }
+
+    public NovelStatisticsDashboardViewModel(
+        INovelStatisticsDashboardService dashboardService,
+        ISettingsService settingsService,
+        INovelStatisticsSidecarService statisticsSidecarService,
+        INovelStatisticsMutationCoordinator? statisticsMutationCoordinator = null)
+        : this(
+            dashboardService,
+            settingsService,
+            statisticsSidecarService,
+            TimeProvider.System,
+            new NovelStatisticsBookCoverCache(),
+            statisticsMutationCoordinator)
     {
     }
 
@@ -41,10 +64,38 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
         INovelStatisticsDashboardService dashboardService,
         ISettingsService settingsService,
         TimeProvider timeProvider)
+        : this(dashboardService, settingsService, null, timeProvider)
+    {
+    }
+
+    internal NovelStatisticsDashboardViewModel(
+        INovelStatisticsDashboardService dashboardService,
+        ISettingsService settingsService,
+        INovelStatisticsSidecarService? statisticsSidecarService,
+        TimeProvider timeProvider)
+        : this(
+            dashboardService,
+            settingsService,
+            statisticsSidecarService,
+            timeProvider,
+            new NovelStatisticsBookCoverCache())
+    {
+    }
+
+    internal NovelStatisticsDashboardViewModel(
+        INovelStatisticsDashboardService dashboardService,
+        ISettingsService settingsService,
+        INovelStatisticsSidecarService? statisticsSidecarService,
+        TimeProvider timeProvider,
+        NovelStatisticsBookCoverCache bookCoverCache,
+        INovelStatisticsMutationCoordinator? statisticsMutationCoordinator = null)
     {
         _dashboardService = dashboardService;
         _settingsService = settingsService;
+        _statisticsSidecarService = statisticsSidecarService;
+        _statisticsMutationCoordinator = statisticsMutationCoordinator;
         _timeProvider = timeProvider;
+        _bookCoverCache = bookCoverCache;
 
         var settings = _settingsService.Current.StatisticsSettings;
         SelectedDailyTargetType = settings.DailyTargetType;
@@ -143,6 +194,12 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
         NovelStatisticsBookRankingMetric.Characters;
 
     [ObservableProperty]
+    public partial int VisibleBookRankingLimit { get; private set; } = BookRankingPageSize;
+
+    [ObservableProperty]
+    public partial bool CanShowMoreBookRankings { get; private set; }
+
+    [ObservableProperty]
     public partial StatisticsDailyTargetType SelectedDailyTargetType { get; set; }
 
     [ObservableProperty]
@@ -234,7 +291,7 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
     public partial ObservableCollection<NovelStatisticsCalendarDayDisplay> CalendarDays { get; set; } = [];
 
     [ObservableProperty]
-    public partial ObservableCollection<NovelStatisticsBookRankingDisplayRow> BookRankingRows { get; set; } = [];
+    public partial ObservableCollection<NovelStatisticsBookRankingItemViewModel> BookRankingRows { get; set; } = [];
 
     [ObservableProperty]
     public partial ObservableCollection<NovelStatisticsShelfComparisonDisplayRow> ShelfComparisonRows { get; set; } = [];
@@ -270,6 +327,11 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
         var generation = ++_activationGeneration;
         _uiContext = SynchronizationContext.Current;
         _shelfState = shelfState;
+        _bookCoverCache.Clear();
+        _booksById = books
+            .GroupBy(book => book.Id, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        ResetBookRankingPagination();
         _dashboardService.SnapshotRefreshed -= OnSnapshotRefreshed;
         _dashboardService.SnapshotRefreshed += OnSnapshotRefreshed;
         IsActive = true;
@@ -476,18 +538,24 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
             day.Date >= range.Start && day.Date <= range.End,
             day.IsToday)));
 
-        var ranking = NovelStatisticsDashboardCalculator.BookRankingRows(
+        var rankingCandidates = NovelStatisticsDashboardCalculator.BookRankingRows(
             snapshot.Days,
             range,
-            SelectedRankingMetric);
+            SelectedRankingMetric,
+            VisibleBookRankingLimit + 1);
+        CanShowMoreBookRankings = rankingCandidates.Count > VisibleBookRankingLimit;
+        var ranking = rankingCandidates
+            .Take(VisibleBookRankingLimit)
+            .ToArray();
         var rankingValues = ranking.Select(RankingRawValue).ToArray();
         var rankingMaximum = Math.Max(rankingValues.DefaultIfEmpty().Max(), 1);
         BookRankingRows = new(ranking.Select((row, index) =>
-            new NovelStatisticsBookRankingDisplayRow(
-                row.Id,
+            new NovelStatisticsBookRankingItemViewModel(
+                ResolveRankingBook(row, snapshot),
                 row.Title,
                 FormatRankingValue(row, SelectedRankingMetric),
-                Math.Clamp(rankingValues[index] / rankingMaximum, 0, 1))));
+                Math.Clamp(rankingValues[index] / rankingMaximum, 0, 1),
+                _bookCoverCache)));
 
         var shelves = NovelStatisticsDashboardCalculator.ShelfComparisonRows(
             snapshot,
@@ -525,6 +593,7 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
 
     partial void OnSelectedRangeModeChanged(NovelStatisticsRangeMode value)
     {
+        ResetBookRankingPagination();
         _isUpdatingProjection = true;
         try
         {
@@ -545,6 +614,7 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
         if (_isUpdatingRangeState)
             return;
 
+        ResetBookRankingPagination();
         _isUpdatingProjection = true;
         try
         {
@@ -559,7 +629,256 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
 
     partial void OnSelectedTrendGrainChanged(NovelStatisticsTrendGrain value) => Recalculate();
     partial void OnSelectedTrendMetricChanged(NovelStatisticsTrendMetric value) => Recalculate();
-    partial void OnSelectedRankingMetricChanged(NovelStatisticsBookRankingMetric value) => Recalculate();
+    partial void OnSelectedRankingMetricChanged(NovelStatisticsBookRankingMetric value)
+    {
+        ResetBookRankingPagination();
+        Recalculate();
+    }
+
+    public void ShowMoreBookRankings()
+    {
+        if (!CanShowMoreBookRankings)
+            return;
+
+        VisibleBookRankingLimit += BookRankingPageSize;
+        Recalculate();
+    }
+
+    private void ResetBookRankingPagination() =>
+        VisibleBookRankingLimit = BookRankingPageSize;
+
+    public async Task<NovelStatisticsBookDetailViewModel?> LoadBookStatisticsAsync(
+        string bookId,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(bookId)
+            || !_booksById.TryGetValue(bookId, out var book))
+        {
+            return null;
+        }
+
+        var rankingItem = BookRankingRows.FirstOrDefault(row => row.Id == bookId)
+            ?? new NovelStatisticsBookRankingItemViewModel(
+                book,
+                book.Title,
+                string.Empty,
+                0,
+                _bookCoverCache);
+        IReadOnlyList<NovelReadingStatistic> statistics;
+        string? errorMessage = null;
+        if (_statisticsSidecarService != null
+            && !string.IsNullOrWhiteSpace(book.ExtractedPath))
+        {
+            var result = await _statisticsSidecarService.LoadWithStatusAsync(
+                book.ExtractedPath,
+                ct);
+            statistics = result.Statistics;
+            if (result.Status is NovelStatisticsSidecarLoadStatus.Corrupt
+                or NovelStatisticsSidecarLoadStatus.Unavailable)
+            {
+                errorMessage = ResourceStringHelper.GetString(
+                    "NovelStatisticsBookDetailUnavailable",
+                    "This book's statistics could not be read. The sidecar was left unchanged.");
+            }
+        }
+        else
+        {
+            statistics = StatisticsFromSnapshot(bookId, book.Title);
+        }
+
+        var visible = NovelStatisticsEditor.Visible(statistics);
+        var totalCharacters = visible.Sum(item => item.CharactersRead);
+        var totalDuration = visible.Sum(item => item.ReadingTime);
+        var speedSamples = visible
+            .Where(item => item.CharactersRead > 0 && item.ReadingTime >= 60)
+            .ToArray();
+        var speedCharacters = speedSamples.Sum(item => item.CharactersRead);
+        var speedDuration = speedSamples.Sum(item => item.ReadingTime);
+        var averageSpeed = speedCharacters > 0 && speedDuration > 0
+            ? (int?)Math.Round(speedCharacters / speedDuration * 3600)
+            : null;
+        var days = visible.Select(item =>
+        {
+            var speed = item.CharactersRead > 0 && item.ReadingTime >= 60
+                ? (int?)Math.Round(item.CharactersRead / item.ReadingTime * 3600)
+                : null;
+            var dateText = NovelStatisticsBookDetailViewModel.FormatDate(item.DateKey);
+            var charactersText = FormatCharacters(item.CharactersRead);
+            var durationText = FormatDuration(item.ReadingTime);
+            var speedText = FormatSpeed(speed);
+            return new NovelStatisticsBookDayDisplay(
+                item.DateKey,
+                dateText,
+                item.CharactersRead,
+                item.ReadingTime,
+                charactersText,
+                durationText,
+                speedText,
+                ResourceStringHelper.FormatString(
+                    "NovelStatisticsBookDetailDayAccessibleFormat",
+                    "{0}, {1} characters, {2}, {3}",
+                    dateText,
+                    charactersText,
+                    durationText,
+                    speedText));
+        }).ToArray();
+
+        return new NovelStatisticsBookDetailViewModel(
+            rankingItem,
+            FormatCharacters(totalCharacters),
+            FormatDuration(totalDuration),
+            FormatSpeed(averageSpeed),
+            ResourceStringHelper.FormatString(
+                "NovelStatisticsBookDetailActiveDaysFormat",
+                "{0} days",
+                days.Length),
+            days,
+            errorMessage);
+    }
+
+    public Task<NovelStatisticsBookDetailViewModel?> UpdateBookStatisticsDayAsync(
+        string bookId,
+        string dateKey,
+        int charactersRead,
+        int hours,
+        int minutes,
+        CancellationToken ct = default)
+    {
+        var safeHours = Math.Max(hours, 0);
+        var safeMinutes = Math.Clamp(minutes, 0, 59);
+        var readingTime = (safeHours * 60d + safeMinutes) * 60d;
+        return MutateBookStatisticsAsync(
+            bookId,
+            (statistics, book, modifiedAt) => NovelStatisticsEditor.Update(
+                statistics,
+                dateKey,
+                book.Title,
+                Math.Max(charactersRead, 0),
+                readingTime,
+                modifiedAt),
+            ct);
+    }
+
+    public Task<NovelStatisticsBookDetailViewModel?> DeleteBookStatisticsDayAsync(
+        string bookId,
+        string dateKey,
+        CancellationToken ct = default) =>
+        MutateBookStatisticsAsync(
+            bookId,
+            (statistics, book, modifiedAt) => NovelStatisticsEditor.DeleteDay(
+                statistics,
+                dateKey,
+                book.Title,
+                modifiedAt),
+            ct);
+
+    public Task<NovelStatisticsBookDetailViewModel?> DeleteAllBookStatisticsAsync(
+        string bookId,
+        CancellationToken ct = default) =>
+        MutateBookStatisticsAsync(
+            bookId,
+            (statistics, book, modifiedAt) => NovelStatisticsEditor.DeleteAll(
+                statistics,
+                book.Title,
+                modifiedAt),
+            ct);
+
+    private async Task<NovelStatisticsBookDetailViewModel?> MutateBookStatisticsAsync(
+        string bookId,
+        Func<
+            IReadOnlyList<NovelReadingStatistic>,
+            NovelBook,
+            long,
+            IReadOnlyList<NovelReadingStatistic>> transform,
+        CancellationToken ct)
+    {
+        if (_statisticsSidecarService == null
+            || string.IsNullOrWhiteSpace(bookId)
+            || !_booksById.TryGetValue(bookId, out var book)
+            || string.IsNullOrWhiteSpace(book.ExtractedPath))
+        {
+            return null;
+        }
+
+        async Task SaveMutationAsync(CancellationToken mutationCt)
+        {
+            var current = await _statisticsSidecarService.LoadWithStatusAsync(
+                book.ExtractedPath,
+                mutationCt);
+            if (current.Status is NovelStatisticsSidecarLoadStatus.Corrupt
+                or NovelStatisticsSidecarLoadStatus.Unavailable)
+            {
+                throw new InvalidOperationException(ResourceStringHelper.GetString(
+                    "NovelStatisticsBookDetailUnavailable",
+                    "This book's statistics could not be read. The sidecar was left unchanged."));
+            }
+
+            var updated = transform(
+                current.Statistics,
+                book,
+                _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
+            await _statisticsSidecarService.SaveAsync(
+                book.ExtractedPath,
+                updated,
+                mutationCt);
+        }
+
+        if (_statisticsMutationCoordinator != null)
+        {
+            await _statisticsMutationCoordinator.ExecuteAsync(
+                bookId,
+                SaveMutationAsync,
+                ct);
+        }
+        else
+        {
+            await SaveMutationAsync(ct);
+        }
+
+        await RefreshAfterBookStatisticsMutationAsync(ct);
+        return await LoadBookStatisticsAsync(bookId, ct);
+    }
+
+    private async Task RefreshAfterBookStatisticsMutationAsync(CancellationToken ct)
+    {
+        if (!IsActive)
+            return;
+
+        var generation = _activationGeneration;
+        var snapshot = await _dashboardService.LoadSnapshotAsync(
+            _booksById.Values.ToArray(),
+            ct);
+        if (IsActive && generation == _activationGeneration)
+            ApplySnapshot(snapshot);
+    }
+
+    private IReadOnlyList<NovelReadingStatistic> StatisticsFromSnapshot(
+        string bookId,
+        string title)
+    {
+        if (_snapshot == null)
+            return [];
+
+        return _snapshot.Days
+            .Select(day =>
+            {
+                var contributions = day.BookContributions
+                    .Where(item => item.BookId == bookId)
+                    .ToArray();
+                return new NovelReadingStatistic(
+                    title,
+                    day.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    contributions.Sum(item => item.Characters),
+                    contributions.Sum(item => item.ReadingTime),
+                    0,
+                    0,
+                    0,
+                    0,
+                    0);
+            })
+            .Where(item => item.CharactersRead > 0 || item.ReadingTime > 0)
+            .ToArray();
+    }
 
     partial void OnSelectedCalendarDayChanged(NovelStatisticsCalendarDayDisplay? value)
     {
@@ -578,6 +897,7 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
             {
                 _isUpdatingRangeState = false;
             }
+            ResetBookRankingPagination();
             Recalculate();
             return;
         }
@@ -708,6 +1028,7 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
             {
                 EnableStatistics = current.EnableStatistics,
                 AutostartMode = current.AutostartMode,
+                ResetTimeMinutes = current.ResetTimeMinutes,
                 DailyTargetType = SelectedDailyTargetType,
                 DailyCharacterTarget = DailyCharacterTarget,
                 DailyDurationTargetMinutes = DailyDurationTargetMinutes,
@@ -733,7 +1054,10 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
     }
 
     private DateOnly TodayDate() =>
-        DateOnly.FromDateTime(_timeProvider.GetLocalNow().DateTime);
+        NovelStatisticsDayBoundary.ReportingDate(
+            _timeProvider.GetUtcNow(),
+            _settingsService.Current.StatisticsSettings.ResetTimeMinutes,
+            _timeProvider.LocalTimeZone);
 
     private static string FormatRangeTitle(
         NovelStatisticsRangeMode mode,
@@ -763,6 +1087,22 @@ public partial class NovelStatisticsDashboardViewModel : ObservableObject
             NovelStatisticsBookRankingMetric.Speed => row.AverageSpeedPerHour ?? 0,
             _ => row.Characters,
         };
+
+    private NovelBook ResolveRankingBook(
+        NovelStatisticsBookRankingRow row,
+        NovelStatisticsDashboardSnapshot snapshot)
+    {
+        if (_booksById.TryGetValue(row.Id, out var book))
+            return book;
+
+        var record = snapshot.Books.FirstOrDefault(item => item.Id == row.Id);
+        return new NovelBook
+        {
+            Id = row.Id,
+            Title = row.Title,
+            CoverPath = record?.CoverPath,
+        };
+    }
 
     private string BuildTrendToolTip(NovelStatisticsTrendPoint point)
     {

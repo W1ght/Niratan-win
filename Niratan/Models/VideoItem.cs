@@ -26,6 +26,9 @@ public class VideoItem
     public Guid? CatalogNodeId { get; set; }
     public Guid? CatalogSeriesNodeId { get; set; }
     public string? CatalogSeriesTitle { get; set; }
+    public string? CatalogSeriesOriginalTitle { get; set; }
+    public string? CatalogSeriesOverview { get; set; }
+    public int? CatalogSeriesReleaseYear { get; set; }
     public VideoCatalogNodeKind CatalogNodeKind { get; set; } = VideoCatalogNodeKind.Unmatched;
     public VideoLibraryMediaType LibraryMediaType { get; set; } = VideoLibraryMediaType.Auto;
     public string? OriginalTitle { get; set; }
@@ -34,6 +37,7 @@ public class VideoItem
     public int? ReleaseYear { get; set; }
     public int? SeasonNumber { get; set; }
     public int? EpisodeNumber { get; set; }
+    public int? EpisodeEnd { get; set; }
     public int? AbsoluteEpisodeNumber { get; set; }
     public bool IsSpecialEpisode { get; set; }
     public bool IdentityLocked { get; set; }
@@ -78,10 +82,26 @@ public class VideoItem
     public string CatalogNumberingText => CatalogNodeKind switch
     {
         VideoCatalogNodeKind.Episode when SeasonNumber.HasValue && EpisodeNumber.HasValue =>
-            $"S{SeasonNumber:00}E{EpisodeNumber:00}",
-        VideoCatalogNodeKind.Episode when AbsoluteEpisodeNumber.HasValue => $"#{AbsoluteEpisodeNumber}",
+            FormatSeasonEpisodeNumber(),
+        VideoCatalogNodeKind.Episode when AbsoluteEpisodeNumber.HasValue => FormatAbsoluteEpisodeNumber(),
         _ => ReleaseYear?.ToString() ?? "",
     };
+
+    private string FormatSeasonEpisodeNumber()
+    {
+        var start = EpisodeNumber!.Value;
+        return EpisodeEnd is > 0 && EpisodeEnd.Value > start
+            ? $"S{SeasonNumber:00}E{start:00}–E{EpisodeEnd:00}"
+            : $"S{SeasonNumber:00}E{start:00}";
+    }
+
+    private string FormatAbsoluteEpisodeNumber()
+    {
+        var start = AbsoluteEpisodeNumber!.Value;
+        return EpisodeEnd is > 0 && EpisodeEnd.Value > start
+            ? $"#{start}–{EpisodeEnd}"
+            : $"#{start}";
+    }
 
     public string ExternalIdsText =>
         string.Join(", ", ExternalIds.Select(pair => $"{pair.Key}: {pair.Value}"));

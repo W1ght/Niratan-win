@@ -53,6 +53,19 @@ public sealed class NovelReaderSasayakiAssetTests
     }
 
     [Fact]
+    public void DirectMiningAudio_IsAwaitedBeforeReturningAnkiTag()
+    {
+        var code = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+
+        code.Should().Contain("var storedFilename = await GenerateDirectSasayakiMiningAudioAsync(");
+        code.Should().Contain("return AnkiDirectMediaStore.GenerateAsync(");
+        code.Should().Contain("AudioClipTag: AnkiMediaMarkup.ForFieldPlaceholder(storedFilename)");
+        code.Should().NotContain("_ = GenerateDirectSasayakiMiningAudioAsync(");
+        code.Should().NotContain("private static void ReplaceFile(");
+    }
+
+    [Fact]
     public void LyricsLookup_UsesAdaptiveHitBoundsAndInvalidatesPendingRequestOnMiss()
     {
         var controlCode = File.ReadAllText(

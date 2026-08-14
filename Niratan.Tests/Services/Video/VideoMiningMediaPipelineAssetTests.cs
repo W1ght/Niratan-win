@@ -28,13 +28,22 @@ public class VideoMiningMediaPipelineAssetTests
     }
 
     [Fact]
-    public void DirectMediaGeneration_IsAwaitedAndFailuresBlockMining()
+    public void DirectMediaGeneration_ReturnsDeterministicTagsAndPublishesInBackground()
     {
         var windowCode = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Video", "VideoPlayerWindow.xaml.cs"));
         var popupCode = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Dictionary", "DictionaryLookupPopup.cs"));
 
         windowCode.Should().Contain("return await GenerateDirectVideoMiningMediaAsync(");
         windowCode.Should().NotContain("_ = GenerateDirectVideoMiningMediaAsync(");
+        windowCode.Should().Contain("AnkiDirectMediaStore.GenerateAsync(");
+        windowCode.Should().Contain("ObserveDirectVideoMediaWriteAsync(");
+        windowCode.Should().Contain("screenshotTag = AnkiMediaMarkup.ForFieldPlaceholder(screenshotFilename);");
+        windowCode.Should().Contain("audioTag = AnkiMediaMarkup.ForFieldPlaceholder(audioFilename);");
+        windowCode.Should().Contain("CancellationToken.None");
+        windowCode.Should().Contain("await Task.WhenAll(screenshotTask, audioClipTask);");
+        windowCode.Should().NotContain("storedScreenshotFilename");
+        windowCode.Should().NotContain("storedAudioFilename");
+        windowCode.Should().NotContain("private static void ReplaceFile(");
         windowCode.Should().Contain("ScreenshotErrorMessage: screenshotError");
         popupCode.Should().Contain("result.ScreenshotErrorMessage ?? \"Unable to capture the video screenshot.\"");
     }

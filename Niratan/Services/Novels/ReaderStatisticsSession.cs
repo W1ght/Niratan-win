@@ -7,10 +7,13 @@ using Niratan.Models.Novel;
 
 namespace Niratan.Services.Novels;
 
-public sealed class ReaderStatisticsSession : IReaderStatisticsSession
+public sealed class ReaderStatisticsSession
+    : IReaderStatisticsSession,
+      IExternalMutableReaderStatisticsSession
 {
     private readonly INovelStatisticsSidecarService _sidecars;
     private readonly TimeProvider _timeProvider;
+    private readonly Func<int> _resetTimeMinutesProvider;
     private IReadOnlyList<NovelReadingStatistic> _history = [];
     private string? _bookRoot;
     private string _title = "Novel reader";
@@ -23,10 +26,12 @@ public sealed class ReaderStatisticsSession : IReaderStatisticsSession
 
     public ReaderStatisticsSession(
         INovelStatisticsSidecarService sidecars,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        Func<int>? resetTimeMinutesProvider = null)
     {
         _sidecars = sidecars ?? throw new ArgumentNullException(nameof(sidecars));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _resetTimeMinutesProvider = resetTimeMinutesProvider ?? (static () => 0);
         var localDate = LocalDate(_timeProvider.GetUtcNow());
         var empty = ReaderStatisticsMath.Empty(_title, localDate);
         State = new ReaderStatisticsSessionState(
@@ -145,6 +150,32 @@ public sealed class ReaderStatisticsSession : IReaderStatisticsSession
         _lastRawCharacterCount = position.RawCharacterCount;
     }
 
+    public async Task ReloadAfterExternalMutationAsync(
+        ReaderStatisticsPosition position,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(_bookRoot))
+            return;
+
+        var now = _timeProvider.GetUtcNow();
+        var localDate = LocalDate(now);
+        _history = ReaderStatisticsMath.Deduplicate(
+            await _sidecars.LoadAsync(_bookRoot, ct));
+        var dateKey = ReaderStatisticsMath.Empty(_title, localDate).DateKey;
+        var today = _history.FirstOrDefault(item =>
+            string.Equals(item.DateKey, dateKey, StringComparison.Ordinal))
+            ?? ReaderStatisticsMath.Empty(_title, localDate);
+        State = State with
+        {
+            Today = today,
+            AllTime = ReaderStatisticsMath.Aggregate(_title, localDate, _history),
+            History = _history,
+        };
+        _lastTimestamp = now;
+        _lastRawCharacterCount = position.RawCharacterCount;
+        Publish();
+    }
+
     private bool CanAccumulate() =>
         State.IsTracking && !State.IsPaused;
 
@@ -215,8 +246,10 @@ public sealed class ReaderStatisticsSession : IReaderStatisticsSession
         ReaderStatisticsMath.Deduplicate(_history.Append(State.Today));
 
     private DateOnly LocalDate(DateTimeOffset utcNow) =>
-        DateOnly.FromDateTime(
-            TimeZoneInfo.ConvertTime(utcNow, _timeProvider.LocalTimeZone).DateTime);
+        NovelStatisticsDayBoundary.ReportingDate(
+            utcNow,
+            _resetTimeMinutesProvider(),
+            _timeProvider.LocalTimeZone);
 
     private void Publish() =>
         StateChanged?.Invoke(this, State);

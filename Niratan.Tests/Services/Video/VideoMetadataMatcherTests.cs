@@ -114,6 +114,58 @@ public sealed class VideoMetadataMatcherTests
         selected.ExternalIds.Should().Contain("anidb", "10972");
     }
 
+    [Fact]
+    public void LockedAniDbIdentity_StillUsesExactAniListCandidateForRichDetails()
+    {
+        var aniDb = Candidate("anidb", "10972", "干物妹!うまるちゃん", 2015, null);
+        var aniList = Candidate("anilist", "20987", "干物妹!うまるちゃん", 2015, null);
+        var accepted = new VideoMetadataMatchScore(
+            aniDb, 1, 1, false, "explicit external id", true, true);
+        var aniListScore = new VideoMetadataMatchScore(
+            aniList, 1, 1, false, "exact compatible alias", false, false);
+
+        var selected = VideoMetadataCoordinator.SelectPrimaryDetailsCandidate(
+            VideoMetadataMediaKind.Anime, accepted, [accepted, aniListScore]);
+
+        selected.ProviderId.Should().Be("anilist");
+        selected.ExternalIds.Should().Contain("anidb", "10972");
+        selected.ExternalIds.Should().Contain("anilist", "20987");
+    }
+
+    [Fact]
+    public void AutoSource_WithAniDbIdentity_UsesAnimeProviderRoute()
+    {
+        var kind = VideoMetadataCoordinator.ResolveMediaKind(
+            VideoLibraryMediaType.Auto,
+            hasAnimeExternalIdentity: true,
+            hasAbsoluteEpisodeEvidence: false,
+            hasSeriesHierarchyEvidence: false,
+            hasEpisodeEvidence: true,
+            hasYearEvidence: false);
+
+        kind.Should().Be(VideoMetadataMediaKind.Anime);
+    }
+
+    [Fact]
+    public void RouteEvidence_IncludesSeriesIdentityFromEpisodeParentChain()
+    {
+        var seriesId = Guid.NewGuid();
+        var series = new VideoCatalogNodeSnapshot(
+            seriesId, null, VideoCatalogNodeKind.Series, "Himouto! Umaru-chan",
+            null, null, null, null, null, null, null, false, true, [],
+            ImmutableDictionary<string, string>.Empty.Add("anidb", "10972"));
+        var episode = new VideoCatalogNodeSnapshot(
+            Guid.NewGuid(), seriesId, VideoCatalogNodeKind.Episode, "Episode 8",
+            null, null, null, null, 1, 8, null, false, false, [],
+            ImmutableDictionary<string, string>.Empty);
+        var snapshot = VideoCatalogSnapshot.Empty() with { Nodes = [series, episode] };
+
+        var evidence = VideoMetadataCoordinator.CollectRouteEvidenceNodes(snapshot, [episode]);
+
+        evidence.Should().Contain(node => node.Id == seriesId
+                                          && node.ExternalIds["anidb"] == "10972");
+    }
+
     private static ParsedVideoIdentity Parsed(
         string title,
         int? year,

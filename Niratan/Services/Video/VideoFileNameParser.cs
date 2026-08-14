@@ -18,6 +18,9 @@ public enum ParsedVideoSpecialKind
     Oad,
     NcOp,
     NcEd,
+    Preview,
+    Menu,
+    Short,
 }
 
 public sealed record ParsedVideoIdentity(
@@ -35,7 +38,8 @@ public sealed record ParsedVideoIdentity(
     bool IsMultiEpisode,
     bool HasEpisodeEvidence,
     ImmutableDictionary<string, string> ExternalIds,
-    ImmutableArray<string> RemovedReleaseTags);
+    ImmutableArray<string> RemovedReleaseTags,
+    string? EpisodeTitle = null);
 
 public interface IVideoFileNameParser
 {
@@ -69,6 +73,10 @@ internal sealed class VideoFileNameParser : IVideoFileNameParser
 
     private static readonly Regex SeriesPartPattern = new(
         @"第\s*(?<part>\d{1,3})\s*期",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static readonly Regex StandaloneSeasonPattern = new(
+        @"(?<![A-Za-z0-9])(?:S(?<short>\d{1,3})|Season[ ._-]*(?<word>\d{1,3})|(?<ordinal>\d{1,3})(?:st|nd|rd|th)[ ._-]*Season)(?![A-Za-z0-9])|第\s*(?<cjk>\d{1,3})\s*季",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static readonly Regex CourPattern = new(
@@ -120,30 +128,55 @@ internal sealed class VideoFileNameParser : IVideoFileNameParser
             externalIds[provider] = match.Groups["id"].Value;
             return " ";
         });
+        var classificationText = normalized;
 
         int? season = null;
         int? episodeStart = null;
         int? episodeEnd = null;
-        var episodeMatch = FirstSuccessfulMatch(
-            normalized,
-            SeasonEpisodePattern,
-            XEpisodePattern,
-            JapaneseEpisodePattern,
-            EnglishEpisodePattern);
+        string? episodeTitleCandidate = null;
+        var episodeMatch = mediaType == VideoLibraryMediaType.Movie
+            ? Match.Empty
+            : FirstSuccessfulMatch(
+                normalized,
+                SeasonEpisodePattern,
+                XEpisodePattern,
+                JapaneseEpisodePattern,
+                EnglishEpisodePattern);
         if (episodeMatch.Success)
         {
             season = ParseOptionalInt(episodeMatch, "season");
             episodeStart = ParseOptionalInt(episodeMatch, "start");
             episodeEnd = ParseOptionalInt(episodeMatch, "end") ?? episodeStart;
-            normalized = RemoveMatch(normalized, episodeMatch);
+            episodeTitleCandidate = classificationText[(episodeMatch.Index + episodeMatch.Length)..];
+            normalized = classificationText[..episodeMatch.Index]
+                         + PreserveUndelimitedSemanticBrackets(episodeTitleCandidate);
         }
 
-        var partMatch = SeriesPartPattern.Match(normalized);
+        var standaloneSeasonMatch = mediaType == VideoLibraryMediaType.Movie
+            ? Match.Empty
+            : StandaloneSeasonPattern.Match(normalized);
+        if (!season.HasValue && standaloneSeasonMatch.Success)
+        {
+            season = ParseOptionalInt(standaloneSeasonMatch, "short")
+                     ?? ParseOptionalInt(standaloneSeasonMatch, "word")
+                     ?? ParseOptionalInt(standaloneSeasonMatch, "ordinal")
+                     ?? ParseOptionalInt(standaloneSeasonMatch, "cjk");
+            normalized = RemoveMatch(normalized, standaloneSeasonMatch);
+        }
+
+        var partMatch = mediaType == VideoLibraryMediaType.Movie
+            ? Match.Empty
+            : SeriesPartPattern.Match(normalized);
         var seriesPart = ParseOptionalInt(partMatch, "part");
         if (partMatch.Success)
+        {
+            season ??= seriesPart;
             normalized = RemoveMatch(normalized, partMatch);
+        }
 
-        var courMatch = CourPattern.Match(normalized);
+        var courMatch = mediaType == VideoLibraryMediaType.Movie
+            ? Match.Empty
+            : CourPattern.Match(normalized);
         var cour = ParseOptionalInt(courMatch, "cour") ?? ParseOptionalInt(courMatch, "courPrefix");
         if (courMatch.Success)
             normalized = RemoveMatch(normalized, courMatch);
@@ -153,8 +186,13 @@ internal sealed class VideoFileNameParser : IVideoFileNameParser
         if (yearMatch.Success)
             normalized = RemoveMatch(normalized, yearMatch);
 
-        var special = DetectSpecial(normalized);
-        normalized = RemoveSpecialTokens(normalized);
+        var special = mediaType == VideoLibraryMediaType.Movie
+            ? ParsedVideoSpecialKind.None
+            : DetectSpecial(classificationText, filePath, sourceRoot);
+        if (season == 0 && episodeStart.HasValue && special == ParsedVideoSpecialKind.None)
+            special = ParsedVideoSpecialKind.Special;
+        if (special != ParsedVideoSpecialKind.None)
+            normalized = RemoveSpecialTokens(normalized);
 
         int? absoluteEpisode = null;
         if (!episodeStart.HasValue && mediaType is VideoLibraryMediaType.Anime or VideoLibraryMediaType.Auto)
@@ -174,7 +212,7 @@ internal sealed class VideoFileNameParser : IVideoFileNameParser
         var leadingBracket = LeadingBracketPattern.Match(normalized);
         if (leadingBracket.Success && parsedEpisodeEvidence())
         {
-            var hasReleaseMetadataBracket = BracketPattern.Matches(normalized)
+            var hasReleaseMetadataBracket = BracketPattern.Matches(classificationText)
                 .Cast<Match>()
                 .Any(match => match.Index != leadingBracket.Index
                               && IsReleaseTag(CollapseSeparators(match.Groups["value"].Value).Trim()));
@@ -206,7 +244,11 @@ internal sealed class VideoFileNameParser : IVideoFileNameParser
             removedTags.Add(token);
         }
 
+        normalized = RemoveEmptyBrackets(normalized);
         var title = CollapseSeparators(normalized).Trim(' ', '.', '-', '_');
+        var semanticBracket = Regex.Match(title, @"^\[(?<title>[^\]]+)\]$");
+        if (semanticBracket.Success)
+            title = semanticBracket.Groups["title"].Value.Trim();
         if (title.Length == 0)
             title = original.Normalize(NormalizationForm.FormKC).Trim();
 
@@ -234,7 +276,8 @@ internal sealed class VideoFileNameParser : IVideoFileNameParser
             episodeStart.HasValue && episodeEnd.HasValue && episodeStart != episodeEnd,
             episodeStart.HasValue || absoluteEpisode.HasValue || special != ParsedVideoSpecialKind.None,
             externalIds.ToImmutable(),
-            removedTags.Distinct(StringComparer.OrdinalIgnoreCase).ToImmutableArray());
+            removedTags.Distinct(StringComparer.OrdinalIgnoreCase).ToImmutableArray(),
+            NormalizeEpisodeTitle(episodeTitleCandidate));
 
         bool parsedEpisodeEvidence() =>
             episodeStart.HasValue || absoluteEpisode.HasValue || special != ParsedVideoSpecialKind.None;
@@ -263,6 +306,12 @@ internal sealed class VideoFileNameParser : IVideoFileNameParser
 
     private static string CollapseSeparators(string value) => SeparatorPattern.Replace(value, " ");
 
+    private static string RemoveEmptyBrackets(string value) => Regex.Replace(
+        value,
+        @"\[\s*\]|【\s*】|\(\s*\)|（\s*）",
+        " ",
+        RegexOptions.CultureInvariant);
+
     private static string NormalizeProviderId(string value) => value.ToLowerInvariant() switch
     {
         "tmdbid" => "tmdb",
@@ -285,9 +334,47 @@ internal sealed class VideoFileNameParser : IVideoFileNameParser
     private static bool IsReleaseComponent(string value) =>
         ReleaseTokens.Contains(value)
         || Regex.IsMatch(value, @"^\d{3,4}x\d{3,4}$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+        || Regex.IsMatch(value, @"^(?:flac|aac|opus|ac3|eac3|dts|truehd)(?:x\d+)?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
         || Regex.IsMatch(value, @"^subs?(?:\([^)]*\))?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-    private static ParsedVideoSpecialKind DetectSpecial(string value)
+    private static string? NormalizeEpisodeTitle(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+        var normalized = value.Normalize(NormalizationForm.FormKC);
+        normalized = BracketPattern.Replace(normalized, match =>
+        {
+            var token = CollapseSeparators(match.Groups["value"].Value).Trim();
+            return IsReleaseTag(token) ? " " : match.Value;
+        });
+        foreach (var token in ReleaseTokens.OrderByDescending(item => item.Length))
+        {
+            normalized = Regex.Replace(
+                normalized,
+                $@"(?<![A-Za-z0-9]){Regex.Escape(token)}(?![A-Za-z0-9])",
+                " ",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+        var title = CollapseSeparators(normalized).Trim(' ', '.', '-', '_');
+        var semanticBracket = Regex.Match(title, @"^\[(?<title>[^\]]+)\]$");
+        if (semanticBracket.Success)
+            title = semanticBracket.Groups["title"].Value.Trim();
+        return title.Length == 0 ? null : title;
+    }
+
+    private static string PreserveUndelimitedSemanticBrackets(string suffix)
+    {
+        if (string.IsNullOrWhiteSpace(suffix)
+            || Regex.IsMatch(suffix, @"^\s*(?:-|~|～|–|—)\s*", RegexOptions.CultureInvariant))
+            return string.Empty;
+
+        return string.Concat(BracketPattern.Matches(suffix)
+            .Cast<Match>()
+            .Where(match => !IsReleaseTag(CollapseSeparators(match.Groups["value"].Value).Trim()))
+            .Select(match => " " + match.Value));
+    }
+
+    private static ParsedVideoSpecialKind DetectSpecial(string value, string filePath, string? sourceRoot)
     {
         if (Regex.IsMatch(value, @"(?<![A-Za-z0-9])NCOP(?:\d+)?(?![A-Za-z0-9])", RegexOptions.IgnoreCase))
             return ParsedVideoSpecialKind.NcOp;
@@ -299,12 +386,73 @@ internal sealed class VideoFileNameParser : IVideoFileNameParser
             return ParsedVideoSpecialKind.Oad;
         if (Regex.IsMatch(value, @"(?<![A-Za-z0-9])SP(?:ECIAL)?\d*(?![A-Za-z0-9])|特別編|特別篇", RegexOptions.IgnoreCase))
             return ParsedVideoSpecialKind.Special;
+        if (HasSupplementalFileMarker(value, @"PV|PROMO|TRAILER|予告|预告|預告"))
+            return ParsedVideoSpecialKind.Preview;
+        if (HasSupplementalFileMarker(value, @"MENUS?"))
+            return ParsedVideoSpecialKind.Menu;
+
+        foreach (var segment in RelativeDirectorySegments(filePath, sourceRoot).Reverse())
+        {
+            var key = CollapseSeparators(segment.Normalize(NormalizationForm.FormKC).Replace('&', ' '))
+                .Trim()
+                .ToLowerInvariant();
+            if (key is "ncop" or "ncop nced")
+                return ParsedVideoSpecialKind.NcOp;
+            if (key is "nced")
+                return ParsedVideoSpecialKind.NcEd;
+            if (key is "pv" or "preview" or "previews" or "promo" or "promos"
+                or "trailer" or "trailers" or "予告" or "预告" or "預告")
+                return ParsedVideoSpecialKind.Preview;
+            if (key is "menu" or "menus" or "disc menu" or "disc menus")
+                return ParsedVideoSpecialKind.Menu;
+            if (key is "short" or "shorts" or "mini anime" or "mini animation"
+                or "迷你动画" or "迷你動畫" or "短篇" or "小剧场" or "小劇場")
+                return ParsedVideoSpecialKind.Short;
+            if (key is "extra" or "extras" or "special" or "specials" or "featurette" or "featurettes"
+                or "behind the scenes" or "deleted scenes" or "interviews" or "scenes" or "clips"
+                or "samples" or "花絮" or "特典" or "映像特典")
+                return ParsedVideoSpecialKind.Special;
+        }
         return ParsedVideoSpecialKind.None;
+    }
+
+    private static bool HasSupplementalFileMarker(string value, string markerAlternatives)
+    {
+        var marker = $@"(?:{markerAlternatives})(?:[ ._-]*\d+)?";
+        var bracketed = $@"(?:\[\s*{marker}\s*\]|【\s*{marker}\s*】|\(\s*{marker}\s*\)|（\s*{marker}\s*）)";
+        if (Regex.IsMatch(
+                value,
+                bracketed,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            return true;
+
+        var trailingBrackets = @"(?:\s*(?:\[[^\]]*\]|【[^】]*】|\([^)]*\)|（[^）]*）))*\s*$";
+        return Regex.IsMatch(
+            value,
+            $@"(?<![A-Za-z0-9]){marker}(?![A-Za-z0-9])(?={trailingBrackets})",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 
     private static string RemoveSpecialTokens(string value) => Regex.Replace(
         value,
-        @"(?<![A-Za-z0-9])(?:NCOP|NCED|OVA|OAD|SP(?:ECIAL)?)\d*(?![A-Za-z0-9])|特別編|特別篇",
+        @"(?<![A-Za-z0-9])(?:NCOP|NCED|OVA|OAD|SP(?:ECIAL)?|PV|PROMO|TRAILER|MENUS?)\d*(?![A-Za-z0-9])|特別編|特別篇|予告|预告|預告",
         " ",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static IEnumerable<string> RelativeDirectorySegments(string filePath, string? sourceRoot)
+    {
+        var directory = Path.GetDirectoryName(Path.GetFullPath(filePath));
+        if (string.IsNullOrWhiteSpace(directory))
+            yield break;
+        var relative = string.IsNullOrWhiteSpace(sourceRoot)
+            ? new DirectoryInfo(directory).Name
+            : Path.GetRelativePath(Path.GetFullPath(sourceRoot), directory);
+        foreach (var segment in relative.Split(
+                     [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                     StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (segment != ".")
+                yield return segment;
+        }
+    }
 }

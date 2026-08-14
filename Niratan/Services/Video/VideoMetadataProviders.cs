@@ -447,23 +447,46 @@ internal sealed class TvMazeVideoMetadataProvider : VideoMetadataProviderBase,
 
 internal sealed class AniListVideoMetadataProvider : VideoMetadataProviderBase,
     IVideoMetadataSearchProvider,
-    IVideoMetadataDetailsProvider
+    IVideoMetadataDetailsProvider,
+    IVideoArtworkProvider
 {
     public AniListVideoMetadataProvider(IVideoMetadataTransport transport) : base(transport) { }
     public override string Id => "anilist";
     public override string DisplayName => "AniList";
-    public override VideoMetadataCapabilities Capabilities => VideoMetadataCapabilities.Search | VideoMetadataCapabilities.Details;
+    public override VideoMetadataCapabilities Capabilities =>
+        VideoMetadataCapabilities.Search
+        | VideoMetadataCapabilities.Details
+        | VideoMetadataCapabilities.Artwork;
     public override IReadOnlySet<VideoMetadataMediaKind> SupportedMediaKinds { get; } =
         new HashSet<VideoMetadataMediaKind> { VideoMetadataMediaKind.Anime, VideoMetadataMediaKind.Series, VideoMetadataMediaKind.Episode };
-    public override bool ArtworkEnabledByDefault => false;
+    public override bool ArtworkEnabledByDefault => true;
     public override string AttributionUrl => "https://anilist.co/";
 
     public async Task<IReadOnlyList<VideoMetadataCandidate>> SearchAsync(VideoMetadataSearchQuery query, CancellationToken ct = default)
     {
-        const string graph = "query($search:String,$id:Int,$idMal:Int){Page(perPage:20){media(search:$search,id:$id,idMal:$idMal,type:ANIME){id idMal title{romaji english native} synonyms seasonYear siteUrl}}}";
+        const string fields = "{id idMal title{romaji english native} synonyms seasonYear siteUrl}";
         int? id = query.ExternalIds.TryGetValue("anilist", out var own) && int.TryParse(own, out var ownId) ? ownId : null;
         int? mal = query.ExternalIds.TryGetValue("mal", out var malValue) && int.TryParse(malValue, out var malId) ? malId : null;
-        var body = JsonSerializer.SerializeToUtf8Bytes(new { query = graph, variables = new { search = id.HasValue || mal.HasValue ? null : query.Title, id, idMal = mal } });
+        string graph;
+        object variables;
+        if (id.HasValue)
+        {
+            graph = $"query NiratanAnimeByIdV3($id:Int){{Page(perPage:20){{media(id:$id,type:ANIME){fields}}}}}";
+            variables = new { id };
+        }
+        else if (mal.HasValue)
+        {
+            graph = $"query NiratanAnimeByMalIdV3($idMal:Int){{Page(perPage:20){{media(idMal:$idMal,type:ANIME){fields}}}}}";
+            variables = new { idMal = mal };
+        }
+        else
+        {
+            // AniList treats explicitly supplied null id/idMal arguments as filters
+            // and returns no rows, so title search must omit those arguments entirely.
+            graph = $"query NiratanAnimeSearchV3($search:String){{Page(perPage:20){{media(search:$search,type:ANIME){fields}}}}}";
+            variables = new { search = query.Title };
+        }
+        var body = JsonSerializer.SerializeToUtf8Bytes(new { query = graph, variables });
         var response = await Transport.SendAsync(new VideoMetadataRequest(
             Id, HttpMethod.Post, new Uri("https://graphql.anilist.co"), body, "application/json", IsIdempotent: true), ct);
         using var json = ParseJson(response);
@@ -588,6 +611,58 @@ internal sealed class AniListVideoMetadataProvider : VideoMetadataProviderBase,
             Studios: studios,
             People: peopleSnapshot,
             RelatedItems: relatedItems.ToImmutable());
+    }
+
+    public async Task<IReadOnlyList<VideoArtworkCandidate>> GetArtworkAsync(
+        VideoMetadataCandidate identity,
+        CancellationToken ct = default)
+    {
+        const string graph = "query($id:Int){Media(id:$id,type:ANIME){coverImage{extraLarge large medium} bannerImage siteUrl}}";
+        var body = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            query = graph,
+            variables = new
+            {
+                id = int.Parse(identity.ProviderItemId, CultureInfo.InvariantCulture),
+            },
+        });
+        var response = await Transport.SendAsync(new VideoMetadataRequest(
+            Id,
+            HttpMethod.Post,
+            new Uri("https://graphql.anilist.co"),
+            body,
+            "application/json",
+            IsIdempotent: true), ct);
+        using var json = ParseJson(response);
+        if (json.RootElement.GetProperty("data").GetProperty("Media") is not
+            { ValueKind: JsonValueKind.Object } media)
+            return [];
+
+        var sourceUrl = String(media, "siteUrl") ?? identity.SourceUrl ?? AttributionUrl;
+        var artwork = new List<VideoArtworkCandidate>();
+        if (media.TryGetProperty("coverImage", out var coverImage))
+        {
+            foreach (var url in new[]
+                     {
+                         String(coverImage, "extraLarge"),
+                         String(coverImage, "large"),
+                         String(coverImage, "medium"),
+                     }
+                     .Where(value => !string.IsNullOrWhiteSpace(value))
+                     .Distinct(StringComparer.Ordinal))
+            {
+                artwork.Add(new VideoArtworkCandidate(
+                    Id, url!, "poster", null, null, null, sourceUrl));
+            }
+        }
+
+        var bannerUrl = String(media, "bannerImage");
+        if (!string.IsNullOrWhiteSpace(bannerUrl))
+        {
+            artwork.Add(new VideoArtworkCandidate(
+                Id, bannerUrl, "backdrop", null, null, null, sourceUrl));
+        }
+        return artwork;
     }
 
     private static VideoMetadataCandidate ToCandidate(JsonElement item, VideoMetadataSearchQuery query)

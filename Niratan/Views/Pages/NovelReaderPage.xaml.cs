@@ -1591,7 +1591,7 @@ public sealed partial class NovelReaderPage : Page
         ReaderBottomChrome.Background = new SolidColorBrush(backgroundColor);
         var foregroundBrush = new SolidColorBrush(foregroundColor)
         {
-            Opacity = settings.UseCustomColors ? 1 : 0.68,
+            Opacity = settings.UsesCustomColors ? 1 : 0.68,
         };
         NovelReaderTitleText.Foreground = foregroundBrush;
         NovelReaderTopProgressText.Foreground = foregroundBrush;
@@ -4803,13 +4803,17 @@ public sealed partial class NovelReaderPage : Page
 
         if (!string.IsNullOrWhiteSpace(request.DirectMediaDirectory))
         {
-            _ = GenerateDirectSasayakiMiningAudioAsync(
+            var storedFilename = await GenerateDirectSasayakiMiningAudioAsync(
                 request.DirectMediaDirectory,
                 filename,
                 audiobookPath,
-                range.Value);
-            return new SasayakiMiningAudioResult(
-                AudioClipTag: AnkiMediaMarkup.ForFieldPlaceholder(filename));
+                range.Value,
+                ct);
+            return string.IsNullOrWhiteSpace(storedFilename)
+                ? new SasayakiMiningAudioResult(
+                    ErrorMessage: "Unable to capture the Sasayaki audio clip.")
+                : new SasayakiMiningAudioResult(
+                    AudioClipTag: AnkiMediaMarkup.ForFieldPlaceholder(storedFilename));
         }
 
         var mediaDir = Path.Combine(AppDataHelper.GetDataPath(), "SasayakiMining");
@@ -4905,30 +4909,24 @@ public sealed partial class NovelReaderPage : Page
             && normalizedSentence.Contains(cueText, StringComparison.Ordinal);
     }
 
-    private async Task GenerateDirectSasayakiMiningAudioAsync(
+    private Task<string?> GenerateDirectSasayakiMiningAudioAsync(
         string mediaDirectory,
         string filename,
         string audiobookPath,
-        (TimeSpan Start, TimeSpan End) range)
+        (TimeSpan Start, TimeSpan End) range,
+        CancellationToken ct)
     {
-        try
-        {
-            Directory.CreateDirectory(mediaDirectory);
-            var tempDir = Path.Combine(AppDataHelper.GetDataPath(), "SasayakiMining", "Temp");
-            Directory.CreateDirectory(tempDir);
-            var temp = Path.Combine(tempDir, $".{Guid.NewGuid():N}-{filename}");
-            var exported = await App.GetService<IVideoMiningMediaExtractor>().ExportAudioClipAsync(
+        var extractor = App.GetService<IVideoMiningMediaExtractor>();
+        return AnkiDirectMediaStore.GenerateAsync(
+            mediaDirectory,
+            filename,
+            (tempPath, producerToken) => extractor.ExportAudioClipAsync(
                 audiobookPath,
-                temp,
+                tempPath,
                 range.Start,
-                range.End);
-            if (!string.IsNullOrWhiteSpace(exported) && File.Exists(exported))
-                ReplaceFile(exported, Path.Combine(mediaDirectory, filename));
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "[Sasayaki] Failed to generate direct mining audio");
-        }
+                range.End,
+                producerToken),
+            ct);
     }
 
     private static string NormalizeSasayakiMiningText(string text)
@@ -4948,15 +4946,6 @@ public sealed partial class NovelReaderPage : Page
         }
 
         return builder.ToString();
-    }
-
-    private static void ReplaceFile(string sourcePath, string destinationPath)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
-        if (File.Exists(destinationPath))
-            File.Delete(destinationPath);
-        File.Copy(sourcePath, destinationPath, overwrite: true);
-        File.Delete(sourcePath);
     }
 
     private void ApplySasayakiPlayback(SasayakiPlaybackData playback)

@@ -102,20 +102,80 @@ public sealed class AnkiConnectClient : IDisposable
         Dictionary<string, string> fields,
         AnkiSettings settings)
     {
-        var notes = new[]
-        {
-            BuildNoteObject(deck, noteType, fields, settings),
-        };
+        var results = await CanAddNotesAsync(deck, noteType, [fields], settings);
+        return results.Count == 0 || results[0];
+    }
 
+    public async Task<IReadOnlyList<bool>> CanAddNotesAsync(
+        AnkiDeck deck,
+        AnkiNoteType noteType,
+        IReadOnlyList<Dictionary<string, string>> fields,
+        AnkiSettings settings)
+    {
+        if (fields.Count == 0)
+            return [];
+
+        var notes = fields
+            .Select(candidate => BuildNoteObject(deck, noteType, candidate, settings))
+            .ToArray();
         var result = await RequestAsync("canAddNotesWithErrorDetail", new { notes });
-        var results = result.Deserialize<List<CanAddResult>>();
-        return results?.FirstOrDefault()?.CanAdd ?? true;
+        var response = result.Deserialize<List<CanAddResult>>() ?? [];
+        if (response.Count != fields.Count)
+        {
+            throw new AnkiConnectException(
+                $"AnkiConnect returned {response.Count} canAdd result(s) for {fields.Count} note(s)");
+        }
+
+        return response.Select(item => item.CanAdd).ToArray();
     }
 
     public async Task<List<long>> FindNotesAsync(string query)
     {
         var result = await RequestAsync("findNotes", new { query });
         return result.Deserialize<List<long>>() ?? [];
+    }
+
+    public async Task<IReadOnlyList<IReadOnlyList<long>>> FindNotesAsync(
+        IReadOnlyList<string> queries)
+    {
+        if (queries.Count == 0)
+            return [];
+
+        var actions = queries
+            .Select(query => (
+                action: "findNotes",
+                parameters: (object?)new { query }))
+            .ToList();
+        var results = await MultiRequestWithErrorsAsync(actions);
+        var noteIds = new List<IReadOnlyList<long>>(queries.Count);
+        for (var index = 0; index < queries.Count; index++)
+        {
+            if (index >= results.Count || !string.IsNullOrWhiteSpace(results[index].Error))
+            {
+                if (index < results.Count)
+                {
+                    Log.Warning(
+                        "[AnkiConnect] findNotes batch[{Index}] failed: {Error}",
+                        index,
+                        results[index].Error);
+                }
+
+                noteIds.Add([]);
+                continue;
+            }
+
+            try
+            {
+                noteIds.Add(results[index].Result.Deserialize<List<long>>() ?? []);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[AnkiConnect] findNotes batch[{Index}] returned invalid note IDs", index);
+                noteIds.Add([]);
+            }
+        }
+
+        return noteIds;
     }
 
     public async Task<bool> AddNoteAsync(

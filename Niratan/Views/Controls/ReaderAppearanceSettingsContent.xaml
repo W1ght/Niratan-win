@@ -29,35 +29,48 @@
             <StackPanel MaxWidth="1280"
                         HorizontalAlignment="Stretch"
                         Spacing="{StaticResource SettingsCardSpacing}">
-                <TextBlock x:Uid="SettingsApplicationSectionHeader"
-                           Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
-                           Text="Application" />
-                <toolkit:SettingsCard x:Uid="SettingsApplicationThemeCard"
-                                      HorizontalAlignment="Stretch"
-                                      HorizontalContentAlignment="Stretch"
-                                      HeaderIcon="{ui:FontIcon Glyph=&#xE790;}">
-                    <ComboBox ItemsSource="{x:Bind ViewModel.AvailableThemeModes}"
-                              SelectedItem="{x:Bind ViewModel.SelectedThemeMode, Mode=TwoWay}" />
-                </toolkit:SettingsCard>
-
                 <TextBlock x:Uid="ReaderThemeSectionHeader"
                            Style="{StaticResource SettingsSectionHeaderTextBlockStyle}"
-                           Text="Reader Theme" />
-                <toolkit:SettingsCard x:Uid="ReaderSepiaModeCard"
+                           Text="Theme" />
+                <toolkit:SettingsCard x:Uid="ReaderColorThemeCard"
                                       HorizontalAlignment="Stretch"
                                       HorizontalContentAlignment="Stretch"
-                                      Description="Use sepia-tone background and text colors for reading"
-                                      Header="Sepia Mode"
+                                      Description="Select the app and reader theme"
+                                      Header="Theme"
                                       HeaderIcon="{ui:FontIcon Glyph=&#xE790;}">
-                    <ToggleSwitch IsOn="{x:Bind ViewModel.SepiaMode, Mode=TwoWay}" />
+                    <ComboBox AutomationProperties.AutomationId="ReaderColorThemeComboBox"
+                              ItemsSource="{x:Bind ViewModel.AvailableReaderThemes}"
+                              SelectedItem="{x:Bind ViewModel.SelectedReaderTheme, Mode=TwoWay}" />
                 </toolkit:SettingsCard>
-                <toolkit:SettingsCard x:Uid="ReaderCustomColorsCard"
+                <toolkit:SettingsCard x:Uid="ReaderSystemLightSepiaCard"
                                       HorizontalAlignment="Stretch"
                                       HorizontalContentAlignment="Stretch"
-                                      Description="Override the reader background, body text, and information text colors"
-                                      Header="Custom Colors"
-                                      HeaderIcon="{ui:FontIcon Glyph=&#xE790;}">
-                    <ToggleSwitch IsOn="{x:Bind ViewModel.UseCustomReaderColors, Mode=TwoWay}" />
+                                      Description="When the system is in light mode, use sepia instead"
+                                      Header="Use Sepia as Light Theme"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE790;}"
+                                      Visibility="{x:Bind ViewModel.IsSystemLightSepiaVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <ToggleSwitch AutomationProperties.AutomationId="ReaderSystemLightSepiaToggle"
+                                  IsOn="{x:Bind ViewModel.SystemLightSepia, Mode=TwoWay}" />
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="ReaderSepiaInvertCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Description="Invert sepia colors when the system is in dark mode"
+                                      Header="Invert in System Dark"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE790;}"
+                                      Visibility="{x:Bind ViewModel.IsSepiaInvertVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <ToggleSwitch AutomationProperties.AutomationId="ReaderSepiaInvertToggle"
+                                  IsOn="{x:Bind ViewModel.SepiaInvertInDark, Mode=TwoWay}" />
+                </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="ReaderCustomInterfaceThemeCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Header="Interface"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE790;}"
+                                      Visibility="{x:Bind ViewModel.AreCustomReaderColorsVisible, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <ComboBox AutomationProperties.AutomationId="ReaderCustomInterfaceThemeComboBox"
+                              ItemsSource="{x:Bind ViewModel.AvailableInterfaceThemeModes}"
+                              SelectedItem="{x:Bind ViewModel.SelectedCustomInterfaceTheme, Mode=TwoWay}" />
                 </toolkit:SettingsCard>
                 <toolkit:SettingsCard x:Uid="ReaderCustomBackgroundColorCard"
                                       HorizontalAlignment="Stretch"

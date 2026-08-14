@@ -131,6 +131,57 @@ public class VideoLibraryPageViewModelTests
     }
 
     [Fact]
+    public async Task SeriesDetails_QueuesOnlyCollapsedRegularEpisodesAndKeepsSpecialSingle()
+    {
+        var seriesId = Guid.NewGuid();
+        var otherSeriesId = Guid.NewGuid();
+        var episodeOneNode = Guid.NewGuid();
+        var service = new RecordingVideoLibraryService
+        {
+            Videos =
+            [
+                SeriesEpisode("episode-2", seriesId, Guid.NewGuid(), 1, 2),
+                SeriesEpisode("episode-1-unavailable", seriesId, episodeOneNode, 1, 1, available: false),
+                SeriesEpisode("episode-1", seriesId, episodeOneNode, 1, 1),
+                SeriesEpisode("special", seriesId, Guid.NewGuid(), 0, 1, special: true),
+                SeriesEpisode("other-series", otherSeriesId, Guid.NewGuid(), 1, 1),
+            ],
+        };
+        var player = new RecordingVideoPlayerWindowService();
+        var sut = CreateSut(videoService: service, playerService: player);
+        await sut.InitializeAsync();
+        var series = sut.SeriesCards.Single(card => card.Id == seriesId);
+        sut.SelectSeriesCommand.Execute(series);
+
+        await sut.OpenVideoCommand.ExecuteAsync(series.RegularEpisodes[1]);
+        await sut.OpenVideoCommand.ExecuteAsync(series.SpecialFeatures.Single());
+
+        player.OpenedPlaylists.Should().HaveCount(2);
+        player.OpenedPlaylists[0].Select(video => video.Id)
+            .Should().Equal("episode-1", "episode-2");
+        player.OpenedPlaylists[1].Select(video => video.Id)
+            .Should().Equal("special");
+    }
+
+    [Fact]
+    public void NextUp_ExcludesSpecialFeaturesAndCollapsesAssetVersions()
+    {
+        var seriesId = Guid.NewGuid();
+        var episodeOneNode = Guid.NewGuid();
+        var watched = SeriesEpisode("episode-1", seriesId, episodeOneNode, 1, 1);
+        watched.IsWatched = true;
+        var alternateVersion = SeriesEpisode("episode-1-alt", seriesId, episodeOneNode, 1, 1);
+        var special = SeriesEpisode("special", seriesId, Guid.NewGuid(), 0, 2, special: true);
+        special.AbsoluteEpisodeNumber = 2;
+        var next = SeriesEpisode("episode-2", seriesId, Guid.NewGuid(), 1, 2);
+
+        var result = VideoLibraryPageViewModel.BuildNextEpisodeItems(
+            [watched, alternateVersion, special, next]);
+
+        result.Select(video => video.Id).Should().Equal("episode-2");
+    }
+
+    [Fact]
     public async Task SearchText_FiltersVisibleVideosByTitleFolderCollectionAndTags()
     {
         var service = new RecordingVideoLibraryService
@@ -689,6 +740,29 @@ public class VideoLibraryPageViewModelTests
             thumbnailService ?? new RecordingVideoThumbnailService(),
             fileRevealService ?? new RecordingFileRevealService());
     }
+
+    private static VideoItem SeriesEpisode(
+        string id,
+        Guid seriesId,
+        Guid nodeId,
+        int season,
+        int episode,
+        bool available = true,
+        bool special = false) => new()
+    {
+        Id = id,
+        Title = id,
+        FilePath = $@"D:\Anime\{id}.mkv",
+        CatalogSeriesNodeId = seriesId,
+        CatalogSeriesTitle = seriesId.ToString("D"),
+        CatalogNodeId = nodeId,
+        CatalogNodeKind = VideoCatalogNodeKind.Episode,
+        SeasonNumber = season,
+        EpisodeNumber = episode,
+        IsSpecialEpisode = special,
+        IsAvailable = available,
+        LibraryMediaType = VideoLibraryMediaType.Auto,
+    };
 
     private sealed class RecordingVideoLibraryService : IVideoLibraryService
     {

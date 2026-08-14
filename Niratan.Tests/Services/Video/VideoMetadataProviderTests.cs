@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using System.Xml;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -105,6 +106,56 @@ public sealed class VideoMetadataProviderTests
         details.Studios.Should().Contain("Doga Kobo");
         details.People.Should().ContainSingle(person => person.Name == "田中あいみ" && person.Role == "土間うまる");
         details.RelatedItems.Should().ContainSingle(item => item.ProviderItemId == "21268");
+    }
+
+    [Fact]
+    public async Task AniListTitleSearch_OmitsUnusedNullIdFilters()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var transport = new FixtureTransport("""
+            {"data":{"Page":{"media":[{"id":20987,"idMal":28825,
+              "title":{"romaji":"Himouto! Umaru-chan","english":"Himouto! Umaru-chan","native":"干物妹！うまるちゃん"},
+              "synonyms":[],"seasonYear":2015,"siteUrl":"https://anilist.co/anime/20987"}]}}}
+            """);
+        var provider = new AniListVideoMetadataProvider(transport);
+        var query = new VideoMetadataSearchQuery(
+            "Himouto! Umaru-chan", VideoMetadataMediaKind.Anime, null, null, 8, 8,
+            "ja-JP", "JP", ImmutableDictionary<string, string>.Empty.Add("anidb", "10972"));
+
+        var candidates = await provider.SearchAsync(query, ct);
+
+        candidates.Should().ContainSingle().Which.ProviderItemId.Should().Be("20987");
+        using var body = JsonDocument.Parse(transport.LastRequest!.Body!);
+        var variables = body.RootElement.GetProperty("variables");
+        variables.GetProperty("search").GetString().Should().Be("Himouto! Umaru-chan");
+        variables.TryGetProperty("id", out _).Should().BeFalse();
+        variables.TryGetProperty("idMal", out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AniListArtwork_ProvidesPortraitPosterAndLandscapeBackdrop()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var transport = new FixtureTransport("""
+            {"data":{"Media":{
+              "coverImage":{"extraLarge":"https://img.test/poster-xl.jpg","large":"https://img.test/poster.jpg","medium":"https://img.test/poster-small.jpg"},
+              "bannerImage":"https://img.test/backdrop.jpg",
+              "siteUrl":"https://anilist.co/anime/20987"}}}
+            """);
+        var provider = new AniListVideoMetadataProvider(transport);
+        var candidate = new VideoMetadataCandidate(
+            "anilist", "20987", VideoMetadataMediaKind.Anime, "干物妹！うまるちゃん", null,
+            2015, null, null, null, ["Himouto! Umaru-chan"],
+            ImmutableDictionary<string, string>.Empty.Add("anilist", "20987"),
+            "https://anilist.co/anime/20987");
+
+        var artwork = await provider.GetArtworkAsync(candidate, ct);
+
+        artwork.Should().Contain(item => item.Kind == "poster"
+                                         && item.Url == "https://img.test/poster-xl.jpg");
+        artwork.Should().Contain(item => item.Kind == "backdrop"
+                                         && item.Url == "https://img.test/backdrop.jpg");
+        provider.ArtworkEnabledByDefault.Should().BeTrue();
     }
 
     [Fact]

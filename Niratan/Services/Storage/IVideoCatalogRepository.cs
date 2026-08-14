@@ -47,11 +47,12 @@ public interface IVideoCatalogRepository
         IReadOnlyList<VideoMatchCandidateSnapshot> candidates,
         CancellationToken ct = default);
 
-    Task ApplyMetadataMatchAsync(
+    Task<bool> ApplyMetadataMatchAsync(
         Guid assetId,
         VideoMetadataCandidate candidate,
         VideoMetadataDetails? details,
         bool lockIdentity,
+        bool preserveExistingHierarchy,
         CancellationToken ct = default);
 
     Task<VideoProviderCacheEntry?> GetProviderCacheAsync(string cacheKey, CancellationToken ct = default);

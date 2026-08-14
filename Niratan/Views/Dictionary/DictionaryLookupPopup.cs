@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
@@ -89,7 +90,26 @@ public sealed class DictionaryLookupPopup : IDisposable
         AudioSettings AudioSettings,
         AnkiSettings AnkiSettings,
         AnkiMiningContext MiningContext,
-        SasayakiPopupControls? SasayakiControls);
+        SasayakiPopupControls? SasayakiControls,
+        int EntryCount,
+        long PageRevision);
+
+    private sealed record DictionaryPopupMiningAttempt(
+        int EntryIndex,
+        long RenderGeneration,
+        long PageRevision,
+        long AttemptId,
+        string Expression,
+        string Kind,
+        bool SubmissionInFlight = false);
+
+    private sealed record DictionaryPopupDuplicateCheckRequest(
+        string Expression,
+        int EntryIndex,
+        long RenderGeneration,
+        long PageRevision,
+        int RequestSequence,
+        long AttemptId);
 
     public event EventHandler<DictionaryPopupRedirectRequest>? RedirectRequested;
     public event EventHandler? TapOutsideRequested;
@@ -127,7 +147,9 @@ public sealed class DictionaryLookupPopup : IDisposable
     private readonly DictionaryPopupRecoveryCoordinator _recoveryCoordinator = new();
     private readonly SemaphoreSlim _webViewInitializationGate = new(1, 1);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<long, TaskCompletionSource<bool>> _shellReadyWaiters = new();
-    private readonly Dictionary<(long Generation, int EntryIndex), long[]> _openableAnkiNotes = [];
+    private readonly Dictionary<(long Generation, long PageRevision, int EntryIndex), long[]> _openableAnkiNotes = [];
+    private readonly object _miningAttemptLock = new();
+    private readonly Dictionary<(long Generation, long PageRevision, int EntryIndex), DictionaryPopupMiningAttempt> _activeMiningAttempts = [];
     private AnkiMiningContext _miningContext = new();
     private AnkiMiningContext _nextMiningContext = new();
     private SasayakiPopupControls? _sasayakiPopupControls;
@@ -143,6 +165,9 @@ public sealed class DictionaryLookupPopup : IDisposable
     private long _rendererEpochCounter;
     private long _rendererEpoch;
     private long _displayGeneration;
+    private long _pageRevisionCounter;
+    private long _committedPageRevision;
+    private int _committedEntryCount;
     private long? _pendingContentGeneration;
     private CancellationToken _pendingContentCancellationToken;
     private Stopwatch? _pendingContentStopwatch;
@@ -156,6 +181,8 @@ public sealed class DictionaryLookupPopup : IDisposable
     private long _opacityAnimationGeneration;
 
     private const int MaxResolvedAudioUrlCacheEntries = 512;
+    private const int MaxMiningFeedbackDetailLength = 240;
+    private const int MaxMiningExpressionLength = 1024;
     private const string AudioSourcePlaceholderPattern = "[^/?#&]+";
     // Niratan uses SwiftUI .default.speed(2.2) for presentation and
     // .default.speed(2.4) for dismissal. These durations preserve the same
@@ -170,6 +197,10 @@ public sealed class DictionaryLookupPopup : IDisposable
     private CancellationTokenSource? _prefetchCts;
     private CancellationTokenSource? _deferredResultsCts;
     private CancellationTokenSource? _miningToastCts;
+    private readonly object _duplicateCheckBatchLock = new();
+    private readonly List<DictionaryPopupDuplicateCheckRequest> _pendingDuplicateChecks = [];
+    private readonly CancellationTokenSource _duplicateCheckBatchCts = new();
+    private bool _duplicateCheckBatchScheduled;
     private MiningContextSelectionDialog? _contextMiningDialog;
     private Panel? _inPlaceDialogHost;
 
@@ -211,6 +242,7 @@ public sealed class DictionaryLookupPopup : IDisposable
             Margin = new Thickness(12),
         };
         AutomationProperties.SetAutomationId(_miningToast, "AnkiMiningToast");
+        AutomationProperties.SetLiveSetting(_miningToast, AutomationLiveSetting.Polite);
 
         _popupBackButton = CreateCommandButton(
             "DictionaryPopupBackButton",
@@ -717,6 +749,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         var generation = PrepareForPendingContent(
             request.CancellationToken,
             request.TraceId);
+        var pageRevision = NextPageRevision();
         if (!request.State.TryStartGeneration())
         {
             CancelPendingContent(generation, request.TraceId);
@@ -737,7 +770,9 @@ public sealed class DictionaryLookupPopup : IDisposable
                 request.AudioSettings,
                 request.AnkiSettings,
                 request.MiningContext,
-                request.SasayakiControls);
+                request.SasayakiControls,
+                request.Results.Count,
+                pageRevision);
             _pendingContentStopwatch = Stopwatch.StartNew();
             var serializeSw = Stopwatch.StartNew();
             var injectionScript = _htmlGenerator.GenerateInjectionScript(initialResults,
@@ -750,7 +785,8 @@ public sealed class DictionaryLookupPopup : IDisposable
                 traceId: request.TraceId,
                 totalResultCount: request.Results.Count,
                 documentEpoch: _rendererEpoch,
-                contextMiningAvailable: request.MiningContext.ContextSelection != null);
+                contextMiningAvailable: request.MiningContext.ContextSelection != null,
+                pageRevision: pageRevision);
             var payloadBytes = Encoding.UTF8.GetByteCount(injectionScript);
             Log.Information(
                 "[LookupTrace] trace={TraceId} popup initial serialized in {Ms}ms bytes={Bytes} entries={EntryCount} total={TotalCount}",
@@ -819,6 +855,9 @@ public sealed class DictionaryLookupPopup : IDisposable
 
         CancelPrefetch();
         CancelDeferredResults();
+        var previousPageRevision = _committedPageRevision;
+        var previousEntryCount = _committedEntryCount;
+        var pageRevision = NextPageRevision();
         var injectionScript = _htmlGenerator.GenerateRedirectInjectionScript(
             results,
             styles,
@@ -828,14 +867,33 @@ public sealed class DictionaryLookupPopup : IDisposable
             normalizedAudioSettings,
             normalizedAnkiSettings,
             traceId,
-            contextMiningAvailable: _miningContext.ContextSelection != null);
-        var appliedJson = await _contentWebView.CoreWebView2.ExecuteScriptAsync(injectionScript);
+            contextMiningAvailable: _miningContext.ContextSelection != null,
+            pageRevision: pageRevision);
+        string appliedJson;
+        try
+        {
+            appliedJson = await _contentWebView.CoreWebView2.ExecuteScriptAsync(injectionScript);
+        }
+        catch
+        {
+            RestoreMiningPageAfterFailedReplacement(
+                pageRevision,
+                previousPageRevision,
+                previousEntryCount);
+            throw;
+        }
         cancellationToken.ThrowIfCancellationRequested();
         if (CommittedGeneration != expectedCommittedGeneration
             || !string.Equals(appliedJson, "true", StringComparison.OrdinalIgnoreCase))
         {
+            RestoreMiningPageAfterFailedReplacement(
+                pageRevision,
+                previousPageRevision,
+                previousEntryCount);
             return false;
         }
+        if (_committedPageRevision != pageRevision)
+            ActivateMiningPage(pageRevision, results.Count);
         ApplySurfaceTheme(themeMode);
         _currentTraceId = traceId;
         _audioSettings = normalizedAudioSettings;
@@ -848,14 +906,75 @@ public sealed class DictionaryLookupPopup : IDisposable
 
     public async Task NavigateBackAsync()
     {
-        if (_contentWebView.CoreWebView2 is not null)
-            await _contentWebView.CoreWebView2.ExecuteScriptAsync("window.navigateBack?.()");
+        await NavigateHistoryAsync("navigateBack");
     }
 
     public async Task NavigateForwardAsync()
     {
-        if (_contentWebView.CoreWebView2 is not null)
-            await _contentWebView.CoreWebView2.ExecuteScriptAsync("window.navigateForward?.()");
+        await NavigateHistoryAsync("navigateForward");
+    }
+
+    private async Task NavigateHistoryAsync(string callback)
+    {
+        if (_contentWebView.CoreWebView2 is null || CommittedGeneration is null)
+            return;
+
+        var previousPageRevision = _committedPageRevision;
+        var previousEntryCount = _committedEntryCount;
+        var pageRevision = NextPageRevision();
+        string changedJson;
+        try
+        {
+            changedJson = await _contentWebView.CoreWebView2.ExecuteScriptAsync(
+                $"window.{callback}?.({pageRevision})");
+        }
+        catch
+        {
+            RestoreMiningPageAfterFailedReplacement(
+                pageRevision,
+                previousPageRevision,
+                previousEntryCount);
+            throw;
+        }
+        if (!string.Equals(changedJson, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            RestoreMiningPageAfterFailedReplacement(
+                pageRevision,
+                previousPageRevision,
+                previousEntryCount);
+        }
+    }
+
+    private long NextPageRevision() => Interlocked.Increment(ref _pageRevisionCounter);
+
+    private void ActivateMiningPage(long pageRevision, int entryCount)
+    {
+        _pageRevisionCounter = Math.Max(_pageRevisionCounter, pageRevision);
+        _committedPageRevision = pageRevision;
+        _committedEntryCount = Math.Max(0, entryCount);
+        lock (_miningAttemptLock)
+            _activeMiningAttempts.Clear();
+        foreach (var key in _openableAnkiNotes.Keys
+            .Where(key => key.Generation != CommittedGeneration
+                || key.PageRevision != pageRevision)
+            .ToArray())
+        {
+            _openableAnkiNotes.Remove(key);
+        }
+        ResetMiningToast();
+        _contextMiningDialog?.Hide();
+    }
+
+    private void RestoreMiningPageAfterFailedReplacement(
+        long failedPageRevision,
+        long previousPageRevision,
+        int previousEntryCount)
+    {
+        if (_committedPageRevision != failedPageRevision)
+            return;
+
+        _committedPageRevision = previousPageRevision;
+        _committedEntryCount = previousEntryCount;
     }
 
     public async Task<bool> MoveDictionaryEntryAsync(int direction, int count)
@@ -985,6 +1104,12 @@ public sealed class DictionaryLookupPopup : IDisposable
         _displayTransaction.Dismiss();
         _navigationStateCoordinator.Reset();
         _openableAnkiNotes.Clear();
+        lock (_miningAttemptLock)
+            _activeMiningAttempts.Clear();
+        _committedPageRevision = 0;
+        _committedEntryCount = 0;
+        ResetMiningToast();
+        _contextMiningDialog?.Hide();
         ResetActionBarNavigationState();
         _displayGeneration++;
         _pendingContentGeneration = null;
@@ -1560,8 +1685,16 @@ public sealed class DictionaryLookupPopup : IDisposable
                     HandleMineEntry(payload);
                     break;
 
+                case "miningFeedback":
+                    HandleMiningFeedback(payload);
+                    break;
+
                 case "prepareContextMining":
                     HandlePrepareContextMining(payload);
+                    break;
+
+                case "pageRevisionChanged":
+                    HandlePageRevisionChanged(payload);
                     break;
 
                 case "openAnkiNote":
@@ -1577,6 +1710,30 @@ public sealed class DictionaryLookupPopup : IDisposable
         {
             Log.Error(ex, "[DictPopup] Failed to process WebMessage");
         }
+    }
+
+    private void HandlePageRevisionChanged(JsonElement payload)
+    {
+        if (!payload.TryGetProperty("body", out var body)
+            || body.ValueKind != JsonValueKind.Object
+            || !body.TryGetProperty("generation", out var generationElement)
+            || !generationElement.TryGetInt64(out var generation)
+            || !body.TryGetProperty("pageRevision", out var revisionElement)
+            || !revisionElement.TryGetInt64(out var pageRevision)
+            || !body.TryGetProperty("entryCount", out var countElement)
+            || !countElement.TryGetInt32(out var entryCount)
+            || generation != CommittedGeneration
+            || pageRevision < _committedPageRevision
+            || pageRevision > Math.Max(_pageRevisionCounter, _committedPageRevision + 1)
+            || entryCount < 0)
+        {
+            return;
+        }
+
+        if (pageRevision > _committedPageRevision)
+            ActivateMiningPage(pageRevision, entryCount);
+        else
+            _committedEntryCount = entryCount;
     }
 
     private void LogPopupDiagnostic(JsonElement payload)
@@ -2146,7 +2303,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         _ankiSettings = context.AnkiSettings;
         _miningContext = context.MiningContext;
         _sasayakiPopupControls = context.SasayakiControls;
-        _openableAnkiNotes.Clear();
+        ActivateMiningPage(context.PageRevision, context.EntryCount);
         _stagedNativeContext = null;
         UpdateSasayakiPopupControls();
     }
@@ -2614,6 +2771,129 @@ public sealed class DictionaryLookupPopup : IDisposable
         return AudioSourceUrlNormalizer.Normalize(url);
     }
 
+    private DictionaryPopupMiningAttempt? CreateMiningAttempt(
+        AnkiMiningPayload payload,
+        string kind)
+    {
+        if (payload.AttemptId <= 0
+            || payload.PageRevision < 0
+            || string.IsNullOrWhiteSpace(payload.Expression)
+            || payload.Expression.Length > MaxMiningExpressionLength
+            || !IsCurrentMiningEntry(
+                payload.RenderGeneration,
+                payload.PageRevision,
+                payload.EntryIndex))
+        {
+            return null;
+        }
+
+        return new DictionaryPopupMiningAttempt(
+            payload.EntryIndex,
+            payload.RenderGeneration,
+            payload.PageRevision,
+            payload.AttemptId,
+            payload.Expression,
+            kind);
+    }
+
+    private static bool MiningAttemptMatches(
+        DictionaryPopupMiningAttempt left,
+        DictionaryPopupMiningAttempt right) =>
+        left.EntryIndex == right.EntryIndex
+        && left.RenderGeneration == right.RenderGeneration
+        && left.PageRevision == right.PageRevision
+        && left.AttemptId == right.AttemptId
+        && string.Equals(left.Expression, right.Expression, StringComparison.Ordinal)
+        && string.Equals(left.Kind, right.Kind, StringComparison.Ordinal);
+
+    private bool TryBeginMiningAttempt(DictionaryPopupMiningAttempt attempt)
+    {
+        if (!IsCurrentMiningEntry(
+            attempt.RenderGeneration,
+            attempt.PageRevision,
+            attempt.EntryIndex))
+        {
+            return false;
+        }
+
+        var key = (attempt.RenderGeneration, attempt.PageRevision, attempt.EntryIndex);
+        lock (_miningAttemptLock)
+        {
+            if (_activeMiningAttempts.ContainsKey(key))
+                return false;
+            _activeMiningAttempts[key] = attempt;
+            return true;
+        }
+    }
+
+    private bool IsActiveMiningAttempt(DictionaryPopupMiningAttempt attempt)
+    {
+        var key = (attempt.RenderGeneration, attempt.PageRevision, attempt.EntryIndex);
+        lock (_miningAttemptLock)
+        {
+            return _activeMiningAttempts.TryGetValue(key, out var active)
+                && MiningAttemptMatches(active, attempt);
+        }
+    }
+
+    private bool TryStartMiningSubmission(DictionaryPopupMiningAttempt attempt)
+    {
+        if (!IsCurrentMiningEntry(
+            attempt.RenderGeneration,
+            attempt.PageRevision,
+            attempt.EntryIndex))
+        {
+            return false;
+        }
+
+        var key = (attempt.RenderGeneration, attempt.PageRevision, attempt.EntryIndex);
+        lock (_miningAttemptLock)
+        {
+            if (!_activeMiningAttempts.TryGetValue(key, out var active)
+                || !MiningAttemptMatches(active, attempt)
+                || active.SubmissionInFlight)
+            {
+                return false;
+            }
+
+            _activeMiningAttempts[key] = active with { SubmissionInFlight = true };
+            return true;
+        }
+    }
+
+    private void MarkMiningAttemptReadyForRetry(DictionaryPopupMiningAttempt attempt)
+    {
+        var key = (attempt.RenderGeneration, attempt.PageRevision, attempt.EntryIndex);
+        lock (_miningAttemptLock)
+        {
+            if (_activeMiningAttempts.TryGetValue(key, out var active)
+                && MiningAttemptMatches(active, attempt))
+            {
+                _activeMiningAttempts[key] = active with { SubmissionInFlight = false };
+            }
+        }
+    }
+
+    private bool TryCompleteMiningAttempt(DictionaryPopupMiningAttempt attempt)
+    {
+        var key = (attempt.RenderGeneration, attempt.PageRevision, attempt.EntryIndex);
+        lock (_miningAttemptLock)
+        {
+            if (!_activeMiningAttempts.TryGetValue(key, out var active)
+                || !MiningAttemptMatches(active, attempt))
+            {
+                return false;
+            }
+
+            _activeMiningAttempts.Remove(key);
+        }
+
+        return IsCurrentMiningEntry(
+            attempt.RenderGeneration,
+            attempt.PageRevision,
+            attempt.EntryIndex);
+    }
+
     private void HandleMineEntry(JsonElement payload)
     {
         if (!payload.TryGetProperty("body", out var body) || body.ValueKind != JsonValueKind.Object)
@@ -2621,27 +2901,68 @@ public sealed class DictionaryLookupPopup : IDisposable
 
         var rawPayload = body.GetRawText();
         var miningPayload = AnkiMiningPayload.FromJson(rawPayload);
-        var entryIndex = miningPayload.EntryIndex;
-        var renderGeneration = miningPayload.RenderGeneration;
+        var attempt = CreateMiningAttempt(miningPayload, "mine");
+        if (attempt == null || !TryStartMiningSubmission(attempt))
+            return;
+
+        var miningContext = ResolveMiningContext(attempt.RenderGeneration) is { } resolvedContext
+            ? MiningContextSelectionResolver.Clone(resolvedContext)
+            : null;
         _ = _contentWebView.DispatcherQueue.TryEnqueue(async () =>
         {
             try
             {
                 Log.Information("[Lifecycle] Anki mine started");
-                var result = await MineEntryCoreAsync(rawPayload, _miningContext);
-                ShowMiningToast(result);
-                await SendMiningResultToWebAsync(
-                    "onMineComplete", entryIndex, renderGeneration, result);
+                var result = miningContext == null
+                    ? AnkiMiningResult.Failed(ActivePopupChangedMessage)
+                    : await MineEntryCoreAsync(rawPayload, miningContext);
+                await PublishMiningResultToCurrentPopupAsync(
+                    "onMineComplete", attempt, result);
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "[DictPopup] MineEntry failed");
                 var result = AnkiMiningResult.Failed(ex.Message);
-                ShowMiningToast(result);
-                await SendMiningResultToWebAsync(
-                    "onMineComplete", entryIndex, renderGeneration, result);
+                await PublishMiningResultToCurrentPopupAsync(
+                    "onMineComplete", attempt, result);
             }
         });
+    }
+
+    private void HandleMiningFeedback(JsonElement payload)
+    {
+        if (!payload.TryGetProperty("body", out var body)
+            || body.ValueKind != JsonValueKind.Object
+            || !body.TryGetProperty("status", out var statusElement)
+            || statusElement.ValueKind != JsonValueKind.String)
+        {
+            return;
+        }
+
+        var status = statusElement.GetString();
+        var miningPayload = AnkiMiningPayload.FromJson(body.GetRawText());
+        var attempt = CreateMiningAttempt(miningPayload, "mine");
+        if (attempt == null)
+            return;
+
+        var detail = body.TryGetProperty("detail", out var detailElement)
+            && detailElement.ValueKind == JsonValueKind.String
+                ? detailElement.GetString() ?? UnknownErrorMessage
+                : UnknownErrorMessage;
+        if (detail.Length > MaxMiningFeedbackDetailLength)
+            detail = detail[..MaxMiningFeedbackDetailLength] + "…";
+        AnkiMiningResult? result = status switch
+        {
+            "pending" when TryBeginMiningAttempt(attempt) =>
+                AnkiMiningResult.Pending(PreparingCardMessage),
+            "failed" when TryCompleteMiningAttempt(attempt) =>
+                AnkiMiningResult.Failed(string.Format(
+                PrepareCardFailedFormat,
+                detail)),
+            _ => null,
+        };
+        if (result != null)
+            ShowMiningToast(result);
     }
 
     private void HandlePrepareContextMining(JsonElement payload)
@@ -2651,46 +2972,71 @@ public sealed class DictionaryLookupPopup : IDisposable
 
         var rawPayload = body.GetRawText();
         var miningPayload = AnkiMiningPayload.FromJson(rawPayload);
+        var attempt = CreateMiningAttempt(miningPayload, "context");
+        if (attempt == null || !TryBeginMiningAttempt(attempt))
+            return;
+
+        var baseMiningContext = ResolveMiningContext(attempt.RenderGeneration) is { } resolvedContext
+            ? MiningContextSelectionResolver.Clone(resolvedContext)
+            : null;
         _ = _contentWebView.DispatcherQueue.TryEnqueue(async () =>
         {
             try
             {
-                var baseMiningContext = ResolveMiningContext(miningPayload.RenderGeneration);
-                if (baseMiningContext == null)
+                if (baseMiningContext == null || !IsActiveMiningAttempt(attempt))
                 {
-                    await NotifyContextMiningPreparedAsync(miningPayload.EntryIndex);
+                    await ReleaseContextMiningAttemptAsync(attempt);
                     return;
                 }
 
-                await NotifyContextMiningPreparedAsync(miningPayload.EntryIndex);
                 var selection = baseMiningContext.ContextSelection;
                 var xamlRoot = VisualRoot.XamlRoot;
                 if (selection == null || xamlRoot == null)
                 {
                     var unavailable = AnkiMiningResult.Failed("Sentence context is unavailable.");
-                    ShowMiningToast(unavailable);
+                    await PublishMiningResultToCurrentPopupAsync(
+                        "onContextMineComplete",
+                        attempt,
+                        unavailable);
                     return;
                 }
 
                 if (_contextMiningDialog != null)
+                {
+                    await ReleaseContextMiningAttemptAsync(attempt);
                     return;
+                }
+
+                await NotifyContextMiningPreparedAsync(attempt);
 
                 var dialog = new MiningContextSelectionDialog(
                     selection,
                     miningPayload.Matched.Length,
                     async range =>
                     {
+                        if (!TryStartMiningSubmission(attempt))
+                            return AnkiMiningResult.Failed(ActivePopupChangedMessage);
+
+                        ShowMiningToast(AnkiMiningResult.Pending(PreparingCardMessage));
                         var selectedContext = MiningContextSelectionResolver.Apply(
                             baseMiningContext,
                             selection,
                             range);
                         var result = await MineEntryCoreAsync(rawPayload, selectedContext);
-                        ShowMiningToast(result);
-                        await SendMiningResultToWebAsync(
-                            "onContextMineComplete",
-                            miningPayload.EntryIndex,
-                            miningPayload.RenderGeneration,
-                            result);
+                        var keepAttempt = result.Status != AnkiMiningStatus.Added;
+                        try
+                        {
+                            await PublishMiningResultToCurrentPopupAsync(
+                                "onContextMineComplete",
+                                attempt,
+                                result,
+                                keepAttempt);
+                        }
+                        finally
+                        {
+                            if (keepAttempt)
+                                MarkMiningAttemptReadyForRetry(attempt);
+                        }
                         return result;
                     })
                 {
@@ -2715,13 +3061,16 @@ public sealed class DictionaryLookupPopup : IDisposable
                     if (dialogHost?.Children.Contains(dialog) == true)
                         dialogHost.Children.Remove(dialog);
                     _contextMiningDialog = null;
+                    await ReleaseContextMiningAttemptAsync(attempt);
                 }
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "[DictPopup] Context mining dialog failed to open");
-                ShowMiningToast(AnkiMiningResult.Failed("Unable to open sentence context."));
-                await NotifyContextMiningPreparedAsync(miningPayload.EntryIndex);
+                await PublishMiningResultToCurrentPopupAsync(
+                    "onContextMineComplete",
+                    attempt,
+                    AnkiMiningResult.Failed("Unable to open sentence context."));
             }
         });
     }
@@ -2737,10 +3086,32 @@ public sealed class DictionaryLookupPopup : IDisposable
                 : null;
     }
 
-    private Task NotifyContextMiningPreparedAsync(int entryIndex) =>
-        _contentWebView.CoreWebView2.ExecuteScriptAsync(
-            $"if (typeof window.onContextMiningPrepared === 'function') window.onContextMiningPrepared({entryIndex});")
+    private Task NotifyContextMiningPreparedAsync(DictionaryPopupMiningAttempt attempt)
+    {
+        if (!IsActiveMiningAttempt(attempt)
+            || !IsCurrentMiningEntry(
+                attempt.RenderGeneration,
+                attempt.PageRevision,
+                attempt.EntryIndex))
+        {
+            return Task.CompletedTask;
+        }
+
+        var expression = JsonSerializer.Serialize(attempt.Expression);
+        return _contentWebView.CoreWebView2.ExecuteScriptAsync(
+            $"if (typeof window.onContextMiningPrepared === 'function') window.onContextMiningPrepared({attempt.EntryIndex}, {attempt.RenderGeneration}, {attempt.PageRevision}, {attempt.AttemptId}, {expression});")
             .AsTask();
+    }
+
+    private async Task ReleaseContextMiningAttemptAsync(DictionaryPopupMiningAttempt attempt)
+    {
+        if (!TryCompleteMiningAttempt(attempt))
+            return;
+
+        var expression = JsonSerializer.Serialize(attempt.Expression);
+        await _contentWebView.CoreWebView2.ExecuteScriptAsync(
+            $"if (typeof window.onContextMiningReleased === 'function') window.onContextMiningReleased({attempt.EntryIndex}, {attempt.RenderGeneration}, {attempt.PageRevision}, {attempt.AttemptId}, {expression});");
+    }
 
     private async Task<AnkiMiningResult> MineEntryCoreAsync(
         string rawPayload,
@@ -2751,9 +3122,13 @@ public sealed class DictionaryLookupPopup : IDisposable
             var preflight = await _ankiService.PreflightMiningAsync(rawPayload, miningContext);
             if (!preflight.CanMine)
             {
+                var duplicateNoteId = preflight.DuplicateNoteIds?
+                    .FirstOrDefault(noteId => noteId > 0);
                 return preflight.IsDuplicate
-                    ? AnkiMiningResult.Duplicate()
-                    : AnkiMiningResult.Failed(preflight.ErrorMessage ?? "Failed to add card.");
+                    ? AnkiMiningResult.Duplicate(
+                        AlreadyExistsMessage,
+                        duplicateNoteId > 0 ? duplicateNoteId : null)
+                    : AnkiMiningResult.Failed(preflight.ErrorMessage ?? AddCardFailedMessage);
             }
 
             var videoMediaError = await RequestVideoMiningMediaAsync(preflight, miningContext);
@@ -2765,9 +3140,30 @@ public sealed class DictionaryLookupPopup : IDisposable
                 return AnkiMiningResult.Failed(sasayakiMediaError);
 
             var noteId = await _ankiService.MineEntryAsync(rawPayload, miningContext);
-            return noteId is long addedNoteId && addedNoteId > 0
-                ? AnkiMiningResult.Added(addedNoteId)
-                : AnkiMiningResult.Failed("Failed to add card.");
+            if (noteId is long addedNoteId && addedNoteId > 0)
+                return AnkiMiningResult.Added(addedNoteId, AddedToAnkiMessage);
+
+            // The final, keyed submission check may discover that another in-flight
+            // attempt just added this expression. MineEntryAsync intentionally returns
+            // no new note ID in that case; recover the cached duplicate outcome so the
+            // UI reports Duplicate Found instead of a misleading Add Failed.
+            if (!_ankiService.Settings.AllowDupes)
+            {
+                var expression = AnkiMiningPayload.FromJson(rawPayload).Expression;
+                if (!string.IsNullOrWhiteSpace(expression))
+                {
+                    var duplicate = await _ankiService.DuplicateLookupExpressionAsync(expression);
+                    if (duplicate.IsDuplicate)
+                    {
+                        var duplicateNoteId = duplicate.NoteIds.FirstOrDefault(id => id > 0);
+                        return AnkiMiningResult.Duplicate(
+                            AlreadyExistsMessage,
+                            duplicateNoteId > 0 ? duplicateNoteId : null);
+                    }
+                }
+            }
+
+            return AnkiMiningResult.Failed(AddCardFailedMessage);
         }
         catch (Exception ex)
         {
@@ -2849,6 +3245,9 @@ public sealed class DictionaryLookupPopup : IDisposable
             || !body.TryGetProperty("renderGeneration", out var generationElement)
             || !generationElement.TryGetInt64(out var renderGeneration)
             || renderGeneration < 0
+            || !body.TryGetProperty("pageRevision", out var revisionElement)
+            || !revisionElement.TryGetInt64(out var pageRevision)
+            || pageRevision < 0
             || !body.TryGetProperty("noteIDs", out var noteIdsElement)
             || noteIdsElement.ValueKind != JsonValueKind.Array)
         {
@@ -2870,16 +3269,16 @@ public sealed class DictionaryLookupPopup : IDisposable
 
         _ = _contentWebView.DispatcherQueue.TryEnqueue(async () =>
         {
-            var allowed = CommittedGeneration == renderGeneration
+            var allowed = IsCurrentMiningEntry(renderGeneration, pageRevision, entryIndex)
                 && _openableAnkiNotes.TryGetValue(
-                    (renderGeneration, entryIndex),
+                    (renderGeneration, pageRevision, entryIndex),
                     out var allowedNoteIds)
                 && allowedNoteIds.SequenceEqual(noteIds);
             var opened = false;
             if (allowed)
             {
                 opened = await _ankiService.OpenNotesInAnkiAsync(noteIds);
-                if (!opened)
+                if (!opened && IsCurrentMiningEntry(renderGeneration, pageRevision, entryIndex))
                     ShowMiningToast(AnkiMiningResult.Failed("Unable to open note in Anki."));
             }
             else
@@ -2891,11 +3290,11 @@ public sealed class DictionaryLookupPopup : IDisposable
                     string.Join(',', noteIds));
             }
 
-            if (CommittedGeneration != renderGeneration)
+            if (!IsCurrentMiningEntry(renderGeneration, pageRevision, entryIndex))
                 return;
 
             await _contentWebView.CoreWebView2.ExecuteScriptAsync(
-                $"if (typeof window.onOpenAnkiNoteComplete === 'function') window.onOpenAnkiNoteComplete({entryIndex}, {(opened ? "true" : "false")});");
+                $"if (typeof window.onOpenAnkiNoteComplete === 'function') window.onOpenAnkiNoteComplete({entryIndex}, {renderGeneration}, {pageRevision}, {(opened ? "true" : "false")});");
         });
     }
 
@@ -2905,6 +3304,7 @@ public sealed class DictionaryLookupPopup : IDisposable
             return;
 
         var expression = body.TryGetProperty("expression", out var expressionElement)
+            && expressionElement.ValueKind == JsonValueKind.String
             ? expressionElement.GetString() ?? ""
             : "";
         var entryIndex = body.TryGetProperty("entryIndex", out var entryIndexElement)
@@ -2915,64 +3315,230 @@ public sealed class DictionaryLookupPopup : IDisposable
             && generationElement.TryGetInt64(out var parsedGeneration)
                 ? parsedGeneration
                 : -1;
-        _ = HandleDuplicateCheckAsync(expression, entryIndex, renderGeneration);
+        var pageRevision = body.TryGetProperty("pageRevision", out var revisionElement)
+            && revisionElement.TryGetInt64(out var parsedRevision)
+                ? parsedRevision
+                : -1;
+        var requestSequence = body.TryGetProperty("requestSequence", out var sequenceElement)
+            && sequenceElement.TryGetInt32(out var parsedSequence)
+                ? parsedSequence
+                : 0;
+        var attemptId = body.TryGetProperty("attemptId", out var attemptElement)
+            && attemptElement.TryGetInt64(out var parsedAttemptId)
+                ? parsedAttemptId
+                : 0;
+        if (entryIndex < 0
+            || renderGeneration < 0
+            || pageRevision < 0
+            || requestSequence < 0
+            || attemptId < 0
+            || string.IsNullOrWhiteSpace(expression)
+            || expression.Length > MaxMiningExpressionLength)
+            return;
+
+        var request = new DictionaryPopupDuplicateCheckRequest(
+            expression,
+            entryIndex,
+            renderGeneration,
+            pageRevision,
+            requestSequence,
+            attemptId);
+        if (!IsAcceptedDuplicatePage(request))
+            return;
+
+        var shouldSchedule = false;
+        lock (_duplicateCheckBatchLock)
+        {
+            _pendingDuplicateChecks.Add(request);
+            if (!_duplicateCheckBatchScheduled)
+            {
+                _duplicateCheckBatchScheduled = true;
+                shouldSchedule = true;
+            }
+        }
+
+        if (shouldSchedule)
+            _ = FlushDuplicateCheckBatchAsync(_duplicateCheckBatchCts.Token);
     }
 
-    private async Task HandleDuplicateCheckAsync(
-        string expression,
-        int entryIndex,
-        long renderGeneration)
+    private async Task FlushDuplicateCheckBatchAsync(CancellationToken cancellationToken)
     {
+        List<DictionaryPopupDuplicateCheckRequest> requests = [];
         try
         {
-            var lookup = await _ankiService.DuplicateLookupExpressionAsync(expression);
-            if (renderGeneration >= 0
-                && CommittedGeneration != renderGeneration
-                && _displayTransaction.CommitInFlightGeneration != renderGeneration)
+            await Task.Delay(TimeSpan.FromMilliseconds(15), cancellationToken);
+            lock (_duplicateCheckBatchLock)
+            {
+                requests = _pendingDuplicateChecks
+                    .GroupBy(request => (
+                        request.RenderGeneration,
+                        request.PageRevision,
+                        request.EntryIndex,
+                        request.Expression))
+                    .Select(group => group.MaxBy(request => request.RequestSequence)!)
+                    .ToList();
+                _pendingDuplicateChecks.Clear();
+                _duplicateCheckBatchScheduled = false;
+            }
+
+            requests = requests
+                .Where(request => IsAcceptedDuplicatePage(request))
+                .ToList();
+            if (requests.Count == 0)
                 return;
 
+            var expressions = requests
+                .Select(request => request.Expression)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            var lookups = await _ankiService.DuplicateLookupExpressionsAsync(expressions);
+            await SendDuplicateCheckBatchToWebAsync(requests, lookups);
+        }
+        catch (OperationCanceledException)
+        {
+            lock (_duplicateCheckBatchLock)
+            {
+                _pendingDuplicateChecks.Clear();
+                _duplicateCheckBatchScheduled = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[DictPopup] DuplicateCheck batch failed");
+            if (requests.Count == 0)
+            {
+                lock (_duplicateCheckBatchLock)
+                {
+                    requests = _pendingDuplicateChecks.ToList();
+                    _pendingDuplicateChecks.Clear();
+                    _duplicateCheckBatchScheduled = false;
+                }
+            }
+
+            if (requests.Count > 0)
+            {
+                try
+                {
+                    await SendDuplicateCheckBatchToWebAsync(
+                        requests,
+                        new Dictionary<string, AnkiDuplicateLookupResult>(StringComparer.Ordinal));
+                }
+                catch (Exception callbackEx)
+                {
+                    Log.Debug(callbackEx, "[DictPopup] DuplicateCheck failure callback was not delivered");
+                }
+            }
+        }
+    }
+
+    private bool IsAcceptedDuplicatePage(DictionaryPopupDuplicateCheckRequest request) =>
+        IsCurrentMiningEntry(
+            request.RenderGeneration,
+            request.PageRevision,
+            request.EntryIndex)
+        || (_displayTransaction.CommitInFlightGeneration == request.RenderGeneration
+            && _stagedNativeContext is { } staged
+            && staged.Generation == request.RenderGeneration
+            && staged.PageRevision == request.PageRevision
+            && request.EntryIndex < staged.EntryCount);
+
+    private async Task SendDuplicateCheckBatchToWebAsync(
+        IReadOnlyList<DictionaryPopupDuplicateCheckRequest> requests,
+        IReadOnlyDictionary<string, AnkiDuplicateLookupResult> lookups)
+    {
+        var currentRequests = requests
+            .Where(IsAcceptedDuplicatePage)
+            .ToArray();
+        if (currentRequests.Length == 0)
+            return;
+
+        var results = currentRequests.Select(request =>
+        {
+            var lookup = lookups.TryGetValue(request.Expression, out var found)
+                ? found
+                : AnkiDuplicateLookupResult.NotDuplicate();
             var noteIds = lookup.NoteIds
                 .Where(noteId => noteId > 0)
                 .Distinct()
                 .ToArray();
-            var key = (renderGeneration, entryIndex);
+            var key = (request.RenderGeneration, request.PageRevision, request.EntryIndex);
             if (lookup.IsDuplicate && noteIds.Length > 0)
                 _openableAnkiNotes[key] = noteIds;
-            else
-                _openableAnkiNotes.Remove(key);
 
-            var result = JsonSerializer.Serialize(new
+            return new
             {
+                entryIndex = request.EntryIndex,
+                renderGeneration = request.RenderGeneration,
+                pageRevision = request.PageRevision,
+                requestSequence = request.RequestSequence,
+                attemptId = request.AttemptId,
+                expression = request.Expression,
                 isDuplicate = lookup.IsDuplicate,
                 noteIDs = noteIds,
-            });
-            await _contentWebView.CoreWebView2.ExecuteScriptAsync(
-                $"if (typeof window.onDuplicateCheck === 'function') window.onDuplicateCheck({entryIndex}, {result});");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "[DictPopup] DuplicateCheck failed");
-            if (renderGeneration >= 0
-                && CommittedGeneration != renderGeneration
-                && _displayTransaction.CommitInFlightGeneration != renderGeneration)
-                return;
+            };
+        }).ToArray();
 
-            await _contentWebView.CoreWebView2.ExecuteScriptAsync(
-                $"if (typeof window.onDuplicateCheck === 'function') window.onDuplicateCheck({entryIndex}, {{isDuplicate:false,noteIDs:[]}});");
-        }
+        var payload = JsonSerializer.Serialize(results);
+        await _contentWebView.CoreWebView2.ExecuteScriptAsync(
+            $"if (typeof window.onDuplicateCheckBatch === 'function') window.onDuplicateCheckBatch({payload});");
+    }
+
+    private bool IsCurrentMiningGeneration(long renderGeneration) =>
+        renderGeneration >= 0 && CommittedGeneration == renderGeneration;
+
+    private bool IsCurrentMiningEntry(
+        long renderGeneration,
+        long pageRevision,
+        int entryIndex) =>
+        IsCurrentMiningGeneration(renderGeneration)
+        && pageRevision == _committedPageRevision
+        && entryIndex >= 0
+        && entryIndex < _committedEntryCount;
+
+    private async Task PublishMiningResultToCurrentPopupAsync(
+        string callback,
+        DictionaryPopupMiningAttempt attempt,
+        AnkiMiningResult result,
+        bool keepAttempt = false)
+    {
+        var canPresent = keepAttempt
+            ? IsActiveMiningAttempt(attempt)
+                && IsCurrentMiningEntry(
+                    attempt.RenderGeneration,
+                    attempt.PageRevision,
+                    attempt.EntryIndex)
+            : TryCompleteMiningAttempt(attempt);
+        if (!canPresent)
+            return;
+
+        ShowMiningToast(result);
+        await SendMiningResultToWebAsync(callback, attempt, result, keepAttempt);
     }
 
     private async Task SendMiningResultToWebAsync(
         string callback,
-        int entryIndex,
-        long renderGeneration,
-        AnkiMiningResult result)
+        DictionaryPopupMiningAttempt attempt,
+        AnkiMiningResult result,
+        bool keepAttempt)
     {
-        if (renderGeneration >= 0 && CommittedGeneration != renderGeneration)
+        if (!IsCurrentMiningEntry(
+            attempt.RenderGeneration,
+            attempt.PageRevision,
+            attempt.EntryIndex))
+        {
             return;
+        }
 
-        if (result is { Status: AnkiMiningStatus.Added, NoteId: > 0 })
-            _openableAnkiNotes[(renderGeneration, entryIndex)] = [result.NoteId.Value];
+        if (result is
+            {
+                Status: AnkiMiningStatus.Added or AnkiMiningStatus.Duplicate,
+                NoteId: > 0,
+            })
+        {
+            _openableAnkiNotes[
+                (attempt.RenderGeneration, attempt.PageRevision, attempt.EntryIndex)] =
+                [result.NoteId.Value];
+        }
 
         var payload = JsonSerializer.Serialize(new
         {
@@ -2980,8 +3546,9 @@ public sealed class DictionaryLookupPopup : IDisposable
             message = result.Message,
             noteID = result.NoteId,
         });
+        var expression = JsonSerializer.Serialize(attempt.Expression);
         await _contentWebView.CoreWebView2.ExecuteScriptAsync(
-            $"if (typeof window.{callback} === 'function') window.{callback}({entryIndex}, {payload});");
+            $"if (typeof window.{callback} === 'function') window.{callback}({attempt.EntryIndex}, {attempt.RenderGeneration}, {attempt.PageRevision}, {attempt.AttemptId}, {expression}, {payload}, {(keepAttempt ? "true" : "false")});");
     }
 
     private void ShowMiningToast(AnkiMiningResult result)
@@ -2991,10 +3558,10 @@ public sealed class DictionaryLookupPopup : IDisposable
         _miningToastCts = new CancellationTokenSource();
         _miningToast.Title = result.Status switch
         {
-            AnkiMiningStatus.Added => "Card Added",
-            AnkiMiningStatus.Duplicate => "Duplicate Found",
-            AnkiMiningStatus.Pending => "Sent to Anki",
-            _ => "Add Failed",
+            AnkiMiningStatus.Added => CardAddedTitle,
+            AnkiMiningStatus.Duplicate => DuplicateFoundTitle,
+            AnkiMiningStatus.Pending => SentToAnkiTitle,
+            _ => AddFailedTitle,
         };
         _miningToast.Message = result.Message;
         _miningToast.Severity = result.Status switch
@@ -3008,12 +3575,68 @@ public sealed class DictionaryLookupPopup : IDisposable
         _ = HideMiningToastAsync(_miningToastCts.Token);
     }
 
+    private void ResetMiningToast()
+    {
+        _miningToastCts?.Cancel();
+        _miningToastCts?.Dispose();
+        _miningToastCts = null;
+        _miningToast.IsOpen = false;
+    }
+
+    private static string CardAddedTitle => ResourceStringHelper.GetString(
+        "DictionaryPopupAnkiCardAddedTitle",
+        "Card Added");
+
+    private static string DuplicateFoundTitle => ResourceStringHelper.GetString(
+        "DictionaryPopupAnkiDuplicateFoundTitle",
+        "Duplicate Found");
+
+    private static string SentToAnkiTitle => ResourceStringHelper.GetString(
+        "DictionaryPopupAnkiSentToAnkiTitle",
+        "Sent to Anki");
+
+    private static string AddFailedTitle => ResourceStringHelper.GetString(
+        "DictionaryPopupAnkiAddFailedTitle",
+        "Add Failed");
+
+    private static string PreparingCardMessage => ResourceStringHelper.GetString(
+        "DictionaryPopupAnkiPreparingCardMessage",
+        "Preparing card…");
+
+    private static string PrepareCardFailedFormat => ResourceStringHelper.GetString(
+        "DictionaryPopupAnkiPrepareCardFailedFormat",
+        "Unable to prepare the card: {0}");
+
+    private static string AddedToAnkiMessage => ResourceStringHelper.GetString(
+        "DictionaryPopupAnkiAddedMessage",
+        "Added to Anki.");
+
+    private static string AlreadyExistsMessage => ResourceStringHelper.GetString(
+        "DictionaryPopupAnkiAlreadyExistsMessage",
+        "Already exists in Anki.");
+
+    private static string AddCardFailedMessage => ResourceStringHelper.GetString(
+        "DictionaryPopupAnkiAddCardFailedMessage",
+        "Failed to add card.");
+
+    private static string ActivePopupChangedMessage => ResourceStringHelper.GetString(
+        "DictionaryPopupAnkiActivePopupChangedMessage",
+        "Lookup changed. Try adding the card again.");
+
+    private static string UnknownErrorMessage => ResourceStringHelper.GetString(
+        "DictionaryPopupUnknownErrorMessage",
+        "Unknown error");
+
     private async Task HideMiningToastAsync(CancellationToken cancellationToken)
     {
         try
         {
             await Task.Delay(TimeSpan.FromMilliseconds(2200), cancellationToken);
-            _contentWebView.DispatcherQueue.TryEnqueue(() => _miningToast.IsOpen = false);
+            _contentWebView.DispatcherQueue.TryEnqueue(() =>
+            {
+                if (!cancellationToken.IsCancellationRequested)
+                    _miningToast.IsOpen = false;
+            });
         }
         catch (OperationCanceledException)
         {
@@ -3023,8 +3646,9 @@ public sealed class DictionaryLookupPopup : IDisposable
     public void Dispose()
     {
         CancelOpacityAnimation();
-        _miningToastCts?.Cancel();
-        _miningToastCts?.Dispose();
+        ResetMiningToast();
+        _duplicateCheckBatchCts.Cancel();
+        _duplicateCheckBatchCts.Dispose();
         CancelPrefetch();
         CancelDeferredResults();
         if (_contentWebView.CoreWebView2 != null)

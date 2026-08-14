@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Niratan.Enums;
 using Niratan.Models.Settings;
 
 namespace Niratan.Tests.Models.Settings;
@@ -46,7 +47,7 @@ public sealed class ReaderSettingsTests
     {
         var settings = new ReaderSettings
         {
-            UseCustomColors = true,
+            Theme = ReaderTheme.Custom,
             CustomBackgroundColor = "#123456",
             CustomTextColor = "#ABCDEF",
             CustomInfoColor = "#654321",
@@ -55,6 +56,72 @@ public sealed class ReaderSettingsTests
         settings.BackgroundColor(Niratan.Enums.ThemeMode.Dark).Should().Be(0xFF123456);
         settings.TextColorCss(Niratan.Enums.ThemeMode.Dark).Should().Be("#ABCDEF");
         settings.InfoColor(Niratan.Enums.ThemeMode.Dark).Should().Be(0xFF654321);
+    }
+
+    [Fact]
+    public void LegacyThemeFlags_ResolveToUnifiedTheme()
+    {
+        new ReaderSettings { SepiaMode = true }.EffectiveTheme.Should().Be(ReaderTheme.Sepia);
+        new ReaderSettings { SepiaMode = true, UseCustomColors = true }
+            .EffectiveTheme.Should().Be(ReaderTheme.Custom);
+    }
+
+    [Fact]
+    public void Sepia_InvertsOnlyWhenEnabledInDarkMode()
+    {
+        var settings = new ReaderSettings
+        {
+            Theme = ReaderTheme.Sepia,
+            SepiaInvertInDark = true,
+        };
+
+        settings.BackgroundColor(ThemeMode.Light).Should().Be(0xFFF2E2C9);
+        settings.TextColorCss(ThemeMode.Light).Should().Be("#332A1B");
+        settings.BackgroundColor(ThemeMode.Dark).Should().Be(0xFF18150C);
+        settings.TextColorCss(ThemeMode.Dark).Should().Be("#F2E2C9");
+        settings.InfoColor(ThemeMode.Dark).Should().Be(0xFFF2E2C9);
+        settings.UsesDarkInterface(ThemeMode.Dark).Should().BeTrue();
+    }
+
+    [Fact]
+    public void SystemTheme_CanUseSepiaForLightContent()
+    {
+        var settings = new ReaderSettings
+        {
+            Theme = ReaderTheme.System,
+            SystemLightSepia = true,
+        };
+
+        settings.BackgroundColor(ThemeMode.Light).Should().Be(0xFFF2E2C9);
+        settings.TextColorCss(ThemeMode.Light).Should().Be("#332A1B");
+        settings.BackgroundColor(ThemeMode.Dark).Should().Be(0xFF000000);
+        settings.TextColorCss(ThemeMode.Dark).Should().Be("#fff");
+    }
+
+    [Theory]
+    [InlineData(ThemeMode.System, ReaderTheme.System)]
+    [InlineData(ThemeMode.Light, ReaderTheme.Light)]
+    [InlineData(ThemeMode.Dark, ReaderTheme.Dark)]
+    public void LegacyApplicationTheme_MigratesIntoUnifiedTheme(
+        ThemeMode appTheme,
+        ReaderTheme expected)
+    {
+        new ReaderSettings().ResolveUnifiedTheme(appTheme).Should().Be(expected);
+    }
+
+    [Fact]
+    public void UnifiedTheme_ResolvesApplicationInterfaceLikeNiratan()
+    {
+        new ReaderSettings { Theme = ReaderTheme.Sepia }
+            .ResolveInterfaceTheme(ThemeMode.Dark).Should().Be(ThemeMode.Light);
+        new ReaderSettings { Theme = ReaderTheme.Sepia, SepiaInvertInDark = true }
+            .ResolveInterfaceTheme(ThemeMode.Light).Should().Be(ThemeMode.System);
+        new ReaderSettings
+            {
+                Theme = ReaderTheme.Custom,
+                CustomInterfaceTheme = ThemeMode.Dark,
+            }
+            .ResolveInterfaceTheme(ThemeMode.Light).Should().Be(ThemeMode.Dark);
     }
 
     [Theory]

@@ -47,6 +47,7 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     private string? _activeSeriesName;
     private string? _activeTag;
     private bool _isSubscribedToPlayerLibraryChanges;
+    private Guid? _lastReloadedMetadataJobId;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NoVideos))]
@@ -553,7 +554,7 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
             ? CloneForPlayback(item.Video, lastPositionSeconds: 0)
             : item.Video;
 
-        var playlist = Videos.Select(row => row.Video).ToList();
+        var playlist = ResolvePlaybackPlaylist(item.Video);
         var currentIndex = playlist.FindIndex(candidate =>
             string.Equals(candidate.Id, item.Video.Id, StringComparison.OrdinalIgnoreCase));
         var context = new VideoLibraryPlaybackContext(
@@ -566,6 +567,19 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         await _playerWindowService.OpenAsync(
             new VideoPlaybackLaunchRequest(video, playlist, LibraryContext: context),
             _cts.Token);
+    }
+
+    private List<VideoItem> ResolvePlaybackPlaylist(VideoItem selected)
+    {
+        if (IsSeriesDetailView && SelectedSeries != null)
+        {
+            if (SelectedSeries.ContainsSpecialFeature(selected))
+                return [selected];
+            if (SelectedSeries.ContainsRegularEpisode(selected))
+                return SelectedSeries.RegularEpisodes.Select(item => item.Video).ToList();
+        }
+
+        return Videos.Select(row => row.Video).ToList();
     }
 
     [RelayCommand]
@@ -1038,6 +1052,10 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     }
 
     [RelayCommand]
+    private void SelectSeriesSeason(VideoSeasonViewModel season) =>
+        SelectedSeries?.SelectSeason(season.SeasonNumber);
+
+    [RelayCommand]
     private void BackToSeries()
     {
         SelectedSeries = null;
@@ -1326,7 +1344,15 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
             .FirstOrDefault();
         HasBackgroundMetadataTask = active != null;
         if (active == null)
+        {
+            if (progress.State == VideoCatalogJobState.Completed
+                && _lastReloadedMetadataJobId != progress.JobId)
+            {
+                _lastReloadedMetadataJobId = progress.JobId;
+                _ = LoadVideosAsync();
+            }
             return;
+        }
         BackgroundMetadataProgress = active.TotalCount > 0
             ? Math.Clamp(active.ProcessedCount * 100d / active.TotalCount, 0, 100)
             : 100;
@@ -1466,6 +1492,7 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     private void RebuildSeriesCards()
     {
         var selectedId = SelectedSeries?.Id;
+        var selectedSeason = SelectedSeries?.SelectedSeason;
         SeriesCards = new ObservableCollection<VideoSeriesViewModel>(_allVideos
             .Where(video => video.CatalogSeriesNodeId.HasValue
                             && video.LibraryMediaType != VideoLibraryMediaType.Anime)
@@ -1475,6 +1502,8 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         SelectedSeries = selectedId.HasValue
             ? SeriesCards.FirstOrDefault(series => series.Id == selectedId.Value)
             : null;
+        if (SelectedSeries != null && selectedSeason != null)
+            SelectedSeries.SelectSeason(selectedSeason.SeasonNumber);
         if (SelectedLibraryView == VideoLibraryView.Series && SelectedSeries == null)
             CurrentViewSubtitle = FormatVideoCount(SeriesCards.Count);
     }
@@ -1511,20 +1540,24 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
             .ToList();
     }
 
-    private IEnumerable<VideoItem> BuildNextEpisodes()
+    private IEnumerable<VideoItem> BuildNextEpisodes() => BuildNextEpisodeItems(_allVideos);
+
+    internal static IReadOnlyList<VideoItem> BuildNextEpisodeItems(IEnumerable<VideoItem> videos)
     {
-        return _allVideos
+        var logicalEpisodes = VideoSeriesViewModel.CollapseLogicalEntries(videos
             .Where(video => video.CatalogSeriesNodeId.HasValue
                             && video.CatalogNodeKind == VideoCatalogNodeKind.Episode
                             && video.IsAvailable
-                            && (!video.IsSpecialEpisode || video.AbsoluteEpisodeNumber.HasValue))
+                            && !VideoSeriesViewModel.IsSpecialEntry(video)));
+
+        return logicalEpisodes
             .GroupBy(video => video.CatalogSeriesNodeId!.Value)
             .Select(group =>
             {
                 var ordered = group
-                    .OrderBy(video => video.AbsoluteEpisodeNumber ?? int.MaxValue)
-                    .ThenBy(video => video.SeasonNumber ?? int.MaxValue)
-                    .ThenBy(video => video.EpisodeNumber ?? int.MaxValue)
+                    .OrderBy(video => video.SeasonNumber ?? int.MaxValue)
+                    .ThenBy(video => video.EpisodeNumber ?? video.AbsoluteEpisodeNumber ?? int.MaxValue)
+                    .ThenBy(video => video.AbsoluteEpisodeNumber ?? int.MaxValue)
                     .ThenBy(video => video.FilePath, StringComparer.OrdinalIgnoreCase)
                     .ToList();
                 var anchor = ordered.FindLastIndex(video => video.IsWatched || HasProgress(video));
@@ -1534,7 +1567,8 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
             })
             .Where(video => video != null)
             .Select(video => video!)
-            .OrderByDescending(video => video.ImportedAt);
+            .OrderByDescending(video => video.ImportedAt)
+            .ToList();
     }
 
     private IEnumerable<VideoItem> FilterVideos(IEnumerable<VideoItem> videos)

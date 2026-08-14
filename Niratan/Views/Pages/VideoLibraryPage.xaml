@@ -203,8 +203,11 @@
         </DataTemplate>
 
         <DataTemplate x:Key="VideoPosterItemTemplate" x:DataType="vmc:VideoItemViewModel">
-            <Grid>
+            <Grid Width="220"
+                  MaxWidth="220"
+                  Margin="0,0,12,0">
             <Button Width="220"
+                    MaxWidth="220"
                     Padding="0"
                     HorizontalContentAlignment="Stretch"
                     VerticalContentAlignment="Stretch"
@@ -261,8 +264,11 @@
                                         CommandParameter="{x:Bind}" />
                     </MenuFlyout>
                 </Button.ContextFlyout>
-                <StackPanel Spacing="8">
-                    <Border Height="124"
+                <StackPanel Width="220"
+                            MaxWidth="220"
+                            Spacing="8">
+                    <Border Width="220"
+                            Height="124"
                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                             CornerRadius="8">
                         <Grid>
@@ -277,7 +283,9 @@
                                       Visibility="{x:Bind HasLandscapeArtwork, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}" />
                         </Grid>
                     </Border>
-                    <StackPanel Spacing="5">
+                    <StackPanel Width="220"
+                                MaxWidth="220"
+                                Spacing="5">
                         <Grid ColumnDefinitions="*,Auto"
                               ColumnSpacing="8">
                             <ProgressBar Height="4"
@@ -290,6 +298,8 @@
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         </Grid>
                         <TextBlock x:Name="VideoPosterTitleText"
+                                   Width="220"
+                                   MaxWidth="220"
                                    Text="{x:Bind Video.Title, Mode=OneTime}"
                                    TextWrapping="WrapWholeWords"
                                    TextTrimming="CharacterEllipsis"
@@ -983,13 +993,23 @@
                                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><ItemsStackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vmc:VideoSeasonViewModel">
-                                            <StackPanel Width="128" Margin="0,0,12,0" Spacing="6">
-                                                <Border Height="192" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-                                                    <Image Source="{x:Bind PosterImage, Mode=OneTime}" Stretch="UniformToFill" />
-                                                </Border>
-                                                <TextBlock Text="{x:Bind Title, Mode=OneTime}" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                                <TextBlock Text="{x:Bind EpisodeCountText, Mode=OneTime}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                            </StackPanel>
+                                            <ToggleButton Width="128"
+                                                          Margin="0,0,12,0"
+                                                          Padding="0"
+                                                          HorizontalContentAlignment="Stretch"
+                                                          VerticalContentAlignment="Stretch"
+                                                          AutomationProperties.AutomationId="{x:Bind AutomationId, Mode=OneTime}"
+                                                          IsChecked="{x:Bind IsSelected, Mode=OneWay}"
+                                                          Command="{Binding ViewModel.SelectSeriesSeasonCommand, ElementName=ThisPage}"
+                                                          CommandParameter="{x:Bind}">
+                                                <StackPanel Spacing="6">
+                                                    <Border Height="192" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                                                        <Image Source="{x:Bind PosterImage, Mode=OneTime}" Stretch="UniformToFill" />
+                                                    </Border>
+                                                    <TextBlock Text="{x:Bind Title, Mode=OneTime}" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                                    <TextBlock Text="{x:Bind EpisodeCountText, Mode=OneTime}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                </StackPanel>
+                                            </ToggleButton>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>

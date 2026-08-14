@@ -13,6 +13,7 @@ using Serilog;
 using Niratan.Helpers;
 using Niratan.Models;
 using Niratan.Models.Novel;
+using Niratan.Enums;
 using Niratan.Services;
 using Niratan.Services.Anki;
 using Niratan.Services.Audio;
@@ -223,6 +224,7 @@ public partial class App : Application
         services.AddSingleton<IVideoMetadataDetailsProvider>(provider => provider.GetRequiredService<TvDbLicenseGatedProvider>());
         services.AddSingleton<IVideoArtworkProvider>(provider => provider.GetRequiredService<TmdbVideoMetadataProvider>());
         services.AddSingleton<IVideoArtworkProvider>(provider => provider.GetRequiredService<TvMazeVideoMetadataProvider>());
+        services.AddSingleton<IVideoArtworkProvider>(provider => provider.GetRequiredService<AniListVideoMetadataProvider>());
         services.AddSingleton<IVideoArtworkProvider>(provider => provider.GetRequiredService<TvDbLicenseGatedProvider>());
         services.AddSingleton<IVideoDataService, VideoDataService>();
         services.AddSingleton<INovelBookStorageService, NovelBookStorageService>();
@@ -271,16 +273,21 @@ public partial class App : Application
         services.AddSingleton<INovelBookSidecarService, NovelBookSidecarService>();
         services.AddSingleton<IReaderImageGalleryService, ReaderImageGalleryService>();
         services.AddSingleton<INovelStatisticsSidecarService, NovelStatisticsSidecarService>();
+        services.AddSingleton<INovelStatisticsMutationCoordinator, NovelStatisticsMutationCoordinator>();
         services.AddTransient<IReaderStatisticsSession>(provider =>
             new ReaderStatisticsSession(
                 provider.GetRequiredService<INovelStatisticsSidecarService>(),
-                TimeProvider.System));
+                TimeProvider.System,
+                () => provider.GetRequiredService<ISettingsService>()
+                    .Current.StatisticsSettings.ResetTimeMinutes));
         services.AddSingleton<NovelStatisticsDashboardCache>();
         services.AddSingleton<INovelStatisticsDashboardService>(provider =>
             new NovelStatisticsDashboardService(
                 provider.GetRequiredService<INovelStatisticsSidecarService>(),
                 provider.GetRequiredService<INovelBookSidecarService>(),
-                provider.GetRequiredService<NovelStatisticsDashboardCache>()));
+                provider.GetRequiredService<NovelStatisticsDashboardCache>(),
+                () => provider.GetRequiredService<ISettingsService>()
+                    .Current.StatisticsSettings.ResetTimeMinutes));
         services.AddSingleton<IReaderHighlightService, ReaderHighlightService>();
         services.AddSingleton<ISasayakiSidecarService, SasayakiSidecarService>();
         services.AddSingleton<ISasayakiMatchService, SasayakiMatchService>();
@@ -338,6 +345,21 @@ public partial class App : Application
             var profiles = GetService<IProfileService>();
             await profiles.LoadAsync();
             await GetService<IProfileRuntimeService>().InitializeAsync();
+
+            var unifiedTheme = readerSettings.Current.ResolveUnifiedTheme(settings.Current.Theme);
+            if (readerSettings.Current.Theme != unifiedTheme)
+                readerSettings.Set(s => s.Theme, (ReaderTheme?)unifiedTheme);
+            if (unifiedTheme == ReaderTheme.Custom
+                && readerSettings.Current.CustomInterfaceTheme is null)
+            {
+                readerSettings.Set(
+                    s => s.CustomInterfaceTheme,
+                    (ThemeMode?)settings.Current.Theme);
+            }
+
+            var interfaceTheme = readerSettings.Current.ResolveInterfaceTheme(settings.Current.Theme);
+            if (settings.Current.Theme != interfaceTheme)
+                settings.Set(s => s.Theme, interfaceTheme);
 
             MainWindow = new MainWindow();
             MainWindow.Activate();

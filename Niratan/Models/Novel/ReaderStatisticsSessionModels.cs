@@ -14,6 +14,7 @@ public enum ReaderStatisticsCheckpointReason
     Stop,
     Close,
     Background,
+    ExternalMutation,
 }
 
 public sealed record ReaderStatisticsSessionState(

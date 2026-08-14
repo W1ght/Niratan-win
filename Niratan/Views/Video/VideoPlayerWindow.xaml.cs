@@ -232,8 +232,8 @@ public sealed partial class VideoPlayerWindow : Window
 
     private void SettingsService_SettingChanged(object? sender, SettingsChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(AppSettings.Theme))
-            ApplyInspectorTheme(e.NewValue is ThemeMode theme ? theme : ThemeMode.System);
+        if (e.PropertyName is nameof(AppSettings.Theme) or nameof(ISettingsService.Current))
+            ApplyInspectorTheme(_settingsService.Current.Theme);
     }
 
     private void ApplyInspectorTheme(ThemeMode theme) =>
@@ -1174,8 +1174,7 @@ public sealed partial class VideoPlayerWindow : Window
                     position,
                     audioRange,
                     request.CaptureScreenshot,
-                    request.CaptureAudioClip,
-                    ct);
+                    request.CaptureAudioClip);
             }
 
             return new VideoMiningMediaResult(
@@ -1197,29 +1196,29 @@ public sealed partial class VideoPlayerWindow : Window
         var mediaDir = Path.Combine(AppDataHelper.GetDataPath(), "VideoMining");
         Directory.CreateDirectory(mediaDir);
 
-        string? screenshotPath = null;
-        if (request.CaptureScreenshot)
-        {
-            var target = Path.Combine(
-                mediaDir,
-                VideoMiningMediaNaming.CreateScreenshotFilename(videoPath, position));
-            screenshotPath = await _playbackEngine.CaptureScreenshotAsync(target, ct);
-        }
+        var screenshotTask = request.CaptureScreenshot
+            ? _playbackEngine.CaptureScreenshotAsync(
+                Path.Combine(
+                    mediaDir,
+                    VideoMiningMediaNaming.CreateScreenshotFilename(videoPath, position)),
+                ct)
+            : Task.FromResult<string?>(null);
 
-        string? audioClipPath = null;
         string? audioClipErrorMessage = null;
+        Task<string?> audioClipTask;
         if (request.CaptureAudioClip)
         {
             if (audioRange == null)
             {
                 audioClipErrorMessage = "Unable to capture the subtitle audio clip.";
+                audioClipTask = Task.FromResult<string?>(null);
             }
             else
             {
                 var target = Path.Combine(
                     mediaDir,
                     VideoMiningMediaNaming.CreateAudioClipFilename(videoPath, audioRange.Value.Start, audioRange.Value.End));
-                audioClipPath = await _mediaExtractor.ExportAudioClipAsync(
+                audioClipTask = _mediaExtractor.ExportAudioClipAsync(
                     ResolveMiningMediaSource(videoPath),
                     target,
                     audioRange.Value.Start,
@@ -1227,6 +1226,14 @@ public sealed partial class VideoPlayerWindow : Window
                     ct);
             }
         }
+        else
+        {
+            audioClipTask = Task.FromResult<string?>(null);
+        }
+
+        await Task.WhenAll(screenshotTask, audioClipTask);
+        var screenshotPath = await screenshotTask;
+        var audioClipPath = await audioClipTask;
 
         return new VideoMiningMediaResult(
             screenshotPath,
@@ -1237,7 +1244,7 @@ public sealed partial class VideoPlayerWindow : Window
                 : null);
     }
 
-    private async Task<VideoMiningMediaResult> GenerateDirectVideoMiningMediaAsync(
+    private Task<VideoMiningMediaResult> GenerateDirectVideoMiningMediaAsync(
         string mediaDirectory,
         string? screenshotFilename,
         string? audioFilename,
@@ -1245,8 +1252,7 @@ public sealed partial class VideoPlayerWindow : Window
         TimeSpan position,
         (TimeSpan Start, TimeSpan End)? audioRange,
         bool captureScreenshot,
-        bool captureAudioClip,
-        CancellationToken ct)
+        bool captureAudioClip)
     {
         string? screenshotTag = null;
         string? audioTag = null;
@@ -1254,49 +1260,43 @@ public sealed partial class VideoPlayerWindow : Window
         string? audioError = null;
         try
         {
-            Directory.CreateDirectory(mediaDirectory);
-            var tempDir = Path.Combine(AppDataHelper.GetDataPath(), "VideoMining", "Temp");
-            Directory.CreateDirectory(tempDir);
-
             if (screenshotFilename != null)
             {
-                var temp = Path.Combine(tempDir, $".{Guid.NewGuid():N}-{screenshotFilename}");
-                var captured = await _playbackEngine.CaptureScreenshotAsync(temp, ct);
-                var destination = Path.Combine(mediaDirectory, screenshotFilename);
-                if (HasOutput(captured))
-                {
-                    ReplaceFile(captured!, destination);
-                    if (HasOutput(destination))
-                        screenshotTag = AnkiMediaMarkup.ForFieldPlaceholder(screenshotFilename);
-                }
-
-                if (screenshotTag == null)
-                    screenshotError = "Unable to capture the video screenshot.";
+                var screenshotTask = AnkiDirectMediaStore.GenerateAsync(
+                    mediaDirectory,
+                    screenshotFilename,
+                    (tempPath, producerToken) =>
+                        _playbackEngine.CaptureScreenshotAsync(tempPath, producerToken),
+                    CancellationToken.None);
+                _ = ObserveDirectVideoMediaWriteAsync(
+                    screenshotTask,
+                    screenshotFilename,
+                    "screenshot");
+                screenshotTag = AnkiMediaMarkup.ForFieldPlaceholder(screenshotFilename);
             }
             else if (captureScreenshot)
             {
                 screenshotError = "Unable to capture the video screenshot.";
             }
 
-            if (audioFilename != null && audioRange != null)
+            if (audioFilename != null && audioRange is { } resolvedAudioRange)
             {
-                var temp = Path.Combine(tempDir, $".{Guid.NewGuid():N}-{audioFilename}");
-                var exported = await _mediaExtractor.ExportAudioClipAsync(
-                    ResolveMiningMediaSource(videoPath),
-                    temp,
-                    audioRange.Value.Start,
-                    audioRange.Value.End,
-                    ct);
-                var destination = Path.Combine(mediaDirectory, audioFilename);
-                if (HasOutput(exported))
-                {
-                    ReplaceFile(exported!, destination);
-                    if (HasOutput(destination))
-                        audioTag = AnkiMediaMarkup.ForFieldPlaceholder(audioFilename);
-                }
-
-                if (audioTag == null)
-                    audioError = "Unable to capture the subtitle audio clip.";
+                var audioSource = ResolveMiningMediaSource(videoPath);
+                var audioTask = AnkiDirectMediaStore.GenerateAsync(
+                    mediaDirectory,
+                    audioFilename,
+                    (tempPath, producerToken) => _mediaExtractor.ExportAudioClipAsync(
+                        audioSource,
+                        tempPath,
+                        resolvedAudioRange.Start,
+                        resolvedAudioRange.End,
+                        producerToken),
+                    CancellationToken.None);
+                _ = ObserveDirectVideoMediaWriteAsync(
+                    audioTask,
+                    audioFilename,
+                    "audio clip");
+                audioTag = AnkiMediaMarkup.ForFieldPlaceholder(audioFilename);
             }
             else if (captureAudioClip)
             {
@@ -1317,11 +1317,40 @@ public sealed partial class VideoPlayerWindow : Window
                 audioError = "Unable to capture the subtitle audio clip.";
         }
 
-        return new VideoMiningMediaResult(
+        return Task.FromResult(new VideoMiningMediaResult(
             ScreenshotTag: screenshotTag,
             AudioClipTag: audioTag,
             AudioClipErrorMessage: audioError,
-            ScreenshotErrorMessage: screenshotError);
+            ScreenshotErrorMessage: screenshotError));
+    }
+
+    private static async Task ObserveDirectVideoMediaWriteAsync(
+        Task<string?> writeTask,
+        string expectedFilename,
+        string mediaKind)
+    {
+        try
+        {
+            var storedFilename = await writeTask.ConfigureAwait(false);
+            if (!string.Equals(
+                storedFilename,
+                expectedFilename,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Warning(
+                    "[VideoMining] Background direct {MediaKind} write failed for {Filename}",
+                    mediaKind,
+                    expectedFilename);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(
+                ex,
+                "[VideoMining] Background direct {MediaKind} write failed for {Filename}",
+                mediaKind,
+                expectedFilename);
+        }
     }
 
     private (TimeSpan Start, TimeSpan End)? ResolveVideoAudioClipRange(TimeSpan cueStart, TimeSpan cueEnd)
@@ -1347,15 +1376,6 @@ public sealed partial class VideoPlayerWindow : Window
             return VideoMiningMediaSource.Remote(remote.AudioStream ?? remote.MiningStream);
 
         return VideoMiningMediaSource.Local(localFallback);
-    }
-
-    private static void ReplaceFile(string sourcePath, string destinationPath)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
-        if (File.Exists(destinationPath))
-            File.Delete(destinationPath);
-        File.Copy(sourcePath, destinationPath, overwrite: true);
-        File.Delete(sourcePath);
     }
 
     private static bool HasOutput(string? path) =>

@@ -218,6 +218,8 @@ public sealed class VideoSettings
 
 public sealed class VideoMetadataSettings
 {
+    public const int CurrentArtworkPolicyVersion = 1;
+
     public bool OnlineConsentAccepted { get; set; }
     public bool TmdbEnabled { get; set; } = true;
     public bool TvMazeEnabled { get; set; } = true;
@@ -225,12 +227,13 @@ public sealed class VideoMetadataSettings
     public bool AniDbEnabled { get; set; } = true;
     public bool BangumiEnabled { get; set; } = true;
     public bool TvDbEnabled { get; set; }
+    public int ArtworkPolicyVersion { get; set; } = CurrentArtworkPolicyVersion;
     public Dictionary<string, bool> ArtworkEnabled { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
         ["local"] = true,
         ["tmdb"] = true,
         ["tvmaze"] = true,
-        ["anilist"] = false,
+        ["anilist"] = true,
         ["anidb"] = false,
         ["bangumi"] = false,
         ["tvdb"] = false,
@@ -245,6 +248,7 @@ public sealed class VideoMetadataSettings
         AniDbEnabled = AniDbEnabled,
         BangumiEnabled = BangumiEnabled,
         TvDbEnabled = false,
+        ArtworkPolicyVersion = ArtworkPolicyVersion,
         ArtworkEnabled = new Dictionary<string, bool>(ArtworkEnabled, StringComparer.OrdinalIgnoreCase),
     };
 }

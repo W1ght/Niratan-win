@@ -16,6 +16,7 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
     private readonly INovelBookSidecarService? _bookSidecarService;
     private readonly TimeProvider _timeProvider;
     private readonly NovelStatisticsDashboardCache? _cache;
+    private readonly Func<int> _resetTimeMinutesProvider;
 
     public event EventHandler<NovelStatisticsDashboardSnapshot>? SnapshotRefreshed;
 
@@ -35,7 +36,21 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
         INovelStatisticsSidecarService statisticsSidecarService,
         INovelBookSidecarService bookSidecarService,
         NovelStatisticsDashboardCache cache)
-        : this(statisticsSidecarService, bookSidecarService, TimeProvider.System, cache)
+        : this(statisticsSidecarService, bookSidecarService, TimeProvider.System, cache, null)
+    {
+    }
+
+    internal NovelStatisticsDashboardService(
+        INovelStatisticsSidecarService statisticsSidecarService,
+        INovelBookSidecarService bookSidecarService,
+        NovelStatisticsDashboardCache cache,
+        Func<int> resetTimeMinutesProvider)
+        : this(
+            statisticsSidecarService,
+            bookSidecarService,
+            TimeProvider.System,
+            cache,
+            resetTimeMinutesProvider)
     {
     }
 
@@ -43,7 +58,7 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
         INovelStatisticsSidecarService statisticsSidecarService,
         INovelBookSidecarService? bookSidecarService,
         TimeProvider timeProvider)
-        : this(statisticsSidecarService, bookSidecarService, timeProvider, null)
+        : this(statisticsSidecarService, bookSidecarService, timeProvider, null, null)
     {
     }
 
@@ -51,19 +66,24 @@ public sealed class NovelStatisticsDashboardService : INovelStatisticsDashboardS
         INovelStatisticsSidecarService statisticsSidecarService,
         INovelBookSidecarService? bookSidecarService,
         TimeProvider timeProvider,
-        NovelStatisticsDashboardCache? cache)
+        NovelStatisticsDashboardCache? cache,
+        Func<int>? resetTimeMinutesProvider = null)
     {
         _statisticsSidecarService = statisticsSidecarService;
         _bookSidecarService = bookSidecarService;
         _timeProvider = timeProvider;
         _cache = cache;
+        _resetTimeMinutesProvider = resetTimeMinutesProvider ?? (static () => 0);
     }
 
     public async Task<NovelStatisticsDashboardSnapshot> LoadSnapshotAsync(
         IReadOnlyList<NovelBook> books,
         CancellationToken ct = default)
     {
-        var today = DateOnly.FromDateTime(_timeProvider.GetLocalNow().DateTime);
+        var today = NovelStatisticsDayBoundary.ReportingDate(
+            _timeProvider.GetUtcNow(),
+            _resetTimeMinutesProvider(),
+            _timeProvider.LocalTimeZone);
         var cacheKey = await Task.Run(
             () => NovelStatisticsDashboardCache.CreateKey(books, today),
             ct).ConfigureAwait(false);

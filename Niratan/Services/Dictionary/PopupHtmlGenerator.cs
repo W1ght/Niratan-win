@@ -111,6 +111,7 @@ window.contentLanguageId = {JsonSerializer.Serialize(contentLanguageId)};
 window.maxResults = {settings.MaxResults};
 window.scanLength = {settings.ScanLength};
 window.popupRenderGeneration = {renderGeneration};
+window.popupPageRevision = 0;
 window.niratanPopupDocumentEpoch = {documentEpoch};
 window.lookupTraceId = '';
 window.audioSources = {SerializeAudioSources(audioSettings)};
@@ -351,7 +352,8 @@ window.viewAnkiNoteLabel = {JsonSerializer.Serialize(ViewAnkiNoteLabel)};
         string? traceId = null,
         int? totalResultCount = null,
         long documentEpoch = 0,
-        bool contextMiningAvailable = false) =>
+        bool contextMiningAvailable = false,
+        long pageRevision = 0) =>
         GenerateResultsInjectionScript(
             results,
             styles,
@@ -364,6 +366,7 @@ window.viewAnkiNoteLabel = {JsonSerializer.Serialize(ViewAnkiNoteLabel)};
             totalResultCount,
             documentEpoch,
             contextMiningAvailable,
+            pageRevision,
             stageRender: true);
 
     public string GenerateRedirectInjectionScript(
@@ -375,7 +378,8 @@ window.viewAnkiNoteLabel = {JsonSerializer.Serialize(ViewAnkiNoteLabel)};
         AudioSettings? audioSettings = null,
         AnkiSettings? ankiSettings = null,
         string? traceId = null,
-        bool contextMiningAvailable = false) =>
+        bool contextMiningAvailable = false,
+        long pageRevision = 0) =>
         GenerateResultsInjectionScript(
             results,
             styles,
@@ -388,6 +392,7 @@ window.viewAnkiNoteLabel = {JsonSerializer.Serialize(ViewAnkiNoteLabel)};
             results.Count,
             documentEpoch: 0,
             contextMiningAvailable: contextMiningAvailable,
+            pageRevision: pageRevision,
             stageRender: false);
 
     private string GenerateResultsInjectionScript(
@@ -402,6 +407,7 @@ window.viewAnkiNoteLabel = {JsonSerializer.Serialize(ViewAnkiNoteLabel)};
         int? totalResultCount,
         long documentEpoch,
         bool contextMiningAvailable,
+        long pageRevision,
         bool stageRender)
     {
         var settings = displaySettings ?? new DictionaryDisplaySettings();
@@ -453,6 +459,7 @@ window.viewAnkiNoteLabel = {JsonSerializer.Serialize(ViewAnkiNoteLabel)};
 window.niratanStagePopupRender({{
     documentEpoch: {documentEpoch},
     generation: {renderGeneration},
+    pageRevision: {pageRevision},
     entries: {entriesJson},
     entryCount: {finalResultCount},
     runtime: {runtime}
@@ -494,7 +501,7 @@ window.needsAudio = {BoolToJs(ankiSettings?.PopupSettings.NeedsAudio ?? false)};
 window.compactGlossariesAnki = {BoolToJs(ankiSettings?.PopupSettings.CompactGlossaries ?? false)};
 window.contextMiningAvailable = {BoolToJs(contextMiningAvailable)};
 window.viewAnkiNoteLabel = {JsonSerializer.Serialize(ViewAnkiNoteLabel)};
-return window.niratanRedirectResults?.({entriesJson}, {finalResultCount}, {renderGeneration}) === true;
+return window.niratanRedirectResults?.({entriesJson}, {finalResultCount}, {renderGeneration}, {pageRevision}) === true;
 }})()";
     }
 

@@ -4,7 +4,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="using:Niratan.Views.Controls"
              xmlns:converters="using:Niratan.Helpers.UI.Converters"
-             xmlns:novel="using:Niratan.Models.Novel">
+             xmlns:novel="using:Niratan.Models.Novel"
+             xmlns:viewModels="using:Niratan.ViewModels.Components">
 
     <UserControl.Resources>
         <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
@@ -69,21 +70,52 @@
         </DataTemplate>
 
         <DataTemplate x:Key="BookRankingTemplate"
-                      x:DataType="novel:NovelStatisticsBookRankingDisplayRow">
-            <StackPanel Padding="0,7"
-                        Spacing="6">
-                <Grid ColumnDefinitions="*,Auto"
-                      ColumnSpacing="12">
-                    <TextBlock FontWeight="SemiBold"
+                      x:DataType="viewModels:NovelStatisticsBookRankingItemViewModel">
+            <Button Padding="0,7"
+                    AutomationProperties.Name="{x:Bind AccessibleText}"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Click="BookRanking_Click"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Stretch">
+                <Grid ColumnDefinitions="40,*,108,16"
+                      RowDefinitions="Auto,Auto"
+                      ColumnSpacing="12"
+                      RowSpacing="6">
+                    <Border Grid.RowSpan="2"
+                            Width="36"
+                            Height="50"
+                            Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                            CornerRadius="5">
+                        <Grid>
+                            <Image Source="{x:Bind CoverImage, Mode=OneWay}"
+                                   ImageFailed="BookCover_ImageFailed"
+                                   Stretch="UniformToFill"
+                                   Visibility="{x:Bind HasCover, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            <FontIcon FontSize="16"
+                                      Glyph="&#xE8F1;"
+                                      Opacity="0.45"
+                                      Visibility="{x:Bind HasNoCover, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        </Grid>
+                    </Border>
+                    <TextBlock Grid.Column="1"
+                               FontWeight="SemiBold"
                                Text="{x:Bind Title}"
                                TextTrimming="CharacterEllipsis" />
-                    <TextBlock Grid.Column="1"
+                    <TextBlock Grid.Column="2"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                Text="{x:Bind ValueText}" />
+                    <FontIcon Grid.Column="3"
+                              FontSize="12"
+                              Glyph="&#xE76C;"
+                              Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                    <ProgressBar Grid.Row="1"
+                                 Grid.Column="1"
+                                 Grid.ColumnSpan="2"
+                                 Maximum="1"
+                                 Value="{x:Bind NormalizedValue}" />
                 </Grid>
-                <ProgressBar Maximum="1"
-                             Value="{x:Bind NormalizedValue}" />
-            </StackPanel>
+            </Button>
         </DataTemplate>
 
         <DataTemplate x:Key="ShelfComparisonTemplate"
@@ -543,6 +575,12 @@
                             <ItemsControl AutomationProperties.AutomationId="NovelStatisticsBookRanking"
                                           ItemTemplate="{StaticResource BookRankingTemplate}"
                                           ItemsSource="{Binding BookRankingRows}" />
+                            <Button x:Uid="NovelStatisticsMoreBooksButton"
+                                    AutomationProperties.AutomationId="NovelStatisticsMoreBooksButton"
+                                    Click="MoreBooks_Click"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Center"
+                                    Visibility="{Binding CanShowMoreBookRankings, Converter={StaticResource BooleanToVisibilityConverter}}" />
                         </StackPanel>
                     </Border>
 

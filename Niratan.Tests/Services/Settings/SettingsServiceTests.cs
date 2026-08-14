@@ -14,6 +14,39 @@ namespace Niratan.Tests.Services.Settings;
 public sealed class SettingsServiceTests
 {
     [Fact]
+    public async Task LoadAsync_MigratesLegacyAniListArtworkPolicyAndPersistsVersion()
+    {
+        using var temporaryDirectory = new TempDirectory();
+        var settingsPath = Path.Combine(temporaryDirectory.Path, "settings.json");
+        await File.WriteAllTextAsync(settingsPath, """
+            {
+              "VideoSettings": {
+                "Metadata": {
+                  "OnlineConsentAccepted": true,
+                  "ArtworkEnabled": { "anilist": false, "tmdb": true }
+                }
+              }
+            }
+            """, TestContext.Current.CancellationToken);
+        var service = CreateSut(
+            settingsPath,
+            (path, json) => File.WriteAllTextAsync(path, json, TestContext.Current.CancellationToken));
+
+        await service.LoadAsync();
+
+        service.Current.VideoSettings.Metadata.ArtworkEnabled["anilist"].Should().BeTrue();
+        service.Current.VideoSettings.Metadata.ArtworkPolicyVersion.Should()
+            .Be(VideoMetadataSettings.CurrentArtworkPolicyVersion);
+        using var persisted = JsonDocument.Parse(await File.ReadAllTextAsync(
+            settingsPath,
+            TestContext.Current.CancellationToken));
+        persisted.RootElement.GetProperty(nameof(AppSettings.VideoSettings))
+            .GetProperty(nameof(VideoSettings.Metadata))
+            .GetProperty(nameof(VideoMetadataSettings.ArtworkPolicyVersion))
+            .GetInt32().Should().Be(VideoMetadataSettings.CurrentArtworkPolicyVersion);
+    }
+
+    [Fact]
     public async Task ConcurrentSaves_AreSerializedAndPersistTheLatestSettings()
     {
         using var temporaryDirectory = new TempDirectory();

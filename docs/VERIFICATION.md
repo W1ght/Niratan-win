@@ -170,8 +170,9 @@ YYYY-MM-DD-uia-tree.txt
 5. 同章节 `#fragment` 不重载章节；跨章节链接等待 fragment 对齐完成。外部 URL、`javascript:` 和非 spine 资源不得离开 Reader。
 6. 产生至少两个历史位置，验证 Back/Forward 显示目标字符位置且往返正确；历史恢复不计作阅读字符。
 7. tracking 时最小化窗口后检查 Background checkpoint；关闭主窗口或返回书架后检查 Close checkpoint 只有一次。
-8. 在本地时间午夜前开始、午夜后 checkpoint，确认旧日期归档，新日期只出现一条记录，并按 Niratan 语义接收完整跨日 checkpoint。
-9. 重启应用后 `bookmark.json` 与 `statistics.json` 可恢复；`statistics.json` 同一 `dateKey` 只保留 `lastStatisticModified` 最新记录。
+8. 默认 reset time 为 00:00；在本地时间午夜前开始、午夜后 checkpoint，确认旧日期归档，新日期只出现一条记录，并按 Niratan 语义接收完整跨日 checkpoint。
+9. 把 reset time 设为 04:00，确认 03:59 的阅读归入前一天、04:00 起归入当天；Reader 的 Today、Dashboard 的 Today/最近一年末日必须使用同一 reporting day。切换 Profile 或重启后分钟级设置保持。
+10. 重启应用后 `bookmark.json` 与 `statistics.json` 可恢复；`statistics.json` 同一 `dateKey` 只保留 `lastStatisticModified` 最新记录。
 
 诊断失败时保留 Reader 日志，并重点搜索 `ProgrammaticDeparture`、`navigationGeneration`、`Background`、`Close` 和 `Restore completed`。
 
@@ -253,11 +254,11 @@ dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter
 1. 运行所有 `NovelStatisticsDashboard*Tests`，覆盖 repository、目标/区间、速度、趋势、日历、排名、书架和缓存。
 2. 准备一条 `<60s` 且字符数为正的记录：总字符/时长必须增加，所有速度模块不得使用该记录。
 3. 放入损坏的 `statistics.json`：Dashboard 显示/记录 skipped book，原文件 hash 不变，其余书籍仍正常聚合。
-4. 验证最近一年边界、周一到周日 7 格、未来周 cell 无百分比、目标完成度允许超过 100%。
+4. 验证最近一年边界以配置的 statistics reporting day 结束、周一到周日 7 格、未来周 cell 无百分比、目标完成度允许超过 100%。
 5. 逐一切换 year/month/week/day range、day/week/month grain、characters/duration/speed trend metric 和 ranking metric，确认所有卡片使用同一范围且显示单位正确；界面不得再出现 anchor 日期控件。
 6. 拖动趋势图下方常驻可见的横向范围拖动条，确认日/月/周均按完整日历窗口吸附，Range、Trend、Calendar、Speed、Ranking 和 Shelf 同步更新；Year 覆盖完整最近一年且拖动条禁用。点击 Calendar 任意日期后，拖动条应移动到包含该日期的窗口，详情显示字符、时长和 active books。
 7. 在 Dashboard 修改目标类型、字符/时长目标和周目标天数，确认 Today/Week/Selected Range/streak 立即重算，重启后设置仍保留。
-8. 验证 Book Ranking 最多 12 行，以及自定义书架/Unshelved 对比；损坏 sidecar 时必须显示可见警告。
+8. 验证 Book Ranking 首屏 12 行；有更多记录时出现“更多书籍”，每次再显示 12 行，切换 range 或 ranking metric 后恢复首屏。每行显示可用封面、固定宽度的数值列和等长进度轨，并可点击打开居中的宽高版逐日统计面板；缺失封面使用占位图，损坏 sidecar 显示警告且原文件 hash 不变。选择日期后修改字符、小时和分钟并保存，重开面板确认持久化；分别确认“删除当天数据”和“删除全部统计”的确认提示、取消路径与零值墓碑写入。保持同一本书在 Reader 中计时，再从 Dashboard 编辑或删除，确认 Reader 先 checkpoint、修改后重载，继续阅读不会覆盖修改或复活已删除数据。另验证自定义书架/Unshelved 对比。
 9. 重开 Dashboard 验证 `statistics_dashboard_cache_v1.json` 先命中再后台重读 sidecar；新 snapshot 发布后 UI 更新且缓存被替换。
    自动化测试必须创建第二个 cache 实例从磁盘读取 snapshot，不能只验证同一实例的内存命中。
 10. 使用包含非空 `bookContributions` 的 `statistics_dashboard_cache_v1.json` 重启并进入 Dashboard；缓存必须正常反序列化。再放入结构有效但模型不兼容的派生缓存，确认只删除该缓存并从各书 `statistics.json` 重建，应用不得退出，原始 sidecar、EPUB 和视频 JSON 均不得改变。
@@ -266,7 +267,7 @@ dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter
 13. 分别把窗口调整到 `>=1260`、`840..1259` 和 `<840` effective pixels，确认三列、两列、单列状态生效，无裁切、重叠或第二个纵向滚动条；Today 目标环保持 118×118 effective pixels；This Week 卡片高度随自身内容收紧，不得因同一 Grid 行中的更高卡片而纵向拉伸；Calendar 保持 12×12 effective-pixel 方块、4-pixel 可见间距和七行紧凑布局，只允许横向滚动。点击不同日期后，选中范围与详情必须同步更新。
     连续在断点两侧调整窗口，确认每次只发生一次布局切换，统计视图保持响应且不出现 DispatcherQueue 重排循环。
 14. 在加载未完成时返回 Bookshelf，再次进入 Dashboard；旧 load/refresh 不得覆盖新 snapshot，loading/refresh 状态不得残留，refresh 订阅始终只有一个。
-15. 在英文和简体中文下检查所有 header、metric、empty/loading/warning 文案；用键盘遍历 range、日期范围拖动条、grain、metric、style、goal、calendar、ranking 和返回按钮，并确认 UI Automation name 非空。拖动条方向键移动一个窗口，Page 键移动多个窗口。
+15. 在英文和简体中文下检查所有 header、metric、empty/loading/warning 文案；用键盘遍历 range、日期范围拖动条、grain、metric、style、goal、calendar、ranking、更多书籍、书籍详情关闭按钮和返回按钮，并确认 UI Automation name 非空。拖动条方向键移动一个窗口，Page 键移动多个窗口。
 16. Light、Dark 与 High Contrast 下检查趋势线/柱、calendar heat、range/selection outline、ranking/shelf bars 和损坏警告均可辨认。
 
 ---
@@ -478,10 +479,10 @@ dotnet build -p:Platform=x64
 自动化与 disposable fixture 至少确认：
 
 1. 迁移覆盖空库、本地/远程资产、Profile/字幕/海报、手动/智能集合、双重 membership、orphan、损坏/未来版本、重复 identity、并发与失败重试；源 JSON、播放历史和测试媒体哈希不变。
-2. 增量扫描只重解析新增或大小/mtime 变化资产；唯一例外是旧 catalog 中仍绑定 unmatched 的已解析分集，下一次普通增量扫描必须将其提升为同一 series 下的 season/episode，随后不再重复解析。枚举阶段立即显示不定进度，数量确定后显示“已处理 / 总数”、阶段、当前文件名与吞吐率。sidecar 分析并发不超过四路，进度节流且 catalog 按批提交；完整枚举才标记缺失。取消、暂停/恢复、部分枚举失败、来源删除、嵌套/重叠来源和迟到 generation 不清空用户数据或误写旧结果。
-3. 文件名 fixture 覆盖 `S01E02`、`1x02`、全角第 N 話、多集范围、绝对集、cour、第 N 期、SP/OVA/OAD/NCOP/NCED、年份/重拍与显式 external ID；未知括号标签保留。
+2. 增量扫描只重复读取新增或大小/mtime 变化资产的 sidecar，但每次都执行轻量层级分类；`jellyfin-folder-hierarchy-v11` 只在升级后强制一次本地重解析，即使旧 v10 audit 已存在也必须生效。随后未变化资产不得重复解析或重建，未重读 NFO 时也不得把已有 Local 季集覆盖回文件名结果；完整扫描若 owner/binding 稳定，不得取消已完成 metadata 负缓存。枚举阶段立即显示不定进度，数量确定后显示“已处理 / 总数”、阶段、当前文件名与吞吐率。sidecar 分析并发不超过四路，进度节流且 catalog 按批提交；完整枚举才标记缺失。取消、暂停/恢复、部分枚举失败、来源删除、嵌套/重叠来源和迟到 generation 不清空用户数据或误写旧结果。
+3. 文件名 fixture 覆盖 `S01E02`、`1x02`、`S3`、`3rd Season`、全角第 N 話、多集范围、绝对集、cour、第 N 期、SP/OVA/OAD/NCOP/NCED、年份/重拍与显式 external ID；集号后的副标题与 series identity 分离，普通标题中的 `Trailer` 不误判，未知括号标签保留。目录 fixture 覆盖 `Show/Season` 的硬 owner、来源根单发布包回退、Shoko renamer 的 `Series - 01 [anidbid-x]` 新文件与无法确定 owner 的平铺混合来源；Shoko fixture 只验证新扫描，不触发旧 Shoko catalog 迁移。发布包内多个不同 Break Time 副标题不得生成多个 series；显式 `S00E01` 保留编号，`PV`、`menu`、trailers、featurettes、NCOP/NCED 和迷你动画进入无编号 Special Features，增删 supplemental 不改变既有节点 ID。`S01E01-E02` 在完整及增量扫描后都只有一个逻辑 Episode，结束集号保留在 asset。显式 Movie 来源的 `OVA The Movie` 保留完整标题且不得创建 Episode；旧错误 Movie hierarchy 仅在无保护、单资产时自动降级，否则候选必须留在 Needs Review。
 4. Local NFO 使用禁用 DTD/外部实体的受限 XML，超限或越界 sidecar 失败关闭；迁移、扫描、刷新和移除来源前后视频、音频、字幕、NFO 与图片哈希一致。
-5. 匹配确认显式 ID 锁定，唯一精确别名需要年份/季集佐证，模糊阈值为 `0.92 / 0.15` 且拒绝硬冲突；人工 rematch 必须先显示身份、层级和字段 diff。
+5. 匹配确认显式 ID 逐 provider 锁定，provider 自动发现的 ID 只作查询提示，节点上一个锁定 ID 不得连带锁定其他 provider ID；唯一精确别名需要年份/季集佐证，模糊阈值为 `0.92 / 0.15` 且拒绝硬冲突。自动 Series/Anime metadata 只能丰富 series owner，不得改变 season/episode 绑定；结构化系列下的 Movie 结果不得改写 Episode 或接收 Movie artwork。空节点清理必须保留 Local field/artwork、锁定 field/external ID 与 node user data。人工 rematch 必须先显示身份、层级和字段 diff。
 6. Provider 测试只使用注入式 handler 和固定 JSON/XML/图片 fixture；覆盖 401 不重试、429/Retry-After、5xx/超时退避、取消、30 天 cache、ETag/Last-Modified、图片大小/格式/原子替换与旧详情保留。多个 provider 搜索同时启动但不突破各自 transport 限速；故意让后置 provider 先返回时，评分候选仍保持 route 顺序。CI 不访问实时网络。
 
 人工验证使用 disposable 动画、日剧、电影与音频目录：
@@ -540,6 +541,10 @@ dotnet build -p:Platform=x64
 3. 临时让媒体目录只读或使用无有效音轨的片段，确认显示截图/音频采集错误且不提交引用缺失文件的卡片。
 4. 打开带封面的 EPUB，使用含 `{book-cover}` 的字段映射制卡；卡片字段必须为 Anki 媒体文件名的 `<img>`，不得包含应用私有目录或盘符路径。
 5. 对 `rules` 为 `v1`、`v5 adj-i` 和空字符串的词条分别制卡，确认弹窗不再因 `.some()` 报错。
+6. 打开包含多条结果的查词弹窗，确认各条目并发完成查重且只有当前制卡按钮进入 busy；切换 Profile、redirect、Back/Forward 或快速重复点击后，旧查重/制卡结果不得覆盖当前页面或新 attempt。
+7. 依次触发 pending、added、duplicate、failed，确认 toast 标题、蓝/绿/橙/红语义与 Niratan 一致并在约 2.2 秒后隐藏；最终状态必须重新查重并保留可打开的 note ID。
+8. 同时制卡两个不同词条应并行准备；同一 expression 的并发提交在禁用重复卡时只能成功一张。普通制卡与上下文制卡不得相互清除 busy、toast 或 note ID。
+9. 对同一确定性截图/音频目标并发发起生成，确认只执行一次 producer；视频直写取得确定性文件名后应立即进入 `addNote`，截图与音频在后台并发写入 `collection.media`，最终发布仍必须使用同目录临时文件并验证非空。无法直写时必须等待生成完成，失败项只批量上传一次后再提交。
 
 ---
 

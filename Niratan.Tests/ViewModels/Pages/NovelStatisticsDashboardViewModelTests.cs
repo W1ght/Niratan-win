@@ -5,6 +5,7 @@ using Niratan.Models.Novel;
 using Niratan.Models.Settings;
 using Niratan.Services.Novels;
 using Niratan.Services.Settings;
+using Niratan.ViewModels.Components;
 using Niratan.ViewModels.Pages;
 using Moq;
 
@@ -129,6 +130,222 @@ public sealed class NovelStatisticsDashboardViewModelTests
     }
 
     [Fact]
+    public async Task BookRanking_RevealsTwelveMoreRowsAndResetsForMetricChanges()
+    {
+        var books = Enumerable.Range(1, 14)
+            .Select(index => new NovelBook
+            {
+                Id = $"book-{index:00}",
+                Title = $"Book {index:00}",
+            })
+            .ToArray();
+        var contributions = books
+            .Select((book, index) => new NovelStatisticsBookContribution(
+                book.Id,
+                book.Title,
+                null,
+                14_000 - index * 100,
+                600 + index * 60,
+                true))
+            .ToArray();
+        var snapshot = new NovelStatisticsDashboardSnapshot(
+            Today.AddYears(-1).AddDays(1),
+            Today,
+            [new NovelStatisticsDayAggregate(
+                Today,
+                contributions.Sum(item => item.Characters),
+                contributions.Sum(item => item.ReadingTime),
+                contributions)],
+            books.Select(book => new NovelStatisticsBookRecord(
+                book.Id,
+                book.Title,
+                book.CoverPath,
+                20_000)).ToArray(),
+            []);
+        var service = new RecordingDashboardService(snapshot);
+        var settings = CreateSettings();
+        var sut = new NovelStatisticsDashboardViewModel(
+            service,
+            settings.Object,
+            new FixedTimeProvider());
+
+        await sut.ActivateAsync(books, new NovelShelfState([], books.Select(book => book.Id).ToArray()), CancellationToken.None);
+
+        sut.BookRankingRows.Should().HaveCount(12);
+        sut.CanShowMoreBookRankings.Should().BeTrue();
+
+        sut.ShowMoreBookRankings();
+
+        sut.BookRankingRows.Should().HaveCount(14);
+        sut.CanShowMoreBookRankings.Should().BeFalse();
+
+        sut.SelectedRankingMetric = NovelStatisticsBookRankingMetric.Duration;
+
+        sut.VisibleBookRankingLimit.Should().Be(12);
+        sut.BookRankingRows.Should().HaveCount(12);
+        sut.CanShowMoreBookRankings.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task BookRanking_ReusesCoverResolutionAcrossProjectionRecalculations()
+    {
+        var coverLoadCount = 0;
+        var coverCache = new NovelStatisticsBookCoverCache(_ =>
+        {
+            coverLoadCount++;
+            return null;
+        });
+        var books = Books().ToArray();
+        books[0].CoverPath = "D:\\Books\\a\\cover.jpg";
+        var sut = new NovelStatisticsDashboardViewModel(
+            new RecordingDashboardService(Snapshot()),
+            CreateSettings().Object,
+            null,
+            new FixedTimeProvider(),
+            coverCache);
+
+        await sut.ActivateAsync(
+            books,
+            Shelves(),
+            TestContext.Current.CancellationToken);
+
+        coverLoadCount.Should().Be(1);
+
+        sut.SelectedRankingMetric = NovelStatisticsBookRankingMetric.Duration;
+        sut.SelectedRangeMode = NovelStatisticsRangeMode.Day;
+
+        coverLoadCount.Should().Be(1);
+        sut.BookRankingRows.Single(row => row.Id == "a").HasNoCover.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task BookDetail_LoadsEveryVisibleDayFromTheBookSidecar()
+    {
+        var sidecars = new Mock<INovelStatisticsSidecarService>();
+        var books = Books().ToArray();
+        books[0].ExtractedPath = "D:\\Books\\a";
+        sidecars.Setup(service => service.LoadWithStatusAsync(
+                books[0].ExtractedPath!,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new NovelStatisticsSidecarLoadResult(
+                NovelStatisticsSidecarLoadStatus.Loaded,
+                [
+                    new NovelReadingStatistic("A", "2026-07-10", 600, 300, 0, 0, 7_200, 7_200, 1),
+                    new NovelReadingStatistic("A", "2026-07-11", 1_200, 600, 0, 0, 7_200, 7_200, 2),
+                ]));
+        var sut = new NovelStatisticsDashboardViewModel(
+            new RecordingDashboardService(Snapshot()),
+            CreateSettings().Object,
+            sidecars.Object,
+            new FixedTimeProvider());
+        await sut.ActivateAsync(books, Shelves(), CancellationToken.None);
+
+        var detail = await sut.LoadBookStatisticsAsync(
+            "a",
+            TestContext.Current.CancellationToken);
+
+        detail.Should().NotBeNull();
+        detail!.Days.Should().HaveCount(2);
+        detail.TotalCharactersText.Should().Be("1,800");
+        detail.TotalDurationText.Should().Be("15m");
+        detail.AverageSpeedText.Should().Contain("7,200");
+        detail.HasError.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task BookDetail_AverageSpeedExcludesDaysShorterThanOneMinute()
+    {
+        var sidecars = new Mock<INovelStatisticsSidecarService>();
+        var books = Books().ToArray();
+        books[0].ExtractedPath = "D:\\Books\\a";
+        sidecars.Setup(service => service.LoadWithStatusAsync(
+                books[0].ExtractedPath!,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new NovelStatisticsSidecarLoadResult(
+                NovelStatisticsSidecarLoadStatus.Loaded,
+                [
+                    new NovelReadingStatistic("A", "2026-07-10", 100, 30, 0, 0, 0, 0, 1),
+                    new NovelReadingStatistic("A", "2026-07-11", 100, 30, 0, 0, 0, 0, 2),
+                ]));
+        var sut = new NovelStatisticsDashboardViewModel(
+            new RecordingDashboardService(Snapshot()),
+            CreateSettings().Object,
+            sidecars.Object,
+            new FixedTimeProvider());
+        await sut.ActivateAsync(
+            books,
+            Shelves(),
+            TestContext.Current.CancellationToken);
+
+        var detail = await sut.LoadBookStatisticsAsync(
+            "a",
+            TestContext.Current.CancellationToken);
+
+        detail.Should().NotBeNull();
+        detail!.TotalCharactersText.Should().Be("200");
+        detail.TotalDurationText.Should().Be("1m");
+        detail.AverageSpeedText.Should().Be("— / h");
+        detail.Days.Should().OnlyContain(day => day.SpeedText == "— / h");
+    }
+
+    [Fact]
+    public async Task BookDetail_DeleteDay_UsesActiveReaderCoordinatorAndPersistsTombstone()
+    {
+        var books = Books().ToArray();
+        books[0].ExtractedPath = "D:\\Books\\a";
+        IReadOnlyList<NovelReadingStatistic> current =
+        [
+            new NovelReadingStatistic(
+                "A", "2026-07-11", 1_200, 600, 0, 0, 7_200, 7_200, 10),
+        ];
+        var sidecars = new Mock<INovelStatisticsSidecarService>();
+        sidecars.Setup(service => service.LoadWithStatusAsync(
+                books[0].ExtractedPath!,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => new NovelStatisticsSidecarLoadResult(
+                NovelStatisticsSidecarLoadStatus.Loaded,
+                current));
+        sidecars.Setup(service => service.SaveAsync(
+                books[0].ExtractedPath!,
+                It.IsAny<IReadOnlyList<NovelReadingStatistic>>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, IReadOnlyList<NovelReadingStatistic>, CancellationToken>(
+                (_, statistics, _) => current = statistics)
+            .Returns(Task.CompletedTask);
+        var coordinator = new Mock<INovelStatisticsMutationCoordinator>();
+        coordinator.Setup(service => service.ExecuteAsync(
+                "a",
+                It.IsAny<Func<CancellationToken, Task>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<string, Func<CancellationToken, Task>, CancellationToken>(
+                (_, mutation, ct) => mutation(ct));
+        var sut = new NovelStatisticsDashboardViewModel(
+            new RecordingDashboardService(Snapshot()),
+            CreateSettings().Object,
+            sidecars.Object,
+            new FixedTimeProvider(),
+            new NovelStatisticsBookCoverCache(),
+            coordinator.Object);
+        await sut.ActivateAsync(books, Shelves(), TestContext.Current.CancellationToken);
+
+        var detail = await sut.DeleteBookStatisticsDayAsync(
+            "a",
+            "2026-07-11",
+            TestContext.Current.CancellationToken);
+
+        current.Should().ContainSingle();
+        current[0].CharactersRead.Should().Be(0);
+        current[0].ReadingTime.Should().Be(0);
+        current[0].LastStatisticModified.Should().BeGreaterThan(10);
+        detail.Should().NotBeNull();
+        detail!.HasNoDays.Should().BeTrue();
+        coordinator.Verify(service => service.ExecuteAsync(
+            "a",
+            It.IsAny<Func<CancellationToken, Task>>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task RangeScrollbar_DefaultsNewestAndMovesEveryProjection()
     {
         var sut = CreateSut(out _, out _);
@@ -213,6 +430,31 @@ public sealed class NovelStatisticsDashboardViewModelTests
             It.IsAny<Expression<Func<AppSettings, NovelStatisticsSettings>>>(),
             It.Is<NovelStatisticsSettings>(value => value.DailyCharacterTarget == 1_000)));
         settings.Verify(service => service.SaveAsync(), Times.AtLeastOnce);
+    }
+
+    [Fact]
+    public async Task DashboardToday_UsesTheConfiguredEarlyMorningResetBoundary()
+    {
+        var service = new RecordingDashboardService(Snapshot());
+        var settings = CreateSettings();
+        settings.Object.Current.StatisticsSettings.ResetTimeMinutes = 4 * 60;
+        var timeZone = TimeZoneInfo.CreateCustomTimeZone(
+            "View model +08",
+            TimeSpan.FromHours(8),
+            "View model +08",
+            "View model +08");
+        var clock = new ConfigurableTimeProvider(
+            new DateTimeOffset(2026, 7, 11, 19, 30, 0, TimeSpan.Zero),
+            timeZone);
+        var sut = new NovelStatisticsDashboardViewModel(
+            service,
+            settings.Object,
+            clock);
+
+        await sut.ActivateAsync(Books(), Shelves(), CancellationToken.None);
+
+        sut.Today!.Date.Should().Be(Today);
+        sut.SelectedDateRange.End.Should().Be(Today);
     }
 
     [Fact]
@@ -425,5 +667,14 @@ public sealed class NovelStatisticsDashboardViewModelTests
             new(2026, 7, 11, 12, 0, 0, TimeSpan.Zero);
 
         public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
+    }
+
+    private sealed class ConfigurableTimeProvider(
+        DateTimeOffset utcNow,
+        TimeZoneInfo localTimeZone) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
+
+        public override TimeZoneInfo LocalTimeZone { get; } = localTimeZone;
     }
 }

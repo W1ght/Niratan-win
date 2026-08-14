@@ -17,6 +17,7 @@ public sealed class StatisticsSettingsPageViewModelTests
 
         settings.EnableStatistics.Should().BeFalse();
         settings.AutostartMode.Should().Be(StatisticsAutostartMode.Off);
+        settings.ResetTimeMinutes.Should().Be(0);
         settings.DailyTargetType.Should().Be(StatisticsDailyTargetType.Characters);
         settings.DailyCharacterTarget.Should().Be(5000);
         settings.DailyDurationTargetMinutes.Should().Be(30);
@@ -57,6 +58,7 @@ public sealed class StatisticsSettingsPageViewModelTests
         {
             EnableStatistics = true,
             SelectedAutostartMode = StatisticsAutostartMode.PageTurn,
+            ResetTime = TimeSpan.FromHours(4) + TimeSpan.FromMinutes(35),
             EnableSync = true,
             SelectedSyncMode = StatisticsSyncMode.Replace,
         };
@@ -64,6 +66,7 @@ public sealed class StatisticsSettingsPageViewModelTests
         saved.Should().NotBeNull();
         saved!.EnableStatistics.Should().BeTrue();
         saved.AutostartMode.Should().Be(StatisticsAutostartMode.PageTurn);
+        saved.ResetTimeMinutes.Should().Be(275);
         saved.DailyTargetType.Should().Be(StatisticsDailyTargetType.Duration);
         saved.DailyCharacterTarget.Should().Be(9000);
         saved.DailyDurationTargetMinutes.Should().Be(45);
@@ -109,6 +112,7 @@ public sealed class StatisticsSettingsPageViewModelTests
             {
                 EnableStatistics = true,
                 AutostartMode = StatisticsAutostartMode.PageTurn,
+                ResetTimeMinutes = 240,
                 DailyTargetType = StatisticsDailyTargetType.Duration,
                 DailyCharacterTarget = 8500,
                 DailyDurationTargetMinutes = 75,
@@ -125,10 +129,12 @@ public sealed class StatisticsSettingsPageViewModelTests
         sut.ShowStatisticsOptions.Should().BeFalse();
         sut.ShowStatisticsSyncOptions.Should().BeFalse();
         sut.SelectedAutostartMode.Should().Be(StatisticsAutostartMode.PageTurn);
+        sut.ResetTime.Should().Be(TimeSpan.FromHours(4));
         sut.EnableSync.Should().BeTrue();
         sut.SelectedSyncMode.Should().Be(StatisticsSyncMode.Replace);
 
         settings.StatisticsSettings.AutostartMode.Should().Be(StatisticsAutostartMode.PageTurn);
+        settings.StatisticsSettings.ResetTimeMinutes.Should().Be(240);
         settings.StatisticsSettings.DailyTargetType.Should().Be(StatisticsDailyTargetType.Duration);
         settings.StatisticsSettings.DailyCharacterTarget.Should().Be(8500);
         settings.StatisticsSettings.DailyDurationTargetMinutes.Should().Be(75);

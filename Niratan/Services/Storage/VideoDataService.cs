@@ -343,13 +343,18 @@ internal sealed class VideoDataService : IVideoDataService
         var nodeId = asset.NodeIds.FirstOrDefault();
         var node = nodeId == Guid.Empty ? null : snapshot.Nodes.FirstOrDefault(item => item.Id == nodeId);
         var seriesNode = FindAncestor(snapshot, node, VideoCatalogNodeKind.Series);
-        var descriptiveNode = node is { Genres.Length: > 0 } or { Actors.Length: > 0 }
+        var descriptiveNode = node != null
+                              && (!node.Genres.IsDefaultOrEmpty || !node.Actors.IsDefaultOrEmpty)
             ? node
             : seriesNode ?? node;
         var item = new VideoItem
         {
             Id = asset.IdentityKey,
-            Title = asset.DisplayTitle ?? asset.Title,
+            Title = !string.IsNullOrWhiteSpace(asset.DisplayTitle)
+                ? asset.DisplayTitle
+                : !string.IsNullOrWhiteSpace(node?.PrimaryTitle)
+                    ? node.PrimaryTitle
+                    : asset.Title,
             FilePath = asset.Location,
             SubtitlePath = asset.BoundSubtitlePath,
             ImportedAt = asset.ImportedAt.UtcDateTime,
@@ -368,6 +373,9 @@ internal sealed class VideoDataService : IVideoDataService
             CatalogNodeId = node?.Id,
             CatalogSeriesNodeId = seriesNode?.Id,
             CatalogSeriesTitle = seriesNode?.PrimaryTitle,
+            CatalogSeriesOriginalTitle = seriesNode?.OriginalTitle,
+            CatalogSeriesOverview = seriesNode?.Overview,
+            CatalogSeriesReleaseYear = seriesNode?.Year,
             CatalogNodeKind = node?.Kind ?? VideoCatalogNodeKind.Unmatched,
             LibraryMediaType = source?.MediaType ?? VideoLibraryMediaType.Auto,
             OriginalTitle = node?.OriginalTitle ?? seriesNode?.OriginalTitle,
@@ -376,6 +384,7 @@ internal sealed class VideoDataService : IVideoDataService
             ReleaseYear = node?.Year ?? seriesNode?.Year,
             SeasonNumber = node?.SeasonNumber,
             EpisodeNumber = node?.EpisodeNumber,
+            EpisodeEnd = asset.EpisodeEnd,
             AbsoluteEpisodeNumber = node?.AbsoluteEpisodeNumber,
             IsSpecialEpisode = node?.IsSpecial == true,
             IdentityLocked = node?.IdentityLocked == true,
@@ -397,8 +406,8 @@ internal sealed class VideoDataService : IVideoDataService
             Tagline = descriptiveNode?.Tagline,
             OfficialRating = descriptiveNode?.OfficialRating,
             CommunityRating = descriptiveNode?.CommunityRating,
-            EndYear = descriptiveNode?.EndYear,
-            SeriesStatus = descriptiveNode?.Status,
+            EndYear = seriesNode?.EndYear ?? descriptiveNode?.EndYear,
+            SeriesStatus = seriesNode?.Status ?? descriptiveNode?.Status,
             MetadataTags = descriptiveNode?.Tags.IsDefault == false ? descriptiveNode.Tags : [],
             Studios = descriptiveNode?.Studios.IsDefault == false ? descriptiveNode.Studios : [],
             People = descriptiveNode?.People.IsDefault == false ? descriptiveNode.People : [],

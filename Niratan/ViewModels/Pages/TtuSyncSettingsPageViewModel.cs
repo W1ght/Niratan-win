@@ -205,6 +205,7 @@ public partial class TtuSyncSettingsPageViewModel : ObservableObject
             {
                 EnableStatistics = current.EnableStatistics,
                 AutostartMode = current.AutostartMode,
+                ResetTimeMinutes = current.ResetTimeMinutes,
                 DailyTargetType = current.DailyTargetType,
                 DailyCharacterTarget = current.DailyCharacterTarget,
                 DailyDurationTargetMinutes = current.DailyDurationTargetMinutes,

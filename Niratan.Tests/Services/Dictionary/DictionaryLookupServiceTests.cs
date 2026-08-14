@@ -104,10 +104,14 @@ public class DictionaryLookupServiceTests
         var deferred = CreateLookupResult("deferred");
 
         var initial = generator.GenerateInjectionScript(
-            [first], [], renderGeneration: 7, totalResultCount: 2);
+            [first], [], renderGeneration: 7, totalResultCount: 2, pageRevision: 11);
         var append = generator.GenerateAppendResultsScript([deferred], 2, 7);
+        var redirect = generator.GenerateRedirectInjectionScript(
+            [first], [], new DictionaryDisplaySettings(), ThemeMode.System,
+            renderGeneration: 7, pageRevision: 12);
 
         initial.Should().Contain("entryCount: 2,");
+        initial.Should().Contain("pageRevision: 11,");
         initial.Should().Contain("window.niratanStagePopupRender({");
         initial.Should().Contain("first");
         initial.Should().NotContain("deferred");
@@ -117,6 +121,8 @@ public class DictionaryLookupServiceTests
         append.Should().Contain("bridge-missing");
         append.Should().Contain("appended");
         append.Should().Contain("stale");
+        redirect.Should().Contain("window.niratanRedirectResults?.(");
+        redirect.Should().Contain(", 1, 7, 12) === true");
     }
 
     [Fact]
@@ -379,18 +385,33 @@ public class DictionaryLookupServiceTests
         script.Should().Contain("createButtonSlot('context', idx)");
         script.Should().Contain("function inlineButtonIcon(kind, state)");
         script.Should().Contain("M12 8v8m-4-4h8");
-        script.Should().Contain("requestRenderedDuplicateChecks(liveContainer)");
+        script.Should().Contain("requestRenderedDuplicateChecks(liveContainer, true)");
+        script.Should().Contain("slots[i],\n        force === true");
         script.Should().Contain("postPopupMessage('duplicateCheck'");
+        script.Should().Contain("postPopupMessage('miningFeedback'");
+        script.Should().Contain("status: 'pending'");
+        script.Should().Contain("status: 'failed'");
+        script.Should().NotContain("miningRequestPending");
+        script.Should().Contain("updateButtonSlot(clickedSlot, {");
+        script.Should().Contain("clickedSlot.setAttribute('aria-busy', 'true')");
+        script.Should().Contain("mineSlot.getAttribute('aria-busy') === 'true'");
         script.Should().Contain("postPopupMessage('prepareContextMining'");
         script.Should().Contain("status === 'added' || status === 'duplicate'");
-        script.Should().Contain("window.onMineComplete = function (entryIndex, result)");
+        script.Should().Contain("window.onMineComplete = function (");
+        script.Should().Contain("window.onContextMiningPrepared = function (");
+        script.Should().Contain("window.onContextMiningReleased = function (");
         script.Should().Contain("createButtonSlot('viewNote', idx, false)");
         script.Should().Contain("showAnkiNoteButton(entryIndex, result.noteID)");
         script.Should().Contain("requestDuplicateCheck(idx, expression || '', mineSlot)");
         script.Should().Contain("function applyAnkiDuplicateLookup(entryIndex, duplicateLookup, slots)");
+        script.Should().Contain("entry.expression || '',\n    slot,\n    true,\n    attemptId");
+        script.Should().Contain("window.onDuplicateCheckBatch = function (results)");
+        script.Should().Contain("requestSequence: requestSequence");
+        script.Should().Contain("responseSequence < latestSequence");
         script.Should().Contain("noteIDs: noteIDs.map(Number)");
         script.Should().Contain("postPopupMessage('openAnkiNote'");
-        script.Should().Contain("window.onOpenAnkiNoteComplete = function (entryIndex)");
+        script.Should().Contain("window.onOpenAnkiNoteComplete = function (entryIndex, renderGeneration, pageRevision)");
+        script.Should().Contain("pageRevision !== currentPopupPageRevision()");
         shellHtml.Should().Contain("window.viewAnkiNoteLabel =");
     }
 
@@ -403,17 +424,120 @@ public class DictionaryLookupServiceTests
             "Dictionary",
             "DictionaryLookupPopup.cs"));
 
-        popup.Should().Contain("ResolveMiningContext(miningPayload.RenderGeneration)");
+        popup.Should().Contain("ResolveMiningContext(attempt.RenderGeneration) is { } resolvedContext");
+        popup.Should().Contain("MiningContextSelectionResolver.Clone(resolvedContext)");
         popup.Should().Contain("staged.Generation == renderGeneration");
-        popup.Should().Contain("_displayTransaction.CommitInFlightGeneration != renderGeneration");
+        popup.Should().Contain("_displayTransaction.CommitInFlightGeneration == request.RenderGeneration");
         popup.Should().Contain("dialog.ShowAsync(ContentDialogPlacement.InPlace)");
         popup.Should().Contain("dialog.ShowAsync(ContentDialogPlacement.Popup)");
         popup.Should().Contain("_openableAnkiNotes.TryGetValue");
         popup.Should().Contain("allowedNoteIds.SequenceEqual(noteIds)");
         popup.Should().Contain("_ankiService.OpenNotesInAnkiAsync(noteIds)");
-        popup.Should().Contain("_ankiService.DuplicateLookupExpressionAsync(expression)");
+        popup.Should().Contain("Task.Delay(TimeSpan.FromMilliseconds(15), cancellationToken)");
+        popup.Should().Contain("_ankiService.DuplicateLookupExpressionsAsync(expressions)");
+        popup.Should().Contain("window.onDuplicateCheckBatch");
+        popup.Should().Contain("requestSequence = request.RequestSequence");
+        popup.Should().Contain("PublishMiningResultToCurrentPopupAsync");
+        popup.Should().Contain("IsCurrentMiningEntry(renderGeneration, pageRevision, entryIndex)");
+        popup.Should().Contain("entryIndex < _committedEntryCount");
+        popup.Should().Contain("MaxMiningFeedbackDetailLength = 240");
         popup.Should().Contain("noteIDs = noteIds");
         popup.Should().Contain("noteID = result.NoteId");
+        popup.Should().Contain("await _ankiService.DuplicateLookupExpressionAsync(expression)");
+        popup.Should().Contain("if (duplicate.IsDuplicate)");
+        popup.Should().Contain("window.{callback}({attempt.EntryIndex}, {attempt.RenderGeneration}, {attempt.PageRevision}, {attempt.AttemptId}, {expression}, {payload}");
+    }
+
+    [Fact]
+    public void PopupMining_IsolatesAttemptsAndVisiblePageRevisions()
+    {
+        var script = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "Web",
+            "DictionaryPopup",
+            "popup.js"));
+        var popup = File.ReadAllText(Path.Combine(
+            ProjectRoot,
+            "Views",
+            "Dictionary",
+            "DictionaryLookupPopup.cs"));
+
+        script.Should().Contain("function beginEntryMiningAttempt(entryIndex, kind, expression)");
+        script.Should().Contain("if (!activeSlot || activeSlot.dataset.miningAttemptId) return null;");
+        script.Should().Contain("slot.dataset.miningAttemptId = String(identity.attemptId)");
+        script.Should().Contain("function miningAttemptMatches(entryIndex, renderGeneration, pageRevision, attemptId, expression)");
+        script.Should().Contain("pageRevision !== currentPopupPageRevision()");
+        script.Should().Contain("String(entry.expression || '') === String(expression || '')");
+        script.Should().Contain("function releaseEntryMiningAttempt(");
+        script.Should().Contain("function invalidateMiningAttempts(root)");
+        script.Should().Contain("function resetDuplicateChecks(root)");
+        script.Should().Contain("window.niratanRedirectResults = function (");
+        script.Should().Contain("function restore(snap, pageRevision)");
+        script.Should().Contain("window.navigateBack = function (pageRevision)");
+        script.Should().Contain("adoptPopupPageRevision(pageRevision, true)");
+        script.Should().Contain("responseAttemptId !== latestAttemptId");
+        script.Should().Contain("responseSequence < latestSequence");
+
+        popup.Should().Contain("private sealed record DictionaryPopupMiningAttempt(");
+        popup.Should().Contain("long PageRevision,");
+        popup.Should().Contain("long AttemptId,");
+        popup.Should().Contain("private bool TryBeginMiningAttempt(DictionaryPopupMiningAttempt attempt)");
+        popup.Should().Contain("private bool TryStartMiningSubmission(DictionaryPopupMiningAttempt attempt)");
+        popup.Should().Contain("private bool TryCompleteMiningAttempt(DictionaryPopupMiningAttempt attempt)");
+        popup.Should().Contain("_activeMiningAttempts.ContainsKey(key)");
+        popup.Should().Contain("(long Generation, long PageRevision, int EntryIndex)");
+        popup.Should().Contain("ActivateMiningPage(pageRevision, entryCount)");
+        popup.Should().Contain("ResetMiningToast();");
+        popup.Should().Contain("request.PageRevision,");
+        popup.Should().Contain("request.AttemptId,");
+    }
+
+    [Fact]
+    public void PopupHost_LocalizesAndAnnouncesAlignedMiningToastStates()
+    {
+        var popup = File.ReadAllText(Path.Combine(
+            ProjectRoot,
+            "Views",
+            "Dictionary",
+            "DictionaryLookupPopup.cs"));
+        var english = File.ReadAllText(Path.Combine(
+            ProjectRoot,
+            "Strings",
+            "en-US",
+            "Resources.resw"));
+        var chinese = File.ReadAllText(Path.Combine(
+            ProjectRoot,
+            "Strings",
+            "zh-CN",
+            "Resources.resw"));
+        var resourceKeys = new[]
+        {
+            "DictionaryPopupAnkiCardAddedTitle",
+            "DictionaryPopupAnkiDuplicateFoundTitle",
+            "DictionaryPopupAnkiSentToAnkiTitle",
+            "DictionaryPopupAnkiAddFailedTitle",
+            "DictionaryPopupAnkiPreparingCardMessage",
+            "DictionaryPopupAnkiPrepareCardFailedFormat",
+            "DictionaryPopupAnkiAddedMessage",
+            "DictionaryPopupAnkiAlreadyExistsMessage",
+            "DictionaryPopupAnkiAddCardFailedMessage",
+            "DictionaryPopupAnkiActivePopupChangedMessage",
+            "DictionaryPopupUnknownErrorMessage",
+        };
+
+        foreach (var resourceKey in resourceKeys)
+        {
+            english.Should().Contain($"name=\"{resourceKey}\"");
+            chinese.Should().Contain($"name=\"{resourceKey}\"");
+            popup.Should().Contain($"\"{resourceKey}\"");
+        }
+
+        popup.Should().Contain("AutomationProperties.SetLiveSetting(_miningToast, AutomationLiveSetting.Polite)");
+        popup.Should().Contain("AnkiMiningStatus.Pending => InfoBarSeverity.Informational");
+        popup.Should().Contain("AnkiMiningStatus.Added => InfoBarSeverity.Success");
+        popup.Should().Contain("AnkiMiningStatus.Duplicate => InfoBarSeverity.Warning");
+        popup.Should().Contain("Task.Delay(TimeSpan.FromMilliseconds(2200), cancellationToken)");
+        popup.Should().Contain("if (!cancellationToken.IsCancellationRequested)");
     }
 
     [Fact]
@@ -442,7 +566,7 @@ public class DictionaryLookupServiceTests
             "function constructFrequencyHtml(entryIndex)",
             StringComparison.Ordinal);
         var functionEnd = script.IndexOf(
-            "async function buildMiningPayload(entryIndex)",
+            "async function buildMiningPayload(entryIndex, identity)",
             functionStart,
             StringComparison.Ordinal);
 

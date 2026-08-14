@@ -47,7 +47,7 @@ public static class MiningContextSelectionResolver
         return result;
     }
 
-    private static AnkiMiningContext Clone(AnkiMiningContext source) => new()
+    public static AnkiMiningContext Clone(AnkiMiningContext source) => new()
     {
         Sentence = source.Sentence,
         DocumentTitle = source.DocumentTitle,

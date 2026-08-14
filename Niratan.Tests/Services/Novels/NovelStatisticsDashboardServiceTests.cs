@@ -94,6 +94,54 @@ public sealed class NovelStatisticsDashboardServiceTests
         day.BookContributions[0].CoverPath.Should().Be(alpha.CoverPath);
     }
 
+    [Fact]
+    public async Task Service_UsesConfiguredReportingDayForDashboardWindow()
+    {
+        var sidecars = new Mock<INovelStatisticsSidecarService>();
+        var book = new NovelBook
+        {
+            Id = "early",
+            Title = "Early Reading",
+            ExtractedPath = "D:\\Books\\early",
+        };
+        sidecars.Setup(service => service.LoadAsync(
+                book.ExtractedPath,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new NovelReadingStatistic(
+                    book.Title,
+                    "2026-08-09",
+                    800,
+                    300,
+                    0,
+                    0,
+                    9_600,
+                    9_600,
+                    1),
+            ]);
+        var timeZone = TimeZoneInfo.CreateCustomTimeZone(
+            "Dashboard +08",
+            TimeSpan.FromHours(8),
+            "Dashboard +08",
+            "Dashboard +08");
+        var clock = new FixedDashboardTimeProvider(
+            new DateTimeOffset(2026, 8, 9, 19, 30, 0, TimeSpan.Zero),
+            timeZone);
+        var service = new NovelStatisticsDashboardService(
+            sidecars.Object,
+            null,
+            clock,
+            null,
+            () => 4 * 60);
+
+        var snapshot = await service.LoadSnapshotAsync(
+            [book],
+            TestContext.Current.CancellationToken);
+
+        snapshot.WindowEnd.Should().Be(new DateOnly(2026, 8, 9));
+        snapshot.Days.Should().ContainSingle(day => day.Date == new DateOnly(2026, 8, 9));
+    }
+
     private static NovelStatisticsDayAggregate Day(
         DateOnly date,
         int characters,
@@ -107,4 +155,13 @@ public sealed class NovelStatisticsDashboardServiceTests
         int characters,
         double readingTime) =>
         new(id, title, CoverPath: null, characters, readingTime);
+
+    private sealed class FixedDashboardTimeProvider(
+        DateTimeOffset utcNow,
+        TimeZoneInfo localTimeZone) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
+
+        public override TimeZoneInfo LocalTimeZone { get; } = localTimeZone;
+    }
 }

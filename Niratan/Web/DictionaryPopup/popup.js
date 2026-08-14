@@ -16,7 +16,7 @@ const COMPACT_GLOSSARIES_ANKI = '.yomitan-glossary ul[data-sc-content="glossary"
   + '.yomitan-glossary ul[data-sc-content="glossary"], .yomitan-glossary .glossary-list { display: inline; list-style: none; padding-left: 0px; }';
 
 let selectedDictionaries = {};
-let miningRequestPending = false;
+let miningAttemptCounter = 0;
 let popupScrollIndicatorTimer = 0;
 let currentDictionaryEntryIndex = 0;
 
@@ -951,7 +951,6 @@ function createButtonSlot(kind, entryIndex, enabled) {
     event.preventDefault();
     event.stopPropagation();
     if (slot.dataset.state === 'pending' || slot.dataset.enabled === 'false') return;
-    if ((kind === 'mine' || kind === 'context') && miningRequestPending) return;
     if (kind === 'audio') {
       playEntryAudio(entryIndex);
     } else if (kind === 'mine') {
@@ -982,6 +981,132 @@ function updateButtonSlot(slot, changes) {
   var enabled = slot.dataset.enabled !== 'false';
   slot.disabled = !enabled;
   slot.innerHTML = inlineButtonIcon(kind, state);
+}
+
+function currentPopupPageRevision() {
+  return Number(window.popupPageRevision || 0);
+}
+
+function nextMiningAttemptId() {
+  miningAttemptCounter = miningAttemptCounter >= Number.MAX_SAFE_INTEGER
+    ? 1
+    : miningAttemptCounter + 1;
+  return miningAttemptCounter;
+}
+
+function entryMiningSlots(entryIndex) {
+  return {
+    mine: getButtonSlot('mine', entryIndex),
+    context: getButtonSlot('context', entryIndex),
+  };
+}
+
+function beginEntryMiningAttempt(entryIndex, kind, expression) {
+  var slots = entryMiningSlots(entryIndex);
+  var activeSlot = slots.mine || slots.context;
+  if (!activeSlot || activeSlot.dataset.miningAttemptId) return null;
+
+  var identity = {
+    entryIndex: entryIndex,
+    renderGeneration: Number(window.popupRenderGeneration || 0),
+    pageRevision: currentPopupPageRevision(),
+    attemptId: nextMiningAttemptId(),
+    expression: String(expression || ''),
+  };
+  [slots.mine, slots.context].filter(Boolean).forEach(function (slot) {
+    slot.dataset.miningAttemptId = String(identity.attemptId);
+    slot.dataset.miningPageRevision = String(identity.pageRevision);
+    slot.dataset.miningExpression = identity.expression;
+    slot.dataset.miningPreviousState = slot.dataset.state || 'default';
+    slot.dataset.miningPreviousEnabled = slot.dataset.enabled || 'true';
+  });
+
+  var clickedSlot = slots[kind];
+  if (clickedSlot) {
+    clickedSlot.setAttribute('aria-busy', 'true');
+    updateButtonSlot(clickedSlot, {
+      state: kind === 'context' ? 'pending' : 'default',
+      enabled: false,
+    });
+  }
+  return identity;
+}
+
+function miningAttemptMatches(entryIndex, renderGeneration, pageRevision, attemptId, expression) {
+  if (renderGeneration !== Number(window.popupRenderGeneration || 0)
+      || pageRevision !== currentPopupPageRevision()) return false;
+  var slots = entryMiningSlots(entryIndex);
+  var activeSlot = slots.mine || slots.context;
+  var entry = window.lookupEntries && window.lookupEntries[entryIndex];
+  return !!activeSlot
+    && Number(activeSlot.dataset.miningAttemptId || 0) === Number(attemptId)
+    && Number(activeSlot.dataset.miningPageRevision || -1) === Number(pageRevision)
+    && String(activeSlot.dataset.miningExpression || '') === String(expression || '')
+    && !!entry
+    && String(entry.expression || '') === String(expression || '');
+}
+
+function restoreAndClearMiningSlot(slot, restore) {
+  if (!slot) return;
+  var previousState = slot.dataset.miningPreviousState || 'default';
+  var previousEnabled = slot.dataset.miningPreviousEnabled !== 'false';
+  slot.removeAttribute('aria-busy');
+  delete slot.dataset.miningAttemptId;
+  delete slot.dataset.miningPageRevision;
+  delete slot.dataset.miningExpression;
+  delete slot.dataset.miningPreviousState;
+  delete slot.dataset.miningPreviousEnabled;
+  if (restore) updateButtonSlot(slot, { state: previousState, enabled: previousEnabled });
+}
+
+function releaseEntryMiningAttempt(
+    entryIndex,
+    renderGeneration,
+    pageRevision,
+    attemptId,
+    expression,
+    restore) {
+  if (!miningAttemptMatches(
+      entryIndex,
+      renderGeneration,
+      pageRevision,
+      attemptId,
+      expression)) return null;
+  var slots = entryMiningSlots(entryIndex);
+  restoreAndClearMiningSlot(slots.mine, restore);
+  restoreAndClearMiningSlot(slots.context, restore);
+  return slots;
+}
+
+function invalidateMiningAttempts(root) {
+  if (!root || !root.querySelectorAll) return;
+  var seenEntries = new Set();
+  root.querySelectorAll('.button-slot[data-mining-attempt-id]').forEach(function (slot) {
+    var entryIndex = Number(slot.dataset.entryIndex);
+    if (seenEntries.has(entryIndex)) return;
+    seenEntries.add(entryIndex);
+    var slots = {
+      mine: root.querySelector('.button-slot[data-kind="mine"][data-entry-index="' + entryIndex + '"]'),
+      context: root.querySelector('.button-slot[data-kind="context"][data-entry-index="' + entryIndex + '"]'),
+    };
+    restoreAndClearMiningSlot(slots.mine, true);
+    restoreAndClearMiningSlot(slots.context, true);
+  });
+}
+
+function resetDuplicateChecks(root) {
+  if (!root || !root.querySelectorAll) return;
+  root.querySelectorAll('.button-slot[data-kind="mine"]').forEach(function (slot) {
+    delete slot.dataset.duplicateCheckRequested;
+    delete slot.dataset.duplicateCheckSequence;
+    delete slot.dataset.miningFallbackDuplicate;
+    delete slot.dataset.miningFallbackNoteIds;
+    delete slot.dataset.latestMiningAttemptId;
+    updateButtonSlot(slot, { state: 'default', enabled: false });
+  });
+  root.querySelectorAll('.button-slot[data-kind="viewNote"]').forEach(function (slot) {
+    updateButtonSlot(slot, { noteIDs: [], hidden: true, enabled: false });
+  });
 }
 
 function inlineButtonIcon(kind, state) {
@@ -1354,7 +1479,7 @@ function constructFrequencyHtml(entryIndex) {
   return itemCount ? list.outerHTML : '';
 }
 
-async function buildMiningPayload(entryIndex) {
+async function buildMiningPayload(entryIndex, identity) {
   var entry = window.lookupEntries && window.lookupEntries[entryIndex];
   if (!entry) return null;
 
@@ -1378,7 +1503,9 @@ async function buildMiningPayload(entryIndex) {
     var audio = audioUrls[entryIndex] || '';
     return {
       entryIndex: entryIndex,
-      renderGeneration: Number(window.popupRenderGeneration || 0),
+      renderGeneration: identity.renderGeneration,
+      pageRevision: identity.pageRevision,
+      attemptId: identity.attemptId,
       expression: expression,
       reading: reading,
       matched: matched,
@@ -1401,21 +1528,50 @@ async function buildMiningPayload(entryIndex) {
 }
 
 async function mineEntryAtIndex(entryIndex) {
-  if (miningRequestPending) return;
-  var mineSlot = getButtonSlot('mine', entryIndex);
-  if (!mineSlot || mineSlot.dataset.state === 'pending') return;
-  miningRequestPending = true;
-  updateButtonSlot(mineSlot, { state: 'pending', enabled: false });
+  var entry = window.lookupEntries && window.lookupEntries[entryIndex];
+  var identity = entry
+    ? beginEntryMiningAttempt(entryIndex, 'mine', entry.expression || '')
+    : null;
+  if (!identity) return;
   try {
-    var payload = await buildMiningPayload(entryIndex);
+    postPopupMessage('miningFeedback', {
+      status: 'pending',
+      entryIndex: identity.entryIndex,
+      renderGeneration: identity.renderGeneration,
+      pageRevision: identity.pageRevision,
+      attemptId: identity.attemptId,
+      expression: identity.expression,
+    });
+    var payload = await buildMiningPayload(entryIndex, identity);
     if (!payload) throw new Error('Entry is no longer available.');
+    if (!miningAttemptMatches(
+        identity.entryIndex,
+        identity.renderGeneration,
+        identity.pageRevision,
+        identity.attemptId,
+        identity.expression)) return;
     postPopupMessage('mineEntry', payload);
   } catch (e) {
     console.error('[Anki] mineEntry failed before native submit: ' + e.message);
-    postPopupMessage('popupError', 'mineEntry failed before native submit: ' + (e.message || e));
-    miningRequestPending = false;
-    updateButtonSlot(mineSlot, { state: 'error', enabled: true });
-    setTimeout(function () { updateButtonSlot(mineSlot, { state: 'default' }); }, 2000);
+    try {
+      postPopupMessage('miningFeedback', {
+        status: 'failed',
+        detail: String(e && e.message ? e.message : e || 'Unknown error'),
+        entryIndex: identity.entryIndex,
+        renderGeneration: identity.renderGeneration,
+        pageRevision: identity.pageRevision,
+        attemptId: identity.attemptId,
+        expression: identity.expression,
+      });
+    } finally {
+      releaseEntryMiningAttempt(
+        identity.entryIndex,
+        identity.renderGeneration,
+        identity.pageRevision,
+        identity.attemptId,
+        identity.expression,
+        true);
+    }
   }
 }
 
@@ -1448,56 +1604,194 @@ function openAnkiNoteAtIndex(entryIndex) {
   postPopupMessage('openAnkiNote', {
     entryIndex: entryIndex,
     renderGeneration: Number(window.popupRenderGeneration || 0),
+    pageRevision: currentPopupPageRevision(),
     noteIDs: noteIDs.map(Number),
   });
 }
 
-window.onOpenAnkiNoteComplete = function (entryIndex) {
+window.onOpenAnkiNoteComplete = function (entryIndex, renderGeneration, pageRevision) {
+  if (renderGeneration !== Number(window.popupRenderGeneration || 0)
+      || pageRevision !== currentPopupPageRevision()) return;
   updateButtonSlot(getButtonSlot('viewNote', entryIndex), { enabled: true });
 };
 
 async function prepareContextMiningAtIndex(entryIndex) {
-  if (!window.contextMiningAvailable || miningRequestPending) return;
-  var contextSlot = getButtonSlot('context', entryIndex);
-  if (!contextSlot) return;
-  updateButtonSlot(contextSlot, { state: 'pending', enabled: false });
+  if (!window.contextMiningAvailable) return;
+  var entry = window.lookupEntries && window.lookupEntries[entryIndex];
+  var identity = entry
+    ? beginEntryMiningAttempt(entryIndex, 'context', entry.expression || '')
+    : null;
+  if (!identity) return;
   try {
-    var payload = await buildMiningPayload(entryIndex);
+    var payload = await buildMiningPayload(entryIndex, identity);
     if (!payload) throw new Error('Entry is no longer available.');
+    if (!miningAttemptMatches(
+        identity.entryIndex,
+        identity.renderGeneration,
+        identity.pageRevision,
+        identity.attemptId,
+        identity.expression)) return;
     postPopupMessage('prepareContextMining', payload);
   } catch (e) {
-    updateButtonSlot(contextSlot, { state: 'error', enabled: true });
-    setTimeout(function () { updateButtonSlot(contextSlot, { state: 'default' }); }, 2000);
+    releaseEntryMiningAttempt(
+      identity.entryIndex,
+      identity.renderGeneration,
+      identity.pageRevision,
+      identity.attemptId,
+      identity.expression,
+      true);
   }
 }
 
-window.onContextMiningPrepared = function (entryIndex) {
+window.onContextMiningPrepared = function (
+    entryIndex,
+    renderGeneration,
+    pageRevision,
+    attemptId,
+    expression) {
+  if (!miningAttemptMatches(
+      entryIndex,
+      renderGeneration,
+      pageRevision,
+      attemptId,
+      expression)) return;
   var slot = getButtonSlot('context', entryIndex);
-  updateButtonSlot(slot, { state: 'default', enabled: true });
+  slot.removeAttribute('aria-busy');
+  updateButtonSlot(slot, {
+    state: slot.dataset.miningPreviousState || 'default',
+    enabled: false,
+  });
 };
 
-function applyMiningResult(entryIndex, result) {
-  miningRequestPending = false;
-  var slot = getButtonSlot('mine', entryIndex);
+function applyMiningVisualResult(entryIndex, attemptId, result, slots) {
+  slots = slots || entryMiningSlots(entryIndex);
+  var slot = slots.mine;
   if (!slot) return;
   var status = result && result.status ? result.status : 'failed';
-  if (status === 'added' && result.noteID) {
+  if ((status === 'added' || status === 'duplicate') && result.noteID) {
     showAnkiNoteButton(entryIndex, result.noteID);
   }
-  if (status === 'added' || status === 'duplicate') {
-    updateButtonSlot(slot, { state: 'duplicate', enabled: !!window.allowDupes });
-  } else {
-    updateButtonSlot(slot, { state: 'error', enabled: true });
-    setTimeout(function () { updateButtonSlot(slot, { state: 'default' }); }, 2000);
-  }
+  var isDuplicateResult = status === 'added' || status === 'duplicate';
+  slot.dataset.latestMiningAttemptId = String(attemptId);
+  slot.dataset.miningFallbackDuplicate = String(isDuplicateResult);
+  slot.dataset.miningFallbackNoteIds = result && result.noteID ? String(result.noteID) : '';
+  updateButtonSlot(slot, {
+    state: isDuplicateResult ? 'duplicate' : 'default',
+    enabled: !isDuplicateResult || !!window.allowDupes,
+  });
+
+  var entry = window.lookupEntries && window.lookupEntries[entryIndex];
+  if (entry) requestDuplicateCheck(
+    entryIndex,
+    entry.expression || '',
+    slot,
+    true,
+    attemptId);
 }
 
-window.onMineComplete = function (entryIndex, result) {
-  applyMiningResult(entryIndex, result);
+function applyMiningResult(
+    entryIndex,
+    renderGeneration,
+    pageRevision,
+    attemptId,
+    expression,
+    result,
+    keepAttempt) {
+  if (!miningAttemptMatches(
+      entryIndex,
+      renderGeneration,
+      pageRevision,
+      attemptId,
+      expression)) return;
+  var slots = entryMiningSlots(entryIndex);
+  if (keepAttempt) {
+    slots.mine.dataset.contextMiningPendingResult = JSON.stringify(result || {});
+    var status = result && result.status ? result.status : 'failed';
+    if ((status === 'added' || status === 'duplicate') && result.noteID) {
+      showAnkiNoteButton(entryIndex, result.noteID);
+    }
+    updateButtonSlot(slots.mine, {
+      state: status === 'added' || status === 'duplicate' ? 'duplicate' : 'default',
+      enabled: false,
+    });
+    return;
+  }
+  releaseEntryMiningAttempt(
+    entryIndex,
+    renderGeneration,
+    pageRevision,
+    attemptId,
+    expression,
+    true);
+  applyMiningVisualResult(entryIndex, attemptId, result, slots);
+}
+
+window.onMineComplete = function (
+    entryIndex,
+    renderGeneration,
+    pageRevision,
+    attemptId,
+    expression,
+    result) {
+  applyMiningResult(
+    entryIndex,
+    renderGeneration,
+    pageRevision,
+    attemptId,
+    expression,
+    result,
+    false);
 };
 
-window.onContextMineComplete = function (entryIndex, result) {
-  applyMiningResult(entryIndex, result);
+window.onContextMineComplete = function (
+    entryIndex,
+    renderGeneration,
+    pageRevision,
+    attemptId,
+    expression,
+    result,
+    keepAttempt) {
+  applyMiningResult(
+    entryIndex,
+    renderGeneration,
+    pageRevision,
+    attemptId,
+    expression,
+    result,
+    !!keepAttempt);
+};
+
+window.onContextMiningReleased = function (
+    entryIndex,
+    renderGeneration,
+    pageRevision,
+    attemptId,
+    expression) {
+  if (!miningAttemptMatches(
+      entryIndex,
+      renderGeneration,
+      pageRevision,
+      attemptId,
+      expression)) return;
+  var mineSlot = getButtonSlot('mine', entryIndex);
+  var pendingResult = null;
+  try {
+    pendingResult = mineSlot && mineSlot.dataset.contextMiningPendingResult
+      ? JSON.parse(mineSlot.dataset.contextMiningPendingResult)
+      : null;
+  } catch (_) {
+  }
+  if (mineSlot) delete mineSlot.dataset.contextMiningPendingResult;
+  var slots = releaseEntryMiningAttempt(
+    entryIndex,
+    renderGeneration,
+    pageRevision,
+    attemptId,
+    expression,
+    true);
+  if (slots && pendingResult) {
+    applyMiningVisualResult(entryIndex, attemptId, pendingResult, slots);
+  }
 };
 
 function applyAnkiDuplicateLookup(entryIndex, duplicateLookup, slots) {
@@ -1506,7 +1800,25 @@ function applyAnkiDuplicateLookup(entryIndex, duplicateLookup, slots) {
     ? duplicateLookup
     : !!(duplicateLookup && duplicateLookup.isDuplicate);
   var mineSlot = slots.mine || getButtonSlot('mine', entryIndex);
-  if (!mineSlot || mineSlot.dataset.state === 'pending') return;
+  if (!mineSlot
+      || mineSlot.dataset.state === 'pending'
+      || mineSlot.getAttribute('aria-busy') === 'true'
+      || mineSlot.dataset.miningAttemptId) return;
+  var entry = window.lookupEntries && window.lookupEntries[entryIndex];
+  if (duplicateLookup && typeof duplicateLookup === 'object') {
+    if (Number(duplicateLookup.pageRevision) !== currentPopupPageRevision()
+        || String(duplicateLookup.expression || '') !== String(entry && entry.expression || '')) return;
+    var responseAttemptId = Number(duplicateLookup.attemptId || 0);
+    var latestAttemptId = Number(mineSlot.dataset.latestMiningAttemptId || 0);
+    if (responseAttemptId > 0 && responseAttemptId !== latestAttemptId) return;
+  }
+  var responseSequence = duplicateLookup && typeof duplicateLookup === 'object'
+    ? Number(duplicateLookup.requestSequence)
+    : Number.NaN;
+  var latestSequence = Number(mineSlot.dataset.duplicateCheckSequence || 0);
+  if (Number.isFinite(responseSequence) && responseSequence < latestSequence) return;
+  var fallbackDuplicate = mineSlot.dataset.miningFallbackDuplicate === 'true';
+  isDuplicate = isDuplicate || fallbackDuplicate;
   updateButtonSlot(mineSlot, {
     state: isDuplicate ? 'duplicate' : 'default',
     enabled: !(isDuplicate && !window.allowDupes),
@@ -1514,35 +1826,61 @@ function applyAnkiDuplicateLookup(entryIndex, duplicateLookup, slots) {
 
   var viewNoteSlot = slots.viewNote || getButtonSlot('viewNote', entryIndex);
   var noteIDs = normalizedAnkiNoteIDs(duplicateLookup && duplicateLookup.noteIDs);
+  if (noteIDs.length === 0 && mineSlot.dataset.miningFallbackNoteIds) {
+    noteIDs = mineSlot.dataset.miningFallbackNoteIds.split(' ').filter(Boolean);
+  }
   if (isDuplicate && noteIDs.length > 0) {
     showAnkiNoteButton(entryIndex, noteIDs, viewNoteSlot);
-  } else {
-    updateButtonSlot(viewNoteSlot, { noteIDs: [], hidden: true, enabled: false });
   }
+  delete mineSlot.dataset.miningFallbackDuplicate;
+  delete mineSlot.dataset.miningFallbackNoteIds;
 }
 
 window.onDuplicateCheck = function (entryIndex, duplicateLookup) {
   applyAnkiDuplicateLookup(entryIndex, duplicateLookup);
 };
 
-function requestDuplicateCheck(entryIndex, expression, slot) {
+window.onDuplicateCheckBatch = function (results) {
+  if (!Array.isArray(results)) return;
+  var currentGeneration = Number(window.popupRenderGeneration || 0);
+  var currentRevision = currentPopupPageRevision();
+  results.forEach(function (result) {
+    if (!result
+        || Number(result.renderGeneration) !== currentGeneration
+        || Number(result.pageRevision) !== currentRevision) return;
+    applyAnkiDuplicateLookup(Number(result.entryIndex), result);
+  });
+};
+
+function requestDuplicateCheck(entryIndex, expression, slot, force, attemptId) {
   slot = slot || getButtonSlot('mine', entryIndex);
-  if (!slot || slot.dataset.duplicateCheckRequested === 'true') return;
+  if (!slot || (!force && slot.dataset.duplicateCheckRequested === 'true')) return;
   slot.dataset.duplicateCheckRequested = 'true';
+  var requestSequence = Number(slot.dataset.duplicateCheckSequence || 0) + 1;
+  slot.dataset.duplicateCheckSequence = String(requestSequence);
   postPopupMessage('duplicateCheck', {
     entryIndex: entryIndex,
     renderGeneration: Number(window.popupRenderGeneration || 0),
+    pageRevision: currentPopupPageRevision(),
     expression: expression,
+    requestSequence: requestSequence,
+    attemptId: Number(attemptId || 0),
   });
 }
 
-function requestRenderedDuplicateChecks(root) {
+function requestRenderedDuplicateChecks(root, force) {
   if (!root) return;
   var slots = root.querySelectorAll('.button-slot[data-kind="mine"]');
   for (var i = 0; i < slots.length; i++) {
     var entryIndex = Number(slots[i].dataset.entryIndex);
     var entry = window.lookupEntries && window.lookupEntries[entryIndex];
-    if (entry) requestDuplicateCheck(entryIndex, entry.expression || '');
+    if (entry) {
+      requestDuplicateCheck(
+        entryIndex,
+        entry.expression || '',
+        slots[i],
+        force === true);
+    }
   }
 }
 
@@ -1697,10 +2035,32 @@ var backStack = [];
 var forwardStack = [];
 var pendingHistoryRestore = null;
 
+function postPopupPageRevision() {
+  postPopupMessage('pageRevisionChanged', {
+    generation: Number(window.popupRenderGeneration || 0),
+    pageRevision: currentPopupPageRevision(),
+    entryCount: Number(window.entryCount || 0),
+  });
+}
+
+function adoptPopupPageRevision(pageRevision, notifyNative) {
+  if (!Number.isSafeInteger(pageRevision) || pageRevision < 0) return false;
+  window.popupPageRevision = pageRevision;
+  if (notifyNative) postPopupPageRevision();
+  return true;
+}
+
+function advancePopupPageRevision() {
+  var nextRevision = currentPopupPageRevision() + 1;
+  adoptPopupPageRevision(nextRevision, true);
+  return nextRevision;
+}
+
 function postNavigationState() {
   postPopupMessage('navigationState', {
     epoch: window.niratanPopupDocumentEpoch,
     generation: Number(window.popupRenderGeneration || 0),
+    pageRevision: currentPopupPageRevision(),
     canGoBack: backStack.length > 0,
     canGoForward: forwardStack.length > 0
   });
@@ -1722,11 +2082,14 @@ function flushPendingHistoryRestore() {
 
 function redirect(count) {
   flushPendingHistoryRestore();
+  invalidateMiningAttempts(document.getElementById('entries-container'));
+  resetDuplicateChecks(document.getElementById('entries-container'));
   backStack.push(snapshot());
   forwardStack.length = 0;
   document.documentElement.style.visibility = 'hidden';
   window.lookupEntries = undefined;
   window.entryCount = count;
+  advancePopupPageRevision();
   selectedDictionaries = {};
   audioUrls = {};
   disconnectDictionaryColumns();
@@ -1744,11 +2107,14 @@ window.replacePopupResults = function (count) {
   postPopupTrace('replace-results-start', { count: count });
   closeOverlay();
   flushPendingHistoryRestore();
+  invalidateMiningAttempts(document.getElementById('entries-container'));
+  resetDuplicateChecks(document.getElementById('entries-container'));
   backStack.length = 0;
   forwardStack.length = 0;
   document.documentElement.style.visibility = 'hidden';
   window.lookupEntries = undefined;
   window.entryCount = count;
+  advancePopupPageRevision();
   selectedDictionaries = {};
   audioUrls = {};
   var container = document.getElementById('entries-container');
@@ -1840,6 +2206,8 @@ window.niratanStagePopupRender = function (pendingPayload) {
   if (!pendingPayload
       || pendingPayload.documentEpoch !== window.niratanPopupDocumentEpoch
       || !Number.isSafeInteger(pendingPayload.generation)
+      || !Number.isSafeInteger(pendingPayload.pageRevision)
+      || pendingPayload.pageRevision < 0
       || !Array.isArray(pendingPayload.entries)
       || !Number.isSafeInteger(pendingPayload.entryCount)
       || pendingPayload.entryCount < pendingPayload.entries.length
@@ -1850,11 +2218,13 @@ window.niratanStagePopupRender = function (pendingPayload) {
   var committedEntries = window.lookupEntries;
   var committedEntryCount = window.entryCount;
   var committedGeneration = window.popupRenderGeneration;
+  var committedPageRevision = window.popupPageRevision;
   try {
     applyPopupRuntime(pendingPayload.runtime);
     window.lookupEntries = pendingPayload.entries;
     window.entryCount = pendingPayload.entryCount;
     window.popupRenderGeneration = pendingPayload.generation;
+    window.popupPageRevision = pendingPayload.pageRevision;
     window.renderPopup(pendingPayload);
     return true;
   } finally {
@@ -1862,6 +2232,7 @@ window.niratanStagePopupRender = function (pendingPayload) {
     window.lookupEntries = committedEntries;
     window.entryCount = committedEntryCount;
     window.popupRenderGeneration = committedGeneration;
+    window.popupPageRevision = committedPageRevision;
   }
 };
 
@@ -1870,6 +2241,7 @@ window.niratanInjectResults = function (entriesJson, count) {
   return window.niratanStagePopupRender({
     documentEpoch: window.niratanPopupDocumentEpoch,
     generation: window.popupRenderGeneration || 0,
+    pageRevision: currentPopupPageRevision(),
     entries: entriesJson,
     entryCount: count,
     runtime: capturePopupRuntime()
@@ -1914,21 +2286,31 @@ window.niratanDiscardPopupRender = function (expectedEpoch, expectedGeneration) 
   return true;
 };
 
-window.niratanRedirectResults = function (entriesJson, count, expectedGeneration) {
-  if (expectedGeneration !== (window.popupRenderGeneration || 0)) return false;
+window.niratanRedirectResults = function (
+    entriesJson,
+    count,
+    expectedGeneration,
+    expectedPageRevision) {
+  if (expectedGeneration !== (window.popupRenderGeneration || 0)
+      || !Number.isSafeInteger(expectedPageRevision)
+      || expectedPageRevision < 0) return false;
   closeOverlay();
   flushPendingHistoryRestore();
+  invalidateMiningAttempts(document.getElementById('entries-container'));
+  resetDuplicateChecks(document.getElementById('entries-container'));
   backStack.push(snapshot());
   forwardStack.length = 0;
   document.documentElement.style.visibility = 'hidden';
   window.lookupEntries = entriesJson;
   window.entryCount = count;
+  adoptPopupPageRevision(expectedPageRevision, false);
   selectedDictionaries = {};
   audioUrls = {};
   var container = document.getElementById('entries-container');
   disconnectDictionaryColumns();
   if (container) container.innerHTML = '';
   window.renderPopup();
+  postPopupPageRevision();
   postNavigationState();
   requestAnimationFrame(function () {
     getPopupScrollElement().scrollTop = 0;
@@ -1956,7 +2338,7 @@ function snapshot() {
   };
 }
 
-function restore(snap) {
+function restore(snap, pageRevision) {
   flushPendingHistoryRestore();
   var container = document.getElementById('entries-container');
   var nodes = snap.nodes.slice();
@@ -1969,29 +2351,43 @@ function restore(snap) {
   } else {
     container.replaceChildren.apply(container, nodes);
   }
+  invalidateMiningAttempts(container);
+  resetDuplicateChecks(container);
   window.lookupEntries = snap.lookupEntries;
   window.entryCount = snap.entryCount;
+  adoptPopupPageRevision(pageRevision, true);
   selectedDictionaries = {};
   audioUrls = {};
   observeAllDictionarySections();
   scheduleDictionaryColumns();
   requestAnimationFrame(function () {
     getPopupScrollElement().scrollTop = snap.scrollTop;
+    requestRenderedDuplicateChecks(container);
   });
 }
 
-function navigate(origin, destination) {
+function navigate(origin, destination, pageRevision) {
   if (!origin.length) {
     postNavigationState();
-    return;
+    return false;
   }
+  if (!Number.isSafeInteger(pageRevision) || pageRevision < 0) {
+    pageRevision = currentPopupPageRevision() + 1;
+  }
+  invalidateMiningAttempts(document.getElementById('entries-container'));
+  resetDuplicateChecks(document.getElementById('entries-container'));
   destination.push(snapshot());
-  restore(origin.pop());
+  restore(origin.pop(), pageRevision);
   postNavigationState();
+  return true;
 }
 
-window.navigateBack = function () { navigate(backStack, forwardStack); };
-window.navigateForward = function () { navigate(forwardStack, backStack); };
+window.navigateBack = function (pageRevision) {
+  return navigate(backStack, forwardStack, pageRevision);
+};
+window.navigateForward = function (pageRevision) {
+  return navigate(forwardStack, backStack, pageRevision);
+};
 
 var dictionaryColumnsRaf = 0;
 var dictionaryColumnsObserver = null;
@@ -2271,6 +2667,9 @@ window.renderPopup = function (pendingPayload) {
         forwardStack.length = 0;
       }
       window.popupRenderGeneration = generation;
+      if (pendingPayload) {
+        adoptPopupPageRevision(pendingPayload.pageRevision, false);
+      }
       window.lookupEntries = lookupEntries;
       window.entryCount = entryCount;
       closeOverlay();
@@ -2278,19 +2677,24 @@ window.renderPopup = function (pendingPayload) {
       selectedDictionaries = {};
       audioUrls = {};
       disconnectDictionaryColumns();
+      invalidateMiningAttempts(liveContainer);
       liveContainer.replaceChildren.apply(liveContainer,
         Array.from(stagingContainer.childNodes));
       container = liveContainer;
       firstFrameCommitted = true;
       requestAnimationFrame(function () {
         if (generation === (window.popupRenderGeneration || 0)) {
-          requestRenderedDuplicateChecks(liveContainer);
+          // Staged entry construction can emit a lookup before native commits the
+          // page. Always issue a newer, post-commit sequence for the promoted DOM;
+          // any accepted staged response is then harmlessly ignored as stale.
+          requestRenderedDuplicateChecks(liveContainer, true);
         }
       });
       applyConfiguredStyles();
       observeAllDictionarySections();
       layoutDictionaryColumns();
       document.documentElement.style.visibility = 'visible';
+      postPopupPageRevision();
       window.niratanCommittedPopupAppend = appendResults;
       attachPopupInteractionHandlers();
       postPopupTrace('first-frame-ready', {

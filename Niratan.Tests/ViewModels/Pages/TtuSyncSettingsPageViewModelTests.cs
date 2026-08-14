@@ -133,6 +133,7 @@ public sealed class TtuSyncSettingsPageViewModelTests
             StatisticsSettings = new NovelStatisticsSettings
             {
                 EnableStatistics = true,
+                ResetTimeMinutes = 275,
                 DailyCharacterTarget = 12345,
                 SyncMode = StatisticsSyncMode.Replace,
             },
@@ -153,6 +154,7 @@ public sealed class TtuSyncSettingsPageViewModelTests
         viewModel.ShowStatisticsSync.Should().BeTrue();
         viewModel.ShowSasayakiSync.Should().BeTrue();
         settings.StatisticsSettings.EnableSync.Should().BeTrue();
+        settings.StatisticsSettings.ResetTimeMinutes.Should().Be(275);
         settings.StatisticsSettings.DailyCharacterTarget.Should().Be(12345);
         settings.StatisticsSettings.SyncMode.Should().Be(StatisticsSyncMode.Replace);
         settings.SasayakiSettings.EnableSync.Should().BeTrue();

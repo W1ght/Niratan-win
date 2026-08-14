@@ -131,8 +131,8 @@ public sealed partial class MainWindow : Window, IRecipient<SetFullscreenMessage
 
     private void Settings_Changed(object? sender, SettingsChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(AppSettings.Theme))
-            SetTheme(e.NewValue is ThemeMode newTheme ? newTheme : ThemeMode.System);
+        if (e.PropertyName is nameof(AppSettings.Theme) or nameof(ISettingsService.Current))
+            SetTheme(_settingsService.Current.Theme);
     }
 
     private void OnKeyDown(object sender, KeyRoutedEventArgs e)

@@ -195,7 +195,7 @@ ruby { ruby-position: over; }
 
 ### 3.6 阅读统计会话与导航事务
 
-`ReaderStatisticsSession` 是阅读时间、字符基线、本地日期 rollover、TTU 统计公式和 `statistics.json` 写入的唯一所有者。`NovelReaderPageViewModel` 只投影状态并转发 typed operation；Page 只分类 WebView2/WinUI 事件。
+`ReaderStatisticsSession` 是阅读时间、字符基线、本地 reporting-day rollover、TTU 统计公式和 `statistics.json` 写入的唯一所有者。reporting day 使用 Profile 中 0–1439 分钟的 reset time；边界前的本地时间归入前一天。`NovelReaderPageViewModel` 只投影状态并转发 typed operation；Page 只分类 WebView2/WinUI 事件。
 
 ```text
 真实阅读移动
@@ -321,7 +321,9 @@ NovelReaderPage
 - 功能：测试连接、deck 列表、note type 列表、字段列表、创建 note、重复卡检查。
 - Anki 逻辑不写在 ViewModel 里。
 - 调用链：`ReaderViewModel → IAnkiService → AnkiConnectClient`
-- EPUB 封面、视频截图和音频片段必须在字段渲染前完成并验证非空；上传型媒体使用 Anki 返回的稳定文件名生成标签，禁止把应用私有本地路径写入卡片字段。直写 `collection.media` 的视频媒体也必须等待原子替换完成后才允许提交卡片。
+- Popup 同一可见页的查重先在 JavaScript 短窗口内聚合，再由 AnkiConnect 的批量 `canAddNotesWithErrorDetail` 与按需 `multi/findNotes` 完成；短 TTL 缓存与在途合流按 Anki settings generation 隔离，Profile/deck/model/scope 变化必须失效。提交前仍对同一 expression 串行执行最终查重，禁止缓存或并发竞态生成重复卡。
+- Popup 的 mining attempt 由 `render generation + page revision + entry + attempt + expression` 标识；只有当前 attempt 可以更新按钮、toast 与 note ID。不同词条可以并行，同词条普通/上下文制卡共享门控。
+- EPUB 封面和上传型媒体在字段渲染前完成并验证非空，使用 Anki 返回的稳定文件名生成标签，禁止把应用私有本地路径写入卡片字段。视频直写 `collection.media` 对齐 Niratan 的 optimistic 路径：先以内容身份生成确定性文件名并立即提交卡片，截图与音频在后台并发生成；后台仍使用同目录临时文件、相同目标合流和原子发布。无法取得直写目录时继续等待媒体生成，并把失败项放入单次 `multi/storeMediaFile` fallback 后才提交。
 
 模板变量：
 ```
@@ -395,13 +397,14 @@ Windows 使用系统文件选择器直接写入用户选择的目标路径，不
 - `IVideoPlaybackHistoryStore` 继续逐字节兼容 `video_playback_history.json`；`video_mining_history.json` 也不迁移。本地 identity 是标准化绝对路径，远程 identity 是 `remote://<provider>/<id>`；移除 source 或资产不可用不删除历史。
 - 进度小于 2 秒不持久化；距离结尾 5 秒以内标记完成；字幕选择独立于进度清理。该边界直接对齐 Niratan `VideoPlaybackHistoryStore`。
 - legacy JSON 在进程级锁内完整解析、验证并哈希，导入 app-owned 临时库的单一事务；数量、`foreign_key_check`、`quick_check` 与 ledger 全部成功后才原子提升。原 JSON 永不修改、重命名或删除；失败回滚并只读展示 legacy snapshot，成功后不再读取它。
-- 增量扫描每次枚举来源以发现新增/缺失，只重解析大小或 mtime 变化的资产；旧 catalog 中仍绑定 `unmatched` 的已解析分集会在下一次增量扫描执行一次兼容性重解析，提升为 series/season/episode 后即恢复普通增量规则。任务按“发现文件 / 读取元数据 / 保存 catalog”分段上报；文件分析最多四路并行，结果仍按自然路径顺序以短事务分批提交，UI 进度节流而不逐文件重载 snapshot。只有完整枚举才标记未见资产不可用；取消、权限/I/O 错误和迟到 generation 都不能制造丢失。来源重叠以多对多 membership 去重，媒体目录和 NFO/图片 sidecar 始终只读。
-- `IVideoFileNameParser` 仅对匹配副本执行 NFKC/全角数字规范化，识别季集、多集、绝对集数、第 N 話、第 N 期、cour、SP/OVA/OAD/NCOP/NCED、电影年份与显式 TMDB/TVDB/AniDB/AniList/MAL/Bangumi ID。
-- metadata 合并顺序固定为用户锁定/人工绑定、Local NFO/图片、主 provider、补充 provider 填空。显式 ID 直接锁定；多个 provider 对同一年份的精确动画别名可作为联合确认，随后优先用 TMDB 投影丰富系列详情与图片，年份相冲突的重拍仍进入 Review。模糊匹配要求总分至少 0.92、领先至少 0.15且无年份/编号硬冲突，否则保留完整候选进入 Needs Review。Unorganized 只表示没有集合覆盖，与 Review 分离。
+- 增量扫描每次枚举来源以发现新增/缺失，并以轻量目录/文件名分类检查现有层级；媒体大小或 mtime 未变化时不重复读取 NFO。`jellyfin-folder-hierarchy-v11` 兼容修复会一次性把本地资产标记为待重解析，修复旧 v10 使用错误资产 kind 而空跑的问题，成功重建后恢复普通增量规则；显式 Movie 来源若曾被旧逻辑建成单资产 episodic hierarchy，只在无 Local/锁定/用户状态且不共享节点时安全降级，其他情况保留层级并重新进入 Needs Review。任务按“发现文件 / 读取元数据 / 保存 catalog”分段上报；文件分析最多四路并行，结果仍按自然路径顺序以短事务分批提交，UI 进度节流而不逐文件重载 snapshot。只有完整枚举才标记未见资产不可用；取消、权限/I/O 错误和迟到 generation 都不能制造丢失。来源重叠以多对多 membership 去重，媒体目录和 NFO/图片 sidecar 始终只读。
+- `IVideoFileNameParser` 仅对匹配副本执行 NFKC/全角数字规范化，识别季集、多集、绝对集数、第 N 話、第 N 期、`S3`/`3rd Season`、cour、SP/OVA/OAD/NCOP/NCED、电影年份与显式 TMDB/TVDB/AniDB/AniList/MAL/Bangumi ID，并把集号后的副标题单独保留为 episode title；显式 Movie 来源保留标题中的 OVA/PV/SxxExx 字面量，不据此制造分集。系列所有权优先来自 `Show/Season/Episode` 目录；来源根本身是单一发布包时才以根目录和正篇标题作兼容回退，无法确定 owner 的平铺混合来源不得跨作品激进合并。Shoko renamer/import 目标目录作为本地 Anime 来源时，新发现或变化文件进入同一分类器；不读取或迁移 Shoko 自身的旧 catalog。
+- 显式 `Season 00` / `Specials` / `S00Eyy` 继续作为有编号 Special；`PV`、`menu`、trailers、featurettes、shorts、NCOP/NCED 与 extras 作为无编号 supplemental 投影到同一系列的 Special Features，不按扫描顺序伪造集号，也不进入正篇计数、Next Up 或自动连播。多集文件只建立一个逻辑 Episode，结束集号保留在 media asset；文件名、目录和媒体字节均不改写。
+- metadata 合并顺序固定为用户锁定/人工绑定、Local NFO/图片、主 provider、补充 provider 填空。显式 ID 逐 provider 锁定；provider 自动发现的 external ID 只作为后续查询提示，不因同一节点上另一个锁定 ID 而反向升级成人工身份锁。Series/Anime metadata 只丰富 scanner 已确定的 series owner，不压平 season/episode 绑定；结构化系列下的自动 Movie 结果必须拒绝，不能形成 `Series -> Season -> Movie`。兼容重排可修复未锁定子层级，并保留人工锁定的 series 身份、用户字段和播放状态；清理空 scaffold 只丢弃可重建的 provider cache，Local field/artwork、锁定字段和 node user data 都是删除保护条件。多个 provider 对同一年份的精确动画别名可作为联合确认，随后优先用 TMDB 投影丰富系列详情与图片，年份相冲突的重拍仍进入 Review。模糊匹配要求总分至少 0.92、领先至少 0.15且无年份/编号硬冲突，否则保留完整候选进入 Needs Review。Unorganized 只表示没有集合覆盖，与 Review 分离。
 - 在线 provider 通过 `IVideoMetadataTransport` 的 HTTPS host allowlist、并发门、请求间隔、Retry-After、条件缓存、最多三次幂等重试和取消访问；凭据只进 Windows Credential Manager，30 天 normalized cache 在 SQLite，poster/backdrop/logo、首屏演员头像和相关推荐海报经原子 2 GiB LRU cache。图片下载每个 URL 并发去重，TMDB 同时不超过四路，UI 永不直连 provider CDN。首次联网前必须取得隐私同意。
-- metadata 刷新是独立于页面生命周期的后台 `catalog_jobs` 任务：来源扫描完成后只为新增/变化、尚未尝试或 TTL 已过期的可用视频排队，最近一次完整任务同时作为未匹配结果的 30 天负缓存；手动“刮削元数据”才强制刷新整个来源。离开 Video 页面不会取消任务，取消来源刮削则只终止该任务并保留已有详情。不同资产最多两路并行，同一 provider 查询仍服从 transport 并发门、请求间隔和 `Retry-After`；相同的幂等查询以 cache key 合并，等待者在首个请求写入 30 天 catalog cache 后直接复用。候选始终按来源 route 顺序进入评分。
+- metadata 刷新是独立于页面生命周期的后台 `catalog_jobs` 任务：来源扫描完成后只为新增/变化、尚未尝试或 TTL 已过期的可用视频排队，最近一次完整任务同时作为未匹配结果的 30 天负缓存；完整扫描或 mtime 变化可重读并应用 Local metadata，但 owner/binding 未变化时不得取消该负缓存，只有实际层级重绑才使对应来源的完成任务失效。手动“刮削元数据”才强制刷新整个来源。离开 Video 页面不会取消任务，取消来源刮削则只终止该任务并保留已有详情。不同资产最多两路并行，同一 provider 查询仍服从 transport 并发门、请求间隔和 `Retry-After`；相同的幂等查询以 cache key 合并，等待者在首个请求写入 30 天 catalog cache 后直接复用。候选始终按来源 route 顺序进入评分。
 - 扫描和后台刮削进度同时投影在 Video 顶部任务条；来源管理使用主内容区全宽卡片，不使用固定宽度 `ContentDialog`，并显示扫描/刮削各自的计数、匹配数、待确认数、失败及取消入口。
-- Home 采用 Jellyfin 式媒体中心层级：`My media` 快捷库、`Continue watching`、`Next up`、`Recently added media` 独立横向行，空行隐藏，首页不再重复渲染完整资料库列表。Continue Watching 按系列折叠，仅保留该系列最近播放的一集，并优先横版 thumb/backdrop；系列书架按 series node 聚合并使用竖版 poster。系列详情使用横版 hero、竖版 poster 和可选 logo，投影标题/原题、标语、简介、年份区间、分级、评分、状态、类型、标签、工作室、季、正篇、Specials、演员、相关推荐及 provider 归属；图片只读取本地 sidecar 或应用图片缓存，不由 UI 直接加载 provider URL。
+- Home 采用 Jellyfin 式媒体中心层级：`My media` 快捷库、`Continue watching`、`Next up`、`Recently added media` 独立横向行，空行隐藏，首页不再重复渲染完整资料库列表。Continue Watching 按系列折叠，仅保留该系列最近播放的一集，并优先横版 thumb/backdrop；系列书架按 series node 聚合并使用竖版 poster。系列详情使用横版 hero、竖版 poster 和可选 logo，原题、简介与年份明确取 series owner，不用某一集 NFO 回填系列资料；同时投影标题、标语、年份区间、分级、评分、状态、类型、标签、工作室、季、正篇、Specials、演员、相关推荐及 provider 归属。图片只读取本地 sidecar 或应用图片缓存，不由 UI 直接加载 provider URL。
 - Windows 视频可选 Anime4K 由 `IAnime4KShaderService` 管理：固定下载 Anime4K `v4.0.1` GLSL，使用 SHA-256 校验并原子写入 `%APPDATA%\Niratan\VideoShaders`；`MpvPlaybackEngine` 只接收强类型预设并通过 `change-list glsl-shaders` 应用，不接受任意 URL、路径或 mpv 配置。入口位于播放器侧边栏“视频增强”，预设仅属于当前播放会话，每次打开视频都强制恢复 `Off`，避免高 GPU 负载被自动继承；这是相对 Niratan macOS 默认画质链路的显式 Windows 可选偏差。
 - 视频打开采用首帧优先路径：来源和必要播放属性应用后立即解除暂停；外部字幕 CPU 解析在线程池执行，章节、轨道轮询、交互字幕与侧边栏投影不得阻塞首帧。底部控制栏层级必须高于透明字幕选择画布，重叠区域由控制栏优先接收输入。
 - 仅当物理 `niratan.db` 已存在时，旧 `NovelBooks`、`NovelReadingProgress`、`NovelReaderSettings` 才由 `NovelStorageMigrationService` 在启动时读取；探测不得创建空数据库。
@@ -422,9 +425,9 @@ metadata.json + bookinfo.json + statistics.json + shelves.json
 
 - Dashboard 读取当前可见书籍；损坏 `statistics.json` 按书报告并跳过，绝不因扫描或缓存恢复覆盖原文件。
 - 总字符/时长包含所有合法记录；速度仅使用 `characters > 0 && readingTime >= 60s` 的贡献，避免短 burst 产生虚高速度。
-- 最近一年窗口以 Windows 本地今天结束。周从周一开始并固定提供 7 个 cell；未来日期没有目标百分比。
+- 最近一年窗口以配置 reset time 计算出的 Windows 本地 reporting day 结束。周从周一开始并固定提供 7 个 cell；未来日期没有目标百分比。
 - Speed 提供加权、active-day median、最近 7 active days、非重叠 14+14 active days 变化和最快/最慢日期。
-- Range 的 year/month/week/day 与 anchor 会重算所有 Dashboard 卡片；Trend 的 day/week/month grain 和 characters/duration/speed metric 独立切换，Ranking 也可按三种 metric 排序。
+- Range 的 year/month/week/day 与 anchor 会重算所有 Dashboard 卡片；Trend 的 day/week/month grain 和 characters/duration/speed metric 独立切换，Ranking 也可按三种 metric 排序。Ranking 首屏 12 本并按 12 本递增，range/metric 改变时重置分页；行项目复用本地封面并使用固定数值列，使所有进度轨占用相同宽度。点击后在居中的宽版详情面板中选择日期、编辑字符/时长、删除单日或经确认删除全部统计。修改由 `INovelStatisticsSidecarService` 原子保存为带新 `lastStatisticModified` 的记录或零值墓碑；`INovelStatisticsMutationCoordinator` 在同一本书仍有活动 Reader 时把“当前统计 checkpoint → 外部修改 → Reader 重载”放入同一写队列，避免后续计时覆盖编辑或复活删除记录。损坏或不可用 sidecar 只显示警告，不执行修复或覆盖。
 - Calendar 覆盖最近一年并支持选择日期查看字符、时长和书籍数；目标类型、字符/时长阈值与周目标天数可在 Dashboard 内调整，修改后重算历史目标与 streak 并持久化到应用设置。
 - `statistics_dashboard_cache_v1.json` 只是 schema-versioned 派生缓存。key 包含本地日期、书籍身份及 metadata/bookinfo/statistics 文件投影；损坏、key/schema 不匹配或 `NovelLibraryChangedMessage` 只删除缓存自身。命中缓存时先同步展示，再后台重读 sidecar、更新缓存并在 UI 线程发布新 snapshot。
 - `NovelLibraryPageViewModel` 只负责 Bookshelf/Statistics 全页切换，并把当前可见书籍与 `NovelShelfState` 交给子 ViewModel；统计格式化、selector、目标设置和 refresh 订阅不再通过父 ViewModel 转发。

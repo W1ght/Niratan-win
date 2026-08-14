@@ -9,6 +9,97 @@ namespace Niratan.Tests.Services.Anki;
 public class AnkiConnectClientTests
 {
     [Fact]
+    public async Task CanAddNotesAsync_SendsAllCandidatesInOneRequestAndPreservesOrder()
+    {
+        var handler = new RecordingJsonHttpMessageHandler("""
+        {
+          "result": [
+            { "canAdd": true },
+            { "canAdd": false, "error": "duplicate" }
+          ],
+          "error": null
+        }
+        """);
+        using var client = new AnkiConnectClient("http://anki.test", handler);
+        var deck = new AnkiDeck { Name = "Mining", Id = 1 };
+        var noteType = new AnkiNoteType { Name = "Basic", Id = 2, Fields = ["Front"] };
+
+        var canAdd = await client.CanAddNotesAsync(
+            deck,
+            noteType,
+            [
+                new Dictionary<string, string> { ["Front"] = "星" },
+                new Dictionary<string, string> { ["Front"] = "月" },
+            ],
+            new AnkiSettings());
+
+        canAdd.Should().Equal(true, false);
+        handler.Request.GetProperty("action").GetString().Should().Be("canAddNotesWithErrorDetail");
+        var notes = handler.Request.GetProperty("params").GetProperty("notes");
+        notes.GetArrayLength().Should().Be(2);
+        notes[0].GetProperty("fields").GetProperty("Front").GetString().Should().Be("星");
+        notes[1].GetProperty("fields").GetProperty("Front").GetString().Should().Be("月");
+    }
+
+    [Fact]
+    public async Task CanAddNotesAsync_WhenResponseCountIsShort_FailsClosed()
+    {
+        var handler = new RecordingJsonHttpMessageHandler("""
+        {
+          "result": [
+            { "canAdd": true }
+          ],
+          "error": null
+        }
+        """);
+        using var client = new AnkiConnectClient("http://anki.test", handler);
+        var deck = new AnkiDeck { Name = "Mining", Id = 1 };
+        var noteType = new AnkiNoteType { Name = "Basic", Id = 2, Fields = ["Front"] };
+
+        Func<Task> act = async () =>
+        {
+            await client.CanAddNotesAsync(
+                deck,
+                noteType,
+                [
+                    new Dictionary<string, string> { ["Front"] = "星" },
+                    new Dictionary<string, string> { ["Front"] = "月" },
+                ],
+                new AnkiSettings());
+        };
+
+        await act.Should().ThrowAsync<AnkiConnectException>()
+            .WithMessage("*1 canAdd result(s) for 2 note(s)*");
+    }
+
+    [Fact]
+    public async Task FindNotesAsync_BatchesQueriesAndKeepsPerActionFailuresIsolated()
+    {
+        var handler = new RecordingJsonHttpMessageHandler("""
+        {
+          "result": [
+            { "result": [11, 22, 11], "error": null },
+            { "result": null, "error": "invalid query" }
+          ],
+          "error": null
+        }
+        """);
+        using var client = new AnkiConnectClient("http://anki.test", handler);
+
+        var noteIds = await client.FindNotesAsync(["query-one", "query-two"]);
+
+        noteIds.Should().HaveCount(2);
+        noteIds[0].Should().Equal(11, 22, 11);
+        noteIds[1].Should().BeEmpty();
+        handler.Request.GetProperty("action").GetString().Should().Be("multi");
+        var actions = handler.Request.GetProperty("params").GetProperty("actions");
+        actions.GetArrayLength().Should().Be(2);
+        actions[0].GetProperty("action").GetString().Should().Be("findNotes");
+        actions[0].GetProperty("params").GetProperty("query").GetString().Should().Be("query-one");
+        actions[1].GetProperty("params").GetProperty("query").GetString().Should().Be("query-two");
+    }
+
+    [Fact]
     public async Task StoreMediaFilesAsync_UnwrapsMultiActionResultWrappers()
     {
         using var client = new AnkiConnectClient(
@@ -197,6 +288,28 @@ public class AnkiConnectClientTests
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(responseJson, System.Text.Encoding.UTF8, "application/json"),
+            };
+        }
+    }
+
+    private sealed class RecordingJsonHttpMessageHandler(string responseJson) : HttpMessageHandler
+    {
+        public JsonElement Request { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            var body = await request.Content!.ReadAsStringAsync(cancellationToken);
+            using var document = JsonDocument.Parse(body);
+            Request = document.RootElement.Clone();
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    responseJson,
+                    System.Text.Encoding.UTF8,
+                    "application/json"),
             };
         }
     }

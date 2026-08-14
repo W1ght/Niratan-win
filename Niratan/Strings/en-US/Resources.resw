@@ -174,7 +174,7 @@
   <data name="ReaderAppearancePageTitle.Text" xml:space="preserve"><value>Appearance</value></data>
   <data name="ReaderAppearancePanelDialog.Title" xml:space="preserve"><value>Appearance</value></data>
   <data name="ReaderAppearancePanelDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
-  <data name="ReaderThemeSectionHeader.Text" xml:space="preserve"><value>Reader Theme</value></data>
+  <data name="ReaderThemeSectionHeader.Text" xml:space="preserve"><value>Theme</value></data>
   <data name="ReaderSepiaModeCard.Header" xml:space="preserve"><value>Sepia Mode</value></data>
   <data name="ReaderSepiaModeCard.Description" xml:space="preserve"><value>Use sepia-tone background and text colors for reading</value></data>
   <data name="ReaderCustomColorsCard.Header" xml:space="preserve"><value>Custom Colors</value></data>
@@ -182,14 +182,15 @@
   <data name="ReaderCustomBackgroundColorCard.Header" xml:space="preserve"><value>Background Color</value></data>
   <data name="ReaderCustomTextColorCard.Header" xml:space="preserve"><value>Body Text Color</value></data>
   <data name="ReaderCustomInfoColorCard.Header" xml:space="preserve"><value>Information Text Color</value></data>
-  <data name="ReaderColorThemeCard.Header" xml:space="preserve"><value>Color Theme</value></data>
-  <data name="ReaderColorThemeCard.Description" xml:space="preserve"><value>Select the reading color theme</value></data>
+  <data name="ReaderColorThemeCard.Header" xml:space="preserve"><value>Theme</value></data>
+  <data name="ReaderColorThemeCard.Description" xml:space="preserve"><value>Select the app and reader theme</value></data>
   <data name="ReaderEInkModeCard.Header" xml:space="preserve"><value>E-Ink Mode</value></data>
   <data name="ReaderEInkModeCard.Description" xml:space="preserve"><value>High-contrast black and white for e-ink displays</value></data>
   <data name="ReaderSystemLightSepiaCard.Header" xml:space="preserve"><value>Use Sepia as Light Theme</value></data>
   <data name="ReaderSystemLightSepiaCard.Description" xml:space="preserve"><value>When the system is in light mode, use sepia instead</value></data>
   <data name="ReaderSepiaInvertCard.Header" xml:space="preserve"><value>Invert in System Dark</value></data>
   <data name="ReaderSepiaInvertCard.Description" xml:space="preserve"><value>Invert sepia colors when the system is in dark mode</value></data>
+  <data name="ReaderCustomInterfaceThemeCard.Header" xml:space="preserve"><value>Interface</value></data>
   <data name="ReaderTextSectionHeader.Text" xml:space="preserve"><value>Reader Text</value></data>
   <data name="ReaderTextOrientationCard.Header" xml:space="preserve"><value>Text Orientation</value></data>
   <data name="ReaderTextOrientationCard.Description" xml:space="preserve"><value>Vertical or horizontal writing</value></data>
@@ -557,6 +558,8 @@
   <data name="StatisticsEnableToggle.Description" xml:space="preserve"><value>Show statistics controls and save reading history sidecars</value></data>
   <data name="StatisticsAutostartModeComboBox.Header" xml:space="preserve"><value>Autostart</value></data>
   <data name="StatisticsAutostartModeComboBox.Description" xml:space="preserve"><value>Start tracking manually, on page turn, or when the reader opens</value></data>
+  <data name="StatisticsResetTimeCard.Header" xml:space="preserve"><value>Reset Time</value></data>
+  <data name="StatisticsResetTimeCard.Description" xml:space="preserve"><value>Reading statistics recorded before this time count toward the previous day.</value></data>
   <data name="StatisticsSyncSectionHeader.Text" xml:space="preserve"><value>Sync</value></data>
   <data name="StatisticsEnableSyncToggle.Header" xml:space="preserve"><value>ッツ Sync</value></data>
   <data name="StatisticsEnableSyncToggle.Description" xml:space="preserve"><value>Enable statistics sync metadata</value></data>
@@ -1105,6 +1108,32 @@
   <data name="NovelStatisticsCalendarTitle.Text" xml:space="preserve"><value>Reading Calendar</value></data>
   <data name="NovelStatisticsCalendarRecentYear.Text" xml:space="preserve"><value>Recent year</value></data>
   <data name="NovelStatisticsRankingTitle.Text" xml:space="preserve"><value>Book Ranking</value></data>
+  <data name="NovelStatisticsMoreBooksButton.Content" xml:space="preserve"><value>More Books</value></data>
+  <data name="NovelStatisticsBookDetailDialogTitle" xml:space="preserve"><value>Book Statistics</value></data>
+  <data name="NovelStatisticsBookDetailClose" xml:space="preserve"><value>Close</value></data>
+  <data name="NovelStatisticsBookDetailLoading" xml:space="preserve"><value>Loading book statistics…</value></data>
+  <data name="NovelStatisticsBookDetailSubtitle.Text" xml:space="preserve"><value>Daily reading statistics</value></data>
+  <data name="NovelStatisticsBookDetailCharacters.Text" xml:space="preserve"><value>Characters</value></data>
+  <data name="NovelStatisticsBookDetailDuration.Text" xml:space="preserve"><value>Duration</value></data>
+  <data name="NovelStatisticsBookDetailSpeed.Text" xml:space="preserve"><value>Speed</value></data>
+  <data name="NovelStatisticsBookDetailActiveDays.Text" xml:space="preserve"><value>Active Days</value></data>
+  <data name="NovelStatisticsBookDetailDays.Text" xml:space="preserve"><value>Days</value></data>
+  <data name="NovelStatisticsBookDetailNoRecords.Text" xml:space="preserve"><value>No reading records</value></data>
+  <data name="NovelStatisticsBookDetailUnavailable" xml:space="preserve"><value>This book's statistics could not be read. The sidecar was left unchanged.</value></data>
+  <data name="NovelStatisticsBookDetailActiveDaysFormat" xml:space="preserve"><value>{0} days</value></data>
+  <data name="NovelStatisticsBookDetailDayAccessibleFormat" xml:space="preserve"><value>{0}, {1} characters, {2}, {3}</value></data>
+  <data name="NovelStatisticsBookDetailCharactersInput.Header" xml:space="preserve"><value>Characters Read</value></data>
+  <data name="NovelStatisticsBookDetailHoursInput.Header" xml:space="preserve"><value>Hours</value></data>
+  <data name="NovelStatisticsBookDetailMinutesInput.Header" xml:space="preserve"><value>Minutes</value></data>
+  <data name="NovelStatisticsBookDetailDeleteDay.Content" xml:space="preserve"><value>Delete This Day</value></data>
+  <data name="NovelStatisticsBookDetailSave.Content" xml:space="preserve"><value>Save</value></data>
+  <data name="NovelStatisticsBookDetailCancel.Content" xml:space="preserve"><value>Cancel</value></data>
+  <data name="NovelStatisticsBookDetailConfirmDelete.Content" xml:space="preserve"><value>Delete</value></data>
+  <data name="NovelStatisticsBookDetailDeleteAll.Content" xml:space="preserve"><value>Delete All Statistics</value></data>
+  <data name="NovelStatisticsBookDetailSelectDay.Text" xml:space="preserve"><value>Select a day to edit its statistics.</value></data>
+  <data name="NovelStatisticsBookDetailDeleteDayConfirmation" xml:space="preserve"><value>Delete the selected day's statistics? This cannot be undone.</value></data>
+  <data name="NovelStatisticsBookDetailDeleteAllConfirmation" xml:space="preserve"><value>Delete all statistics for this book? This cannot be undone.</value></data>
+  <data name="NovelStatisticsBookDetailMutationFailedFormat" xml:space="preserve"><value>Unable to update statistics: {0}</value></data>
   <data name="NovelStatisticsShelfTitle.Text" xml:space="preserve"><value>Shelf Comparison</value></data>
   <data name="NovelStatisticsLoadingText.Text" xml:space="preserve"><value>Loading statistics…</value></data>
   <data name="NovelStatisticsEmptyTitle.Text" xml:space="preserve"><value>No reading statistics yet</value></data>
@@ -1160,6 +1189,17 @@
   <data name="YouTubeSubtitleLoadFailed" xml:space="preserve"><value>Could not load this publisher subtitle track.</value></data>
   <data name="YouTubeSubtitleLoading" xml:space="preserve"><value>Loading publisher subtitles...</value></data>
   <data name="DictionaryPopupViewAddedNoteInAnki" xml:space="preserve"><value>View added note in Anki</value></data>
+  <data name="DictionaryPopupAnkiCardAddedTitle" xml:space="preserve"><value>Card Added</value></data>
+  <data name="DictionaryPopupAnkiDuplicateFoundTitle" xml:space="preserve"><value>Duplicate Found</value></data>
+  <data name="DictionaryPopupAnkiSentToAnkiTitle" xml:space="preserve"><value>Sent to Anki</value></data>
+  <data name="DictionaryPopupAnkiAddFailedTitle" xml:space="preserve"><value>Add Failed</value></data>
+  <data name="DictionaryPopupAnkiPreparingCardMessage" xml:space="preserve"><value>Preparing card…</value></data>
+  <data name="DictionaryPopupAnkiPrepareCardFailedFormat" xml:space="preserve"><value>Unable to prepare the card: {0}</value></data>
+  <data name="DictionaryPopupAnkiAddedMessage" xml:space="preserve"><value>Added to Anki.</value></data>
+  <data name="DictionaryPopupAnkiAlreadyExistsMessage" xml:space="preserve"><value>Already exists in Anki.</value></data>
+  <data name="DictionaryPopupAnkiAddCardFailedMessage" xml:space="preserve"><value>Failed to add card.</value></data>
+  <data name="DictionaryPopupAnkiActivePopupChangedMessage" xml:space="preserve"><value>Lookup changed. Try adding the card again.</value></data>
+  <data name="DictionaryPopupUnknownErrorMessage" xml:space="preserve"><value>Unknown error</value></data>
   <data name="BackupSettingsBackButton.AutomationProperties.Name" xml:space="preserve"><value>Back</value></data>
   <data name="BackupSettingsPageTitle.Text" xml:space="preserve"><value>Backup</value></data>
   <data name="BackupBooksSectionHeader.Text" xml:space="preserve"><value>Books</value></data>

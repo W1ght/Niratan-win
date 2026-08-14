@@ -1,3 +1,5 @@
+using System;
+
 namespace Niratan.Models.Settings;
 
 public enum StatisticsAutostartMode
@@ -21,8 +23,15 @@ public enum StatisticsSyncMode
 
 public sealed class NovelStatisticsSettings
 {
+    private int _resetTimeMinutes;
+
     public bool EnableStatistics { get; set; }
     public StatisticsAutostartMode AutostartMode { get; set; } = StatisticsAutostartMode.Off;
+    public int ResetTimeMinutes
+    {
+        get => _resetTimeMinutes;
+        set => _resetTimeMinutes = Math.Clamp(value, 0, 24 * 60 - 1);
+    }
     public StatisticsDailyTargetType DailyTargetType { get; set; } =
         StatisticsDailyTargetType.Characters;
     public int DailyCharacterTarget { get; set; } = 5000;
