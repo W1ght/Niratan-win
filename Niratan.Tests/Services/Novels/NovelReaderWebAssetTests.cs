@@ -2737,7 +2737,7 @@ public class NovelReaderWebAssetTests
     {
         var popupJs = File.ReadAllText(
             Path.Combine(ProjectRoot, "Web", "DictionaryPopup", "popup.js")
-        );
+        ).ReplaceLineEndings("\n");
 
         popupJs.Should().Contain("if (slot.dataset.state === 'pending' || slot.dataset.enabled === 'false') return;");
         popupJs.Should().Contain("if (!activeSlot || activeSlot.dataset.miningAttemptId) return null;");
@@ -2893,7 +2893,7 @@ public class NovelReaderWebAssetTests
         );
         var dashboardViewModel = File.ReadAllText(
             Path.Combine(ProjectRoot, "ViewModels", "Pages", "NovelStatisticsDashboardViewModel.cs")
-        );
+        ).ReplaceLineEndings("\n");
         var dashboardXaml = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Controls", "NovelStatisticsDashboardView.xaml")
         );

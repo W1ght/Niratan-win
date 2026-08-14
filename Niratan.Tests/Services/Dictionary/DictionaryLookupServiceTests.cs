@@ -376,7 +376,8 @@ public class DictionaryLookupServiceTests
     [Fact]
     public void PopupScript_AlignsDuplicateStateContextMiningAndResultCallbacks()
     {
-        var script = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Web", "DictionaryPopup", "popup.js"));
+        var script = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Web", "DictionaryPopup", "popup.js"))
+            .ReplaceLineEndings("\n");
         var shellHtml = new PopupHtmlGenerator().GenerateShellHtml();
 
         script.Should().Contain("el('button'");
