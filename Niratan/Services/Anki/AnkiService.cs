@@ -137,6 +137,11 @@ public sealed class AnkiService : IAnkiService, IDisposable
         return await GetClient().FetchDecksAsync();
     }
 
+    public async Task<(List<AnkiDeck> Decks, List<AnkiNoteType> NoteTypes)> FetchMetadataAsync()
+    {
+        return await GetClient().FetchMetadataAsync();
+    }
+
     public async Task<List<AnkiNoteType>> FetchNoteTypesAsync()
     {
         return await GetClient().FetchNoteTypesAsync();

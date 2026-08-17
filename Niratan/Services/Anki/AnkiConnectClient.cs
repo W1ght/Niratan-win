@@ -31,7 +31,7 @@ public sealed class AnkiConnectClient : IDisposable
 
     internal AnkiConnectClient(string endpoint, HttpMessageHandler handler)
     {
-        _endpoint = endpoint.TrimEnd('/');
+        _endpoint = NormalizeEndpoint(endpoint);
         _http = new HttpClient(handler)
         {
             Timeout = DefaultTimeout,
@@ -54,32 +54,68 @@ public sealed class AnkiConnectClient : IDisposable
     public async Task<List<AnkiDeck>> FetchDecksAsync()
     {
         var result = await RequestAsync("deckNames", null);
-        var names = result.Deserialize<List<string>>() ?? [];
-        return names.Select(name => new AnkiDeck
-        {
-            Name = name,
-            Id = AnkiDeck.ComputeStableId(name),
-        }).ToList();
+        return DeserializeDecks(result);
     }
 
     public async Task<List<AnkiNoteType>> FetchNoteTypesAsync()
     {
         var result = await RequestAsync("modelNames", null);
         var names = result.Deserialize<List<string>>() ?? [];
+        return await FetchNoteTypesAsync(names);
+    }
 
-        var noteTypes = new List<AnkiNoteType>();
-        foreach (var name in names)
+    public async Task<(List<AnkiDeck> Decks, List<AnkiNoteType> NoteTypes)> FetchMetadataAsync()
+    {
+        var results = await MultiRequestAsync(
+        [
+            ("deckNames", null),
+            ("modelNames", null),
+        ]);
+        if (results.Count != 2)
+            throw new AnkiConnectException($"Expected 2 Anki metadata results, received {results.Count}.");
+
+        var decks = DeserializeDecks(results[0]);
+        var modelNames = results[1].Deserialize<List<string>>() ?? [];
+        var noteTypes = await FetchNoteTypesAsync(modelNames);
+        return (decks, noteTypes);
+    }
+
+    private async Task<List<AnkiNoteType>> FetchNoteTypesAsync(IReadOnlyList<string> names)
+    {
+        if (names.Count == 0)
+            return [];
+
+        var results = await MultiRequestAsync(names
+            .Select(name => ("modelFieldNames", (object?)new { modelName = name }))
+            .ToList());
+        if (results.Count != names.Count)
         {
-            var fields = await FetchModelFieldNamesAsync(name);
+            throw new AnkiConnectException(
+                $"Expected {names.Count} model field result(s), received {results.Count}.");
+        }
+
+        var noteTypes = new List<AnkiNoteType>(names.Count);
+        for (var i = 0; i < names.Count; i++)
+        {
             noteTypes.Add(new AnkiNoteType
             {
-                Name = name,
-                Id = AnkiDeck.ComputeStableId(name),
-                Fields = fields,
+                Name = names[i],
+                Id = AnkiDeck.ComputeStableId(names[i]),
+                Fields = results[i].Deserialize<List<string>>() ?? [],
             });
         }
 
         return noteTypes;
+    }
+
+    private static List<AnkiDeck> DeserializeDecks(JsonElement result)
+    {
+        var names = result.Deserialize<List<string>>() ?? [];
+        return names.Select(name => new AnkiDeck
+        {
+            Name = name,
+            Id = AnkiDeck.ComputeStableId(name),
+        }).ToList();
     }
 
     public async Task<List<string>> FetchModelFieldNamesAsync(string modelName)
@@ -540,6 +576,22 @@ public sealed class AnkiConnectClient : IDisposable
         }
 
         return error.GetRawText();
+    }
+
+    private static string NormalizeEndpoint(string endpoint)
+    {
+        var normalized = endpoint.TrimEnd('/');
+        if (!Uri.TryCreate(normalized, UriKind.Absolute, out var uri)
+            || !uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            return normalized;
+        }
+
+        var builder = new UriBuilder(uri)
+        {
+            Host = "127.0.0.1",
+        };
+        return builder.Uri.AbsoluteUri.TrimEnd('/');
     }
 
     private static JsonElement DefaultJsonElement()

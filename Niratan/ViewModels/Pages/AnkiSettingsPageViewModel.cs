@@ -298,8 +298,7 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
         {
             IsFetchingData = true;
 
-            var decks = await _ankiService.FetchDecksAsync();
-            var noteTypes = await _ankiService.FetchNoteTypesAsync();
+            var (decks, noteTypes) = await _ankiService.FetchMetadataAsync();
 
             AvailableDecks.Clear();
             foreach (var deck in decks)

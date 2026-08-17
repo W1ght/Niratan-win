@@ -11,6 +11,7 @@ public interface IAnkiService
     void UpdateSettings(AnkiSettings settings);
 
     Task<bool> IsAvailableAsync();
+    Task<(List<AnkiDeck> Decks, List<AnkiNoteType> NoteTypes)> FetchMetadataAsync();
     Task<List<AnkiDeck>> FetchDecksAsync();
     Task<List<AnkiNoteType>> FetchNoteTypesAsync();
     Task<List<string>> FetchModelFieldNamesAsync(string modelName);

@@ -9,6 +9,47 @@ namespace Niratan.Tests.Services.Anki;
 public class AnkiConnectClientTests
 {
     [Fact]
+    public async Task FetchMetadataAsync_BatchesDecksModelsAndAllModelFields()
+    {
+        var handler = new SequentialRecordingJsonHttpMessageHandler(
+            """{"result":[{"result":["Default","Mining"],"error":null},{"result":["Basic","Lapis"],"error":null}],"error":null}""",
+            """{"result":[{"result":["Front","Back"],"error":null},{"result":["Expression","Sentence"],"error":null}],"error":null}""");
+        using var client = new AnkiConnectClient("http://anki.test", handler);
+
+        var (decks, noteTypes) = await client.FetchMetadataAsync();
+
+        decks.Select(deck => deck.Name).Should().Equal("Default", "Mining");
+        noteTypes.Select(noteType => noteType.Name).Should().Equal("Basic", "Lapis");
+        noteTypes[0].Fields.Should().Equal("Front", "Back");
+        noteTypes[1].Fields.Should().Equal("Expression", "Sentence");
+        handler.Requests.Should().HaveCount(2);
+
+        var metadataActions = handler.Requests[0].GetProperty("params").GetProperty("actions");
+        metadataActions[0].GetProperty("action").GetString().Should().Be("deckNames");
+        metadataActions[1].GetProperty("action").GetString().Should().Be("modelNames");
+
+        var fieldActions = handler.Requests[1].GetProperty("params").GetProperty("actions");
+        fieldActions.GetArrayLength().Should().Be(2);
+        fieldActions[0].GetProperty("action").GetString().Should().Be("modelFieldNames");
+        fieldActions[0].GetProperty("params").GetProperty("modelName").GetString().Should().Be("Basic");
+        fieldActions[1].GetProperty("params").GetProperty("modelName").GetString().Should().Be("Lapis");
+    }
+
+    [Fact]
+    public async Task LocalhostEndpoint_UsesIpv4LoopbackWithoutChangingPortOrPath()
+    {
+        var handler = new SequentialRecordingJsonHttpMessageHandler(
+            """{"result":6,"error":null}""");
+        using var client = new AnkiConnectClient("http://localhost:8765/anki/", handler);
+
+        var available = await client.IsAvailableAsync();
+
+        available.Should().BeTrue();
+        handler.RequestUris.Should().ContainSingle();
+        handler.RequestUris[0].Should().Be(new Uri("http://127.0.0.1:8765/anki"));
+    }
+
+    [Fact]
     public async Task CanAddNotesAsync_SendsAllCandidatesInOneRequestAndPreservesOrder()
     {
         var handler = new RecordingJsonHttpMessageHandler("""
@@ -308,6 +349,33 @@ public class AnkiConnectClientTests
             {
                 Content = new StringContent(
                     responseJson,
+                    System.Text.Encoding.UTF8,
+                    "application/json"),
+            };
+        }
+    }
+
+    private sealed class SequentialRecordingJsonHttpMessageHandler(params string[] responseJson) : HttpMessageHandler
+    {
+        private readonly Queue<string> _responses = new(responseJson);
+
+        public List<JsonElement> Requests { get; } = [];
+        public List<Uri> RequestUris { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            var body = await request.Content!.ReadAsStringAsync(cancellationToken);
+            using var document = JsonDocument.Parse(body);
+            Requests.Add(document.RootElement.Clone());
+            RequestUris.Add(request.RequestUri!);
+
+            _responses.Should().NotBeEmpty();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    _responses.Dequeue(),
                     System.Text.Encoding.UTF8,
                     "application/json"),
             };
