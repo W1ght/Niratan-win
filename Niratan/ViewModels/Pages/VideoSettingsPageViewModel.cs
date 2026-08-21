@@ -54,6 +54,18 @@ public partial class VideoSettingsPageViewModel : ObservableObject
     public partial bool BangumiMetadataEnabled { get; set; }
 
     [ObservableProperty]
+    public partial string DiscoveryProviderOrderText { get; set; } = "tmdb,bangumi,anilist";
+
+    [ObservableProperty]
+    public partial bool TmdbRecommendationsEnabled { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool BangumiCalendarEnabled { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool AniListRecommendationsEnabled { get; set; } = true;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TmdbCredentialStatusText))]
     public partial bool HasTmdbToken { get; set; }
 
@@ -225,6 +237,11 @@ public partial class VideoSettingsPageViewModel : ObservableObject
         AniListMetadataEnabled = settings.Metadata.AniListEnabled;
         AniDbMetadataEnabled = settings.Metadata.AniDbEnabled;
         BangumiMetadataEnabled = settings.Metadata.BangumiEnabled;
+        var discovery = _settingsService.Current.DiscoverySettings ?? new DiscoverySettings();
+        DiscoveryProviderOrderText = string.Join(",", discovery.ExploreProviderOrder);
+        TmdbRecommendationsEnabled = IsRecommendationGroupEnabled(discovery, "tmdb:");
+        BangumiCalendarEnabled = IsRecommendationGroupEnabled(discovery, "bangumi:calendar");
+        AniListRecommendationsEnabled = IsRecommendationGroupEnabled(discovery, "anilist:");
 
         AutoPlayNextEpisode = settings.AutoPlayNextEpisode;
         RememberPlaybackState = settings.RememberPlaybackState;
@@ -301,6 +318,31 @@ public partial class VideoSettingsPageViewModel : ObservableObject
                     TvDbEnabled = false,
                 },
             });
+        _settingsService.Set(
+            settings => settings.DiscoverySettings,
+            new DiscoverySettings
+            {
+                ExploreProviderOrder = DiscoveryProviderOrderText
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Where(value => value is "tmdb" or "bangumi" or "anilist")
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList(),
+                EnabledRecommendationFeeds = new Dictionary<string, bool>
+                {
+                    ["tmdb:trending-movie"] = TmdbRecommendationsEnabled,
+                    ["tmdb:trending-tv"] = TmdbRecommendationsEnabled,
+                    ["tmdb:popular-movie"] = TmdbRecommendationsEnabled,
+                    ["tmdb:popular-tv"] = TmdbRecommendationsEnabled,
+                    ["tmdb:top-rated-movie"] = TmdbRecommendationsEnabled,
+                    ["tmdb:top-rated-tv"] = TmdbRecommendationsEnabled,
+                    ["tmdb:now-playing"] = TmdbRecommendationsEnabled,
+                    ["tmdb:upcoming"] = TmdbRecommendationsEnabled,
+                    ["tmdb:on-air"] = TmdbRecommendationsEnabled,
+                    ["bangumi:calendar"] = BangumiCalendarEnabled,
+                    ["anilist:popular"] = AniListRecommendationsEnabled,
+                    ["anilist:seasonal"] = AniListRecommendationsEnabled,
+                },
+            });
         _ = _settingsService.SaveAsync();
     }
 
@@ -311,6 +353,10 @@ public partial class VideoSettingsPageViewModel : ObservableObject
     partial void OnAniListMetadataEnabledChanged(bool value) => SaveSettings();
     partial void OnAniDbMetadataEnabledChanged(bool value) => SaveSettings();
     partial void OnBangumiMetadataEnabledChanged(bool value) => SaveSettings();
+    partial void OnDiscoveryProviderOrderTextChanged(string value) => SaveSettings();
+    partial void OnTmdbRecommendationsEnabledChanged(bool value) => SaveSettings();
+    partial void OnBangumiCalendarEnabledChanged(bool value) => SaveSettings();
+    partial void OnAniListRecommendationsEnabledChanged(bool value) => SaveSettings();
     partial void OnRememberPlaybackStateChanged(bool value) => SaveSettings();
     partial void OnSeekIntervalSecondsChanged(int value)
     {
@@ -327,6 +373,19 @@ public partial class VideoSettingsPageViewModel : ObservableObject
     partial void OnHardwareDecodingEnabledChanged(bool value) => SaveSettings();
     partial void OnDeinterlacingEnabledChanged(bool value) => SaveSettings();
     partial void OnHdrEnhancementEnabledChanged(bool value) => SaveSettings();
+
+    private static bool IsRecommendationGroupEnabled(
+        DiscoverySettings settings,
+        string keyOrPrefix)
+    {
+        var values = settings.EnabledRecommendationFeeds
+            .Where(pair => keyOrPrefix.EndsWith(':')
+                ? pair.Key.StartsWith(keyOrPrefix, StringComparison.OrdinalIgnoreCase)
+                : pair.Key.Equals(keyOrPrefix, StringComparison.OrdinalIgnoreCase))
+            .Select(pair => pair.Value)
+            .ToList();
+        return values.Count == 0 || values.Any(value => value);
+    }
 
     partial void OnVideoBrightnessChanged(double value)
     {

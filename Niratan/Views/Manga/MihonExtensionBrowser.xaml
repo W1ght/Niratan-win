@@ -15,7 +15,7 @@
                       x:DataType="components:MihonRepositorySourceItemViewModel">
             <Grid MinHeight="64"
                   Padding="12,6"
-                  ColumnDefinitions="Auto,*,Auto"
+                  ColumnDefinitions="Auto,*,Auto,Auto"
                   ColumnSpacing="14"
                   DataContextChanged="MihonRepositorySourceRow_DataContextChanged"
                   Loaded="MihonRepositorySourceRow_Loaded">
@@ -26,6 +26,7 @@
                         CornerRadius="6">
                     <Grid>
                         <Image Margin="4"
+                               ImageFailed="MihonRepositorySourceIcon_ImageFailed"
                                Source="{x:Bind IconImage, Mode=OneWay}"
                                Stretch="Uniform"
                                Visibility="{x:Bind HasIcon, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
@@ -62,6 +63,18 @@
                         ToolTipService.ToolTip="{x:Bind InstallActionLabel, Mode=OneTime}">
                     <FontIcon FontSize="18"
                               Glyph="&#xE896;" />
+                </Button>
+                <Button Grid.Column="3"
+                        Width="42"
+                        Height="42"
+                        Padding="0"
+                        VerticalAlignment="Center"
+                        AutomationProperties.AutomationId="{x:Bind RemoveAutomationId, Mode=OneTime}"
+                        Command="{x:Bind RemoveCommand}"
+                        IsEnabled="{x:Bind CanRemove, Mode=OneTime}"
+                        ToolTipService.ToolTip="{x:Bind RemoveActionLabel, Mode=OneTime}"
+                        >
+                    <SymbolIcon Symbol="Delete" />
                 </Button>
             </Grid>
         </DataTemplate>

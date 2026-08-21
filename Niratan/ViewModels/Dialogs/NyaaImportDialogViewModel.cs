@@ -20,12 +20,17 @@ public sealed record NyaaDownloadViewOption(string Code, string DisplayName);
 public partial class NyaaImportDialogViewModel : ObservableObject, IDisposable
 {
     private readonly INyaaClient _nyaaClient;
-    private readonly INyaaDownloadManager _downloadManager;
+    private readonly Lazy<INyaaDownloadManager> _downloadManager;
     private readonly IFileRevealService _fileRevealService;
     private readonly INotificationService _notificationService;
     private readonly DispatcherQueue? _dispatcherQueue;
     private readonly CancellationTokenSource _cts = new();
+    private readonly object _downloadManagerSync = new();
+    private Task<INyaaDownloadManager>? _downloadManagerTask;
+    private INyaaDownloadManager? _resolvedDownloadManager;
     private IReadOnlyList<NyaaTorrentItem> _allSearchResults = [];
+    private bool _downloadTasksSubscribed;
+    private bool _disposed;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSearch))]
@@ -129,7 +134,7 @@ public partial class NyaaImportDialogViewModel : ObservableObject, IDisposable
 
     public NyaaImportDialogViewModel(
         INyaaClient nyaaClient,
-        INyaaDownloadManager downloadManager,
+        Lazy<INyaaDownloadManager> downloadManager,
         IFileRevealService fileRevealService,
         INotificationService notificationService)
     {
@@ -150,8 +155,15 @@ public partial class NyaaImportDialogViewModel : ObservableObject, IDisposable
         SelectedResultSort = ResultSortOptions[0];
         SelectedDownloadFilter = DownloadFilters[0];
         SelectedDownloadSort = DownloadSortOptions[0];
-        _downloadManager.TasksChanged += OnDownloadTasksChanged;
-        RefreshDownloads();
+    }
+
+    public async Task InitializeAsync()
+    {
+        if (_disposed)
+            return;
+
+        var downloadManager = await GetDownloadManagerAsync(_cts.Token);
+        RefreshDownloads(downloadManager.GetTasks());
     }
 
     [RelayCommand(CanExecute = nameof(CanSearch))]
@@ -198,35 +210,61 @@ public partial class NyaaImportDialogViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private void DownloadAndImport(NyaaTorrentItemViewModel row)
+    private async Task DownloadAndImportAsync(NyaaTorrentItemViewModel row)
     {
-        if (!row.CanDownload)
+        if (row is null || !row.CanDownload)
             return;
 
-        _downloadManager.Enqueue(row.Item);
+        var downloadManager = await GetDownloadManagerAsync(_cts.Token);
+        downloadManager.Enqueue(row.Item);
         row.IsImported = true;
         row.Status = ResourceStringHelper.GetString("NyaaStatusQueued", "Added to downloads");
     }
 
     [RelayCommand]
-    private Task PauseDownloadAsync(NyaaDownloadTaskSnapshot task) =>
-        _downloadManager.PauseAsync(task.TaskId);
+    private async Task PauseDownloadAsync(NyaaDownloadTaskSnapshot task)
+    {
+        if (task is null)
+            return;
+        var downloadManager = await GetDownloadManagerAsync(_cts.Token);
+        await downloadManager.PauseAsync(task.TaskId);
+    }
 
     [RelayCommand]
-    private Task ResumeDownloadAsync(NyaaDownloadTaskSnapshot task) =>
-        _downloadManager.ResumeAsync(task.TaskId);
+    private async Task ResumeDownloadAsync(NyaaDownloadTaskSnapshot task)
+    {
+        if (task is null)
+            return;
+        var downloadManager = await GetDownloadManagerAsync(_cts.Token);
+        await downloadManager.ResumeAsync(task.TaskId);
+    }
 
     [RelayCommand]
-    private void CancelDownload(NyaaDownloadTaskSnapshot task) =>
-        _downloadManager.Cancel(task.TaskId);
+    private async Task CancelDownloadAsync(NyaaDownloadTaskSnapshot task)
+    {
+        if (task is null)
+            return;
+        var downloadManager = await GetDownloadManagerAsync(_cts.Token);
+        downloadManager.Cancel(task.TaskId);
+    }
 
     [RelayCommand]
-    private void RetryDownload(NyaaDownloadTaskSnapshot task) =>
-        _downloadManager.Retry(task.TaskId);
+    private async Task RetryDownloadAsync(NyaaDownloadTaskSnapshot task)
+    {
+        if (task is null)
+            return;
+        var downloadManager = await GetDownloadManagerAsync(_cts.Token);
+        downloadManager.Retry(task.TaskId);
+    }
 
     [RelayCommand]
-    private void RemoveDownload(NyaaDownloadTaskSnapshot task) =>
-        _downloadManager.Remove(task.TaskId);
+    private async Task RemoveDownloadAsync(NyaaDownloadTaskSnapshot task)
+    {
+        if (task is null)
+            return;
+        var downloadManager = await GetDownloadManagerAsync(_cts.Token);
+        downloadManager.Remove(task.TaskId);
+    }
 
     [RelayCommand]
     private async Task OpenDownloadFolderAsync(NyaaDownloadTaskSnapshot task)
@@ -248,7 +286,14 @@ public partial class NyaaImportDialogViewModel : ObservableObject, IDisposable
 
     private void RefreshDownloads()
     {
-        var tasks = _downloadManager.GetTasks();
+        var downloadManager = _resolvedDownloadManager;
+        if (downloadManager is null)
+            return;
+        RefreshDownloads(downloadManager.GetTasks());
+    }
+
+    private void RefreshDownloads(IReadOnlyList<NyaaDownloadTaskSnapshot> tasks)
+    {
         TotalDownloadCount = tasks.Count;
         var filtered = tasks.Where(MatchesDownloadFilter);
         filtered = SelectedDownloadSort?.Code switch
@@ -264,7 +309,70 @@ public partial class NyaaImportDialogViewModel : ObservableObject, IDisposable
                 .OrderBy(task => task.Item.Title, StringComparer.CurrentCultureIgnoreCase),
             _ => filtered.OrderByDescending(task => task.CreatedAt),
         };
-        Downloads = new ObservableCollection<NyaaDownloadTaskSnapshot>(filtered);
+        SynchronizeDownloads(filtered.ToList());
+    }
+
+    private async Task<INyaaDownloadManager> GetDownloadManagerAsync(CancellationToken cancellationToken)
+    {
+        Task<INyaaDownloadManager> task;
+        lock (_downloadManagerSync)
+        {
+            _downloadManagerTask ??= Task.Run(() => _downloadManager.Value);
+            task = _downloadManagerTask;
+        }
+
+        var downloadManager = await task.WaitAsync(cancellationToken);
+        _resolvedDownloadManager = downloadManager;
+        if (!_disposed && !_downloadTasksSubscribed)
+        {
+            downloadManager.TasksChanged += OnDownloadTasksChanged;
+            _downloadTasksSubscribed = true;
+        }
+
+        return downloadManager;
+    }
+
+    private void SynchronizeDownloads(IReadOnlyList<NyaaDownloadTaskSnapshot> next)
+    {
+        var nextTaskIds = next
+            .Select(task => task.TaskId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        for (var index = Downloads.Count - 1; index >= 0; index--)
+        {
+            if (!nextTaskIds.Contains(Downloads[index].TaskId))
+                Downloads.RemoveAt(index);
+        }
+
+        for (var index = 0; index < next.Count; index++)
+        {
+            var task = next[index];
+            var currentIndex = FindDownloadIndex(task.TaskId);
+            if (currentIndex < 0)
+            {
+                Downloads.Insert(index, task);
+                continue;
+            }
+
+            if (currentIndex != index)
+                Downloads.Move(currentIndex, index);
+
+            if (!Equals(Downloads[index], task))
+                Downloads[index] = task;
+        }
+
+        OnPropertyChanged(nameof(NoDownloads));
+    }
+
+    private int FindDownloadIndex(string taskId)
+    {
+        for (var index = 0; index < Downloads.Count; index++)
+        {
+            if (Downloads[index].TaskId.Equals(taskId, StringComparison.OrdinalIgnoreCase))
+                return index;
+        }
+
+        return -1;
     }
 
     private void RefreshSearchResults()
@@ -327,7 +435,11 @@ public partial class NyaaImportDialogViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
-        _downloadManager.TasksChanged -= OnDownloadTasksChanged;
+        if (_disposed)
+            return;
+        _disposed = true;
+        if (_downloadTasksSubscribed && _resolvedDownloadManager is not null)
+            _resolvedDownloadManager.TasksChanged -= OnDownloadTasksChanged;
         _cts.Cancel();
         _cts.Dispose();
     }

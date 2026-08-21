@@ -71,9 +71,26 @@ public sealed class VideoLibrarySourceSummaryTests
 
         summary.UpdateMetadataProgress(new VideoMetadataBatchProgress(
             Guid.NewGuid(), Guid.NewGuid(), VideoCatalogJobState.Failed,
-            4, 10, 2, 2, null, "provider unavailable"));
+            4, 10, 2, 2, null, "provider unavailable", 1));
         summary.IsMetadataProgressVisible.Should().BeTrue();
         summary.HasMetadataError.Should().BeTrue();
         summary.MetadataErrorText.Should().Be("provider unavailable");
+        summary.ScrapeSummaryText.Should().Contain("1");
+    }
+
+    [Fact]
+    public void UpdateMetadataProgress_ExposesLastScrapeSummaryAndSettingsStartCollapsed()
+    {
+        var summary = new VideoLibrarySourceSummary(new VideoLibrarySource(), 0, 0, 0);
+
+        summary.IsSourceSettingsExpanded.Should().BeFalse();
+        summary.ScrapeSummaryText.Should().NotBeNullOrWhiteSpace();
+
+        summary.UpdateMetadataProgress(new VideoMetadataBatchProgress(
+            Guid.NewGuid(), Guid.NewGuid(), VideoCatalogJobState.Completed,
+            1, 1, 1, 0, null));
+
+        summary.IsMetadataProgressVisible.Should().BeFalse();
+        summary.ScrapeSummaryText.Should().Contain("1");
     }
 }

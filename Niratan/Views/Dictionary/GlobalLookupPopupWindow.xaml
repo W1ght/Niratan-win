@@ -30,5 +30,13 @@
         </Border>
         <Canvas x:Name="DictionaryOverlayCanvas"
                 Background="Transparent" />
+        <InfoBar x:Name="LookupMiningToast"
+                 Canvas.ZIndex="140"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Top"
+                 MaxWidth="420"
+                 Margin="12"
+                 IsClosable="False"
+                 IsOpen="False" />
     </Grid>
 </Window>

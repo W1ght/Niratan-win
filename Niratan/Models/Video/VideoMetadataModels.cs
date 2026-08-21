@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 
 namespace Niratan.Models.Video;
 
@@ -76,7 +77,8 @@ public sealed record VideoMetadataDetails(
     ImmutableArray<string> Tags = default,
     ImmutableArray<string> Studios = default,
     ImmutableArray<VideoPersonCredit> People = default,
-    ImmutableArray<VideoRelatedItem> RelatedItems = default)
+    ImmutableArray<VideoRelatedItem> RelatedItems = default,
+    ImmutableArray<VideoMetadataSeason> Seasons = default)
 {
     public VideoMetadataDetails WithInitializedCollections() => this with
     {
@@ -88,8 +90,33 @@ public sealed record VideoMetadataDetails(
         Studios = Studios.IsDefault ? [] : Studios,
         People = People.IsDefault ? [] : People,
         RelatedItems = RelatedItems.IsDefault ? [] : RelatedItems,
+        Seasons = Seasons.IsDefault
+            ? []
+            : Seasons.Select(season => season with
+            {
+                Episodes = season.Episodes.IsDefault ? [] : season.Episodes,
+            }).ToImmutableArray(),
     };
 }
+
+public sealed record VideoMetadataSeason(
+    int SeasonNumber,
+    string Title,
+    string? Overview,
+    string? AirDate,
+    int? EpisodeCount,
+    string? PosterUrl,
+    ImmutableArray<VideoMetadataEpisode> Episodes = default);
+
+public sealed record VideoMetadataEpisode(
+    int EpisodeNumber,
+    string Title,
+    string? OriginalTitle,
+    string? Overview,
+    string? AirDate,
+    int? RuntimeMinutes,
+    string? ThumbnailUrl,
+    string? SourceUrl);
 
 public sealed record VideoPersonCredit(
     string ProviderPersonId,
@@ -162,3 +189,16 @@ public sealed record VideoMetadataRefreshResult(
     string? ProviderId,
     string? Error,
     ImmutableArray<VideoMetadataMatchScore> Candidates);
+
+public sealed record VideoMetadataTaskSnapshot(
+    Guid JobId,
+    Guid? SourceId,
+    VideoCatalogJobState State,
+    int ProcessedCount,
+    int TotalCount,
+    int MatchedCount,
+    int NeedsReviewCount,
+    string? Error,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    int FailedCount = 0);

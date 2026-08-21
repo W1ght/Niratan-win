@@ -6,6 +6,8 @@ public enum AppPage
     MangaLibraryPage,
     BrowsePage,
     VideoLibraryPage,
+    GamesPage,
+    DownloadsPage,
     NovelLookupPage,
     ReaderAppearanceSettingsPage,
     AdvancedSettingsPage,

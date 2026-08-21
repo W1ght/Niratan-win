@@ -13,17 +13,22 @@ public sealed partial class RemoteMangaLibraryItemViewModel : ObservableObject
         string provider,
         string id,
         string title,
-        Func<Task> open)
+        Func<Task> open,
+        string? sourceName = null)
     {
         Provider = provider;
         Id = id;
         Title = title;
+        SourceName = string.IsNullOrWhiteSpace(sourceName)
+            ? provider
+            : sourceName;
         OpenCommand = new AsyncRelayCommand(open);
     }
 
     public string Provider { get; }
     public string Id { get; }
     public string Title { get; }
+    public string SourceName { get; }
     public string AutomationId => $"{Provider}Manga_{Id}";
     public IAsyncRelayCommand OpenCommand { get; }
 

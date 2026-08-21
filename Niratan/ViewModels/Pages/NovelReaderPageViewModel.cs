@@ -418,6 +418,18 @@ public partial class NovelReaderPageViewModel
         _statisticsSession.Start(new ReaderStatisticsPosition(CurrentCharacterCount));
     }
 
+    public Task StartStatisticsForAudiobookPlaybackAsync(
+        CancellationToken ct = default)
+    {
+        if (!_settingsService.Current.StatisticsSettings.EnableStatistics
+            || (IsStatisticsTracking && !IsStatisticsPaused))
+        {
+            return Task.CompletedTask;
+        }
+
+        return EnqueueStatisticsMutationAsync(StatisticsMutation.Start, ct);
+    }
+
     public void StartStatisticsForAutostart(StatisticsAutostartMode trigger)
     {
         var settings = _settingsService.Current.StatisticsSettings;
@@ -653,6 +665,9 @@ public partial class NovelReaderPageViewModel
         var readerPosition = new ReaderStatisticsPosition(position);
         switch (mutation)
         {
+            case StatisticsMutation.Start:
+                _statisticsSession.Start(readerPosition);
+                break;
             case StatisticsMutation.Tick:
                 _statisticsSession.Tick(readerPosition);
                 break;
@@ -1772,6 +1787,7 @@ public partial class NovelReaderPageViewModel
 
     private enum StatisticsMutation
     {
+        Start,
         Tick,
         Pause,
         Stop,

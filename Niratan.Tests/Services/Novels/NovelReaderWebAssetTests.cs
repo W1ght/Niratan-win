@@ -539,6 +539,10 @@ public class NovelReaderWebAssetTests
             ProjectRoot, "Views", "Dictionary", "DictionaryPopupOverlay.cs"));
         var popupJs = File.ReadAllText(Path.Combine(
             ProjectRoot, "Web", "DictionaryPopup", "popup.js"));
+        var readerXaml = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml"));
+        var readerCode = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
 
         popupCode.Should().Contain("new CommandBar");
         popupCode.Should().Contain("PopupActionBar");
@@ -552,14 +556,43 @@ public class NovelReaderWebAssetTests
         popupCode.Should().Contain("MinHeight = 36");
         popupCode.Should().Contain("Height = 32");
         popupCode.Should().Contain("Grid.SetColumn(_sasayakiControlsBar, 1)");
-        popupCode.Should().Contain("Grid.SetRow(_miningToast, 1)");
-        popupCode.Should().Contain("Canvas.SetZIndex(_miningToast, 1)");
-        popupCode.Should().NotContain("Grid.SetRow(_miningToast, 2)");
+        popupCode.Should().NotContain("_miningToast");
+        popupCode.Should().Contain("MiningFeedbackRequested");
+        readerXaml.Should().Contain("x:Name=\"ReaderMiningToast\"");
+        readerCode.Should().Contain("new AnkiMiningFeedbackPresenter(ReaderMiningToast)");
+        readerCode.Should().Contain("_popupOverlay.MiningFeedbackRequested += OnMiningFeedbackRequested;");
         overlayCode.Should().Contain("DictionaryPopupRedirectMode.InPlace");
         popupJs.Should().Contain("window.niratanRedirectResults");
         popupJs.Should().Contain("postNavigationState");
         popupJs.Should().Contain("canGoBack: backStack.length > 0");
         popupJs.Should().Contain("canGoForward: forwardStack.length > 0");
+    }
+
+    [Fact]
+    public void VideoAndMangaHostAnkiFeedbackOutsideDictionaryPopup()
+    {
+        var videoXaml = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Views", "Video", "VideoPlayerWindow.xaml"));
+        var videoCode = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Views", "Video", "VideoPlayerWindow.xaml.cs"));
+        var mangaXaml = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Views", "Manga", "MangaReaderWindow.xaml"));
+        var mangaCode = File.ReadAllText(Path.Combine(
+            ProjectRoot, "Views", "Manga", "MangaReaderWindow.xaml.cs"));
+
+        videoXaml.Should().Contain("x:Name=\"VideoMiningFeedbackHost\"");
+        videoXaml.Should().Contain("x:Name=\"VideoModalOverlayHost\"");
+        videoXaml.Should().Contain("x:Name=\"VideoMiningToast\"");
+        videoXaml.IndexOf("x:Name=\"VideoMiningToast\"", StringComparison.Ordinal)
+            .Should().BeGreaterThan(videoXaml.IndexOf("x:Name=\"VideoMiningFeedbackHost\"", StringComparison.Ordinal));
+        videoCode.Should().Contain("new AnkiMiningFeedbackPresenter(VideoMiningToast)");
+        videoCode.Should().Contain("_popupOverlay.MiningFeedbackRequested += OnMiningFeedbackRequested;");
+
+        mangaXaml.Should().Contain("x:Name=\"MangaMiningFeedbackHost\"");
+        mangaXaml.Should().Contain("x:Name=\"MangaPopupCanvas\"");
+        mangaXaml.Should().Contain("x:Name=\"MangaMiningToast\"");
+        mangaCode.Should().Contain("new AnkiMiningFeedbackPresenter(MangaMiningToast)");
+        mangaCode.Should().Contain("overlay.MiningFeedbackRequested += OnMiningFeedbackRequested;");
     }
 
     [Fact]

@@ -53,4 +53,17 @@ public sealed partial class MihonExtensionBrowser : UserControl
         if (args.NewValue is MihonRepositorySourceItemViewModel item)
             await item.EnsureIconAsync();
     }
+
+    private void MihonRepositorySourceIcon_ImageFailed(
+        object sender,
+        ExceptionRoutedEventArgs e)
+    {
+        if (sender is FrameworkElement
+            {
+                DataContext: MihonRepositorySourceItemViewModel item
+            })
+        {
+            item.IconImage = null;
+        }
+    }
 }

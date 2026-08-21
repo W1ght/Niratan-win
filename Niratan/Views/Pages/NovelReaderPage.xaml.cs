@@ -102,7 +102,9 @@ public sealed partial class NovelReaderPage : Page
     private readonly NovelReaderRenderState _renderState = new();
     private CoreWebView2ContextMenuItem? _readerHighlightContextMenuItem;
     private DictionaryPopupOverlay? _popupOverlay;
+    private readonly AnkiMiningFeedbackPresenter _miningFeedbackPresenter;
     private readonly SemaphoreSlim _lookupSemaphore = new(1, 1);
+    private readonly SemaphoreSlim _sasayakiPlaybackToggleSemaphore = new(1, 1);
     private readonly Dictionary<KeyboardAccelerator, KeyboardShortcutBinding> _keyboardAcceleratorBindings = [];
     private readonly IShortcutService _shortcutService;
     private readonly IGameControllerService _gameControllerService;
@@ -172,6 +174,7 @@ public sealed partial class NovelReaderPage : Page
     public NovelReaderPage()
     {
         InitializeComponent();
+        _miningFeedbackPresenter = new AnkiMiningFeedbackPresenter(ReaderMiningToast);
         SasayakiResourcesPanel.DataContext = _sasayakiResourcesVM;
         SizeChanged += NovelReaderPage_SizeChanged;
         _isRefreshingSasayakiPanel = false;
@@ -407,9 +410,12 @@ public sealed partial class NovelReaderPage : Page
         {
             _popupOverlay.Dismissed -= OnPopupOverlayDismissed;
             _popupOverlay.DismissStarted -= OnPopupOverlayDismissStarted;
+            _popupOverlay.MiningFeedbackRequested -= OnMiningFeedbackRequested;
+            _popupOverlay.MiningFeedbackCleared -= OnMiningFeedbackCleared;
         }
         _popupOverlay?.Dispose();
         _popupOverlay = null;
+        _miningFeedbackPresenter.Dispose();
 
         _ = SaveSasayakiPlaybackAsync();
 
@@ -3042,6 +3048,8 @@ public sealed partial class NovelReaderPage : Page
         _popupOverlay = new DictionaryPopupOverlay();
         _popupOverlay.Dismissed += OnPopupOverlayDismissed;
         _popupOverlay.DismissStarted += OnPopupOverlayDismissStarted;
+        _popupOverlay.MiningFeedbackRequested += OnMiningFeedbackRequested;
+        _popupOverlay.MiningFeedbackCleared += OnMiningFeedbackCleared;
         _popupOverlay.UseCanvas(
             DictionaryOverlayCanvas,
             DictionaryPopupCanvasInputMode.VisibleHostsOnly);
@@ -3058,8 +3066,17 @@ public sealed partial class NovelReaderPage : Page
     private void OnPopupOverlayDismissStarted(object? sender, EventArgs e) =>
         RestoreReaderKeyboardFocus();
 
+    private void OnMiningFeedbackRequested(
+        object? sender,
+        DictionaryPopupMiningFeedbackEventArgs e) =>
+        _miningFeedbackPresenter.Show(e);
+
+    private void OnMiningFeedbackCleared(object? sender, EventArgs e) =>
+        _miningFeedbackPresenter.Clear();
+
     private void PauseSasayakiForLookup()
     {
+        // Lookup auto-pause is temporary and must not pause reader statistics.
         if (!_sasayakiLookupPlayback.TryPauseForLookup(
                 CurrentSasayakiSettings.AutoPauseOnLookup,
                 _sasayakiPlayer?.IsPlaying == true))
@@ -4980,32 +4997,55 @@ public sealed partial class NovelReaderPage : Page
         if (!CanHandleSasayakiShortcut())
             return;
 
-        _sasayakiLookupPlayback.CancelAutoResume();
-        _sasayakiStopPlaybackAtSeconds = null;
-
-        if (_sasayakiPlayer!.IsPlaying)
+        await _sasayakiPlaybackToggleSemaphore.WaitAsync();
+        try
         {
-            _sasayakiPlayer.Pause();
-            _sasayakiVM.UpdatePlaybackState(false, true,
-                _sasayakiPlayer.PositionSeconds, _sasayakiPlayer.DurationSeconds);
+            if (!CanHandleSasayakiShortcut())
+                return;
+
+            var player = _sasayakiPlayer;
+            if (player == null)
+                return;
+
+            _sasayakiLookupPlayback.CancelAutoResume();
+            _sasayakiStopPlaybackAtSeconds = null;
+
+            // Use the page's playback intent as well as the native player's
+            // instantaneous state. MediaPlayer can briefly report Buffering or
+            // Opening while the user is already seeing the playing state; in
+            // that window a pause click must still pause reader statistics.
+            if (_sasayakiVM.IsPlaying || player.IsPlaying)
+            {
+                player.Pause();
+                // Only an explicit playback toggle pauses reader statistics.
+                await ViewModel.PauseStatisticsAsync();
+                _sasayakiVM.UpdatePlaybackState(false, true,
+                    player.PositionSeconds, player.DurationSeconds);
+                UpdateSasayakiChromeState();
+                await SaveSasayakiPlaybackAsync();
+                return;
+            }
+
+            if (player.IsPaused)
+            {
+                player.Resume();
+            }
+            else
+            {
+                player.Play();
+            }
+
+            await ViewModel.StartStatisticsForAudiobookPlaybackAsync();
+
+            _sasayakiVM.UpdatePlaybackState(true, false,
+                player.PositionSeconds,
+                player.DurationSeconds);
             UpdateSasayakiChromeState();
-            await SaveSasayakiPlaybackAsync();
-            return;
         }
-
-        if (_sasayakiPlayer.IsPaused)
+        finally
         {
-            _sasayakiPlayer.Resume();
+            _sasayakiPlaybackToggleSemaphore.Release();
         }
-        else
-        {
-            _sasayakiPlayer.Play();
-        }
-
-        _sasayakiVM.UpdatePlaybackState(true, false,
-            _sasayakiPlayer.PositionSeconds,
-            _sasayakiPlayer.DurationSeconds);
-        UpdateSasayakiChromeState();
     }
 
     private async void SasayakiPrevCue_Click(object sender, RoutedEventArgs e)
@@ -5162,6 +5202,7 @@ public sealed partial class NovelReaderPage : Page
         {
             _sasayakiLookupPlayback.CancelAutoResume();
             _sasayakiPlayer.Play();
+            await ViewModel.StartStatisticsForAudiobookPlaybackAsync();
         }
 
         _sasayakiVM.UpdatePlaybackState(

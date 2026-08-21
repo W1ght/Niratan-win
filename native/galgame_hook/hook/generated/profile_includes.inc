@@ -1,0 +1,7 @@
+#include "../adapters/reallive_profile.h"
+#include "../adapters/bgi_ethornell_profile.h"
+#include "../adapters/artemis_profile.h"
+#include "../adapters/catsystem2_profile.h"
+#include "../adapters/malie_profile.h"
+#include "../adapters/qlie_profile.h"
+#include "../adapters/elf_ai6_profile.h"

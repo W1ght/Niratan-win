@@ -16,6 +16,7 @@ public class MiningContextSelectionResolverTests
             VideoScreenshotTag = "source-tag",
             SasayakiAudioPath = "source.mp3",
             SasayakiAudioTag = "source-audio-tag",
+            AllowMissingVideoAudio = true,
         };
 
         var clone = MiningContextSelectionResolver.Clone(source);
@@ -29,6 +30,7 @@ public class MiningContextSelectionResolverTests
         source.VideoScreenshotTag.Should().Be("source-tag");
         source.SasayakiAudioPath.Should().Be("source.mp3");
         source.SasayakiAudioTag.Should().Be("source-audio-tag");
+        clone.AllowMissingVideoAudio.Should().BeTrue();
     }
 
     [Fact]

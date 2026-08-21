@@ -29,6 +29,7 @@ public sealed partial class NyaaImportDialog : ContentDialog
             XamlRoot = xamlRoot,
             RequestedTheme = rootTheme,
         };
+        await dialog.ViewModel.InitializeAsync();
         await dialog.ShowAsync();
     }
 

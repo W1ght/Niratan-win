@@ -85,6 +85,31 @@ internal sealed class GlobalLookupPopupService : IGlobalLookupPopupService, IDis
         }
     }
 
+    public async Task ShowAsync(
+        DictionaryPopupRequest request,
+        RectInt32 anchorScreenBounds,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        await _showSemaphore.WaitAsync(ct);
+        try
+        {
+            await RunOnUiThreadAsync(() =>
+            {
+                CloseAllCore();
+                return Task.CompletedTask;
+            });
+            await RunOnUiThreadAsync(() => PresentPopupCoreAsync(
+                request,
+                NormalizeAnchorRect(anchorScreenBounds, GetCursorPoint()),
+                ct));
+        }
+        finally
+        {
+            _showSemaphore.Release();
+        }
+    }
+
     private static async Task RunOnUiThreadAsync(Func<Task> action)
     {
         var dispatcher = App.MainWindow?.DispatcherQueue

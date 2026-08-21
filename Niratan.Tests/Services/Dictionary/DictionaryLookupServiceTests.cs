@@ -488,19 +488,24 @@ public class DictionaryLookupServiceTests
         popup.Should().Contain("_activeMiningAttempts.ContainsKey(key)");
         popup.Should().Contain("(long Generation, long PageRevision, int EntryIndex)");
         popup.Should().Contain("ActivateMiningPage(pageRevision, entryCount)");
-        popup.Should().Contain("ResetMiningToast();");
+        popup.Should().Contain("ResetMiningFeedback();");
         popup.Should().Contain("request.PageRevision,");
         popup.Should().Contain("request.AttemptId,");
     }
 
     [Fact]
-    public void PopupHost_LocalizesAndAnnouncesAlignedMiningToastStates()
+    public void PopupHost_PublishesLocalizedMiningFeedbackToTheOwningLayer()
     {
         var popup = File.ReadAllText(Path.Combine(
             ProjectRoot,
             "Views",
             "Dictionary",
             "DictionaryLookupPopup.cs"));
+        var presenter = File.ReadAllText(Path.Combine(
+            ProjectRoot,
+            "Views",
+            "Dictionary",
+            "AnkiMiningFeedbackPresenter.cs"));
         var english = File.ReadAllText(Path.Combine(
             ProjectRoot,
             "Strings",
@@ -533,12 +538,15 @@ public class DictionaryLookupServiceTests
             popup.Should().Contain($"\"{resourceKey}\"");
         }
 
-        popup.Should().Contain("AutomationProperties.SetLiveSetting(_miningToast, AutomationLiveSetting.Polite)");
-        popup.Should().Contain("AnkiMiningStatus.Pending => InfoBarSeverity.Informational");
-        popup.Should().Contain("AnkiMiningStatus.Added => InfoBarSeverity.Success");
-        popup.Should().Contain("AnkiMiningStatus.Duplicate => InfoBarSeverity.Warning");
-        popup.Should().Contain("Task.Delay(TimeSpan.FromMilliseconds(2200), cancellationToken)");
-        popup.Should().Contain("if (!cancellationToken.IsCancellationRequested)");
+        popup.Should().Contain("MiningFeedbackRequested");
+        popup.Should().Contain("MiningFeedbackCleared");
+        popup.Should().Contain("new DictionaryPopupMiningFeedbackEventArgs(result, title, severity)");
+        popup.Should().NotContain("_miningToast");
+        presenter.Should().Contain("AutomationProperties.SetLiveSetting(_infoBar, AutomationLiveSetting.Polite)");
+        presenter.Should().Contain("NotificationSeverity.Success => InfoBarSeverity.Success");
+        presenter.Should().Contain("NotificationSeverity.Warning => InfoBarSeverity.Warning");
+        presenter.Should().Contain("Task.Delay(DisplayDuration, cancellationToken)");
+        presenter.Should().Contain("if (!cancellationToken.IsCancellationRequested)");
     }
 
     [Fact]

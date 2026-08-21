@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Net;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using FluentAssertions;
@@ -487,7 +488,234 @@ public sealed class MihonExtensionServiceTests
 
         iconPath.Should().NotBeNull();
         Path.GetExtension(iconPath!).Should().Be(".png");
-        File.ReadAllBytes(iconPath).Should().Equal(9, 8, 7, 6, 5);
+        File.ReadAllBytes(iconPath).Should().Equal(CreateTestPng());
+    }
+
+    [Fact]
+    public async Task GetRepositorySourceIconPathAsync_ReusesPersistentCacheAfterServiceRestart()
+    {
+        using var temp = new TempDirectory();
+        var apk = CreateApk();
+        var firstHandler = new RecordingHandler(request =>
+        {
+            request.RequestUri!.AbsolutePath.Should().Be("/apk/example.apk");
+            return Bytes(apk, "application/vnd.android.package-archive");
+        });
+        var source = new MihonExtensionSource
+        {
+            Id = "42",
+            PackageName = "example",
+            ApkDownloadUrl = "https://repo.example/apk/example.apk",
+        };
+
+        string firstPath;
+        using (var service = CreateService(temp, firstHandler))
+        {
+            firstPath = (await service.GetRepositorySourceIconPathAsync(
+                new MihonExtensionConfiguration(),
+                source,
+                TestContext.Current.CancellationToken))!;
+        }
+
+        using var restartedService = CreateService(
+            temp,
+            new RecordingHandler(_ => throw new InvalidOperationException(
+                "A valid persistent icon cache must not require a network request.")));
+        var secondPath = await restartedService.GetRepositorySourceIconPathAsync(
+            new MihonExtensionConfiguration(),
+            source,
+            TestContext.Current.CancellationToken);
+
+        secondPath.Should().Be(firstPath);
+        File.ReadAllBytes(secondPath!).Should().Equal(CreateTestPng());
+    }
+
+    [Fact]
+    public async Task GetRepositorySourceIconPathAsync_MigratesLegacyPackageCache()
+    {
+        using var temp = new TempDirectory();
+        var legacyDirectory = Path.Combine(
+            temp.Path,
+            "cache",
+            "SourceIcons",
+            Sha256ForTest("example"));
+        Directory.CreateDirectory(legacyDirectory);
+        var legacyPath = Path.Combine(legacyDirectory, "icon.png");
+        await File.WriteAllBytesAsync(
+            legacyPath,
+            CreateTestPng(),
+            TestContext.Current.CancellationToken);
+
+        using var service = CreateService(
+            temp,
+            new RecordingHandler(_ => throw new InvalidOperationException(
+                "A legacy icon cache must be migrated before any network request.")));
+        var path = await service.GetRepositorySourceIconPathAsync(
+            new MihonExtensionConfiguration(),
+            new MihonExtensionSource
+            {
+                Id = "42",
+                PackageName = "example",
+                ApkDownloadUrl = "https://repo.example/apk/example.apk",
+            },
+            TestContext.Current.CancellationToken);
+
+        path.Should().NotBe(legacyPath);
+        File.ReadAllBytes(path!).Should().Equal(CreateTestPng());
+    }
+
+    [Fact]
+    public async Task GetRepositorySourceIconPathAsync_NormalizesMislabeledCachedImage()
+    {
+        using var temp = new TempDirectory();
+        var directory = Path.Combine(
+            temp.Path,
+            "cache",
+            "SourceIcons",
+            Sha256ForTest("example\u001f42"));
+        Directory.CreateDirectory(directory);
+        var mislabeledPath = Path.Combine(directory, "icon.png");
+        var jpeg = CreateTestJpeg();
+        await File.WriteAllBytesAsync(
+            mislabeledPath,
+            jpeg,
+            TestContext.Current.CancellationToken);
+
+        using var service = CreateService(
+            temp,
+            new RecordingHandler(_ => throw new InvalidOperationException(
+                "A usable cached image must not require a network request.")));
+        var path = await service.GetRepositorySourceIconPathAsync(
+            new MihonExtensionConfiguration(),
+            new MihonExtensionSource
+            {
+                Id = "42",
+                PackageName = "example",
+            },
+            TestContext.Current.CancellationToken);
+
+        Path.GetExtension(path!).Should().Be(".jpg");
+        File.ReadAllBytes(path!).Should().Equal(jpeg);
+    }
+
+    [Fact]
+    public async Task RemoveAsync_PreservesSourceIconCache()
+    {
+        using var temp = new TempDirectory();
+        var extensionRoot = Path.Combine(temp.Path, "extensions");
+        Directory.CreateDirectory(extensionRoot);
+        var apkPath = Path.Combine(extensionRoot, "example-1.apk");
+        await File.WriteAllBytesAsync(
+            apkPath,
+            CreateApk(),
+            TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(
+            Path.Combine(extensionRoot, "installed.json"),
+            JsonSerializer.Serialize(
+                new MihonInstalledExtensionCatalog
+                {
+                    Extensions =
+                    [
+                        new MihonInstalledExtension
+                        {
+                            PackageName = "example",
+                            SourceId = "42",
+                            ApkPath = apkPath,
+                        },
+                    ],
+                }),
+            TestContext.Current.CancellationToken);
+        var source = new MihonExtensionSource
+        {
+            Id = "42",
+            PackageName = "example",
+            ApkDownloadUrl = "https://repo.example/apk/example.apk",
+        };
+
+        using var service = CreateService(
+            temp,
+            new RecordingHandler(_ => throw new InvalidOperationException()));
+        var iconPath = await service.GetRepositorySourceIconPathAsync(
+            new MihonExtensionConfiguration(),
+            source,
+            TestContext.Current.CancellationToken);
+
+        await service.RemoveAsync(
+            "example",
+            "42",
+            TestContext.Current.CancellationToken);
+
+        File.Exists(apkPath).Should().BeFalse();
+        File.Exists(iconPath!).Should().BeTrue();
+        var cachedAfterRemoval = await service.GetRepositorySourceIconPathAsync(
+            new MihonExtensionConfiguration(),
+            source,
+            TestContext.Current.CancellationToken);
+
+        cachedAfterRemoval.Should().Be(iconPath);
+        File.ReadAllBytes(cachedAfterRemoval!).Should().Equal(CreateTestPng());
+    }
+
+    [Fact]
+    public async Task RemoveAsync_RemovesSourceAndKeepsSharedApkUntilLastSource()
+    {
+        using var temp = new TempDirectory();
+        var extensionRoot = Path.Combine(temp.Path, "extensions");
+        Directory.CreateDirectory(extensionRoot);
+        var apkPath = Path.Combine(extensionRoot, "shared.apk");
+        await File.WriteAllBytesAsync(
+            apkPath,
+            [1, 2, 3],
+            TestContext.Current.CancellationToken);
+        var catalogPath = Path.Combine(extensionRoot, "installed.json");
+        await File.WriteAllTextAsync(
+            catalogPath,
+            JsonSerializer.Serialize(
+                new MihonInstalledExtensionCatalog
+                {
+                    Extensions =
+                    [
+                        new MihonInstalledExtension
+                        {
+                            PackageName = "example.package",
+                            SourceId = "1",
+                            SourceName = "First",
+                            ApkPath = apkPath,
+                        },
+                        new MihonInstalledExtension
+                        {
+                            PackageName = "example.package",
+                            SourceId = "2",
+                            SourceName = "Second",
+                            ApkPath = apkPath,
+                        },
+                    ],
+                }),
+            TestContext.Current.CancellationToken);
+        using var service = CreateService(
+            temp,
+            new RecordingHandler(_ => throw new InvalidOperationException()));
+
+        await service.RemoveAsync(
+            "example.package",
+            "1",
+            TestContext.Current.CancellationToken);
+
+        (await service.GetInstalledSourcesAsync(
+                TestContext.Current.CancellationToken))
+            .Should().ContainSingle()
+            .Which.SourceId.Should().Be("2");
+        File.Exists(apkPath).Should().BeTrue();
+
+        await service.RemoveAsync(
+            "example.package",
+            "2",
+            TestContext.Current.CancellationToken);
+
+        File.Exists(apkPath).Should().BeFalse();
+        (await service.GetInstalledSourcesAsync(
+                TestContext.Current.CancellationToken))
+            .Should().BeEmpty();
     }
 
     [Fact]
@@ -588,6 +816,7 @@ public sealed class MihonExtensionServiceTests
 
     private static byte[] CreateApk()
     {
+        var testPng = CreateTestPng();
         using var output = new MemoryStream();
         using (var archive = new ZipArchive(output, ZipArchiveMode.Create, true))
         {
@@ -602,10 +831,20 @@ public sealed class MihonExtensionServiceTests
                 stream.Write([1, 2]);
             var largeIcon = archive.CreateEntry("res/b.png");
             using (var stream = largeIcon.Open())
-                stream.Write([9, 8, 7, 6, 5]);
+                stream.Write(testPng);
         }
         return output.ToArray();
     }
+
+    private static byte[] CreateTestPng() => Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+
+    private static byte[] CreateTestJpeg() => Convert.FromBase64String(
+        "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH/AP/EABQQAQAAAAAAAAAAAAAAAAAAABD/2gAIAQEAAQUCf//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8Bf//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8Bf//EABQQAQAAAAAAAAAAAAAAAAAAABD/2gAIAQEABj8Cf//Z");
+
+    private static string Sha256ForTest(string value) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))
+            .ToLowerInvariant();
 
     private static HttpResponseMessage Json(string value) =>
         new(HttpStatusCode.OK)

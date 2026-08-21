@@ -303,6 +303,20 @@
                       HorizontalAlignment="Stretch"
                       VerticalAlignment="Stretch" />
 
+                <Grid x:Name="VideoMiningFeedbackHost"
+                      Canvas.ZIndex="1100"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch"
+                      IsHitTestVisible="False">
+                    <InfoBar x:Name="VideoMiningToast"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Top"
+                             MaxWidth="420"
+                             Margin="12"
+                             IsClosable="False"
+                             IsOpen="False" />
+                </Grid>
+
             </Grid>
         </Popup>
 
@@ -1251,7 +1265,7 @@
                                             Style="{StaticResource VideoInspectorCardStyle}">
                                         <StackPanel Spacing="8">
                                             <TextBlock x:Uid="YouTubePublisherSubtitlesHeaderText"
-                                                       Text="Publisher subtitles"
+                                                       Text="YouTube subtitles"
                                                        Style="{StaticResource VideoInspectorSectionTitleStyle}" />
                                             <ComboBox x:Name="YouTubeSubtitleComboBox"
                                                       AutomationProperties.AutomationId="YouTubeSubtitleComboBox"

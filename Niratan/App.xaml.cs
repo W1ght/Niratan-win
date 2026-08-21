@@ -20,9 +20,11 @@ using Niratan.Services.Audio;
 using Niratan.Services.Backup;
 using Niratan.Services.Dictionary;
 using Niratan.Services.GameControllers;
+using Niratan.Services.Games;
 using Niratan.Services.Logging;
 using Niratan.Services.Manga;
 using Niratan.Services.Nyaa;
+using Niratan.Services.QBittorrent;
 using Niratan.Services.Novels;
 using Niratan.Services.Profiles;
 using Niratan.Services.Sasayaki;
@@ -113,6 +115,11 @@ public partial class App : Application
         // --- Step 6: Flush logs on normal process exit ---
         AppDomain.CurrentDomain.ProcessExit += (_, _) =>
         {
+            try
+            {
+                GetService<IGalGameSessionService>().StopAsync().GetAwaiter().GetResult();
+            }
+            catch { /* helper cleanup must not block process exit */ }
             try { Log.CloseAndFlush(); }
             catch { /* not much we can do */ }
         };
@@ -160,6 +167,9 @@ public partial class App : Application
         services.AddTransient<ZLibraryDialogViewModel>();
         services.AddTransient<SasayakiResourcesViewModel>();
         services.AddTransient<VideoLibraryPageViewModel>();
+        services.AddTransient<GamesPageViewModel>();
+        services.AddTransient<DownloadsPageViewModel>();
+        services.AddTransient<DiscoverPageViewModel>();
         services.AddTransient<NovelLookupPageViewModel>();
         services.AddTransient<ReaderNavigationTransactionCoordinator>();
         services.AddTransient<NovelReaderPageViewModel>();
@@ -184,6 +194,14 @@ public partial class App : Application
             provider.GetRequiredService<ProfileRuntimeService>());
         services.AddSingleton<IShortcutService, ShortcutService>();
         services.AddSingleton<IGameControllerService, GameControllerService>();
+        services.AddSingleton<GalGameHookRuntimeStage>();
+        services.AddSingleton<GalGameIpcReader>();
+        services.AddSingleton<GalGameMediaCapture>();
+        services.AddSingleton<GalGameTextOverlayService>();
+        services.AddTransient<GalGameLookupCardRenderer>();
+        services.AddTransient<GalGameIngameLookupController>();
+        services.AddSingleton<IGalGameRepository, GalGameRepository>();
+        services.AddSingleton<IGalGameSessionService, GalGameSessionService>();
         services.AddSingleton<INiratanJsonFileStore, NiratanJsonFileStore>();
         services.AddSingleton<IVideoCatalogRepository, SQLiteVideoCatalogRepository>();
         services.AddSingleton<IVideoPlaybackHistoryStore, VideoPlaybackHistoryStore>();
@@ -225,7 +243,19 @@ public partial class App : Application
         services.AddSingleton<IVideoArtworkProvider>(provider => provider.GetRequiredService<TmdbVideoMetadataProvider>());
         services.AddSingleton<IVideoArtworkProvider>(provider => provider.GetRequiredService<TvMazeVideoMetadataProvider>());
         services.AddSingleton<IVideoArtworkProvider>(provider => provider.GetRequiredService<AniListVideoMetadataProvider>());
+        services.AddSingleton<IVideoArtworkProvider>(provider => provider.GetRequiredService<BangumiVideoMetadataProvider>());
         services.AddSingleton<IVideoArtworkProvider>(provider => provider.GetRequiredService<TvDbLicenseGatedProvider>());
+        services.AddSingleton<TmdbVideoDiscoveryProvider>();
+        services.AddSingleton<BangumiVideoDiscoveryProvider>();
+        services.AddSingleton<AniListVideoDiscoveryProvider>();
+        services.AddSingleton<IVideoDiscoveryProvider>(provider =>
+            provider.GetRequiredService<TmdbVideoDiscoveryProvider>());
+        services.AddSingleton<IVideoDiscoveryProvider>(provider =>
+            provider.GetRequiredService<BangumiVideoDiscoveryProvider>());
+        services.AddSingleton<IVideoDiscoveryProvider>(provider =>
+            provider.GetRequiredService<AniListVideoDiscoveryProvider>());
+        services.AddSingleton<IVideoDiscoveryService, VideoDiscoveryService>();
+        services.AddSingleton<IVideoResourceSearchService, VideoResourceSearchService>();
         services.AddSingleton<IVideoDataService, VideoDataService>();
         services.AddSingleton<INovelBookStorageService, NovelBookStorageService>();
         services.AddSingleton<INovelShelfService, NovelShelfService>();
@@ -244,6 +274,7 @@ public partial class App : Application
         services.AddSingleton<IMangaOcrService, MangaOcrService>();
         services.AddSingleton<ISuwayomiService, SuwayomiService>();
         services.AddSingleton<IMihonExtensionService, MihonExtensionService>();
+        services.AddSingleton<IMangaDiscoveryService, MangaDiscoveryService>();
         services.AddSingleton<MangaLibraryService>();
         services.AddSingleton<IMangaLibraryService>(provider =>
             provider.GetRequiredService<MangaLibraryService>());
@@ -254,10 +285,16 @@ public partial class App : Application
         services.AddSingleton<IResourcePackageImportService, ResourcePackageImportService>();
         services.AddSingleton<ITorrentDownloadService, MonoTorrentDownloadService>();
         services.AddSingleton<INyaaDownloadManager, NyaaDownloadManager>();
+        services.AddSingleton<Lazy<INyaaDownloadManager>>(provider =>
+            new Lazy<INyaaDownloadManager>(provider.GetRequiredService<INyaaDownloadManager>));
+        services.AddSingleton<IQbittorrentCredentialStore, WindowsCredentialQbittorrentCredentialStore>();
+        services.AddSingleton<IQbittorrentClient, QbittorrentApiClient>();
+        services.AddSingleton<IQbittorrentDownloadCoordinator, QbittorrentDownloadCoordinator>();
         services.AddSingleton<IZLibraryClient, ZLibraryClient>();
         services.AddSingleton<IZLibraryCredentialStore, WindowsCredentialZLibraryCredentialStore>();
         services.AddSingleton<IZLibraryService, ZLibraryService>();
         services.AddSingleton<IVideoLibraryService, VideoLibraryService>();
+        services.AddSingleton<IVideoDownloadImportService, VideoDownloadImportService>();
         services.AddSingleton<IRemoteVideoResolver, YoutubeExplodeRemoteVideoResolver>();
         services.AddSingleton<IAnime4KShaderService, Anime4KShaderService>();
         services.AddSingleton<IVideoMiningHistoryStore>(provider =>

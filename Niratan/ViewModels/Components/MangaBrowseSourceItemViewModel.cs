@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -14,6 +15,7 @@ namespace Niratan.ViewModels.Components;
 public sealed partial class MangaBrowseSourceItemViewModel : ObservableObject
 {
     private readonly Func<Task<string?>>? _loadIcon;
+    private readonly Func<Task>? _remove;
     private int _iconLoadStarted;
 
     public MangaBrowseSourceItemViewModel(
@@ -21,13 +23,18 @@ public sealed partial class MangaBrowseSourceItemViewModel : ObservableObject
         string language,
         string provider,
         Func<Task> open,
-        Func<Task<string?>>? loadIcon = null)
+        Func<Task<string?>>? loadIcon = null,
+        Func<Task>? remove = null)
     {
         Name = name;
         Language = language;
         Provider = provider;
         _loadIcon = loadIcon;
+        _remove = remove;
         OpenCommand = new AsyncRelayCommand(open);
+        RemoveCommand = new AsyncRelayCommand(
+            () => _remove?.Invoke() ?? Task.CompletedTask,
+            () => CanRemove);
     }
 
     public string Name { get; }
@@ -38,6 +45,15 @@ public sealed partial class MangaBrowseSourceItemViewModel : ObservableObject
         ? Provider
         : $"{LanguageLabel} · {Provider}";
     public IAsyncRelayCommand OpenCommand { get; }
+    public IAsyncRelayCommand RemoveCommand { get; }
+    public bool CanRemove => _remove is not null;
+    public string RemoveActionLabel => ResourceStringHelper.GetString(
+        "MihonRemoveSourceAction",
+        "Remove");
+    public string RemoveAutomationId =>
+        $"BrowseSourceRemove_{SanitizeAutomationSegment(Name)}_"
+        + $"{SanitizeAutomationSegment(Language)}_"
+        + SanitizeAutomationSegment(Provider);
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasIcon))]
@@ -59,7 +75,13 @@ public sealed partial class MangaBrowseSourceItemViewModel : ObservableObject
         {
             var path = await _loadIcon();
             if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-                IconImage = new BitmapImage(new Uri(Path.GetFullPath(path)));
+            {
+                // Let the Image control own the decode lifecycle. Explicitly
+                // feeding a third-party stream to SetSourceAsync can make
+                // WinUI.Xaml fail-fast on a malformed or unsupported icon.
+                IconImage = new BitmapImage(
+                    new Uri(Path.GetFullPath(path), UriKind.Absolute));
+            }
         }
         catch (OperationCanceledException)
         {
@@ -92,6 +114,12 @@ public sealed partial class MangaBrowseSourceItemViewModel : ObservableObject
             return language.ToUpperInvariant();
         }
     }
+
+    private static string SanitizeAutomationSegment(string? value) =>
+        new((value ?? string.Empty)
+            .Select(character =>
+                char.IsLetterOrDigit(character) ? character : '_')
+            .ToArray());
 }
 
 public sealed class MangaBrowseSourceGroupViewModel

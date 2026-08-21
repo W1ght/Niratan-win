@@ -1,4 +1,5 @@
 using FluentAssertions;
+using System.Collections.Immutable;
 using Niratan.Models;
 using Niratan.Models.Video;
 using Niratan.ViewModels.Components;
@@ -107,6 +108,83 @@ public sealed class VideoSeriesViewModelTests
         result.OriginalTitle.Should().Be("シリーズ原題");
         result.Overview.Should().Be("シリーズ概要");
         result.YearRangeText.Should().Be("2024");
+    }
+
+    [Fact]
+    public void RemoteSeasons_MergeMissingEpisodesWithDownloadedEpisodes()
+    {
+        var seriesId = Guid.NewGuid();
+        var localEpisode = Episode("episode-1", seriesId, Guid.NewGuid(), 1, 1, absolute: null);
+        localEpisode.Title = "Downloaded episode";
+        var localPath = Path.GetTempFileName();
+        try
+        {
+            localEpisode.FilePath = localPath;
+            var result = new VideoSeriesViewModel(seriesId, [localEpisode]);
+
+            result.ApplyRemoteSeasons([
+                new VideoDiscoverySeason(
+                    1,
+                    "Season 1",
+                    null,
+                    "2026-01-01",
+                    3,
+                    null,
+                    [
+                        new VideoDiscoveryEpisode(1, "First episode", null, null, null, null, null, null),
+                        new VideoDiscoveryEpisode(2, "Second episode", null, null, null, null, null, null),
+                        new VideoDiscoveryEpisode(3, "Third episode", null, null, null, null, null, null),
+                    ]),
+            ]);
+
+            result.Seasons.Should().ContainSingle();
+            result.Episodes.Should().ContainSingle().Which.Video.Id.Should().Be("episode-1");
+            result.SelectedSeason!.EpisodeSlots.Should().HaveCount(3);
+            result.SelectedSeason.EpisodeSlots[0].IsDownloaded.Should().BeTrue();
+            result.SelectedSeason.EpisodeSlots[1].IsDownloaded.Should().BeFalse();
+            result.SelectedSeason.EpisodeSlots[1].Title.Should().Be("Second episode");
+            result.SelectedSeason.EpisodeSlots[2].StatusText.Should().NotBeNullOrWhiteSpace();
+        }
+        finally
+        {
+            File.Delete(localPath);
+        }
+    }
+
+    [Fact]
+    public void RemoteSeasons_KeepEveryScrapedSeasonAndEpisode()
+    {
+        var seriesId = Guid.NewGuid();
+        var seedEpisode = Episode("seed", seriesId, Guid.NewGuid(), 1, 1, absolute: null);
+        var result = new VideoSeriesViewModel(seriesId, [seedEpisode]);
+        var remoteSeasons = Enumerable.Range(1, 25)
+            .Select(seasonNumber => new VideoDiscoverySeason(
+                seasonNumber,
+                $"Season {seasonNumber}",
+                null,
+                null,
+                201,
+                null,
+                ImmutableArray.CreateRange(Enumerable.Range(1, 201).Select(episodeNumber =>
+                    new VideoDiscoveryEpisode(
+                        episodeNumber,
+                        $"Episode {episodeNumber}",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null)))))
+            .ToArray();
+
+        result.ApplyRemoteSeasons(remoteSeasons);
+
+        result.Seasons.Should().HaveCount(25);
+        result.Seasons.Select(season => season.SeasonNumber)
+            .Should().Equal(Enumerable.Range(1, 25).Select(number => (int?)number));
+        result.Seasons[^1].EpisodeSlots.Should().HaveCount(201);
+        result.Seasons[^1].EpisodeSlots[^1].EpisodeNumber.Should().Be(201);
+        result.Seasons[^1].EpisodeSlots[^1].IsDownloaded.Should().BeFalse();
     }
 
     private static VideoItem Episode(

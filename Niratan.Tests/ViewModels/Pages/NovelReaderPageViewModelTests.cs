@@ -3040,6 +3040,31 @@ public sealed class NovelReaderPageViewModelTests
         sut.IsStatisticsTracking.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task AudiobookPlaybackStatistics_StartsAndPausesWithoutStoppingSession()
+    {
+        using var temp = new TempBookDirectory();
+        var statisticsSession = new FakeReaderStatisticsSession();
+        var sut = CreateInitializedSut(
+            temp.Path,
+            new ReaderHighlightService(),
+            statisticsSession: statisticsSession,
+            statisticsSettings: new NovelStatisticsSettings
+            {
+                EnableStatistics = true,
+            });
+        sut.SetChapterCharacterCounts([100]);
+        sut.SetChapter(0, 1);
+        sut.UpdateProgress(0.40);
+
+        await sut.StartStatisticsForAudiobookPlaybackAsync();
+        await sut.PauseStatisticsAsync();
+
+        statisticsSession.StartPositions.Should().Equal(40);
+        statisticsSession.PausePositions.Should().Equal(40);
+        statisticsSession.StopPositions.Should().BeEmpty();
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
@@ -3714,6 +3739,7 @@ public sealed class NovelReaderPageViewModelTests
 
         public (string Root, string Title, int Position)? LoadRequest { get; private set; }
         public List<int> StartPositions { get; } = [];
+        public List<int> PausePositions { get; } = [];
         public List<(int Position, ReaderStatisticsCheckpointReason Reason)> Checkpoints { get; } = [];
         public List<int> ResetPositions { get; } = [];
         public List<int> StopPositions { get; } = [];
@@ -3771,6 +3797,7 @@ public sealed class NovelReaderPageViewModelTests
             ReaderStatisticsPosition position,
             CancellationToken ct = default)
         {
+            PausePositions.Add(position.RawCharacterCount);
             PauseRecorded?.Invoke(position);
             return Task.CompletedTask;
         }

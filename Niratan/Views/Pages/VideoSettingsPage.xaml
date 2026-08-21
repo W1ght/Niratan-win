@@ -442,26 +442,76 @@
                                           HorizontalAlignment="Stretch"
                                           HorizontalContentAlignment="Stretch"
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE72E;}">
-                        <ToggleSwitch x:Uid="VideoMetadataPrivacyToggle"
-                                      AutomationProperties.AutomationId="VideoMetadataPrivacyToggle"
-                                      IsOn="{x:Bind ViewModel.OnlineMetadataConsentAccepted, Mode=TwoWay}" />
+                        <Grid Width="560"
+                              MaxWidth="560"
+                              ColumnDefinitions="*,Auto"
+                              ColumnSpacing="16">
+                            <TextBlock x:Uid="VideoMetadataPrivacyToggleLabel"
+                                       Text="Enable online metadata queries"
+                                       TextWrapping="Wrap"
+                                       VerticalAlignment="Center" />
+                            <ToggleSwitch Grid.Column="1"
+                                          AutomationProperties.AutomationId="VideoMetadataPrivacyToggle"
+                                          HorizontalAlignment="Right"
+                                          IsOn="{x:Bind ViewModel.OnlineMetadataConsentAccepted, Mode=TwoWay}" />
+                        </Grid>
                     </toolkit:SettingsCard>
 
                     <toolkit:SettingsCard x:Uid="VideoMetadataProvidersCard"
                                           HorizontalAlignment="Stretch"
                                           HorizontalContentAlignment="Stretch"
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE774;}">
-                        <StackPanel Width="360" Spacing="8">
-                            <ToggleSwitch x:Uid="VideoMetadataTmdbToggle"
-                                          IsOn="{x:Bind ViewModel.TmdbMetadataEnabled, Mode=TwoWay}" />
-                            <ToggleSwitch x:Uid="VideoMetadataTvMazeToggle"
-                                          IsOn="{x:Bind ViewModel.TvMazeMetadataEnabled, Mode=TwoWay}" />
-                            <ToggleSwitch x:Uid="VideoMetadataAniListToggle"
-                                          IsOn="{x:Bind ViewModel.AniListMetadataEnabled, Mode=TwoWay}" />
-                            <ToggleSwitch x:Uid="VideoMetadataAniDbToggle"
-                                          IsOn="{x:Bind ViewModel.AniDbMetadataEnabled, Mode=TwoWay}" />
-                            <ToggleSwitch x:Uid="VideoMetadataBangumiToggle"
-                                          IsOn="{x:Bind ViewModel.BangumiMetadataEnabled, Mode=TwoWay}" />
+                        <StackPanel Width="560" Spacing="8">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoMetadataTmdbToggleLabel"
+                                           Text="TMDB — movies, drama, and mainstream anime"
+                                           TextWrapping="Wrap"
+                                           VerticalAlignment="Center" />
+                                <ToggleSwitch Grid.Column="1"
+                                              AutomationProperties.AutomationId="VideoMetadataTmdbToggle"
+                                              HorizontalAlignment="Right"
+                                              IsOn="{x:Bind ViewModel.TmdbMetadataEnabled, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoMetadataTvMazeToggleLabel"
+                                           Text="TVmaze — television supplement (CC BY-SA)"
+                                           TextWrapping="Wrap"
+                                           VerticalAlignment="Center" />
+                                <ToggleSwitch Grid.Column="1"
+                                              AutomationProperties.AutomationId="VideoMetadataTvMazeToggle"
+                                              HorizontalAlignment="Right"
+                                              IsOn="{x:Bind ViewModel.TvMazeMetadataEnabled, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoMetadataAniListToggleLabel"
+                                           Text="AniList — anime identity, aliases, and tags"
+                                           TextWrapping="Wrap"
+                                           VerticalAlignment="Center" />
+                                <ToggleSwitch Grid.Column="1"
+                                              AutomationProperties.AutomationId="VideoMetadataAniListToggle"
+                                              HorizontalAlignment="Right"
+                                              IsOn="{x:Bind ViewModel.AniListMetadataEnabled, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoMetadataAniDbToggleLabel"
+                                           Text="AniDB — official weekly title index"
+                                           TextWrapping="Wrap"
+                                           VerticalAlignment="Center" />
+                                <ToggleSwitch Grid.Column="1"
+                                              AutomationProperties.AutomationId="VideoMetadataAniDbToggle"
+                                              HorizontalAlignment="Right"
+                                              IsOn="{x:Bind ViewModel.AniDbMetadataEnabled, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoMetadataBangumiToggleLabel"
+                                           Text="Bangumi — anime and Japanese television supplement"
+                                           TextWrapping="Wrap"
+                                           VerticalAlignment="Center" />
+                                <ToggleSwitch Grid.Column="1"
+                                              AutomationProperties.AutomationId="VideoMetadataBangumiToggle"
+                                              HorizontalAlignment="Right"
+                                              IsOn="{x:Bind ViewModel.BangumiMetadataEnabled, Mode=TwoWay}" />
+                            </Grid>
                             <TextBlock x:Uid="VideoMetadataTvDbDisabledText"
                                        Text="TheTVDB: waiting for project authorization"
                                        TextWrapping="Wrap" />
@@ -476,6 +526,48 @@
                                 <HyperlinkButton x:Uid="VideoMetadataBangumiLink" NavigateUri="https://bgm.tv/" />
                                 <HyperlinkButton x:Uid="VideoMetadataTvDbLink" NavigateUri="https://thetvdb.com/" />
                             </StackPanel>
+                        </StackPanel>
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="VideoDiscoverySettingsCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8B4;}">
+                        <StackPanel Width="560" Spacing="8">
+                            <TextBox x:Uid="VideoDiscoveryProviderOrderBox"
+                                     AutomationProperties.AutomationId="VideoDiscoveryProviderOrderBox"
+                                     HorizontalAlignment="Stretch"
+                                     Text="{x:Bind ViewModel.DiscoveryProviderOrderText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoDiscoveryTmdbRecommendationsLabel"
+                                           Text="TMDB recommendation groups"
+                                           TextWrapping="Wrap"
+                                           VerticalAlignment="Center" />
+                                <ToggleSwitch Grid.Column="1"
+                                              AutomationProperties.AutomationId="VideoDiscoveryTmdbRecommendationsToggle"
+                                              HorizontalAlignment="Right"
+                                              IsOn="{x:Bind ViewModel.TmdbRecommendationsEnabled, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoDiscoveryBangumiCalendarLabel"
+                                           Text="Bangumi broadcast calendar"
+                                           TextWrapping="Wrap"
+                                           VerticalAlignment="Center" />
+                                <ToggleSwitch Grid.Column="1"
+                                              AutomationProperties.AutomationId="VideoDiscoveryBangumiCalendarToggle"
+                                              HorizontalAlignment="Right"
+                                              IsOn="{x:Bind ViewModel.BangumiCalendarEnabled, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoDiscoveryAniListRecommendationsLabel"
+                                           Text="AniList recommendation groups"
+                                           TextWrapping="Wrap"
+                                           VerticalAlignment="Center" />
+                                <ToggleSwitch Grid.Column="1"
+                                              AutomationProperties.AutomationId="VideoDiscoveryAniListRecommendationsToggle"
+                                              HorizontalAlignment="Right"
+                                              IsOn="{x:Bind ViewModel.AniListRecommendationsEnabled, Mode=TwoWay}" />
+                            </Grid>
                         </StackPanel>
                     </toolkit:SettingsCard>
 

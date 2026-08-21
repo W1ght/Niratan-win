@@ -17,6 +17,7 @@ namespace Niratan.Views.Dictionary;
 public sealed partial class GlobalLookupWindow : Window, IDisposable
 {
     private DictionaryPopupOverlay? _popupOverlay;
+    private readonly AnkiMiningFeedbackPresenter _miningFeedbackPresenter;
     private DictionaryDesktopAcrylicThinBackdrop? _desktopAcrylicThinBackdrop;
     private string? _pendingInitialQuery;
     private bool _isLoaded;
@@ -26,6 +27,7 @@ public sealed partial class GlobalLookupWindow : Window, IDisposable
     public GlobalLookupWindow()
     {
         InitializeComponent();
+        _miningFeedbackPresenter = new AnkiMiningFeedbackPresenter(LookupMiningToast);
         Title = "Global Lookup";
         _desktopAcrylicThinBackdrop = DictionaryPopupMaterial.TryApplyDesktopAcrylicThin(this, RootGrid);
         RootGrid.Background = DictionaryPopupMaterial.CreateWindowFallbackBrush();
@@ -162,6 +164,8 @@ public sealed partial class GlobalLookupWindow : Window, IDisposable
         {
             _popupOverlay = new DictionaryPopupOverlay();
             _popupOverlay.Dismissed += OnPopupOverlayDismissed;
+            _popupOverlay.MiningFeedbackRequested += OnMiningFeedbackRequested;
+            _popupOverlay.MiningFeedbackCleared += OnMiningFeedbackCleared;
         }
 
         _popupOverlay.UseCanvas(DictionaryOverlayCanvas);
@@ -173,6 +177,14 @@ public sealed partial class GlobalLookupWindow : Window, IDisposable
     {
         DictionaryPanelRoot.Visibility = Visibility.Collapsed;
     }
+
+    private void OnMiningFeedbackRequested(
+        object? sender,
+        DictionaryPopupMiningFeedbackEventArgs e) =>
+        _miningFeedbackPresenter.Show(e);
+
+    private void OnMiningFeedbackCleared(object? sender, EventArgs e) =>
+        _miningFeedbackPresenter.Clear();
 
     private void OnLookupCleared()
     {
@@ -208,8 +220,11 @@ public sealed partial class GlobalLookupWindow : Window, IDisposable
         if (_popupOverlay is not null)
         {
             _popupOverlay.Dismissed -= OnPopupOverlayDismissed;
+            _popupOverlay.MiningFeedbackRequested -= OnMiningFeedbackRequested;
+            _popupOverlay.MiningFeedbackCleared -= OnMiningFeedbackCleared;
             _popupOverlay.Dispose();
             _popupOverlay = null;
         }
+        _miningFeedbackPresenter.Dispose();
     }
 }

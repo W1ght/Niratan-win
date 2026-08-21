@@ -61,6 +61,16 @@ public sealed class DictionaryPopupShowDroppedEventArgs(
     public string? TraceId { get; } = traceId;
 }
 
+public sealed class DictionaryPopupMiningFeedbackEventArgs(
+    AnkiMiningResult result,
+    string title,
+    NotificationSeverity severity) : EventArgs
+{
+    public AnkiMiningResult Result { get; } = result;
+    public string Title { get; } = title;
+    public NotificationSeverity Severity { get; } = severity;
+}
+
 public sealed record DictionaryPopupShortcutRequest(KeyboardShortcutBinding Binding);
 
 public sealed class DictionaryLookupPopup : IDisposable
@@ -120,6 +130,8 @@ public sealed class DictionaryLookupPopup : IDisposable
     public event EventHandler<DictionaryPopupContentCommittedEventArgs>? ContentCommitted;
     public event EventHandler<DictionaryPopupContentCommittedEventArgs>? ContentCommitAborted;
     public event EventHandler<DictionaryPopupShowDroppedEventArgs>? QueuedShowDropped;
+    public event EventHandler<DictionaryPopupMiningFeedbackEventArgs>? MiningFeedbackRequested;
+    public event EventHandler? MiningFeedbackCleared;
 
     private readonly Grid _surfaceRoot;
     private readonly Grid _controlsRow;
@@ -135,7 +147,6 @@ public sealed class DictionaryLookupPopup : IDisposable
     private readonly AppBarButton _sasayakiPopupJumpCueButton;
     private readonly FontIcon _sasayakiPopupPlayPauseIcon;
     private readonly WebView2 _contentWebView;
-    private readonly InfoBar _miningToast;
     private readonly PopupHtmlGenerator _htmlGenerator;
     private readonly IDictionaryLookupService _lookupService;
     private readonly IAudioService _audioService;
@@ -196,7 +207,6 @@ public sealed class DictionaryLookupPopup : IDisposable
     private static readonly LocalAudioSourceListResolver s_localAudioSourceListResolver = new();
     private CancellationTokenSource? _prefetchCts;
     private CancellationTokenSource? _deferredResultsCts;
-    private CancellationTokenSource? _miningToastCts;
     private readonly object _duplicateCheckBatchLock = new();
     private readonly List<DictionaryPopupDuplicateCheckRequest> _pendingDuplicateChecks = [];
     private readonly CancellationTokenSource _duplicateCheckBatchCts = new();
@@ -231,18 +241,6 @@ public sealed class DictionaryLookupPopup : IDisposable
             IsTabStop = false,
             UseSystemFocusVisuals = false,
         };
-
-        _miningToast = new InfoBar
-        {
-            IsOpen = false,
-            IsClosable = false,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Top,
-            MaxWidth = 420,
-            Margin = new Thickness(12),
-        };
-        AutomationProperties.SetAutomationId(_miningToast, "AnkiMiningToast");
-        AutomationProperties.SetLiveSetting(_miningToast, AutomationLiveSetting.Polite);
 
         _popupBackButton = CreateCommandButton(
             "DictionaryPopupBackButton",
@@ -365,13 +363,10 @@ public sealed class DictionaryLookupPopup : IDisposable
             {
                 _controlsRow,
                 _contentWebView,
-                _miningToast,
             },
         };
         Grid.SetRow(_controlsRow, 0);
         Grid.SetRow(_contentWebView, 1);
-        Grid.SetRow(_miningToast, 1);
-        Canvas.SetZIndex(_miningToast, 1);
 
         VisualRoot = new Border
         {
@@ -655,6 +650,110 @@ public sealed class DictionaryLookupPopup : IDisposable
         {
             return new Windows.Foundation.Point(0, 0);
         }
+    }
+
+    /// <summary>
+    /// Captures the already-rendered dictionary document without showing a
+    /// second desktop popup.  The galgame lookup host uses this image as the
+    /// texture that the native hook paints into the game's own layer.
+    /// </summary>
+    public async Task<byte[]?> CapturePreviewPngAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_webViewReady || _contentWebView.CoreWebView2 is null)
+            return null;
+
+        cancellationToken.ThrowIfCancellationRequested();
+        await using var stream = new MemoryStream();
+        await _contentWebView.CoreWebView2.CapturePreviewAsync(
+            CoreWebView2CapturePreviewImageFormat.Png,
+            stream.AsRandomAccessStream());
+        cancellationToken.ThrowIfCancellationRequested();
+        return stream.ToArray();
+    }
+
+    /// <summary>
+    /// Forwards an input event from the game's lookup layer into the same
+    /// WebView2 document used by the normal dictionary popup.  The WinUI
+    /// WebView2 control is window-hosted, so the DOM dispatch is the portable
+    /// managed fallback; native composition hosting can replace this without
+    /// changing the IPC or dictionary pipeline.
+    /// </summary>
+    public async Task<bool> InjectLookupInputAsync(
+        uint kind,
+        double x,
+        double y,
+        int wheel,
+        uint keys,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_webViewReady || _contentWebView.CoreWebView2 is null)
+            return false;
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var payload = JsonSerializer.Serialize(new
+        {
+            kind,
+            x = Math.Max(0, x),
+            y = Math.Max(0, y),
+            wheel,
+            keys,
+        });
+        var script = $$"""
+            (() => {
+              const p = {{payload}};
+              const target = document.elementFromPoint(p.x, p.y) || document.body;
+              if (!target) return false;
+              const modifiers = p.keys || 0;
+              const ctrlKey = (modifiers & 2) !== 0;
+              const shiftKey = (modifiers & 1) !== 0;
+              const altKey = (modifiers & 4) !== 0;
+              const buttons = p.kind === 1 ? 1 : 0;
+              const mouse = (type, button = 0) => target.dispatchEvent(new MouseEvent(type, {
+                bubbles: true,
+                cancelable: true,
+                view: window,
+                clientX: p.x,
+                clientY: p.y,
+                screenX: p.x,
+                screenY: p.y,
+                button,
+                buttons,
+                ctrlKey,
+                shiftKey,
+                altKey
+              }));
+              switch (p.kind) {
+                case 0: return mouse('mousemove');
+                case 1: return mouse('mousedown', 0);
+                case 2:
+                  mouse('mouseup', 0);
+                  return mouse('click', 0);
+                case 3: return target.dispatchEvent(new WheelEvent('wheel', {
+                  bubbles: true,
+                  cancelable: true,
+                  view: window,
+                  clientX: p.x,
+                  clientY: p.y,
+                  deltaY: -p.wheel,
+                  deltaMode: 0,
+                  ctrlKey,
+                  shiftKey,
+                  altKey
+                }));
+                case 4: return target.dispatchEvent(new MouseEvent('mouseleave', {
+                  bubbles: false,
+                  cancelable: false,
+                  view: window,
+                  clientX: p.x,
+                  clientY: p.y
+                }));
+                default: return false;
+              }
+            })();
+            """;
+        var result = await _contentWebView.CoreWebView2.ExecuteScriptAsync(script);
+        cancellationToken.ThrowIfCancellationRequested();
+        return string.Equals(result, "true", StringComparison.OrdinalIgnoreCase);
     }
 
     private void SetPopupCornerRadius(double radius)
@@ -961,7 +1060,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         {
             _openableAnkiNotes.Remove(key);
         }
-        ResetMiningToast();
+        ResetMiningFeedback();
         _contextMiningDialog?.Hide();
     }
 
@@ -1108,7 +1207,7 @@ public sealed class DictionaryLookupPopup : IDisposable
             _activeMiningAttempts.Clear();
         _committedPageRevision = 0;
         _committedEntryCount = 0;
-        ResetMiningToast();
+        ResetMiningFeedback();
         _contextMiningDialog?.Hide();
         ResetActionBarNavigationState();
         _displayGeneration++;
@@ -2962,7 +3061,7 @@ public sealed class DictionaryLookupPopup : IDisposable
             _ => null,
         };
         if (result != null)
-            ShowMiningToast(result);
+            PublishMiningFeedback(result);
     }
 
     private void HandlePrepareContextMining(JsonElement payload)
@@ -3017,7 +3116,7 @@ public sealed class DictionaryLookupPopup : IDisposable
                         if (!TryStartMiningSubmission(attempt))
                             return AnkiMiningResult.Failed(ActivePopupChangedMessage);
 
-                        ShowMiningToast(AnkiMiningResult.Pending(PreparingCardMessage));
+                        PublishMiningFeedback(AnkiMiningResult.Pending(PreparingCardMessage));
                         var selectedContext = MiningContextSelectionResolver.Apply(
                             baseMiningContext,
                             selection,
@@ -3208,7 +3307,8 @@ public sealed class DictionaryLookupPopup : IDisposable
 
         if (preflight.MediaNeeds.NeedsVideoAudioClip
             && string.IsNullOrWhiteSpace(result.AudioClipPath)
-            && string.IsNullOrWhiteSpace(result.AudioClipTag))
+            && string.IsNullOrWhiteSpace(result.AudioClipTag)
+            && !miningContext.AllowMissingVideoAudio)
         {
             return result.AudioClipErrorMessage ?? "Unable to capture the subtitle audio clip.";
         }
@@ -3279,7 +3379,7 @@ public sealed class DictionaryLookupPopup : IDisposable
             {
                 opened = await _ankiService.OpenNotesInAnkiAsync(noteIds);
                 if (!opened && IsCurrentMiningEntry(renderGeneration, pageRevision, entryIndex))
-                    ShowMiningToast(AnkiMiningResult.Failed("Unable to open note in Anki."));
+                    PublishMiningFeedback(AnkiMiningResult.Failed("Unable to open note in Anki."));
             }
             else
             {
@@ -3511,7 +3611,7 @@ public sealed class DictionaryLookupPopup : IDisposable
         if (!canPresent)
             return;
 
-        ShowMiningToast(result);
+        PublishMiningFeedback(result);
         await SendMiningResultToWebAsync(callback, attempt, result, keepAttempt);
     }
 
@@ -3551,36 +3651,30 @@ public sealed class DictionaryLookupPopup : IDisposable
             $"if (typeof window.{callback} === 'function') window.{callback}({attempt.EntryIndex}, {attempt.RenderGeneration}, {attempt.PageRevision}, {attempt.AttemptId}, {expression}, {payload}, {(keepAttempt ? "true" : "false")});");
     }
 
-    private void ShowMiningToast(AnkiMiningResult result)
+    private void PublishMiningFeedback(AnkiMiningResult result)
     {
-        _miningToastCts?.Cancel();
-        _miningToastCts?.Dispose();
-        _miningToastCts = new CancellationTokenSource();
-        _miningToast.Title = result.Status switch
+        var title = result.Status switch
         {
             AnkiMiningStatus.Added => CardAddedTitle,
             AnkiMiningStatus.Duplicate => DuplicateFoundTitle,
             AnkiMiningStatus.Pending => SentToAnkiTitle,
             _ => AddFailedTitle,
         };
-        _miningToast.Message = result.Message;
-        _miningToast.Severity = result.Status switch
+        var severity = result.Status switch
         {
-            AnkiMiningStatus.Added => InfoBarSeverity.Success,
-            AnkiMiningStatus.Duplicate => InfoBarSeverity.Warning,
-            AnkiMiningStatus.Pending => InfoBarSeverity.Informational,
-            _ => InfoBarSeverity.Error,
+            AnkiMiningStatus.Added => NotificationSeverity.Success,
+            AnkiMiningStatus.Duplicate => NotificationSeverity.Warning,
+            AnkiMiningStatus.Pending => NotificationSeverity.Info,
+            _ => NotificationSeverity.Error,
         };
-        _miningToast.IsOpen = true;
-        _ = HideMiningToastAsync(_miningToastCts.Token);
+        MiningFeedbackRequested?.Invoke(
+            this,
+            new DictionaryPopupMiningFeedbackEventArgs(result, title, severity));
     }
 
-    private void ResetMiningToast()
+    private void ResetMiningFeedback()
     {
-        _miningToastCts?.Cancel();
-        _miningToastCts?.Dispose();
-        _miningToastCts = null;
-        _miningToast.IsOpen = false;
+        MiningFeedbackCleared?.Invoke(this, EventArgs.Empty);
     }
 
     private static string CardAddedTitle => ResourceStringHelper.GetString(
@@ -3627,26 +3721,10 @@ public sealed class DictionaryLookupPopup : IDisposable
         "DictionaryPopupUnknownErrorMessage",
         "Unknown error");
 
-    private async Task HideMiningToastAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await Task.Delay(TimeSpan.FromMilliseconds(2200), cancellationToken);
-            _contentWebView.DispatcherQueue.TryEnqueue(() =>
-            {
-                if (!cancellationToken.IsCancellationRequested)
-                    _miningToast.IsOpen = false;
-            });
-        }
-        catch (OperationCanceledException)
-        {
-        }
-    }
-
     public void Dispose()
     {
         CancelOpacityAnimation();
-        ResetMiningToast();
+        ResetMiningFeedback();
         _duplicateCheckBatchCts.Cancel();
         _duplicateCheckBatchCts.Dispose();
         CancelPrefetch();

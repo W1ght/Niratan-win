@@ -21,7 +21,6 @@ public sealed class MiningContextSelectionDialog : ContentDialog
     private readonly Button _addPreviousButton;
     private readonly Button _removeNextButton;
     private readonly Button _addNextButton;
-    private readonly InfoBar _resultInfoBar = new() { IsOpen = false, IsClosable = false };
     private int _lowerBound;
     private int _upperBound;
     private bool _isSubmitting;
@@ -95,7 +94,6 @@ public sealed class MiningContextSelectionDialog : ContentDialog
                 _summary,
                 scrollViewer,
                 controls,
-                _resultInfoBar,
             },
         };
 
@@ -246,7 +244,6 @@ public sealed class MiningContextSelectionDialog : ContentDialog
         args.Cancel = true;
         var deferral = args.GetDeferral();
         _isSubmitting = true;
-        _resultInfoBar.IsOpen = false;
         Refresh();
         try
         {
@@ -257,14 +254,6 @@ public sealed class MiningContextSelectionDialog : ContentDialog
                 return;
             }
 
-            _resultInfoBar.Title = result.Status == AnkiMiningStatus.Duplicate
-                ? "Duplicate Found"
-                : "Add Failed";
-            _resultInfoBar.Message = result.Message;
-            _resultInfoBar.Severity = result.Status == AnkiMiningStatus.Duplicate
-                ? InfoBarSeverity.Warning
-                : InfoBarSeverity.Error;
-            _resultInfoBar.IsOpen = true;
         }
         finally
         {

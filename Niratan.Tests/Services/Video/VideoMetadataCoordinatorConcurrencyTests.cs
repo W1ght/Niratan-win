@@ -164,6 +164,90 @@ public sealed class VideoMetadataCoordinatorConcurrencyTests
     }
 
     [Fact]
+    public async Task GetTaskHistory_MapsPersistedCountersAndMarksOrphanedJobsInterrupted()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var sourceId = Guid.NewGuid();
+        var jobId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        var job = new VideoCatalogJobSnapshot(
+            jobId, sourceId, VideoCatalogJobKind.MetadataRefresh,
+            VideoCatalogJobState.Running, 0, 2, 5, "partial error",
+            now.AddMinutes(-2), now, 1, 1);
+        var snapshot = VideoCatalogSnapshot.Empty() with { Jobs = [job] };
+        var repository = new Mock<IVideoCatalogRepository>();
+        repository.Setup(item => item.GetSnapshotAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => snapshot);
+        repository.Setup(item => item.UpdateMetadataRefreshAsync(
+                jobId, VideoCatalogJobState.Interrupted, 2,
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Callback<Guid, VideoCatalogJobState, int, string?, CancellationToken>(
+                (_, state, processed, error, _) =>
+                {
+                    snapshot = snapshot with
+                    {
+                        Jobs = [job with
+                        {
+                            State = state,
+                            ProcessedCount = processed,
+                            Error = error,
+                            UpdatedAt = DateTimeOffset.UtcNow,
+                        }],
+                    };
+                })
+            .Returns(Task.CompletedTask);
+        var coordinator = new VideoMetadataCoordinator(
+            repository.Object, Mock.Of<IVideoMetadataMatcher>(), [], [],
+            NullLogger<VideoMetadataCoordinator>.Instance);
+
+        var history = await coordinator.GetTaskHistoryAsync(ct: ct);
+
+        history.Should().ContainSingle();
+        history[0].State.Should().Be(VideoCatalogJobState.Interrupted);
+        history[0].ProcessedCount.Should().Be(2);
+        history[0].MatchedCount.Should().Be(1);
+        history[0].NeedsReviewCount.Should().Be(1);
+        history[0].Error.Should().Contain("stopped");
+        repository.Verify(item => item.UpdateMetadataRefreshAsync(
+            jobId, VideoCatalogJobState.Interrupted, 2,
+            It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CancelTask_UpdatesPersistedQueuedTaskWithoutTouchingSourceMedia()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var sourceId = Guid.NewGuid();
+        var jobId = Guid.NewGuid();
+        var job = new VideoCatalogJobSnapshot(
+            jobId, sourceId, VideoCatalogJobKind.MetadataRefresh,
+            VideoCatalogJobState.Queued, 0, 1, 2, null,
+            DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow,
+            1, 0, 0);
+        var repository = new Mock<IVideoCatalogRepository>();
+        repository.Setup(item => item.GetSnapshotAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(VideoCatalogSnapshot.Empty() with { Jobs = [job] });
+        repository.Setup(item => item.UpdateMetadataRefreshAsync(
+                jobId, VideoCatalogJobState.Cancelled, 1,
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        repository.Setup(item => item.UpdateMetadataRefreshCountsAsync(
+                jobId, 1, 0, It.IsAny<CancellationToken>(), 0))
+            .Returns(Task.CompletedTask);
+        var coordinator = new VideoMetadataCoordinator(
+            repository.Object, Mock.Of<IVideoMetadataMatcher>(), [], [],
+            NullLogger<VideoMetadataCoordinator>.Instance);
+
+        await coordinator.CancelTaskAsync(jobId, ct);
+
+        repository.Verify(item => item.UpdateMetadataRefreshAsync(
+            jobId, VideoCatalogJobState.Cancelled, 1,
+            It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+        repository.Verify(item => item.UpdateMetadataRefreshCountsAsync(
+            jobId, 1, 0, It.IsAny<CancellationToken>(), 0), Times.Once);
+    }
+
+    [Fact]
     public async Task EpisodeRefresh_SearchesWithSeriesTitleAndKeepsEpisodeEvidence()
     {
         var ct = TestContext.Current.CancellationToken;

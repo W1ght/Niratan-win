@@ -54,6 +54,9 @@ public static class AppDataHelper
     public static string GetMangaDataPath() =>
         EnsureDirectory(Path.Combine(GetDataPath(), "Manga"));
 
+    public static string GetGameDataPath() =>
+        EnsureDirectory(Path.Combine(GetDataPath(), "Games"));
+
     public static string GetMangaCachePath() =>
         EnsureDirectory(Path.Combine(GetMangaDataPath(), "Cache"));
 

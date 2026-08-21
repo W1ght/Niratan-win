@@ -27,21 +27,19 @@ public sealed partial class VideoLibraryPage : Page
         base.OnNavigatedTo(e);
         await ViewModel.InitializeAsync();
         SetSelectedNavigationItem(ViewModel.SelectedLibraryView);
+        if (ViewModel.IsDiscoverView)
+            ShowDiscoverPage();
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)
     {
+        if (DiscoverPageHostFrame.Content is DiscoverPage discoverPage)
+            discoverPage.ViewModel.OnNavigatedFrom();
         base.OnNavigatedFrom(e);
         ViewModel.OnNavigatedFrom();
     }
 
     private void GridView_ItemClick(object sender, ItemClickEventArgs e)
-    {
-        if (e.ClickedItem is VideoItemViewModel videoItem)
-            ViewModel.OpenVideoCommand.Execute(videoItem);
-    }
-
-    private void ListView_ItemClick(object sender, ItemClickEventArgs e)
     {
         if (e.ClickedItem is VideoItemViewModel videoItem)
             ViewModel.OpenVideoCommand.Execute(videoItem);
@@ -53,7 +51,7 @@ public sealed partial class VideoLibraryPage : Page
             ViewModel.OpenVideoCommand.Execute(videoItem);
     }
 
-    private void VideoLibrarySecondaryNavigationView_ItemInvoked(
+    private void VideoLibraryTopNavigationView_ItemInvoked(
         NavigationView sender,
         NavigationViewItemInvokedEventArgs args)
     {
@@ -61,14 +59,28 @@ public sealed partial class VideoLibraryPage : Page
             return;
 
         ViewModel.SelectLibraryViewCommand.Execute(viewName);
-        SetSelectedNavigationItem(ViewModel.SelectedLibraryView);
+        if (ViewModel.IsDiscoverView)
+            ShowDiscoverPage();
     }
 
-    private void CreateSmartCollectionButton_Click(object sender, RoutedEventArgs e)
+    private void ShowDiscoverPage()
     {
-        ViewModel.BeginCreateSmartCollectionCommand.Execute(null);
-        CreateSmartCollectionDialog.XamlRoot = XamlRoot;
-        _ = CreateSmartCollectionDialog.ShowAsync();
+        if (DiscoverPageHostFrame.Content is DiscoverPage)
+            return;
+
+        DiscoverPageHostFrame.Navigate(typeof(DiscoverPage), true);
+    }
+
+    private void SetSelectedNavigationItem(VideoLibraryView view)
+    {
+        VideoLibrarySecondaryNavigationView.SelectedItem = view switch
+        {
+            VideoLibraryView.Discover => VideoLibraryDiscoverNavItem,
+            VideoLibraryView.Series => VideoLibrarySeriesNavItem,
+            VideoLibraryView.Sources => VideoLibrarySourcesNavItem,
+            VideoLibraryView.Home => VideoLibraryHomeNavItem,
+            _ => VideoLibraryAllVideosNavItem,
+        };
     }
 
     private void EditSmartCollectionMenuItem_Click(object sender, RoutedEventArgs e)
@@ -104,12 +116,6 @@ public sealed partial class VideoLibraryPage : Page
         await ViewModel.OpenResolvedYouTubeAsync(result.Value!);
     }
 
-    private async void ImportNyaaResourcesButton_Click(object sender, RoutedEventArgs e)
-    {
-        await NyaaImportDialog.ShowAsync(XamlRoot);
-        await ViewModel.InitializeAsync();
-    }
-
     private void CreateSmartCollectionSecondaryButton_Click(object sender, RoutedEventArgs e)
     {
         CreateSmartCollectionDialog.Hide();
@@ -120,26 +126,4 @@ public sealed partial class VideoLibraryPage : Page
         CreateSmartCollectionDialog.Hide();
     }
 
-    private void SetSelectedNavigationItem(VideoLibraryView view)
-    {
-        VideoLibrarySecondaryNavigationView.SelectedItem = view switch
-        {
-            VideoLibraryView.Home => VideoLibraryHomeNavItem,
-            VideoLibraryView.Movies => VideoLibraryMoviesNavItem,
-            VideoLibraryView.Anime => VideoLibraryAnimeNavItem,
-            VideoLibraryView.ContinueWatching => VideoLibraryContinueWatchingNavItem,
-            VideoLibraryView.Watched => VideoLibraryHomeNavItem,
-            VideoLibraryView.Unwatched => VideoLibraryHomeNavItem,
-            VideoLibraryView.Finished => VideoLibraryHomeNavItem,
-            VideoLibraryView.Recent => VideoLibraryHomeNavItem,
-            VideoLibraryView.NeedsReview => VideoLibraryNeedsReviewNavItem,
-            VideoLibraryView.Unorganized => VideoLibraryUnorganizedNavItem,
-            VideoLibraryView.Favorites => VideoLibraryFavoritesNavItem,
-            VideoLibraryView.Series => VideoLibrarySeriesNavItem,
-            VideoLibraryView.Folders => VideoLibraryHomeNavItem,
-            VideoLibraryView.Collections => VideoLibraryCollectionsNavItem,
-            VideoLibraryView.Sources => VideoLibrarySourcesNavItem,
-            _ => VideoLibraryHomeNavItem,
-        };
-    }
 }

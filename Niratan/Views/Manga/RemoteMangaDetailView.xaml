@@ -6,6 +6,7 @@
              xmlns:converters="using:Niratan.Helpers.UI.Converters">
     <UserControl.Resources>
         <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <converters:BooleanNegationConverter x:Key="BooleanNegationConverter" />
         <DataTemplate x:Key="RemoteMangaChapterTemplate"
                       x:DataType="components:RemoteMangaChapterItemViewModel">
             <Button MinHeight="54"
@@ -36,6 +37,20 @@
                 </Grid>
             </Button>
         </DataTemplate>
+
+        <DataTemplate x:Key="RemoteMangaExtensionTemplate"
+                      x:DataType="components:RemoteMangaExtensionOptionViewModel">
+            <StackPanel Padding="4,2"
+                        AutomationProperties.AutomationId="{x:Bind AutomationId, Mode=OneTime}"
+                        Spacing="2">
+                <TextBlock FontWeight="SemiBold"
+                           Text="{x:Bind Name, Mode=OneTime}"
+                           TextTrimming="CharacterEllipsis" />
+                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="{x:Bind Metadata, Mode=OneTime}"
+                           TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+        </DataTemplate>
     </UserControl.Resources>
 
     <Grid Background="#99000000"
@@ -64,6 +79,9 @@
                                    TextTrimming="CharacterEllipsis" />
                         <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    Text="{Binding SelectedRemoteMangaDetails.Provider, Mode=OneWay}" />
+                        <TextBlock Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                   Text="{Binding SelectedRemoteMangaDetails.Metadata, Mode=OneWay}"
+                                   Visibility="{Binding SelectedRemoteMangaDetails.HasMetadata, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
                     </StackPanel>
                     <Button x:Uid="MangaRemoteDetailsCloseButton"
                             Grid.Column="1"
@@ -105,6 +123,14 @@
                                                   Visibility="{Binding SelectedRemoteMangaDetails.HasCover, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert, Mode=OneWay}" />
                                     </Grid>
                                 </Border>
+
+                                <StackPanel Visibility="{Binding SelectedRemoteMangaDetails.HasOriginalTitle, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                                    <TextBlock x:Uid="MangaRemoteDetailsOriginalTitleLabel"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               Text="Original title" />
+                                    <TextBlock Text="{Binding SelectedRemoteMangaDetails.OriginalTitle, Mode=OneWay}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
 
                                 <StackPanel Visibility="{Binding SelectedRemoteMangaDetails.HasAuthor, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
                                     <TextBlock x:Uid="MangaRemoteDetailsAuthorLabel"
@@ -161,18 +187,34 @@
 
                     <Grid Grid.Column="2"
                           Padding="20"
-                          RowDefinitions="Auto,*">
+                          RowDefinitions="Auto,Auto,*">
                         <TextBlock x:Uid="MangaRemoteDetailsChaptersHeader"
                                    Margin="4,0,0,12"
                                    FontSize="18"
                                    FontWeight="SemiBold"
                                    Text="Chapters" />
-                        <ListView Grid.Row="1"
+                        <StackPanel Grid.Row="1"
+                                    Margin="0,0,0,12"
+                                    Visibility="{Binding SelectedRemoteMangaDetails.HasExtensionOptions, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                            <ComboBox x:Uid="MangaRemoteDetailsExtensionsComboBox"
+                                      MinWidth="280"
+                                      MaxWidth="480"
+                                      HorizontalAlignment="Stretch"
+                                      AutomationProperties.AutomationId="MangaRemoteDetailsExtensions"
+                                      Header="Open with extension"
+                                      IsEnabled="{Binding SelectedRemoteMangaDetails.IsActionBusy, Converter={StaticResource BooleanNegationConverter}, Mode=OneWay}"
+                                      ItemTemplate="{StaticResource RemoteMangaExtensionTemplate}"
+                                      ItemsSource="{Binding SelectedRemoteMangaDetails.ExtensionOptions, Mode=OneWay}"
+                                      SelectedValue="{Binding SelectedRemoteMangaDetails.SelectedExtensionId, Mode=OneWay}"
+                                      SelectedValuePath="Id"
+                                      SelectionChanged="RemoteMangaExtensionsComboBox_SelectionChanged" />
+                        </StackPanel>
+                        <ListView Grid.Row="2"
                                   AutomationProperties.AutomationId="MangaRemoteDetailsChaptersList"
                                   ItemTemplate="{StaticResource RemoteMangaChapterTemplate}"
                                   ItemsSource="{Binding SelectedRemoteMangaDetails.Chapters, Mode=OneWay}"
                                   SelectionMode="None" />
-                        <StackPanel Grid.Row="1"
+                        <StackPanel Grid.Row="2"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
                                     Spacing="10"
@@ -184,7 +226,7 @@
                                        Text="Loading manga details…" />
                         </StackPanel>
                         <TextBlock x:Uid="MangaRemoteDetailsNoChaptersText"
-                                   Grid.Row="1"
+                                   Grid.Row="2"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"

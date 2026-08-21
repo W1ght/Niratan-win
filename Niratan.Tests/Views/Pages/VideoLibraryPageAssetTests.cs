@@ -21,41 +21,49 @@ public class VideoLibraryPageAssetTests
         var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml"));
 
         xaml.Should().Contain("x:Name=\"VideoLibrarySecondaryNavigationView\"");
+        xaml.Should().Contain("PaneDisplayMode=\"Top\"");
         xaml.Should().Contain("Padding=\"20,14,28,16\"");
         xaml.Should().NotContain("VideoLibraryTitleBarBackground");
         xaml.Should().NotContain("Margin=\"0,-32,0,0\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryHomeNavItem\"");
-        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryMoviesNavItem\"");
-        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryAnimeNavItem\"");
-        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryContinueWatchingNavItem\"");
-        xaml.Should().NotContain("AutomationProperties.AutomationId=\"VideoLibraryWatchedNavItem\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryDiscoverNavItem\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibrarySeriesNavItem\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryAllVideosNavItem\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibrarySourcesNavItem\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibrarySearchBox\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibrarySortComboBox\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"ScanVideoFolderButton\"");
-        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryLayoutSegment\"");
-        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryListView\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"AddYouTubeLinkButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"RefreshVideoSourcesButton\"");
+        xaml.Should().Contain("ViewModel.IsLibraryHeaderVisible");
+        xaml.Should().Contain("ViewModel.IsSourcesView");
+        xaml.Should().Contain("ViewModel.IsMetadataTaskPanelVisible");
+        xaml.Should().Contain("DefaultLabelPosition=\"Right\"");
+        xaml.Should().NotContain("AutomationProperties.AutomationId=\"VideoLibraryLayoutSegment\"");
+        xaml.Should().NotContain("AutomationProperties.AutomationId=\"VideoLibraryListView\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoGridView\"");
-        xaml.Should().Contain("x:Key=\"VideoListItemTemplate\"");
         xaml.Should().Contain("x:Key=\"VideoPosterItemTemplate\"");
         xaml.Should().Contain("x:Name=\"VideoPosterTitleText\"");
         xaml.Should().Contain("MaxLines=\"2\"");
-        xaml.Should().Contain("ItemHeight=\"260\"");
-        xaml.Should().Contain("AutomationProperties.AutomationId=\"CreateSmartCollectionButton\"");
+        xaml.Should().Contain("ItemHeight=\"320\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryDiscoverPage\"");
         xaml.Should().Contain("Command=\"{x:Bind ViewModel.CreateSmartCollectionCommand}\"");
         xaml.Should().Contain("ItemsSource=\"{x:Bind ViewModel.SmartRuleDrafts");
         xaml.Should().Contain("Command=\"{x:Bind ViewModel.AddSmartRuleCommand}\"");
-        xaml.Should().Contain("AutomationProperties.AutomationId=\"RefreshVideoSourcesButton\"");
-        xaml.Should().Contain("AutomationProperties.AutomationId=\"ManageVideoSourcesButton\"");
+        xaml.Should().NotContain("AutomationProperties.AutomationId=\"ManageVideoSourcesButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryScrapeAllButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryMetadataTasksButton\"");
+        xaml.Should().NotContain("AutomationProperties.AutomationId=\"ImportVideoButton\"");
+        xaml.Should().NotContain("AutomationProperties.AutomationId=\"ImportNyaaResourcesButton\"");
+        xaml.Should().NotContain("AutomationProperties.AutomationId=\"CreateSmartCollectionButton\"");
+        xaml.Should().Contain("x:Key=\"VideoMetadataTaskTemplate\"");
+        xaml.Should().Contain("ViewModel.CancelMetadataTaskCommand");
+        xaml.Should().Contain("ViewModel.RetryMetadataTaskCommand");
         xaml.Should().Contain("Command=\"{x:Bind ViewModel.MarkSelectedWatchedCommand}\"");
         xaml.Should().Contain("Command=\"{x:Bind ViewModel.SaveVideoDetailsCommand}\"");
-        xaml.Should().NotContain("VideoLibraryUnwatchedNavItem");
-        xaml.Should().NotContain("VideoLibraryFinishedNavItem");
-        xaml.Should().NotContain("VideoLibraryRecentNavItem");
-        xaml.Should().Contain("VideoLibraryNeedsReviewNavItem");
-        xaml.Should().Contain("VideoLibraryFavoritesNavItem");
-        xaml.Should().Contain("VideoLibrarySeriesNavItem");
-        xaml.Should().Contain("VideoLibraryUnorganizedNavItem");
-        xaml.Should().Contain("VideoLibrarySourcesNavItem");
+        xaml.Should().NotContain("VideoLibraryNeedsReviewNavItem");
+        xaml.Should().NotContain("VideoLibraryFavoritesNavItem");
+        xaml.Should().NotContain("VideoLibraryUnorganizedNavItem");
         xaml.Should().Contain("Command=\"{x:Bind ViewModel.RefreshSelectedMetadataCommand}\"");
         xaml.Should().Contain("ViewModel.ActiveScanText, Mode=OneWay");
         xaml.Should().Contain("ViewModel.MetadataRefreshText, Mode=OneWay");
@@ -114,21 +122,21 @@ public class VideoLibraryPageAssetTests
         var artwork = button.Descendants()
             .Single(element =>
                 element.Name.LocalName == "Border"
-                && (string?)element.Attribute("Height") == "124");
+                && (string?)element.Attribute("Height") == "169");
         var title = button.Descendants()
             .Single(element =>
                 element.Name.LocalName == "TextBlock"
                 && (string?)element.Attribute(x + "Name") == "VideoPosterTitleText");
 
-        card.Attribute("Width")?.Value.Should().Be("220");
-        card.Attribute("MaxWidth")?.Value.Should().Be("220");
+        card.Attribute("Width")?.Value.Should().Be("300");
+        card.Attribute("MaxWidth")?.Value.Should().Be("300");
         card.Attribute("Margin")?.Value.Should().Be("0,0,12,0");
-        button.Attribute("Width")?.Value.Should().Be("220");
-        button.Attribute("MaxWidth")?.Value.Should().Be("220");
-        artwork.Attribute("Width")?.Value.Should().Be("220");
-        artwork.Attribute("Height")?.Value.Should().Be("124");
-        title.Attribute("Width")?.Value.Should().Be("220");
-        title.Attribute("MaxWidth")?.Value.Should().Be("220");
+        button.Attribute("Width")?.Value.Should().Be("300");
+        button.Attribute("MaxWidth")?.Value.Should().Be("300");
+        artwork.Attribute("Width")?.Value.Should().Be("300");
+        artwork.Attribute("Height")?.Value.Should().Be("169");
+        title.Attribute("Width")?.Value.Should().Be("300");
+        title.Attribute("MaxWidth")?.Value.Should().Be("300");
         title.Attribute("MaxLines")?.Value.Should().Be("2");
 
         var homeItems = document.Descendants()
@@ -139,6 +147,26 @@ public class VideoLibraryPageAssetTests
         homeItems.Should().HaveCount(3);
         homeItems.Should().OnlyContain(element =>
             (string?)element.Attribute("ItemTemplate") == "{StaticResource VideoPosterItemTemplate}");
+    }
+
+    [Fact]
+    public void VideoLibraryPage_DoesNotReserveHiddenDetailsColumn()
+    {
+        var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml"));
+        var document = XDocument.Parse(xaml);
+
+        var browseGrid = document.Descendants()
+            .Single(element =>
+                element.Name.LocalName == "Grid"
+                && (string?)element.Attribute("Margin") == "20,0,28,0");
+        var details = browseGrid.Elements()
+            .Single(element =>
+                element.Name.LocalName == "Border"
+                && (string?)element.Attribute("Grid.Column") == "1");
+
+        browseGrid.Attribute("ColumnDefinitions")?.Value.Should().Be("*,Auto");
+        details.Attribute("Width")?.Value.Should().Be("340");
+        details.Attribute("Visibility")?.Value.Should().Contain("HasSelectedVideo");
     }
 
     [Fact]
@@ -155,7 +183,9 @@ public class VideoLibraryPageAssetTests
 
         var commandBar = searchBox.Parent!.Elements(presentation + "CommandBar").Single();
         commandBar.Attribute("Grid.Row")?.Value.Should().Be("1");
-        commandBar.Attribute("DefaultLabelPosition")?.Value.Should().Be("Collapsed");
+        commandBar.Attribute("DefaultLabelPosition")?.Value.Should().Be("Right");
+        commandBar.Attribute("Visibility")?.Value.Should().Contain("IsSourcesView");
+        searchBox.Parent!.Attribute("Visibility")?.Value.Should().Contain("IsLibraryHeaderVisible");
         searchBox.Parent!.Attribute("RowDefinitions")?.Value.Should().Be("Auto,Auto");
     }
 
@@ -174,6 +204,18 @@ public class VideoLibraryPageAssetTests
     }
 
     [Fact]
+    public void VideoLibraryPage_UsesCompactSourceScrapeActionsWithCollapsedSettings()
+    {
+        var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml"));
+
+        xaml.Should().Contain("Text=\"{x:Bind ScrapeSummaryText, Mode=OneWay}\"");
+        xaml.Should().Contain("x:Uid=\"VideoLibrarySourceSettingsButton\"");
+        xaml.Should().Contain("Command=\"{Binding ViewModel.ToggleSourceSettingsCommand, ElementName=ThisPage}\"");
+        xaml.Should().Contain("IsSourceSettingsExpanded");
+        xaml.Should().Contain("OverflowButtonVisibility=\"Collapsed\"");
+    }
+
+    [Fact]
     public void VideoLibraryPage_HomeMatchesMediaHubSectionsWithoutDuplicatingBrowseList()
     {
         var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml"));
@@ -182,9 +224,29 @@ public class VideoLibraryPageAssetTests
         xaml.Should().Contain("x:Uid=\"VideoLibraryHomeMyMediaHeading\"");
         xaml.Should().Contain("ViewModel.HomeContinueWatching");
         xaml.Should().Contain("ViewModel.HomeNextEpisodes");
+        xaml.Should().Contain("VideoLibraryEpisodeSlots");
+        xaml.Should().Contain("DownloadEpisodeCommand");
+        xaml.Should().Contain("IsLoadingSeriesEpisodes");
         xaml.Should().Contain("ViewModel.HomeRecentlyAdded");
         xaml.Should().Contain("Visibility=\"{x:Bind ViewModel.IsLibraryBrowseView");
         xaml.Should().Contain("HorizontalScrollMode=\"Enabled\"");
+
+        var document = XDocument.Parse(xaml);
+        var importCommandBar = document.Descendants()
+            .Where(element => element.Name.LocalName == "CommandBar")
+            .Single(element => element.Descendants().Any(button =>
+                (string?)button.Attribute("AutomationProperties.AutomationId") == "RefreshVideoSourcesButton"));
+        var importButtonIds = importCommandBar.Descendants()
+            .Where(element => element.Name.LocalName == "AppBarButton")
+            .Select(element => (string?)element.Attribute("AutomationProperties.AutomationId"))
+            .Where(id => id != null)
+            .ToArray();
+        importButtonIds.Should().Equal(
+            "ScanVideoFolderButton",
+            "AddYouTubeLinkButton",
+            "RefreshVideoSourcesButton",
+            "VideoLibraryScrapeAllButton",
+            "VideoLibraryMetadataTasksButton");
     }
 
     [Fact]
@@ -199,24 +261,18 @@ public class VideoLibraryPageAssetTests
         foreach (var uid in new[]
         {
             "VideoLibrarySecondaryNavigationView",
-            "VideoLibrarySectionHeader",
-            "VideoLibraryHomeNavItem",
-            "VideoLibraryMoviesNavItem",
-            "VideoLibraryAnimeNavItem",
-            "VideoLibraryContinueWatchingNavItem",
-            "VideoLibraryNeedsReviewNavItem",
-            "VideoLibraryFavoritesNavItem",
-            "VideoLibrarySeriesNavItem",
-            "VideoLibraryCollectionsNavItem",
-            "VideoLibraryUnorganizedNavItem",
-            "VideoLibrarySourcesNavItem",
-            "VideoLibraryLayoutList",
-            "VideoLibraryLayoutPosters",
+            "VideoLibraryTopHomeNavItem",
+            "VideoLibraryTopDiscoverNavItem",
+            "VideoLibraryTopSeriesNavItem",
+            "VideoLibraryTopAllVideosNavItem",
+            "VideoLibraryTopImportNavItem",
             "VideoLibrarySearchBox",
             "VideoLibrarySortComboBox",
             "ScanVideoFolderButton",
-            "ImportVideoButton",
-            "CreateSmartCollectionButton",
+            "AddYouTubeLinkButton",
+            "RefreshVideoSourcesButton",
+            "VideoLibraryScrapeAllButton",
+            "VideoLibraryMetadataTasksButton",
             "VideoLibrarySmartCollectionName",
             "VideoLibraryPlayMenuItem",
             "VideoLibraryPlayFromBeginningMenuItem",
@@ -239,23 +295,18 @@ public class VideoLibraryPageAssetTests
         foreach (var key in new[]
         {
             "VideoLibrarySecondaryNavigationView.PaneTitle",
-            "VideoLibraryHomeNavItem.Content",
-            "VideoLibraryMoviesNavItem.Content",
-            "VideoLibraryAnimeNavItem.Content",
-            "VideoLibraryContinueWatchingNavItem.Content",
-            "VideoLibraryNeedsReviewNavItem.Content",
-            "VideoLibraryFavoritesNavItem.Content",
-            "VideoLibrarySeriesNavItem.Content",
-            "VideoLibraryCollectionsNavItem.Content",
-            "VideoLibraryUnorganizedNavItem.Content",
-            "VideoLibrarySourcesNavItem.Content",
-            "VideoLibraryLayoutList",
-            "VideoLibraryLayoutPosters",
+            "VideoLibraryTopHomeNavItem.Content",
+            "VideoLibraryTopDiscoverNavItem.Content",
+            "VideoLibraryTopSeriesNavItem.Content",
+            "VideoLibraryTopAllVideosNavItem.Content",
+            "VideoLibraryTopImportNavItem.Content",
             "VideoLibrarySearchBox.PlaceholderText",
             "VideoLibrarySortComboBox.AutomationProperties.Name",
             "ScanVideoFolderButton.Label",
-            "ImportVideoButton.Label",
-            "CreateSmartCollectionButton.Label",
+            "AddYouTubeLinkButton.Label",
+            "RefreshVideoSourcesButton.Label",
+            "VideoLibraryScrapeAllButton.Label",
+            "VideoLibraryMetadataTasksButton.Label",
             "VideoLibrarySmartCollectionName.PlaceholderText",
             "VideoLibrarySmartCollectionRuleField.Header",
             "VideoLibrarySmartRuleFieldFileName",
@@ -289,6 +340,7 @@ public class VideoLibraryPageAssetTests
             "VideoLibrarySortProgress",
             "VideoLibrarySortFolder",
             "VideoLibraryViewAll",
+            "VideoLibraryViewDiscover",
             "VideoLibraryViewContinueWatching",
             "VideoLibraryViewFinished",
             "VideoLibraryViewFolders",

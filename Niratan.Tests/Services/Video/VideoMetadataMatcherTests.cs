@@ -98,6 +98,46 @@ public sealed class VideoMetadataMatcherTests
     }
 
     [Fact]
+    public void AnimeSeasonScopedMatch_PrefersTmdbAcrossSeasonReleaseYears()
+    {
+        var aniList = Candidate(
+            "anilist", "146065", "Mushoku Tensei: Jobless Reincarnation Season 2", 2023, null,
+            season: 2);
+        var tmdb = Candidate(
+            "tmdb", "94796", "Mushoku Tensei: Jobless Reincarnation", 2021, null,
+            VideoMetadataMediaKind.Series, season: 2);
+        var accepted = new VideoMetadataMatchScore(
+            aniList, 1, 1, false, "joint", true, false);
+        var tmdbScore = new VideoMetadataMatchScore(
+            tmdb, 0.82, 0.88, false, "season-scoped title", false, false);
+
+        var selected = VideoMetadataCoordinator.SelectPrimaryDetailsCandidate(
+            VideoMetadataMediaKind.Anime, accepted, [accepted, tmdbScore]);
+
+        selected.ProviderId.Should().Be("tmdb");
+    }
+
+    [Fact]
+    public void SeasonScopedSeriesMatch_AlsoPrefersTmdbAcrossSeasonReleaseYears()
+    {
+        var aniList = Candidate(
+            "anilist", "146065", "Mushoku Tensei: Jobless Reincarnation Season 2", 2023, null,
+            season: 2);
+        var tmdb = Candidate(
+            "tmdb", "94796", "Mushoku Tensei: Jobless Reincarnation", 2021, null,
+            VideoMetadataMediaKind.Series, season: 2);
+        var accepted = new VideoMetadataMatchScore(
+            aniList, 1, 1, false, "joint", true, false);
+        var tmdbScore = new VideoMetadataMatchScore(
+            tmdb, 0.82, 0.88, false, "season-scoped title", false, false);
+
+        var selected = VideoMetadataCoordinator.SelectPrimaryDetailsCandidate(
+            VideoMetadataMediaKind.Series, accepted, [accepted, tmdbScore]);
+
+        selected.ProviderId.Should().Be("tmdb");
+    }
+
+    [Fact]
     public void AnimeJointMatch_FallsBackToAniListDetailsWhenTmdbIsUnavailable()
     {
         var aniDb = Candidate("anidb", "10972", "干物妹!うまるちゃん", 2015, null);
@@ -181,8 +221,9 @@ public sealed class VideoMetadataMatcherTests
         int? year,
         int? episode,
         VideoMetadataMediaKind kind = VideoMetadataMediaKind.Anime,
-        ImmutableArray<string> aliases = default) =>
-        new(provider, id, kind, title, null, year, episode.HasValue ? 1 : null, episode, null,
+        ImmutableArray<string> aliases = default,
+        int? season = null) =>
+        new(provider, id, kind, title, null, year, season ?? (episode.HasValue ? 1 : null), episode, null,
             aliases.IsDefault ? [title] : aliases,
             ImmutableDictionary<string, string>.Empty.Add(provider, id), null);
 }

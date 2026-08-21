@@ -102,6 +102,8 @@ public sealed class DictionaryPopupOverlay : IDisposable
     public event EventHandler? VisibleHostBoundsChanged;
     public event EventHandler<DictionaryPopupExternalChildRequest>? ExternalChildRequested;
     public event EventHandler? ExternalTapInsideRequested;
+    public event EventHandler<DictionaryPopupMiningFeedbackEventArgs>? MiningFeedbackRequested;
+    public event EventHandler? MiningFeedbackCleared;
 
     public bool IsVisible => _rootVisible;
 
@@ -903,8 +905,18 @@ public sealed class DictionaryPopupOverlay : IDisposable
     {
         var host = new DictionaryLookupPopup();
         host.SetInPlaceDialogHost(_inPlaceDialogHost);
+        host.MiningFeedbackRequested += OnMiningFeedbackRequested;
+        host.MiningFeedbackCleared += OnMiningFeedbackCleared;
         return host;
     }
+
+    private void OnMiningFeedbackRequested(
+        object? sender,
+        DictionaryPopupMiningFeedbackEventArgs e) =>
+        MiningFeedbackRequested?.Invoke(this, e);
+
+    private void OnMiningFeedbackCleared(object? sender, EventArgs e) =>
+        MiningFeedbackCleared?.Invoke(this, EventArgs.Empty);
 
     private DictionaryLookupPopup GetReusableChildHost()
     {
@@ -1417,6 +1429,22 @@ public sealed class DictionaryPopupOverlay : IDisposable
         VisibleHostBoundsChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    public Task<byte[]?> CaptureRootPreviewPngAsync(CancellationToken cancellationToken = default) =>
+        _rootWarm
+            ? _rootHost.CapturePreviewPngAsync(cancellationToken)
+            : Task.FromResult<byte[]?>(null);
+
+    public Task<bool> InjectRootLookupInputAsync(
+        uint kind,
+        double x,
+        double y,
+        int wheel,
+        uint keys,
+        CancellationToken cancellationToken = default) =>
+        _rootWarm
+            ? _rootHost.InjectLookupInputAsync(kind, x, y, wheel, keys, cancellationToken)
+            : Task.FromResult(false);
+
     public void SetRootReadyOpacity(double opacity)
     {
         _rootReadyOpacity = Math.Clamp(opacity, 0, 1);
@@ -1439,6 +1467,8 @@ public sealed class DictionaryPopupOverlay : IDisposable
             _rootHost.ContentCommitted -= OnRootContentCommitted;
             _rootHost.ContentCommitAborted -= OnRootContentCommitAborted;
             _rootHost.QueuedShowDropped -= OnRootShowDropped;
+            _rootHost.MiningFeedbackRequested -= OnMiningFeedbackRequested;
+            _rootHost.MiningFeedbackCleared -= OnMiningFeedbackCleared;
             if (_embeddedPanel != null)
                 _embeddedPanel.Children.Remove(_rootHost.VisualRoot);
             _rootHost.Dispose();
@@ -1452,6 +1482,8 @@ public sealed class DictionaryPopupOverlay : IDisposable
             pooledHost.DismissRequested -= OnPopupDismissRequested;
             pooledHost.ShortcutRequested -= OnPopupShortcutRequested;
             pooledHost.Scrolled -= OnChildScrolled;
+            pooledHost.MiningFeedbackRequested -= OnMiningFeedbackRequested;
+            pooledHost.MiningFeedbackCleared -= OnMiningFeedbackCleared;
             if (_canvas.Children.Contains(pooledHost.VisualRoot))
                 _canvas.Children.Remove(pooledHost.VisualRoot);
             pooledHost.Dispose();

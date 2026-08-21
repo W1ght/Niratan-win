@@ -65,12 +65,55 @@
         </Style>
     </Page.Resources>
 
-    <Grid Padding="0,32,0,0"
-          RowDefinitions="Auto,*">
-        <CommandBar Grid.Row="0"
-                    Margin="12,6,28,10"
-                    AutomationProperties.AutomationId="MangaLibraryCommandBar"
-                    DefaultLabelPosition="Right">
+    <Grid Padding="0,32,0,0">
+        <NavigationView x:Name="MangaLibraryNavigationView"
+                        AlwaysShowHeader="False"
+                        IsBackButtonVisible="Collapsed"
+                        IsPaneToggleButtonVisible="False"
+                        IsSettingsVisible="False"
+                        ItemInvoked="MangaLibraryNavigationView_ItemInvoked"
+                        PaneDisplayMode="Top"
+                        SelectionFollowsFocus="Disabled">
+            <NavigationView.Resources>
+                <Thickness x:Key="NavigationViewContentMargin">0</Thickness>
+                <Thickness x:Key="NavigationViewContentGridBorderThickness">1,0,0,0</Thickness>
+                <CornerRadius x:Key="NavigationViewContentGridCornerRadius">0</CornerRadius>
+            </NavigationView.Resources>
+
+            <NavigationView.MenuItems>
+                <NavigationViewItem x:Name="MangaLibraryHomeNavItem"
+                                    x:Uid="MangaLibraryTopHomeNavItem"
+                                    AutomationProperties.AutomationId="MangaLibraryHomeNavItem"
+                                    Content="Library"
+                                    Tag="Library" />
+                <NavigationViewItem x:Name="MangaLibraryDiscoverNavItem"
+                                    x:Uid="MangaLibraryTopDiscoverNavItem"
+                                    AutomationProperties.AutomationId="MangaLibraryDiscoverNavItem"
+                                    Content="Discover"
+                                    Tag="Discover" />
+                <NavigationViewItem x:Name="MangaLibrarySourcesNavItem"
+                                    x:Uid="MangaLibraryTopSourcesNavItem"
+                                    AutomationProperties.AutomationId="MangaLibrarySourcesNavItem"
+                                    Content="Manga sources"
+                                    Tag="Browse" />
+                <NavigationViewItem x:Name="MangaLibraryExtensionsNavItem"
+                                    x:Uid="MangaLibraryTopExtensionsNavItem"
+                                    AutomationProperties.AutomationId="MangaLibraryExtensionsNavItem"
+                                    Content="Manga extensions"
+                                    Tag="Extensions" />
+                <NavigationViewItem x:Name="MangaLibrarySettingsNavItem"
+                                    x:Uid="MangaLibraryTopSettingsNavItem"
+                                    AutomationProperties.AutomationId="MangaLibrarySettingsNavItem"
+                                    Content="Source settings"
+                                    Tag="Settings" />
+            </NavigationView.MenuItems>
+
+            <Grid RowDefinitions="Auto,*">
+                <CommandBar Grid.Row="0"
+                            Margin="12,6,28,10"
+                            AutomationProperties.AutomationId="MangaLibraryCommandBar"
+                            DefaultLabelPosition="Right"
+                            Visibility="{x:Bind ViewModel.IsLibrarySectionSelected, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
             <CommandBar.Content>
                 <StackPanel Orientation="Horizontal"
                             VerticalAlignment="Center"
@@ -128,10 +171,10 @@
                               Label="Import manga"
                               Visibility="{x:Bind ViewModel.ShowLocalLibraryActions, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
             </CommandBar.PrimaryCommands>
-        </CommandBar>
+                </CommandBar>
 
-        <Grid Grid.Row="1"
-              Visibility="{x:Bind ViewModel.IsLocalLibraryVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                <Grid Grid.Row="1"
+                      Visibility="{x:Bind ViewModel.IsLocalLibraryVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
             <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                           VerticalScrollBarVisibility="Auto">
                 <ItemsRepeater Margin="20,0,36,24"
@@ -160,10 +203,10 @@
                           VerticalAlignment="Center"
                           IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
                           Visibility="{x:Bind ViewModel.IsLoading, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
-        </Grid>
+                </Grid>
 
-        <Grid Grid.Row="1"
-              Visibility="{x:Bind ViewModel.IsOnlineLibraryVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                <Grid Grid.Row="1"
+                      Visibility="{x:Bind ViewModel.IsOnlineLibraryVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
             <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                           VerticalScrollBarVisibility="Auto">
                 <ItemsRepeater Margin="20,0,36,24"
@@ -206,9 +249,18 @@
                           VerticalAlignment="Center"
                           IsActive="{x:Bind ViewModel.IsOnlineLoading, Mode=OneWay}"
                           Visibility="{x:Bind ViewModel.IsOnlineLoading, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
-        </Grid>
+                </Grid>
 
-        <manga:RemoteMangaDetailView Grid.RowSpan="2"
-                                     ViewModel="{x:Bind ViewModel, Mode=OneWay}" />
+                <Frame x:Name="MangaDiscoverPageHostFrame"
+                       Grid.Row="1"
+                       AutomationProperties.AutomationId="MangaDiscoverPage"
+                       Navigated="MangaDiscoverPageHostFrame_Navigated"
+                       Padding="0"
+                       Visibility="{x:Bind ViewModel.IsMangaRemoteSurfaceVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+
+                <manga:RemoteMangaDetailView Grid.RowSpan="2"
+                                             ViewModel="{x:Bind ViewModel, Mode=OneWay}" />
+            </Grid>
+        </NavigationView>
     </Grid>
 </Page>

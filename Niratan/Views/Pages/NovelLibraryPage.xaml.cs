@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Navigation;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Niratan.Helpers;
+using Niratan.Services.UI;
 using Niratan.ViewModels.Components;
 using Niratan.ViewModels.Pages;
 using Niratan.Views.Dialogs;
@@ -83,10 +84,9 @@ public sealed partial class NovelLibraryPage : Page
         await ZLibraryDialog.ShowAsync(XamlRoot);
     }
 
-    private async void NyaaButton_Click(object sender, RoutedEventArgs e)
+    private void NyaaButton_Click(object sender, RoutedEventArgs e)
     {
-        await NyaaImportDialog.ShowAsync(XamlRoot);
-        await ViewModel.InitializeAsync();
+        App.GetService<INavigationService>().Navigate(typeof(DownloadsPage));
     }
 
     private async void BulkMoveNovelButton_Click(object sender, RoutedEventArgs e)

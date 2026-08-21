@@ -164,6 +164,52 @@ public class VideoLibraryPageViewModelTests
     }
 
     [Fact]
+    public async Task SeriesCards_MergeScrapedSeasonNodesBySharedIdentity()
+    {
+        var mainSeriesId = Guid.NewGuid();
+        var seasonOnlySeriesId = Guid.NewGuid();
+        var mainEpisode = SeriesEpisode("season-2-episode-1", mainSeriesId, Guid.NewGuid(), 2, 1);
+        mainEpisode.CatalogSeriesTitle = "Mushoku Tensei Isekai Ittara Honki Dasu";
+        mainEpisode.MatchCandidates =
+        [
+            new VideoMatchCandidateSnapshot(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                "bangumi",
+                "501963",
+                "無職転生Ⅲ ～異世界行ったら本気だす～",
+                2026,
+                0.166,
+                0.088,
+                "scraped title",
+                false,
+                DateTimeOffset.UtcNow),
+        ];
+        var seasonOnlyEpisode = SeriesEpisode(
+            "season-3-episode-8",
+            seasonOnlySeriesId,
+            Guid.NewGuid(),
+            3,
+            8);
+        seasonOnlyEpisode.CatalogSeriesTitle = "無職転生Ⅲ ～異世界行ったら本気だす～";
+        seasonOnlyEpisode.ExternalIds = new Dictionary<string, string>
+        {
+            ["bangumi"] = "501963",
+        };
+
+        var sut = CreateSut(videoService: new RecordingVideoLibraryService
+        {
+            Videos = [mainEpisode, seasonOnlyEpisode],
+        });
+
+        await sut.InitializeAsync();
+
+        sut.SeriesCards.Should().ContainSingle();
+        sut.SeriesCards[0].RegularEpisodes.Select(item => item.Video.Id)
+            .Should().Equal("season-2-episode-1", "season-3-episode-8");
+    }
+
+    [Fact]
     public void NextUp_ExcludesSpecialFeaturesAndCollapsesAssetVersions()
     {
         var seriesId = Guid.NewGuid();
@@ -246,6 +292,33 @@ public class VideoLibraryPageViewModelTests
 
         sut.IsPosterLayout.Should().BeTrue();
         sut.IsListLayout.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task LibraryHeader_IsVisibleOnlyForSearchOrImportViews()
+    {
+        var sut = CreateSut();
+        await sut.InitializeAsync();
+
+        sut.IsHomeView.Should().BeTrue();
+        sut.IsLibraryHeaderVisible.Should().BeFalse();
+
+        sut.SelectLibraryViewCommand.Execute(nameof(VideoLibraryView.All));
+        sut.IsCatalogSearchVisible.Should().BeTrue();
+        sut.IsLibraryHeaderVisible.Should().BeTrue();
+
+        sut.SelectLibraryViewCommand.Execute(nameof(VideoLibraryView.Sources));
+        sut.IsCatalogSearchVisible.Should().BeFalse();
+        sut.IsSourcesView.Should().BeTrue();
+        sut.IsLibraryHeaderVisible.Should().BeTrue();
+
+        sut.ToggleMetadataTasksCommand.Execute(null);
+        sut.IsMetadataTaskPanelOpen.Should().BeTrue();
+        sut.IsMetadataTaskPanelVisible.Should().BeTrue();
+
+        sut.SelectLibraryViewCommand.Execute(nameof(VideoLibraryView.Series));
+        sut.IsMetadataTaskPanelOpen.Should().BeFalse();
+        sut.IsMetadataTaskPanelVisible.Should().BeFalse();
     }
 
     [Fact]

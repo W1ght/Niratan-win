@@ -22,7 +22,7 @@ public sealed class RemoteVideoPlaybackContractTests
     }
 
     [Fact]
-    public void FilterPublisherSubtitles_RemovesAutomaticCaptions()
+    public void OrderSubtitles_PrefersPublisherTracksButKeepsAutomaticFallbacks()
     {
         var options = new[]
         {
@@ -30,9 +30,9 @@ public sealed class RemoteVideoPlaybackContractTests
             new RemoteVideoSubtitleOption("ja-auto", "ja", "Japanese (auto)", "https://example.test/auto", true),
         };
 
-        YoutubeExplodeRemoteVideoResolver.FilterPublisherSubtitles(options)
-            .Should().ContainSingle()
-            .Which.IsAutomatic.Should().BeFalse();
+        YoutubeExplodeRemoteVideoResolver.OrderSubtitles(options)
+            .Should().HaveCount(2)
+            .And.Subject.First().IsAutomatic.Should().BeFalse();
     }
 
     [Fact]

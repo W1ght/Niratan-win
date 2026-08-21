@@ -144,6 +144,14 @@ public sealed class AnkiMiningContext
     public string? VideoScreenshotTag { get; set; }
     public string? VideoAudioClipTag { get; set; }
 
+    /// <summary>
+    /// Allows a media-backed context to create a card when the requested
+    /// sentence audio is not available. Galgame dialogue can legitimately be
+    /// unvoiced; the screenshot and text must not be discarded with it.
+    /// </summary>
+    [JsonIgnore]
+    public bool AllowMissingVideoAudio { get; set; }
+
     [JsonIgnore]
     public VideoMiningMediaProvider? VideoMediaProvider { get; set; }
 

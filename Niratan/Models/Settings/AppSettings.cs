@@ -4,6 +4,7 @@ using Niratan.Models.GameControllers;
 using Niratan.Models.Sasayaki;
 using Niratan.Models.Shortcuts;
 using Niratan.Models.Sync;
+using Niratan.Models.QBittorrent;
 
 namespace Niratan.Models.Settings;
 
@@ -26,4 +27,7 @@ public class AppSettings
     public SasayakiSettings SasayakiSettings { get; set; } = new();
     public NovelStatisticsSettings StatisticsSettings { get; set; } = new();
     public TtuSyncSettings TtuSyncSettings { get; set; } = new();
+    public QbittorrentSettings QbittorrentSettings { get; set; } = new();
+    public DiscoverySettings DiscoverySettings { get; set; } = new();
+    public DownloadBackendKind DownloadBackend { get; set; } = DownloadBackendKind.MonoTorrent;
 }

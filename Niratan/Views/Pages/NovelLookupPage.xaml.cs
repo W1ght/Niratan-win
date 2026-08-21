@@ -18,11 +18,13 @@ public sealed partial class NovelLookupPage : Page, IDisposable
 {
     public NovelLookupPageViewModel ViewModel { get; set; }
     private DictionaryPopupOverlay? _popupOverlay;
+    private readonly AnkiMiningFeedbackPresenter _miningFeedbackPresenter;
 
     public NovelLookupPage()
     {
         ViewModel = App.GetService<NovelLookupPageViewModel>();
         InitializeComponent();
+        _miningFeedbackPresenter = new AnkiMiningFeedbackPresenter(LookupMiningToast);
         DataContext = ViewModel;
         AddHandler(KeyDownEvent, new KeyEventHandler(NovelLookupPage_KeyDown), true);
         Loaded += NovelLookupPage_Loaded;
@@ -68,6 +70,8 @@ public sealed partial class NovelLookupPage : Page, IDisposable
         {
             _popupOverlay = new DictionaryPopupOverlay();
             _popupOverlay.Dismissed += OnPopupOverlayDismissed;
+            _popupOverlay.MiningFeedbackRequested += OnMiningFeedbackRequested;
+            _popupOverlay.MiningFeedbackCleared += OnMiningFeedbackCleared;
         }
 
         _popupOverlay.UseCanvas(DictionaryOverlayCanvas);
@@ -79,6 +83,14 @@ public sealed partial class NovelLookupPage : Page, IDisposable
     {
         DictionaryPanelRoot.Visibility = Visibility.Collapsed;
     }
+
+    private void OnMiningFeedbackRequested(
+        object? sender,
+        DictionaryPopupMiningFeedbackEventArgs e) =>
+        _miningFeedbackPresenter.Show(e);
+
+    private void OnMiningFeedbackCleared(object? sender, EventArgs e) =>
+        _miningFeedbackPresenter.Clear();
 
     private void OnDictionaryPanelSizeChanged(object sender, SizeChangedEventArgs e)
     {
@@ -176,8 +188,11 @@ public sealed partial class NovelLookupPage : Page, IDisposable
         if (_popupOverlay != null)
         {
             _popupOverlay.Dismissed -= OnPopupOverlayDismissed;
+            _popupOverlay.MiningFeedbackRequested -= OnMiningFeedbackRequested;
+            _popupOverlay.MiningFeedbackCleared -= OnMiningFeedbackCleared;
             _popupOverlay.Dispose();
             _popupOverlay = null;
         }
+        _miningFeedbackPresenter.Dispose();
     }
 }

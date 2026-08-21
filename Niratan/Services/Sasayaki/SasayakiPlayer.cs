@@ -86,11 +86,14 @@ public sealed class SasayakiPlayer : IDisposable
 
     public void Pause()
     {
-        if (_player == null || !IsPlaying)
+        if (_player == null)
             return;
 
         try
         {
+            // MediaPlayer may briefly report Opening or Buffering when an
+            // explicit pause arrives. Let the native player settle the pause
+            // instead of dropping the command based on that transient state.
             _player.Pause();
             _isPaused = true;
             StopPositionTimer();

@@ -143,6 +143,10 @@ public interface IMihonExtensionService
         CancellationToken ct = default);
     Task<IReadOnlyList<MihonInstalledExtension>> GetInstalledSourcesAsync(
         CancellationToken ct = default);
+    Task RemoveAsync(
+        string packageName,
+        string sourceId,
+        CancellationToken ct = default);
     Task<string?> GetRepositorySourceIconPathAsync(
         MihonExtensionConfiguration configuration,
         MihonExtensionSource source,

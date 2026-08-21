@@ -34,6 +34,13 @@ public interface IVideoCatalogRepository
         int processedCount,
         string? error,
         CancellationToken ct = default);
+    Task UpdateMetadataRefreshCountsAsync(
+        Guid jobId,
+        int matchedCount,
+        int needsReviewCount,
+        CancellationToken ct = default,
+        int failedCount = 0);
+    Task ClearRemoteMetadataAsync(Guid sourceId, CancellationToken ct = default);
 
     Task UpsertCollectionAsync(VideoCollection collection, CancellationToken ct = default);
     Task DeleteCollectionAsync(Guid collectionId, CancellationToken ct = default);

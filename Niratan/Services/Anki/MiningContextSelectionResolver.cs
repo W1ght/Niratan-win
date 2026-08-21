@@ -68,6 +68,7 @@ public static class MiningContextSelectionResolver
         VideoAudioClipPath = source.VideoAudioClipPath,
         VideoScreenshotTag = source.VideoScreenshotTag,
         VideoAudioClipTag = source.VideoAudioClipTag,
+        AllowMissingVideoAudio = source.AllowMissingVideoAudio,
         VideoMediaProvider = source.VideoMediaProvider,
         SasayakiAudioProvider = source.SasayakiAudioProvider,
         SasayakiPopupControls = source.SasayakiPopupControls,

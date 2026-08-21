@@ -258,11 +258,15 @@ public sealed class SQLiteVideoCatalogRepositoryTests
 
         await repository.UpdateMetadataRefreshAsync(
             metadataJobId, VideoCatalogJobState.Running, 5, null, ct);
+        await repository.UpdateMetadataRefreshCountsAsync(metadataJobId, 3, 1, ct, 2);
         await repository.SetSourceScanPausedAsync(sourceId, true, ct);
         var running = await repository.GetSnapshotAsync(ct);
 
         running.Jobs.Single(job => job.Id == metadataJobId).State.Should().Be(VideoCatalogJobState.Running);
         running.Jobs.Single(job => job.Id == metadataJobId).ProcessedCount.Should().Be(5);
+        running.Jobs.Single(job => job.Id == metadataJobId).MatchedCount.Should().Be(3);
+        running.Jobs.Single(job => job.Id == metadataJobId).NeedsReviewCount.Should().Be(1);
+        running.Jobs.Single(job => job.Id == metadataJobId).FailedCount.Should().Be(2);
         running.Jobs.Single(job => job.Kind == VideoCatalogJobKind.IncrementalScan).State
             .Should().Be(VideoCatalogJobState.Paused);
 
@@ -404,6 +408,14 @@ public sealed class SQLiteVideoCatalogRepositoryTests
         after.Nodes.Should().ContainSingle(node => node.Kind == VideoCatalogNodeKind.Episode);
         after.Nodes.Single(node => node.Kind == VideoCatalogNodeKind.Series).ExternalIds
             .Should().Contain("anilist", "20987");
+
+        await repository.ClearRemoteMetadataAsync(sourceId, ct);
+        var cleared = await repository.GetSnapshotAsync(ct);
+        cleared.Assets.Should().ContainSingle(asset => asset.Location == mediaPath);
+        cleared.Nodes.Should().ContainSingle(node => node.Kind == VideoCatalogNodeKind.Series);
+        cleared.Nodes.Should().ContainSingle(node => node.Kind == VideoCatalogNodeKind.Episode);
+        cleared.Nodes.Should().OnlyContain(node => node.ExternalIds.Count == 0);
+        cleared.Nodes.Should().OnlyContain(node => node.MetadataExpiresAt == null);
     }
 
     [Fact]

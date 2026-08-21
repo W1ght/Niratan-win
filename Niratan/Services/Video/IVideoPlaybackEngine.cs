@@ -11,6 +11,7 @@ public interface IVideoPlaybackEngine : IDisposable
 {
     event EventHandler<VideoMediaLoadedEventArgs>? MediaLoaded;
     event EventHandler<VideoMediaFailedEventArgs>? MediaFailed;
+    event EventHandler? PlaybackEnded;
 
     Task InitializeAsync(IntPtr hostHwnd, CancellationToken ct = default);
 

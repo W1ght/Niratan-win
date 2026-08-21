@@ -23,6 +23,11 @@ mono_crash.*
 [Rr]eleases/
 x64/
 x86/
+!Niratan/voice_hook/
+!Niratan/voice_hook/x64/
+!Niratan/voice_hook/x64/**
+!Niratan/voice_hook/x86/
+!Niratan/voice_hook/x86/**
 [Ww][Ii][Nn]32/
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/

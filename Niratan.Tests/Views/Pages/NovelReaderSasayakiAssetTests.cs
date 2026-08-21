@@ -53,6 +53,54 @@ public sealed class NovelReaderSasayakiAssetTests
     }
 
     [Fact]
+    public void AudiobookPlayback_OnlyExplicitPausePausesReaderStatistics()
+    {
+        var code = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml.cs"));
+
+        var toggleStart = code.IndexOf(
+            "private async Task ToggleSasayakiPlaybackAsync",
+            StringComparison.Ordinal);
+        var toggleEnd = code.IndexOf(
+            "private async void SasayakiPrevCue_Click",
+            toggleStart,
+            StringComparison.Ordinal);
+        toggleStart.Should().BeGreaterThanOrEqualTo(0);
+        toggleEnd.Should().BeGreaterThan(toggleStart);
+        var toggleMethod = code[toggleStart..toggleEnd];
+        toggleMethod.Should().Contain("await _sasayakiPlaybackToggleSemaphore.WaitAsync();");
+        toggleMethod.Should().Contain(
+            "if (_sasayakiVM.IsPlaying || player.IsPlaying)");
+        toggleMethod.Should().Contain("await ViewModel.PauseStatisticsAsync();");
+        toggleMethod.Should().Contain(
+            "await ViewModel.StartStatisticsForAudiobookPlaybackAsync();");
+
+        var playerCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Services", "Sasayaki", "SasayakiPlayer.cs"));
+        var pauseStart = playerCode.IndexOf(
+            "public void Pause()",
+            StringComparison.Ordinal);
+        var pauseEnd = playerCode.IndexOf(
+            "public void Resume()",
+            pauseStart,
+            StringComparison.Ordinal);
+        pauseStart.Should().BeGreaterThanOrEqualTo(0);
+        pauseEnd.Should().BeGreaterThan(pauseStart);
+        playerCode[pauseStart..pauseEnd].Should().NotContain("!IsPlaying");
+
+        var lookupStart = code.IndexOf(
+            "private void PauseSasayakiForLookup",
+            StringComparison.Ordinal);
+        var lookupEnd = code.IndexOf(
+            "private void ResumeSasayakiAfterLookup",
+            lookupStart,
+            StringComparison.Ordinal);
+        lookupStart.Should().BeGreaterThanOrEqualTo(0);
+        lookupEnd.Should().BeGreaterThan(lookupStart);
+        code[lookupStart..lookupEnd].Should().NotContain("PauseStatisticsAsync");
+    }
+
+    [Fact]
     public void DirectMiningAudio_IsAwaitedBeforeReturningAnkiTag()
     {
         var code = File.ReadAllText(

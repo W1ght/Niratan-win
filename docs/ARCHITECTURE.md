@@ -322,7 +322,7 @@ NovelReaderPage
 - Anki 逻辑不写在 ViewModel 里。
 - 调用链：`ReaderViewModel → IAnkiService → AnkiConnectClient`
 - Popup 同一可见页的查重先在 JavaScript 短窗口内聚合，再由 AnkiConnect 的批量 `canAddNotesWithErrorDetail` 与按需 `multi/findNotes` 完成；短 TTL 缓存与在途合流按 Anki settings generation 隔离，Profile/deck/model/scope 变化必须失效。提交前仍对同一 expression 串行执行最终查重，禁止缓存或并发竞态生成重复卡。
-- Popup 的 mining attempt 由 `render generation + page revision + entry + attempt + expression` 标识；只有当前 attempt 可以更新按钮、toast 与 note ID。不同词条可以并行，同词条普通/上下文制卡共享门控。
+- Popup 的 mining attempt 由 `render generation + page revision + entry + attempt + expression` 标识；只有当前 attempt 可以更新按钮、宿主模块层的制卡反馈和 note ID。Popup 只发布带本地化标题与语义级别的反馈事件，不在自身视觉树内创建 toast；Reader、Video、Manga、Lookup 及全局查词窗口各自在 Popup 外层承载同一反馈组件。不同词条可以并行，同词条普通/上下文制卡共享门控。
 - EPUB 封面和上传型媒体在字段渲染前完成并验证非空，使用 Anki 返回的稳定文件名生成标签，禁止把应用私有本地路径写入卡片字段。视频直写 `collection.media` 对齐 Niratan 的 optimistic 路径：先以内容身份生成确定性文件名并立即提交卡片，截图与音频在后台并发生成；后台仍使用同目录临时文件、相同目标合流和原子发布。无法取得直写目录时继续等待媒体生成，并把失败项放入单次 `multi/storeMediaFile` fallback 后才提交。
 
 模板变量：
@@ -403,10 +403,11 @@ Windows 使用系统文件选择器直接写入用户选择的目标路径，不
 - metadata 合并顺序固定为用户锁定/人工绑定、Local NFO/图片、主 provider、补充 provider 填空。显式 ID 逐 provider 锁定；provider 自动发现的 external ID 只作为后续查询提示，不因同一节点上另一个锁定 ID 而反向升级成人工身份锁。Series/Anime metadata 只丰富 scanner 已确定的 series owner，不压平 season/episode 绑定；结构化系列下的自动 Movie 结果必须拒绝，不能形成 `Series -> Season -> Movie`。兼容重排可修复未锁定子层级，并保留人工锁定的 series 身份、用户字段和播放状态；清理空 scaffold 只丢弃可重建的 provider cache，Local field/artwork、锁定字段和 node user data 都是删除保护条件。多个 provider 对同一年份的精确动画别名可作为联合确认，随后优先用 TMDB 投影丰富系列详情与图片，年份相冲突的重拍仍进入 Review。模糊匹配要求总分至少 0.92、领先至少 0.15且无年份/编号硬冲突，否则保留完整候选进入 Needs Review。Unorganized 只表示没有集合覆盖，与 Review 分离。
 - 在线 provider 通过 `IVideoMetadataTransport` 的 HTTPS host allowlist、并发门、请求间隔、Retry-After、条件缓存、最多三次幂等重试和取消访问；凭据只进 Windows Credential Manager，30 天 normalized cache 在 SQLite，poster/backdrop/logo、首屏演员头像和相关推荐海报经原子 2 GiB LRU cache。图片下载每个 URL 并发去重，TMDB 同时不超过四路，UI 永不直连 provider CDN。首次联网前必须取得隐私同意。
 - metadata 刷新是独立于页面生命周期的后台 `catalog_jobs` 任务：来源扫描完成后只为新增/变化、尚未尝试或 TTL 已过期的可用视频排队，最近一次完整任务同时作为未匹配结果的 30 天负缓存；完整扫描或 mtime 变化可重读并应用 Local metadata，但 owner/binding 未变化时不得取消该负缓存，只有实际层级重绑才使对应来源的完成任务失效。手动“刮削元数据”才强制刷新整个来源。离开 Video 页面不会取消任务，取消来源刮削则只终止该任务并保留已有详情。不同资产最多两路并行，同一 provider 查询仍服从 transport 并发门、请求间隔和 `Retry-After`；相同的幂等查询以 cache key 合并，等待者在首个请求写入 30 天 catalog cache 后直接复用。候选始终按来源 route 顺序进入评分。
-- 扫描和后台刮削进度同时投影在 Video 顶部任务条；来源管理使用主内容区全宽卡片，不使用固定宽度 `ContentDialog`，并显示扫描/刮削各自的计数、匹配数、待确认数、失败及取消入口。
+- 扫描和后台刮削进度同时投影在 Video 顶部任务条；来源管理使用主内容区全宽卡片，不使用固定宽度 `ContentDialog`，并显示扫描/刮削各自的计数、匹配数、待确认数、失败及取消入口。`Home` / `Discover` 不显示内容区命令栏，`Series` / `All videos` 只保留搜索和排序；`Import` 顶部按 Fushi 主动作样式提供带图标和文字的“扫描文件夹 / YouTube / 刷新 / 重新刮削 / 后台任务”，来源设置、打开文件夹和移除等单来源操作留在来源卡片内。后台任务详情只属于 `Import` 内容区，切离该页必须关闭，不得覆盖其他 Video 页签。
 - Home 采用 Jellyfin 式媒体中心层级：`My media` 快捷库、`Continue watching`、`Next up`、`Recently added media` 独立横向行，空行隐藏，首页不再重复渲染完整资料库列表。Continue Watching 按系列折叠，仅保留该系列最近播放的一集，并优先横版 thumb/backdrop；系列书架按 series node 聚合并使用竖版 poster。系列详情使用横版 hero、竖版 poster 和可选 logo，原题、简介与年份明确取 series owner，不用某一集 NFO 回填系列资料；同时投影标题、标语、年份区间、分级、评分、状态、类型、标签、工作室、季、正篇、Specials、演员、相关推荐及 provider 归属。图片只读取本地 sidecar 或应用图片缓存，不由 UI 直接加载 provider URL。
 - Windows 视频可选 Anime4K 由 `IAnime4KShaderService` 管理：固定下载 Anime4K `v4.0.1` GLSL，使用 SHA-256 校验并原子写入 `%APPDATA%\Niratan\VideoShaders`；`MpvPlaybackEngine` 只接收强类型预设并通过 `change-list glsl-shaders` 应用，不接受任意 URL、路径或 mpv 配置。入口位于播放器侧边栏“视频增强”，预设仅属于当前播放会话，每次打开视频都强制恢复 `Off`，避免高 GPU 负载被自动继承；这是相对 Niratan macOS 默认画质链路的显式 Windows 可选偏差。
 - 视频打开采用首帧优先路径：来源和必要播放属性应用后立即解除暂停；外部字幕 CPU 解析在线程池执行，章节、轨道轮询、交互字幕与侧边栏投影不得阻塞首帧。底部控制栏层级必须高于透明字幕选择画布，重叠区域由控制栏优先接收输入。
+- 交互字幕面板按当前视频 viewport 的实际可用宽度估算显式换行与自动折行，并为阴影/模糊效果保留垂直空间；窗口缩放或侧栏切换后必须重新布局。只有单条字幕在当前 viewport 内确实无法完整容纳时才缩小该条的有效字号，用户保存的全局字号不变；可见 Canvas 与隐藏选词 WebView 必须使用同一有效字号，保持字符命中坐标一致。
 - 仅当物理 `niratan.db` 已存在时，旧 `NovelBooks`、`NovelReadingProgress`、`NovelReaderSettings` 才由 `NovelStorageMigrationService` 在启动时读取；探测不得创建空数据库。
 - 迁移顺序固定为：备份数据库 → 导出 sidecar → 重扫并校验 manifest → 同一事务退役旧小说表 → 最后原子写完成 manifest。
 - 任何导出或校验失败都 fail closed：保留旧表与备份，小说写入切为只读，原始文件不删除。
@@ -468,8 +469,14 @@ MangaLibraryPage / MangaReaderWindow
 - Mihon 生态有两条显式接入路径。Suwayomi 模式继续连接用户自行管理的服务器；`Data/Manga/suwayomi.json` 只保存服务地址、鉴权模式、用户名和凭据 identity，密码/令牌写入 Windows Credential Manager。源浏览、搜索、章节准备、页面缓存与进度回写使用 Suwayomi `/api/v1`；只允许 HTTP/HTTPS，JSON 和图片分别限制为 16 MiB、256 MiB。
 - 直接 Mihon APK 模式对齐 Mangayomi 的桌面分进程方案：主进程不加载 APK、DEX 或 JVM，只通过 `MihonExtensionService` 调用 Niratan 自主管理的 M-Extension-Server sidecar。x64 build/publish 固定包含 M-Extension-Server 1.0.4 与其私有 Java 21 runtime；构建先校验上游 bundle 的固定 SHA-256，再把 runtime、MPL-2.0 和对应源码 notice 复制到输出的 `MihonBridge`。用户界面不提供下载选择、bridge 地址、Java 或 JAR 路径，旧配置中的这些字段不再参与运行。配置保存在 `Data/Manga/mihon.json`，其中 `Repositories[]` 按用户顺序保存多个仓库，旧版单一 `RepositoryUrl` 在读取后无损迁移；APK 与强类型安装清单保存在 `Data/Manga/Extensions`，sidecar 私有工作目录为 `Data/Manga/MihonBridge`。刷新按仓库隔离失败并合并结果，同一 package/source identity 重复时由列表中靠前的仓库优先；移除仓库不删除已经安装的 APK。sidecar 在首次需要执行扩展时使用随机本机端口以及 Windows 分发包要求的内存、`--add-opens` 与 `-noverify` 参数启动，并随服务释放而终止。
 - Mihon 仓库必须使用 HTTPS（测试用回环 HTTP 除外），索引限制为 8 MiB；APK 限制为 64 MiB，写入前校验 ZIP、`AndroidManifest.xml`、DEX、条目数并记录 SHA-256。兼容协议只允许固定的 manga 方法并传 Base64 APK 与字符串 `sourceId`；Niratan 的 MPL-2.0 overlay 在 sidecar 内从 SourceFactory 结果中按 64 位 source ID 精确选择，再交给原 invoker，因而同一 APK 暴露的多语言/多 Source 条目可独立安装和调用。overlay loader 还只在 DEX 转换后的私有临时 JAR 内修复 dex2jar 2.4 对近期 R8 无字段 companion/serializer、可唯一识别的无状态 lambda/interceptor，以及 enum/单例错误实例化父类所产生的构造 owner；不改写用户 APK，也不在 App 主进程执行 DEX。overlay 源码与小型 JAR 随仓库保存，构建按固定 SHA-256 校验并在 class path 中先于固定上游 1.0.4 JAR 加载。Niratan 客户端只接受 `localhost` / `127.0.0.1` / `::1` bridge URL，JSON 限制为 16 MiB，图片限制为 256 MiB。原版 M-Extension-Server 可能监听全部网卡且协议没有认证，UI 必须提示用户检查 Windows 防火墙；客户端的回环限制不能被描述成 sidecar 自身只监听回环。
-- 漫画主页只承载本地/在线书架；来源发现与扩展管理抽为 App 侧边栏一级 `BrowsePage`，对齐 Mangayomi 的 Browse 信息架构。当前 Windows 扩展运行时只覆盖漫画，因此该页只显示“漫画源 / 漫画扩展 / 来源设置”，不提供无实现的动画或小说扩展页签。三者都是同一导航行的平面页签；来源设置在主内容区承载 Suwayomi 连接与凭据、Mihon 仓库和内置 runtime 状态，不使用遮挡列表的 Flyout，也不暴露 M-Extension-Server 下载、bridge 地址或 Java/JAR 路径。Mihon 仓库配置显示为可添加、编辑和移除的列表，不退化为单值输入框或来源下拉框。漫画源把 Suwayomi 与已安装 Mihon 来源合并为按语言分组、可滚动的全宽列表，点击行尾“热门”后才进入复用书架的来源结果页；当前 bridge/service 没有 Latest 契约，不得把 Popular 误标成 Latest。Suwayomi 返回的同源 `iconUrl` 在列表项实现时按需下载并显示，缺少或无效图标使用稳定的来源占位。Mihon 扩展先按 Mangayomi 的 `<repo>/icon/<package>.png` 读取图标；仓库未发布该资产时按需下载对应 APK，只从受大小限制的 `res/` 光栅资源中选取最大候选并缓存，仍失败才显示拼图占位。Mihon 扩展由独立 `MihonExtensionBrowser` 承载，列表按“已安装 / 语言”分组并虚拟化，支持名称/语言/包名搜索、语言筛选、安装状态优先排序和逐行图标安装/更新；多 Source APK 的每个仓库条目按 source ID 独立安装，不把完整仓库塞进 ComboBox。Suwayomi 与 Mihon 的浏览结果都投影为同一个 `RemoteMangaLibraryItemViewModel`，复用 `NovelBookCard`、`UniformGridLayout` 与封面占位；浏览书架在末尾六项进入布局时依据服务 `hasNextPage` 预加载下一页，按 Provider、来源与查询隔离状态并跨页去重。远端卡片点击先打开共用详情面板，显示完整海报、元数据、继续阅读与章节选择，只有用户选择阅读动作后才创建 Reader 会话。Suwayomi 详情通过服务器 `/library` 契约加入或移出书库；直接 Mihon APK 没有服务器书库契约，因此 Windows 扩展把用户明确加入的远端条目保存到 `mihon.json` 的 `Library[]`，并与 Suwayomi `category` 收藏合并显示在在线书架。本地书架仍只来自 `catalog.json`，任何远端收藏都不会写入本地 catalog。
+- 漫画主页默认承载本地/在线书架，并在页内使用与 Video library 一致的顶部平面分段入口：`Library` 显示书架，`Discover`、`Extensions` 和 `Source settings` 嵌入复用的 `BrowsePage` 内容。`BrowsePage` 仍保留 App 侧边栏一级入口，便于直接进入来源发现与扩展管理；两条入口共享同一 Browse 信息架构和同样的只读/凭据边界。当前 Windows 扩展运行时只覆盖漫画，因此该页只显示“漫画源 / 漫画扩展 / 来源设置”，不提供无实现的动画或小说扩展页签。三者都是同一导航行的平面页签；来源设置在主内容区承载 Suwayomi 连接与凭据、Mihon 仓库和内置 runtime 状态，不使用遮挡列表的 Flyout，也不暴露 M-Extension-Server 下载、bridge 地址或 Java/JAR 路径。Mihon 仓库配置显示为可添加、编辑和移除的列表，不退化为单值输入框或来源下拉框。漫画源把 Suwayomi 与已安装 Mihon 来源合并为按语言分组、可滚动的全宽列表，点击行尾“热门”后才进入复用书架的来源结果页；当前 bridge/service 没有 Latest 契约，不得把 Popular 误标成 Latest。Suwayomi 返回的同源 `iconUrl` 在列表项实现时按需下载并显示，缺少或无效图标使用稳定的来源占位。Mihon 扩展先按 Mangayomi 的 `<repo>/icon/<package>.png` 读取图标；仓库未发布该资产时按需下载对应 APK，只从受大小限制的 `res/` 光栅资源中选取最大候选并缓存，仍失败才显示拼图占位。Mihon 扩展由独立 `MihonExtensionBrowser` 承载，列表按“已安装 / 语言”分组并虚拟化，支持名称/语言/包名搜索、语言筛选、安装状态优先排序和逐行图标安装/更新；多 Source APK 的每个仓库条目按 source ID 独立安装，不把完整仓库塞进 ComboBox。Suwayomi 与 Mihon 的浏览结果都投影为同一个 `RemoteMangaLibraryItemViewModel`，复用 `NovelBookCard`、`UniformGridLayout` 与封面占位；浏览书架在末尾六项进入布局时依据服务 `hasNextPage` 预加载下一页，按 Provider、来源与查询隔离状态并跨页去重。远端卡片点击先打开共用详情面板，显示完整海报、元数据、继续阅读、可切换的已安装 Mihon 扩展和章节选择；切换扩展按当前标题在目标扩展中检索并重新加载章节，只有用户选择阅读动作后才创建 Reader 会话。Suwayomi 详情通过服务器 `/library` 契约加入或移出书库；直接 Mihon APK 没有服务器书库契约，因此 Windows 扩展把用户明确加入的远端条目保存到 `mihon.json` 的 `Library[]`，并与 Suwayomi `category` 收藏合并显示在在线书架。本地书架仍只来自 `catalog.json`，任何远端收藏都不会写入本地 catalog。
 - Suwayomi 来源图标缓存到 `Data/Manga/Cache/Suwayomi/SourceIcons/<server-id>`，页缓存到 `Data/Manga/Cache/Suwayomi/<chapter-id>`；图标 URL 必须回到同一个 Suwayomi origin 和 `/api/v1`，响应必须是受大小限制的图片。Mihon 扩展图标、封面与章节页按 package/source/book identity 缓存到 `Data/Manga/Cache/Mihon`，并在读取已安装 APK 前校验 SHA-256。两者的 Reader session 都是远程临时会话，不混入本地只读媒体 catalog；Mihon sidecar 没有进度 API，因此其页进度当前不跨会话保存。全局布局、方向、缩放与 OCR 披露仍复用 Manga JSON 偏好。
+
+### 6.8 漫画发现元数据源
+
+- Manga `Discover` 使用独立的 `IMangaDiscoveryService` 从网站元数据获取发现分区、搜索结果和网络海报；当前主来源为 Bangumi，AniList 作为可切换补充来源。TMDB 的公开发现接口面向电影、剧集和人物，不作为漫画发现源。
+- 元数据卡片只负责展示远端标题、年份、评分、简介来源和缓存海报；点击后先打开漫画详情面板，再按标题、原名和别名遍历已安装 Mihon source，优先精确归一化匹配，命中后进入现有详情、扩展切换、章节和 Reader 流程。未安装或未匹配时详情仍保留，用户可以从扩展列表直接尝试，不写入本地 `catalog.json`。
+- Bangumi/AniList JSON 与海报请求分别使用 HTTPS host allowlist、响应大小限制、图片 MIME/文件头校验；海报写入 `Data/Manga/Cache/Discovery`，以 URL 哈希和 sidecar 持久缓存，并用同 URL 串行门闩避免重复下载，可重建，不属于用户目录状态。发现页的 provider/category/search/pagination 状态只存在于页面 ViewModel。
 
 ## 7. 性能规则
 
@@ -562,14 +569,15 @@ JavaScript：
 
 ## 11. YouTube 远程视频（实验性）
 
-- 产品行为对齐 Niratan，Windows 端使用固定版本 `YoutubeExplode 6.6.0` 在进程内解析元数据、匿名公开流与发布者字幕；该非官方接口具有易失性，UI 必须明确标注“实验性”。
+- 产品行为对齐 Niratan，Windows 端使用固定版本 `YoutubeExplode 6.6.1`，并在其对部分公开视频返回错误时，通过受限的 YouTube watch page / Android VR player 响应 fallback 解析元数据、匿名公开流和字幕；该非官方接口具有易失性，UI 必须明确标注“实验性”。
 - 不使用 YouTube IFrame/Data API 作为播放链路，因为它们不能同时满足主动画质选择、libmpv 分离流播放、字幕查词与音频制卡；禁止引入 yt-dlp、youtube-dl、Deno、Node、converter/helper 下载或子进程。
 - `IRemoteVideoResolver` 是唯一接触 YoutubeExplode 类型的适配边界。其他层只使用 `RemoteVideoIdentity`、`ResolvedRemoteVideoSource`、`VideoPlaybackRequest` 等自有强类型模型。
+- Windows libmpv 对带 `clen` 的 HTTPS `*.googlevideo.com` 签名流使用只读 callback protocol：真实 URL 与 headers 保持在进程内，由 `HttpClient` 逐段发出有明确起止位置的有限 `Range` 请求，并校验 `206 Content-Range` 与解析时长度；交给 libmpv 的只有不透明会话 URI。其他本地或远程来源不经过该桥。此适配用于规避 Google Video CDN 拒绝 FFmpeg 开放式 `Range: bytes=n-` 后产生的 `MPV_ERROR_LOADING_FAILED`，且不得放宽到任意 host、HTTP 或重定向。
 - 签名流 URL、字幕 URL、请求 headers 和过期时间只驻留内存；视频 SQLite 仅保存 `remote://youtube/{videoId}` 稳定键、原始/规范 URL、远程身份、缩略图 URL 与字幕语言。日志只记录 provider/id，不记录签名 URL。
 - 视频恢复状态按媒体身份保存进度、字幕选择、播放速度、音频选择及音频/字幕延迟；音轨优先以 ff-index 恢复，并以轨道元数据作唯一匹配回退。音量、硬解、去隔行、HDR、色彩校正和字幕外观是全局偏好；循环、A-B 点、旋转、画面比例、远程临时画质和 Anime4K 是会话态，不自动恢复。
 - 解析缓存以稳定键索引，优先使用流 URL 的 `expire`，提前 5 分钟失效；无过期参数时使用 4 小时 TTL。首次播放失败强制刷新一次，随后仅允许一次 muxed fallback。
 - 匿名 v1 只支持公开、非直播、非播放列表视频，最高 1080p。画质切换重开流但恢复位置、暂停、音量、速度、延迟、循环、宽高比、旋转与字幕覆盖层。
-- 发布者字幕过滤自动生成轨道，下载到应用临时目录并继续走现有 SRT 解析、透明字幕覆盖层、查词和 transcript；不交给 mpv 渲染，也不持久化临时路径。
+- 字幕轨道保留发布者字幕和自动生成字幕，发布者轨道优先、无发布者轨道时自动生成轨道作为 fallback；字幕下载到应用临时目录并继续走现有 SRT 解析、透明字幕覆盖层、查词和 transcript，不交给 mpv 渲染，也不持久化临时路径。字幕/页面响应有固定大小上限，只接受 YouTube timedtext 和 googlevideo 来源。
 - 远程挖卡截图复用当前 libmpv 实例；音频导出使用当前解析的音频流或 muxed fallback。挖卡历史保存稳定媒体键，重开时经资料库重新解析，不对远程键调用 `File.Exists`。
 
 ---
@@ -577,9 +585,30 @@ JavaScript：
 ## 12. Nyaa / BitTorrent 资源包导入（实验性）
 
 - `INyaaClient` 只读取固定 HTTPS origin `https://nyaa.si/` 的 RSS，不执行 HTML 抓取，也不接受任意索引站脚本。RSS 上限 2 MiB；详情、torrent URL 和 HTTP 重定向后的最终地址必须同源、同端口且不得包含 credentials。
-- `ITorrentDownloadService` 是 BitTorrent 边界。Windows 实现使用固定版本 `MonoTorrent 3.0.2`，引擎缓存位于应用缓存目录，完成文件位于 `Data/TorrentDownloads`；下载完成后停止 torrent，不提供后台做种或宽泛 tracker 管理 API。
+- `ITorrentDownloadService` 是 BitTorrent 边界。Windows 实现使用固定版本 `MonoTorrent 3.9.0-alpha.unstable.rev0000`，引擎缓存位于应用缓存目录，完成文件位于 `Data/TorrentDownloads`；下载完成后停止 torrent，不提供后台做种或宽泛 tracker 管理 API。该版本是当前 NuGet 可用的预览版，升级必须经过 x64 构建和下载契约测试。
 - `INyaaDownloadManager` 持有应用会话内的任务队列。搜索对话框只负责入队，关闭对话框不会取消任务；搜索结果可按可信度/重制/做种状态筛选并按做种数/时间/下载数/体积/标题排序。管理页展示进度与错误，并提供暂停、继续、取消、重试、打开目录、移除记录、状态筛选和排序。
 - `.torrent` 元数据限制为 32 MiB，以覆盖文件数量较多的合法资源包。启动下载前必须验证每个 torrent 文件的规范化路径仍位于该任务目录内；资源包递归扫描跳过 reparse point，并再次执行目录边界校验。
 - `ResourcePackageAnalyzer` 只分类强类型扩展：EPUB、音频、SRT/字幕和视频。单 EPUB + 单音频 + 单 SRT 直接视为高置信度；多资源包使用规范化文件名评分，低分或前两名接近时不得自动匹配。
 - `IResourcePackageImportService` 是唯一编排入口：EPUB 复用 `INovelLibraryService`，有声书/SRT 复制到书籍私有 `Resources/Sasayaki` 后调用 `ISasayakiMatchService`，视频复用 `IVideoLibraryService` 并绑定同名或语言后缀字幕。ViewModel 不直接访问文件存储或持久化实现。
 - 下载内容保持不可信。资源包中的可执行文件、脚本和未知格式不会启动或导入；只有用户明确选择的结果才会下载。UI 必须提示用户仅下载有权获取的内容。
+
+## 13. 下载发现与 qBittorrent（Windows 扩展）
+
+- 一级“下载”模块包含“发现 / 下载任务 / 下载设置”三个平面区。发现区复用 `INyaaClient` 的固定 HTTPS Nyaa RSS 搜索，不执行 HTML 抓取；搜索结果只有在用户明确点击后才会发送到当前选择的下载器。
+- `AppSettings.DownloadBackend` 在下载设置中选择 `MonoTorrent` 或 `Qbittorrent`，默认是内置 `MonoTorrent`。发现按钮、任务列表和任务操作均按当前选择路由；切换不会复制或迁移另一后端已有任务。
+- `IQbittorrentDownloadCoordinator` 是发现与 qBittorrent WebAPI 的唯一编排边界。`DownloadsPageViewModel` 不直接访问 HTTP、Credential Manager 或 `ISettingsService` 的持久化细节。
+- `QbittorrentApiClient` 只使用 `/api/v2` WebAPI：旧版 WebUI 使用登录 Cookie，qBittorrent 5.2+ 可使用 Bearer API Key；任务页以 qBittorrent 返回的任务状态为准，应用重启后重新读取远端任务，不把 qB 任务复制成第二份本地下载状态。
+- 任务列表项点击后打开详情 Panel；概览、文件和 Tracker 页分别读取 qB 的 `torrents/properties`、`torrents/files` 和 `torrents/trackers`，详情不落地为第二份用户状态。取消调用 qB `stop`，恢复调用 `start`，打开位置复用 `IFileRevealService`。
+- 删除任务必须先经过 `IDialogService` 确认，确认后仅以 `deleteFiles=false` 从 qB 移除任务；不删除已下载文件。详情 Panel 关闭后才显示确认框，避免嵌套 WinUI `ContentDialog`。
+- qB 地址只接受 HTTP(S) origin，不接受 URL 中的 credentials、query 或 fragment；HTTP 只允许 loopback，远程连接必须使用 HTTPS。Nyaa torrent URL 发送前再次限制为 `https://nyaa.si/` 默认 origin。
+- qBittorrent 密码和 API Key 只写入 Windows Credential Manager；服务器地址、默认保存路径、默认分类和“暂停添加”写入 `AppSettings.QbittorrentSettings`。不把密码、API Key、Cookie 或 Authorization header 写入日志。
+- qB 远程保存路径不被自动当成本机媒体路径。下载完成后的小说、视频或漫画导入必须另行实现路径映射或用户显式选择，不得因为搜索或下载完成而自动改写本地资料库。
+- `MonoTorrentDownloadService → NyaaDownloadManager → ResourcePackageImportService` 是内置后端链路，任务在下载页展示并在完成后自动导入；`IQbittorrentDownloadCoordinator → QbittorrentApiClient` 是外部后端链路，任务状态仍以 qBittorrent WebAPI 为准。两套任务列表和恢复语义保持隔离，切换后端只改变后续添加与当前任务视图，不会删除另一后端任务。
+
+## 14. Galgame 游戏捕获（Windows 扩展）
+
+- 游戏库使用 `Data/Games/galgame-library.json`，通过 `IGalGameRepository` 与原子 JSON store 读写；损坏文件只报告错误，不自动清空或覆盖。游戏 exe、工作目录和启动参数属于用户配置，源游戏文件保持只读。
+- `GalGameSessionService` 只负责会话状态、启动/附着 injector 和停止 helper；注入器、hook DLL、LunaHook 与游戏进程保持独立边界，不链接进 `Niratan.exe`。启动参数先按 Windows `CommandLineToArgvW` 规则拆分，再以重复 `--arg` 传递，避免含空格路径被二次切分。
+- `voice_hook/<arch>/` 是随构建输出的离线 helper 运行时。启动前复制到 `%APPDATA%/Niratan/Data/Games/voice_hook_runtime/<content-version>/<arch>/`，注入器永不回退到安装目录副本，以避免游戏进程长期锁住更新文件。
+- IPC 仅通过 `Local\\FushiVoiceHook_<pid>` 只读映射读取 `HVH1`、共享版本、稳定 IPC 版本、hook/文本/音频健康头字段。文本 lane、音频 ring 和游戏内查词消息必须继续按 native `voice_hook_ipc.h` 的强类型布局扩展，不能在 C# 中猜偏移。
+- 当前 Windows M0 只提供库、启动/附着会话、诊断状态和基础 hook helper；没有真实游戏进程证据时，任何具体引擎只能标记为 `implemented_unverified`，不得在支持列表或发布说明中升级为已验证支持。Unity 资源音频提取运行时未随本 M0 目标包分发。

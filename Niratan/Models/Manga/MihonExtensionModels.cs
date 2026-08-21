@@ -88,6 +88,7 @@ public sealed class MihonInstalledExtension
     public string BaseUrl { get; set; } = string.Empty;
     public string PackageName { get; set; } = string.Empty;
     public string Version { get; set; } = string.Empty;
+    public string IconDownloadUrl { get; set; } = string.Empty;
     public string ApkPath { get; set; } = string.Empty;
     public string Sha256 { get; set; } = string.Empty;
     public bool IsNsfw { get; set; }

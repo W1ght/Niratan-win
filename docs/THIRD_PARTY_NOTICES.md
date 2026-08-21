@@ -13,12 +13,12 @@ Niratan queries these services on demand after explicit user consent. It does no
 
 No Jikan/MAL HTML scraping, OpenSubtitles, Fanart.tv or AniBridge dataset is used in this phase.
 
-## MonoTorrent 3.0.2
+## MonoTorrent 3.9.0-alpha.unstable.rev0000
 
 - Project: https://github.com/alanmcgovern/monotorrent
-- Package: https://www.nuget.org/packages/MonoTorrent/3.0.2
+- Package: https://www.nuget.org/packages/MonoTorrent/3.9.0-alpha.unstable.rev0000
 - License: MIT
-- Use in Niratan: in-process BitTorrent download engine for explicitly selected Nyaa RSS results. Niratan stops the torrent after download completion and does not expose a general-purpose seeding or tracker-management UI.
+- Use in Niratan: in-process BitTorrent download engine for explicitly selected Nyaa RSS results. This is the current NuGet preview package; Niratan stops the torrent after download completion and does not expose a general-purpose seeding or tracker-management UI.
 
 Copyright (c) 2006-2024 Alan McGovern and contributors
 
@@ -28,10 +28,10 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-## YoutubeExplode 6.6.0
+## YoutubeExplode 6.6.1
 
 - Project: https://github.com/Tyrrrz/YoutubeExplode
-- Package: https://www.nuget.org/packages/YoutubeExplode/6.6.0
+- Package: https://www.nuget.org/packages/YoutubeExplode/6.6.1
 - License: MIT
 - Use in Niratan: in-process YouTube metadata, stream-manifest, and publisher-caption resolution. `YoutubeExplode.Converter`, yt-dlp, youtube-dl, Deno, Node, helper downloads, and child processes are not used.
 

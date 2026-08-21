@@ -44,6 +44,33 @@ public sealed class MihonRepositorySourceItemViewModelTests
     }
 
     [Fact]
+    public async Task InstalledSource_ExposesRemoveCommandAndStableAutomationId()
+    {
+        var source = new MihonExtensionSource
+        {
+            Id = "42",
+            Name = "Example",
+            PackageName = "example.package",
+            IsInstalled = true,
+        };
+        var removed = false;
+        var item = new MihonRepositorySourceItemViewModel(
+            source,
+            _ => Task.CompletedTask,
+            remove: _ =>
+            {
+                removed = true;
+                return Task.CompletedTask;
+            });
+
+        item.RemoveCommand.CanExecute(null).Should().BeTrue();
+        item.RemoveAutomationId.Should().Be(
+            "MihonRepositorySource_example_package_42_Remove");
+        await item.RemoveCommand.ExecuteAsync(null);
+        removed.Should().BeTrue();
+    }
+
+    [Fact]
     public void LanguageLabel_HidesSuwayomiLocalSourceSentinel()
     {
         MangaBrowseSourceItemViewModel

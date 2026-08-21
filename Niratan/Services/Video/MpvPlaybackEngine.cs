@@ -14,6 +14,7 @@ namespace Niratan.Services.Video;
 internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
 {
     private readonly IAnime4KShaderService _anime4KShaderService;
+    private readonly MpvHttpRangeStreamBridge _httpRangeStreamBridge = new();
     private readonly object _syncRoot = new();
     private IntPtr _handle;
     private bool _disposed;
@@ -27,6 +28,7 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
 
     public event EventHandler<VideoMediaLoadedEventArgs>? MediaLoaded;
     public event EventHandler<VideoMediaFailedEventArgs>? MediaFailed;
+    public event EventHandler? PlaybackEnded;
 
     public Task InitializeAsync(IntPtr hostHwnd, CancellationToken ct = default)
     {
@@ -68,6 +70,7 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
             MpvNative.SetOptionStringChecked(_handle, "hwdec", "auto-safe");
             MpvNative.SetOptionStringChecked(_handle, "ytdl", "no");
             MpvNative.SetOptionStringChecked(_handle, "wid", hostHwnd.ToInt64().ToString());
+            _httpRangeStreamBridge.Register(_handle);
 
             var status = MpvNative.Initialize(_handle);
             if (status < 0)
@@ -102,12 +105,13 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
             ThrowIfDisposed();
             EnsureInitialized();
 
-            var headers = string.Join(",", request.HttpHeaders.Select(pair => $"{pair.Key}: {pair.Value}"));
+            var effectiveRequest = _httpRangeStreamBridge.Prepare(request);
+            var headers = SerializeHttpHeaders(effectiveRequest.HttpHeaders);
             var headerStatus = MpvNative.SetPropertyString(_handle, "http-header-fields", headers);
             if (headerStatus < 0)
                 throw new InvalidOperationException($"Unable to configure video request headers: {MpvNative.ErrorString(headerStatus)}");
 
-            var status = MpvNative.Command(_handle, BuildLoadRequestCommandArgs(request));
+            var status = MpvNative.Command(_handle, BuildLoadRequestCommandArgs(effectiveRequest));
             if (status < 0)
                 throw new InvalidOperationException($"Unable to load video: {MpvNative.ErrorString(status)}");
 
@@ -462,6 +466,14 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
             : ["loadfile", request.PrimarySource, "replace", "-1", string.Join(',', options)];
     }
 
+    internal static string SerializeHttpHeaders(IReadOnlyDictionary<string, string> headers) =>
+        string.Join(",", headers.Select(pair =>
+            $"{EscapeMpvListValue(pair.Key)}: {EscapeMpvListValue(pair.Value)}"));
+
+    private static string EscapeMpvListValue(string value) =>
+        value.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace(",", "\\,", StringComparison.Ordinal);
+
     private static string EscapeMpvOption(string value) =>
         value.Replace("\\", "\\\\", StringComparison.Ordinal)
             .Replace(",", "\\,", StringComparison.Ordinal);
@@ -505,6 +517,10 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
                     MediaFailed?.Invoke(
                         this,
                         new VideoMediaFailedEventArgs("Unable to load the remote video source."));
+                }
+                else if (endFile.Reason == MpvNative.MpvEndFileReasonEof)
+                {
+                    PlaybackEnded?.Invoke(this, EventArgs.Empty);
                 }
             }
             else if (mpvEvent.EventId == MpvNative.MpvEventIdShutdown)
@@ -820,6 +836,7 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
                 return;
 
             DestroyHandle();
+            _httpRangeStreamBridge.Dispose();
             _disposed = true;
         }
 
@@ -907,6 +924,7 @@ internal sealed class MpvPlaybackEngine : IVideoPlaybackEngine
 
         MpvNative.TerminateDestroy(_handle);
         _handle = IntPtr.Zero;
+        _httpRangeStreamBridge.ReleaseRegistration();
     }
 
     private void ThrowIfDisposed()

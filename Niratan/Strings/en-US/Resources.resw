@@ -6,6 +6,7 @@
   <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
   <data name="NovelNavItem.Content" xml:space="preserve"><value>Novels</value></data>
   <data name="VideoNavItem.Content" xml:space="preserve"><value>Videos</value></data>
+  <data name="VideoLibraryNavigationItem.Content" xml:space="preserve"><value>Video library</value></data>
   <data name="NovelLookupNavItem.Content" xml:space="preserve"><value>Lookup Window</value></data>
   <data name="SettingsNavItem.Content" xml:space="preserve"><value>Settings</value></data>
   <data name="NormalLogsNavItem.Content" xml:space="preserve"><value>Normal Logs</value></data>
@@ -340,6 +341,7 @@
   <data name="VideoLibrarySortComboBox.AutomationProperties.Name" xml:space="preserve"><value>Sort videos</value></data>
   <data name="ScanVideoFolderButton.AutomationProperties.Name" xml:space="preserve"><value>Scan folder</value></data>
   <data name="ScanVideoFolderButton.Label" xml:space="preserve"><value>Scan folder</value></data>
+  <data name="RefreshVideoSourcesButton.Label" xml:space="preserve"><value>Refresh</value></data>
   <data name="ScanVideoFolderButton.ToolTipService.ToolTip" xml:space="preserve"><value>Scan folder</value></data>
   <data name="ImportVideoButton.AutomationProperties.Name" xml:space="preserve"><value>Import video</value></data>
   <data name="ImportVideoButton.Label" xml:space="preserve"><value>Import video</value></data>
@@ -1168,10 +1170,10 @@
   <data name="RemoteNovelDownloadQueued" xml:space="preserve"><value>Queued</value></data>
   <data name="RemoteNovelDownloading" xml:space="preserve"><value>Downloading</value></data>
   <data name="RemoteNovelDownloadRetry" xml:space="preserve"><value>Retry</value></data>
-  <data name="AddYouTubeLinkButton.Label" xml:space="preserve"><value>Add link</value></data>
+  <data name="AddYouTubeLinkButton.Label" xml:space="preserve"><value>YouTube</value></data>
   <data name="VideoPlayerOpenYouTubeLinkButton.Label" xml:space="preserve"><value>Open YouTube link</value></data>
   <data name="YouTubeQualityHeaderText.Text" xml:space="preserve"><value>YouTube Quality</value></data>
-  <data name="YouTubePublisherSubtitlesHeaderText.Text" xml:space="preserve"><value>Publisher subtitles</value></data>
+  <data name="YouTubePublisherSubtitlesHeaderText.Text" xml:space="preserve"><value>YouTube subtitles</value></data>
   <data name="YouTubeVideo" xml:space="preserve"><value>YouTube Video</value></data>
   <data name="YouTubeDialogTitle" xml:space="preserve"><value>Add / open YouTube link</value></data>
   <data name="YouTubeDialogOpen" xml:space="preserve"><value>Open</value></data>
@@ -1179,15 +1181,15 @@
   <data name="YouTubeDialogExperimentalTitle" xml:space="preserve"><value>Experimental</value></data>
   <data name="YouTubeDialogExperimentalMessage" xml:space="preserve"><value>YouTube support uses an unofficial interface and may stop working when YouTube changes.</value></data>
   <data name="YouTubeDialogInputHeader" xml:space="preserve"><value>YouTube video link</value></data>
-  <data name="YouTubeDialogResolving" xml:space="preserve"><value>Resolving video, qualities, and publisher subtitles...</value></data>
+  <data name="YouTubeDialogResolving" xml:space="preserve"><value>Resolving video, qualities, and YouTube subtitles...</value></data>
   <data name="YouTubeInvalidUrl" xml:space="preserve"><value>Enter a valid YouTube video link.</value></data>
   <data name="YouTubeRestricted" xml:space="preserve"><value>This video requires access that Niratan does not support.</value></data>
   <data name="YouTubeNoPlayableStream" xml:space="preserve"><value>No compatible stream up to 1080p is available.</value></data>
   <data name="YouTubeResolveFailed" xml:space="preserve"><value>The YouTube video could not be resolved. Try again later.</value></data>
   <data name="YouTubePlaybackFailed" xml:space="preserve"><value>This YouTube video could not be played. Try again later.</value></data>
   <data name="YouTubeQualitySwitchFailed" xml:space="preserve"><value>Could not switch YouTube quality.</value></data>
-  <data name="YouTubeSubtitleLoadFailed" xml:space="preserve"><value>Could not load this publisher subtitle track.</value></data>
-  <data name="YouTubeSubtitleLoading" xml:space="preserve"><value>Loading publisher subtitles...</value></data>
+  <data name="YouTubeSubtitleLoadFailed" xml:space="preserve"><value>Could not load this YouTube subtitle track.</value></data>
+  <data name="YouTubeSubtitleLoading" xml:space="preserve"><value>Loading YouTube subtitles...</value></data>
   <data name="DictionaryPopupViewAddedNoteInAnki" xml:space="preserve"><value>View added note in Anki</value></data>
   <data name="DictionaryPopupAnkiCardAddedTitle" xml:space="preserve"><value>Card Added</value></data>
   <data name="DictionaryPopupAnkiDuplicateFoundTitle" xml:space="preserve"><value>Duplicate Found</value></data>
@@ -1405,6 +1407,40 @@
   <data name="MangaLibraryLocalSurfaceButton.Content" xml:space="preserve"><value>Local</value></data>
   <data name="MangaLibraryOnlineSurfaceButton.Content" xml:space="preserve"><value>Online</value></data>
   <data name="MangaLibraryOnlineBrowseButton.Content" xml:space="preserve"><value>Browse / Connect</value></data>
+  <data name="MangaLibraryTopHomeNavItem.Content" xml:space="preserve"><value>Library</value></data>
+  <data name="MangaLibraryTopDiscoverNavItem.Content" xml:space="preserve"><value>Discover</value></data>
+  <data name="MangaLibraryTopSourcesNavItem.Content" xml:space="preserve"><value>Manga sources</value></data>
+  <data name="MangaLibraryTopExtensionsNavItem.Content" xml:space="preserve"><value>Manga extensions</value></data>
+  <data name="MangaLibraryTopSettingsNavItem.Content" xml:space="preserve"><value>Source settings</value></data>
+  <data name="MangaDiscoverSearchTextBox.PlaceholderText" xml:space="preserve"><value>Search manga</value></data>
+  <data name="MangaDiscoverProviderBox.Header" xml:space="preserve"><value>Metadata source</value></data>
+  <data name="MangaDiscoverFeedBox.Header" xml:space="preserve"><value>Category</value></data>
+  <data name="MangaDiscoverProvider_bangumi" xml:space="preserve"><value>Bangumi</value></data>
+  <data name="MangaDiscoverProvider_anilist" xml:space="preserve"><value>AniList</value></data>
+  <data name="MangaDiscoverFeed_bangumi_rank" xml:space="preserve"><value>Top rated manga</value></data>
+  <data name="MangaDiscoverFeed_bangumi_heat" xml:space="preserve"><value>Popular manga</value></data>
+  <data name="MangaDiscoverFeed_bangumi_date" xml:space="preserve"><value>Latest manga</value></data>
+  <data name="MangaDiscoverFeed_anilist_trending" xml:space="preserve"><value>Trending manga</value></data>
+  <data name="MangaDiscoverFeed_anilist_popular" xml:space="preserve"><value>Popular manga</value></data>
+  <data name="MangaDiscoverFeed_anilist_updated" xml:space="preserve"><value>Latest manga</value></data>
+  <data name="MangaDiscoverSearchButton.Content" xml:space="preserve"><value>Search</value></data>
+  <data name="MangaDiscoverRefreshButton.Content" xml:space="preserve"><value>Refresh</value></data>
+  <data name="MangaDiscoverSearchResultsHeading.Text" xml:space="preserve"><value>Search results</value></data>
+  <data name="MangaDiscoverEmptyText.Text" xml:space="preserve"><value>Choose Bangumi or AniList to discover manga.</value></data>
+  <data name="MangaDiscoverInitialStatus" xml:space="preserve"><value>Discover manga from Bangumi or AniList.</value></data>
+  <data name="MangaDiscoverLoadingStatus" xml:space="preserve"><value>Loading manga recommendations…</value></data>
+  <data name="MangaDiscoverEmptyStatus" xml:space="preserve"><value>No manga was returned by this metadata source.</value></data>
+  <data name="MangaDiscoverLoadedStatus" xml:space="preserve"><value>Loaded {0} manga discovery sections.</value></data>
+  <data name="MangaDiscoverSearchEmptyStatus" xml:space="preserve"><value>No manga matched this search.</value></data>
+  <data name="MangaDiscoverSearchLoadedStatus" xml:space="preserve"><value>Showing {0} manga search results.</value></data>
+  <data name="MangaDiscoverNoExtensionMessage" xml:space="preserve"><value>Install a Mihon manga extension first, then open this title again.</value></data>
+  <data name="MangaDiscoverNoExtensionTitle" xml:space="preserve"><value>No manga extension installed</value></data>
+  <data name="MangaDiscoverNoMatchMessage" xml:space="preserve"><value>No installed extension matched "{0}".</value></data>
+  <data name="MangaDiscoverNoMatchTitle" xml:space="preserve"><value>Manga extension match failed</value></data>
+  <data name="MangaDiscoverOpenFailedTitle" xml:space="preserve"><value>Open manga failed</value></data>
+  <data name="MangaDiscoverMatchingExtensionStatus" xml:space="preserve"><value>Matching installed manga extensions…</value></data>
+  <data name="MangaDiscoverNoExtensionDetailStatus" xml:space="preserve"><value>Install an extension or choose one from the extension list to open chapters.</value></data>
+  <data name="MangaDiscoverNoMatchDetailStatus" xml:space="preserve"><value>No installed extension matched "{0}". Select an extension to try it directly.</value></data>
   <data name="MangaBrowseSourceComboBox.Header" xml:space="preserve"><value>Source</value></data>
   <data name="MangaBrowseSearchTextBox.Header" xml:space="preserve"><value>Search</value></data>
   <data name="MangaBrowseSearchTextBox.PlaceholderText" xml:space="preserve"><value>Select a source, then search</value></data>
@@ -1550,6 +1586,11 @@
   <data name="MihonInstallSourceAction" xml:space="preserve"><value>Install</value></data>
   <data name="MihonUpdateSourceAction" xml:space="preserve"><value>Update</value></data>
   <data name="MihonInstalledSourceBadge" xml:space="preserve"><value>Installed</value></data>
+  <data name="MihonRemoveSourceAction" xml:space="preserve"><value>Remove</value></data>
+  <data name="MihonRemoveSourceDialogTitle" xml:space="preserve"><value>Remove extension?</value></data>
+  <data name="MihonRemoveSourceDialogMessage" xml:space="preserve"><value>Remove “{0}”? Its APK will be kept only while another source uses it.</value></data>
+  <data name="MihonRemovingStatus" xml:space="preserve"><value>Removing the Mihon extension…</value></data>
+  <data name="MihonRemovedStatus" xml:space="preserve"><value>{0} removed.</value></data>
   <data name="MihonNsfwSourceBadge" xml:space="preserve"><value>NSFW</value></data>
   <data name="MihonInitialStatus" xml:space="preserve"><value>The bundled Mihon runtime starts automatically when an extension is used.</value></data>
   <data name="MihonConnectingStatus" xml:space="preserve"><value>Connecting to the local Mihon bridge…</value></data>
@@ -1600,6 +1641,7 @@
   <data name="MangaRemoteDetailsCloseButton.Content" xml:space="preserve"><value>Close</value></data>
   <data name="MangaRemoteDetailsContinueButton.Content" xml:space="preserve"><value>Continue reading</value></data>
   <data name="MangaRemoteDetailsAuthorLabel.Text" xml:space="preserve"><value>Author</value></data>
+  <data name="MangaRemoteDetailsOriginalTitleLabel.Text" xml:space="preserve"><value>Original title</value></data>
   <data name="MangaRemoteDetailsChaptersHeader.Text" xml:space="preserve"><value>Chapters</value></data>
   <data name="MangaRemoteDetailsLoadingText.Text" xml:space="preserve"><value>Loading manga details…</value></data>
   <data name="MangaRemoteDetailsNoChaptersText.Text" xml:space="preserve"><value>No chapters are available.</value></data>
@@ -1608,21 +1650,30 @@
   <data name="MangaRemoteDetailsAddedLibraryStatus" xml:space="preserve"><value>Added to the manga library.</value></data>
   <data name="MangaRemoteDetailsRemovedLibraryStatus" xml:space="preserve"><value>Removed from the manga library.</value></data>
   <data name="MangaRemoteDetailsReadChapterStatus" xml:space="preserve"><value>Read</value></data>
+  <data name="MangaRemoteDetailsExtensionsComboBox.Header" xml:space="preserve"><value>Open with extension</value></data>
+  <data name="MangaRemoteDetailsSwitchingExtensionStatus" xml:space="preserve"><value>Loading from the selected extension…</value></data>
+  <data name="MangaRemoteDetailsExtensionNoMatch" xml:space="preserve"><value>The selected extension did not find &quot;{0}&quot;.</value></data>
   <data name="VideoMetadataSectionHeader.Text" xml:space="preserve"><value>Library metadata</value></data>
   <data name="VideoMetadataPrivacyCard.Header" xml:space="preserve"><value>Online metadata privacy</value></data>
   <data name="VideoMetadataPrivacyCard.Description" xml:space="preserve"><value>Allow Niratan to send only parsed titles, years, episode numbers, and external IDs. Videos, subtitles, NFO contents, and local paths are never uploaded.</value></data>
   <data name="VideoMetadataPrivacyToggle.Header" xml:space="preserve"><value>Enable online metadata queries</value></data>
+  <data name="VideoMetadataPrivacyToggleLabel.Text" xml:space="preserve"><value>Enable online metadata queries</value></data>
   <data name="VideoMetadataProvidersCard.Header" xml:space="preserve"><value>Metadata providers</value></data>
   <data name="VideoMetadataProvidersCard.Description" xml:space="preserve"><value>Local NFO and artwork always remain read-only. Provider failures never clear existing metadata.</value></data>
   <data name="VideoMetadataTmdbToggle.Header" xml:space="preserve"><value>TMDB — movies, drama, and mainstream anime</value></data>
+  <data name="VideoMetadataTmdbToggleLabel.Text" xml:space="preserve"><value>TMDB — movies, drama, and mainstream anime</value></data>
   <data name="VideoMetadataTvMazeToggle.Header" xml:space="preserve"><value>TVmaze — television fallback (CC BY-SA)</value></data>
+  <data name="VideoMetadataTvMazeToggleLabel.Text" xml:space="preserve"><value>TVmaze — television fallback (CC BY-SA)</value></data>
   <data name="VideoMetadataAniListToggle.Header" xml:space="preserve"><value>AniList — anime identities, aliases, and tags</value></data>
+  <data name="VideoMetadataAniListToggleLabel.Text" xml:space="preserve"><value>AniList — anime identities, aliases, and tags</value></data>
   <data name="VideoMetadataAniDbToggle.Header" xml:space="preserve"><value>AniDB — weekly official title index</value></data>
+  <data name="VideoMetadataAniDbToggleLabel.Text" xml:space="preserve"><value>AniDB — weekly official title index</value></data>
   <data name="VideoMetadataBangumiToggle.Header" xml:space="preserve"><value>Bangumi — anime and Japanese drama supplement</value></data>
+  <data name="VideoMetadataBangumiToggleLabel.Text" xml:space="preserve"><value>Bangumi — anime and Japanese drama supplement</value></data>
   <data name="VideoMetadataTvDbDisabledText.Text" xml:space="preserve"><value>TheTVDB: waiting for an approved Niratan project license</value></data>
   <data name="VideoMetadataTmdbCredentialCard.Header" xml:space="preserve"><value>TMDB credential</value></data>
   <data name="VideoMetadataTmdbCredentialCard.Description" xml:space="preserve"><value>Stored only in Windows Credential Manager. This product uses the TMDB API but is not endorsed or certified by TMDB.</value></data>
-  <data name="VideoMetadataTmdbTokenBox.PlaceholderText" xml:space="preserve"><value>TMDB v4 Read Token</value></data>
+  <data name="VideoMetadataTmdbTokenBox.PlaceholderText" xml:space="preserve"><value>TMDB v4 Read Token or v3 API Key</value></data>
   <data name="VideoMetadataSaveTmdbTokenButton.Content" xml:space="preserve"><value>Save token</value></data>
   <data name="VideoMetadataClearTmdbTokenButton.Content" xml:space="preserve"><value>Clear</value></data>
   <data name="VideoMetadataTmdbAttributionLink.Content" xml:space="preserve"><value>TMDB source</value></data>
@@ -1636,11 +1687,17 @@
   <data name="VideoMetadataCredentialMissing" xml:space="preserve"><value>Not configured</value></data>
   <data name="VideoMetadataCredentialOptional" xml:space="preserve"><value>Optional</value></data>
   <data name="VideoLibraryHomeNavItem.Content" xml:space="preserve"><value>Home</value></data>
+  <data name="VideoLibraryTopHomeNavItem.Content" xml:space="preserve"><value>Home</value></data>
+  <data name="VideoLibraryTopDiscoverNavItem.Content" xml:space="preserve"><value>Discover</value></data>
+  <data name="VideoLibraryTopSeriesNavItem.Content" xml:space="preserve"><value>Series</value></data>
+  <data name="VideoLibraryTopAllVideosNavItem.Content" xml:space="preserve"><value>All videos</value></data>
+  <data name="VideoLibraryTopImportNavItem.Content" xml:space="preserve"><value>Import</value></data>
   <data name="VideoLibraryMoviesNavItem.Content" xml:space="preserve"><value>Movies</value></data>
   <data name="VideoLibraryAnimeNavItem.Content" xml:space="preserve"><value>Anime</value></data>
   <data name="VideoLibraryUnorganizedNavItem.Content" xml:space="preserve"><value>Unorganized</value></data>
   <data name="VideoLibrarySourcesNavItem.Content" xml:space="preserve"><value>Sources</value></data>
   <data name="VideoLibraryViewHome" xml:space="preserve"><value>Home</value></data>
+  <data name="VideoLibraryViewDiscover" xml:space="preserve"><value>Discover</value></data>
   <data name="VideoLibraryViewMovies" xml:space="preserve"><value>Movies</value></data>
   <data name="VideoLibraryViewAnime" xml:space="preserve"><value>Anime</value></data>
   <data name="VideoLibraryViewUnorganized" xml:space="preserve"><value>Unorganized</value></data>
@@ -1695,6 +1752,10 @@
   <data name="VideoLibrarySourcesPrivacyInfo.Message" xml:space="preserve"><value>Online scraping runs only after privacy consent. Local scanning and NFO discovery remain available.</value></data>
   <data name="VideoLibraryRemoveSourceButton.ToolTipService.ToolTip" xml:space="preserve"><value>Remove source</value></data>
   <data name="VideoLibraryRemoveSourceButton.AutomationProperties.Name" xml:space="preserve"><value>Remove source</value></data>
+  <data name="VideoLibraryRemoveSourceButton.Label" xml:space="preserve"><value>Remove source</value></data>
+  <data name="VideoLibrarySourceSettingsButton.Label" xml:space="preserve"><value>Settings</value></data>
+  <data name="VideoLibrarySourceSettingsButton.ToolTipService.ToolTip" xml:space="preserve"><value>Source settings</value></data>
+  <data name="VideoLibrarySourceSettingsButton.AutomationProperties.Name" xml:space="preserve"><value>Source settings</value></data>
   <data name="VideoLibrarySourceMediaTypeBox.Header" xml:space="preserve"><value>Media type</value></data>
   <data name="VideoLibrarySaveSourceSettingsButton.Label" xml:space="preserve"><value>Save settings</value></data>
   <data name="VideoLibraryRefreshSourceButton.Label" xml:space="preserve"><value>Scan changes</value></data>
@@ -1710,12 +1771,39 @@
   <data name="VideoMetadataBatchStageCompleted" xml:space="preserve"><value>Metadata refresh complete</value></data>
   <data name="VideoMetadataBatchStageCancelled" xml:space="preserve"><value>Metadata refresh cancelled</value></data>
   <data name="VideoMetadataBatchStageFailed" xml:space="preserve"><value>Metadata refresh failed</value></data>
-  <data name="VideoMetadataSourceProgressFormat" xml:space="preserve"><value>{0} · {1} / {2} · {3} matched · {4} review</value></data>
-  <data name="VideoMetadataBackgroundProgressFormat" xml:space="preserve"><value>Scraping metadata{0} · {1} / {2} · {3} matched · {4} review</value></data>
+  <data name="VideoMetadataBatchStageInterrupted" xml:space="preserve"><value>Metadata refresh interrupted</value></data>
+  <data name="VideoMetadataSourceProgressFormat" xml:space="preserve"><value>{0} · {1} / {2} · {3} success · {4} pending · {5} failed</value></data>
+  <data name="VideoMetadataBackgroundProgressFormat" xml:space="preserve"><value>Scraping metadata{0} · {1} / {2} · {3} success · {4} pending · {5} failed</value></data>
   <data name="VideoLibrarySourceStatusFormat" xml:space="preserve"><value>{0} videos · {1} in progress · {2} missing</value></data>
   <data name="VideoLibrarySourceLastScannedFormat" xml:space="preserve"><value>Last scanned {0:g}</value></data>
   <data name="VideoLibrarySourceNeverScanned" xml:space="preserve"><value>Never scanned</value></data>
   <data name="VideoLibrarySourceDefaultProviderRoute" xml:space="preserve"><value>Default provider route</value></data>
+  <data name="VideoLibrarySourceLastScrapeFormat" xml:space="preserve"><value>Last scrape ({0}): {1} success · {2} pending · {3} failed</value></data>
+  <data name="VideoLibrarySourceNeverScraped" xml:space="preserve"><value>Never scraped</value></data>
+  <data name="VideoLibraryScrapeAllButton.Label" xml:space="preserve"><value>Rescrape</value></data>
+  <data name="VideoLibraryScrapeAllButton.ToolTipService.ToolTip" xml:space="preserve"><value>Rescrape metadata for all sources</value></data>
+  <data name="VideoLibraryMetadataTasksButton.Label" xml:space="preserve"><value>Background tasks</value></data>
+  <data name="VideoLibraryMetadataTasksButton.ToolTipService.ToolTip" xml:space="preserve"><value>Open background tasks</value></data>
+  <data name="VideoLibraryMetadataTasksHeading.Text" xml:space="preserve"><value>Background tasks</value></data>
+  <data name="VideoLibraryMetadataTasksEmptyText.Text" xml:space="preserve"><value>No background tasks.</value></data>
+  <data name="VideoLibraryRefreshMetadataTasksButton.ToolTipService.ToolTip" xml:space="preserve"><value>Refresh</value></data>
+  <data name="VideoLibraryCloseMetadataTasksButton.ToolTipService.ToolTip" xml:space="preserve"><value>Close</value></data>
+  <data name="VideoLibraryRetryFailedMetadataTasksButton.ToolTipService.ToolTip" xml:space="preserve"><value>Retry failed tasks</value></data>
+  <data name="VideoMetadataTaskReviewButton.ToolTipService.ToolTip" xml:space="preserve"><value>Open review</value></data>
+  <data name="VideoMetadataTaskRetryButton.ToolTipService.ToolTip" xml:space="preserve"><value>Retry task</value></data>
+  <data name="VideoMetadataTaskCancelButton.ToolTipService.ToolTip" xml:space="preserve"><value>Cancel task</value></data>
+  <data name="VideoMetadataTaskAllSources" xml:space="preserve"><value>All video sources</value></data>
+  <data name="VideoMetadataTaskQueued" xml:space="preserve"><value>Queued</value></data>
+  <data name="VideoMetadataTaskRunning" xml:space="preserve"><value>Running in background</value></data>
+  <data name="VideoMetadataTaskPaused" xml:space="preserve"><value>Paused</value></data>
+  <data name="VideoMetadataTaskCompleted" xml:space="preserve"><value>Completed</value></data>
+  <data name="VideoMetadataTaskCancelled" xml:space="preserve"><value>Cancelled</value></data>
+  <data name="VideoMetadataTaskInterrupted" xml:space="preserve"><value>Interrupted; retry available</value></data>
+  <data name="VideoMetadataTaskFailed" xml:space="preserve"><value>Failed; retry available</value></data>
+  <data name="VideoMetadataTaskProgressFormat" xml:space="preserve"><value>{0} / {1} · {2} success · {3} pending · {4} failed</value></data>
+  <data name="VideoMetadataTaskUpdatedFormat" xml:space="preserve"><value>Updated {0:g}</value></data>
+  <data name="VideoMetadataTaskCountFormat" xml:space="preserve"><value>{0} background tasks</value></data>
+  <data name="VideoMetadataTaskLoadFailedTitle" xml:space="preserve"><value>Background tasks unavailable</value></data>
   <data name="VideoLibraryHomeMyMediaHeading.Text" xml:space="preserve"><value>My media</value></data>
   <data name="VideoLibraryHomeMoviesTile.Text" xml:space="preserve"><value>Movies</value></data>
   <data name="VideoLibraryHomeSeriesTile.Text" xml:space="preserve"><value>Series</value></data>
@@ -1741,4 +1829,343 @@
   <data name="VideoLibraryTagsHeading.Text" xml:space="preserve"><value>Tags</value></data>
   <data name="VideoLibraryStudiosHeading.Text" xml:space="preserve"><value>Studios</value></data>
   <data name="VideoLibraryMoreLikeThisHeading.Text" xml:space="preserve"><value>More like this</value></data>
+  <data name="DownloadsNavigationItem.Content" xml:space="preserve"><value>Downloads</value></data>
+  <data name="DownloadsPageTitleText.Text" xml:space="preserve"><value>Downloads</value></data>
+  <data name="DownloadsRefreshButton.Label" xml:space="preserve"><value>Refresh</value></data>
+  <data name="DownloadsDiscoveryTab.Content" xml:space="preserve"><value>Discover</value></data>
+  <data name="DownloadsTasksTab.Content" xml:space="preserve"><value>Tasks</value></data>
+  <data name="DownloadsSettingsTab.Content" xml:space="preserve"><value>Download settings</value></data>
+  <data name="DownloadsLegalNotice.Title" xml:space="preserve"><value>Use only resources you are authorized to download</value></data>
+  <data name="DownloadsLegalNotice.Message" xml:space="preserve"><value>Search results come from Nyaa's RSS feed. Review the release before sending it to qBittorrent.</value></data>
+  <data name="DownloadsSearchBox.PlaceholderText" xml:space="preserve"><value>Title, release group, or keyword</value></data>
+  <data name="DownloadsSearchButton.Content" xml:space="preserve"><value>Search</value></data>
+  <data name="DownloadsAddButton.Content" xml:space="preserve"><value>Use selected backend</value></data>
+  <data name="DownloadsSettingsNotice.Title" xml:space="preserve"><value>Download backend settings</value></data>
+  <data name="DownloadsSettingsNotice.Message" xml:space="preserve"><value>Choose built-in MonoTorrent or qBittorrent. qBittorrent credentials are stored in Windows Credential Manager.</value></data>
+  <data name="DownloadsServerUrlBox.Header" xml:space="preserve"><value>Server URL</value></data>
+  <data name="DownloadsUsernameBox.Header" xml:space="preserve"><value>Username</value></data>
+  <data name="DownloadsPasswordBox.Header" xml:space="preserve"><value>WebUI password</value></data>
+  <data name="DownloadsApiKeyBox.Header" xml:space="preserve"><value>API key (qBittorrent 5.2+)</value></data>
+  <data name="DownloadsSavePathBox.Header" xml:space="preserve"><value>Default save path</value></data>
+  <data name="DownloadsCategoryBoxSettings.Header" xml:space="preserve"><value>Default category</value></data>
+  <data name="DownloadsAddPausedCheckBox.Content" xml:space="preserve"><value>Add torrents paused</value></data>
+  <data name="DownloadsSaveSettingsButton.Content" xml:space="preserve"><value>Save settings</value></data>
+  <data name="DownloadsTestConnectionButton.Content" xml:space="preserve"><value>Test connection</value></data>
+  <data name="DownloadsClearCredentialsButton.Content" xml:space="preserve"><value>Clear credentials</value></data>
+  <data name="DownloadsPauseButton.Content" xml:space="preserve"><value>Pause</value></data>
+  <data name="DownloadsResumeButton.Content" xml:space="preserve"><value>Resume</value></data>
+  <data name="DownloadsRemoveButton.Content" xml:space="preserve"><value>Remove task</value></data>
+  <data name="DownloadsInitialSummary" xml:space="preserve"><value>Search Nyaa for a resource.</value></data>
+  <data name="DownloadsTasksInitialStatus" xml:space="preserve"><value>Select a backend to load its download tasks.</value></data>
+  <data name="DownloadsCredentialsMissing" xml:space="preserve"><value>Not configured</value></data>
+  <data name="DownloadsCredentialsConfigured" xml:space="preserve"><value>Configured</value></data>
+  <data name="DownloadsCredentialsCleared" xml:space="preserve"><value>qBittorrent credentials cleared.</value></data>
+  <data name="DownloadsSearchFailed" xml:space="preserve"><value>Search failed.</value></data>
+  <data name="DownloadsSearchResultSummary" xml:space="preserve"><value>Showing {0} results. Verify the release contents before downloading.</value></data>
+  <data name="DownloadsAddingStatus" xml:space="preserve"><value>Adding to qBittorrent…</value></data>
+  <data name="DownloadsAddedStatus" xml:space="preserve"><value>Added to qBittorrent</value></data>
+  <data name="DownloadsAddedTaskStatus" xml:space="preserve"><value>The torrent was added to qBittorrent.</value></data>
+  <data name="DownloadsAddFailedStatus" xml:space="preserve"><value>Could not add torrent.</value></data>
+  <data name="DownloadsSettingsSaved" xml:space="preserve"><value>Download settings saved.</value></data>
+  <data name="DownloadsConnectionSuccess" xml:space="preserve"><value>Connected to qBittorrent {0} (WebAPI {1}).</value></data>
+  <data name="DownloadsConnectionFailed" xml:space="preserve"><value>qBittorrent connection failed.</value></data>
+  <data name="DownloadsTaskCount" xml:space="preserve"><value>{0} qBittorrent tasks.</value></data>
+  <data name="DownloadsRefreshFailed" xml:space="preserve"><value>Could not refresh qBittorrent tasks.</value></data>
+  <data name="DownloadsNoCategory" xml:space="preserve"><value>No category</value></data>
+  <data name="DownloadsEtaUnknown" xml:space="preserve"><value>Unknown ETA</value></data>
+  <data name="DownloadsCancelTaskButton.Content" xml:space="preserve"><value>Cancel</value></data>
+  <data name="DownloadsDetailsButton.Content" xml:space="preserve"><value>Details</value></data>
+  <data name="DownloadsResumeTaskButton.Content" xml:space="preserve"><value>Resume</value></data>
+  <data name="DownloadsOpenLocationButton.Content" xml:space="preserve"><value>Open file location</value></data>
+  <data name="DownloadsDeleteTaskButton.Content" xml:space="preserve"><value>Delete task</value></data>
+  <data name="DownloadsTaskDetailsDialog.Title" xml:space="preserve"><value>Task details</value></data>
+  <data name="DownloadsTaskDetailsDialog.CloseButtonText" xml:space="preserve"><value>Close</value></data>
+  <data name="DownloadsTaskDetailsOverviewTab.Content" xml:space="preserve"><value>Overview</value></data>
+  <data name="DownloadsTaskDetailsFilesTab.Content" xml:space="preserve"><value>Files</value></data>
+  <data name="DownloadsTaskDetailsTrackersTab.Content" xml:space="preserve"><value>Trackers</value></data>
+  <data name="DownloadsTaskHashLabel.Text" xml:space="preserve"><value>Hash</value></data>
+  <data name="DownloadsTaskStateLabel.Text" xml:space="preserve"><value>State</value></data>
+  <data name="DownloadsTaskProgressLabel.Text" xml:space="preserve"><value>Progress</value></data>
+  <data name="DownloadsTaskSizeLabel.Text" xml:space="preserve"><value>Total size</value></data>
+  <data name="DownloadsTaskTorrentSizeLabel.Text" xml:space="preserve"><value>Torrent size</value></data>
+  <data name="DownloadsTaskRemainingLabel.Text" xml:space="preserve"><value>Remaining</value></data>
+  <data name="DownloadsTaskSavePathLabel.Text" xml:space="preserve"><value>Save path</value></data>
+  <data name="DownloadsTaskContentPathLabel.Text" xml:space="preserve"><value>Content path</value></data>
+  <data name="DownloadsTaskDownloadRateLabel.Text" xml:space="preserve"><value>Download / upload</value></data>
+  <data name="DownloadsTaskAverageRateLabel.Text" xml:space="preserve"><value>Average rate</value></data>
+  <data name="DownloadsTaskEtaLabel.Text" xml:space="preserve"><value>ETA</value></data>
+  <data name="DownloadsTaskPeersLabel.Text" xml:space="preserve"><value>Peers / seeds</value></data>
+  <data name="DownloadsTaskPiecesLabel.Text" xml:space="preserve"><value>Pieces / ratio</value></data>
+  <data name="DownloadsTaskPieceSizeLabel.Text" xml:space="preserve"><value>Piece size</value></data>
+  <data name="DownloadsTaskConnectionsLabel.Text" xml:space="preserve"><value>Connections</value></data>
+  <data name="DownloadsTaskDownloadedLabel.Text" xml:space="preserve"><value>Downloaded</value></data>
+  <data name="DownloadsTaskUploadedLabel.Text" xml:space="preserve"><value>Uploaded</value></data>
+  <data name="DownloadsTaskWastedLabel.Text" xml:space="preserve"><value>Wasted</value></data>
+  <data name="DownloadsTaskPrivacyLabel.Text" xml:space="preserve"><value>Privacy</value></data>
+  <data name="DownloadsTaskDatesLabel.Text" xml:space="preserve"><value>Added / completed</value></data>
+  <data name="DownloadsTaskCreationDateLabel.Text" xml:space="preserve"><value>Created</value></data>
+  <data name="DownloadsTaskCreatedByLabel.Text" xml:space="preserve"><value>Created by</value></data>
+  <data name="DownloadsTaskCommentLabel.Text" xml:space="preserve"><value>Comment</value></data>
+  <data name="DownloadsTaskDetailsLoading" xml:space="preserve"><value>Loading task details…</value></data>
+  <data name="DownloadsTaskDetailsLoaded" xml:space="preserve"><value>Details loaded from qBittorrent.</value></data>
+  <data name="DownloadsTaskDetailsFailed" xml:space="preserve"><value>Could not load task details.</value></data>
+  <data name="DownloadsDeleteTaskTitle" xml:space="preserve"><value>Delete download task?</value></data>
+  <data name="DownloadsDeleteTaskMessage" xml:space="preserve"><value>Remove '{0}' from qBittorrent? Downloaded files will be kept.</value></data>
+  <data name="DownloadsDeleteTaskButtonText" xml:space="preserve"><value>Delete task</value></data>
+  <data name="DownloadsCancelButton" xml:space="preserve"><value>Cancel</value></data>
+  <data name="DownloadsLocationUnavailable" xml:space="preserve"><value>The qBittorrent save path is unavailable.</value></data>
+  <data name="DownloadsLocationOpenFailed" xml:space="preserve"><value>Could not open the task location.</value></data>
+  <data name="DownloadsPrivateTorrent" xml:space="preserve"><value>Private torrent</value></data>
+  <data name="DownloadsPublicTorrent" xml:space="preserve"><value>Public torrent</value></data>
+  <data name="DownloadsNoComment" xml:space="preserve"><value>No comment</value></data>
+  <data name="DownloadsUnknownValue" xml:space="preserve"><value>Unknown</value></data>
+  <data name="DownloadsPriorityDoNotDownload" xml:space="preserve"><value>Do not download</value></data>
+  <data name="DownloadsPriorityHigh" xml:space="preserve"><value>High</value></data>
+  <data name="DownloadsPriorityMaximum" xml:space="preserve"><value>Maximum</value></data>
+  <data name="DownloadsPriorityNormal" xml:space="preserve"><value>Normal</value></data>
+  <data name="DownloadsTrackerWorking" xml:space="preserve"><value>Working</value></data>
+  <data name="DownloadsTrackerUpdating" xml:space="preserve"><value>Updating</value></data>
+  <data name="DownloadsTrackerError" xml:space="preserve"><value>Error</value></data>
+  <data name="DownloadsTrackerDisabled" xml:space="preserve"><value>Disabled</value></data>
+  <data name="DownloadsTrackerNotContacted" xml:space="preserve"><value>Not contacted</value></data>
+  <data name="DownloadsFileNameHeader.Text" xml:space="preserve"><value>Name</value></data>
+  <data name="DownloadsFileSizeHeader.Text" xml:space="preserve"><value>Size</value></data>
+  <data name="DownloadsFileProgressHeader.Text" xml:space="preserve"><value>Progress</value></data>
+  <data name="DownloadsFilePriorityHeader.Text" xml:space="preserve"><value>Priority</value></data>
+  <data name="DownloadsFileAvailabilityHeader.Text" xml:space="preserve"><value>Availability</value></data>
+  <data name="DownloadsFileSeed" xml:space="preserve"><value>Seeding</value></data>
+  <data name="DownloadsFileNotSeed" xml:space="preserve"><value>Not seeding</value></data>
+  <data name="DownloadsTrackerTier" xml:space="preserve"><value>Tier</value></data>
+  <data name="DownloadsTrackerDownloaded" xml:space="preserve"><value>Downloaded</value></data>
+  <data name="DiscoverNavigationItem.Content" xml:space="preserve"><value>Video</value></data>
+  <data name="DiscoverPageTitleText.Text" xml:space="preserve"><value>Video</value></data>
+  <data name="DiscoverRefreshButton.Label" xml:space="preserve"><value>Refresh</value></data>
+  <data name="DiscoverExploreTab.Content" xml:space="preserve"><value>Explore</value></data>
+  <data name="DiscoverRecommendationsTab.Content" xml:space="preserve"><value>Recommendations</value></data>
+  <data name="DiscoverProviderBox.Header" xml:space="preserve"><value>Source</value></data>
+  <data name="DiscoverFeedBox.Header" xml:space="preserve"><value>Feed</value></data>
+  <data name="DiscoverMediaKindBox.Header" xml:space="preserve"><value>Type</value></data>
+  <data name="DiscoverYearBox.Header" xml:space="preserve"><value>Year</value></data>
+  <data name="DiscoverGenreBox.Header" xml:space="preserve"><value>Genre ID</value></data>
+  <data name="DiscoverSortBox.Header" xml:space="preserve"><value>Sort</value></data>
+  <data name="DiscoverLoadButton.Content" xml:space="preserve"><value>Apply</value></data>
+  <data name="DiscoverLoadMoreButton.Content" xml:space="preserve"><value>Load more</value></data>
+  <data name="DiscoverVideoSearchBox.PlaceholderText" xml:space="preserve"><value>Search movies, series, or anime</value></data>
+  <data name="DiscoverVideoSearchKindBox.PlaceholderText" xml:space="preserve"><value>Type</value></data>
+  <data name="DiscoverVideoSearchButton.Content" xml:space="preserve"><value>Search</value></data>
+  <data name="DiscoverSearchResultsHeading.Text" xml:space="preserve"><value>Search results</value></data>
+  <data name="DiscoverRecommendationHeading.Text" xml:space="preserve"><value>Recommendations</value></data>
+  <data name="DiscoverPeopleHeading.Text" xml:space="preserve"><value>Cast and staff</value></data>
+  <data name="DiscoverRelatedHeading.Text" xml:space="preserve"><value>Related titles</value></data>
+  <data name="DiscoverOverviewHeading.Text" xml:space="preserve"><value>Overview</value></data>
+  <data name="DiscoverDetailsBannerText.Text" xml:space="preserve"><value>Video details</value></data>
+  <data name="DiscoverDetailsLoadingText.Text" xml:space="preserve"><value>Loading details…</value></data>
+  <data name="DiscoverBackButton.Content" xml:space="preserve"><value>Back</value></data>
+  <data name="DiscoverResourceHeading.Text" xml:space="preserve"><value>Search Nyaa resources</value></data>
+  <data name="DiscoverResourceQueryBox.PlaceholderText" xml:space="preserve"><value>Title, original title, year, or season</value></data>
+  <data name="DiscoverSearchNyaaButton.Content" xml:space="preserve"><value>Search Nyaa</value></data>
+  <data name="DiscoverSearchResourcesButton" xml:space="preserve"><value>Search resources</value></data>
+  <data name="DiscoverSearchSubtitlesButton" xml:space="preserve"><value>Search subtitles</value></data>
+  <data name="DiscoverSubscribeButton" xml:space="preserve"><value>Subscribe</value></data>
+  <data name="DiscoverUnsubscribeButton" xml:space="preserve"><value>Unsubscribe</value></data>
+  <data name="DiscoverSubtitleHeading" xml:space="preserve"><value>Search subtitles</value></data>
+  <data name="DiscoverNyaaDownloadButton.Content" xml:space="preserve"><value>Download and import</value></data>
+  <data name="DiscoverAddToQbButton.Content" xml:space="preserve"><value>Add to qBittorrent</value></data>
+  <data name="DiscoverMovie" xml:space="preserve"><value>Movie</value></data>
+  <data name="DiscoverSeries" xml:space="preserve"><value>Series</value></data>
+  <data name="DiscoverAnime" xml:space="preserve"><value>Anime</value></data>
+  <data name="DiscoverSortPopularity" xml:space="preserve"><value>Popularity</value></data>
+  <data name="DiscoverSortRating" xml:space="preserve"><value>Rating</value></data>
+  <data name="DiscoverSortMovieRelease" xml:space="preserve"><value>Movie release date</value></data>
+  <data name="DiscoverSortSeriesAir" xml:space="preserve"><value>Series first air date</value></data>
+  <data name="DiscoverSortRevenue" xml:space="preserve"><value>Revenue</value></data>
+  <data name="DiscoverResultSummary" xml:space="preserve"><value>Showing {0} results.</value></data>
+  <data name="DiscoverResourceSummary" xml:space="preserve"><value>Showing {0} Nyaa results.</value></data>
+  <data name="DiscoverSubtitleSummary" xml:space="preserve"><value>Showing {0} subtitle results.</value></data>
+  <data name="DiscoverQbMissing" xml:space="preserve"><value>Configure qBittorrent in Downloads first.</value></data>
+  <data name="DiscoverOnlineConsentRequired" xml:space="preserve"><value>Enable online metadata queries in Video settings before using Discovery.</value></data>
+  <data name="DiscoverConsentTitle" xml:space="preserve"><value>Online metadata permission required</value></data>
+  <data name="DiscoverProviderFailedTitle" xml:space="preserve"><value>Discovery provider failed</value></data>
+  <data name="DiscoverSearchFailedTitle" xml:space="preserve"><value>Video search failed</value></data>
+  <data name="DiscoverTmdbCredentialInvalid" xml:space="preserve"><value>TMDB authentication failed. Enter a TMDB v4 Read Token or a v3 API key, then refresh.</value></data>
+  <data name="DiscoverOpenSettingsButton.Content" xml:space="preserve"><value>Open video settings</value></data>
+  <data name="VideoLibraryEpisodesLoadingText.Text" xml:space="preserve"><value>Loading episodes…</value></data>
+  <data name="VideoLibraryEpisodePlayButton.Content" xml:space="preserve"><value>Play</value></data>
+  <data name="VideoLibraryEpisodeDownloadButton.Content" xml:space="preserve"><value>Download</value></data>
+  <data name="VideoEpisodeNotDownloaded" xml:space="preserve"><value>Not downloaded</value></data>
+  <data name="VideoEpisodeSearchingResources" xml:space="preserve"><value>Searching resources…</value></data>
+  <data name="VideoEpisodeResourceNotFound" xml:space="preserve"><value>No matching resource was found.</value></data>
+  <data name="VideoEpisodeDownloadQueued" xml:space="preserve"><value>Added to downloads</value></data>
+  <data name="DownloadsImportHeading" xml:space="preserve"><value>Import completed download</value></data>
+  <data name="DownloadsImportSourceBox.Header" xml:space="preserve"><value>Video source</value></data>
+  <data name="DownloadsImportButton.Content" xml:space="preserve"><value>Confirm read-only scan</value></data>
+  <data name="DownloadsImportStatus" xml:space="preserve"><value></value></data>
+  <data name="DownloadsImportIncomplete" xml:space="preserve"><value>Import is available after the download completes.</value></data>
+  <data name="DownloadsImportNoSource" xml:space="preserve"><value>No configured video source contains this download.</value></data>
+  <data name="DownloadsImportConfirm" xml:space="preserve"><value>Choose a source and confirm a read-only library scan.</value></data>
+  <data name="DownloadsImportUnavailable" xml:space="preserve"><value>This download cannot be imported.</value></data>
+  <data name="DownloadsImportSuccess" xml:space="preserve"><value>Scanned {0} videos into {1}.</value></data>
+  <data name="DownloadsImportFailed" xml:space="preserve"><value>The video source scan failed.</value></data>
+  <data name="VideoDiscoverySettingsCard.Header" xml:space="preserve"><value>Discovery feeds</value></data>
+  <data name="VideoDiscoveryProviderOrderBox.Header" xml:space="preserve"><value>Explore provider order</value></data>
+  <data name="VideoDiscoveryProviderOrderBox.PlaceholderText" xml:space="preserve"><value>tmdb,bangumi,anilist</value></data>
+  <data name="VideoDiscoveryTmdbRecommendationsToggle.OnContent" xml:space="preserve"><value>TMDB recommendation groups</value></data>
+  <data name="VideoDiscoveryTmdbRecommendationsToggle.OffContent" xml:space="preserve"><value>TMDB recommendation groups</value></data>
+  <data name="VideoDiscoveryBangumiCalendarToggle.OnContent" xml:space="preserve"><value>Bangumi broadcast calendar</value></data>
+  <data name="VideoDiscoveryBangumiCalendarToggle.OffContent" xml:space="preserve"><value>Bangumi broadcast calendar</value></data>
+  <data name="VideoDiscoveryAniListRecommendationsToggle.OnContent" xml:space="preserve"><value>AniList recommendation groups</value></data>
+  <data name="VideoDiscoveryAniListRecommendationsToggle.OffContent" xml:space="preserve"><value>AniList recommendation groups</value></data>
+  <data name="VideoDiscoveryTmdbRecommendationsLabel.Text" xml:space="preserve"><value>TMDB recommendation groups</value></data>
+  <data name="VideoDiscoveryBangumiCalendarLabel.Text" xml:space="preserve"><value>Bangumi broadcast calendar</value></data>
+  <data name="VideoDiscoveryAniListRecommendationsLabel.Text" xml:space="preserve"><value>AniList recommendation groups</value></data>
+  <data name="DiscoverFeed_tmdb_discover-movie" xml:space="preserve"><value>Explore movies</value></data>
+  <data name="DiscoverFeed_tmdb_discover-tv" xml:space="preserve"><value>Explore series</value></data>
+  <data name="DiscoverFeed_tmdb_trending-movie" xml:space="preserve"><value>Trending movies</value></data>
+  <data name="DiscoverFeed_tmdb_trending-tv" xml:space="preserve"><value>Trending series</value></data>
+  <data name="DiscoverFeed_tmdb_popular-movie" xml:space="preserve"><value>Popular movies</value></data>
+  <data name="DiscoverFeed_tmdb_popular-tv" xml:space="preserve"><value>Popular series</value></data>
+  <data name="DiscoverFeed_tmdb_top-rated-movie" xml:space="preserve"><value>Top rated movies</value></data>
+  <data name="DiscoverFeed_tmdb_top-rated-tv" xml:space="preserve"><value>Top rated series</value></data>
+  <data name="DiscoverFeed_tmdb_now-playing" xml:space="preserve"><value>Now playing</value></data>
+  <data name="DiscoverFeed_tmdb_upcoming" xml:space="preserve"><value>Upcoming movies</value></data>
+  <data name="DiscoverFeed_tmdb_on-air" xml:space="preserve"><value>On the air</value></data>
+  <data name="DiscoverFeed_bangumi_subjects" xml:space="preserve"><value>Browse anime</value></data>
+  <data name="DiscoverFeed_bangumi_calendar" xml:space="preserve"><value>Broadcast calendar</value></data>
+  <data name="DiscoverFeed_anilist_trending" xml:space="preserve"><value>Trending anime</value></data>
+  <data name="DiscoverFeed_anilist_popular" xml:space="preserve"><value>Popular anime</value></data>
+  <data name="DiscoverFeed_anilist_seasonal" xml:space="preserve"><value>This season</value></data>
+  <data name="GamesNavItem.Content" xml:space="preserve"><value>Games</value></data>
+  <data name="GamesPageTitle.Text" xml:space="preserve"><value>Galgame</value></data>
+  <data name="GamesPathBox.Header" xml:space="preserve"><value>Game executable</value></data>
+  <data name="GamesPathBox.PlaceholderText" xml:space="preserve"><value>C:\Games\Game.exe</value></data>
+  <data name="GamesAddButton.Content" xml:space="preserve"><value>Add</value></data>
+  <data name="GamesLaunchButton.Content" xml:space="preserve"><value>Launch and capture</value></data>
+  <data name="GamesRemoveButton.Content" xml:space="preserve"><value>Remove</value></data>
+  <data name="GamesAttachLabel.Text" xml:space="preserve"><value>Attach PID</value></data>
+  <data name="GamesAttachPidBox.Header" xml:space="preserve"><value>Running process id</value></data>
+  <data name="GamesAttachButton.Content" xml:space="preserve"><value>Attach and capture</value></data>
+  <data name="GamesToolbarLaunchLabel.Text" xml:space="preserve"><value>Launch and capture</value></data>
+  <data name="GamesToolbarAttachLabel.Text" xml:space="preserve"><value>Attach and capture</value></data>
+  <data name="GamesToolbarClearLabel.Text" xml:space="preserve"><value>Clear</value></data>
+  <data name="GamesAudioFallbackButton.ToolTipService.ToolTip" xml:space="preserve"><value>Audio fallback policy</value></data>
+  <data name="GamesToolbarHealthButton.ToolTipService.ToolTip" xml:space="preserve"><value>Health</value></data>
+  <data name="GamesToolbarShowWindowButton.ToolTipService.ToolTip" xml:space="preserve"><value>Show hook text window</value></data>
+  <data name="GamesExternalWindowModeButton.ToolTipService.ToolTip" xml:space="preserve"><value>External-window mining is enabled</value></data>
+  <data name="GamesAttachProcessPlaceholder" xml:space="preserve"><value>Select a running game</value></data>
+  <data name="GamesAttachProcessTitle" xml:space="preserve"><value>Attach and capture</value></data>
+  <data name="GamesAttachProcessConfirm" xml:space="preserve"><value>Attach</value></data>
+  <data name="GamesAudioFallbackTitle" xml:space="preserve"><value>Audio fallback policy</value></data>
+  <data name="GamesAudioFallbackDescription" xml:space="preserve"><value>Use paired game resources first, then engine PCM, then system loopback. A genuinely unvoiced line can still create a text-and-screenshot card.</value></data>
+  <data name="GamesStopButton.Content" xml:space="preserve"><value>Stop</value></data>
+  <data name="GamesSessionIdle" xml:space="preserve"><value>No capture session is running.</value></data>
+  <data name="GamesSessionResolving" xml:space="preserve"><value>Resolving game and helper runtime…</value></data>
+  <data name="GamesSessionLaunching" xml:space="preserve"><value>Launching game…</value></data>
+  <data name="GamesSessionAttaching" xml:space="preserve"><value>Attaching to the running game…</value></data>
+  <data name="GamesSessionInjecting" xml:space="preserve"><value>Injecting the isolated voice helper…</value></data>
+  <data name="GamesSessionOpeningIpc" xml:space="preserve"><value>Opening the read-only capture channel…</value></data>
+  <data name="GamesSessionWaiting" xml:space="preserve"><value>Waiting for text and voice signals…</value></data>
+  <data name="GamesSessionRunning" xml:space="preserve"><value>Listening</value></data>
+  <data name="GamesSessionDegraded" xml:space="preserve"><value>Game is running, but hook signals are incomplete.</value></data>
+  <data name="GamesSessionStopping" xml:space="preserve"><value>Stopping capture…</value></data>
+  <data name="GamesSessionError" xml:space="preserve"><value>Capture session failed.</value></data>
+  <data name="GamesInvalidExecutable" xml:space="preserve"><value>Choose an existing .exe file.</value></data>
+  <data name="GamesDuplicateExecutable" xml:space="preserve"><value>This executable is already in the game library.</value></data>
+  <data name="GamesInvalidProcessId" xml:space="preserve"><value>Enter a valid running process id.</value></data>
+  <data name="GamesPageSubtitle.Text" xml:space="preserve"><value>Manage games, capture text, and mine cards with voice.</value></data>
+  <data name="GamesLibraryKpiLabel.Text" xml:space="preserve"><value>Library</value></data>
+  <data name="GamesSessionKpiLabel.Text" xml:space="preserve"><value>Capture</value></data>
+  <data name="GamesTextKpiLabel.Text" xml:space="preserve"><value>Captured text</value></data>
+  <data name="GamesAudioKpiLabel.Text" xml:space="preserve"><value>Voice</value></data>
+  <data name="GamesAudioKpiValue.Text" xml:space="preserve"><value>Ready with a live session</value></data>
+  <data name="GamesLibrarySection.Content" xml:space="preserve"><value>Library</value></data>
+  <data name="GamesWorkbenchSection.Content" xml:space="preserve"><value>Workbench</value></data>
+  <data name="GamesDiagnosticsSection.Content" xml:space="preserve"><value>Diagnostics</value></data>
+  <data name="GamesCardHint.Text" xml:space="preserve"><value>Select this game, then switch to Workbench to inspect live text.</value></data>
+  <data name="GamesThreadsTitle.Text" xml:space="preserve"><value>Capture threads</value></data>
+  <data name="GamesWorkbenchHelpTitle.Text" xml:space="preserve"><value>Capture workbench</value></data>
+  <data name="GamesWorkbenchHelpText.Text" xml:space="preserve"><value>Select any text inside a captured line, then click Look up. The game window and nearest voice clip are prepared when you mine an Anki card.</value></data>
+  <data name="GamesCapturedTextTitle.Text" xml:space="preserve"><value>Captured text</value></data>
+  <data name="GamesDiagnosticsTitle.Text" xml:space="preserve"><value>Hook diagnostics</value></data>
+  <data name="GamesDiagnosticsPipelineTitle.Text" xml:space="preserve"><value>Capture pipeline</value></data>
+  <data name="GamesDiagnosticsSnapshotTitle.Text" xml:space="preserve"><value>Runtime snapshot</value></data>
+  <data name="GamesDiagnosticsIdentityLabel.Text" xml:space="preserve"><value>Target identity</value></data>
+  <data name="GamesDiagnosticsCountersLabel.Text" xml:space="preserve"><value>Observed counters</value></data>
+  <data name="GamesDiagnosticsFlagsLabel.Text" xml:space="preserve"><value>Symbolic diagnostics</value></data>
+  <data name="GamesDiagnosticsEvidenceNotice.Message" xml:space="preserve"><value>Only directly observed runtime evidence is marked as observed; later gates are never inferred from an earlier gate.</value></data>
+  <data name="GamesDiagnosticsEventsTitle.Text" xml:space="preserve"><value>Session timeline</value></data>
+  <data name="GamesDiagnosticsAllObserved" xml:space="preserve"><value>All currently observable runtime gates passed.</value></data>
+  <data name="GamesDiagnosticsNextGateFormat" xml:space="preserve"><value>Next gate: {0}.</value></data>
+  <data name="GamesDiagnosticsNoTarget" xml:space="preserve"><value>No target selected</value></data>
+  <data name="GamesDiagnosticsNoSnapshot" xml:space="preserve"><value>No compatible IPC snapshot has been observed.</value></data>
+  <data name="GamesDiagnosticsCountersFormat" xml:space="preserve"><value>HVH1 v{0} / IPC v{1} · text={2} · clips={3} · PCM={4} B</value></data>
+  <data name="GamesDiagProcess" xml:space="preserve"><value>Target process</value></data>
+  <data name="GamesDiagHelper" xml:space="preserve"><value>Helper ready</value></data>
+  <data name="GamesDiagIpc" xml:space="preserve"><value>IPC compatible</value></data>
+  <data name="GamesDiagText" xml:space="preserve"><value>Text observed</value></data>
+  <data name="GamesDiagThread" xml:space="preserve"><value>Text thread selected</value></data>
+  <data name="GamesDiagResource" xml:space="preserve"><value>Voice resource observed</value></data>
+  <data name="GamesDiagPcm" xml:space="preserve"><value>PCM observed</value></data>
+  <data name="GamesDiagPaired" xml:space="preserve"><value>Text and voice paired</value></data>
+  <data name="GamesDiagLoopback" xml:space="preserve"><value>Loopback fallback observed</value></data>
+  <data name="GamesDiagE2e" xml:space="preserve"><value>Card end-to-end verified</value></data>
+  <data name="GamesDiagPassed" xml:space="preserve"><value>Observed</value></data>
+  <data name="GamesDiagPending" xml:space="preserve"><value>Waiting</value></data>
+  <data name="GamesDiagFailed" xml:space="preserve"><value>Failed</value></data>
+  <data name="GamesDiagNotRun" xml:space="preserve"><value>Not run</value></data>
+  <data name="GamesDiagNotApplicable" xml:space="preserve"><value>Not applicable</value></data>
+  <data name="GamesDiagUnavailable" xml:space="preserve"><value>Not exposed</value></data>
+  <data name="GamesDiagWaitingEvidence" xml:space="preserve"><value>No direct evidence has been observed yet.</value></data>
+  <data name="GamesDiagFailedEvidence" xml:space="preserve"><value>The session stopped at this boundary.</value></data>
+  <data name="GamesDiagUnavailableEvidence" xml:space="preserve"><value>The current IPC contract does not expose this proof.</value></data>
+  <data name="GamesDiagHelperEvidence" xml:space="preserve"><value>The helper published a shared capture header.</value></data>
+  <data name="GamesDiagTextEvidenceFormat" xml:space="preserve"><value>{0} text events observed.</value></data>
+  <data name="GamesDiagResourceEvidence" xml:space="preserve"><value>A symbolic resource or engine clip flag was observed.</value></data>
+  <data name="GamesDiagPcmEvidenceFormat" xml:space="preserve"><value>{0} PCM bytes · {1} clips</value></data>
+  <data name="GamesDiagResourceNotApplicableEvidence" xml:space="preserve"><value>PCM was observed without a resource-level flag.</value></data>
+  <data name="GamesDiagPairUnavailableEvidence" xml:space="preserve"><value>The current IPC does not expose a stable text/audio pair event.</value></data>
+  <data name="GamesOverlayTitle.Text" xml:space="preserve"><value>Galgame capture window</value></data>
+  <data name="GamesOverlayStatus.Text" xml:space="preserve"><value>Waiting for captured text…</value></data>
+  <data name="GamesOverlayCloseButton.Content" xml:space="preserve"><value>Close</value></data>
+  <data name="GamesOverlayThreadsTitle.Text" xml:space="preserve"><value>Selectable capture threads</value></data>
+  <data name="GamesOverlayTextTitle.Text" xml:space="preserve"><value>Select any text, then click Look up</value></data>
+  <data name="GamesOverlayLookupButton.Content" xml:space="preserve"><value>Look up</value></data>
+  <data name="GamesRefreshButton.Content" xml:space="preserve"><value>Refresh</value></data>
+  <data name="GamesClearButton.Content" xml:space="preserve"><value>Clear</value></data>
+  <data name="GamesShowWindowButton.Content" xml:space="preserve"><value>Text window</value></data>
+  <data name="GamesHealthButton.Content" xml:space="preserve"><value>Health</value></data>
+  <data name="GamesOverlayRefreshButton.Content" xml:space="preserve"><value>Refresh</value></data>
+  <data name="GamesThreadSelector.PlaceholderText" xml:space="preserve"><value>Select a capture thread</value></data>
+  <data name="GamesThreadSelectorHint.Text" xml:space="preserve"><value>Choose a clean dialogue thread as in Luna Translator; each item keeps its latest three previews.</value></data>
+  <data name="GamesThreadLinesLabel.Text" xml:space="preserve"><value>Lines</value></data>
+  <data name="GamesThreadArtifactsLabel.Text" xml:space="preserve"><value>Artifacts</value></data>
+  <data name="GamesVoiceWaiting" xml:space="preserve"><value>Waiting for a live session</value></data>
+  <data name="GamesVoiceObserved" xml:space="preserve"><value>Voice observed</value></data>
+  <data name="GamesVoiceNotObserved" xml:space="preserve"><value>No sentence audio observed</value></data>
+  <data name="GamesExperimentalInfoBar.Message" xml:space="preserve"><value>Text hook is experimental: live text, lookup, and card mining may be unstable.</value></data>
+  <data name="GamesWindowBindingTitle.Text" xml:space="preserve"><value>Unbound window (click to select)</value></data>
+  <data name="GamesListeningTitle.Text" xml:space="preserve"><value>Listening</value></data>
+  <data name="GamesAvailableStatus.Text" xml:space="preserve"><value>Available</value></data>
+  <data name="GamesLiveLinesTitle.Text" xml:space="preserve"><value>Live lines</value></data>
+  <data name="GamesFollowLiveCheckBox.Content" xml:space="preserve"><value>Follow live</value></data>
+  <data name="GamesFilterAllButton.Content" xml:space="preserve"><value>All</value></data>
+  <data name="GamesFilterAudioButton.Content" xml:space="preserve"><value>Audio</value></data>
+  <data name="GamesFilterMinedButton.Content" xml:space="preserve"><value>Mined</value></data>
+  <data name="GamesFilterFavoriteButton.Content" xml:space="preserve"><value>Favorites</value></data>
+  <data name="GamesLineAudioTitle.Text" xml:space="preserve"><value>Current line audio</value></data>
+  <data name="GamesLineAudioHint.Text" xml:space="preserve"><value>Select a line to inspect its audio status.</value></data>
+  <data name="GamesSelectedLinePlaceholder.Text" xml:space="preserve"><value>No line selected.</value></data>
+  <data name="DownloadsBackendBox.Header" xml:space="preserve"><value>Download backend</value></data>
+  <data name="DownloadsBackendMonoTorrent" xml:space="preserve"><value>Built-in MonoTorrent</value></data>
+  <data name="DownloadsBackendQbittorrent" xml:space="preserve"><value>qBittorrent (external)</value></data>
+  <data name="DownloadsBackendMonoTorrentDescription" xml:space="preserve"><value>Downloads run inside Niratan through MonoTorrent and supported resources are imported automatically.</value></data>
+  <data name="DownloadsBackendQbittorrentDescription" xml:space="preserve"><value>Downloads are managed by the configured qBittorrent WebUI and remain available after Niratan restarts.</value></data>
+  <data name="DownloadsUseMonoTorrentButton" xml:space="preserve"><value>Download with MonoTorrent</value></data>
+  <data name="DownloadsMonoTorrentNotice" xml:space="preserve"><value>Search results come from Nyaa's RSS feed. Niratan will download selected resources with its built-in MonoTorrent engine.</value></data>
+  <data name="DownloadsQbittorrentNotice" xml:space="preserve"><value>Search results come from Nyaa's RSS feed. Review the release before sending it to qBittorrent.</value></data>
+  <data name="DownloadsAddingMonoTorrentStatus" xml:space="preserve"><value>Adding to MonoTorrent…</value></data>
+  <data name="DownloadsAddedMonoTorrentStatus" xml:space="preserve"><value>Added to MonoTorrent downloads</value></data>
+  <data name="DownloadsAddedMonoTorrentTaskStatus" xml:space="preserve"><value>The torrent was added to the built-in MonoTorrent queue.</value></data>
+  <data name="DownloadsMonoTorrentTaskCount" xml:space="preserve"><value>MonoTorrent has {0} tasks.</value></data>
+  <data name="DownloadsDeleteBuiltInTaskMessage" xml:space="preserve"><value>Remove '{0}' from the MonoTorrent task list? Downloaded files will be kept.</value></data>
+  <data name="DownloadsBuiltInLocationUnavailable" xml:space="preserve"><value>The MonoTorrent download folder is unavailable.</value></data>
 </root>

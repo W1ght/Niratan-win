@@ -31,6 +31,7 @@ public sealed partial class MangaReaderWindow : Window
     private bool _updatingChrome;
     private long _lastWheelTurnAt;
     private DictionaryPopupOverlay? _popupOverlay;
+    private readonly AnkiMiningFeedbackPresenter _miningFeedbackPresenter;
     private CancellationTokenSource? _lookupCts;
 
     public MangaReaderViewModel ViewModel { get; }
@@ -39,6 +40,7 @@ public sealed partial class MangaReaderWindow : Window
     public MangaReaderWindow()
     {
         InitializeComponent();
+        _miningFeedbackPresenter = new AnkiMiningFeedbackPresenter(MangaMiningToast);
         ViewModel = App.GetService<MangaReaderViewModel>();
         ViewModel.PropertyChanged += ViewModel_PropertyChanged;
         ViewModel.ReaderStateChanged += ViewModel_ReaderStateChanged;
@@ -350,11 +352,21 @@ public sealed partial class MangaReaderWindow : Window
     private DictionaryPopupOverlay CreatePopupOverlay()
     {
         var overlay = new DictionaryPopupOverlay();
+        overlay.MiningFeedbackRequested += OnMiningFeedbackRequested;
+        overlay.MiningFeedbackCleared += OnMiningFeedbackCleared;
         overlay.UseCanvas(
             MangaPopupCanvas,
             DictionaryPopupCanvasInputMode.VisibleHostsOnly);
         return overlay;
     }
+
+    private void OnMiningFeedbackRequested(
+        object? sender,
+        DictionaryPopupMiningFeedbackEventArgs e) =>
+        _miningFeedbackPresenter.Show(e);
+
+    private void OnMiningFeedbackCleared(object? sender, EventArgs e) =>
+        _miningFeedbackPresenter.Clear();
 
     private async void LayoutMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -629,8 +641,14 @@ public sealed partial class MangaReaderWindow : Window
         _lookupCts?.Cancel();
         _lookupCts?.Dispose();
         _lookupCts = null;
+        if (_popupOverlay != null)
+        {
+            _popupOverlay.MiningFeedbackRequested -= OnMiningFeedbackRequested;
+            _popupOverlay.MiningFeedbackCleared -= OnMiningFeedbackCleared;
+        }
         _popupOverlay?.Dispose();
         _popupOverlay = null;
+        _miningFeedbackPresenter.Dispose();
         await ViewModel.SaveAsync();
         ReadingStateSaved?.Invoke(this, EventArgs.Empty);
         ViewModel.PropertyChanged -= ViewModel_PropertyChanged;

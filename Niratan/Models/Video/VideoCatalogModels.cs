@@ -49,6 +49,7 @@ public enum VideoCatalogJobState
     Paused,
     Completed,
     Cancelled,
+    Interrupted,
     Failed,
 }
 
@@ -175,7 +176,10 @@ public sealed record VideoCatalogJobSnapshot(
     int TotalCount,
     string? Error,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int MatchedCount = 0,
+    int NeedsReviewCount = 0,
+    int FailedCount = 0);
 
 public sealed record VideoCatalogSnapshot(
     VideoCatalogMode Mode,

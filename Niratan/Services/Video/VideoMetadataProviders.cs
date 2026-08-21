@@ -10,6 +10,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 using Niratan.Models.Video;
@@ -59,10 +60,18 @@ internal abstract class VideoMetadataProviderBase : IVideoMetadataProvider
             : null;
 
     protected static int? Int(JsonElement parent, string name) =>
-        parent.TryGetProperty(name, out var value) && value.TryGetInt32(out var number) ? number : null;
+        parent.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.Number
+        && value.TryGetInt32(out var number)
+            ? number
+            : null;
 
     protected static double? Double(JsonElement parent, string name) =>
-        parent.TryGetProperty(name, out var value) && value.TryGetDouble(out var number) ? number : null;
+        parent.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.Number
+        && value.TryGetDouble(out var number)
+            ? number
+            : null;
 }
 
 internal sealed class TmdbVideoMetadataProvider : VideoMetadataProviderBase,
@@ -102,14 +111,32 @@ internal sealed class TmdbVideoMetadataProvider : VideoMetadataProviderBase,
         var token = await RequireTokenAsync(ct);
         var isMovie = query.MediaKind == VideoMetadataMediaKind.Movie;
         var endpoint = isMovie ? "movie" : "tv";
-        var yearParameter = query.Year.HasValue
+        var searchTitle = isMovie ? query.Title : RemoveSeasonMarker(query.Title);
+        // TMDB localizes `name` using the search language.  A parsed Latin-title
+        // such as "Mushoku Tensei" otherwise comes back with only its Japanese
+        // title under ja-JP, which makes the identity matcher reject a valid
+        // TMDB result before AniList/other fallbacks are considered.
+        var searchLanguage = query.Language;
+        if (query.Language.Equals("ja-JP", StringComparison.OrdinalIgnoreCase)
+            && !ContainsJapaneseScript(searchTitle))
+        {
+            searchLanguage = "en-US";
+        }
+        var includeYearFilter = isMovie
+                                || query.MediaKind != VideoMetadataMediaKind.Anime
+                                && !query.SeasonNumber.HasValue
+                                && !query.EpisodeNumber.HasValue;
+        var yearParameter = query.Year.HasValue && includeYearFilter
             ? $"&{(isMovie ? "year" : "first_air_date_year")}={query.Year.Value}"
             : string.Empty;
         var uri = new Uri(
-            $"https://api.themoviedb.org/3/search/{endpoint}?query={Uri.EscapeDataString(query.Title)}" +
-            $"&language={Uri.EscapeDataString(query.Language)}&region={Uri.EscapeDataString(query.Region)}{yearParameter}");
+            $"https://api.themoviedb.org/3/search/{endpoint}?query={Uri.EscapeDataString(searchTitle)}" +
+            $"&language={Uri.EscapeDataString(searchLanguage)}&region={Uri.EscapeDataString(query.Region)}{yearParameter}");
         var response = await Transport.SendAsync(new VideoMetadataRequest(
-            Id, HttpMethod.Get, uri, Headers: AuthHeaders(token)), ct);
+            Id,
+            HttpMethod.Get,
+            TmdbCredentialAuth.Apply(uri, token),
+            Headers: TmdbCredentialAuth.Headers(token)), ct);
         using var json = ParseJson(response);
         if (!json.RootElement.TryGetProperty("results", out var results))
             return [];
@@ -135,6 +162,20 @@ internal sealed class TmdbVideoMetadataProvider : VideoMetadataProviderBase,
         }).Where(candidate => candidate.Title.Length > 0).ToList();
     }
 
+    private static string RemoveSeasonMarker(string title)
+    {
+        var withoutEnglishMarker = Regex.Replace(
+            title,
+            @"\b(?:season|s)\s*\d+\b",
+            " ",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        var withoutCjkMarker = Regex.Replace(withoutEnglishMarker, @"第\s*\d+\s*季", " ");
+        return Regex.Replace(withoutCjkMarker, @"\s{2,}", " ").Trim();
+    }
+
+    private static bool ContainsJapaneseScript(string value) =>
+        value.Any(character => character is (>= '\u3040' and <= '\u30ff') or (>= '\u3400' and <= '\u9fff'));
+
     public async Task<VideoMetadataDetails?> GetDetailsAsync(
         VideoMetadataCandidate identity,
         string language,
@@ -147,7 +188,10 @@ internal sealed class TmdbVideoMetadataProvider : VideoMetadataProviderBase,
             $"https://api.themoviedb.org/3/{endpoint}/{Uri.EscapeDataString(identity.ProviderItemId)}" +
             $"?language={Uri.EscapeDataString(language)}&append_to_response=external_ids,credits,keywords,content_ratings,recommendations");
         var response = await Transport.SendAsync(new VideoMetadataRequest(
-            Id, HttpMethod.Get, uri, Headers: AuthHeaders(token)), ct);
+            Id,
+            HttpMethod.Get,
+            TmdbCredentialAuth.Apply(uri, token),
+            Headers: TmdbCredentialAuth.Headers(token)), ct);
         if (response.StatusCode == 404)
             return null;
         using var json = ParseJson(response);
@@ -261,6 +305,9 @@ internal sealed class TmdbVideoMetadataProvider : VideoMetadataProviderBase,
                     ids[pair.Item1] = value;
             }
         }
+        var seasons = endpoint == "tv"
+            ? await LoadSeasonsAsync(identity, root, language, token, ct)
+            : ImmutableArray<VideoMetadataSeason>.Empty;
         var now = DateTimeOffset.UtcNow;
         return new VideoMetadataDetails(
             Id, identity.ProviderItemId, identity.MediaKind, title, original, null,
@@ -270,7 +317,107 @@ internal sealed class TmdbVideoMetadataProvider : VideoMetadataProviderBase,
             genres, actors, ids.ToImmutable(), identity.SourceUrl, now, now + MetadataTtl,
             String(root, "tagline"), officialRating, Double(root, "vote_average"),
             YearFromDate(String(root, endpoint == "movie" ? "release_date" : "last_air_date")),
-            String(root, "status"), tags, studios, peopleSnapshot, relatedItems);
+            String(root, "status"), tags, studios, peopleSnapshot, relatedItems,
+            Seasons: seasons);
+    }
+
+    private async Task<ImmutableArray<VideoMetadataSeason>> LoadSeasonsAsync(
+        VideoMetadataCandidate identity,
+        JsonElement root,
+        string language,
+        string token,
+        CancellationToken ct)
+    {
+        if (!root.TryGetProperty("seasons", out var seasonItems)
+            || seasonItems.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var seasons = new List<VideoMetadataSeason>();
+        foreach (var summary in seasonItems.EnumerateArray())
+        {
+            var seasonNumber = Int(summary, "season_number");
+            if (seasonNumber is null)
+                continue;
+
+            var title = String(summary, "name")
+                        ?? (seasonNumber == 0 ? "Specials" : $"Season {seasonNumber}");
+            var overview = String(summary, "overview");
+            var airDate = String(summary, "air_date");
+            var episodeCount = Int(summary, "episode_count");
+            var posterPath = String(summary, "poster_path");
+            var posterUrl = string.IsNullOrWhiteSpace(posterPath)
+                ? null
+                : "https://image.tmdb.org/t/p/w500" + posterPath;
+
+            var episodes = await LoadSeasonEpisodesAsync(
+                identity,
+                seasonNumber.Value,
+                language,
+                token,
+                ct);
+            seasons.Add(new VideoMetadataSeason(
+                seasonNumber.Value,
+                title,
+                overview,
+                airDate,
+                episodeCount,
+                posterUrl,
+                episodes));
+        }
+
+        return seasons
+            .OrderBy(season => season.SeasonNumber)
+            .ToImmutableArray();
+    }
+
+    private async Task<ImmutableArray<VideoMetadataEpisode>> LoadSeasonEpisodesAsync(
+        VideoMetadataCandidate identity,
+        int seasonNumber,
+        string language,
+        string token,
+        CancellationToken ct)
+    {
+        var uri = new Uri(
+            $"https://api.themoviedb.org/3/tv/{Uri.EscapeDataString(identity.ProviderItemId)}" +
+            $"/season/{seasonNumber}?language={Uri.EscapeDataString(language)}");
+        var response = await Transport.SendAsync(new VideoMetadataRequest(
+            Id,
+            HttpMethod.Get,
+            TmdbCredentialAuth.Apply(uri, token),
+            Headers: TmdbCredentialAuth.Headers(token)), ct);
+        using var json = ParseJson(response);
+        if (!json.RootElement.TryGetProperty("episodes", out var episodeItems)
+            || episodeItems.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        return episodeItems.EnumerateArray()
+            .Select(item =>
+            {
+                var episodeNumber = Int(item, "episode_number");
+                if (episodeNumber is null)
+                    return null;
+                var title = String(item, "name") ?? $"Episode {episodeNumber}";
+                var stillPath = String(item, "still_path");
+                return new VideoMetadataEpisode(
+                    episodeNumber.Value,
+                    title,
+                    String(item, "original_name"),
+                    String(item, "overview"),
+                    String(item, "air_date"),
+                    Int(item, "runtime"),
+                    string.IsNullOrWhiteSpace(stillPath)
+                        ? null
+                        : "https://image.tmdb.org/t/p/w500" + stillPath,
+                    $"https://www.themoviedb.org/tv/{identity.ProviderItemId}/season/{seasonNumber}/episode/{episodeNumber}");
+            })
+            .Where(episode => episode is not null)
+            .Cast<VideoMetadataEpisode>()
+            .OrderBy(episode => episode.EpisodeNumber)
+            .ToImmutableArray();
     }
 
     public async Task<IReadOnlyList<VideoArtworkCandidate>> GetArtworkAsync(
@@ -281,7 +428,10 @@ internal sealed class TmdbVideoMetadataProvider : VideoMetadataProviderBase,
         var endpoint = identity.MediaKind == VideoMetadataMediaKind.Movie ? "movie" : "tv";
         var uri = new Uri($"https://api.themoviedb.org/3/{endpoint}/{identity.ProviderItemId}/images");
         var response = await Transport.SendAsync(new VideoMetadataRequest(
-            Id, HttpMethod.Get, uri, Headers: AuthHeaders(token)), ct);
+            Id,
+            HttpMethod.Get,
+            TmdbCredentialAuth.Apply(uri, token),
+            Headers: TmdbCredentialAuth.Headers(token)), ct);
         using var json = ParseJson(response);
         var result = new List<VideoArtworkCandidate>();
         AddArtwork(json.RootElement, "posters", "poster", result);
@@ -317,9 +467,6 @@ internal sealed class TmdbVideoMetadataProvider : VideoMetadataProviderBase,
     private async Task<string> RequireTokenAsync(CancellationToken ct) =>
         await _credentials.ReadAsync(Id, "token", ct)
         ?? throw new InvalidOperationException("TMDB v4 Read Token is not configured.");
-
-    private static IReadOnlyDictionary<string, string> AuthHeaders(string token) =>
-        new Dictionary<string, string> { ["Authorization"] = "Bearer " + token, ["Accept"] = "application/json" };
 
     private static VideoMetadataCandidate CreateExplicitCandidate(VideoMetadataSearchQuery query, string id) =>
         new("tmdb", id, query.MediaKind, query.Title, null, query.Year, query.SeasonNumber,
@@ -412,6 +559,7 @@ internal sealed class TvMazeVideoMetadataProvider : VideoMetadataProviderBase,
         double? communityRating = null;
         if (root.TryGetProperty("rating", out var rating) && rating.ValueKind == JsonValueKind.Object)
             communityRating = Double(rating, "average");
+        var seasons = ParseTvMazeSeasons(root, identity);
         var now = DateTimeOffset.UtcNow;
         return new VideoMetadataDetails(
             Id, identity.ProviderItemId, identity.MediaKind, title, null, null,
@@ -422,7 +570,59 @@ internal sealed class TvMazeVideoMetadataProvider : VideoMetadataProviderBase,
             OfficialRating: null, CommunityRating: communityRating,
             EndYear: YearFromDate(String(root, "ended")), Status: String(root, "status"),
             Studios: studios.Distinct(StringComparer.CurrentCultureIgnoreCase).ToImmutableArray(),
-            People: peopleSnapshot);
+            People: peopleSnapshot,
+            Seasons: seasons);
+    }
+
+    private static ImmutableArray<VideoMetadataSeason> ParseTvMazeSeasons(
+        JsonElement root,
+        VideoMetadataCandidate identity)
+    {
+        if (!root.TryGetProperty("_embedded", out var embedded)
+            || !embedded.TryGetProperty("episodes", out var episodeItems)
+            || episodeItems.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        return episodeItems.EnumerateArray()
+            .Select(item =>
+            {
+                var seasonNumber = Int(item, "season");
+                var episodeNumber = Int(item, "number");
+                if (seasonNumber is null || episodeNumber is null)
+                    return null;
+                var imageUrl = item.TryGetProperty("image", out var image)
+                    && image.ValueKind == JsonValueKind.Object
+                    ? String(image, "original") ?? String(image, "medium")
+                    : null;
+                return new
+                {
+                    Season = seasonNumber.Value,
+                    Episode = new VideoMetadataEpisode(
+                        episodeNumber.Value,
+                        String(item, "name") ?? $"Episode {episodeNumber}",
+                        null,
+                        StripHtml(String(item, "summary")),
+                        String(item, "airdate"),
+                        Int(item, "runtime"),
+                        imageUrl,
+                        String(item, "url")
+                            ?? $"https://www.tvmaze.com/shows/{identity.ProviderItemId}"),
+                };
+            })
+            .Where(item => item is not null)
+            .GroupBy(item => item!.Season)
+            .Select(group => new VideoMetadataSeason(
+                group.Key,
+                group.Key == 0 ? "Specials" : $"Season {group.Key}",
+                null,
+                group.Select(item => item!.Episode.AirDate).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)),
+                group.Count(),
+                null,
+                group.Select(item => item!.Episode).OrderBy(episode => episode.EpisodeNumber).ToImmutableArray()))
+            .OrderBy(season => season.SeasonNumber)
+            .ToImmutableArray();
     }
 
     public async Task<IReadOnlyList<VideoArtworkCandidate>> GetArtworkAsync(VideoMetadataCandidate identity, CancellationToken ct = default)
@@ -671,7 +871,6 @@ internal sealed class AniListVideoMetadataProvider : VideoMetadataProviderBase,
         var native = String(titleObject, "native");
         var romaji = String(titleObject, "romaji");
         var english = String(titleObject, "english");
-        var title = native ?? romaji ?? english ?? query.Title;
         var id = item.GetProperty("id").GetInt32().ToString(CultureInfo.InvariantCulture);
         var ids = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.OrdinalIgnoreCase);
         ids["anilist"] = id;
@@ -681,7 +880,7 @@ internal sealed class AniListVideoMetadataProvider : VideoMetadataProviderBase,
             .AddRange(new[] { native, romaji, english }.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value!))
             .Distinct(StringComparer.CurrentCultureIgnoreCase).ToImmutableArray();
         return new VideoMetadataCandidate(
-            "anilist", id, VideoMetadataMediaKind.Anime, title, native,
+            "anilist", id, VideoMetadataMediaKind.Anime, english ?? romaji ?? native ?? query.Title, native,
             Int(item, "seasonYear"), query.SeasonNumber, query.EpisodeNumber, query.AbsoluteEpisodeNumber,
             aliases, ids.ToImmutable(), String(item, "siteUrl"));
     }
@@ -714,13 +913,19 @@ internal sealed class AniDbTitleIndexProvider : VideoMetadataProviderBase, IVide
                             || normalized.Contains(title.Normalized, StringComparison.Ordinal))
             .GroupBy(title => title.AnimeId)
             .Take(20)
-            .Select(group => new VideoMetadataCandidate(
-                Id, group.Key, VideoMetadataMediaKind.Anime, group.First().Value,
-                group.FirstOrDefault(title => title.Language == "ja")?.Value,
-                query.Year, query.SeasonNumber, query.EpisodeNumber, query.AbsoluteEpisodeNumber,
-                group.Select(title => title.Value).Distinct(StringComparer.CurrentCultureIgnoreCase).ToImmutableArray(),
-                ImmutableDictionary<string, string>.Empty.Add("anidb", group.Key),
-                $"https://anidb.net/anime/{group.Key}"))
+            .Select(group =>
+            {
+                var english = group.FirstOrDefault(title =>
+                    title.Language.Equals("en", StringComparison.OrdinalIgnoreCase))?.Value;
+                var primary = english ?? group.First().Value;
+                return new VideoMetadataCandidate(
+                    Id, group.Key, VideoMetadataMediaKind.Anime, primary,
+                    group.FirstOrDefault(title => title.Language == "ja")?.Value,
+                    query.Year, query.SeasonNumber, query.EpisodeNumber, query.AbsoluteEpisodeNumber,
+                    group.Select(title => title.Value).Distinct(StringComparer.CurrentCultureIgnoreCase).ToImmutableArray(),
+                    ImmutableDictionary<string, string>.Empty.Add("anidb", group.Key),
+                    $"https://anidb.net/anime/{group.Key}");
+            })
             .ToList();
     }
 
@@ -772,7 +977,8 @@ internal sealed class AniDbTitleIndexProvider : VideoMetadataProviderBase, IVide
 
 internal sealed class BangumiVideoMetadataProvider : VideoMetadataProviderBase,
     IVideoMetadataSearchProvider,
-    IVideoMetadataDetailsProvider
+    IVideoMetadataDetailsProvider,
+    IVideoArtworkProvider
 {
     private readonly IVideoMetadataCredentialStore _credentials;
     private static readonly IReadOnlyDictionary<string, string> BaseHeaders = new Dictionary<string, string>
@@ -841,6 +1047,36 @@ internal sealed class BangumiVideoMetadataProvider : VideoMetadataProviderBase,
             identity.Aliases.Add(native ?? string.Empty).Add(translated ?? string.Empty).Where(value => value.Length > 0).Distinct().ToImmutableArray(),
             [], [], identity.ExternalIds.SetItem("bangumi", identity.ProviderItemId), identity.SourceUrl,
             now, now + MetadataTtl);
+    }
+
+    public async Task<IReadOnlyList<VideoArtworkCandidate>> GetArtworkAsync(
+        VideoMetadataCandidate identity,
+        CancellationToken ct = default)
+    {
+        var response = await Transport.SendAsync(new VideoMetadataRequest(
+            Id,
+            HttpMethod.Get,
+            new Uri($"https://api.bgm.tv/v0/subjects/{identity.ProviderItemId}"),
+            Headers: await HeadersAsync(ct)), ct);
+        if (response.StatusCode == 404)
+            return [];
+
+        using var json = ParseJson(response);
+        if (!json.RootElement.TryGetProperty("images", out var images)
+            || images.ValueKind != JsonValueKind.Object)
+            return [];
+
+        var poster = String(images, "large") ?? String(images, "common") ?? String(images, "medium");
+        if (string.IsNullOrWhiteSpace(poster))
+            return [];
+
+        // Bangumi exposes a poster but no separate backdrop. Reusing the same
+        // local-cached image keeps the details view useful without fetching HTML.
+        return
+        [
+            new VideoArtworkCandidate(Id, poster, "poster", null, null, null, identity.SourceUrl),
+            new VideoArtworkCandidate(Id, poster, "backdrop", null, null, null, identity.SourceUrl),
+        ];
     }
 
     private async Task<IReadOnlyDictionary<string, string>> HeadersAsync(CancellationToken ct)

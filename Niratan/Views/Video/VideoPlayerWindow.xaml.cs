@@ -93,6 +93,7 @@ public sealed partial class VideoPlayerWindow : Window
     private readonly SubclassProc _videoHostSubclassProc;
     private readonly SubclassProc _videoWindowSubclassProc;
     private DictionaryPopupOverlay? _popupOverlay;
+    private readonly AnkiMiningFeedbackPresenter _miningFeedbackPresenter;
     private VideoItem? _pendingVideo;
     private IReadOnlyList<VideoItem>? _pendingPlaylist;
     private ResolvedRemoteVideoSource? _pendingRemoteSource;
@@ -135,6 +136,7 @@ public sealed partial class VideoPlayerWindow : Window
     private bool _isSubtitleWebViewReady;
     private VideoViewportGeometry? _subtitleVideoViewport;
     private Windows.Foundation.Rect? _subtitleVisibleBounds;
+    private double _effectiveSubtitleFontSize = DefaultSubtitleFontSize;
     private int _subtitleSelectionStart = -1;
     private int _subtitleSelectionLength;
     private int _lastSubtitleHoverCharacterIndex = -1;
@@ -156,6 +158,7 @@ public sealed partial class VideoPlayerWindow : Window
     public VideoPlayerWindow()
     {
         InitializeComponent();
+        _miningFeedbackPresenter = new AnkiMiningFeedbackPresenter(VideoMiningToast);
         _settingsService = App.GetService<ISettingsService>();
         ApplyInspectorTheme(_settingsService.Current.Theme);
         _settingsService.SettingChanged += SettingsService_SettingChanged;
@@ -168,6 +171,7 @@ public sealed partial class VideoPlayerWindow : Window
         _remotePlaybackSession = new RemoteVideoPlaybackSession(App.GetService<IRemoteVideoResolver>());
         _playbackEngine.MediaLoaded += PlaybackEngine_MediaLoaded;
         _playbackEngine.MediaFailed += PlaybackEngine_MediaFailed;
+        _playbackEngine.PlaybackEnded += PlaybackEngine_PlaybackEnded;
         _videoLibraryService = App.GetService<IVideoLibraryService>();
         _miningHistoryStore = App.GetService<IVideoMiningHistoryStore>();
         _mediaExtractor = App.GetService<IVideoMiningMediaExtractor>();
@@ -438,6 +442,32 @@ public sealed partial class VideoPlayerWindow : Window
         DispatcherQueue.TryEnqueue(async () => await RecoverRemotePlaybackAsync());
     }
 
+    private void PlaybackEngine_PlaybackEnded(object? sender, EventArgs e)
+    {
+        DispatcherQueue.TryEnqueue(async () =>
+        {
+            try
+            {
+                if (!_isLoaded || _isOpeningVideo || ViewModel.CurrentVideo == null)
+                    return;
+
+                var duration = ViewModel.Duration;
+                if (duration <= TimeSpan.Zero)
+                    duration = await _playbackEngine.GetDurationAsync();
+
+                if (duration > TimeSpan.Zero)
+                    ViewModel.UpdatePosition(duration, duration);
+
+                await SaveCurrentVideoProgressAsync();
+                await TryAutoPlayNextEpisodeAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[Video] Failed to finalize playback progress at EOF");
+            }
+        });
+    }
+
     private void PlaybackEngine_MediaLoaded(object? sender, VideoMediaLoadedEventArgs e)
     {
         DispatcherQueue.TryEnqueue(async () =>
@@ -616,9 +646,9 @@ public sealed partial class VideoPlayerWindow : Window
         var version = Interlocked.Increment(ref _remoteSubtitleSelectionVersion);
         ViewModel.StatusText = ResourceStringHelper.GetString(
             "YouTubeSubtitleLoading",
-            "Loading publisher subtitles...");
+            "Loading YouTube subtitles...");
         Log.Information(
-            "[YouTubeSubtitle] Loading publisher track {Language} ({TrackId})",
+            "[YouTubeSubtitle] Loading YouTube track {Language} ({TrackId})",
             option.Language,
             option.Id);
         try
@@ -641,7 +671,7 @@ public sealed partial class VideoPlayerWindow : Window
             if (persistSelection)
                 await SaveCurrentVideoProgressAsync(ct);
             Log.Information(
-                "[YouTubeSubtitle] Loaded publisher track {Language} ({TrackId})",
+                "[YouTubeSubtitle] Loaded YouTube track {Language} ({TrackId})",
                 option.Language,
                 option.Id);
             return true;
@@ -656,11 +686,11 @@ public sealed partial class VideoPlayerWindow : Window
             {
                 ViewModel.StatusText = ResourceStringHelper.GetString(
                     "YouTubeSubtitleLoadFailed",
-                    "Could not load this publisher subtitle track.");
+                    "Could not load this YouTube subtitle track.");
                 SyncYouTubeSubtitleComboBoxSelection();
                 Log.Warning(
                     ex,
-                    "[YouTubeSubtitle] Failed publisher track {Language} ({TrackId})",
+                    "[YouTubeSubtitle] Failed YouTube track {Language} ({TrackId})",
                     option.Language,
                     option.Id);
             }
@@ -1393,12 +1423,22 @@ public sealed partial class VideoPlayerWindow : Window
         _popupOverlay.RootContentCommitted += PopupOverlay_RootContentCommitted;
         _popupOverlay.RootContentAborted += PopupOverlay_RootContentAborted;
         _popupOverlay.RootShowDropped += PopupOverlay_RootShowDropped;
+        _popupOverlay.MiningFeedbackRequested += OnMiningFeedbackRequested;
+        _popupOverlay.MiningFeedbackCleared += OnMiningFeedbackCleared;
         _popupOverlay.UseCanvas(
             PopupOverlayCanvas,
             DictionaryPopupCanvasInputMode.VisibleHostsOnly);
         _popupOverlay.UseInPlaceDialogHost(VideoModalOverlayHost);
         return _popupOverlay;
     }
+
+    private void OnMiningFeedbackRequested(
+        object? sender,
+        DictionaryPopupMiningFeedbackEventArgs e) =>
+        _miningFeedbackPresenter.Show(e);
+
+    private void OnMiningFeedbackCleared(object? sender, EventArgs e) =>
+        _miningFeedbackPresenter.Clear();
 
     private void EnsureVideoDictionaryOverlaySurfaceVisible(DictionaryPopupOverlay? overlay = null)
     {
@@ -1433,6 +1473,7 @@ public sealed partial class VideoPlayerWindow : Window
             _remotePlaybackSession.Invalidate();
             _playbackEngine.MediaLoaded -= PlaybackEngine_MediaLoaded;
             _playbackEngine.MediaFailed -= PlaybackEngine_MediaFailed;
+            _playbackEngine.PlaybackEnded -= PlaybackEngine_PlaybackEnded;
             if (_parentHwnd != IntPtr.Zero)
             {
                 RemoveWindowSubclass(_parentHwnd, _videoWindowSubclassProc, VideoWindowSubclassId);
@@ -1456,10 +1497,13 @@ public sealed partial class VideoPlayerWindow : Window
                 _popupOverlay.RootContentCommitted -= PopupOverlay_RootContentCommitted;
                 _popupOverlay.RootContentAborted -= PopupOverlay_RootContentAborted;
                 _popupOverlay.RootShowDropped -= PopupOverlay_RootShowDropped;
+                _popupOverlay.MiningFeedbackRequested -= OnMiningFeedbackRequested;
+                _popupOverlay.MiningFeedbackCleared -= OnMiningFeedbackCleared;
             }
             _subtitleLookupCoordinator.Dispose();
             _popupOverlay?.Dispose();
             _popupOverlay = null;
+            _miningFeedbackPresenter.Dispose();
             _subtitleTranscriptLoadCoordinator.Dispose();
             _playbackEngine.Dispose();
 

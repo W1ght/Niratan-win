@@ -20,6 +20,8 @@ internal static class MpvNative
     internal const int MpvEventIdShutdown = 1;
     internal const int MpvEventIdEndFile = 7;
     internal const int MpvEventIdFileLoaded = 8;
+    internal const int MpvEndFileReasonEof = 0;
+    internal const int MpvErrorLoadingFailed = -13;
 
     private static readonly object ResolverLock = new();
     private static IntPtr s_libraryHandle;
@@ -163,6 +165,13 @@ internal static class MpvNative
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "mpv_wakeup")]
     internal static extern void Wakeup(IntPtr handle);
 
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "mpv_stream_cb_add_ro")]
+    internal static extern int StreamCallbackAddReadOnly(
+        IntPtr handle,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string protocol,
+        IntPtr userData,
+        MpvStreamOpenCallback openCallback);
+
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "mpv_set_option_string")]
     internal static extern int SetOptionString(
         IntPtr handle,
@@ -246,5 +255,34 @@ internal static class MpvNative
         public readonly long PlaylistEntryId;
         public readonly int PlaylistInsertId;
         public readonly int PlaylistInsertNumEntries;
+    }
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate int MpvStreamOpenCallback(IntPtr userData, IntPtr uri, IntPtr info);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate long MpvStreamReadCallback(IntPtr cookie, IntPtr buffer, ulong byteCount);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate long MpvStreamSeekCallback(IntPtr cookie, long offset);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate long MpvStreamSizeCallback(IntPtr cookie);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void MpvStreamCloseCallback(IntPtr cookie);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void MpvStreamCancelCallback(IntPtr cookie);
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MpvStreamCallbackInfo
+    {
+        internal IntPtr Cookie;
+        internal IntPtr ReadCallback;
+        internal IntPtr SeekCallback;
+        internal IntPtr SizeCallback;
+        internal IntPtr CloseCallback;
+        internal IntPtr CancelCallback;
     }
 }

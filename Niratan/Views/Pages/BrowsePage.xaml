@@ -24,11 +24,75 @@
                                     Command="{x:Bind OpenCommand}" />
         </DataTemplate>
 
+        <DataTemplate x:Key="MangaDiscoveryCardTemplate"
+                      x:DataType="components:MangaDiscoveryCardViewModel">
+            <Button Width="170"
+                    Height="350"
+                    Padding="0"
+                    HorizontalAlignment="Left"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Top"
+                    AutomationProperties.AutomationId="{x:Bind AutomationId, Mode=OneTime}"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Command="{x:Bind OpenCommand}">
+                <StackPanel Width="170"
+                            Spacing="5">
+                    <Grid Height="238"
+                          Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                        <FontIcon FontSize="42"
+                                  Glyph="&#xE8B4;"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                        <Image Source="{x:Bind PosterImage, Mode=OneWay}"
+                               Stretch="UniformToFill"
+                               Visibility="{x:Bind HasPoster, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                    </Grid>
+                    <TextBlock Height="48"
+                               MaxLines="2"
+                               Style="{StaticResource BodyStrongTextBlockStyle}"
+                               Text="{x:Bind Title, Mode=OneTime}"
+                               TextTrimming="CharacterEllipsis"
+                               TextWrapping="Wrap" />
+                    <TextBlock Height="24"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="{x:Bind FactsText, Mode=OneTime}"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Height="24"
+                               Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                               Text="{x:Bind SourceText, Mode=OneTime}"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </Button>
+        </DataTemplate>
+
+        <DataTemplate x:Key="MangaDiscoverSectionTemplate"
+                      x:DataType="components:MangaDiscoverSectionViewModel">
+            <StackPanel Spacing="8">
+                <TextBlock Text="{x:Bind Title, Mode=OneTime}"
+                           Style="{StaticResource SubtitleTextBlockStyle}" />
+                <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Disabled"
+                              Loaded="HorizontalMangaList_Loaded"
+                              Unloaded="HorizontalMangaList_Unloaded">
+                    <ItemsRepeater ElementPrepared="MangaDiscoveryCard_ElementPrepared"
+                                   ItemTemplate="{StaticResource MangaDiscoveryCardTemplate}"
+                                   ItemsSource="{x:Bind Items, Mode=OneTime}">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Orientation="Horizontal"
+                                         Spacing="14" />
+                        </ItemsRepeater.Layout>
+                    </ItemsRepeater>
+                </ScrollViewer>
+            </StackPanel>
+        </DataTemplate>
+
         <DataTemplate x:Key="BrowseSourceTemplate"
                       x:DataType="components:MangaBrowseSourceItemViewModel">
             <Grid MinHeight="64"
                   Padding="12,6"
-                  ColumnDefinitions="Auto,*,Auto"
+                  ColumnDefinitions="Auto,*,Auto,Auto"
                   ColumnSpacing="14"
                   Loaded="BrowseSourceRow_Loaded">
                 <Border Width="44"
@@ -38,6 +102,7 @@
                         CornerRadius="6">
                     <Grid>
                         <Image Margin="4"
+                               ImageFailed="BrowseSourceIcon_ImageFailed"
                                Source="{x:Bind IconImage, Mode=OneWay}"
                                Stretch="Uniform"
                                Visibility="{x:Bind HasIcon, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
@@ -66,80 +131,139 @@
                         Command="{x:Bind OpenCommand}"
                         Content="Popular"
                         Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                <Button Grid.Column="3"
+                        Width="42"
+                        Height="42"
+                        Padding="0"
+                        VerticalAlignment="Center"
+                        AutomationProperties.AutomationId="{x:Bind RemoveAutomationId, Mode=OneTime}"
+                        Command="{x:Bind RemoveCommand}"
+                        ToolTipService.ToolTip="{x:Bind RemoveActionLabel, Mode=OneTime}"
+                        Visibility="{x:Bind CanRemove, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneTime}">
+                    <SymbolIcon Symbol="Delete" />
+                </Button>
             </Grid>
         </DataTemplate>
 
-        <Style x:Key="BrowseTabButtonStyle"
-               TargetType="Button">
-            <Setter Property="Padding" Value="18,10" />
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="CornerRadius" Value="0" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-        </Style>
     </Page.Resources>
 
-    <Grid Padding="0,32,0,0"
-          RowDefinitions="Auto,Auto,*">
-        <CommandBar Grid.Row="0"
-                    Margin="12,6,28,0"
-                    AutomationProperties.AutomationId="BrowseCommandBar"
-                    DefaultLabelPosition="Right">
-            <CommandBar.Content>
-                <TextBlock x:Uid="BrowsePageTitleText"
-                           Margin="4,0,0,0"
-                           VerticalAlignment="Center"
-                           Style="{StaticResource TitleTextBlockStyle}"
-                           Text="Browse" />
-            </CommandBar.Content>
-        </CommandBar>
+    <Grid Padding="0">
+        <Grid RowDefinitions="Auto,*"
+              Visibility="{x:Bind ViewModel.IsDiscoverSectionSelected, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+            <StackPanel x:Name="MangaDiscoverSearchToolbar"
+                        Grid.Row="0"
+                        Margin="20,16,36,0"
+                        Spacing="10">
+                <Grid ColumnDefinitions="*,Auto"
+                      ColumnSpacing="8">
+                    <TextBox x:Name="MangaDiscoverSearchBox"
+                             x:Uid="MangaDiscoverSearchTextBox"
+                             AutomationProperties.AutomationId="MangaDiscoverSearchTextBox"
+                             KeyDown="MangaDiscoverSearchTextBox_KeyDown"
+                             PlaceholderText="Search manga"
+                             Text="{x:Bind ViewModel.MangaDiscoverQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <Button Grid.Column="1"
+                            x:Uid="MangaDiscoverSearchButton"
+                            AutomationProperties.AutomationId="MangaDiscoverSearchButton"
+                            Command="{x:Bind ViewModel.SearchMangaDiscoverCommand}"
+                            Content="Search"
+                            Style="{StaticResource AccentButtonStyle}" />
+                </Grid>
 
-        <Grid Grid.Row="1"
-              BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-              BorderThickness="0,0,0,1"
-              ColumnDefinitions="Auto,Auto,Auto,*">
-            <Grid Margin="20,0,0,0"
-                  RowDefinitions="Auto,3">
-                <Button x:Uid="BrowseMangaSourcesTab"
-                        AutomationProperties.AutomationId="BrowseMangaSourcesTab"
-                        Command="{x:Bind ViewModel.SelectBrowseCommand}"
-                        Content="Manga sources"
-                        Style="{StaticResource BrowseTabButtonStyle}" />
-                <Border Grid.Row="1"
-                        Height="3"
-                        Background="{ThemeResource AccentFillColorDefaultBrush}"
-                        CornerRadius="2,2,0,0"
-                        Visibility="{x:Bind ViewModel.IsBrowseSectionSelected, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
-            </Grid>
-            <Grid Grid.Column="1"
-                  RowDefinitions="Auto,3">
-                <Button x:Uid="BrowseMangaExtensionsTab"
-                        AutomationProperties.AutomationId="BrowseMangaExtensionsTab"
-                        Command="{x:Bind ViewModel.SelectSourcesCommand}"
-                        Content="Manga extensions"
-                        Style="{StaticResource BrowseTabButtonStyle}" />
-                <Border Grid.Row="1"
-                        Height="3"
-                        Background="{ThemeResource AccentFillColorDefaultBrush}"
-                        CornerRadius="2,2,0,0"
-                        Visibility="{x:Bind ViewModel.IsSourcesSectionSelected, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
-            </Grid>
-            <Grid Grid.Column="2"
-                  RowDefinitions="Auto,3">
-                <Button x:Uid="BrowseSourceSettingsTab"
-                        AutomationProperties.AutomationId="BrowseSourceSettingsTab"
-                        Command="{x:Bind ViewModel.SelectSettingsCommand}"
-                        Content="Source settings"
-                        Style="{StaticResource BrowseTabButtonStyle}" />
-                <Border Grid.Row="1"
-                        Height="3"
-                        Background="{ThemeResource AccentFillColorDefaultBrush}"
-                        CornerRadius="2,2,0,0"
-                        Visibility="{x:Bind ViewModel.IsSettingsSectionSelected, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
-            </Grid>
+                <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Disabled">
+                    <StackPanel Orientation="Horizontal"
+                                Spacing="8">
+                        <ComboBox x:Uid="MangaDiscoverProviderBox"
+                                  Width="150"
+                                  AutomationProperties.AutomationId="MangaDiscoverProviderBox"
+                                  DisplayMemberPath="DisplayName"
+                                  Header="Metadata source"
+                                  ItemsSource="{x:Bind ViewModel.MangaDiscoveryProviders, Mode=OneWay}"
+                                  SelectedItem="{x:Bind ViewModel.SelectedMangaDiscoveryProvider, Mode=TwoWay}" />
+                        <ComboBox x:Uid="MangaDiscoverFeedBox"
+                                  Width="190"
+                                  AutomationProperties.AutomationId="MangaDiscoverFeedBox"
+                                  DisplayMemberPath="DisplayName"
+                                  Header="Category"
+                                  ItemsSource="{x:Bind ViewModel.MangaDiscoveryFeeds, Mode=OneWay}"
+                                  SelectedItem="{x:Bind ViewModel.SelectedMangaDiscoveryFeed, Mode=TwoWay}" />
+                        <Button x:Uid="MangaDiscoverRefreshButton"
+                                VerticalAlignment="Bottom"
+                                AutomationProperties.AutomationId="MangaDiscoverRefreshButton"
+                                Command="{x:Bind ViewModel.RefreshMangaDiscoverCommand}"
+                                Content="Refresh" />
+                    </StackPanel>
+                </ScrollViewer>
+            </StackPanel>
+
+            <ScrollViewer x:Name="MangaDiscoverContentScrollViewer"
+                          Grid.Row="1"
+                          Margin="20,12,36,24"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto"
+                          ViewChanged="MangaDiscoverContentScrollViewer_ViewChanged">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="{x:Bind ViewModel.MangaDiscoverStatusMessage, Mode=OneWay}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap" />
+                    <StackPanel Spacing="10"
+                                Visibility="{x:Bind ViewModel.IsMangaDiscoverSearchMode, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert, Mode=OneWay}">
+                        <ItemsRepeater AutomationProperties.AutomationId="MangaDiscoverSections"
+                                       ItemTemplate="{StaticResource MangaDiscoverSectionTemplate}"
+                                       ItemsSource="{x:Bind ViewModel.MangaDiscoverSections, Mode=OneWay}">
+                            <ItemsRepeater.Layout>
+                                <StackLayout Spacing="22" />
+                            </ItemsRepeater.Layout>
+                        </ItemsRepeater>
+                    </StackPanel>
+                    <TextBlock x:Uid="MangaDiscoverSearchResultsHeading"
+                               AutomationProperties.AutomationId="MangaDiscoverSearchResultsHeading"
+                               Style="{StaticResource SubtitleTextBlockStyle}"
+                               Text="Search results"
+                               Visibility="{x:Bind ViewModel.IsMangaDiscoverSearchMode, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                    <ItemsRepeater AutomationProperties.AutomationId="MangaDiscoverSearchResults"
+                                   ElementPrepared="MangaDiscoveryCard_ElementPrepared"
+                                   ItemTemplate="{StaticResource MangaDiscoveryCardTemplate}"
+                                   ItemsSource="{x:Bind ViewModel.MangaDiscoverItems, Mode=OneWay}"
+                                   Visibility="{x:Bind ViewModel.IsMangaDiscoverSearchMode, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                        <ItemsRepeater.Layout>
+                            <UniformGridLayout MinItemWidth="180"
+                                                MinItemHeight="350"
+                                                MinRowSpacing="18"
+                                                MinColumnSpacing="14" />
+                        </ItemsRepeater.Layout>
+                    </ItemsRepeater>
+                    <ProgressRing Width="28"
+                                  Height="28"
+                                  HorizontalAlignment="Center"
+                                  IsActive="{x:Bind ViewModel.IsMangaDiscoverLoadingMore, Mode=OneWay}"
+                                  Visibility="{x:Bind ViewModel.IsMangaDiscoverLoadingMore, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                    <ProgressRing Width="28"
+                                  Height="28"
+                                  HorizontalAlignment="Left"
+                                  IsActive="{x:Bind ViewModel.IsMangaDiscoverLoading, Mode=OneWay}"
+                                  Visibility="{x:Bind ViewModel.IsMangaDiscoverLoading, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                    <StackPanel HorizontalAlignment="Center"
+                                MaxWidth="520"
+                                Spacing="8"
+                                Visibility="{x:Bind ViewModel.ShowMangaDiscoverPlaceholder, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                        <FontIcon FontSize="46"
+                                  HorizontalAlignment="Center"
+                                  Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                  Glyph="&#xE8B4;" />
+                        <TextBlock x:Uid="MangaDiscoverEmptyText"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="Choose a metadata source to discover manga."
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
         </Grid>
 
-        <Grid Grid.Row="2"
+        <Grid
               Visibility="{x:Bind ViewModel.IsBrowseSourceDirectoryVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
             <ListView AutomationProperties.AutomationId="BrowseSourcesList"
                       ItemTemplate="{StaticResource BrowseSourceTemplate}"
@@ -191,7 +315,7 @@
             </StackPanel>
         </Grid>
 
-        <Grid Grid.Row="2"
+        <Grid
               RowDefinitions="Auto,*"
               Visibility="{x:Bind ViewModel.IsBrowseResultsVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
             <Grid Margin="16,10,36,12"
@@ -280,15 +404,15 @@
             </Grid>
         </Grid>
 
-        <manga:MihonExtensionBrowser Grid.Row="2"
+        <manga:MihonExtensionBrowser
                                      ViewModel="{x:Bind ViewModel, Mode=OneWay}"
                                      Visibility="{x:Bind ViewModel.IsSourcesSectionSelected, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
 
-        <manga:MangaSourceSettingsContent Grid.Row="2"
-                                          ViewModel="{x:Bind ViewModel, Mode=OneWay}"
-                                          Visibility="{x:Bind ViewModel.IsSettingsSectionSelected, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+        <manga:MangaSourceSettingsContent
+                                           ViewModel="{x:Bind ViewModel, Mode=OneWay}"
+                                           Visibility="{x:Bind ViewModel.IsSettingsSectionSelected, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
 
-        <manga:RemoteMangaDetailView Grid.RowSpan="3"
+        <manga:RemoteMangaDetailView
                                      ViewModel="{x:Bind ViewModel, Mode=OneWay}" />
     </Grid>
 </Page>

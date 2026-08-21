@@ -13,6 +13,7 @@
 
     <Page.Resources>
         <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <converters:EnumToBooleanConverter x:Key="EnumToBooleanConverter" />
 
         <DataTemplate x:Key="FolderFilterTemplate" x:DataType="pages:VideoLibraryFilterRow">
             <Button Width="220"
@@ -92,6 +93,51 @@
             </Button>
         </DataTemplate>
 
+        <DataTemplate x:Key="VideoMetadataTaskTemplate"
+                      x:DataType="vmc:VideoMetadataTaskViewModel">
+            <Grid Padding="0,8"
+                  ColumnDefinitions="*,Auto"
+                  ColumnSpacing="12">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="{x:Bind TaskTitle}"
+                               Style="{StaticResource BodyStrongTextBlockStyle}"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{x:Bind StatusText}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock Text="{x:Bind ProgressText}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock Text="{x:Bind UpdatedText}"
+                               Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                    <TextBlock Text="{x:Bind ErrorText}"
+                               Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                               TextWrapping="Wrap"
+                               Visibility="{x:Bind HasError, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            Spacing="4"
+                            VerticalAlignment="Center">
+                    <Button x:Uid="VideoMetadataTaskReviewButton"
+                            Command="{Binding ViewModel.OpenMetadataReviewCommand, ElementName=ThisPage}"
+                            Visibility="{x:Bind HasReviewItems, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <FontIcon Glyph="&#xE7BA;" />
+                    </Button>
+                    <Button x:Uid="VideoMetadataTaskRetryButton"
+                            Command="{Binding ViewModel.RetryMetadataTaskCommand, ElementName=ThisPage}"
+                            CommandParameter="{x:Bind}"
+                            Visibility="{x:Bind CanRetry, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <FontIcon Glyph="&#xE72C;" />
+                    </Button>
+                    <Button x:Uid="VideoMetadataTaskCancelButton"
+                            Command="{Binding ViewModel.CancelMetadataTaskCommand, ElementName=ThisPage}"
+                            CommandParameter="{x:Bind}"
+                            Visibility="{x:Bind CanCancel, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <FontIcon Glyph="&#xE711;" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
         <DataTemplate x:Key="VideoListItemTemplate" x:DataType="vmc:VideoItemViewModel">
             <Grid>
             <Button Padding="0"
@@ -149,7 +195,7 @@
                                         CommandParameter="{x:Bind}" />
                     </MenuFlyout>
                 </Button.ContextFlyout>
-                <Grid Height="96"
+                <Grid MinHeight="96"
                       ColumnDefinitions="144,*"
                       ColumnSpacing="14"
                       Padding="10,8">
@@ -172,7 +218,9 @@
                           RowDefinitions="Auto,Auto,Auto"
                           RowSpacing="6">
                         <TextBlock Text="{x:Bind Video.Title, Mode=OneTime}"
+                                   TextWrapping="WrapWholeWords"
                                    TextTrimming="CharacterEllipsis"
+                                   MaxLines="2"
                                    Style="{StaticResource BodyStrongTextBlockStyle}" />
                         <TextBlock Grid.Row="1"
                                    Text="{x:Bind ListMetadataText, Mode=OneWay}"
@@ -203,11 +251,11 @@
         </DataTemplate>
 
         <DataTemplate x:Key="VideoPosterItemTemplate" x:DataType="vmc:VideoItemViewModel">
-            <Grid Width="220"
-                  MaxWidth="220"
+            <Grid Width="300"
+                  MaxWidth="300"
                   Margin="0,0,12,0">
-            <Button Width="220"
-                    MaxWidth="220"
+            <Button Width="300"
+                    MaxWidth="300"
                     Padding="0"
                     HorizontalContentAlignment="Stretch"
                     VerticalContentAlignment="Stretch"
@@ -264,11 +312,11 @@
                                         CommandParameter="{x:Bind}" />
                     </MenuFlyout>
                 </Button.ContextFlyout>
-                <StackPanel Width="220"
-                            MaxWidth="220"
+                <StackPanel Width="300"
+                            MaxWidth="300"
                             Spacing="8">
-                    <Border Width="220"
-                            Height="124"
+                    <Border Width="300"
+                            Height="169"
                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                             CornerRadius="8">
                         <Grid>
@@ -283,8 +331,8 @@
                                       Visibility="{x:Bind HasLandscapeArtwork, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}" />
                         </Grid>
                     </Border>
-                    <StackPanel Width="220"
-                                MaxWidth="220"
+                    <StackPanel Width="300"
+                                MaxWidth="300"
                                 Spacing="5">
                         <Grid ColumnDefinitions="*,Auto"
                               ColumnSpacing="8">
@@ -298,8 +346,8 @@
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         </Grid>
                         <TextBlock x:Name="VideoPosterTitleText"
-                                   Width="220"
-                                   MaxWidth="220"
+                                   Width="300"
+                                   MaxWidth="300"
                                    Text="{x:Bind Video.Title, Mode=OneTime}"
                                    TextWrapping="WrapWholeWords"
                                    TextTrimming="CharacterEllipsis"
@@ -331,10 +379,9 @@
                         IsBackButtonVisible="Collapsed"
                         IsPaneToggleButtonVisible="False"
                         IsSettingsVisible="False"
-                        ItemInvoked="VideoLibrarySecondaryNavigationView_ItemInvoked"
-                        OpenPaneLength="248"
-                        PaneDisplayMode="Left"
-                        PaneTitle="Videos">
+                        ItemInvoked="VideoLibraryTopNavigationView_ItemInvoked"
+                        PaneDisplayMode="Top"
+                        SelectionFollowsFocus="Disabled">
             <NavigationView.Resources>
                 <Thickness x:Key="NavigationViewContentMargin">0</Thickness>
                 <Thickness x:Key="NavigationViewContentGridBorderThickness">1,0,0,0</Thickness>
@@ -342,85 +389,35 @@
             </NavigationView.Resources>
 
             <NavigationView.MenuItems>
-                <NavigationViewItemHeader x:Uid="VideoLibrarySectionHeader"
-                                          Content="Library" />
                 <NavigationViewItem x:Name="VideoLibraryHomeNavItem"
-                                    x:Uid="VideoLibraryHomeNavItem"
+                                    x:Uid="VideoLibraryTopHomeNavItem"
                                     AutomationProperties.AutomationId="VideoLibraryHomeNavItem"
                                     Content="Home"
                                     Tag="Home">
-                    <NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE80F;" />
-                    </NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem x:Name="VideoLibraryMoviesNavItem"
-                                    x:Uid="VideoLibraryMoviesNavItem"
-                                    AutomationProperties.AutomationId="VideoLibraryMoviesNavItem"
-                                    Content="Movies"
-                                    Tag="Movies">
-                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE8B2;" /></NavigationViewItem.Icon>
+                <NavigationViewItem x:Name="VideoLibraryDiscoverNavItem"
+                                    x:Uid="VideoLibraryTopDiscoverNavItem"
+                                    AutomationProperties.AutomationId="VideoLibraryDiscoverNavItem"
+                                    Content="Discover"
+                                    Tag="Discover">
                 </NavigationViewItem>
                 <NavigationViewItem x:Name="VideoLibrarySeriesNavItem"
-                                    x:Uid="VideoLibrarySeriesNavItem"
+                                    x:Uid="VideoLibraryTopSeriesNavItem"
                                     AutomationProperties.AutomationId="VideoLibrarySeriesNavItem"
                                     Content="Series"
                                     Tag="Series">
-                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE8D2;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem x:Name="VideoLibraryAnimeNavItem"
-                                    x:Uid="VideoLibraryAnimeNavItem"
-                                    AutomationProperties.AutomationId="VideoLibraryAnimeNavItem"
-                                    Content="Anime"
-                                    Tag="Anime">
-                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE7FC;" /></NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem x:Name="VideoLibraryContinueWatchingNavItem"
-                                    x:Uid="VideoLibraryContinueWatchingNavItem"
-                                    AutomationProperties.AutomationId="VideoLibraryContinueWatchingNavItem"
-                                    Content="Continue Watching"
-                                    Tag="ContinueWatching">
-                    <NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE768;" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem x:Name="VideoLibraryFavoritesNavItem"
-                                    x:Uid="VideoLibraryFavoritesNavItem"
-                                    AutomationProperties.AutomationId="VideoLibraryFavoritesNavItem"
-                                    Content="Favorites"
-                                    Tag="Favorites">
-                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE734;" /></NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem x:Name="VideoLibraryNeedsReviewNavItem"
-                                    x:Uid="VideoLibraryNeedsReviewNavItem"
-                                    AutomationProperties.AutomationId="VideoLibraryNeedsReviewNavItem"
-                                    Content="Needs Review"
-                                    Tag="NeedsReview">
-                    <NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE7BA;" />
-                    </NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem x:Name="VideoLibraryUnorganizedNavItem"
-                                    x:Uid="VideoLibraryUnorganizedNavItem"
-                                    AutomationProperties.AutomationId="VideoLibraryUnorganizedNavItem"
-                                    Content="Unorganized"
-                                    Tag="Unorganized">
-                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE8B7;" /></NavigationViewItem.Icon>
-                </NavigationViewItem>
-                <NavigationViewItem x:Name="VideoLibraryCollectionsNavItem"
-                                    x:Uid="VideoLibraryCollectionsNavItem"
-                                    AutomationProperties.AutomationId="VideoLibraryCollectionsNavItem"
-                                    Content="Collections"
-                                    Tag="Collections">
-                    <NavigationViewItem.Icon>
-                        <FontIcon Glyph="&#xE8F1;" />
-                    </NavigationViewItem.Icon>
+                <NavigationViewItem x:Name="VideoLibraryAllVideosNavItem"
+                                    x:Uid="VideoLibraryTopAllVideosNavItem"
+                                    AutomationProperties.AutomationId="VideoLibraryAllVideosNavItem"
+                                    Content="All videos"
+                                    Tag="All">
                 </NavigationViewItem>
                 <NavigationViewItem x:Name="VideoLibrarySourcesNavItem"
-                                    x:Uid="VideoLibrarySourcesNavItem"
+                                    x:Uid="VideoLibraryTopImportNavItem"
                                     AutomationProperties.AutomationId="VideoLibrarySourcesNavItem"
-                                    Content="Sources"
+                                    Content="Import"
                                     Tag="Sources">
-                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE713;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
             </NavigationView.MenuItems>
 
@@ -428,12 +425,14 @@
                 <Grid Grid.Row="0"
                       Padding="20,14,28,16"
                       RowDefinitions="Auto,Auto"
-                      ColumnDefinitions="*,156,112,Auto"
-                      ColumnSpacing="12">
-                    <StackPanel Grid.ColumnSpan="4"
+                      ColumnDefinitions="*,156,Auto"
+                      ColumnSpacing="12"
+                      Visibility="{x:Bind ViewModel.IsLibraryHeaderVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                    <StackPanel Grid.ColumnSpan="3"
                                 Margin="0,0,0,12"
                                 VerticalAlignment="Center"
-                                Spacing="2">
+                                Spacing="2"
+                                Visibility="Collapsed">
                         <StackPanel Orientation="Horizontal"
                                     Spacing="8"
                                     VerticalAlignment="Center">
@@ -451,7 +450,7 @@
                              x:Uid="VideoLibrarySearchBox"
                              AutomationProperties.AutomationId="VideoLibrarySearchBox"
                              PlaceholderText="Search videos"
-                             Visibility="{x:Bind ViewModel.IsLibraryBrowseView, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}"
+                             Visibility="{x:Bind ViewModel.IsCatalogSearchVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}"
                              VerticalAlignment="Center"
                              Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
@@ -461,56 +460,18 @@
                               x:Uid="VideoLibrarySortComboBox"
                               AutomationProperties.AutomationId="VideoLibrarySortComboBox"
                               AutomationProperties.Name="Sort videos"
-                              Visibility="{x:Bind ViewModel.IsLibraryBrowseView, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}"
+                              Visibility="{x:Bind ViewModel.IsCatalogSearchVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}"
                               DisplayMemberPath="DisplayName"
                               ItemsSource="{x:Bind ViewModel.SortOptions, Mode=OneWay}"
                               SelectedValue="{x:Bind ViewModel.SelectedSortOption, Mode=TwoWay}"
                               SelectedValuePath="Value"
                               VerticalAlignment="Center" />
 
-                    <Grid x:Name="VideoLibraryLayoutSegment"
-                          AutomationProperties.AutomationId="VideoLibraryLayoutSegment"
-                          Grid.Row="1"
-                          Grid.Column="2"
-                          Visibility="{x:Bind ViewModel.IsLibraryBrowseView, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}"
-                          Height="36"
-                          ColumnDefinitions="*,*">
-                        <ToggleButton x:Uid="VideoLibraryLayoutList"
-                                      IsChecked="{x:Bind ViewModel.IsListLayout, Mode=OneWay}"
-                                      Command="{x:Bind ViewModel.SelectLayoutCommand}"
-                                      CommandParameter="List">
-                            <FontIcon Glyph="&#xE8FD;" />
-                        </ToggleButton>
-                        <ToggleButton x:Uid="VideoLibraryLayoutPosters"
-                                      Grid.Column="1"
-                                      IsChecked="{x:Bind ViewModel.IsPosterLayout, Mode=OneWay}"
-                                      Command="{x:Bind ViewModel.SelectLayoutCommand}"
-                                      CommandParameter="Posters">
-                            <FontIcon Glyph="&#xECA5;" />
-                        </ToggleButton>
-                    </Grid>
-
                     <CommandBar Grid.Row="1"
-                                Grid.Column="3"
-                                DefaultLabelPosition="Collapsed"
-                                VerticalAlignment="Center">
-                        <AppBarButton Label="Refresh sources"
-                                      AutomationProperties.AutomationId="RefreshVideoSourcesButton"
-                                      IsEnabled="{x:Bind ViewModel.HasSources, Mode=OneWay}"
-                                      Command="{x:Bind ViewModel.RefreshAllSourcesCommand}">
-                            <AppBarButton.Icon>
-                                <FontIcon Glyph="&#xE72C;" />
-                            </AppBarButton.Icon>
-                        </AppBarButton>
-                        <AppBarButton Label="Manage sources"
-                                      x:Uid="VideoLibraryManageSourcesButton"
-                                      AutomationProperties.AutomationId="ManageVideoSourcesButton"
-                                      Command="{x:Bind ViewModel.SelectLibraryViewCommand}"
-                                      CommandParameter="Sources">
-                            <AppBarButton.Icon>
-                                <FontIcon Glyph="&#xE713;" />
-                            </AppBarButton.Icon>
-                        </AppBarButton>
+                                Grid.Column="2"
+                                DefaultLabelPosition="Right"
+                                VerticalAlignment="Center"
+                                Visibility="{x:Bind ViewModel.IsSourcesView, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
                         <AppBarButton x:Name="ScanVideoFolderButton"
                                       x:Uid="ScanVideoFolderButton"
                                       AutomationProperties.AutomationId="ScanVideoFolderButton"
@@ -520,40 +481,38 @@
                                 <FontIcon Glyph="&#xE8B7;" />
                             </AppBarButton.Icon>
                         </AppBarButton>
-                        <AppBarButton x:Name="ImportVideoButton"
-                                      x:Uid="ImportVideoButton"
-                                      AutomationProperties.AutomationId="ImportVideoButton"
-                                      Command="{x:Bind ViewModel.ImportVideoCommand}"
-                                      Label="Import video">
-                            <AppBarButton.Icon>
-                                <FontIcon Glyph="&#xE8E5;" />
-                            </AppBarButton.Icon>
-                        </AppBarButton>
                         <AppBarButton x:Name="AddYouTubeLinkButton"
                                       x:Uid="AddYouTubeLinkButton"
                                       AutomationProperties.AutomationId="AddYouTubeLinkButton"
                                       Click="AddYouTubeLinkButton_Click"
-                                      Label="Add link">
+                                      Label="YouTube">
                             <AppBarButton.Icon>
                                 <FontIcon Glyph="&#xE71B;" />
                             </AppBarButton.Icon>
                         </AppBarButton>
-                        <AppBarButton x:Name="ImportNyaaResourcesButton"
-                                      x:Uid="VideoLibraryNyaaButton"
-                                      AutomationProperties.AutomationId="ImportNyaaResourcesButton"
-                                      Click="ImportNyaaResourcesButton_Click"
-                                      Label="Import from Nyaa">
-                              <AppBarButton.Icon>
-                                  <FontIcon Glyph="&#xE774;" />
+                        <AppBarButton x:Uid="RefreshVideoSourcesButton"
+                                      Label="Refresh"
+                                      AutomationProperties.AutomationId="RefreshVideoSourcesButton"
+                                      IsEnabled="{x:Bind ViewModel.HasSources, Mode=OneWay}"
+                                      Command="{x:Bind ViewModel.RefreshAllSourcesCommand}">
+                            <AppBarButton.Icon>
+                                <FontIcon Glyph="&#xE72C;" />
                             </AppBarButton.Icon>
                         </AppBarButton>
-                        <AppBarButton x:Name="CreateSmartCollectionButton"
-                                      x:Uid="CreateSmartCollectionButton"
-                                      AutomationProperties.AutomationId="CreateSmartCollectionButton"
-                                      Click="CreateSmartCollectionButton_Click"
-                                      Label="Create smart collection">
+                        <AppBarButton x:Uid="VideoLibraryScrapeAllButton"
+                                      Label="Rescrape"
+                                      AutomationProperties.AutomationId="VideoLibraryScrapeAllButton"
+                                      Command="{x:Bind ViewModel.ScrapeAllMetadataCommand}">
                             <AppBarButton.Icon>
-                                <FontIcon Glyph="&#xE710;" />
+                                <FontIcon Glyph="&#xE774;" />
+                            </AppBarButton.Icon>
+                        </AppBarButton>
+                        <AppBarButton x:Uid="VideoLibraryMetadataTasksButton"
+                                      Label="Background tasks"
+                                      AutomationProperties.AutomationId="VideoLibraryMetadataTasksButton"
+                                      Command="{x:Bind ViewModel.ToggleMetadataTasksCommand}">
+                            <AppBarButton.Icon>
+                                <FontIcon Glyph="&#xE823;" />
                             </AppBarButton.Icon>
                         </AppBarButton>
                     </CommandBar>
@@ -598,7 +557,55 @@
                                      Maximum="100"
                                      Value="{x:Bind ViewModel.BackgroundMetadataProgress, Mode=OneWay}" />
                     </Grid>
+                    <Border Padding="12,8"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            CornerRadius="8"
+                            Visibility="{x:Bind ViewModel.IsMetadataTaskPanelVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                        <Grid RowDefinitions="Auto,Auto"
+                              RowSpacing="6">
+                            <Grid ColumnDefinitions="*,Auto,Auto,Auto"
+                                  ColumnSpacing="6">
+                                <StackPanel Spacing="1">
+                                    <TextBlock x:Uid="VideoLibraryMetadataTasksHeading"
+                                               Style="{StaticResource BodyStrongTextBlockStyle}"
+                                               Text="Background tasks" />
+                                    <TextBlock Text="{x:Bind ViewModel.MetadataTaskCountText, Mode=OneWay}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                                <Button x:Uid="VideoLibraryRefreshMetadataTasksButton"
+                                        Grid.Column="1"
+                                        Command="{x:Bind ViewModel.RefreshMetadataTasksCommand}">
+                                    <FontIcon Glyph="&#xE72C;" />
+                                </Button>
+                                <Button x:Uid="VideoLibraryCloseMetadataTasksButton"
+                                        Grid.Column="2"
+                                        Command="{x:Bind ViewModel.ToggleMetadataTasksCommand}">
+                                    <FontIcon Glyph="&#xE711;" />
+                                </Button>
+                                <Button x:Uid="VideoLibraryRetryFailedMetadataTasksButton"
+                                        Grid.Column="3"
+                                        Command="{x:Bind ViewModel.RetryFailedMetadataTasksCommand}">
+                                    <FontIcon Glyph="&#xE72C;" />
+                                </Button>
+                            </Grid>
+                            <TextBlock Grid.Row="1"
+                                       x:Uid="VideoLibraryMetadataTasksEmptyText"
+                                       Text="No background tasks."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Visibility="{x:Bind ViewModel.HasMetadataTasks, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert, Mode=OneWay}" />
+                            <ItemsControl Grid.Row="1"
+                                          ItemTemplate="{StaticResource VideoMetadataTaskTemplate}"
+                                          ItemsSource="{x:Bind ViewModel.MetadataTasks, Mode=OneWay}"
+                                          Visibility="{x:Bind ViewModel.HasMetadataTasks, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                        </Grid>
+                    </Border>
                 </StackPanel>
+
+                <Frame Grid.Row="2"
+                       x:Name="DiscoverPageHostFrame"
+                       AutomationProperties.AutomationId="VideoLibraryDiscoverPage"
+                       Padding="0"
+                       Visibility="{x:Bind ViewModel.IsDiscoverView, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
 
                 <ProgressRing Grid.Row="2"
                               Width="60"
@@ -662,7 +669,7 @@
 
                     <Grid Grid.Row="1"
                           Margin="20,0,28,0"
-                          ColumnDefinitions="*,340"
+                          ColumnDefinitions="*,Auto"
                           ColumnSpacing="16">
                         <Grid RowDefinitions="Auto,*">
                             <CommandBar Grid.Row="0"
@@ -686,16 +693,6 @@
                                 </AppBarButton>
                             </CommandBar>
 
-                        <ListView Grid.Row="1"
-                                  x:Name="VideoLibraryListView"
-                                  AutomationProperties.AutomationId="VideoLibraryListView"
-                                  ItemTemplate="{StaticResource VideoListItemTemplate}"
-                                  ItemsSource="{x:Bind ViewModel.Videos, Mode=OneWay}"
-                                  ItemClick="ListView_ItemClick"
-                                  IsItemClickEnabled="True"
-                                  SelectionMode="None"
-                                  Visibility="{x:Bind ViewModel.IsListLayout, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
-
                         <GridView Grid.Row="1"
                                   x:Name="VideoGridView"
                                   AutomationProperties.AutomationId="VideoGridView"
@@ -704,19 +701,19 @@
                                   ItemClick="GridView_ItemClick"
                                   ItemTemplate="{StaticResource VideoPosterItemTemplate}"
                                   ItemsSource="{x:Bind ViewModel.Videos, Mode=OneWay}"
-                                  SelectionMode="None"
-                                  Visibility="{x:Bind ViewModel.IsPosterLayout, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                                  SelectionMode="None">
                             <GridView.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <ItemsWrapGrid Orientation="Horizontal"
-                                                   ItemWidth="220"
-                                                   ItemHeight="260" />
+                                                   ItemWidth="300"
+                                                   ItemHeight="320" />
                                 </ItemsPanelTemplate>
                             </GridView.ItemsPanel>
                         </GridView>
                         </Grid>
 
                         <Border Grid.Column="1"
+                                Width="340"
                                 Padding="16"
                                 BorderThickness="1,0,0,0"
                                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -1017,14 +1014,90 @@
                         </StackPanel>
 
                         <StackPanel Spacing="10">
-                            <TextBlock x:Uid="VideoLibraryEpisodesHeading" Text="Episodes" Style="{StaticResource SubtitleTextBlockStyle}" />
-                            <ScrollViewer HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Auto"
-                                          VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Hidden">
-                                <ItemsControl ItemsSource="{x:Bind ViewModel.SelectedSeries.Episodes, Mode=OneWay}"
-                                              ItemTemplate="{StaticResource VideoPosterItemTemplate}">
-                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><ItemsStackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                                </ItemsControl>
-                            </ScrollViewer>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                <TextBlock x:Uid="VideoLibraryEpisodesHeading" Text="Episodes" Style="{StaticResource SubtitleTextBlockStyle}" />
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                    <ProgressRing Width="20"
+                                                  Height="20"
+                                                  IsActive="{x:Bind ViewModel.IsLoadingSeriesEpisodes, Mode=OneWay}" />
+                                    <TextBlock x:Uid="VideoLibraryEpisodesLoadingText"
+                                               Text="Loading episodes…"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               Visibility="{x:Bind ViewModel.IsLoadingSeriesEpisodes, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                                </StackPanel>
+                            </Grid>
+                            <InfoBar x:Uid="VideoLibraryEpisodesError"
+                                     IsClosable="False"
+                                     IsOpen="{x:Bind ViewModel.HasSeriesEpisodesError, Mode=OneWay}"
+                                     Message="{x:Bind ViewModel.SeriesEpisodesError, Mode=OneWay}"
+                                     Severity="Warning" />
+                            <ItemsRepeater AutomationProperties.AutomationId="VideoLibraryEpisodeSlots"
+                                           ItemsSource="{x:Bind ViewModel.SelectedSeries.SelectedEpisodeSlots, Mode=OneWay}">
+                                <ItemsRepeater.Layout>
+                                    <UniformGridLayout MinItemWidth="480"
+                                                        MinItemHeight="164"
+                                                        MinRowSpacing="12"
+                                                        MinColumnSpacing="12" />
+                                </ItemsRepeater.Layout>
+                                <ItemsRepeater.ItemTemplate>
+                                    <DataTemplate x:DataType="vmc:VideoEpisodeSlotViewModel">
+                                        <Border Padding="10"
+                                                CornerRadius="12"
+                                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                                            <Grid ColumnDefinitions="180,*" ColumnSpacing="14">
+                                                <Grid Height="140"
+                                                      Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                                                    <FontIcon Glyph="&#xE8B4;"
+                                                              FontSize="32"
+                                                              HorizontalAlignment="Center"
+                                                              VerticalAlignment="Center"
+                                                              Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                              Visibility="{x:Bind HasArtwork, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}" />
+                                                    <Image Source="{x:Bind ArtworkImage, Mode=OneWay}"
+                                                           Stretch="UniformToFill"
+                                                           Visibility="{x:Bind HasArtwork, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                                                </Grid>
+                                                <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto" RowSpacing="6">
+                                                    <TextBlock Text="{x:Bind NumberText}"
+                                                               Style="{StaticResource BodyStrongTextBlockStyle}"
+                                                               TextWrapping="WrapWholeWords" />
+                                                    <StackPanel Grid.Row="1" Spacing="3">
+                                                        <TextBlock Text="{x:Bind Title}"
+                                                                   Style="{StaticResource BodyStrongTextBlockStyle}"
+                                                                   TextWrapping="Wrap"
+                                                                   MaxLines="2"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Text="{x:Bind Overview}"
+                                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                                   TextWrapping="Wrap"
+                                                                   MaxLines="3"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   Visibility="{x:Bind HasOverview, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
+                                                        <Button x:Uid="VideoLibraryEpisodePlayButton"
+                                                                Content="Play"
+                                                                Command="{Binding ViewModel.OpenVideoCommand, ElementName=ThisPage}"
+                                                                CommandParameter="{x:Bind DownloadedEpisode}"
+                                                                Visibility="{x:Bind IsDownloaded, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                                                        <Button x:Uid="VideoLibraryEpisodeDownloadButton"
+                                                                AutomationProperties.AutomationId="VideoLibraryEpisodeDownloadButton"
+                                                                Content="Download"
+                                                                Command="{Binding ViewModel.DownloadEpisodeCommand, ElementName=ThisPage}"
+                                                                CommandParameter="{x:Bind}"
+                                                                IsEnabled="{x:Bind CanDownload, Mode=OneWay}"
+                                                                Visibility="{x:Bind IsDownloaded, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert, Mode=OneWay}" />
+                                                        <TextBlock Text="{x:Bind StatusText, Mode=OneWay}"
+                                                                   VerticalAlignment="Center"
+                                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsRepeater.ItemTemplate>
+                            </ItemsRepeater>
                         </StackPanel>
 
                         <StackPanel Spacing="6"
@@ -1225,7 +1298,7 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="pages:VideoLibrarySourceSummary">
                                     <Border Margin="0,0,0,12"
-                                            Padding="18"
+                                            Padding="14,12"
                                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                             BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                             BorderThickness="1"
@@ -1239,17 +1312,57 @@
                                                     <TextBlock Text="{x:Bind Source.FolderPath, Mode=OneTime}"
                                                                TextTrimming="CharacterEllipsis"
                                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                                    <TextBlock Text="{x:Bind StatusText, Mode=OneTime}"
-                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                                    <TextBlock Text="{x:Bind LastScannedText, Mode=OneTime}"
+                                                    <TextBlock Text="{x:Bind ScrapeSummaryText, Mode=OneWay}"
                                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                                 </StackPanel>
-                                                <Button Grid.Column="2"
-                                                        x:Uid="VideoLibraryRemoveSourceButton"
-                                                        Command="{Binding ViewModel.RemoveSourceCommand, ElementName=ThisPage}"
-                                                        CommandParameter="{x:Bind}">
-                                                    <FontIcon Glyph="&#xE74D;" />
-                                                </Button>
+                                                <CommandBar Grid.Column="2"
+                                                            DefaultLabelPosition="Collapsed"
+                                                            IsOpen="True"
+                                                            OverflowButtonVisibility="Collapsed">
+                                                    <AppBarButton x:Uid="VideoLibraryRefreshSourceButton"
+                                                                  Label="Scan changes"
+                                                                  Command="{Binding ViewModel.RefreshSourceCommand, ElementName=ThisPage}"
+                                                                  CommandParameter="{x:Bind}">
+                                                        <AppBarButton.Icon><FontIcon Glyph="&#xE72C;" /></AppBarButton.Icon>
+                                                    </AppBarButton>
+                                                    <AppBarButton x:Uid="VideoLibraryFullScanSourceButton"
+                                                                  Label="Full scan"
+                                                                  Command="{Binding ViewModel.FullScanSourceCommand, ElementName=ThisPage}"
+                                                                  CommandParameter="{x:Bind}">
+                                                        <AppBarButton.Icon><FontIcon Glyph="&#xE895;" /></AppBarButton.Icon>
+                                                    </AppBarButton>
+                                                    <AppBarButton x:Uid="VideoLibraryScrapeSourceButton"
+                                                                  Label="Scrape metadata"
+                                                                  Command="{Binding ViewModel.RefreshSourceMetadataCommand, ElementName=ThisPage}"
+                                                                  CommandParameter="{x:Bind}">
+                                                        <AppBarButton.Icon><FontIcon Glyph="&#xE774;" /></AppBarButton.Icon>
+                                                    </AppBarButton>
+                                                    <AppBarButton x:Uid="VideoLibraryCancelScrapeSourceButton"
+                                                                  Label="Cancel scraping"
+                                                                  Visibility="{x:Bind IsMetadataProgressVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}"
+                                                                  Command="{Binding ViewModel.CancelSourceMetadataCommand, ElementName=ThisPage}"
+                                                                  CommandParameter="{x:Bind}">
+                                                        <AppBarButton.Icon><FontIcon Glyph="&#xE711;" /></AppBarButton.Icon>
+                                                    </AppBarButton>
+                                                    <AppBarButton x:Uid="VideoLibrarySourceSettingsButton"
+                                                                  Label="Settings"
+                                                                  Command="{Binding ViewModel.ToggleSourceSettingsCommand, ElementName=ThisPage}"
+                                                                  CommandParameter="{x:Bind}">
+                                                        <AppBarButton.Icon><FontIcon Glyph="&#xE713;" /></AppBarButton.Icon>
+                                                    </AppBarButton>
+                                                    <AppBarButton x:Uid="VideoLibraryRevealSourceButton"
+                                                                  Label="Open folder"
+                                                                  Command="{Binding ViewModel.RevealSourceCommand, ElementName=ThisPage}"
+                                                                  CommandParameter="{x:Bind}">
+                                                        <AppBarButton.Icon><FontIcon Glyph="&#xE8B7;" /></AppBarButton.Icon>
+                                                    </AppBarButton>
+                                                    <AppBarButton x:Uid="VideoLibraryRemoveSourceButton"
+                                                                  Label="Remove source"
+                                                                  Command="{Binding ViewModel.RemoveSourceCommand, ElementName=ThisPage}"
+                                                                  CommandParameter="{x:Bind}">
+                                                        <AppBarButton.Icon><FontIcon Glyph="&#xE74D;" /></AppBarButton.Icon>
+                                                    </AppBarButton>
+                                                </CommandBar>
                                             </Grid>
 
                                             <TextBlock Text="{x:Bind Source.LastError, Mode=OneWay}"
@@ -1282,56 +1395,41 @@
                                                            Visibility="{x:Bind HasMetadataError, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
                                             </StackPanel>
 
-                                            <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+                                            <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8"
+                                                  Visibility="{x:Bind IsSourceSettingsExpanded, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                                                <StackPanel Spacing="3">
+                                                    <TextBlock Text="{x:Bind StatusText, Mode=OneWay}"
+                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                    <TextBlock Text="{x:Bind LastScannedText, Mode=OneWay}"
+                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                </StackPanel>
                                                 <ComboBox x:Uid="VideoLibrarySourceMediaTypeBox"
+                                                          Grid.Row="1"
                                                           Header="Media type"
                                                           HorizontalAlignment="Stretch"
                                                           ItemsSource="{Binding ViewModel.SourceMediaTypeOptions, ElementName=ThisPage}"
                                                           DisplayMemberPath="DisplayName"
                                                           SelectedIndex="{x:Bind MediaTypeSelectedIndex, Mode=TwoWay}" />
-                                                <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="8">
+                                                <Grid Grid.Row="2" ColumnDefinitions="*,*" ColumnSpacing="8">
                                                     <TextBox x:Uid="VideoLibrarySourceLanguageBox" Header="Language"
                                                              Text="{x:Bind Source.Language, Mode=TwoWay}" />
                                                     <TextBox Grid.Column="1" x:Uid="VideoLibrarySourceRegionBox" Header="Region"
                                                              Text="{x:Bind Source.Region, Mode=TwoWay}" />
                                                 </Grid>
-                                                <TextBox Grid.Row="2"
+                                                <TextBox Grid.Row="3"
                                                          x:Uid="VideoLibrarySourceProviderOrderBox"
                                                          Header="Provider order"
                                                          PlaceholderText="local, tmdb, tvmaze"
                                                          Text="{x:Bind ProviderOrderDraft, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                             </Grid>
 
-                                            <CommandBar DefaultLabelPosition="Right" IsOpen="True">
+                                            <CommandBar DefaultLabelPosition="Right" IsOpen="True"
+                                                        Visibility="{x:Bind IsSourceSettingsExpanded, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
                                                 <AppBarButton x:Uid="VideoLibrarySaveSourceSettingsButton"
                                                               Label="Save"
                                                               Command="{Binding ViewModel.SaveSourceSettingsCommand, ElementName=ThisPage}"
                                                               CommandParameter="{x:Bind}">
                                                     <AppBarButton.Icon><FontIcon Glyph="&#xE74E;" /></AppBarButton.Icon>
-                                                </AppBarButton>
-                                                <AppBarButton x:Uid="VideoLibraryRefreshSourceButton"
-                                                              Label="Scan changes"
-                                                              Command="{Binding ViewModel.RefreshSourceCommand, ElementName=ThisPage}"
-                                                              CommandParameter="{x:Bind}">
-                                                    <AppBarButton.Icon><FontIcon Glyph="&#xE72C;" /></AppBarButton.Icon>
-                                                </AppBarButton>
-                                                <AppBarButton x:Uid="VideoLibraryFullScanSourceButton"
-                                                              Label="Full scan"
-                                                              Command="{Binding ViewModel.FullScanSourceCommand, ElementName=ThisPage}"
-                                                              CommandParameter="{x:Bind}">
-                                                    <AppBarButton.Icon><FontIcon Glyph="&#xE895;" /></AppBarButton.Icon>
-                                                </AppBarButton>
-                                                <AppBarButton x:Uid="VideoLibraryScrapeSourceButton"
-                                                              Label="Scrape metadata"
-                                                              Command="{Binding ViewModel.RefreshSourceMetadataCommand, ElementName=ThisPage}"
-                                                              CommandParameter="{x:Bind}">
-                                                    <AppBarButton.Icon><FontIcon Glyph="&#xE774;" /></AppBarButton.Icon>
-                                                </AppBarButton>
-                                                <AppBarButton x:Uid="VideoLibraryCancelScrapeSourceButton"
-                                                              Label="Cancel scraping"
-                                                              Command="{Binding ViewModel.CancelSourceMetadataCommand, ElementName=ThisPage}"
-                                                              CommandParameter="{x:Bind}">
-                                                    <AppBarButton.Icon><FontIcon Glyph="&#xE711;" /></AppBarButton.Icon>
                                                 </AppBarButton>
                                                 <CommandBar.SecondaryCommands>
                                                     <AppBarButton x:Uid="VideoLibraryPauseSourceScanButton"

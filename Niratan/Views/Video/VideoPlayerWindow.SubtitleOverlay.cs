@@ -78,7 +78,7 @@ public sealed partial class VideoPlayerWindow
         {
             text = ViewModel.CurrentSubtitleText,
             fontFamily = ViewModel.SubtitleFontFamily,
-            fontSize = ViewModel.SubtitleFontSize,
+            fontSize = _effectiveSubtitleFontSize,
             fontWeight = ViewModel.SubtitleFontWeight,
             shadowRadius = ViewModel.SubtitleShadowRadius,
             textOpacity,
@@ -581,6 +581,24 @@ public sealed partial class VideoPlayerWindow
 
         var viewportWidth = Math.Max(surfaceWidth - viewportLeft - viewportRight, 0);
         var horizontalInset = Math.Min(16, viewportWidth / 4);
+        var subtitleLayout = VideoSubtitlePanelLayout.Calculate(
+            ViewModel.CurrentSubtitleText,
+            ViewModel.SubtitleFontSize,
+            Math.Max(ViewModel.SubtitleShadowRadius, ViewModel.SubtitleMaskBlurRadius),
+            Math.Max(1, viewportWidth - (horizontalInset * 2)),
+            viewportHeight);
+        var layoutChanged = Math.Abs(_effectiveSubtitleFontSize - subtitleLayout.FontSize) > 0.01
+            || !double.IsFinite(SubtitlePanelBorder.Height)
+            || Math.Abs(SubtitlePanelBorder.Height - subtitleLayout.PanelHeight) > 0.25;
+        _effectiveSubtitleFontSize = subtitleLayout.FontSize > 0
+            ? subtitleLayout.FontSize
+            : Math.Clamp(ViewModel.SubtitleFontSize, 12, 72);
+        SubtitlePanelBorder.Height = subtitleLayout.PanelHeight;
+        if (layoutChanged)
+        {
+            _subtitleVisibleBounds = null;
+            SubtitleCanvas.Invalidate();
+        }
         SubtitlePanelBorder.Margin = new Thickness(
             viewportLeft + horizontalInset,
             0,
@@ -672,7 +690,7 @@ public sealed partial class VideoPlayerWindow
         return new VideoSubtitleCanvasRenderOptions(
             ViewModel.CurrentSubtitleText ?? "",
             fontFamily,
-            ViewModel.SubtitleFontSize,
+            _effectiveSubtitleFontSize,
             ViewModel.SubtitleFontWeight,
             ParseColorHex(ViewModel.SubtitleColorHex, Colors.White),
             ViewModel.SubtitleShadowRadius,

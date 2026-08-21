@@ -36,6 +36,77 @@ public sealed class VideoMetadataProviderTests
     }
 
     [Fact]
+    public async Task TmdbAnimeSearch_RemovesSeasonSuffixAndDoesNotFilterBySeasonYear()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var transport = new FixtureTransport("{\"results\":[]}");
+        var provider = new TmdbVideoMetadataProvider(transport, new FixtureCredentialStore("secret"));
+        var query = new VideoMetadataSearchQuery(
+            "Mushoku Tensei: Jobless Reincarnation Season 2",
+            VideoMetadataMediaKind.Anime,
+            2023,
+            2,
+            1,
+            null,
+            "ja-JP",
+            "JP",
+            ImmutableDictionary<string, string>.Empty);
+
+        await provider.SearchAsync(query, ct);
+
+        transport.LastRequest!.Uri.Query.Should().Contain("query=Mushoku%20Tensei");
+        transport.LastRequest.Uri.Query.Should().NotContain("Season%202");
+        transport.LastRequest.Uri.Query.Should().NotContain("first_air_date_year");
+    }
+
+    [Fact]
+    public async Task TmdbSearch_UsesEnglishResultLanguageForLatinTitles()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var transport = new FixtureTransport(
+            "{\"results\":[{\"id\":94664,\"name\":\"Mushoku Tensei: Jobless Reincarnation\",\"original_name\":\"無職転生 ～異世界行ったら本気だす～\",\"first_air_date\":\"2021-01-11\"}]}" );
+        var provider = new TmdbVideoMetadataProvider(transport, new FixtureCredentialStore("secret"));
+        var query = new VideoMetadataSearchQuery(
+            "Mushoku Tensei: Jobless Reincarnation Season 2",
+            VideoMetadataMediaKind.Anime,
+            2023,
+            2,
+            1,
+            null,
+            "ja-JP",
+            "JP",
+            ImmutableDictionary<string, string>.Empty);
+
+        var candidates = await provider.SearchAsync(query, ct);
+
+        candidates.Should().ContainSingle().Which.Title.Should().Be("Mushoku Tensei: Jobless Reincarnation");
+        transport.LastRequest!.Uri.Query.Should().Contain("language=en-US");
+    }
+
+    [Fact]
+    public async Task TmdbSeasonScopedSeriesSearch_DoesNotFilterBySeasonYear()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var transport = new FixtureTransport("{\"results\":[]}");
+        var provider = new TmdbVideoMetadataProvider(transport, new FixtureCredentialStore("secret"));
+        var query = new VideoMetadataSearchQuery(
+            "Mushoku Tensei: Jobless Reincarnation Season 2",
+            VideoMetadataMediaKind.Series,
+            2023,
+            2,
+            1,
+            null,
+            "ja-JP",
+            "JP",
+            ImmutableDictionary<string, string>.Empty);
+
+        await provider.SearchAsync(query, ct);
+
+        transport.LastRequest!.Uri.Query.Should().NotContain("Season%202");
+        transport.LastRequest.Uri.Query.Should().NotContain("first_air_date_year");
+    }
+
+    [Fact]
     public async Task TmdbDetails_ProjectsComprehensiveSeriesMetadataFromFixture()
     {
         var ct = TestContext.Current.CancellationToken;
@@ -72,6 +143,26 @@ public sealed class VideoMetadataProviderTests
         details.People.Should().ContainSingle(person => person.Name == "声優 A" && person.Role == "主人公");
         details.RelatedItems.Should().ContainSingle(item => item.ProviderItemId == "99");
         transport.LastRequest!.Uri.Query.Should().Contain("recommendations");
+    }
+
+    [Fact]
+    public async Task TmdbDetails_LoadsEveryScrapedSeasonAndEpisode()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var transport = new AllSeasonsFixtureTransport();
+        var provider = new TmdbVideoMetadataProvider(transport, new FixtureCredentialStore("secret"));
+        var candidate = new VideoMetadataCandidate(
+            "tmdb", "123", VideoMetadataMediaKind.Series, "作品", null, 2020,
+            null, null, null, ["作品"], ImmutableDictionary<string, string>.Empty,
+            "https://www.themoviedb.org/tv/123");
+
+        var details = await provider.GetDetailsAsync(candidate, "ja-JP", "JP", ct);
+
+        details.Should().NotBeNull();
+        details!.Seasons.Should().HaveCount(25);
+        details.Seasons[^1].Episodes.Should().HaveCount(201);
+        details.Seasons[^1].Episodes[^1].EpisodeNumber.Should().Be(201);
+        transport.SeasonRequestCount.Should().Be(25);
     }
 
     [Fact]
@@ -124,7 +215,9 @@ public sealed class VideoMetadataProviderTests
 
         var candidates = await provider.SearchAsync(query, ct);
 
-        candidates.Should().ContainSingle().Which.ProviderItemId.Should().Be("20987");
+        var candidate = candidates.Should().ContainSingle().Subject;
+        candidate.ProviderItemId.Should().Be("20987");
+        candidate.Title.Should().Be("Himouto! Umaru-chan");
         using var body = JsonDocument.Parse(transport.LastRequest!.Body!);
         var variables = body.RootElement.GetProperty("variables");
         variables.GetProperty("search").GetString().Should().Be("Himouto! Umaru-chan");
@@ -320,6 +413,59 @@ public sealed class VideoMetadataProviderTests
             return Task.FromResult(new VideoMetadataResponse(
                 200, Encoding.UTF8.GetBytes(json), "application/json", null, null, DateTimeOffset.UtcNow, false));
         }
+    }
+
+    private sealed class AllSeasonsFixtureTransport : IVideoMetadataTransport
+    {
+        public int SeasonRequestCount { get; private set; }
+
+        public Task<VideoMetadataResponse> SendAsync(
+            VideoMetadataRequest request,
+            CancellationToken ct = default)
+        {
+            var isSeason = request.Uri.AbsolutePath.Contains("/season/", StringComparison.OrdinalIgnoreCase);
+            var json = isSeason
+                ? BuildSeasonJson(++SeasonRequestCount)
+                : BuildDetailsJson();
+            return Task.FromResult(new VideoMetadataResponse(
+                200,
+                Encoding.UTF8.GetBytes(json),
+                "application/json",
+                null,
+                null,
+                DateTimeOffset.UtcNow,
+                false));
+        }
+
+        private static string BuildDetailsJson() => JsonSerializer.Serialize(new
+        {
+            id = 123,
+            name = "作品",
+            original_name = "作品",
+            first_air_date = "2020-01-01",
+            seasons = Enumerable.Range(1, 25).Select(season => new
+            {
+                season_number = season,
+                name = $"Season {season}",
+                episode_count = 201,
+                overview = (string?)null,
+                air_date = (string?)null,
+                poster_path = (string?)null,
+            }),
+        });
+
+        private static string BuildSeasonJson(int seasonNumber) => JsonSerializer.Serialize(new
+        {
+            episodes = Enumerable.Range(1, 201).Select(episode => new
+            {
+                episode_number = episode,
+                name = $"S{seasonNumber}E{episode}",
+                still_path = (string?)null,
+                overview = (string?)null,
+                air_date = (string?)null,
+                runtime = (int?)null,
+            }),
+        });
     }
 
     private sealed class FixtureCredentialStore(string token) : IVideoMetadataCredentialStore

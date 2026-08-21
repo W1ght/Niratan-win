@@ -1,4 +1,5 @@
 using FluentAssertions;
+using System.Xml.Linq;
 
 namespace Niratan.Tests.Views.Pages;
 
@@ -39,8 +40,8 @@ public sealed class MangaLibraryPageAssetTests
 
         xaml.Should().Contain("AutomationProperties.AutomationId=\"MangaNavItem\"");
         xaml.Should().Contain("Tag=\"Niratan.Views.Pages.MangaLibraryPage\"");
-        xaml.Should().Contain("AutomationProperties.AutomationId=\"BrowseNavItem\"");
-        xaml.Should().Contain("Tag=\"Niratan.Views.Pages.BrowsePage\"");
+        xaml.Should().NotContain("AutomationProperties.AutomationId=\"BrowseNavItem\"");
+        xaml.Should().NotContain("Tag=\"Niratan.Views.Pages.BrowsePage\"");
     }
 
     [Fact]
@@ -131,13 +132,15 @@ public sealed class MangaLibraryPageAssetTests
         viewModel.Should().Contain("supportsOnlineLibrary: true");
         viewModel.Should().Contain("CreateMihonLibraryEntry");
         viewModel.Should().Contain("SaveConfigurationAsync");
-        viewModel.Should().NotContain("supportsOnlineLibrary: false");
+        viewModel.Should().Contain("supportsOnlineLibrary: false");
+        viewModel.Should().Contain("ApplyDiscoveryDetails");
+        viewModel.Should().Contain("LoadMangaDiscoveryDetailsAsync");
         viewModel.Should().NotContain("OpenOnlineMangaAsync");
         viewModel.Should().NotContain("OpenMihonMangaAsync");
     }
 
     [Fact]
-    public void Browse_IsATopLevelModuleWithSourceAndExtensionTabs()
+    public void MangaLibrary_PutsRemoteSourcesExtensionsAndSettingsInTopNavigation()
     {
         var library = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "MangaLibraryPage.xaml"));
@@ -152,12 +155,33 @@ public sealed class MangaLibraryPageAssetTests
                 "Manga",
                 "MangaSourceSettingsContent.xaml"));
 
+        library.Should().Contain(
+            "AutomationProperties.AutomationId=\"MangaLibrarySourcesNavItem\"");
+        library.Should().Contain(
+            "AutomationProperties.AutomationId=\"MangaLibraryDiscoverNavItem\"");
+        library.Should().Contain(
+            "AutomationProperties.AutomationId=\"MangaLibraryExtensionsNavItem\"");
+        library.Should().Contain(
+            "AutomationProperties.AutomationId=\"MangaLibrarySettingsNavItem\"");
+        library.Should().Contain("x:Uid=\"MangaLibraryTopDiscoverNavItem\"");
+        library.Should().Contain("x:Uid=\"MangaLibraryTopSourcesNavItem\"");
+        library.Should().Contain("Tag=\"Discover\"");
+        library.Should().Contain("Tag=\"Browse\"");
         xaml.Should().Contain(
-            "AutomationProperties.AutomationId=\"BrowseMangaSourcesTab\"");
+            "AutomationProperties.AutomationId=\"MangaDiscoverSections\"");
         xaml.Should().Contain(
-            "AutomationProperties.AutomationId=\"BrowseMangaExtensionsTab\"");
+            "AutomationProperties.AutomationId=\"MangaDiscoverSearchButton\"");
         xaml.Should().Contain(
-            "AutomationProperties.AutomationId=\"BrowseSourceSettingsTab\"");
+            "AutomationProperties.AutomationId=\"MangaDiscoverProviderBox\"");
+        xaml.Should().Contain(
+            "AutomationProperties.AutomationId=\"MangaDiscoverFeedBox\"");
+        xaml.Should().Contain(
+            "ItemsSource=\"{x:Bind ViewModel.MangaDiscoverSections, Mode=OneWay}\"");
+        xaml.Should().Contain(
+            "AutomationProperties.AutomationId=\"MangaDiscoverSearchResults\"");
+        xaml.Should().Contain("MangaDiscoverSectionTemplate");
+        code.Should().Contain("MangaHomeSection.Discover");
+        code.Should().Contain("InitializeBrowseAsync(section)");
         xaml.Should().Contain(
             "ItemsSource=\"{x:Bind ViewModel.BrowseBooks, Mode=OneWay}\"");
         xaml.Should().Contain(
@@ -185,6 +209,9 @@ public sealed class MangaLibraryPageAssetTests
         xaml.Should().Contain(
             "ItemsSource=\"{Binding Source={StaticResource GroupedBrowseSources}}\"");
         settings.Should().Contain("x:Uid=\"MangaSourcesBoundaryInfoBar\"");
+        xaml.Should().NotContain("BrowseMangaSourcesTab");
+        xaml.Should().NotContain("BrowseMangaExtensionsTab");
+        xaml.Should().NotContain("BrowseSourceSettingsTab");
         xaml.Should().NotContain("MihonBrowseSourceComboBox");
         library.Should().NotContain("BrowseMangaSourcesTab");
         library.Should().NotContain("MangaSourcesMihonProviderButton");
@@ -299,13 +326,25 @@ public sealed class MangaLibraryPageAssetTests
                 "Views",
                 "Manga",
                 "MihonExtensionBrowser.xaml"));
+        var sourceItemViewModel = File.ReadAllText(
+            Path.Combine(
+                ProjectRoot,
+                "ViewModels",
+                "Components",
+                "MangaBrowseSourceItemViewModel.cs"));
         var mihon = File.ReadAllText(
             Path.Combine(ProjectRoot, "Services", "Manga", "MihonExtensionService.cs"));
+        var pageViewModel = File.ReadAllText(
+            Path.Combine(
+                ProjectRoot,
+                "ViewModels",
+                "Pages",
+                "MangaLibraryPageViewModel.cs"));
 
         library.Should().Contain("x:Key=\"RemoteMangaBookTemplate\"");
         xaml.Should().Contain("x:Key=\"RemoteMangaBookTemplate\"");
         xaml.Should().Contain("x:DataType=\"components:RemoteMangaLibraryItemViewModel\"");
-        xaml.Should().Contain(
+        xaml.Should().NotContain(
             "AutomationProperties.AutomationId=\"BrowseSourceSettingsTab\"");
         xaml.Should().Contain(
             "<manga:MangaSourceSettingsContent");
@@ -314,6 +353,10 @@ public sealed class MangaLibraryPageAssetTests
             "ScrollViewer.VerticalScrollMode=\"Enabled\"");
         xaml.Should().Contain(
             "Source=\"{x:Bind IconImage, Mode=OneWay}\"");
+        xaml.Should().Contain(
+            "ColumnDefinitions=\"Auto,*,Auto,Auto\"");
+        xaml.Should().Contain("Command=\"{x:Bind RemoveCommand}\"");
+        xaml.Should().Contain("RemoveAutomationId");
         xaml.Should().Contain("<manga:MihonExtensionBrowser");
         xaml.Should().Contain(
             "Source=\"{Binding BrowseSourceGroups}\"");
@@ -322,6 +365,9 @@ public sealed class MangaLibraryPageAssetTests
         extensionBrowser.Should().Contain(
             "AutomationProperties.AutomationId=\"MihonRepositorySourcesList\"");
         extensionBrowser.Should().Contain("Command=\"{x:Bind InstallCommand}\"");
+        extensionBrowser.Should().Contain("Command=\"{x:Bind RemoveCommand}\"");
+        extensionBrowser.Should().Contain("RemoveAutomationId");
+        extensionBrowser.Should().Contain("SymbolIcon Symbol=\"Delete\"");
         extensionBrowser.Should().Contain(
             "ItemsSource=\"{Binding Source={StaticResource GroupedMihonRepositorySources}}\"");
         extensionBrowser.Should().Contain("<ListView.GroupStyle>");
@@ -329,6 +375,16 @@ public sealed class MangaLibraryPageAssetTests
             "ScrollViewer.VerticalScrollMode=\"Enabled\"");
         extensionBrowser.Should().Contain(
             "Source=\"{x:Bind IconImage, Mode=OneWay}\"");
+        sourceItemViewModel.Should().Contain("new BitmapImage");
+        sourceItemViewModel.Should().Contain("UriKind.Absolute");
+        sourceItemViewModel.Should().Contain("RemoveCommand");
+        extensionBrowser.Should().Contain("ImageFailed=\"MihonRepositorySourceIcon_ImageFailed\"");
+        extensionBrowser.Should().Contain("IsEnabled=\"{x:Bind CanRemove, Mode=OneTime}\"");
+        extensionBrowser.Should().NotContain("Visibility=\"{x:Bind IsInstalled");
+        mihon.Should().Contain("GetDetectedRasterImageExtension");
+        pageViewModel.Should().Contain("LoadMihonInstalledSourceIconAsync");
+        pageViewModel.Should().Contain("RemoveMihonInstalledSourceAsync");
+        pageViewModel.Should().Contain("source.IconDownloadUrl");
         extensionBrowser.Should().NotContain("MihonRepositorySourceComboBox");
         extensionBrowser.Should().NotContain(
             "MihonCompatibleSourcesOnlyCheckBox");
@@ -344,6 +400,8 @@ public sealed class MangaLibraryPageAssetTests
         mihon.Should().Contain(
             "Path.Combine(AppContext.BaseDirectory, \"MihonBridge\")");
         mihon.Should().Contain("ResolveBundledRuntime");
+        mihon.Should().Contain("RemoveAsync(");
+        mihon.Should().Contain("HasRasterImageSignature");
         mihon.Should().Contain(
             "headers as optional");
     }
@@ -426,12 +484,16 @@ public sealed class MangaLibraryPageAssetTests
         navigation.Should().Contain("x:Uid=\"MangaNavigationItem\"");
         reader.Should().Contain("x:Uid=\"MangaReaderLayoutButton\"");
         reader.Should().Contain("x:Uid=\"MangaReaderOcrButton\"");
-        navigation.Should().Contain("x:Uid=\"BrowseNavigationItem\"");
+        navigation.Should().NotContain("x:Uid=\"BrowseNavigationItem\"");
         var browse = File.ReadAllText(
             Path.Combine(ProjectRoot, "Views", "Pages", "BrowsePage.xaml"));
-        browse.Should().Contain("x:Uid=\"BrowseMangaSourcesTab\"");
-        browse.Should().Contain("x:Uid=\"BrowseMangaExtensionsTab\"");
-        browse.Should().Contain("x:Uid=\"BrowseSourceSettingsTab\"");
+        library.Should().Contain("x:Uid=\"MangaLibraryTopSourcesNavItem\"");
+        library.Should().Contain("x:Uid=\"MangaLibraryTopDiscoverNavItem\"");
+        library.Should().Contain("x:Uid=\"MangaLibraryTopExtensionsNavItem\"");
+        library.Should().Contain("x:Uid=\"MangaLibraryTopSettingsNavItem\"");
+        browse.Should().NotContain("BrowseMangaSourcesTab");
+        browse.Should().NotContain("BrowseMangaExtensionsTab");
+        browse.Should().NotContain("BrowseSourceSettingsTab");
         chinese.Should().Contain(
             "name=\"MangaLibraryTitleText.Text\" xml:space=\"preserve\"><value>漫画</value>");
         chinese.Should().Contain(
@@ -439,13 +501,19 @@ public sealed class MangaLibraryPageAssetTests
         chinese.Should().Contain(
             "name=\"MangaLibraryOnlineSurfaceButton.Content\" xml:space=\"preserve\"><value>在线</value>");
         chinese.Should().Contain(
-            "name=\"BrowseNavigationItem.Content\" xml:space=\"preserve\"><value>浏览</value>");
+            "name=\"MangaLibraryTopHomeNavItem.Content\" xml:space=\"preserve\"><value>漫画库</value>");
         chinese.Should().Contain(
-            "name=\"BrowseMangaSourcesTab.Content\" xml:space=\"preserve\"><value>漫画源</value>");
+            "name=\"MangaLibraryTopDiscoverNavItem.Content\" xml:space=\"preserve\"><value>发现</value>");
         chinese.Should().Contain(
-            "name=\"BrowseMangaExtensionsTab.Content\" xml:space=\"preserve\"><value>漫画扩展</value>");
+            "name=\"MangaLibraryTopSourcesNavItem.Content\" xml:space=\"preserve\"><value>漫画源</value>");
         chinese.Should().Contain(
-            "name=\"BrowseSourceSettingsTab.Content\" xml:space=\"preserve\"><value>来源设置</value>");
+            "name=\"MangaDiscoverSearchButton.Content\" xml:space=\"preserve\"><value>搜索</value>");
+        chinese.Should().Contain(
+            "name=\"MangaDiscoverEmptyText.Text\" xml:space=\"preserve\"><value>选择 Bangumi 或 AniList 来发现漫画。</value>");
+        chinese.Should().Contain(
+            "name=\"MangaLibraryTopExtensionsNavItem.Content\" xml:space=\"preserve\"><value>漫画扩展</value>");
+        chinese.Should().Contain(
+            "name=\"MangaLibraryTopSettingsNavItem.Content\" xml:space=\"preserve\"><value>来源设置</value>");
         chinese.Should().Contain(
             "name=\"MihonRepositoriesHeader.Text\" xml:space=\"preserve\"><value>扩展仓库</value>");
         chinese.Should().Contain(
@@ -454,5 +522,211 @@ public sealed class MangaLibraryPageAssetTests
             "name=\"MangaOcrPausedStatus\" xml:space=\"preserve\"><value>文字识别已暂停，已完成页面仍可立即查词。</value>");
         chinese.Should().Contain(
             "name=\"MangaSourcesConnectButton.Content\" xml:space=\"preserve\"><value>连接</value>");
+    }
+
+    [Fact]
+    public void MangaLibrary_UsesVideoAlignedTopDiscoverSegment()
+    {
+        var xaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "MangaLibraryPage.xaml"));
+        var code = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "MangaLibraryPage.xaml.cs"));
+
+        xaml.Should().Contain(
+            "PaneDisplayMode=\"Top\"");
+        xaml.Should().Contain(
+            "AutomationProperties.AutomationId=\"MangaLibrarySourcesNavItem\"");
+        xaml.Should().Contain(
+            "AutomationProperties.AutomationId=\"MangaLibraryDiscoverNavItem\"");
+        xaml.Should().Contain(
+            "AutomationProperties.AutomationId=\"MangaDiscoverPage\"");
+        xaml.Should().Contain(
+            "Tag=\"Discover\"");
+        xaml.Should().Contain(
+            "Tag=\"Browse\"");
+        code.Should().Contain("ShowMangaDiscoverPageAsync");
+        code.Should().Contain("typeof(BrowsePage)");
+        code.Should().Contain("MangaDiscoverPageHostFrame.Content is BrowsePage browsePage");
+        code.Should().Contain("browsePage.ViewModel.SelectBrowseSectionAsync(section)");
+        code.Should().NotContain("MangaDiscoverPageHostFrame.Content = null");
+        xaml.Should().Contain(
+            "Navigated=\"MangaDiscoverPageHostFrame_Navigated\"");
+        code.Should().Contain(
+            "_browsePageViewModel.PropertyChanged += BrowsePageViewModel_PropertyChanged");
+        code.Should().Contain(
+            "_browsePageViewModel.PropertyChanged -= BrowsePageViewModel_PropertyChanged");
+        code.Should().Contain(
+            "ViewModel.SelectedSection = _browsePageViewModel.SelectedSection");
+        code.Should().Contain(
+            "SetSelectedNavigationItem(_browsePageViewModel.SelectedSection)");
+    }
+
+    [Fact]
+    public void MangaDiscover_UsesNetworkPosterFeedsAndDirectExtensionCommands()
+    {
+        var browse = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "BrowsePage.xaml"));
+        var browseCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "BrowsePage.xaml.cs"));
+        var viewModel = File.ReadAllText(
+            Path.Combine(
+                ProjectRoot,
+                "ViewModels",
+                "Pages",
+                "MangaLibraryPageViewModel.cs"));
+        var discoveryService = File.ReadAllText(
+            Path.Combine(
+                ProjectRoot,
+                "Services",
+                "Manga",
+                "MangaDiscoveryService.cs"));
+        var item = File.ReadAllText(
+            Path.Combine(
+                ProjectRoot,
+                "ViewModels",
+                "Components",
+                "MangaDiscoveryCardViewModel.cs"));
+
+        browse.Should().Contain("MangaDiscoverSectionTemplate");
+        browse.Should().Contain("PosterImage, Mode=OneWay");
+        browse.Should().Contain("SourceText, Mode=OneTime");
+        browse.Should().Contain("MangaDiscoverRefreshButton");
+        browse.Should().Contain("MangaDiscoverContentScrollViewer_ViewChanged");
+        browse.Should().Contain("MangaDiscoveryCard_ElementPrepared");
+        browseCode.Should().Contain("sender.ItemsSourceView.GetAt(args.Index)");
+        browse.Should().Contain("MangaDiscoverSearchTextBox_KeyDown");
+        viewModel.Should().Contain("LoadMangaDiscoveryHomeAsync");
+        viewModel.Should().Contain("LoadMangaDiscoverySectionAsync");
+        viewModel.Should().Contain("GetPageAsync(");
+        viewModel.Should().Contain("_mangaDiscovery.SearchAsync");
+        viewModel.Should().Contain("OpenMangaDiscoveryItemAsync");
+        viewModel.Should().Contain("FindMihonMangaAsync");
+        viewModel.Should().Contain("ShowMihonMangaDetailsAsync");
+        discoveryService.Should().Contain("api.bgm.tv");
+        discoveryService.Should().Contain("graphql.anilist.co");
+        discoveryService.Should().Contain("Discovery");
+        item.Should().Contain("SourceText");
+        item.Should().Contain("SetPosterPath");
+    }
+
+    [Fact]
+    public void MangaDiscover_ReusesVideoAlignedCardTemplateForSectionsAndSearch()
+    {
+        var xaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "BrowsePage.xaml"));
+        var document = XDocument.Parse(xaml);
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var template = document.Descendants(presentation + "DataTemplate")
+            .Single(element =>
+                (string?)element.Attribute(x + "Key") == "MangaDiscoveryCardTemplate");
+        var button = template.Descendants(presentation + "Button").Single();
+        ((string?)button.Attribute("Width")).Should().Be("170");
+        ((string?)button.Attribute("Height")).Should().Be("350");
+
+        var poster = template.Descendants(presentation + "Grid")
+            .Single(element => (string?)element.Attribute("Height") == "238");
+        var title = template.Descendants(presentation + "TextBlock")
+            .Single(element => ((string?)element.Attribute("Text"))?.Contains("Title") == true);
+        title.Ancestors().Should().NotContain(poster);
+        ((string?)title.Attribute("Height")).Should().Be("48");
+        ((string?)title.Attribute("MaxLines")).Should().Be("2");
+        ((string?)title.Attribute("Style")).Should().Be("{StaticResource BodyStrongTextBlockStyle}");
+
+        var facts = template.Descendants(presentation + "TextBlock")
+            .Single(element => ((string?)element.Attribute("Text"))?.Contains("FactsText") == true);
+        ((string?)facts.Attribute("Height")).Should().Be("24");
+        ((string?)facts.Attribute("Foreground"))
+            .Should().Be("{ThemeResource TextFillColorSecondaryBrush}");
+        var source = template.Descendants(presentation + "TextBlock")
+            .Single(element => ((string?)element.Attribute("Text"))?.Contains("SourceText") == true);
+        ((string?)source.Attribute("Height")).Should().Be("24");
+        ((string?)source.Attribute("Foreground"))
+            .Should().Be("{ThemeResource AccentTextFillColorPrimaryBrush}");
+
+        template.Descendants(presentation + "LinearGradientBrush").Should().BeEmpty();
+        template.ToString().Should().NotContain("AccentFillColorDefaultBrush");
+        xaml.Split("ItemTemplate=\"{StaticResource MangaDiscoveryCardTemplate}\"")
+            .Should().HaveCount(3);
+        xaml.Should().Contain("MinItemHeight=\"350\"");
+    }
+
+    [Fact]
+    public void MangaDiscover_SearchToolbarStaysOutsideVerticalContentScroller()
+    {
+        var xaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "BrowsePage.xaml"));
+        var document = XDocument.Parse(xaml);
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var toolbar = document.Descendants()
+            .Single(element => (string?)element.Attribute(x + "Name") == "MangaDiscoverSearchToolbar");
+        var contentScroller = document.Descendants()
+            .Single(element => (string?)element.Attribute(x + "Name") == "MangaDiscoverContentScrollViewer");
+        var searchBox = document.Descendants()
+            .Single(element => (string?)element.Attribute(x + "Name") == "MangaDiscoverSearchBox");
+
+        toolbar.Descendants().Should().Contain(searchBox);
+        contentScroller.Descendants().Should().NotContain(searchBox);
+        ((string?)toolbar.Attribute("Grid.Row")).Should().Be("0");
+        ((string?)contentScroller.Attribute("Grid.Row")).Should().Be("1");
+    }
+
+    [Fact]
+    public void MangaDiscover_RecommendationWheelMatchesVideoDiscoverBehavior()
+    {
+        var xaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "BrowsePage.xaml"));
+        var code = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "BrowsePage.xaml.cs"));
+
+        xaml.Should().Contain("Loaded=\"HorizontalMangaList_Loaded\"");
+        xaml.Should().Contain("Unloaded=\"HorizontalMangaList_Unloaded\"");
+        code.Should().Contain("VirtualKeyModifiers.Shift");
+        code.Should().Contain("verticalScrollViewer.ChangeView(");
+        code.Should().Contain("horizontalScrollViewer.ChangeView(");
+        code.Should().Contain("disableAnimation: false");
+        code.Should().Contain("RemoveHandler(");
+    }
+
+    [Fact]
+    public void MangaRemoteDetails_ExposeInstalledExtensionSwitchBeforeChapters()
+    {
+        var details = File.ReadAllText(
+            Path.Combine(
+                ProjectRoot,
+                "Views",
+                "Manga",
+                "RemoteMangaDetailView.xaml"));
+        var viewModel = File.ReadAllText(
+            Path.Combine(
+                ProjectRoot,
+                "ViewModels",
+                "Pages",
+                "MangaLibraryPageViewModel.cs"));
+        var component = File.ReadAllText(
+            Path.Combine(
+                ProjectRoot,
+                "ViewModels",
+                "Components",
+                "RemoteMangaDetailViewModel.cs"));
+
+        details.Should().Contain(
+            "AutomationProperties.AutomationId=\"MangaRemoteDetailsExtensions\"");
+        details.Should().Contain(
+            "<ComboBox x:Uid=\"MangaRemoteDetailsExtensionsComboBox\"");
+        details.Should().Contain(
+            "ItemsSource=\"{Binding SelectedRemoteMangaDetails.ExtensionOptions, Mode=OneWay}\"");
+        details.Should().Contain(
+            "SelectedValue=\"{Binding SelectedRemoteMangaDetails.SelectedExtensionId, Mode=OneWay}\"");
+        details.Should().Contain(
+            "SelectionChanged=\"RemoteMangaExtensionsComboBox_SelectionChanged\"");
+        details.Should().NotContain("<ToggleButton MinWidth=\"150\"");
+        viewModel.Should().Contain("FindMihonMangaAsync");
+        viewModel.Should().Contain("SelectRemoteMangaExtensionAsync");
+        component.Should().Contain("SetExtensionOptions");
+        component.Should().Contain("SelectedExtensionId");
+        component.Should().Contain("RemoteMangaExtensionOptionViewModel");
     }
 }

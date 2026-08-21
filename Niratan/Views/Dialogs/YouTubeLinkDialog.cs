@@ -68,7 +68,7 @@ internal sealed class YouTubeLinkDialog
                 {
                     Text = ResourceStringHelper.GetString(
                         "YouTubeDialogResolving",
-                        "Resolving video, qualities, and publisher subtitles..."),
+                        "Resolving video, qualities, and YouTube subtitles..."),
                     VerticalAlignment = VerticalAlignment.Center,
                 },
             },

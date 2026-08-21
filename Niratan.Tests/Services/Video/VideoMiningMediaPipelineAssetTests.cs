@@ -63,4 +63,22 @@ public class VideoMiningMediaPipelineAssetTests
         extractorCode.Should().Contain("SetOptionStringChecked(handle, \"screenshot-sw\", \"yes\")");
         extractorCode.Should().NotContain("SetOptionStringChecked(handle, \"pause\", \"yes\")");
     }
+
+    [Fact]
+    public void GalgameMining_AllowsAValidTextAndScreenshotCardWithoutSentenceAudio()
+    {
+        var gameCode = File.ReadAllText(Path.Combine(
+            ProjectRoot,
+            "ViewModels",
+            "Pages",
+            "GamesPageViewModel.cs"));
+        var popupCode = File.ReadAllText(Path.Combine(
+            ProjectRoot,
+            "Views",
+            "Dictionary",
+            "DictionaryLookupPopup.cs"));
+
+        gameCode.Should().Contain("AllowMissingVideoAudio = true");
+        popupCode.Should().Contain("&& !miningContext.AllowMissingVideoAudio");
+    }
 }

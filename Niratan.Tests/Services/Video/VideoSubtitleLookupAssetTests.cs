@@ -402,7 +402,9 @@ public class VideoSubtitleLookupAssetTests
         xaml.Should().NotContain("x:Name=\"SubtitleBlurTextLayer\"");
         xaml.Should().NotContain("x:Name=\"SubtitleNativeBlurTextLayer\"");
         xaml.Should().NotContain("x:Name=\"SubtitleMaskBlurImage\"");
-        code.Should().Contain("fontSize = ViewModel.SubtitleFontSize");
+        code.Should().Contain("fontSize = _effectiveSubtitleFontSize");
+        code.Should().Contain("ViewModel.SubtitleFontSize,");
+        code.Should().Contain("VideoSubtitlePanelLayout.Calculate(");
         code.Should().Contain("shadowRadius = ViewModel.SubtitleShadowRadius");
         code.Should().Contain("blurRadius = ViewModel.CalculateSubtitleMaskBlurRadius");
         code.Should().Contain("UpdateSubtitleCanvasAppearance");

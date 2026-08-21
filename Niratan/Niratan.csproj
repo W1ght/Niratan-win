@@ -109,6 +109,11 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
 
+    <Content Include="voice_hook\**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+
     <None Include="$(TargetDir)$(TargetName).pri">
       <Link>$(TargetName).pri</Link>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
@@ -133,16 +138,16 @@
     <PackageReference Include="Endpne.LibMPV.Windows" Version="0.41.0" />
     <PackageReference Include="Google.Protobuf" Version="3.35.1" />
     <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
     <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.1839" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.0.1" />
-    <PackageReference Include="MonoTorrent" Version="3.0.2" />
+    <PackageReference Include="MonoTorrent" Version="3.9.0-alpha.unstable.rev0000" />
     <PackageReference Include="NAudio" Version="2.3.0" />
     <PackageReference Include="Serilog" Version="4.3.1" />
     <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
-    <PackageReference Include="YoutubeExplode" Version="6.6.0" />
+    <PackageReference Include="YoutubeExplode" Version="6.6.1" />
   </ItemGroup>
 </Project>

@@ -3,6 +3,7 @@ namespace Niratan.Models.Video;
 public enum VideoLibraryView
 {
     Home,
+    Discover,
     Movies,
     Anime,
     ContinueWatching,

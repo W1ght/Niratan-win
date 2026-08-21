@@ -19,6 +19,8 @@ internal sealed class NavigationService : INavigationService
                 Type t when t == typeof(MangaLibraryPage) => AppPage.MangaLibraryPage,
                 Type t when t == typeof(BrowsePage) => AppPage.BrowsePage,
                 Type t when t == typeof(VideoLibraryPage) => AppPage.VideoLibraryPage,
+                Type t when t == typeof(GamesPage) => AppPage.GamesPage,
+                Type t when t == typeof(DownloadsPage) => AppPage.DownloadsPage,
                 Type t when t == typeof(NovelLookupPage) => AppPage.NovelLookupPage,
                 Type t when t == typeof(ReaderAppearanceSettingsPage) => AppPage.ReaderAppearanceSettingsPage,
                 Type t when t == typeof(AdvancedSettingsPage) => AppPage.AdvancedSettingsPage,

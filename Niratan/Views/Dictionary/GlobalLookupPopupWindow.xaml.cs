@@ -19,6 +19,7 @@ public sealed partial class GlobalLookupPopupWindow : Window, IDisposable
     private readonly TaskCompletionSource _loadedCompletion = new(
         TaskCreationOptions.RunContinuationsAsynchronously);
     private DictionaryPopupOverlay? _popupOverlay;
+    private readonly AnkiMiningFeedbackPresenter _miningFeedbackPresenter;
     private Windows.UI.Color _hostSurfaceColor = Windows.UI.Color.FromArgb(0xFF, 0x24, 0x24, 0x24);
     private bool _isDisposed;
 
@@ -29,6 +30,7 @@ public sealed partial class GlobalLookupPopupWindow : Window, IDisposable
     public GlobalLookupPopupWindow()
     {
         InitializeComponent();
+        _miningFeedbackPresenter = new AnkiMiningFeedbackPresenter(LookupMiningToast);
         Title = "Niratan Lookup Popup";
         ExtendsContentIntoTitleBar = true;
         SystemBackdrop = null;
@@ -158,6 +160,26 @@ public sealed partial class GlobalLookupPopupWindow : Window, IDisposable
             Math.Max(1, pixelSize.Width / scale),
             Math.Max(1, pixelSize.Height / scale));
     }
+
+    public Task<byte[]?> CaptureRootPreviewPngAsync(CancellationToken cancellationToken = default) =>
+        _popupOverlay?.CaptureRootPreviewPngAsync(cancellationToken)
+        ?? Task.FromResult<byte[]?>(null);
+
+    public Task<bool> InjectRootLookupInputAsync(
+        uint kind,
+        double x,
+        double y,
+        int wheel,
+        uint keys,
+        CancellationToken cancellationToken = default) =>
+        _popupOverlay?.InjectRootLookupInputAsync(
+            kind,
+            x,
+            y,
+            wheel,
+            keys,
+            cancellationToken)
+        ?? Task.FromResult(false);
 
     public async Task RevealFinalSurfaceAsync(
         RectInt32 surfaceRect,
@@ -414,6 +436,8 @@ public sealed partial class GlobalLookupPopupWindow : Window, IDisposable
             _popupOverlay.RootContentCommitted += OnRootContentCommitted;
             _popupOverlay.ExternalChildRequested += OnExternalChildRequested;
             _popupOverlay.ExternalTapInsideRequested += OnExternalTapInsideRequested;
+            _popupOverlay.MiningFeedbackRequested += OnMiningFeedbackRequested;
+            _popupOverlay.MiningFeedbackCleared += OnMiningFeedbackCleared;
         }
 
         _popupOverlay.UseCanvas(DictionaryOverlayCanvas);
@@ -574,6 +598,14 @@ public sealed partial class GlobalLookupPopupWindow : Window, IDisposable
     private void OnExternalTapInsideRequested(object? sender, EventArgs e) =>
         PopupSurfaceClicked?.Invoke(this, EventArgs.Empty);
 
+    private void OnMiningFeedbackRequested(
+        object? sender,
+        DictionaryPopupMiningFeedbackEventArgs e) =>
+        _miningFeedbackPresenter.Show(e);
+
+    private void OnMiningFeedbackCleared(object? sender, EventArgs e) =>
+        _miningFeedbackPresenter.Clear();
+
     private void OnClosed(object sender, WindowEventArgs args)
     {
         Dispose();
@@ -593,9 +625,12 @@ public sealed partial class GlobalLookupPopupWindow : Window, IDisposable
             _popupOverlay.RootContentCommitted -= OnRootContentCommitted;
             _popupOverlay.ExternalChildRequested -= OnExternalChildRequested;
             _popupOverlay.ExternalTapInsideRequested -= OnExternalTapInsideRequested;
+            _popupOverlay.MiningFeedbackRequested -= OnMiningFeedbackRequested;
+            _popupOverlay.MiningFeedbackCleared -= OnMiningFeedbackCleared;
             _popupOverlay.Dispose();
             _popupOverlay = null;
         }
+        _miningFeedbackPresenter.Dispose();
     }
 
     private const int DwmwaNcRenderingPolicy = 2;

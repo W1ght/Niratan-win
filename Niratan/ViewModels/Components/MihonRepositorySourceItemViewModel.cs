@@ -33,11 +33,15 @@ public sealed partial class MihonRepositorySourceItemViewModel : ObservableObjec
     public MihonRepositorySourceItemViewModel(
         MihonExtensionSource source,
         Func<MihonExtensionSource, Task> install,
-        Func<MihonExtensionSource, Task<string?>>? loadIcon = null)
+        Func<MihonExtensionSource, Task<string?>>? loadIcon = null,
+        Func<MihonExtensionSource, Task>? remove = null)
     {
         Source = source;
         _loadIcon = loadIcon;
         InstallCommand = new AsyncRelayCommand(() => install(Source));
+        RemoveCommand = new AsyncRelayCommand(
+            () => remove?.Invoke(Source) ?? Task.CompletedTask,
+            () => CanRemove);
     }
 
     public MihonExtensionSource Source { get; }
@@ -47,8 +51,10 @@ public sealed partial class MihonRepositorySourceItemViewModel : ObservableObjec
         MangaBrowseSourceItemViewModel.GetLanguageLabel(Source.Lang);
     public string PackageName => Source.PackageName;
     public bool IsInstalled => Source.IsInstalled;
+    public bool CanRemove => Source.IsInstalled;
     public bool IsNsfw => Source.IsNsfw;
     public IAsyncRelayCommand InstallCommand { get; }
+    public IAsyncRelayCommand RemoveCommand { get; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasIcon))]
@@ -70,7 +76,13 @@ public sealed partial class MihonRepositorySourceItemViewModel : ObservableObjec
         {
             var path = await _loadIcon(Source);
             if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-                IconImage = new BitmapImage(new Uri(Path.GetFullPath(path)));
+            {
+                // Let the Image control own the decode lifecycle. Explicitly
+                // feeding a third-party stream to SetSourceAsync can make
+                // WinUI.Xaml fail-fast on a malformed or unsupported icon.
+                IconImage = new BitmapImage(
+                    new Uri(Path.GetFullPath(path), UriKind.Absolute));
+            }
         }
         catch (OperationCanceledException)
         {
@@ -113,12 +125,18 @@ public sealed partial class MihonRepositorySourceItemViewModel : ObservableObjec
         "MihonInstalledSourceBadge",
         "Installed");
 
+    public string RemoveActionLabel => ResourceStringHelper.GetString(
+        "MihonRemoveSourceAction",
+        "Remove");
+
     public string NsfwBadgeLabel => ResourceStringHelper.GetString(
         "MihonNsfwSourceBadge",
         "NSFW");
 
     public string AutomationId =>
         $"MihonRepositorySource_{SanitizeAutomationSegment(Source.PackageName)}_{SanitizeAutomationSegment(Source.Id)}";
+
+    public string RemoveAutomationId => $"{AutomationId}_Remove";
 
     public bool Matches(string query)
     {

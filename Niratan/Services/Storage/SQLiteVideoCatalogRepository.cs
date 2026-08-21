@@ -4,6 +4,7 @@ using System.Collections.Immutable;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Channels;
@@ -528,6 +529,7 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                         VideoCatalogJobState.Paused => "paused",
                         VideoCatalogJobState.Completed => "completed",
                         VideoCatalogJobState.Cancelled => "cancelled",
+                        VideoCatalogJobState.Interrupted => "interrupted",
                         _ => "failed",
                     },
                     Processed = Math.Max(0, processedCount),
@@ -853,6 +855,22 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
             {
                 if (structuredSeries.HasValue)
                 {
+                    var canonicalSeries = await FindCanonicalSeriesNodeAsync(
+                        connection,
+                        transaction,
+                        assetId,
+                        structuredSeries.Value,
+                        metadata.ProviderId,
+                        metadata.ProviderItemId);
+                    if (canonicalSeries.HasValue && canonicalSeries.Value != structuredSeries.Value
+                        && await CanMergeAutomaticSeriesAsync(
+                            connection, transaction, structuredSeries.Value) == 1)
+                    {
+                        await MergeAutomaticSeriesHierarchyAsync(
+                            connection, transaction, structuredSeries.Value, canonicalSeries.Value);
+                        structuredSeries = canonicalSeries;
+                    }
+
                     var identityProvidersToLock = await ResolveIdentityProvidersToLockAsync(
                         connection, transaction, structuredSeries.Value, metadata.ProviderId,
                         lockIdentity, preserveExistingHierarchy);
@@ -941,6 +959,27 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                     connection, transaction, assetId, metadata,
                     episodeStart.HasValue ? null : reusableUnmatchedNodeId,
                     lockIdentity, preserveExistingHierarchy, allowLockedIdentityReplacement);
+                if (preserveExistingHierarchy
+                    && metadata.MediaKind is VideoMetadataMediaKind.Episode
+                        or VideoMetadataMediaKind.Series
+                        or VideoMetadataMediaKind.Anime)
+                {
+                    var canonicalSeries = await FindCanonicalSeriesNodeAsync(
+                        connection,
+                        transaction,
+                        assetId,
+                        seriesId,
+                        metadata.ProviderId,
+                        metadata.ProviderItemId);
+                    if (canonicalSeries.HasValue && canonicalSeries.Value != seriesId
+                        && await CanMergeAutomaticSeriesAsync(
+                            connection, transaction, seriesId) == 1)
+                    {
+                        await MergeAutomaticSeriesHierarchyAsync(
+                            connection, transaction, seriesId, canonicalSeries.Value);
+                        seriesId = canonicalSeries.Value;
+                    }
+                }
                 var currentEpisodeTitle = await connection.ExecuteScalarAsync<string?>(
                     """
                     SELECT n.primary_title FROM catalog_nodes n
@@ -1002,6 +1041,73 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 "DELETE FROM match_candidates WHERE asset_id=@Asset;",
                 new { Asset = assetId.ToString("D") }, transaction);
             return true;
+        }, ct);
+
+    public Task UpdateMetadataRefreshCountsAsync(
+        Guid jobId,
+        int matchedCount,
+        int needsReviewCount,
+        CancellationToken ct = default,
+        int failedCount = 0) =>
+        WriteAsync(async (connection, transaction) =>
+        {
+            await connection.ExecuteAsync(
+                "UPDATE catalog_jobs SET matched_count=@Matched, needs_review_count=@NeedsReview, failed_count=@Failed, updated_at=@Now WHERE id=@Id AND kind='metadata_refresh';",
+                new
+                {
+                    Id = jobId.ToString("D"),
+                    Matched = Math.Max(0, matchedCount),
+                    NeedsReview = Math.Max(0, needsReviewCount),
+                    Failed = Math.Max(0, failedCount),
+                    Now = ToDb(DateTimeOffset.UtcNow),
+                }, transaction);
+        }, ct);
+
+    public Task ClearRemoteMetadataAsync(Guid sourceId, CancellationToken ct = default) =>
+        WriteAsync(async (connection, transaction) =>
+        {
+            // Re-scraping is allowed to rebuild provider metadata, but must not touch source
+            // media, playback/user data, local fields, or locked identities. Include ancestors
+            // because series/season metadata can be owned by a parent of the source asset node.
+            await connection.ExecuteAsync(
+                """
+                CREATE TEMP TABLE IF NOT EXISTS clear_remote_metadata_nodes(id TEXT PRIMARY KEY);
+                DELETE FROM clear_remote_metadata_nodes;
+                WITH RECURSIVE bound(id) AS (
+                    SELECT DISTINCT na.node_id
+                    FROM node_assets na
+                    JOIN source_assets sa ON sa.asset_id=na.asset_id
+                    WHERE sa.source_id=@Source
+                    UNION
+                    SELECT parent.parent_id
+                    FROM catalog_nodes parent
+                    JOIN bound child ON child.id=parent.id
+                    WHERE parent.parent_id IS NOT NULL
+                )
+                INSERT OR IGNORE INTO clear_remote_metadata_nodes(id)
+                SELECT id FROM bound;
+
+                DELETE FROM metadata_snapshots
+                WHERE node_id IN (SELECT id FROM clear_remote_metadata_nodes);
+                DELETE FROM metadata_field_values
+                WHERE node_id IN (SELECT id FROM clear_remote_metadata_nodes)
+                  AND provider_id<>'local' AND is_locked=0;
+                DELETE FROM artwork
+                WHERE node_id IN (SELECT id FROM clear_remote_metadata_nodes)
+                  AND provider_id<>'local';
+                DELETE FROM external_ids
+                WHERE node_id IN (SELECT id FROM clear_remote_metadata_nodes)
+                  AND is_identity_locked=0;
+                DELETE FROM catalog_aliases
+                WHERE node_id IN (SELECT id FROM clear_remote_metadata_nodes)
+                  AND provider_id NOT IN ('filename','local');
+                DELETE FROM match_candidates
+                WHERE asset_id IN (
+                    SELECT asset_id FROM source_assets WHERE source_id=@Source
+                );
+                DROP TABLE clear_remote_metadata_nodes;
+                """,
+                new { Source = sourceId.ToString("D") }, transaction);
         }, ct);
 
     private static async Task<ImmutableHashSet<string>> ResolveIdentityProvidersToLockAsync(
@@ -1159,6 +1265,276 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
             identityProvidersToLock, allowLockedIdentityReplacement);
         return id;
     }
+
+    private static async Task<Guid?> FindSeriesNodeByExternalIdAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string providerId,
+        string providerItemId)
+    {
+        var value = await connection.ExecuteScalarAsync<string?>(
+            """
+            SELECT e.node_id
+            FROM external_ids e
+            JOIN catalog_nodes n ON n.id=e.node_id
+            WHERE n.kind='series' AND e.provider_id=@Provider AND e.external_id=@ExternalId
+            ORDER BY n.identity_locked DESC, n.updated_at DESC
+            LIMIT 1;
+            """,
+            new { Provider = providerId, ExternalId = providerItemId }, transaction);
+        return Guid.TryParse(value, out var id) ? id : null;
+    }
+
+    private static async Task<Guid?> FindCanonicalSeriesNodeAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid assetId,
+        Guid currentSeriesId,
+        string providerId,
+        string providerItemId)
+    {
+        var direct = await FindSeriesNodeByExternalIdAsync(
+            connection, transaction, providerId, providerItemId);
+        if (direct.HasValue && direct.Value != currentSeriesId)
+            return direct;
+
+        var currentAliases = (await connection.QueryAsync<string>(
+            """
+            SELECT DISTINCT a.normalized_alias
+            FROM catalog_aliases a
+            JOIN node_assets na ON na.node_id=a.node_id
+            WHERE na.asset_id=@Asset;
+            """,
+            new { Asset = assetId.ToString("D") }, transaction))
+            .Select(NormalizeEpisodeAlias)
+            .Where(alias => alias.Length >= 8)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (currentAliases.Count == 0)
+            return null;
+
+        var candidates = (await connection.QueryAsync<SeriesAliasRow>(
+            """
+            WITH RECURSIVE descendants(root_id,node_id) AS (
+                SELECT id,id FROM catalog_nodes WHERE kind='series'
+                UNION ALL
+                SELECT d.root_id,child.id
+                FROM descendants d
+                JOIN catalog_nodes child ON child.parent_id=d.node_id
+            )
+            SELECT root.id AS root_id, alias.normalized_alias
+            FROM descendants d
+            JOIN catalog_nodes root ON root.id=d.root_id
+            JOIN catalog_aliases alias ON alias.node_id=d.node_id
+            JOIN external_ids tmdb ON tmdb.node_id=root.id AND tmdb.provider_id='tmdb'
+            WHERE root.kind='series' AND root.id<>@Current
+              AND d.node_id<>root.id;
+            """,
+            new { Current = currentSeriesId.ToString("D") }, transaction))
+            .Select(row => (row.root_id, normalizedAlias: NormalizeEpisodeAlias(row.normalized_alias)))
+            .Where(row => row.normalizedAlias.Length >= 8)
+            .ToList();
+
+        var match = candidates
+            .Where(row => currentAliases.Contains(row.normalizedAlias))
+            .GroupBy(row => row.root_id, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(group => group.Count())
+            .Select(group => group.Key)
+            .FirstOrDefault();
+        return Guid.TryParse(match, out var canonical) ? canonical : null;
+    }
+
+    private static string NormalizeEpisodeAlias(string value) =>
+        Regex.Replace(value, "(?:S\\d{1,3}E\\d{1,4}|E\\d{1,4}|\\d{4})", "", RegexOptions.IgnoreCase);
+
+    private sealed record SeriesAliasRow(string root_id, string normalized_alias);
+
+    private static Task<long> CanMergeAutomaticSeriesAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid seriesId) =>
+        connection.ExecuteScalarAsync<long>(
+            """
+            SELECT CASE WHEN n.identity_locked=0
+                             AND NOT EXISTS(
+                                 SELECT 1 FROM external_ids e
+                                 WHERE e.node_id=n.id AND e.is_identity_locked=1)
+                        THEN 1 ELSE 0 END
+            FROM catalog_nodes n
+            WHERE n.id=@Id AND n.kind='series';
+            """,
+            new { Id = seriesId.ToString("D") }, transaction);
+
+    private static async Task MergeAutomaticSeriesHierarchyAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid sourceSeriesId,
+        Guid targetSeriesId)
+    {
+        if (sourceSeriesId == targetSeriesId)
+            return;
+
+        var sourceChildren = (await connection.QueryAsync<HierarchyChildRow>(
+            """
+            SELECT id,kind,season_number,episode_number,absolute_episode_number
+            FROM catalog_nodes
+            WHERE parent_id=@Parent
+            ORDER BY CASE kind WHEN 'season' THEN 0 ELSE 1 END, season_number, episode_number, id;
+            """,
+            new { Parent = sourceSeriesId.ToString("D") }, transaction)).ToList();
+
+        foreach (var child in sourceChildren)
+        {
+            if (string.Equals(child.kind, "season", StringComparison.OrdinalIgnoreCase))
+            {
+                await MergeAutomaticSeasonHierarchyAsync(
+                    connection, transaction, Guid.Parse(child.id), targetSeriesId, child.season_number);
+            }
+            else if (string.Equals(child.kind, "episode", StringComparison.OrdinalIgnoreCase))
+            {
+                var targetParent = await FindOrCreateMergeSeasonNodeAsync(
+                    connection, transaction, targetSeriesId, child.season_number);
+                await MergeAutomaticEpisodeNodeAsync(
+                    connection, transaction, Guid.Parse(child.id), targetParent,
+                    child.episode_number, child.absolute_episode_number);
+            }
+        }
+
+        await connection.ExecuteAsync(
+            """
+            INSERT OR IGNORE INTO node_assets(node_id,asset_id,is_preferred,ordinal)
+            SELECT @Target,asset_id,is_preferred,ordinal FROM node_assets WHERE node_id=@Source;
+            DELETE FROM node_assets WHERE node_id=@Source;
+            """,
+            new { Source = sourceSeriesId.ToString("D"), Target = targetSeriesId.ToString("D") }, transaction);
+        await PruneEmptyAutomaticNodesAsync(connection, transaction);
+    }
+
+    private static async Task MergeAutomaticSeasonHierarchyAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid sourceSeasonId,
+        Guid targetSeriesId,
+        long? seasonNumber)
+    {
+        if (!seasonNumber.HasValue)
+        {
+            await connection.ExecuteAsync(
+                "UPDATE catalog_nodes SET parent_id=@Parent WHERE id=@Id;",
+                new { Id = sourceSeasonId.ToString("D"), Parent = targetSeriesId.ToString("D") }, transaction);
+            return;
+        }
+
+        var targetSeason = await FindOrCreateMergeSeasonNodeAsync(
+            connection, transaction, targetSeriesId, seasonNumber);
+        var episodes = (await connection.QueryAsync<HierarchyChildRow>(
+            """
+            SELECT id,kind,season_number,episode_number,absolute_episode_number
+            FROM catalog_nodes WHERE parent_id=@Parent AND kind='episode'
+            ORDER BY episode_number,id;
+            """,
+            new { Parent = sourceSeasonId.ToString("D") }, transaction)).ToList();
+        foreach (var episode in episodes)
+        {
+            await MergeAutomaticEpisodeNodeAsync(
+                connection, transaction, Guid.Parse(episode.id), targetSeason,
+                episode.episode_number, episode.absolute_episode_number);
+        }
+
+        await connection.ExecuteAsync(
+            """
+            INSERT OR IGNORE INTO node_assets(node_id,asset_id,is_preferred,ordinal)
+            SELECT @Target,asset_id,is_preferred,ordinal FROM node_assets WHERE node_id=@Source;
+            DELETE FROM node_assets WHERE node_id=@Source;
+            UPDATE catalog_nodes SET parent_id=@Target WHERE id=@Source
+              AND NOT EXISTS(SELECT 1 FROM catalog_nodes WHERE parent_id=@Source);
+            """,
+            new { Source = sourceSeasonId.ToString("D"), Target = targetSeason.ToString("D") }, transaction);
+    }
+
+    private static async Task<Guid> FindOrCreateMergeSeasonNodeAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid seriesId,
+        long? seasonNumber)
+    {
+        var season = seasonNumber ?? 0;
+        var value = await connection.ExecuteScalarAsync<string?>(
+            "SELECT id FROM catalog_nodes WHERE parent_id=@Parent AND kind='season' AND season_number=@Season LIMIT 1;",
+            new { Parent = seriesId.ToString("D"), Season = season }, transaction);
+        if (Guid.TryParse(value, out var id))
+            return id;
+
+        id = Guid.NewGuid();
+        await connection.ExecuteAsync(
+            """
+            INSERT INTO catalog_nodes(
+                id,parent_id,kind,primary_title,season_number,is_special,identity_locked,created_at,updated_at)
+            VALUES(@Id,@Parent,'season',@Title,@Season,@Special,0,@Now,@Now);
+            """,
+            new
+            {
+                Id = id.ToString("D"),
+                Parent = seriesId.ToString("D"),
+                Title = season == 0 ? "Specials" : $"Season {season}",
+                Season = season,
+                Special = season == 0 ? 1 : 0,
+                Now = ToDb(DateTimeOffset.UtcNow),
+            }, transaction);
+        return id;
+    }
+
+    private static async Task MergeAutomaticEpisodeNodeAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid sourceEpisodeId,
+        Guid targetParentId,
+        long? episodeNumber,
+        long? absoluteEpisodeNumber)
+    {
+        if (!episodeNumber.HasValue)
+        {
+            await connection.ExecuteAsync(
+                "UPDATE catalog_nodes SET parent_id=@Parent WHERE id=@Id;",
+                new { Id = sourceEpisodeId.ToString("D"), Parent = targetParentId.ToString("D") }, transaction);
+            return;
+        }
+
+        var target = await connection.ExecuteScalarAsync<string?>(
+            """
+            SELECT id FROM catalog_nodes
+            WHERE parent_id=@Parent AND kind='episode' AND episode_number=@Episode
+              AND COALESCE(absolute_episode_number,-1)=COALESCE(@Absolute,-1)
+            LIMIT 1;
+            """,
+            new
+            {
+                Parent = targetParentId.ToString("D"),
+                Episode = episodeNumber,
+                Absolute = absoluteEpisodeNumber,
+            }, transaction);
+        if (!Guid.TryParse(target, out var targetId))
+        {
+            await connection.ExecuteAsync(
+                "UPDATE catalog_nodes SET parent_id=@Parent WHERE id=@Id;",
+                new { Id = sourceEpisodeId.ToString("D"), Parent = targetParentId.ToString("D") }, transaction);
+            return;
+        }
+
+        await connection.ExecuteAsync(
+            """
+            INSERT OR IGNORE INTO node_assets(node_id,asset_id,is_preferred,ordinal)
+            SELECT @Target,asset_id,is_preferred,ordinal FROM node_assets WHERE node_id=@Source;
+            DELETE FROM node_assets WHERE node_id=@Source;
+            """,
+            new { Source = sourceEpisodeId.ToString("D"), Target = targetId.ToString("D") }, transaction);
+    }
+
+    private sealed record HierarchyChildRow(
+        string id,
+        string kind,
+        long? season_number,
+        long? episode_number,
+        long? absolute_episode_number);
 
     private static async Task<Guid> FindOrCreateSeasonNodeAsync(
         SqliteConnection connection,
@@ -2907,7 +3283,10 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 Guid.Parse(row.id), ParseNullableGuid(row.source_id), ParseJobKind(row.kind), ParseJobState(row.state),
                 row.generation, row.processed_count, row.total_count, row.error,
                 ParseDate(row.created_at) ?? DateTimeOffset.UnixEpoch,
-                ParseDate(row.updated_at) ?? DateTimeOffset.UnixEpoch)).ToImmutableArray();
+                ParseDate(row.updated_at) ?? DateTimeOffset.UnixEpoch,
+                row.matched_count,
+                row.needs_review_count,
+                row.failed_count)).ToImmutableArray();
         var sourceSnapshots = sources.Select(row => new VideoCatalogSourceSnapshot(
             Guid.Parse(row.id), row.name, row.folder_path, row.normalized_folder_path,
             ParseMediaType(row.media_type), row.language, row.region,
@@ -2946,6 +3325,7 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
 
     private async Task ApplyCompatibilityRepairsAsync(CancellationToken ct)
     {
+        await EnsureMetadataJobCounterColumnsAsync(ct);
         const string category = "anilist-null-id-search-v9";
         await using var connection = await OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
@@ -3007,6 +3387,22 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
             }, transaction);
         await transaction.CommitAsync(ct);
         await ApplyEpisodicBundleCompatibilityRepairAsync(ct);
+    }
+
+    private async Task EnsureMetadataJobCounterColumnsAsync(CancellationToken ct)
+    {
+        await using var connection = await OpenConnectionAsync(ct);
+        var columns = (await connection.QueryAsync<SchemaColumnRow>(
+                "PRAGMA table_info(catalog_jobs);"))
+            .Select(column => column.name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var column in new[] { "matched_count", "needs_review_count", "failed_count" }
+                     .Where(column => !columns.Contains(column)))
+        {
+            ct.ThrowIfCancellationRequested();
+            await connection.ExecuteAsync(
+                $"ALTER TABLE catalog_jobs ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0;");
+        }
     }
 
     private async Task ApplyEpisodicBundleCompatibilityRepairAsync(CancellationToken ct)
@@ -3361,6 +3757,7 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         "paused" => VideoCatalogJobState.Paused,
         "completed" => VideoCatalogJobState.Completed,
         "cancelled" => VideoCatalogJobState.Cancelled,
+        "interrupted" => VideoCatalogJobState.Interrupted,
         _ => VideoCatalogJobState.Failed,
     };
     private static VideoLibraryMediaType ParseMediaType(string value) => value switch
@@ -3445,7 +3842,8 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
     private sealed class BoundNodeRow { public string id { get; set; } = ""; public string kind { get; set; } = "unmatched"; }
     private sealed class LockedNodeRow { public string id { get; set; } = ""; public string kind { get; set; } = "unmatched"; }
     private sealed class RebuildSeriesRow { public string id { get; set; } = ""; public int preserve { get; set; } }
-    private sealed class JobRow { public string id { get; set; } = ""; public string? source_id { get; set; } public string kind { get; set; } = "incremental_scan"; public string state { get; set; } = "queued"; public long generation { get; set; } public int processed_count { get; set; } public int total_count { get; set; } public string? error { get; set; } public string created_at { get; set; } = ""; public string updated_at { get; set; } = ""; }
+    private sealed class JobRow { public string id { get; set; } = ""; public string? source_id { get; set; } public string kind { get; set; } = "incremental_scan"; public string state { get; set; } = "queued"; public long generation { get; set; } public int processed_count { get; set; } public int total_count { get; set; } public int matched_count { get; set; } public int needs_review_count { get; set; } public int failed_count { get; set; } public string? error { get; set; } public string created_at { get; set; } = ""; public string updated_at { get; set; } = ""; }
+    private sealed class SchemaColumnRow { public string name { get; set; } = ""; }
     private sealed class ProviderCacheRow { public string cache_key { get; set; } = ""; public string provider_id { get; set; } = ""; public string? etag { get; set; } public string? last_modified { get; set; } public byte[]? payload { get; set; } public string? content_type { get; set; } public string fetched_at { get; set; } = ""; public string expires_at { get; set; } = ""; }
 
     private const string SchemaSql = """
@@ -3544,6 +3942,8 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
             id TEXT PRIMARY KEY, source_id TEXT NULL REFERENCES library_sources(id) ON DELETE SET NULL,
             kind TEXT NOT NULL, state TEXT NOT NULL, generation INTEGER NOT NULL,
             processed_count INTEGER NOT NULL, total_count INTEGER NOT NULL,
+            matched_count INTEGER NOT NULL DEFAULT 0, needs_review_count INTEGER NOT NULL DEFAULT 0,
+            failed_count INTEGER NOT NULL DEFAULT 0,
             error TEXT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS provider_cache(
             cache_key TEXT PRIMARY KEY, provider_id TEXT NOT NULL, etag TEXT NULL,

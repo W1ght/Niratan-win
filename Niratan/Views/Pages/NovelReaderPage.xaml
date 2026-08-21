@@ -283,6 +283,16 @@
                 Visibility="Collapsed"
                 AutomationProperties.AutomationId="DictionaryOverlayCanvas" />
 
+        <InfoBar x:Name="ReaderMiningToast"
+                 Grid.RowSpan="3"
+                 Canvas.ZIndex="140"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Top"
+                 MaxWidth="420"
+                 Margin="12"
+                 IsClosable="False"
+                 IsOpen="False" />
+
         <ContentDialog x:Name="ReaderGoToPanelDialog"
                        x:Uid="ReaderGoToPanelDialog"
                        AutomationProperties.AutomationId="NovelReaderGoToPanelDialog"

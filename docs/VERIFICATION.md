@@ -488,12 +488,13 @@ dotnet build -p:Platform=x64
 人工验证使用 disposable 动画、日剧、电影与音频目录：
 
 1. 首次打开 Video 自动增量扫描；主页面和来源页可见当前阶段、计数/总数、吞吐率及当前文件名。来源管理必须占用主内容区并随窗口宽度布局，不得回到固定宽度弹窗或裁切操作按钮；可调整 Auto/Anime/日剧/Movie、语言/区域，执行增量/完整扫描、暂停、恢复、取消并看到错误状态。
-2. Home、Movies、Series、Anime、Continue Watching、Favorites、Needs Review、Unorganized、Collections、Sources 语义分别正确；Needs Review 显示候选分数/证据/外部 ID，Unorganized 仅表示未被集合覆盖。
-3. 首次在线刷新显示传输披露；拒绝后 Local NFO 仍工作。确认后增量扫描自动把未匹配或已过期资产放入独立后台刮削任务；离开并重新进入 Video 后任务继续且进度可恢复显示。顶部任务条和来源卡片持续显示处理数/总数、匹配数、待确认数与错误，并可按来源取消。手动刮削强制刷新来源。不同资产并发不超过两路，相同幂等 provider 查询只产生一次网络请求，仍服从 provider 限速与 `Retry-After`。详情显示日文原题、当前语言副题、简介、年份、层级、进度、provider 来源链接和缓存海报。
-4. 同一未匹配来源完成一次自动刮削后，未变化资产在 30 天内重新进入 Video 不再发起搜索；新增/mtime 变化、TTL 过期或手动强制刷新才重新尝试。响应 cache、未匹配负 cache 和图片 LRU 均使用离线 fixture 验证，凭据不得进入 cache key、SQLite payload 或日志。
-5. Home 只显示“我的媒体 / 继续观看 / 接下来播放 / 最近添加的媒体”横向分区，空分区隐藏且不在下方重复整库列表；窄窗口可横向滚动而不裁切卡片。同一系列先播放第 1 集、再播放第 3 集后，Continue Watching 只显示第 3 集并使用缓存横图。Series 书架每个 series node 只显示一张竖版海报；进入详情后显示横版 hero、竖版 poster、可选 logo、标题/原题、标语、简介、年份区间、分级、评分、状态、类型、标签、工作室、季、正篇、Specials、演员、相关推荐、external IDs、provider 归属和本地媒体信息。
-4. 人工候选绑定先预览 diff，确认后锁定；刷新不覆盖用户标题/本地字段、不改变资产绑定，断网、错误 token 或单 provider 429 不清空旧详情。
-5. 从资料库按层级播放可上一/下一项和自动连播，Specials 不自动插入正篇；多集文件队列只出现一次。文件关联打开使用同目录自然排序，远程或枚举失败退回单项。
+2. 依次切换首页、发现、系列、全部视频和导入：首页/发现不得保留空的内容区命令行，系列/全部视频只显示搜索与排序；导入显示“扫描文件夹 / YouTube / 刷新 / 重新刮削 / 后台任务”五个带图标和文字的按钮。点击后台任务在内容区原位展开/收起任务详情；保持面板打开再切换系列、全部视频、发现或首页时，面板必须立即关闭且不得覆盖目标页。来源设置、打开文件夹和移除仍位于对应来源卡片。
+3. Home、Movies、Series、Anime、Continue Watching、Favorites、Needs Review、Unorganized、Collections、Sources 语义分别正确；Needs Review 显示候选分数/证据/外部 ID，Unorganized 仅表示未被集合覆盖。
+4. 首次在线刷新显示传输披露；拒绝后 Local NFO 仍工作。确认后增量扫描自动把未匹配或已过期资产放入独立后台刮削任务；离开并重新进入 Video 后任务继续且进度可恢复显示。顶部任务条和来源卡片持续显示处理数/总数、匹配数、待确认数与错误，并可按来源取消。手动刮削强制刷新来源。不同资产并发不超过两路，相同幂等 provider 查询只产生一次网络请求，仍服从 provider 限速与 `Retry-After`。详情显示日文原题、当前语言副题、简介、年份、层级、进度、provider 来源链接和缓存海报。
+5. 同一未匹配来源完成一次自动刮削后，未变化资产在 30 天内重新进入 Video 不再发起搜索；新增/mtime 变化、TTL 过期或手动强制刷新才重新尝试。响应 cache、未匹配负 cache 和图片 LRU 均使用离线 fixture 验证，凭据不得进入 cache key、SQLite payload 或日志。
+6. Home 只显示“我的媒体 / 继续观看 / 接下来播放 / 最近添加的媒体”横向分区，空分区隐藏且不在下方重复整库列表；窄窗口可横向滚动而不裁切卡片。同一系列先播放第 1 集、再播放第 3 集后，Continue Watching 只显示第 3 集并使用缓存横图。Series 书架每个 series node 只显示一张竖版海报；进入详情后显示横版 hero、竖版 poster、可选 logo、标题/原题、标语、简介、年份区间、分级、评分、状态、类型、标签、工作室、季、正篇、Specials、演员、相关推荐、external IDs、provider 归属和本地媒体信息。
+7. 人工候选绑定先预览 diff，确认后锁定；刷新不覆盖用户标题/本地字段、不改变资产绑定，断网、错误 token 或单 provider 429 不清空旧详情。
+8. 从资料库按层级播放可上一/下一项和自动连播，Specials 不自动插入正篇；多集文件队列只出现一次。文件关联打开使用同目录自然排序，远程或枚举失败退回单项。
 
 Provider smoke test 只在合法网络与凭据可用时执行；逐项记录 TMDB token、Bangumi token、TVDB 项目授权、实际 Retry-After、图片 CDN 和账号路径是否实测。不得用用户现有媒体或 AppData 做破坏性验证。
 
@@ -513,7 +514,8 @@ dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter
 6. 打开带外部字幕的视频，确认视频源和必要播放属性就绪后立即出首帧；字幕、章节和轨道稍后补齐时界面仍可操作。
 7. 分别打开 16:9、4:3、竖屏和带旋转元数据的视频，确认窗口在 `file-loaded` 后按实际显示宽高适配当前显示器工作区；拖动任意窗口边缘或底部角落时，视频区域持续保持片源比例，全屏不受窗口比例约束。
 8. 在 100%、125%、150% DPI 下切换右侧视频面板并调整其宽度，确认原生视频画面、字幕层与底部控制栏左/右/下边界始终重合，没有一像素漂移、越过侧栏或悬空。
-7. 将字幕位置调到底部并显示字幕，移动鼠标唤出控制栏，确认侧边栏按钮、进度条和其余底部按钮都能点击；字幕未与控制栏重叠的区域仍可点选查词。
+9. 将字幕位置调到底部并显示字幕，移动鼠标唤出控制栏，确认侧边栏按钮、进度条和其余底部按钮都能点击；字幕未与控制栏重叠的区域仍可点选查词。
+10. 将字幕字号设为 52，打开右侧检查器并播放含长单行 SRT/YouTube cue 的视频；确认自动折行后的每一行完整显示且阴影不被裁切。调整窗口和检查器宽度后字幕应重新折行，点击各行文字仍命中对应字符；极端长 cue 可以临时缩小，但下一条普通字幕和重开播放器后仍使用保存的 52 号设置。
 
 ---
 
@@ -528,11 +530,12 @@ dotnet build -p:Platform=x64
 
 1. 从资料库“添加链接”，确认实验性提示、输入校验、解析进度和取消；解析成功后先关闭对话框，再打开播放器。
 2. 确认最高只显示到 1080p、每个高度一个选项，分离音视频有声播放；切换画质后位置、播放/暂停、音量、速度、延迟、循环与字幕不变。
-3. 确认只列发布者字幕，自动生成日语字幕不出现；切换字幕后可查词、滚动 transcript 并在重启后恢复语言。
+3. 确认优先列发布者字幕；没有发布者字幕时保留自动生成字幕作为 fallback，并在打开视频后自动一次性下载到现有字幕/transcript 管线。切换字幕后可查词、滚动 transcript 并在重启后恢复语言。
 4. 返回资料库确认远程标题、缩略图和“YouTube 视频”分类；“在文件资源管理器中显示”隐藏，删除只移除记录。
 5. 从资料库重开并确认进度恢复；验证截图和音频制卡，挖卡历史可通过稳定键重新打开远程条目。
 6. 断网或等待签名 URL 过期后重试，确认只进行一次强制刷新和一次 muxed 降级；最终错误本地化且不包含响应正文、签名 URL或 headers。
 7. 检查项目、发布目录和日志，确认不存在 `yt-dlp`、`youtube-dl`、`YoutubeExplode.Converter`、Deno、Node、helper 下载或子进程调用。
+8. 使用 `https://www.youtube.com/watch?v=FQWe6yVcysw` 验证 1080p 分离音视频：至少连续播放 15 秒，再跳转到 60 秒并继续播放；请求诊断必须显示每个 Google Video 请求都有有限的 `Range: bytes=start-end`，不得出现开放式 `bytes=start-`，播放器与日志不得暴露签名 URL。
 
 ### 6.1 Anki 媒体验证
 
@@ -542,7 +545,7 @@ dotnet build -p:Platform=x64
 4. 打开带封面的 EPUB，使用含 `{book-cover}` 的字段映射制卡；卡片字段必须为 Anki 媒体文件名的 `<img>`，不得包含应用私有目录或盘符路径。
 5. 对 `rules` 为 `v1`、`v5 adj-i` 和空字符串的词条分别制卡，确认弹窗不再因 `.some()` 报错。
 6. 打开包含多条结果的查词弹窗，确认各条目并发完成查重且只有当前制卡按钮进入 busy；切换 Profile、redirect、Back/Forward 或快速重复点击后，旧查重/制卡结果不得覆盖当前页面或新 attempt。
-7. 依次触发 pending、added、duplicate、failed，确认 toast 标题、蓝/绿/橙/红语义与 Niratan 一致并在约 2.2 秒后隐藏；最终状态必须重新查重并保留可打开的 note ID。
+7. 在 Reader、Video、Manga 和 Lookup 宿主中分别依次触发 pending、added、duplicate、failed，确认制卡反馈显示在 Dictionary Popup 外的宿主层，标题、蓝/绿/橙/红语义与 Niratan 一致并在约 2.2 秒后隐藏；最终状态必须重新查重并保留可打开的 note ID。
 8. 同时制卡两个不同词条应并行准备；同一 expression 的并发提交在禁用重复卡时只能成功一张。普通制卡与上下文制卡不得相互清除 busy、toast 或 note ID。
 9. 对同一确定性截图/音频目标并发发起生成，确认只执行一次 producer；视频直写取得确定性文件名后应立即进入 `addNote`，截图与音频在后台并发写入 `collection.media`，最终发布仍必须使用同目录临时文件并验证非空。无法直写时必须等待生成完成，失败项只批量上传一次后再提交。
 
@@ -567,6 +570,7 @@ dotnet build -p:Platform=x64
 8. 使用 `video.mkv + video.srt` 和 `video.mp4 + video.ja.srt`，确认视频导入并绑定对应字幕；不匹配字幕不得误绑。
 9. 使用 15 MiB 合法 `.torrent` 与超过 32 MiB、包含越界路径的恶意样本，确认合法元数据可进入 peer 连接阶段，大小限制和下载根目录约束仍生效。
 10. 完成后重启应用，确认已导入小说、Sasayaki 匹配和视频字幕仍可用；下载目录只保留已完成任务。
+11. 在“下载设置”切换内置 MonoTorrent 与 qBittorrent，确认发现按钮文案、任务列表和任务操作随选择切换；切换不删除另一后端的任务。
 
 ---
 
@@ -578,7 +582,7 @@ dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter
 .\build-and-run.ps1
 ```
 
-UI Automation 使用现有 `ImportMangaFolderButton`、`ImportMangaFileButton`、`RefreshMangaLibraryButton`、`MangaLibraryLocalSurfaceButton`、`MangaLibraryOnlineSurfaceButton`、`BrowseNavItem`、`BrowseMangaSourcesTab`、`BrowseMangaExtensionsTab`、`BrowseSourceSettingsTab`、`BrowseSourcesList`、`BrowseSourcePopularButton`、`BrowseResultsBackButton`、`MangaBrowseSearchTextBox`、`MangaBrowsePopularButton`、`MangaBrowseSearchButton`、`MangaSourcesServerTextBox`、`MangaSourcesSecretBox`、`MangaSourcesConnectButton`、`MihonConnectionSettingsExpander`、`MihonRepositoriesList`、`MihonAddRepositoryButton`、动态 `MihonRepository_<id>_Edit` / `MihonRepository_<id>_Remove`、`MihonExtensionBrowserRefreshButton`、`MihonRepositorySearchTextBox`、`MihonRepositoryLanguageComboBox`、`MihonRepositorySourcesList`、动态 `MihonRepositorySource_<package>_<source-id>` / `MangaBook_<book-id>` / `SuwayomiManga_<manga-id>` / `MihonManga_<identity>` / `<provider>MangaDetails_<identity>` / `RemoteMangaChapter_<identity>`、`RemoteMangaDetailsOverlay`、`MangaRemoteDetailsCloseButton`、`MangaRemoteDetailsContinueButton`、`MangaRemoteDetailsLibraryButton`、`MangaRemoteDetailsChaptersList`、`MangaPreviousPageButton`、`MangaNextPageButton`、`MangaLayoutButton`、`MangaDirectionButton`、`MangaGoogleOcrButton`、`MangaZoomSlider` 和 `MangaPageNumberBox`；Mihon runtime 没有下载、地址或路径选择控件，新增可操作控件时补稳定的 `AutomationId`，不要依赖屏幕坐标。
+UI Automation 使用现有 `ImportMangaFolderButton`、`ImportMangaFileButton`、`RefreshMangaLibraryButton`、`MangaLibraryLocalSurfaceButton`、`MangaLibraryOnlineSurfaceButton`、`MangaLibraryHomeNavItem`、`MangaLibraryDiscoverNavItem`、`MangaLibrarySourcesNavItem`、`MangaLibraryExtensionsNavItem`、`MangaLibrarySettingsNavItem`、`MangaDiscoverPage`、`MangaDiscoverSearchTextBox`、`MangaDiscoverSearchButton`、`MangaDiscoverRefreshButton`、`MangaDiscoverSections`、`BrowseSourcesList`、`BrowseSourcePopularButton`、`BrowseResultsBackButton`、`MangaBrowseSearchTextBox`、`MangaBrowsePopularButton`、`MangaBrowseSearchButton`、`MangaSourcesServerTextBox`、`MangaSourcesSecretBox`、`MangaSourcesConnectButton`、`MihonConnectionSettingsExpander`、`MihonRepositoriesList`、`MihonAddRepositoryButton`、动态 `MihonRepository_<id>_Edit` / `MihonRepository_<id>_Remove`、`MihonExtensionBrowserRefreshButton`、`MihonRepositorySearchTextBox`、`MihonRepositoryLanguageComboBox`、`MihonRepositorySourcesList`、动态 `MihonRepositorySource_<package>_<source-id>` / `MangaBook_<book-id>` / `SuwayomiManga_<manga-id>` / `MihonManga_<identity>` / `<provider>MangaDetails_<identity>` / `RemoteMangaChapter_<identity>` / `MangaRemoteDetailsExtension_<package>_<source-id>`、`RemoteMangaDetailsOverlay`、`MangaRemoteDetailsCloseButton`、`MangaRemoteDetailsContinueButton`、`MangaRemoteDetailsLibraryButton`、`MangaRemoteDetailsExtensions`、`MangaRemoteDetailsChaptersList`、`MangaPreviousPageButton`、`MangaNextPageButton`、`MangaLayoutButton`、`MangaDirectionButton`、`MangaGoogleOcrButton`、`MangaZoomSlider` 和 `MangaPageNumberBox`；Mihon runtime 没有下载、地址或路径选择控件，新增可操作控件时补稳定的 `AutomationId`，不要依赖屏幕坐标。
 
 自动化至少覆盖：
 
@@ -603,7 +607,53 @@ UI Automation 使用现有 `ImportMangaFolderButton`、`ImportMangaFileButton`�
 6. 在分页模式用鼠标滚轮翻页，确认 250ms 节流；连续模式滚动后关闭并重开，确认恢复到最近可见源页。
 7. 打开带 Mokuro 的页面，悬停文字确认整块浮现；点击字符确认共享 Popup、嵌套查词和音频可用，制卡 `{book-cover}` 使用当前漫画页。
 8. 对无 Mokuro 的一次性测试页点击 OCR，确认披露明确说明会上传缩小后的页面；拒绝时不联网，接受后启动命令立即返回。当前页完成时文字层和左键查词必须立刻可用，不等待剩余页；其余页继续后台识别。完成部分页面后保持 OCR 显示并关闭 Reader，再次打开时已完成页必须先从缓存出现、未完成页自动继续识别且已缓存页不重新下载或上传；手动暂停/恢复也复用已完成缓存。不得用用户正式漫画做网络验证。
-9. 启动一次性 Suwayomi Server，验证侧边栏“浏览”是独立一级入口，漫画页只保留本地/在线书架且在线空状态可跳转到浏览模块。浏览页“漫画源 / 漫画扩展 / 来源设置”是同一导航行的三个平面页签，设置在主内容区展开且不出现 Flyout、横向滚动或内容裁切。书架内“本地/在线”切换正常，在线书架合并 `category` 收藏、去重并显示缓存封面，本地 `catalog.json` 不新增远程项目。在“来源设置”内验证 None/Basic/UI Login/Bearer；在“漫画源”内验证 Suwayomi 与已安装 Mihon 来源合并为按语言分组的全宽列表，不出现来源 ComboBox，真实 Suwayomi 图标在行实现时出现、无图标来源保持占位。用来源数足够多的一次性 fixture 验证鼠标滚轮和垂直滚动条；点击行尾“热门”后才进入 Popular/Search 书架结果，返回后仍显示来源列表。点击来源结果或在线书架海报时必须先显示完整详情海报、作者/简介、继续阅读、加入/移出在线书库与章节列表，不得立即打开 Reader；“继续阅读”和指定章节分别打开正确章节，书库动作回写 Suwayomi 且不改本地 `catalog.json`。滚动到末尾六项时应自动请求下一页、去重追加且不跳回顶部，直到 `hasNextPage=false`。切换 Provider、漫画源、查询或快速切换详情后不得混入旧分页、元数据或章节结果。继续验证按页读取和进度回写；断网后已缓存页仍可读。
+9. 启动一次性 Suwayomi Server，验证漫画页顶部 `漫画库 / 发现 / 漫画源 / 漫画扩展 / 来源设置` 分段入口进入同一 Manga 信息架构；不再显示全局侧栏“浏览”或 Browse 页重复的内部页签。`漫画库` 只显示本地/在线书架，在线空状态可跳转到 `漫画源`。打开“发现”后验证按来源分组的网络漫画海报、搜索、刷新和横向海报列表；点击海报必须先显示完整详情海报、作者/简介、继续阅读、加入/移出在线书库、已安装 Mihon 扩展选择和章节列表，不得立即打开 Reader；切换扩展按标题重新检索并刷新章节，“继续阅读”和指定章节分别打开正确章节，书库动作回写 Suwayomi 且不改本地 `catalog.json`。在“来源设置”内验证 None/Basic/UI Login/Bearer；在“漫画源”内验证 Suwayomi 与已安装 Mihon 来源合并为按语言分组的全宽列表，不出现来源 ComboBox，真实 Suwayomi 图标在行实现时出现、无图标来源保持占位。用来源数足够多的一次性 fixture 验证鼠标滚轮和垂直滚动条；点击行尾“热门”后才进入 Popular/Search 书架结果，返回后仍显示来源列表。滚动到末尾六项时应自动请求下一页、去重追加且不跳回顶部，直到 `hasNextPage=false`。切换 Provider、漫画源、查询、扩展或快速切换详情后不得混入旧分页、元数据或章节结果。继续验证按页读取和进度回写；断网后已缓存页仍可读。
 10. 使用一次性 App 数据和可信测试仓库验证 Mihon APK：确认安装目录直接包含固定版本的私有 Java、上游 JAR 与 Niratan overlay JAR，来源设置中不出现 runtime 下载、bridge 地址、Java/JAR 路径或手动启动控件；旧单仓库仍自动显示为列表项，并可添加、编辑、移除多个仓库，移除仓库后已安装 APK 保留。首次安装或使用扩展时确认 Niratan 自动启动 sidecar，使用随机本机端口、overlay 优先 class path、Windows 分发包要求的 `--add-opens` 与 Java 21 `-noverify` 参数，关闭 App 后子进程终止。“漫画扩展”主体直接显示所有仓库合并后按“已安装 / 语言”分组的全宽虚拟列表。刷新仓库后验证鼠标滚轮、垂直滚动条、搜索、语言筛选、安装状态排序和行尾图标安装/更新，不再出现仓库来源下拉框或无效的兼容筛选；仓库图标 404 时应从 APK 的受限 `res/` 光栅候选生成缓存图标，确实无图才显示拼图占位。安装单 Source APK 时，无法读取可选 headers 不得阻止安装清单落盘；用多语言测试 APK 分别安装两个非首位 source ID，确认 Popular/Search、详情海报、章节和页面均来自各自语言 Source，安装清单按 package/source identity 共存且复用同 SHA-256 APK。直接 Mihon 来源卡片也必须先打开详情，显示“加入漫画库”按钮，并由“继续阅读”或指定章节进入 Reader；加入后重启应用仍显示在在线书架，详情按钮切换为“移出漫画库”，移出后条目消失。该 Windows 扩展只更新 `mihon.json` 的 `Library[]`，不得改本地 `catalog.json`。回到“漫画源”后验证来源列表、自动预取下一页和 Reader 均复用现有书架/Reader；HTTP 公网仓库、损坏 APK、APK 被替换、未知 source ID 和显式私网 IP 媒体 URL必须失败。不得对用户正式漫画源或正式扩展目录执行此验证。
 11. 点击空白区域或按 `Esc` 关闭 Popup；翻页、缩放或切换布局后旧 Popup 不得停留在失效坐标。
 12. 检查 `%APPDATA%\Niratan\Data\Manga`：除 `catalog.json`、`suwayomi.json` 与 App 缓存外，直接 Mihon 模式只新增 `mihon.json`（仓库和 `Library[]` 收藏）、`Extensions/installed.json`、经 SHA-256 命名的 APK 与 `MihonBridge` 私有工作目录；不创建或更新 `niratan.db`，本地漫画源目录内不生成 sidecar。`suwayomi.json` 不含密码或 token；Niratan 安装目录的 `MihonBridge` 只包含固定 runtime、许可证与 notice，不包含用户安装的 APK。
+
+### 8.1 元数据发现页补充
+
+1. 在一次性网络 fixture 或 mock endpoint 下打开“漫画 → 发现”，验证顶部 provider 可切换 `Bangumi` / `AniList`；默认页面显示多个网站数据分区，每个分区为横向海报卡片，并显示标题、评分/年份和来源。
+2. 输入漫画标题后点击搜索，验证结果切换为网格、海报异步加载、滚动到末尾六项自动追加下一页；切换 provider、分类或刷新时，旧结果和旧分页不会混入当前列表。
+3. 点击元数据卡片，验证先打开包含封面、原名、年份、评分和简介的漫画详情面板，再按标题/原名/别名检索已安装 Mihon 扩展；详情中可以直接切换扩展、选择章节和进入 Reader。没有安装扩展或没有匹配结果时详情仍可操作并显示明确提示，不改变本地漫画目录。
+4. 用 mock 海报验证只接受 allowlist HTTPS host、图片内容类型/文件头和大小限制；缓存文件位于 Manga cache 的 Discovery 子目录，重复卡片只发起一次下载，损坏或过期缓存可重新获取。
+
+## 9. 下载发现与 qBittorrent 验证
+
+```powershell
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Qbittorrent|FullyQualifiedName~DownloadsPageAsset"
+dotnet build Niratan/Niratan.csproj -p:Platform=x64
+```
+
+自动化至少覆盖：
+
+1. qB WebUI Cookie 登录只发生一次，后续请求发送受限 SID；API Key 模式发送 Bearer header 且不调用登录接口。
+2. `/torrents/info` 的 JSON 正确映射 hash、标题、状态、进度、大小、速度、ETA、分类、标签和时间；qB API 失败时保留可读错误且不暴露密码、Cookie 或 Authorization header。
+3. Nyaa 搜索结果添加到 qB 时只发送允许的 `https://nyaa.si/` torrent URL、配置的保存路径/分类和 Niratan 标签；跨 origin、带 credentials、query 或 fragment 的地址必须拒绝。
+4. qB 任务暂停、继续和移除只作用于明确的 hash；移除任务默认不删除下载文件。
+5. 服务器地址、默认保存路径、分类和暂停添加选项可 round-trip 到 `settings.json`；密码和 API Key 不出现在 JSON、日志或异常文本中，空凭据不会创建空的 Credential Manager 项。
+6. 远程 HTTP qB 地址在发送凭据前失败；loopback HTTP 可用于本机 qB，HTTPS 远程地址可用于受信 WebUI。
+7. 任务详情的 properties、files、trackers 三个 qB 响应正确映射；无效 hash 不发起请求，详情请求只携带已配置的认证信息。
+8. 下载页任务列表声明详情 Panel、概览/文件/Tracker 三个面板、取消/恢复/打开位置/删除入口；删除入口绑定确认流程，且任务删除默认不删除文件。
+9. 下载页后端选择可 round-trip 到 `settings.json`；选择 MonoTorrent 时入队调用 `INyaaDownloadManager`，选择 qBittorrent 时调用 `IQbittorrentDownloadCoordinator`，两者不交叉。
+
+使用 disposable qBittorrent 实例和只包含合法测试资源的 Nyaa fixture 做 UI 验证：
+
+1. 打开“下载 → qB 设置”，保存本机 qB 地址、用户名/密码或 API Key，测试连接成功；重启应用后设置和凭据状态仍正确，密码/API Key 不回填到输入框。
+2. 打开“下载 → 发现”，搜索小型合法测试资源，确认标题、体积、做种数和可信/重制标记可见；点击“添加到 qBittorrent”后只加入一次，状态反馈为已添加。
+3. 打开“下载任务”，确认任务来自 qB 实际列表；暂停、继续、移除任务后刷新页面，状态与 qB WebUI 一致。关闭并重开 Niratan 后任务仍可见。
+4. 在 qB 使用远程保存路径时，确认 Niratan 不把该路径当作本机文件夹打开，也不自动导入小说、视频或漫画资料库。
+5. 没有 qB、密码错误、WebUI 关闭、远程 HTTP、HTTPS 证书失败和 Nyaa RSS 超时时，页面显示受控错误；搜索失败不清空已有 qB 任务。
+6. 点击任务打开详情 Panel，确认概览显示 hash、状态、大小、剩余、保存路径、内容路径、速度、ETA、连接数和时间；文件和 Tracker 页显示 qB 返回的列表。取消停止任务但不移除，恢复重新开始；打开本地路径进入资源管理器，远程 qB 路径显示受控错误；点击删除后先出现确认，取消不改变任务，确认只移除 qB 任务且保留文件。
+
+## 10. Galgame 游戏捕获验证（Windows 扩展）
+
+```powershell
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GalGame"
+dotnet build Niratan/Niratan.csproj -p:Platform=x64
+```
+
+离线验证只覆盖游戏库纯函数、启动参数转义、helper 架构清单和 IPC 版本常量。UI 手动验证必须使用 disposable 游戏副本：添加/移除 exe 后确认 `Data/Games/galgame-library.json` 原子 round-trip；损坏 JSON 不得被空库覆盖；重复路径按 Windows 分隔符和大小写去重；启动参数中的空格、反斜杠和引号保持 token 边界。
+
+真实运行时验证还必须记录目标游戏进程身份、x86/x64 架构、exe SHA-256、injector 路径、PID、窗口、IPC magic/version、hook/text/audio 信号和会话时间线。未取得真实游戏证据前，只能报告 helper 已实现、引擎支持未验证；不得把占位 exe、无游戏的 injector 启动或仅有 C# contract test 当作捕获成功。

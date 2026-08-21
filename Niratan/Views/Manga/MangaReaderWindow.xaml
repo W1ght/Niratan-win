@@ -190,6 +190,21 @@
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch" />
 
+        <Grid x:Name="MangaMiningFeedbackHost"
+              Grid.RowSpan="3"
+              Canvas.ZIndex="1100"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch"
+              IsHitTestVisible="False">
+            <InfoBar x:Name="MangaMiningToast"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Top"
+                     MaxWidth="420"
+                     Margin="12"
+                     IsClosable="False"
+                     IsOpen="False" />
+        </Grid>
+
         <Grid Grid.Row="2"
               Padding="16,4"
               Background="#CC181818">

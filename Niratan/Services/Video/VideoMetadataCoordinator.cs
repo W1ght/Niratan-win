@@ -39,13 +39,17 @@ public sealed record VideoMetadataBatchProgress(
     int MatchedCount,
     int NeedsReviewCount,
     Guid? CurrentAssetId,
-    string? Error = null);
+    string? Error = null,
+    int FailedCount = 0);
 
 public interface IVideoMetadataCoordinator
 {
     event EventHandler<VideoMetadataRefreshProgress>? ProgressChanged;
     event EventHandler<VideoMetadataBatchProgress>? BatchProgressChanged;
     IReadOnlyCollection<VideoMetadataBatchProgress> ActiveBatchProgress { get; }
+    Task<IReadOnlyList<VideoMetadataTaskSnapshot>> GetTaskHistoryAsync(
+        int limit = 50,
+        CancellationToken ct = default);
     Task<VideoMetadataRefreshResult> RefreshAssetAsync(
         Guid assetId,
         bool allowNetwork,
@@ -63,6 +67,9 @@ public interface IVideoMetadataCoordinator
         CancellationToken ct = default);
     Task QueueAllSourcesAsync(bool forceRefresh = false, CancellationToken ct = default);
     Task CancelSourceRefreshAsync(Guid sourceId, CancellationToken ct = default);
+    Task CancelTaskAsync(Guid jobId, CancellationToken ct = default);
+    Task RetryTaskAsync(Guid jobId, CancellationToken ct = default);
+    Task RetryFailedTasksAsync(CancellationToken ct = default);
 }
 
 internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
@@ -84,6 +91,38 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
     public event EventHandler<VideoMetadataRefreshProgress>? ProgressChanged;
     public event EventHandler<VideoMetadataBatchProgress>? BatchProgressChanged;
     public IReadOnlyCollection<VideoMetadataBatchProgress> ActiveBatchProgress => _batchProgress.Values.ToArray();
+
+    public async Task<IReadOnlyList<VideoMetadataTaskSnapshot>> GetTaskHistoryAsync(
+        int limit = 50,
+        CancellationToken ct = default)
+    {
+        var snapshot = await _repository.GetSnapshotAsync(ct);
+        var stale = snapshot.Jobs
+            .Where(job => job.Kind == VideoCatalogJobKind.MetadataRefresh
+                          && (job.State is VideoCatalogJobState.Queued
+                              or VideoCatalogJobState.Running
+                              or VideoCatalogJobState.Paused)
+                          && !IsActiveJob(job.Id))
+            .ToArray();
+        foreach (var job in stale)
+        {
+            await _repository.UpdateMetadataRefreshAsync(
+                job.Id,
+                VideoCatalogJobState.Interrupted,
+                job.ProcessedCount,
+                "The application stopped before this scrape completed.",
+                ct);
+        }
+        if (stale.Length > 0)
+            snapshot = await _repository.GetSnapshotAsync(ct);
+
+        return snapshot.Jobs
+            .Where(job => job.Kind == VideoCatalogJobKind.MetadataRefresh)
+            .OrderByDescending(job => job.UpdatedAt)
+            .Take(Math.Clamp(limit, 1, 200))
+            .Select(ToTaskSnapshot)
+            .ToArray();
+    }
 
     public VideoMetadataCoordinator(
         IVideoCatalogRepository repository,
@@ -175,10 +214,15 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
                     pair => pair.Key,
                     pair => pair.Value,
                     StringComparer.OrdinalIgnoreCase);
+        var isSeasonScopedRoute = route.MediaKind is VideoMetadataMediaKind.Anime or VideoMetadataMediaKind.Series
+                                  && (primaryNode?.SeasonNumber.HasValue == true
+                                      || primaryNode?.EpisodeNumber.HasValue == true
+                                      || asset.EpisodeStart.HasValue);
+        var queryYear = isSeasonScopedRoute ? null : identityNode?.Year ?? primaryNode?.Year;
         var query = new VideoMetadataSearchQuery(
             identityNode?.PrimaryTitle ?? asset.Title,
             route.MediaKind.Value,
-            identityNode?.Year,
+            queryYear,
             primaryNode?.SeasonNumber,
             primaryNode?.EpisodeNumber ?? asset.EpisodeStart,
             primaryNode?.AbsoluteEpisodeNumber,
@@ -237,7 +281,7 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         var parsed = ToParsedIdentity(asset, primaryNode, trustedIdentityExternalIds) with
         {
             NormalizedTitle = identityNode?.PrimaryTitle ?? asset.Title,
-            Year = identityNode?.Year ?? primaryNode?.Year,
+            Year = queryYear,
         };
         var scored = _matcher.Score(parsed, route.MediaKind.Value, candidates).ToImmutableArray();
         await _repository.ReplaceMatchCandidatesAsync(
@@ -332,7 +376,7 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         VideoMetadataMatchScore accepted,
         IReadOnlyList<VideoMetadataMatchScore> scored)
     {
-        if (routeKind != VideoMetadataMediaKind.Anime)
+        if (routeKind is not (VideoMetadataMediaKind.Anime or VideoMetadataMediaKind.Series))
             return accepted.Candidate;
         var detailPriority = new[] { "tmdb", "anilist", "bangumi", "tvmaze" };
         var richCandidate = scored
@@ -340,10 +384,12 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
                                  result.Candidate.ProviderId,
                                  StringComparer.OrdinalIgnoreCase)
                              && !result.HasHardConflict
-                             && result.TitleScore >= 0.999
+                             && result.TitleScore >= 0.84
                              && (!accepted.Candidate.Year.HasValue
                                  || !result.Candidate.Year.HasValue
-                                 || accepted.Candidate.Year == result.Candidate.Year))
+                                 || accepted.Candidate.Year == result.Candidate.Year
+                                 || result.Candidate.SeasonNumber.HasValue
+                                 || result.Candidate.EpisodeNumber.HasValue))
             .OrderBy(result => Array.FindIndex(
                 detailPriority,
                 providerId => providerId.Equals(
@@ -397,6 +443,8 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
             .ToArray();
         if (assets.Length == 0)
             return;
+        if (forceRefresh)
+            await _repository.ClearRemoteMetadataAsync(sourceId, ct);
         var jobId = await _repository.BeginMetadataRefreshAsync(sourceId, assets.Length, ct);
         var batchCts = new CancellationTokenSource();
         if (!_activeBatches.TryAdd(sourceId, batchCts))
@@ -420,6 +468,64 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         {
             await _repository.UpdateMetadataRefreshAsync(
                 progress.JobId, VideoCatalogJobState.Cancelled, progress.ProcessedCount, progress.Error, ct);
+            await _repository.UpdateMetadataRefreshCountsAsync(
+                progress.JobId, progress.MatchedCount, progress.NeedsReviewCount, ct, progress.FailedCount);
+        }
+    }
+
+    public async Task CancelTaskAsync(Guid jobId, CancellationToken ct = default)
+    {
+        var live = _batchProgress.Values.FirstOrDefault(progress => progress.JobId == jobId);
+        if (live != null && _activeBatches.ContainsKey(live.SourceId))
+        {
+            await CancelSourceRefreshAsync(live.SourceId, ct);
+            return;
+        }
+
+        var snapshot = await _repository.GetSnapshotAsync(ct);
+        var job = snapshot.Jobs.FirstOrDefault(candidate =>
+            candidate.Id == jobId && candidate.Kind == VideoCatalogJobKind.MetadataRefresh);
+        if (job == null || job.State is not (VideoCatalogJobState.Queued
+            or VideoCatalogJobState.Running
+            or VideoCatalogJobState.Paused))
+            return;
+
+        await _repository.UpdateMetadataRefreshAsync(
+            job.Id, VideoCatalogJobState.Cancelled, job.ProcessedCount, job.Error, ct);
+        await _repository.UpdateMetadataRefreshCountsAsync(
+            job.Id, job.MatchedCount, job.NeedsReviewCount, ct, job.FailedCount);
+    }
+
+    public async Task RetryTaskAsync(Guid jobId, CancellationToken ct = default)
+    {
+        var snapshot = await _repository.GetSnapshotAsync(ct);
+        var job = snapshot.Jobs.FirstOrDefault(candidate =>
+            candidate.Id == jobId && candidate.Kind == VideoCatalogJobKind.MetadataRefresh);
+        if (job?.SourceId is not Guid sourceId
+            || job.State is not (VideoCatalogJobState.Failed
+                or VideoCatalogJobState.Cancelled
+                or VideoCatalogJobState.Interrupted))
+            return;
+
+        await QueueSourceRefreshAsync(sourceId, forceRefresh: true, ct);
+    }
+
+    public async Task RetryFailedTasksAsync(CancellationToken ct = default)
+    {
+        var snapshot = await _repository.GetSnapshotAsync(ct);
+        var sourceIds = snapshot.Jobs
+            .Where(job => job.Kind == VideoCatalogJobKind.MetadataRefresh
+                          && job.SourceId is not null
+                          && (job.State is VideoCatalogJobState.Failed
+                              or VideoCatalogJobState.Interrupted))
+            .Select(job => job.SourceId!.Value)
+            .Distinct()
+            .Where(sourceId => snapshot.Sources.Any(source => source.Id == sourceId))
+            .ToArray();
+        foreach (var sourceId in sourceIds)
+        {
+            ct.ThrowIfCancellationRequested();
+            await QueueSourceRefreshAsync(sourceId, forceRefresh: true, ct);
         }
     }
 
@@ -431,6 +537,7 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         var processed = 0;
         var matched = 0;
         var needsReview = 0;
+        var failedCount = 0;
         var errors = new ConcurrentQueue<string>();
         try
         {
@@ -452,11 +559,15 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
                         if (result.NeedsReview)
                             Interlocked.Increment(ref needsReview);
                         if (!string.IsNullOrWhiteSpace(result.Error))
+                        {
                             errors.Enqueue(result.Error);
+                            Interlocked.Increment(ref failedCount);
+                        }
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
                         errors.Enqueue(ex.Message);
+                        Interlocked.Increment(ref failedCount);
                     }
                     var current = Interlocked.Increment(ref processed);
                     var progress = initial with
@@ -464,6 +575,7 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
                         ProcessedCount = current,
                         MatchedCount = Volatile.Read(ref matched),
                         NeedsReviewCount = Volatile.Read(ref needsReview),
+                        FailedCount = Volatile.Read(ref failedCount),
                         CurrentAssetId = asset.Id,
                         Error = CompactErrors(errors),
                     };
@@ -474,6 +586,12 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
                         current,
                         progress.Error,
                         CancellationToken.None);
+                    await _repository.UpdateMetadataRefreshCountsAsync(
+                        initial.JobId,
+                        progress.MatchedCount,
+                        progress.NeedsReviewCount,
+                        CancellationToken.None,
+                        progress.FailedCount);
                 });
             var completed = initial with
             {
@@ -481,11 +599,14 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
                 ProcessedCount = processed,
                 MatchedCount = matched,
                 NeedsReviewCount = needsReview,
+                FailedCount = failedCount,
                 CurrentAssetId = null,
                 Error = CompactErrors(errors),
             };
             await _repository.UpdateMetadataRefreshAsync(
                 initial.JobId, completed.State, processed, completed.Error, CancellationToken.None);
+            await _repository.UpdateMetadataRefreshCountsAsync(
+                initial.JobId, matched, needsReview, CancellationToken.None, failedCount);
             PublishBatch(completed);
         }
         catch (OperationCanceledException)
@@ -496,11 +617,14 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
                 ProcessedCount = processed,
                 MatchedCount = matched,
                 NeedsReviewCount = needsReview,
+                FailedCount = failedCount,
                 CurrentAssetId = null,
                 Error = CompactErrors(errors),
             };
             await _repository.UpdateMetadataRefreshAsync(
                 initial.JobId, cancelled.State, processed, cancelled.Error, CancellationToken.None);
+            await _repository.UpdateMetadataRefreshCountsAsync(
+                initial.JobId, matched, needsReview, CancellationToken.None, failedCount);
             PublishBatch(cancelled);
         }
         catch (Exception ex)
@@ -512,11 +636,14 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
                 ProcessedCount = processed,
                 MatchedCount = matched,
                 NeedsReviewCount = needsReview,
+                FailedCount = failedCount,
                 CurrentAssetId = null,
                 Error = CompactErrors(errors),
             };
             await _repository.UpdateMetadataRefreshAsync(
                 initial.JobId, failed.State, processed, failed.Error, CancellationToken.None);
+            await _repository.UpdateMetadataRefreshCountsAsync(
+                initial.JobId, matched, needsReview, CancellationToken.None, failedCount);
             PublishBatch(failed);
         }
         finally
@@ -575,6 +702,27 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
     {
         var values = errors.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct().Take(5).ToArray();
         return values.Length == 0 ? null : string.Join(Environment.NewLine, values);
+    }
+
+    private bool IsActiveJob(Guid jobId) =>
+        _batchProgress.Values.Any(progress => progress.JobId == jobId
+                                              && _activeBatches.ContainsKey(progress.SourceId));
+
+    private VideoMetadataTaskSnapshot ToTaskSnapshot(VideoCatalogJobSnapshot job)
+    {
+        var live = _batchProgress.Values.FirstOrDefault(progress => progress.JobId == job.Id);
+        return new VideoMetadataTaskSnapshot(
+            job.Id,
+            job.SourceId,
+            live?.State ?? job.State,
+            live?.ProcessedCount ?? job.ProcessedCount,
+            live?.TotalCount ?? job.TotalCount,
+            live?.MatchedCount ?? job.MatchedCount,
+            live?.NeedsReviewCount ?? job.NeedsReviewCount,
+            live?.Error ?? job.Error,
+            job.CreatedAt,
+            job.UpdatedAt,
+            live?.FailedCount ?? job.FailedCount);
     }
 
     private void PublishBatch(VideoMetadataBatchProgress progress)
@@ -796,10 +944,12 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
             evidenceNodes.Any(node => node.Year.HasValue));
         var defaults = type switch
         {
-            VideoLibraryMediaType.Anime => new[] { "anilist", "anidb", "bangumi", "tmdb" },
+            // Keep TMDB as the canonical library identity for anime too.  The
+            // other providers remain fallbacks for titles TMDB cannot resolve.
+            VideoLibraryMediaType.Anime => new[] { "tmdb", "tvmaze", "anilist", "anidb", "bangumi" },
             VideoLibraryMediaType.JapaneseDramaTv => new[] { "tmdb", "tvmaze", "bangumi" },
             VideoLibraryMediaType.Movie => new[] { "tmdb", "bangumi" },
-            _ when kind == VideoMetadataMediaKind.Anime => new[] { "anilist", "anidb", "bangumi", "tmdb" },
+            _ when kind == VideoMetadataMediaKind.Anime => new[] { "tmdb", "tvmaze", "anilist", "anidb", "bangumi" },
             _ when kind == VideoMetadataMediaKind.Series => new[] { "tmdb", "tvmaze", "bangumi" },
             _ when kind == VideoMetadataMediaKind.Movie => new[] { "tmdb", "bangumi" },
             _ => Array.Empty<string>(),

@@ -39,6 +39,7 @@ internal sealed class YoutubeExplodeRemoteVideoResolver : IRemoteVideoResolver, 
         var now = _timeProvider.GetUtcNow();
         if (!forceRefresh
             && _cache.TryGetValue(cacheKey, out var cached)
+            && cached.SubtitleOptions.Count > 0
             && !cached.IsExpired(now))
         {
             return ApplyRequestContext(
@@ -55,11 +56,26 @@ internal sealed class YoutubeExplodeRemoteVideoResolver : IRemoteVideoResolver, 
             var streamsTask = _client.GetStreamsAsync(videoId, ct);
             var captionsTask = _client.GetSubtitlesAsync(videoId, ct);
 
-            await Task.WhenAll(metadataTask, streamsTask, captionsTask);
+            await Task.WhenAll(metadataTask, streamsTask);
             var metadata = await metadataTask;
             var descriptors = await streamsTask;
             var selection = YouTubeStreamSelector.Select(descriptors);
-            var subtitles = FilterPublisherSubtitles(await captionsTask);
+            IReadOnlyList<RemoteVideoSubtitleOption> subtitles;
+            try
+            {
+                subtitles = OrderSubtitles(await captionsTask);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                // A caption endpoint outage must not prevent the video stream
+                // from opening. Do not cache an empty result so a later open can
+                // retry subtitle metadata.
+                subtitles = [];
+            }
 
             var identity = new RemoteVideoIdentity(
                 YouTubeUrlParser.ProviderId,
@@ -88,8 +104,11 @@ internal sealed class YoutubeExplodeRemoteVideoResolver : IRemoteVideoResolver, 
                 Identity = identity with { OriginalUrl = canonicalUrl },
                 RequestedStartPosition = null,
             };
-            _cache[identity.PersistenceKey] = cacheEntry;
-            _cache[$"url:{canonicalUrl}"] = cacheEntry;
+            if (subtitles.Count > 0)
+            {
+                _cache[identity.PersistenceKey] = cacheEntry;
+                _cache[$"url:{canonicalUrl}"] = cacheEntry;
+            }
             return source;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -131,8 +150,6 @@ internal sealed class YoutubeExplodeRemoteVideoResolver : IRemoteVideoResolver, 
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
-        if (option.IsAutomatic)
-            throw new InvalidOperationException("Automatic YouTube captions are not supported.");
 
         var directory = Path.GetDirectoryName(outputPath);
         if (!string.IsNullOrWhiteSpace(directory))
@@ -190,9 +207,15 @@ internal sealed class YoutubeExplodeRemoteVideoResolver : IRemoteVideoResolver, 
             : expiries.Min().AddMinutes(-5);
     }
 
-    internal static IReadOnlyList<RemoteVideoSubtitleOption> FilterPublisherSubtitles(
+    internal static IReadOnlyList<RemoteVideoSubtitleOption> OrderSubtitles(
         IEnumerable<RemoteVideoSubtitleOption> subtitles) =>
-        subtitles.Where(option => !option.IsAutomatic).ToList();
+        subtitles
+            .Where(option => !string.IsNullOrWhiteSpace(option.Language)
+                             && !string.IsNullOrWhiteSpace(option.SourceUrl))
+            .OrderBy(option => option.IsAutomatic)
+            .ThenBy(option => option.Language, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(option => option.Id, StringComparer.Ordinal)
+            .ToList();
 
     private static string? ParseQueryValue(string url, string key)
     {

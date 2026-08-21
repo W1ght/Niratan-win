@@ -85,6 +85,7 @@ public sealed record NyaaDownloadTaskSnapshot(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt)
 {
+    public string StateText => State.ToString();
     public bool CanPause => State == NyaaDownloadTaskState.Downloading;
     public bool CanResume => State == NyaaDownloadTaskState.Paused;
     public bool CanCancel => State is NyaaDownloadTaskState.Queued

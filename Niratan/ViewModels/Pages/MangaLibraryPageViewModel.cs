@@ -20,6 +20,7 @@ namespace Niratan.ViewModels.Pages;
 public enum MangaHomeSection
 {
     Library,
+    Discover,
     Browse,
     Sources,
     Settings,
@@ -37,6 +38,7 @@ public partial class MangaLibraryPageViewModel : ObservableObject
     private readonly IMangaReaderWindowService _readerWindow;
     private readonly ISuwayomiService _suwayomi;
     private readonly IMihonExtensionService _mihon;
+    private readonly IMangaDiscoveryService? _mangaDiscovery;
     private readonly IDialogService _dialogs;
     private readonly INotificationService _notifications;
     private CancellationTokenSource _pageCts = new();
@@ -62,6 +64,15 @@ public partial class MangaLibraryPageViewModel : ObservableObject
     private MihonInstalledExtension? _selectedDetailMihonSource;
     private MihonManga? _selectedMihonManga;
     private IReadOnlyList<MihonChapter> _selectedMihonChapters = [];
+    private int _mangaDiscoveryPage;
+    private bool _mangaDiscoveryHasMore;
+    private string? _activeMangaDiscoveryProviderId;
+    private string? _activeMangaDiscoveryQuery;
+    private bool _mangaDiscoveryOptionsReady;
+    private bool _mangaDiscoveryInitialized;
+    private CancellationTokenSource? _mangaDiscoveryRequestCts;
+    private CancellationTokenSource? _mangaDiscoveryPosterCts;
+    private readonly SemaphoreSlim _mangaDiscoveryPosterGate = new(6, 6);
 
     public MangaLibraryPageViewModel(
         IMangaLibraryService library,
@@ -69,12 +80,14 @@ public partial class MangaLibraryPageViewModel : ObservableObject
         ISuwayomiService suwayomi,
         IMihonExtensionService mihon,
         IDialogService dialogs,
-        INotificationService notifications)
+        INotificationService notifications,
+        IMangaDiscoveryService? mangaDiscovery = null)
     {
         _library = library;
         _readerWindow = readerWindow;
         _suwayomi = suwayomi;
         _mihon = mihon;
+        _mangaDiscovery = mangaDiscovery;
         _dialogs = dialogs;
         _notifications = notifications;
         RebuildMihonRepositorySourceItems([]);
@@ -92,6 +105,7 @@ public partial class MangaLibraryPageViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLibrarySectionSelected))]
+    [NotifyPropertyChangedFor(nameof(IsDiscoverSectionSelected))]
     [NotifyPropertyChangedFor(nameof(IsBrowseSectionSelected))]
     [NotifyPropertyChangedFor(nameof(IsSourcesSectionSelected))]
     [NotifyPropertyChangedFor(nameof(IsSettingsSectionSelected))]
@@ -99,6 +113,7 @@ public partial class MangaLibraryPageViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsBrowseResultsVisible))]
     [NotifyPropertyChangedFor(nameof(IsLocalLibraryVisible))]
     [NotifyPropertyChangedFor(nameof(IsOnlineLibraryVisible))]
+    [NotifyPropertyChangedFor(nameof(IsMangaRemoteSurfaceVisible))]
     [NotifyPropertyChangedFor(nameof(ShowLocalLibraryActions))]
     [NotifyPropertyChangedFor(nameof(ShowOnlineLibraryActions))]
     public partial MangaHomeSection SelectedSection { get; set; } =
@@ -106,6 +121,8 @@ public partial class MangaLibraryPageViewModel : ObservableObject
 
     public bool IsLibrarySectionSelected =>
         SelectedSection == MangaHomeSection.Library;
+    public bool IsDiscoverSectionSelected =>
+        SelectedSection == MangaHomeSection.Discover;
     public bool IsBrowseSectionSelected =>
         SelectedSection == MangaHomeSection.Browse;
     public bool IsSourcesSectionSelected =>
@@ -116,6 +133,9 @@ public partial class MangaLibraryPageViewModel : ObservableObject
         IsBrowseSectionSelected && !IsBrowseResultsOpen;
     public bool IsBrowseResultsVisible =>
         IsBrowseSectionSelected && IsBrowseResultsOpen;
+    public bool IsMangaRemoteSurfaceVisible => !IsLibrarySectionSelected;
+    public bool IsRemoteSuwayomiSurfaceSelected =>
+        IsDiscoverSectionSelected || IsBrowseSectionSelected;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLocalSelected))]
@@ -220,6 +240,57 @@ public partial class MangaLibraryPageViewModel : ObservableObject
     public partial ObservableCollection<RemoteMangaLibraryItemViewModel> BrowseBooks { get; set; } = [];
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowMangaDiscoverPlaceholder))]
+    public partial ObservableCollection<MangaDiscoverSectionViewModel>
+        MangaDiscoverSections { get; set; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowMangaDiscoverPlaceholder))]
+    public partial ObservableCollection<MangaDiscoveryCardViewModel>
+        MangaDiscoverItems { get; set; } = [];
+
+    public ObservableCollection<MangaDiscoveryProvider>
+        MangaDiscoveryProviders { get; } = [];
+
+    public ObservableCollection<MangaDiscoveryFeed>
+        MangaDiscoveryFeeds { get; } = [];
+
+    [ObservableProperty]
+    public partial MangaDiscoveryProvider? SelectedMangaDiscoveryProvider
+    {
+        get;
+        set;
+    }
+
+    [ObservableProperty]
+    public partial MangaDiscoveryFeed? SelectedMangaDiscoveryFeed
+    {
+        get;
+        set;
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowMangaDiscoverPlaceholder))]
+    public partial bool IsMangaDiscoverLoading { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowMangaDiscoverPlaceholder))]
+    public partial bool IsMangaDiscoverLoadingMore { get; set; }
+
+    [ObservableProperty]
+    public partial string MangaDiscoverQuery { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowMangaDiscoverPlaceholder))]
+    public partial bool IsMangaDiscoverSearchMode { get; set; }
+
+    [ObservableProperty]
+    public partial string MangaDiscoverStatusMessage { get; set; } =
+        ResourceStringHelper.GetString(
+            "MangaDiscoverInitialStatus",
+            "Discover manga from installed online sources.");
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowBrowsePlaceholder))]
     public partial bool IsSuwayomiBusy { get; set; }
 
@@ -308,6 +379,11 @@ public partial class MangaLibraryPageViewModel : ObservableObject
         !(IsMihonSourceKind ? IsMihonBusy : IsSuwayomiBusy)
         && BrowseBooks.Count == 0;
 
+    public bool ShowMangaDiscoverPlaceholder =>
+        !IsMangaDiscoverLoading
+        && MangaDiscoverSections.Count == 0
+        && MangaDiscoverItems.Count == 0;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasRemoteMangaDetails))]
     public partial RemoteMangaDetailViewModel? SelectedRemoteMangaDetails
@@ -327,24 +403,49 @@ public partial class MangaLibraryPageViewModel : ObservableObject
             _isSubscribedToReader = true;
         }
         _pageCts.Cancel();
+        CancelMangaDiscoveryPosterRequests();
         _pageCts.Dispose();
+        CancelMangaDiscoveryRequest();
         _pageCts = new CancellationTokenSource();
         await LoadAsync(_pageCts.Token);
     }
 
-    public async Task InitializeBrowseAsync()
+    public async Task InitializeBrowseAsync(
+        MangaHomeSection section = MangaHomeSection.Discover)
     {
         _pageCts.Cancel();
+        CancelMangaDiscoveryPosterRequests();
         _pageCts.Dispose();
+        CancelMangaDiscoveryRequest();
         _pageCts = new CancellationTokenSource();
-        SelectedSection = MangaHomeSection.Browse;
-        await SelectBrowseAsync();
+        await SelectBrowseSectionAsync(section);
+    }
+
+    public async Task SelectBrowseSectionAsync(MangaHomeSection section)
+    {
+        switch (section)
+        {
+            case MangaHomeSection.Sources:
+                await SelectSourcesAsync();
+                break;
+            case MangaHomeSection.Settings:
+                await SelectSettingsAsync();
+                break;
+            case MangaHomeSection.Browse:
+                await SelectBrowseAsync();
+                break;
+            default:
+                await SelectDiscoverAsync();
+                break;
+        }
     }
 
     public void OnNavigatedFrom()
     {
         CloseRemoteMangaDetails();
         _pageCts.Cancel();
+        CancelMangaDiscoveryRequest();
+        CancelMangaDiscoveryPosterRequests();
         if (_isSubscribedToReader)
         {
             _readerWindow.LibraryChanged -= OnReaderLibraryChanged;
@@ -386,6 +487,16 @@ public partial class MangaLibraryPageViewModel : ObservableObject
     private void SelectLibrary() => SelectedSection = MangaHomeSection.Library;
 
     [RelayCommand]
+    private async Task SelectDiscoverAsync()
+    {
+        SelectedSection = MangaHomeSection.Discover;
+        RebuildBrowseSourceGroups();
+        ConfigureMangaDiscoveryOptions();
+        if (!_mangaDiscoveryInitialized && !IsMangaDiscoverLoading)
+            await LoadMangaDiscoveryHomeAsync();
+    }
+
+    [RelayCommand]
     private async Task SelectBrowseAsync()
     {
         SelectedSection = MangaHomeSection.Browse;
@@ -395,6 +506,22 @@ public partial class MangaLibraryPageViewModel : ObservableObject
             await ConnectSuwayomiInternalAsync(saveConfiguration: false);
         RebuildBrowseSourceGroups();
     }
+
+    [RelayCommand]
+    private Task RefreshMangaDiscoverAsync()
+    {
+        _mangaDiscovery?.ClearCache();
+        return IsMangaDiscoverSearchMode
+            ? SearchMangaDiscoveryAsync()
+            : LoadMangaDiscoveryHomeAsync();
+    }
+
+    [RelayCommand]
+    private Task SearchMangaDiscoverAsync() => SearchMangaDiscoveryAsync();
+
+    [RelayCommand]
+    private Task LoadMoreMangaDiscoverAsync() =>
+        LoadMangaDiscoverySearchPageAsync(append: true);
 
     [RelayCommand]
     private void CloseBrowseResults()
@@ -478,7 +605,7 @@ public partial class MangaLibraryPageViewModel : ObservableObject
             {
                 await _suwayomi.SetLibraryAsync(
                     _onlineConfiguration,
-                    IsBrowseSectionSelected ? Secret : null,
+                    IsRemoteSuwayomiSurfaceSelected ? Secret : null,
                     _selectedSuwayomiManga.Id,
                     target,
                     _pageCts.Token);
@@ -564,7 +691,9 @@ public partial class MangaLibraryPageViewModel : ObservableObject
                     source.SourceName,
                     source.Lang,
                     "Mihon APK",
-                    () => OpenMihonSourceAsync(source))))
+                    () => OpenMihonSourceAsync(source),
+                    () => LoadMihonInstalledSourceIconAsync(source),
+                    () => RemoveMihonInstalledSourceAsync(source))))
             .OrderBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
         BrowseSourceGroups =
@@ -584,6 +713,676 @@ public partial class MangaLibraryPageViewModel : ObservableObject
         ObservableCollection<MihonInstalledExtension> value) =>
         RebuildBrowseSourceGroups();
 
+    private void ConfigureMangaDiscoveryOptions()
+    {
+        if (_mangaDiscovery is null)
+            return;
+
+        _mangaDiscoveryOptionsReady = false;
+        var selectedProviderId = SelectedMangaDiscoveryProvider?.Id ?? "bangumi";
+        MangaDiscoveryProviders.Clear();
+        foreach (var provider in _mangaDiscovery.Providers)
+        {
+            MangaDiscoveryProviders.Add(provider with
+            {
+                DisplayName = ResourceStringHelper.GetString(
+                    $"MangaDiscoverProvider_{provider.Id}",
+                    provider.DisplayName),
+            });
+        }
+        SelectedMangaDiscoveryProvider = MangaDiscoveryProviders.FirstOrDefault(
+            provider => string.Equals(
+                provider.Id,
+                selectedProviderId,
+                StringComparison.OrdinalIgnoreCase))
+            ?? MangaDiscoveryProviders.FirstOrDefault();
+        ConfigureMangaDiscoveryFeeds();
+        _mangaDiscoveryOptionsReady = true;
+    }
+
+    private void ConfigureMangaDiscoveryFeeds()
+    {
+        MangaDiscoveryFeeds.Clear();
+        if (_mangaDiscovery is null || SelectedMangaDiscoveryProvider is null)
+            return;
+
+        var selectedFeedId = SelectedMangaDiscoveryFeed?.Id;
+        foreach (var feed in _mangaDiscovery.GetFeeds(
+                     SelectedMangaDiscoveryProvider.Id,
+                     MangaDiscoveryFeedKind.Recommendation))
+        {
+            MangaDiscoveryFeeds.Add(feed with
+            {
+                DisplayName = ResourceStringHelper.GetString(
+                    $"MangaDiscoverFeed_{feed.ProviderId}_{feed.Id}",
+                    feed.DisplayName),
+            });
+        }
+        SelectedMangaDiscoveryFeed = MangaDiscoveryFeeds.FirstOrDefault(
+            feed => string.Equals(
+                feed.Id,
+                selectedFeedId,
+                StringComparison.OrdinalIgnoreCase))
+            ?? MangaDiscoveryFeeds.FirstOrDefault();
+    }
+
+    partial void OnSelectedMangaDiscoveryProviderChanged(
+        MangaDiscoveryProvider? value)
+    {
+        var optionsWereReady = _mangaDiscoveryOptionsReady;
+        _mangaDiscoveryOptionsReady = false;
+        ConfigureMangaDiscoveryFeeds();
+        _mangaDiscoveryOptionsReady = optionsWereReady;
+        if (optionsWereReady && IsDiscoverSectionSelected)
+            _ = LoadMangaDiscoveryHomeAsync();
+    }
+
+    partial void OnSelectedMangaDiscoveryFeedChanged(
+        MangaDiscoveryFeed? value)
+    {
+        if (!_mangaDiscoveryOptionsReady
+            || !IsDiscoverSectionSelected
+            || value is null
+            || MangaDiscoverSections.Count < 2)
+        {
+            return;
+        }
+
+        SynchronizeMangaDiscoverySections(
+            MangaDiscoverSections
+                .OrderBy(section => !string.Equals(
+                    section.FeedId,
+                    value.Id,
+                    StringComparison.OrdinalIgnoreCase))
+                .ToList());
+    }
+
+    private async Task LoadMangaDiscoveryHomeAsync()
+    {
+        if (_mangaDiscovery is null)
+            return;
+
+        if (SelectedMangaDiscoveryProvider is null)
+            ConfigureMangaDiscoveryOptions();
+        if (SelectedMangaDiscoveryProvider is null)
+            return;
+
+        BeginMangaDiscoveryPosterRequests();
+        var requestCts = BeginMangaDiscoveryRequest();
+
+        IsMangaDiscoverLoading = true;
+        IsMangaDiscoverSearchMode = false;
+        _mangaDiscoveryInitialized = false;
+        _activeMangaDiscoveryProviderId = null;
+        _activeMangaDiscoveryQuery = null;
+        _mangaDiscoveryPage = 0;
+        _mangaDiscoveryHasMore = false;
+        MangaDiscoverItems = [];
+        MangaDiscoverSections = [];
+        MangaDiscoverStatusMessage = ResourceStringHelper.GetString(
+            "MangaDiscoverLoadingStatus",
+            "Loading manga recommendations…");
+        try
+        {
+            var selectedFeedId = SelectedMangaDiscoveryFeed?.Id;
+            var feeds = MangaDiscoveryFeeds
+                .OrderBy(feed => !string.Equals(
+                    feed.Id,
+                    selectedFeedId,
+                    StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var providerId = SelectedMangaDiscoveryProvider.Id;
+            var results = await LoadMangaDiscoveryHomeSectionsAsync(
+                providerId,
+                feeds,
+                requestCts);
+
+            if (!IsCurrentMangaDiscoveryRequest(requestCts))
+                return;
+            var sections = results
+                .Where(result => result.Section is not null)
+                .Select(result => result.Section!)
+                .ToList();
+            var failures = results
+                .Where(result => result.Failure is not null)
+                .Select(result => result.Failure!)
+                .ToList();
+            SynchronizeMangaDiscoverySections(sections);
+            MangaDiscoverStatusMessage = sections.Count == 0
+                ? failures.Count > 0
+                    ? failures[0].Message
+                    : ResourceStringHelper.GetString(
+                        "MangaDiscoverEmptyStatus",
+                        "No manga was returned by this metadata source.")
+                : ResourceStringHelper.FormatString(
+                    "MangaDiscoverLoadedStatus",
+                     "Loaded {0} manga discovery sections.",
+                     sections.Count);
+            _mangaDiscoveryInitialized = sections.Count > 0
+                || failures.Count < feeds.Count;
+        }
+        catch (OperationCanceledException) when (requestCts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            if (IsCurrentMangaDiscoveryRequest(requestCts))
+            {
+                MangaDiscoverSections = [];
+                MangaDiscoverStatusMessage = ex.Message;
+                _mangaDiscoveryInitialized = false;
+            }
+        }
+        finally
+        {
+            EndMangaDiscoveryRequest(requestCts);
+        }
+    }
+
+    private async Task<IReadOnlyList<MangaDiscoverySectionLoadResult>>
+        LoadMangaDiscoveryHomeSectionsAsync(
+            string providerId,
+            IReadOnlyList<MangaDiscoveryFeed> feeds,
+            CancellationTokenSource requestCts)
+    {
+        if (providerId.Equals("anilist", StringComparison.OrdinalIgnoreCase)
+            && _mangaDiscovery is IMangaDiscoveryBatchService batchService)
+        {
+            try
+            {
+                var pages = await batchService.GetPagesAsync(
+                    providerId,
+                    feeds.Select(feed => new MangaDiscoveryRequest(feed.Id)).ToList(),
+                    requestCts.Token);
+                if (pages.Count != feeds.Count)
+                    throw new InvalidOperationException("AniList returned an incomplete recommendation batch.");
+
+                var batchedResults = feeds
+                    .Select((feed, index) => CreateMangaDiscoverySectionResult(
+                        feed,
+                        pages[index]))
+                    .ToList();
+                PublishMangaDiscoverySections(batchedResults, requestCts);
+                return batchedResults;
+            }
+            catch (OperationCanceledException) when (requestCts.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                // Fall back to isolated feed requests so one rejected batch does not
+                // leave the entire discovery page empty.
+            }
+        }
+
+        var results = new MangaDiscoverySectionLoadResult?[feeds.Count];
+        var pending = feeds
+            .Select((feed, index) => LoadIndexedMangaDiscoverySectionAsync(
+                providerId,
+                feed,
+                index,
+                requestCts.Token))
+            .ToList();
+        while (pending.Count > 0)
+        {
+            var completed = await Task.WhenAny(pending);
+            pending.Remove(completed);
+            var (index, result) = await completed;
+            results[index] = result;
+            PublishMangaDiscoverySections(
+                results.Where(item => item is not null).Select(item => item!).ToList(),
+                requestCts);
+        }
+
+        return results.Where(item => item is not null).Select(item => item!).ToList();
+    }
+
+    private async Task<(int Index, MangaDiscoverySectionLoadResult Result)>
+        LoadIndexedMangaDiscoverySectionAsync(
+            string providerId,
+            MangaDiscoveryFeed feed,
+            int index,
+            CancellationToken ct) =>
+        (index, await LoadMangaDiscoverySectionAsync(providerId, feed, ct));
+
+    private void PublishMangaDiscoverySections(
+        IReadOnlyList<MangaDiscoverySectionLoadResult> results,
+        CancellationTokenSource requestCts)
+    {
+        if (!IsCurrentMangaDiscoveryRequest(requestCts))
+            return;
+
+        var sections = results
+            .Where(result => result.Section is not null)
+            .Select(result => result.Section!)
+            .ToList();
+        if (sections.Count == 0)
+            return;
+
+        SynchronizeMangaDiscoverySections(sections);
+        MangaDiscoverStatusMessage = ResourceStringHelper.FormatString(
+            "MangaDiscoverLoadedStatus",
+            "Loaded {0} manga discovery sections.",
+            sections.Count);
+    }
+
+    private void SynchronizeMangaDiscoverySections(
+        IReadOnlyList<MangaDiscoverSectionViewModel> desiredSections)
+    {
+        for (var desiredIndex = 0;
+             desiredIndex < desiredSections.Count;
+             desiredIndex++)
+        {
+            var desired = desiredSections[desiredIndex];
+            var existingIndex = -1;
+            for (var index = 0; index < MangaDiscoverSections.Count; index++)
+            {
+                if (string.Equals(
+                    MangaDiscoverSections[index].FeedId,
+                    desired.FeedId,
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    existingIndex = index;
+                    break;
+                }
+            }
+
+            if (existingIndex < 0)
+            {
+                MangaDiscoverSections.Insert(desiredIndex, desired);
+            }
+            else if (existingIndex != desiredIndex)
+            {
+                MangaDiscoverSections.Move(existingIndex, desiredIndex);
+            }
+        }
+
+        while (MangaDiscoverSections.Count > desiredSections.Count)
+            MangaDiscoverSections.RemoveAt(MangaDiscoverSections.Count - 1);
+
+        OnPropertyChanged(nameof(MangaDiscoverSections));
+        OnPropertyChanged(nameof(ShowMangaDiscoverPlaceholder));
+    }
+
+    private async Task<MangaDiscoverySectionLoadResult>
+        LoadMangaDiscoverySectionAsync(
+            string providerId,
+            MangaDiscoveryFeed feed,
+            CancellationToken ct)
+    {
+        try
+        {
+            var page = await _mangaDiscovery!.GetPageAsync(
+                providerId,
+                new MangaDiscoveryRequest(feed.Id),
+                ct);
+            return CreateMangaDiscoverySectionResult(feed, page);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return new MangaDiscoverySectionLoadResult(null, ex);
+        }
+    }
+
+    private MangaDiscoverySectionLoadResult CreateMangaDiscoverySectionResult(
+        MangaDiscoveryFeed feed,
+        MangaDiscoveryPage page)
+    {
+        var cards = page.Items
+            .Select(item => CreateMangaDiscoveryCard(item))
+            .ToList();
+        return cards.Count == 0
+            ? new MangaDiscoverySectionLoadResult(null, null)
+            : new MangaDiscoverySectionLoadResult(
+                new MangaDiscoverSectionViewModel(feed.Id, feed.DisplayName, cards),
+                null);
+    }
+
+    private Task SearchMangaDiscoveryAsync()
+    {
+        var query = MangaDiscoverQuery.Trim();
+        return string.IsNullOrWhiteSpace(query)
+            ? LoadMangaDiscoveryHomeAsync()
+            : LoadMangaDiscoverySearchPageAsync(append: false);
+    }
+
+    private async Task LoadMangaDiscoverySearchPageAsync(bool append)
+    {
+        if (_mangaDiscovery is null
+            || SelectedMangaDiscoveryProvider is null
+            || (append && (!_mangaDiscoveryHasMore || IsMangaDiscoverLoadingMore))
+            || (append && IsMangaDiscoverLoading))
+        {
+            return;
+        }
+
+        var providerId = append
+            ? _activeMangaDiscoveryProviderId
+            : SelectedMangaDiscoveryProvider.Id;
+        var query = append
+            ? _activeMangaDiscoveryQuery
+            : MangaDiscoverQuery.Trim();
+        if (string.IsNullOrWhiteSpace(providerId)
+            || string.IsNullOrWhiteSpace(query))
+        {
+            if (!append)
+                await LoadMangaDiscoveryHomeAsync();
+            return;
+        }
+
+        query = query.Trim();
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            await LoadMangaDiscoveryHomeAsync();
+            return;
+        }
+
+        if (!append)
+            BeginMangaDiscoveryPosterRequests();
+        var requestCts = BeginMangaDiscoveryRequest();
+        if (append)
+            IsMangaDiscoverLoadingMore = true;
+        else
+        {
+            IsMangaDiscoverLoading = true;
+            IsMangaDiscoverSearchMode = true;
+            MangaDiscoverSections = [];
+            MangaDiscoverItems = [];
+            _mangaDiscoveryPage = 1;
+            _mangaDiscoveryHasMore = false;
+            _activeMangaDiscoveryProviderId = providerId;
+            _activeMangaDiscoveryQuery = query;
+        }
+
+        try
+        {
+            var requestedPage = append ? _mangaDiscoveryPage + 1 : 1;
+            var page = await _mangaDiscovery.SearchAsync(
+                providerId,
+                query,
+                requestedPage,
+                requestCts.Token);
+            if (!IsCurrentMangaDiscoveryRequest(requestCts))
+                return;
+            var cards = page.Items
+                .Select(item => CreateMangaDiscoveryCard(item))
+                .ToList();
+            if (append)
+            {
+                foreach (var card in cards)
+                    MangaDiscoverItems.Add(card);
+            }
+            else
+            {
+                MangaDiscoverItems = new ObservableCollection<MangaDiscoveryCardViewModel>(cards);
+            }
+            _mangaDiscoveryPage = requestedPage;
+            _mangaDiscoveryHasMore = page.HasMore && cards.Count > 0;
+            MangaDiscoverStatusMessage = MangaDiscoverItems.Count == 0
+                ? ResourceStringHelper.GetString(
+                    "MangaDiscoverSearchEmptyStatus",
+                    "No manga matched this search.")
+                : ResourceStringHelper.FormatString(
+                    "MangaDiscoverSearchLoadedStatus",
+                    "Showing {0} manga search results.",
+                    MangaDiscoverItems.Count);
+            _mangaDiscoveryInitialized = true;
+        }
+        catch (OperationCanceledException) when (requestCts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            if (IsCurrentMangaDiscoveryRequest(requestCts))
+            {
+                if (!append)
+                    MangaDiscoverItems = [];
+                MangaDiscoverStatusMessage = ex.Message;
+                _mangaDiscoveryHasMore = false;
+            }
+        }
+        finally
+        {
+            EndMangaDiscoveryRequest(requestCts);
+        }
+    }
+
+    private CancellationTokenSource BeginMangaDiscoveryRequest()
+    {
+        _mangaDiscoveryRequestCts?.Cancel();
+        _mangaDiscoveryRequestCts?.Dispose();
+        _mangaDiscoveryRequestCts = CancellationTokenSource.CreateLinkedTokenSource(
+            _pageCts.Token);
+        return _mangaDiscoveryRequestCts;
+    }
+
+    private bool IsCurrentMangaDiscoveryRequest(CancellationTokenSource requestCts) =>
+        ReferenceEquals(_mangaDiscoveryRequestCts, requestCts);
+
+    private void EndMangaDiscoveryRequest(CancellationTokenSource requestCts)
+    {
+        if (!IsCurrentMangaDiscoveryRequest(requestCts))
+            return;
+        _mangaDiscoveryRequestCts = null;
+        IsMangaDiscoverLoadingMore = false;
+        IsMangaDiscoverLoading = false;
+        requestCts.Dispose();
+    }
+
+    private void CancelMangaDiscoveryRequest()
+    {
+        _mangaDiscoveryRequestCts?.Cancel();
+    }
+
+    private MangaDiscoveryCardViewModel CreateMangaDiscoveryCard(
+        MangaDiscoveryItem item) =>
+        new(item, () => OpenMangaDiscoveryItemAsync(item));
+
+    public Task EnsureMangaDiscoveryPosterAsync(
+        MangaDiscoveryCardViewModel card)
+    {
+        var ct = _mangaDiscoveryPosterCts?.Token ?? _pageCts.Token;
+        return LoadMangaDiscoveryPosterAsync(card, ct);
+    }
+
+    private void BeginMangaDiscoveryPosterRequests()
+    {
+        CancelMangaDiscoveryPosterRequests();
+        _mangaDiscoveryPosterCts =
+            CancellationTokenSource.CreateLinkedTokenSource(_pageCts.Token);
+    }
+
+    private void CancelMangaDiscoveryPosterRequests()
+    {
+        _mangaDiscoveryPosterCts?.Cancel();
+        _mangaDiscoveryPosterCts?.Dispose();
+        _mangaDiscoveryPosterCts = null;
+    }
+
+    private async Task LoadMangaDiscoveryPostersAsync(
+        IReadOnlyList<MangaDiscoveryCardViewModel> cards,
+        CancellationToken ct)
+    {
+        if (_mangaDiscovery is null)
+            return;
+
+        await Task.WhenAll(cards.Select(card =>
+            LoadMangaDiscoveryPosterAsync(card, ct)));
+    }
+
+    private async Task LoadMangaDiscoveryPosterAsync(
+        MangaDiscoveryCardViewModel card,
+        CancellationToken ct)
+    {
+        if (_mangaDiscovery is null || !card.TryBeginPosterLoad())
+            return;
+
+        var enteredGate = false;
+        try
+        {
+            await _mangaDiscoveryPosterGate.WaitAsync(ct);
+            enteredGate = true;
+            card.SetPosterPath(
+                await _mangaDiscovery!.GetPosterPathAsync(card.Item, ct));
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            card.ResetPosterLoad();
+        }
+        catch
+        {
+            card.ResetPosterLoad();
+            // Keep the standard poster placeholder when one artwork request fails.
+        }
+        finally
+        {
+            if (enteredGate)
+                _mangaDiscoveryPosterGate.Release();
+        }
+    }
+
+    private async Task OpenMangaDiscoveryItemAsync(MangaDiscoveryItem item)
+    {
+        try
+        {
+            var details = new RemoteMangaDetailViewModel(
+                GetMangaDiscoveryProviderName(item.ProviderId),
+                item.ProviderItemId,
+                item.Title,
+                supportsOnlineLibrary: false);
+            details.ApplyDiscoveryDetails(item);
+            details.ActionStatus = ResourceStringHelper.GetString(
+                "MangaDiscoverMatchingExtensionStatus",
+                "Matching installed manga extensions…");
+            var ct = BeginRemoteDetailsLoad(details);
+            _ = LoadMangaDiscoveryDetailsAsync(details, item, ct);
+        }
+        catch (OperationCanceledException) when (_pageCts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _notifications.ShowError(
+                ex.Message,
+                ResourceStringHelper.GetString(
+                    "MangaDiscoverOpenFailedTitle",
+                    "Open manga failed"));
+        }
+    }
+
+    private async Task LoadMangaDiscoveryDetailsAsync(
+        RemoteMangaDetailViewModel details,
+        MangaDiscoveryItem item,
+        CancellationToken ct)
+    {
+        try
+        {
+            _ = LoadMangaDiscoveryDetailPosterAsync(details, item, ct);
+            await EnsureMihonSettingsAsync(ct);
+
+            if (!IsCurrentRemoteDetails(details, ct))
+                return;
+
+            details.SetExtensionOptions(MihonInstalledSources, selected: null);
+            if (MihonInstalledSources.Count == 0)
+            {
+                details.IsLoading = false;
+                details.ActionStatus = ResourceStringHelper.GetString(
+                    "MangaDiscoverNoExtensionDetailStatus",
+                    "Install an extension or choose one from the extension list to open chapters.");
+                return;
+            }
+
+            var configuration = _mihonConfiguration ?? CreateMihonConfiguration();
+            foreach (var source in MihonInstalledSources)
+            {
+                try
+                {
+                    var manga = await FindMihonMangaByTitlesAsync(
+                        configuration,
+                        source,
+                        details.SearchTitles,
+                        ct);
+                    if (manga is not null)
+                    {
+                        await ShowMatchedMihonMangaDetailsAsync(
+                            source,
+                            manga,
+                            item);
+                        return;
+                    }
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch
+                {
+                    // Continue matching against the remaining installed extensions.
+                }
+            }
+
+            if (IsCurrentRemoteDetails(details, ct))
+            {
+                details.IsLoading = false;
+                details.ActionStatus = ResourceStringHelper.FormatString(
+                    "MangaDiscoverNoMatchDetailStatus",
+                    "No installed extension matched \"{0}\". Select an extension to try it directly.",
+                    item.Title);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            if (IsCurrentRemoteDetails(details, ct))
+            {
+                details.IsLoading = false;
+                details.ErrorMessage = ex.Message;
+            }
+        }
+    }
+
+    private async Task LoadMangaDiscoveryDetailPosterAsync(
+        RemoteMangaDetailViewModel details,
+        MangaDiscoveryItem item,
+        CancellationToken ct,
+        bool onlyIfMissing = false)
+    {
+        if (_mangaDiscovery is null)
+            return;
+
+        try
+        {
+            var posterPath = await _mangaDiscovery.GetPosterPathAsync(item, ct);
+            if (IsCurrentRemoteDetails(details, ct)
+                && (!onlyIfMissing || !details.HasCover))
+                details.SetCoverPath(posterPath ?? string.Empty);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+        catch
+        {
+            // Metadata details remain usable when the poster CDN is unavailable.
+        }
+    }
+
+    private static string GetMangaDiscoveryProviderName(string providerId) =>
+        ResourceStringHelper.GetString(
+            $"MangaDiscoverProvider_{providerId}",
+            providerId);
+
+    private sealed record MangaDiscoverySectionLoadResult(
+        MangaDiscoverSectionViewModel? Section,
+        Exception? Failure);
+
     private async Task<string?> LoadSuwayomiSourceIconAsync(
         SuwayomiSource source)
     {
@@ -594,6 +1393,54 @@ public partial class MangaLibraryPageViewModel : ObservableObject
             source,
             _pageCts.Token);
     }
+
+    private async Task<string?> LoadMihonInstalledSourceIconAsync(
+        MihonInstalledExtension source)
+    {
+        await EnsureMihonSettingsAsync(_pageCts.Token);
+        return await _mihon.GetRepositorySourceIconPathAsync(
+            CreateMihonConfiguration(),
+            new MihonExtensionSource
+            {
+                Id = source.SourceId,
+                Name = source.SourceName,
+                Lang = source.Lang,
+                BaseUrl = source.BaseUrl,
+                PackageName = source.PackageName,
+                Version = source.Version,
+                IconDownloadUrl = string.IsNullOrWhiteSpace(
+                    source.IconDownloadUrl)
+                    ? MihonRepositorySources
+                        .FirstOrDefault(candidate =>
+                            string.Equals(
+                                candidate.PackageName,
+                                source.PackageName,
+                                StringComparison.Ordinal)
+                            && string.Equals(
+                                candidate.Id,
+                                source.SourceId,
+                                StringComparison.Ordinal))
+                        ?.IconDownloadUrl
+                        ?? string.Empty
+                    : source.IconDownloadUrl,
+            },
+            _pageCts.Token);
+    }
+
+    private Task RemoveMihonInstalledSourceAsync(
+        MihonInstalledExtension source) =>
+        RemoveMihonSourceAsync(new MihonExtensionSource
+        {
+            Id = source.SourceId,
+            Name = source.SourceName,
+            Lang = source.Lang,
+            BaseUrl = source.BaseUrl,
+            PackageName = source.PackageName,
+            PackageDisplayName = source.SourceName,
+            Version = source.Version,
+            IconDownloadUrl = source.IconDownloadUrl,
+            IsInstalled = true,
+        });
 
     [RelayCommand]
     private async Task SelectSourcesAsync()
@@ -902,6 +1749,77 @@ public partial class MangaLibraryPageViewModel : ObservableObject
         }
     }
 
+    private async Task RemoveMihonSourceAsync(
+        MihonExtensionSource requestedSource)
+    {
+        if (IsMihonBusy)
+            return;
+
+        var sourceName = string.IsNullOrWhiteSpace(requestedSource.Name)
+            ? requestedSource.PackageDisplayName
+            : requestedSource.Name;
+        var confirmed = await _dialogs.ConfirmAsync(
+            ResourceStringHelper.GetString(
+                "MihonRemoveSourceDialogTitle",
+                "Remove extension?"),
+            ResourceStringHelper.FormatString(
+                "MihonRemoveSourceDialogMessage",
+                "Remove {0}? Its APK will be kept only while another source uses it.",
+                sourceName),
+            ResourceStringHelper.GetString(
+                "MihonRemoveSourceAction",
+                "Remove"),
+            ResourceStringHelper.GetString(
+                "CancelButton",
+                "Cancel"));
+        if (!confirmed)
+            return;
+
+        try
+        {
+            IsMihonBusy = true;
+            MihonStatusMessage = ResourceStringHelper.GetString(
+                "MihonRemovingStatus",
+                "Removing the Mihon extension…");
+            await _mihon.RemoveAsync(
+                requestedSource.PackageName,
+                requestedSource.Id,
+                _pageCts.Token);
+            await ReloadInstalledMihonSourcesAsync(_pageCts.Token);
+
+            foreach (var source in MihonRepositorySources)
+            {
+                if (string.Equals(
+                        source.PackageName,
+                        requestedSource.PackageName,
+                        StringComparison.Ordinal)
+                    && string.Equals(
+                        source.Id,
+                        requestedSource.Id,
+                        StringComparison.Ordinal))
+                {
+                    source.IsInstalled = false;
+                }
+            }
+            RebuildMihonRepositorySourceItems(MihonRepositorySources);
+            MihonStatusMessage = ResourceStringHelper.FormatString(
+                "MihonRemovedStatus",
+                "{0} removed.",
+                sourceName);
+        }
+        catch (OperationCanceledException) when (_pageCts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            MihonStatusMessage = ex.Message;
+        }
+        finally
+        {
+            IsMihonBusy = false;
+        }
+    }
+
     partial void OnMihonRepositorySearchTextChanged(string value) =>
         ApplyMihonRepositoryFilters();
 
@@ -920,7 +1838,8 @@ public partial class MangaLibraryPageViewModel : ObservableObject
                 new MihonRepositorySourceItemViewModel(
                     source,
                     InstallMihonSourceAsync,
-                    LoadMihonRepositorySourceIconAsync)));
+                    LoadMihonRepositorySourceIconAsync,
+                    RemoveMihonSourceAsync)));
 
         var allLanguages = new MihonLanguageFilterOption(
             string.Empty,
@@ -1708,7 +2627,19 @@ public partial class MangaLibraryPageViewModel : ObservableObject
 
     private async Task ShowMihonMangaDetailsAsync(
         MihonInstalledExtension source,
-        MihonManga manga)
+        MihonManga manga) =>
+        await ShowMihonMangaDetailsCoreAsync(source, manga, discoveryItem: null);
+
+    private async Task ShowMatchedMihonMangaDetailsAsync(
+        MihonInstalledExtension source,
+        MihonManga manga,
+        MangaDiscoveryItem discoveryItem) =>
+        await ShowMihonMangaDetailsCoreAsync(source, manga, discoveryItem);
+
+    private async Task ShowMihonMangaDetailsCoreAsync(
+        MihonInstalledExtension source,
+        MihonManga manga,
+        MangaDiscoveryItem? discoveryItem)
     {
         var configuration = _mihonConfiguration ?? CreateMihonConfiguration();
         var details = new RemoteMangaDetailViewModel(
@@ -1717,19 +2648,191 @@ public partial class MangaLibraryPageViewModel : ObservableObject
                 $"{source.PackageName}\u001f{source.SourceId}\u001f{manga.Url}"),
             manga.Title,
             supportsOnlineLibrary: true);
+        details.SetExtensionOptions(
+            MihonInstalledSources.Append(source),
+            source);
         var isInLibrary = configuration.Library.Any(entry =>
             IsMihonLibraryEntry(entry, source, manga));
+        if (discoveryItem is not null)
+            details.ApplyDiscoveryDetails(discoveryItem);
         details.ApplyDetails(
             manga.Title,
             manga.Author,
-            manga.Description,
+            string.IsNullOrWhiteSpace(manga.Description)
+                ? details.Description
+                : manga.Description,
             manga.Genres,
             isInOnlineLibrary: isInLibrary);
         var ct = BeginRemoteDetailsLoad(details);
+        if (discoveryItem is not null)
+        {
+            _ = LoadMangaDiscoveryDetailPosterAsync(
+                details,
+                discoveryItem,
+                ct,
+                onlyIfMissing: true);
+        }
         _selectedDetailMihonSource = source;
         _selectedMihonManga = manga;
+        await LoadMihonDetailsAsync(details, source, manga, ct);
+    }
+
+    [RelayCommand]
+    private async Task SelectRemoteMangaExtensionAsync(
+        RemoteMangaExtensionOptionViewModel? option)
+    {
+        var details = SelectedRemoteMangaDetails;
+        if (details is null
+            || option is null
+            || details.IsActionBusy)
+        {
+            return;
+        }
+
+        var previousSource = _selectedDetailMihonSource;
+        var previousManga = _selectedMihonManga;
+        if (previousSource is not null
+            && previousManga is not null
+            && string.Equals(
+                RemoteMangaExtensionOptionViewModel.GetKey(previousSource),
+                option.Id,
+                StringComparison.Ordinal))
+        {
+            details.SelectExtension(option.Id);
+            return;
+        }
+
+        details.IsActionBusy = true;
+        details.IsLoading = true;
+        details.ActionStatus = ResourceStringHelper.GetString(
+            "MangaRemoteDetailsSwitchingExtensionStatus",
+            "Loading from the selected extension…");
+        details.ErrorMessage = string.Empty;
+        var ct = BeginRemoteDetailsLoad(details);
         try
         {
+            var configuration = _mihonConfiguration ?? CreateMihonConfiguration();
+            var manga = previousSource is not null
+                && previousManga is not null
+                && string.Equals(
+                    RemoteMangaExtensionOptionViewModel.GetKey(previousSource),
+                    option.Id,
+                    StringComparison.Ordinal)
+                ? previousManga
+                : await FindMihonMangaByTitlesAsync(
+                    configuration,
+                    option.Source,
+                    details.SearchTitles.Count > 0
+                        ? details.SearchTitles
+                        : [details.Title],
+                    ct);
+            if (manga is null)
+            {
+                details.IsLoading = false;
+                details.ErrorMessage = ResourceStringHelper.FormatString(
+                    "MangaRemoteDetailsExtensionNoMatch",
+                    "The selected extension did not find \"{0}\".",
+                    details.Title);
+                return;
+            }
+
+            details.SetExtensionOptions(
+                MihonInstalledSources.Append(option.Source),
+                option.Source);
+            _selectedDetailMihonSource = option.Source;
+            _selectedMihonManga = manga;
+            await LoadMihonDetailsAsync(details, option.Source, manga, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            if (IsCurrentRemoteDetails(details, ct))
+            {
+                details.IsLoading = false;
+                details.ErrorMessage = ex.Message;
+            }
+        }
+        finally
+        {
+            details.IsActionBusy = false;
+            details.ActionStatus = string.Empty;
+        }
+    }
+
+    private async Task<MihonManga?> FindMihonMangaAsync(
+        MihonExtensionConfiguration configuration,
+        MihonInstalledExtension source,
+        string title,
+        CancellationToken ct)
+    {
+        var page = await _mihon.BrowseAsync(
+            configuration,
+            source,
+            title,
+            1,
+            ct);
+        var candidates = page.MangaList
+            .Where(item => !string.IsNullOrWhiteSpace(item.Url))
+            .ToList();
+        if (candidates.Count == 0)
+            return null;
+
+        var normalizedTitle = NormalizeMangaTitle(title);
+        return candidates.FirstOrDefault(item =>
+                   string.Equals(
+                       NormalizeMangaTitle(item.Title),
+                       normalizedTitle,
+                       StringComparison.OrdinalIgnoreCase))
+            ?? candidates.FirstOrDefault(item =>
+                NormalizeMangaTitle(item.Title).Contains(
+                    normalizedTitle,
+                    StringComparison.OrdinalIgnoreCase)
+                || normalizedTitle.Contains(
+                    NormalizeMangaTitle(item.Title),
+                    StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task<MihonManga?> FindMihonMangaByTitlesAsync(
+        MihonExtensionConfiguration configuration,
+        MihonInstalledExtension source,
+        IEnumerable<string> titles,
+        CancellationToken ct)
+    {
+        foreach (var title in titles
+                     .Where(value => !string.IsNullOrWhiteSpace(value))
+                     .Select(value => value.Trim())
+                     .Distinct(StringComparer.CurrentCultureIgnoreCase))
+        {
+            var manga = await FindMihonMangaAsync(
+                configuration,
+                source,
+                title,
+                ct);
+            if (manga is not null)
+                return manga;
+        }
+
+        return null;
+    }
+
+    private static string NormalizeMangaTitle(string? title) =>
+        new(
+            (title ?? string.Empty)
+                .Where(char.IsLetterOrDigit)
+                .Select(char.ToLowerInvariant)
+                .ToArray());
+
+    private async Task LoadMihonDetailsAsync(
+        RemoteMangaDetailViewModel details,
+        MihonInstalledExtension source,
+        MihonManga manga,
+        CancellationToken ct)
+    {
+        try
+        {
+            var configuration = _mihonConfiguration ?? CreateMihonConfiguration();
             var resolvedMangaTask = _mihon.GetMangaDetailsAsync(
                 configuration,
                 source,
@@ -1753,12 +2856,14 @@ public partial class MangaLibraryPageViewModel : ObservableObject
             _selectedDetailMihonSource = source;
             _selectedMihonManga = resolvedManga;
             _selectedMihonChapters = chapters;
-            isInLibrary = (_mihonConfiguration ?? configuration).Library.Any(entry =>
+            var isInLibrary = (_mihonConfiguration ?? configuration).Library.Any(entry =>
                 IsMihonLibraryEntry(entry, source, resolvedManga));
             details.ApplyDetails(
                 resolvedManga.Title,
                 resolvedManga.Author,
-                resolvedManga.Description,
+                string.IsNullOrWhiteSpace(resolvedManga.Description)
+                    ? details.Description
+                    : resolvedManga.Description,
                 resolvedManga.Genres,
                 isInOnlineLibrary: isInLibrary);
             details.Chapters = new ObservableCollection<RemoteMangaChapterItemViewModel>(
@@ -1806,6 +2911,7 @@ public partial class MangaLibraryPageViewModel : ObservableObject
                 System.Globalization.CultureInfo.InvariantCulture),
             manga.Title,
             supportsOnlineLibrary: true);
+        details.SetExtensionOptions(MihonInstalledSources, selected: null);
         details.ApplyDetails(
             manga.Title,
             manga.Author,
@@ -1815,7 +2921,7 @@ public partial class MangaLibraryPageViewModel : ObservableObject
         var ct = BeginRemoteDetailsLoad(details);
         try
         {
-            var secret = IsBrowseSectionSelected ? Secret : null;
+            var secret = IsRemoteSuwayomiSurfaceSelected ? Secret : null;
             var resolvedMangaTask = _suwayomi.GetMangaDetailsAsync(
                 _onlineConfiguration,
                 secret,
@@ -1978,7 +3084,7 @@ public partial class MangaLibraryPageViewModel : ObservableObject
         {
             var book = await _suwayomi.CreateReaderBookAsync(
                 _onlineConfiguration,
-                IsBrowseSectionSelected ? Secret : null,
+                    IsRemoteSuwayomiSurfaceSelected ? Secret : null,
                 manga,
                 chapter,
                 _pageCts.Token);

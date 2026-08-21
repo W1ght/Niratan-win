@@ -11,6 +11,30 @@ namespace Niratan.Tests.ViewModels.Dialogs;
 public sealed class NyaaImportDialogViewModelTests
 {
     [Fact]
+    public async Task Download_refresh_updates_existing_collection_in_place()
+    {
+        var initialTask = CreateTask("task-1", progress: 0);
+        IReadOnlyList<NyaaDownloadTaskSnapshot> tasks = [initialTask];
+        var client = new Mock<INyaaClient>();
+        var manager = new Mock<INyaaDownloadManager>();
+        manager.Setup(service => service.GetTasks()).Returns(() => tasks);
+
+        using var viewModel = new NyaaImportDialogViewModel(
+            client.Object,
+            new Lazy<INyaaDownloadManager>(() => manager.Object),
+            Mock.Of<IFileRevealService>(),
+            Mock.Of<INotificationService>());
+        await viewModel.InitializeAsync();
+
+        var downloads = viewModel.Downloads;
+        tasks = [initialTask with { ProgressPercent = 42 }];
+        manager.Raise(service => service.TasksChanged += null, EventArgs.Empty);
+
+        viewModel.Downloads.Should().BeSameAs(downloads);
+        viewModel.Downloads.Single().ProgressPercent.Should().Be(42);
+    }
+
+    [Fact]
     public async Task Search_results_can_be_sorted_and_filtered_without_new_network_request()
     {
         var results = new[]
@@ -30,13 +54,14 @@ public sealed class NyaaImportDialogViewModelTests
 
         using var viewModel = new NyaaImportDialogViewModel(
             client.Object,
-            manager.Object,
+            new Lazy<INyaaDownloadManager>(() => manager.Object),
             Mock.Of<IFileRevealService>(),
             Mock.Of<INotificationService>())
         {
             SearchQuery = "example",
         };
 
+        await viewModel.InitializeAsync();
         await viewModel.SearchCommand.ExecuteAsync(null);
         viewModel.Results.Select(row => row.Title).Should().Equal("Alpha", "Zulu", "Beta");
 
@@ -72,4 +97,19 @@ public sealed class NyaaImportDialogViewModelTests
             DateTimeOffset.Now,
             trusted,
             false);
+
+    private static NyaaDownloadTaskSnapshot CreateTask(string taskId, double progress) =>
+        new(
+            taskId,
+            CreateItem(taskId, "Test task", seeders: 1, trusted: true),
+            NyaaDownloadTaskState.Downloading,
+            progress,
+            0,
+            0,
+            "Downloading",
+            null,
+            null,
+            null,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow);
 }

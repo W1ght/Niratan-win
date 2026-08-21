@@ -835,6 +835,76 @@ internal sealed class MihonExtensionService : IMihonExtensionService, IDisposabl
         }
     }
 
+    public async Task RemoveAsync(
+        string packageName,
+        string sourceId,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(packageName))
+            throw new ArgumentException(
+                "An extension package name is required.",
+                nameof(packageName));
+        if (string.IsNullOrWhiteSpace(sourceId))
+            throw new ArgumentException(
+                "An extension source id is required.",
+                nameof(sourceId));
+
+        await _storeGate.WaitAsync(ct);
+        try
+        {
+            var catalog = await LoadInstalledCatalogCoreAsync(ct);
+            var removed = catalog.Extensions.FirstOrDefault(item =>
+                string.Equals(
+                    item.PackageName,
+                    packageName,
+                    StringComparison.Ordinal)
+                && string.Equals(
+                    item.SourceId,
+                    sourceId,
+                    StringComparison.Ordinal));
+            if (removed is null)
+                return;
+
+            catalog.Extensions.Remove(removed);
+            await WriteAtomicJsonAsync(_catalogPath, catalog, ct);
+
+            if (SamePath(_cachedApkPath, removed.ApkPath))
+            {
+                _cachedApkPath = null;
+                _cachedApkWriteTimeUtc = default;
+                _cachedApkLength = 0;
+                _cachedApkBase64 = null;
+            }
+
+            var apkStillReferenced = catalog.Extensions.Any(item =>
+                SamePath(item.ApkPath, removed.ApkPath));
+            if (!apkStillReferenced
+                && IsPathWithinExtensionRoot(removed.ApkPath))
+            {
+                // SourceIcons is an independent persistent cache. Keep it
+                // when an APK is removed so the source row can still render
+                // its last known icon without a repository request.
+                try
+                {
+                    File.Delete(removed.ApkPath);
+                }
+                catch (IOException)
+                {
+                    // The catalog entry is already removed. An orphaned APK
+                    // is safe to clean up on a later install or maintenance pass.
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Do not turn a logical uninstall into a data-loss retry.
+                }
+            }
+        }
+        finally
+        {
+            _storeGate.Release();
+        }
+    }
+
     public async Task<string?> GetRepositorySourceIconPathAsync(
         MihonExtensionConfiguration configuration,
         MihonExtensionSource source,
@@ -845,14 +915,28 @@ internal sealed class MihonExtensionService : IMihonExtensionService, IDisposabl
         if (string.IsNullOrWhiteSpace(source.PackageName))
             return null;
 
+        var sourceIconRoot = Path.Combine(_cacheRoot, "SourceIcons");
         var directory = MangaPathUtility.GetCacheDirectory(
-            Path.Combine(_cacheRoot, "SourceIcons"),
-            Sha256(source.PackageName));
+            sourceIconRoot,
+            Sha256($"{source.PackageName}\u001f{source.Id}"));
         Directory.CreateDirectory(directory);
-        var existing = Directory.EnumerateFiles(directory, "icon.*")
-            .FirstOrDefault(path => new FileInfo(path).Length > 0);
+        var existing = FindCachedSourceIcon(directory);
         if (existing is not null)
             return existing;
+
+        // Older builds keyed icons only by package name. Migrate one of those
+        // entries into the source-specific cache before going online so an
+        // app update does not make an existing icon disappear.
+        var legacyDirectory = MangaPathUtility.GetCacheDirectory(
+            sourceIconRoot,
+            Sha256(source.PackageName));
+        var legacy = FindCachedSourceIcon(legacyDirectory);
+        if (legacy is not null)
+        {
+            var migrated = MigrateCachedSourceIcon(legacy, directory);
+            if (migrated is not null)
+                return migrated;
+        }
 
         if (!string.IsNullOrWhiteSpace(source.IconDownloadUrl))
         {
@@ -945,6 +1029,7 @@ internal sealed class MihonExtensionService : IMihonExtensionService, IDisposabl
             BaseUrl = source.BaseUrl,
             PackageName = source.PackageName,
             Version = source.Version,
+            IconDownloadUrl = source.IconDownloadUrl,
             ApkPath = target,
             Sha256 = sha256,
             IsNsfw = source.IsNsfw,
@@ -1308,16 +1393,15 @@ internal sealed class MihonExtensionService : IMihonExtensionService, IDisposabl
             {
                 return null;
             }
-            var mediaType = response.Content.Headers.ContentType?.MediaType;
-            if (mediaType is null
-                || !mediaType.StartsWith(
-                    "image/",
-                    StringComparison.OrdinalIgnoreCase))
+            var extension = GetRasterImageExtension(
+                response.Content.Headers.ContentType?.MediaType);
+            if (extension is null)
             {
                 return null;
             }
-            var target = Path.Combine(directory, "icon" + ImageExtension(mediaType));
-            var temp = target + $".{Guid.NewGuid():N}.tmp";
+            var temp = Path.Combine(
+                directory,
+                $"icon.{Guid.NewGuid():N}.tmp");
             try
             {
                 await using var input =
@@ -1336,6 +1420,10 @@ internal sealed class MihonExtensionService : IMihonExtensionService, IDisposabl
                         MaximumSourceIconBytes,
                         ct);
                 }
+                var actualExtension = GetDetectedRasterImageExtension(temp);
+                if (actualExtension is null)
+                    return null;
+                var target = Path.Combine(directory, "icon" + actualExtension);
                 File.Move(temp, target, true);
                 return target;
             }
@@ -1373,9 +1461,9 @@ internal sealed class MihonExtensionService : IMihonExtensionService, IDisposabl
         if (icon is null)
             return null;
 
-        var extension = Path.GetExtension(icon.FullName).ToLowerInvariant();
-        var target = Path.Combine(directory, "icon" + extension);
-        var temp = target + $".{Guid.NewGuid():N}.tmp";
+        var temp = Path.Combine(
+            directory,
+            $"icon.{Guid.NewGuid():N}.tmp");
         try
         {
             await using var iconStream = icon.Open();
@@ -1393,6 +1481,10 @@ internal sealed class MihonExtensionService : IMihonExtensionService, IDisposabl
                     MaximumSourceIconBytes,
                     ct);
             }
+            var actualExtension = GetDetectedRasterImageExtension(temp);
+            if (actualExtension is null)
+                return null;
+            var target = Path.Combine(directory, "icon" + actualExtension);
             File.Move(temp, target, true);
             return target;
         }
@@ -1405,7 +1497,208 @@ internal sealed class MihonExtensionService : IMihonExtensionService, IDisposabl
 
     private static bool IsRasterImagePath(string path) =>
         Path.GetExtension(path).ToLowerInvariant() is
-            ".png" or ".webp" or ".jpg" or ".jpeg";
+            ".png" or ".jpg" or ".jpeg" or ".bmp";
+
+    private static string? FindCachedSourceIcon(string directory)
+    {
+        try
+        {
+            foreach (var path in Directory.EnumerateFiles(directory, "icon.*")
+                .Where(IsRasterImagePath)
+                .OrderByDescending(path => File.GetLastWriteTimeUtc(path)))
+            {
+                if (new FileInfo(path).Length <= 0)
+                    continue;
+
+                if (!HasRasterImageSignature(path))
+                    continue;
+
+                var actualExtension = GetDetectedRasterImageExtension(path);
+                if (actualExtension is null)
+                    continue;
+
+                if (ImageExtensionsMatch(path, actualExtension))
+                    return path;
+
+                // Older builds trusted the response content type and could
+                // leave a JPEG named icon.png. Normalize that cache entry so
+                // it remains reusable without feeding a mislabeled file to
+                // WinUI's image decoder.
+                var normalized = Path.Combine(directory, "icon" + actualExtension);
+                var temp = normalized + $".{Guid.NewGuid():N}.tmp";
+                try
+                {
+                    File.Copy(path, temp, false);
+                    File.Move(temp, normalized, true);
+                    return normalized;
+                }
+                finally
+                {
+                    if (File.Exists(temp))
+                        File.Delete(temp);
+                }
+            }
+
+            return null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static string? MigrateCachedSourceIcon(
+        string sourcePath,
+        string directory)
+    {
+        if (!IsRasterImagePath(sourcePath))
+        {
+            return null;
+        }
+
+        var extension = GetDetectedRasterImageExtension(sourcePath);
+        if (extension is null)
+            return null;
+
+        var target = Path.Combine(directory, "icon" + extension);
+        var temp = target + $".{Guid.NewGuid():N}.tmp";
+        try
+        {
+            File.Copy(sourcePath, temp, false);
+            if (GetDetectedRasterImageExtension(temp) is null)
+                return null;
+            File.Move(temp, target, true);
+            return target;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+        finally
+        {
+            if (File.Exists(temp))
+                File.Delete(temp);
+        }
+    }
+
+    private static string? GetRasterImageExtension(string? mediaType) =>
+        mediaType?.ToLowerInvariant() switch
+        {
+            "image/png" => ".png",
+            "image/jpeg" or "image/jpg" => ".jpg",
+            "image/bmp" or "image/x-ms-bmp" => ".bmp",
+            _ => null,
+        };
+
+    private static bool HasRasterImageSignature(string path)
+        => GetDetectedRasterImageExtension(path) is not null;
+
+    private static string? GetDetectedRasterImageExtension(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            Span<byte> header = stackalloc byte[12];
+            var read = stream.Read(header);
+            if (read < 2)
+                return null;
+
+            if (read >= 8
+                && header[0] == 0x89
+                && header[1] == 0x50
+                && header[2] == 0x4E
+                && header[3] == 0x47
+                && header[4] == 0x0D
+                && header[5] == 0x0A
+                && header[6] == 0x1A
+                && header[7] == 0x0A)
+            {
+                return ".png";
+            }
+
+            if (header[0] == 0xFF && header[1] == 0xD8)
+                return ".jpg";
+
+            if (header[0] == (byte)'B' && header[1] == (byte)'M')
+                return ".bmp";
+
+            return null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static bool ImageExtensionsMatch(
+        string path,
+        string detectedExtension) =>
+        string.Equals(
+            Path.GetExtension(path),
+            detectedExtension,
+            StringComparison.OrdinalIgnoreCase)
+        || (detectedExtension == ".jpg"
+            && string.Equals(
+                Path.GetExtension(path),
+                ".jpeg",
+                StringComparison.OrdinalIgnoreCase));
+
+    private bool IsPathWithinExtensionRoot(string path)
+    {
+        try
+        {
+            var root = Path.GetFullPath(_extensionRoot)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            var candidate = Path.GetFullPath(path);
+            return candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    private static bool SamePath(string? left, string? right)
+    {
+        if (string.IsNullOrWhiteSpace(left)
+            || string.IsNullOrWhiteSpace(right))
+        {
+            return false;
+        }
+
+        try
+        {
+            return string.Equals(
+                Path.GetFullPath(left),
+                Path.GetFullPath(right),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (NotSupportedException)
+        {
+            return false;
+        }
+    }
 
     private async Task<T> CallBridgeAsync<T>(
         MihonExtensionConfiguration configuration,

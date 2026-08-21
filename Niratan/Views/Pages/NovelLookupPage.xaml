@@ -42,5 +42,15 @@
             <Canvas x:Name="DictionaryOverlayCanvas"
                     Background="Transparent" />
         </Border>
+
+        <InfoBar x:Name="LookupMiningToast"
+                 Grid.RowSpan="2"
+                 Canvas.ZIndex="140"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Top"
+                 MaxWidth="420"
+                 Margin="12"
+                 IsClosable="False"
+                 IsOpen="False" />
     </Grid>
 </Page>

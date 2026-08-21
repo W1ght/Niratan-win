@@ -1,0 +1,678 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page x:Class="Niratan.Views.Pages.DownloadsPage"
+      x:Name="ThisPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:components="using:Niratan.ViewModels.Components"
+      xmlns:converters="using:Niratan.Helpers.UI.Converters"
+      xmlns:nyaa="using:Niratan.Models.Nyaa"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      mc:Ignorable="d">
+    <Page.Resources>
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <!-- The task-details dialog still uses this compact tab treatment.
+             Page-level section switching is handled by the top NavigationView. -->
+        <Style x:Key="DownloadsTabButtonStyle" TargetType="Button">
+            <Setter Property="Padding" Value="18,10" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+    </Page.Resources>
+
+    <Grid Padding="0,32,24,24"
+          RowDefinitions="Auto,Auto,*"
+          Background="Transparent">
+        <CommandBar Grid.Row="0"
+                    Margin="12,6,0,0"
+                    DefaultLabelPosition="Right">
+            <CommandBar.Content>
+                <TextBlock x:Uid="DownloadsPageTitleText"
+                           Margin="4,0,0,0"
+                           VerticalAlignment="Center"
+                           Style="{StaticResource TitleTextBlockStyle}"
+                           Text="Downloads" />
+            </CommandBar.Content>
+            <AppBarButton x:Uid="DownloadsRefreshButton"
+                          AutomationProperties.AutomationId="DownloadsRefreshButton"
+                          Command="{x:Bind ViewModel.RefreshTasksCommand}"
+                          Label="Refresh">
+                <AppBarButton.Icon><SymbolIcon Symbol="Refresh" /></AppBarButton.Icon>
+            </AppBarButton>
+        </CommandBar>
+
+        <NavigationView x:Name="DownloadsSectionNavigation"
+                        Grid.Row="1"
+                        Margin="20,0,0,0"
+                        AlwaysShowHeader="False"
+                        AutomationProperties.AutomationId="DownloadsSectionNavigation"
+                        IsBackButtonVisible="Collapsed"
+                        IsPaneToggleButtonVisible="False"
+                        IsSettingsVisible="False"
+                        ItemInvoked="DownloadsSectionNavigation_ItemInvoked"
+                        PaneDisplayMode="Top"
+                        SelectionFollowsFocus="Disabled">
+            <NavigationView.Resources>
+                <Thickness x:Key="NavigationViewContentMargin">0</Thickness>
+                <Thickness x:Key="NavigationViewContentGridBorderThickness">1,0,0,0</Thickness>
+                <CornerRadius x:Key="NavigationViewContentGridCornerRadius">0</CornerRadius>
+            </NavigationView.Resources>
+            <NavigationView.MenuItems>
+                <NavigationViewItem x:Name="DownloadsDiscoveryNavItem"
+                                    x:Uid="DownloadsDiscoveryTab"
+                                    AutomationProperties.AutomationId="DownloadsDiscoveryTab"
+                                    Content="Discover"
+                                    Tag="discovery" />
+                <NavigationViewItem x:Uid="DownloadsTasksTab"
+                                    AutomationProperties.AutomationId="DownloadsTasksTab"
+                                    Content="Tasks"
+                                    Tag="tasks" />
+                <NavigationViewItem x:Uid="DownloadsSettingsTab"
+                                    AutomationProperties.AutomationId="DownloadsSettingsTab"
+                                    Content="Download settings"
+                                    Tag="settings" />
+            </NavigationView.MenuItems>
+        </NavigationView>
+
+        <Grid Grid.Row="2"
+              Margin="20,12,0,0"
+              Visibility="{x:Bind ViewModel.IsDiscoveryVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+            <Grid RowDefinitions="Auto,Auto,*" RowSpacing="10">
+                <InfoBar x:Uid="DownloadsLegalNotice"
+                         IsClosable="False"
+                         IsOpen="True"
+                         Severity="Informational"
+                         Title="Use only resources you are authorized to download"
+                         Message="{x:Bind ViewModel.DownloadNotice, Mode=OneWay}" />
+                <Grid Grid.Row="1" ColumnDefinitions="*,180,Auto" ColumnSpacing="8">
+                    <TextBox x:Name="SearchBox"
+                             x:Uid="DownloadsSearchBox"
+                             AutomationProperties.AutomationId="DownloadsSearchBox"
+                             PlaceholderText="Title, release group, or keyword"
+                             Text="{x:Bind ViewModel.SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             KeyDown="SearchBox_KeyDown" />
+                    <ComboBox Grid.Column="1"
+                              x:Uid="DownloadsCategoryBox"
+                              DisplayMemberPath="DisplayName"
+                              ItemsSource="{x:Bind ViewModel.Categories, Mode=OneWay}"
+                              SelectedItem="{x:Bind ViewModel.SelectedCategory, Mode=TwoWay}" />
+                    <Button Grid.Column="2"
+                            x:Uid="DownloadsSearchButton"
+                            AutomationProperties.AutomationId="DownloadsSearchButton"
+                            Command="{x:Bind ViewModel.SearchCommand}"
+                            Content="Search"
+                            IsEnabled="{x:Bind ViewModel.CanSearch, Mode=OneWay}"
+                            Style="{StaticResource AccentButtonStyle}" />
+                </Grid>
+                <Grid Grid.Row="2" RowDefinitions="Auto,*" RowSpacing="8">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                        <ProgressRing Width="18"
+                                      Height="18"
+                                      IsActive="{x:Bind ViewModel.IsSearching, Mode=OneWay}"
+                                      Visibility="{x:Bind ViewModel.IsSearching, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                        <TextBlock Grid.Column="1"
+                                   VerticalAlignment="Center"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="{x:Bind ViewModel.SearchSummary, Mode=OneWay}" />
+                    </Grid>
+                    <ListView Grid.Row="1"
+                              AutomationProperties.AutomationId="DownloadsSearchResults"
+                              ItemsSource="{x:Bind ViewModel.SearchResults, Mode=OneWay}"
+                              SelectionMode="None"
+                              ScrollViewer.VerticalScrollBarVisibility="Auto">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Padding" Value="8" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="components:NyaaTorrentItemViewModel">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14" Padding="4,8">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="{x:Bind Title}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   Text="{x:Bind Metadata}" />
+                                        <TextBlock Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                                   Text="{x:Bind TrustLabel}"
+                                                   Visibility="{x:Bind HasTrustLabel, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneTime}" />
+                                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   Text="{x:Bind Status, Mode=OneWay}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1"
+                                            x:Uid="DownloadsAddButton"
+                                            Command="{Binding ViewModel.AddToBackendCommand, ElementName=ThisPage}"
+                                            CommandParameter="{x:Bind}"
+                                            Content="{Binding ViewModel.DownloadActionText, ElementName=ThisPage}"
+                                            IsEnabled="{x:Bind CanDownload, Mode=OneWay}"
+                                            VerticalAlignment="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <Grid Grid.Row="2"
+              Margin="20,12,0,0"
+              Visibility="{x:Bind ViewModel.IsTasksVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+            <Grid RowDefinitions="Auto,Auto,*" RowSpacing="10">
+                <TextBlock x:Uid="DownloadsTaskStatusText"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="{x:Bind ViewModel.TaskStatusText, Mode=OneWay}"
+                           TextWrapping="Wrap" />
+                <InfoBar Grid.Row="1"
+                         IsClosable="False"
+                         IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
+                         Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
+                         Severity="Warning" />
+                <ListView Grid.Row="2"
+                          AutomationProperties.AutomationId="DownloadsTaskList"
+                          ItemsSource="{x:Bind ViewModel.Tasks, Mode=OneWay}"
+                          Visibility="{x:Bind ViewModel.IsQbittorrentBackend, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}"
+                          IsItemClickEnabled="True"
+                          ItemClick="TaskList_ItemClick"
+                          SelectionMode="None"
+                          ScrollViewer.VerticalScrollBarVisibility="Auto">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="Padding" Value="8" />
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="components:QbittorrentTorrentViewModel">
+                            <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto" ColumnSpacing="12" RowSpacing="6" Padding="4,8">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="{x:Bind Name}"
+                                               TextTrimming="CharacterEllipsis"
+                                               Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               Text="{x:Bind State}" />
+                                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               Text="{x:Bind LocationText}"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                    <Button x:Uid="DownloadsDetailsButton"
+                                            Command="{Binding ViewModel.ShowTaskDetailsCommand, ElementName=ThisPage}"
+                                            CommandParameter="{x:Bind}"
+                                            Content="Details" />
+                                    <Button x:Uid="DownloadsCancelTaskButton"
+                                            Command="{Binding ViewModel.CancelTaskCommand, ElementName=ThisPage}"
+                                            CommandParameter="{x:Bind}"
+                                            Content="Cancel"
+                                            Visibility="{x:Bind CanPause, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                                    <Button x:Uid="DownloadsResumeTaskButton"
+                                            Command="{Binding ViewModel.ResumeTaskCommand, ElementName=ThisPage}"
+                                            CommandParameter="{x:Bind}"
+                                            Content="Resume"
+                                            Visibility="{x:Bind CanResume, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                                    <Button x:Uid="DownloadsOpenLocationButton"
+                                            Command="{Binding ViewModel.OpenTaskLocationCommand, ElementName=ThisPage}"
+                                            CommandParameter="{x:Bind}"
+                                            Content="Open file location"
+                                            Visibility="{x:Bind CanOpenLocation, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                                    <Button x:Uid="DownloadsDeleteTaskButton"
+                                            Command="{Binding ViewModel.RemoveTaskCommand, ElementName=ThisPage}"
+                                            CommandParameter="{x:Bind}"
+                                            Content="Remove task"
+                                            Visibility="{x:Bind CanDelete, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                                </StackPanel>
+                                <ProgressBar Grid.Row="1"
+                                             Grid.ColumnSpan="2"
+                                             Maximum="100"
+                                             Value="{x:Bind ProgressPercent, Mode=OneWay}" />
+                                <TextBlock Grid.Row="2"
+                                           Grid.ColumnSpan="2"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap">
+                                    <Run Text="{x:Bind ProgressPercent, Mode=OneWay}" />
+                                    <Run Text="% · " />
+                                    <Run Text="{x:Bind DownloadRateText, Mode=OneWay}" />
+                                    <Run Text=" ↓ · " />
+                                    <Run Text="{x:Bind UploadRateText, Mode=OneWay}" />
+                                    <Run Text=" ↑ · ETA " />
+                                    <Run Text="{x:Bind EtaText, Mode=OneWay}" />
+                                </TextBlock>
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+                <ListView Grid.Row="2"
+                          AutomationProperties.AutomationId="DownloadsMonoTorrentTaskList"
+                          ItemsSource="{x:Bind ViewModel.BuiltInTasks, Mode=OneWay}"
+                          Visibility="{x:Bind ViewModel.IsBuiltInBackend, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}"
+                          SelectionMode="None"
+                          ScrollViewer.VerticalScrollBarVisibility="Auto">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="Padding" Value="8" />
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="nyaa:NyaaDownloadTaskSnapshot">
+                            <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto" ColumnSpacing="12" RowSpacing="6" Padding="4,8">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="{x:Bind Item.Title}"
+                                               TextTrimming="CharacterEllipsis"
+                                               Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               Text="{x:Bind StateText}" />
+                                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               Text="{x:Bind Status}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                    <Button x:Uid="DownloadsPauseButton"
+                                            Command="{Binding ViewModel.PauseBuiltInTaskCommand, ElementName=ThisPage}"
+                                            CommandParameter="{x:Bind}"
+                                            Content="Pause"
+                                            Visibility="{x:Bind CanPause, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                                    <Button x:Uid="DownloadsResumeButton"
+                                            Command="{Binding ViewModel.ResumeBuiltInTaskCommand, ElementName=ThisPage}"
+                                            CommandParameter="{x:Bind}"
+                                            Content="Resume"
+                                            Visibility="{x:Bind CanResume, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                                    <Button x:Uid="DownloadsCancelTaskButton"
+                                            Command="{Binding ViewModel.CancelBuiltInTaskCommand, ElementName=ThisPage}"
+                                            CommandParameter="{x:Bind}"
+                                            Content="Cancel"
+                                            Visibility="{x:Bind CanCancel, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                                    <Button x:Uid="NyaaRetryButton"
+                                            Command="{Binding ViewModel.RetryBuiltInTaskCommand, ElementName=ThisPage}"
+                                            CommandParameter="{x:Bind}"
+                                            Content="Retry"
+                                            Visibility="{x:Bind CanRetry, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                                    <Button x:Uid="DownloadsOpenLocationButton"
+                                            Command="{Binding ViewModel.OpenBuiltInTaskFolderCommand, ElementName=ThisPage}"
+                                            CommandParameter="{x:Bind}"
+                                            Content="Open folder"
+                                            Visibility="{x:Bind CanOpenFolder, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                                    <Button x:Uid="DownloadsDeleteTaskButton"
+                                            Command="{Binding ViewModel.RemoveBuiltInTaskCommand, ElementName=ThisPage}"
+                                            CommandParameter="{x:Bind}"
+                                            Content="Remove"
+                                            Visibility="{x:Bind CanRemove, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                                </StackPanel>
+                                <ProgressBar Grid.Row="1"
+                                             Grid.ColumnSpan="2"
+                                             Maximum="100"
+                                             Value="{x:Bind ProgressPercent, Mode=OneWay}" />
+                                <TextBlock Grid.Row="2"
+                                           Grid.ColumnSpan="2"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           TextWrapping="Wrap">
+                                    <Run Text="{x:Bind ProgressText, Mode=OneWay}" />
+                                    <Run Text=" · " />
+                                    <Run Text="{x:Bind DownloadRateText, Mode=OneWay}" />
+                                    <Run Text=" ↓ · " />
+                                    <Run Text="{x:Bind ConnectedPeers, Mode=OneWay}" />
+                                    <Run Text=" peers" />
+                                    <Run Text=" · " />
+                                    <Run Text="{x:Bind Error, Mode=OneWay}" />
+                                </TextBlock>
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </Grid>
+        </Grid>
+
+        <ScrollViewer Grid.Row="2"
+                      Margin="20,12,0,0"
+                      Visibility="{x:Bind ViewModel.IsSettingsVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+            <StackPanel MaxWidth="720" Spacing="16">
+                <ComboBox x:Uid="DownloadsBackendBox"
+                          AutomationProperties.AutomationId="DownloadsBackendBox"
+                          Header="Download backend"
+                          DisplayMemberPath="DisplayName"
+                          ItemsSource="{x:Bind ViewModel.BackendOptions, Mode=OneWay}"
+                          SelectedItem="{x:Bind ViewModel.SelectedBackendOption, Mode=TwoWay}" />
+                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="{x:Bind ViewModel.BackendDescription, Mode=OneWay}"
+                           TextWrapping="Wrap" />
+                <InfoBar x:Uid="DownloadsSettingsNotice"
+                         IsClosable="False"
+                         IsOpen="True"
+                         Severity="Informational"
+                         Title="qBittorrent WebUI"
+                         Message="Use a local HTTP endpoint or an HTTPS remote endpoint. Passwords and API keys are stored in Windows Credential Manager." />
+                <TextBox x:Uid="DownloadsServerUrlBox"
+                         AutomationProperties.AutomationId="DownloadsServerUrlBox"
+                         Header="Server URL"
+                         Text="{x:Bind ViewModel.ServerUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBox x:Uid="DownloadsUsernameBox"
+                         AutomationProperties.AutomationId="DownloadsUsernameBox"
+                         Header="Username"
+                         Text="{x:Bind ViewModel.Username, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                <PasswordBox x:Name="PasswordBox"
+                             x:Uid="DownloadsPasswordBox"
+                             AutomationProperties.AutomationId="DownloadsPasswordBox"
+                             Header="WebUI password"
+                             PasswordChanged="PasswordBox_PasswordChanged" />
+                <PasswordBox x:Name="ApiKeyBox"
+                             x:Uid="DownloadsApiKeyBox"
+                             AutomationProperties.AutomationId="DownloadsApiKeyBox"
+                             Header="API key (qBittorrent 5.2+)"
+                             PasswordChanged="ApiKeyBox_PasswordChanged" />
+                <TextBox x:Uid="DownloadsSavePathBox"
+                         AutomationProperties.AutomationId="DownloadsSavePathBox"
+                         Header="Default save path"
+                         Text="{x:Bind ViewModel.DefaultSavePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBox x:Uid="DownloadsCategoryBoxSettings"
+                         AutomationProperties.AutomationId="DownloadsCategoryBoxSettings"
+                         Header="Default category"
+                         Text="{x:Bind ViewModel.DefaultCategory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                <CheckBox x:Uid="DownloadsAddPausedCheckBox"
+                          Content="Add torrents paused"
+                          IsChecked="{x:Bind ViewModel.AddPaused, Mode=TwoWay}" />
+                <TextBlock x:Uid="DownloadsCredentialStatus"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="{x:Bind ViewModel.CredentialStatusText, Mode=OneWay}" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button x:Uid="DownloadsSaveSettingsButton"
+                            AutomationProperties.AutomationId="DownloadsSaveSettingsButton"
+                            Command="{x:Bind ViewModel.SaveSettingsCommand}"
+                            Content="Save settings" />
+                    <Button x:Uid="DownloadsTestConnectionButton"
+                            AutomationProperties.AutomationId="DownloadsTestConnectionButton"
+                            Command="{x:Bind ViewModel.TestConnectionCommand}"
+                            Content="Test connection" />
+                    <Button x:Uid="DownloadsClearCredentialsButton"
+                            AutomationProperties.AutomationId="DownloadsClearCredentialsButton"
+                            Command="{x:Bind ViewModel.ClearCredentialsCommand}"
+                            Content="Clear credentials" />
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+
+        <ContentDialog x:Name="TaskDetailsDialog"
+                       x:Uid="DownloadsTaskDetailsDialog"
+                       AutomationProperties.AutomationId="DownloadsTaskDetailsDialog"
+                       CloseButtonText="Close"
+                       DefaultButton="Close"
+                       HorizontalContentAlignment="Stretch">
+            <ScrollViewer MaxHeight="760"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <Grid MinWidth="1040"
+                      MaxWidth="1140"
+                      HorizontalAlignment="Stretch"
+                      RowDefinitions="Auto,Auto,Auto,Auto,*"
+                      RowSpacing="14">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="{x:Bind ViewModel.SelectedTaskTitle, Mode=OneWay}"
+                                   Style="{StaticResource SubtitleTextBlockStyle}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="{x:Bind ViewModel.SelectedTaskDetails.Status, Mode=OneWay}"
+                                   Visibility="{x:Bind ViewModel.IsTaskDetailsLoaded, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="1"
+                                Orientation="Horizontal"
+                                Spacing="8">
+                        <Button x:Uid="DownloadsCancelTaskButton"
+                                AutomationProperties.AutomationId="DownloadsTaskDetailsCancelButton"
+                                Command="{x:Bind ViewModel.CancelSelectedTaskCommand}"
+                                Content="Cancel"
+                                Visibility="{x:Bind ViewModel.CanCancelSelectedTask, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                        <Button x:Uid="DownloadsResumeTaskButton"
+                                AutomationProperties.AutomationId="DownloadsTaskDetailsResumeButton"
+                                Command="{x:Bind ViewModel.ResumeSelectedTaskCommand}"
+                                Content="Resume"
+                                Visibility="{x:Bind ViewModel.CanResumeSelectedTask, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                        <Button x:Uid="DownloadsOpenLocationButton"
+                                AutomationProperties.AutomationId="DownloadsTaskDetailsOpenLocationButton"
+                                Command="{x:Bind ViewModel.OpenSelectedTaskLocationCommand}"
+                                Content="Open file location"
+                                Visibility="{x:Bind ViewModel.CanOpenSelectedTaskLocation, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                        <Button x:Uid="DownloadsDeleteTaskButton"
+                                AutomationProperties.AutomationId="DownloadsTaskDetailsDeleteButton"
+                                Click="DeleteSelectedTaskButton_Click"
+                                Content="Delete task"
+                                Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                    </StackPanel>
+
+                    <Grid Grid.Row="2"
+                          ColumnDefinitions="Auto,*"
+                          ColumnSpacing="10">
+                        <ProgressRing Width="18"
+                                      Height="18"
+                                      IsActive="{x:Bind ViewModel.IsTaskDetailsLoading, Mode=OneWay}"
+                                      Visibility="{x:Bind ViewModel.IsTaskDetailsLoading, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                        <TextBlock Grid.Column="1"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="{x:Bind ViewModel.TaskDetailsStatusText, Mode=OneWay}"
+                                   TextWrapping="Wrap" />
+                    </Grid>
+
+                    <InfoBar Grid.Row="3"
+                             IsClosable="False"
+                             IsOpen="{x:Bind ViewModel.HasTaskDetailsError, Mode=OneWay}"
+                             Message="{x:Bind ViewModel.TaskDetailsErrorMessage, Mode=OneWay}"
+                             Severity="Warning" />
+
+                    <Grid Grid.Row="4"
+                          RowDefinitions="Auto,Auto,*"
+                          RowSpacing="12">
+                        <Grid ColumnDefinitions="Auto,Auto,Auto,*"
+                              BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                              BorderThickness="0,0,0,1">
+                            <Button x:Uid="DownloadsTaskDetailsOverviewTab"
+                                    AutomationProperties.AutomationId="DownloadsTaskDetailsOverviewTab"
+                                    Command="{x:Bind ViewModel.SelectTaskOverviewCommand}"
+                                    Content="Overview"
+                                    Style="{StaticResource DownloadsTabButtonStyle}" />
+                            <Button Grid.Column="1"
+                                    x:Uid="DownloadsTaskDetailsFilesTab"
+                                    AutomationProperties.AutomationId="DownloadsTaskDetailsFilesTab"
+                                    Command="{x:Bind ViewModel.SelectTaskFilesCommand}"
+                                    Content="Files"
+                                    Style="{StaticResource DownloadsTabButtonStyle}" />
+                            <Button Grid.Column="2"
+                                    x:Uid="DownloadsTaskDetailsTrackersTab"
+                                    AutomationProperties.AutomationId="DownloadsTaskDetailsTrackersTab"
+                                    Command="{x:Bind ViewModel.SelectTaskTrackersCommand}"
+                                    Content="Trackers"
+                                    Style="{StaticResource DownloadsTabButtonStyle}" />
+                        </Grid>
+
+                        <StackPanel Grid.Row="1"
+                                    Spacing="8"
+                                    Padding="8"
+                                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                    BorderThickness="1">
+                            <TextBlock x:Uid="DownloadsImportHeading"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}"
+                                       Text="Import completed download" />
+                            <StackPanel Orientation="Horizontal"
+                                        Spacing="8"
+                                        Visibility="{x:Bind ViewModel.CanImportSelectedTask, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                                <ComboBox x:Uid="DownloadsImportSourceBox"
+                                          AutomationProperties.AutomationId="DownloadsImportSourceBox"
+                                          DisplayMemberPath="Name"
+                                          ItemsSource="{x:Bind ViewModel.ImportSources, Mode=OneWay}"
+                                          SelectedItem="{x:Bind ViewModel.SelectedImportSource, Mode=TwoWay}"
+                                          Width="320" />
+                                <Button x:Uid="DownloadsImportButton"
+                                        AutomationProperties.AutomationId="DownloadsImportButton"
+                                        Command="{x:Bind ViewModel.ImportCompletedTaskCommand}"
+                                        Content="Confirm read-only scan"
+                                        IsEnabled="{x:Bind ViewModel.CanImportSelectedTask, Mode=OneWay}"
+                                        Style="{StaticResource AccentButtonStyle}" />
+                            </StackPanel>
+                            <TextBlock x:Uid="DownloadsImportStatus"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="{x:Bind ViewModel.ImportStatusText, Mode=OneWay}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <Grid Grid.Row="2"
+                              DataContext="{x:Bind ViewModel.SelectedTaskDetails, Mode=OneWay}">
+                            <StackPanel Spacing="14"
+                                        Visibility="{x:Bind ViewModel.IsTaskOverviewVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                                    <ProgressBar Height="6"
+                                                 VerticalAlignment="Center"
+                                                 Maximum="100"
+                                                 Value="{Binding ProgressValue}" />
+                                    <TextBlock Grid.Column="1"
+                                               VerticalAlignment="Center"
+                                               Text="{Binding ProgressText}" />
+                                </Grid>
+
+                                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                                      ColumnDefinitions="Auto,*,Auto,*"
+                                      ColumnSpacing="16"
+                                      RowSpacing="9">
+                                    <TextBlock x:Uid="DownloadsTaskHashLabel" Text="Hash" />
+                                    <TextBlock Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding Hash}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="1" x:Uid="DownloadsTaskStateLabel" Text="State" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Status}" TextWrapping="Wrap" />
+                                    <TextBlock Grid.Row="1" Grid.Column="2" x:Uid="DownloadsTaskProgressLabel" Text="Progress" />
+                                    <TextBlock Grid.Row="1" Grid.Column="3" Text="{Binding ProgressText}" />
+
+                                    <TextBlock Grid.Row="2" x:Uid="DownloadsTaskSizeLabel" Text="Total size" />
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SizeText}" />
+                                    <TextBlock Grid.Row="2" Grid.Column="2" x:Uid="DownloadsTaskTorrentSizeLabel" Text="Torrent size" />
+                                    <TextBlock Grid.Row="2" Grid.Column="3" Text="{Binding TorrentSizeText}" />
+
+                                    <TextBlock Grid.Row="3" x:Uid="DownloadsTaskRemainingLabel" Text="Remaining" />
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding RemainingText}" />
+                                    <TextBlock Grid.Row="3" Grid.Column="2" x:Uid="DownloadsTaskEtaLabel" Text="ETA" />
+                                    <TextBlock Grid.Row="3" Grid.Column="3" Text="{Binding EtaText}" />
+
+                                    <TextBlock Grid.Row="4" x:Uid="DownloadsTaskDownloadRateLabel" Text="Download / upload" />
+                                    <TextBlock Grid.Row="4" Grid.Column="1" TextWrapping="Wrap">
+                                        <Run Text="{Binding DownloadRateText}" />
+                                        <Run Text=" ↓ · " />
+                                        <Run Text="{Binding UploadRateText}" />
+                                        <Run Text=" ↑" />
+                                    </TextBlock>
+                                    <TextBlock Grid.Row="4" Grid.Column="2" x:Uid="DownloadsTaskAverageRateLabel" Text="Average rate" />
+                                    <TextBlock Grid.Row="4" Grid.Column="3" TextWrapping="Wrap">
+                                        <Run Text="{Binding AverageDownloadRateText}" />
+                                        <Run Text=" ↓ · " />
+                                        <Run Text="{Binding AverageUploadRateText}" />
+                                        <Run Text=" ↑" />
+                                    </TextBlock>
+
+                                    <TextBlock Grid.Row="5" x:Uid="DownloadsTaskPeersLabel" Text="Peers / seeds" />
+                                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding PeerSummaryText}" />
+                                    <TextBlock Grid.Row="5" Grid.Column="2" x:Uid="DownloadsTaskConnectionsLabel" Text="Connections" />
+                                    <TextBlock Grid.Row="5" Grid.Column="3" Text="{Binding ConnectionSummaryText}" />
+
+                                    <TextBlock Grid.Row="6" x:Uid="DownloadsTaskPiecesLabel" Text="Pieces / ratio" />
+                                    <TextBlock Grid.Row="6" Grid.Column="1" TextWrapping="Wrap">
+                                        <Run Text="{Binding PiecesText}" />
+                                        <Run Text=" · " />
+                                        <Run Text="{Binding RatioText}" />
+                                    </TextBlock>
+                                    <TextBlock Grid.Row="6" Grid.Column="2" x:Uid="DownloadsTaskPieceSizeLabel" Text="Piece size" />
+                                    <TextBlock Grid.Row="6" Grid.Column="3" Text="{Binding PieceSizeText}" />
+
+                                    <TextBlock Grid.Row="7" x:Uid="DownloadsTaskDownloadedLabel" Text="Downloaded" />
+                                    <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding TotalDownloadedText}" />
+                                    <TextBlock Grid.Row="7" Grid.Column="2" x:Uid="DownloadsTaskUploadedLabel" Text="Uploaded" />
+                                    <TextBlock Grid.Row="7" Grid.Column="3" Text="{Binding TotalUploadedText}" />
+
+                                    <TextBlock Grid.Row="8" x:Uid="DownloadsTaskWastedLabel" Text="Wasted" />
+                                    <TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding TotalWastedText}" />
+                                    <TextBlock Grid.Row="8" Grid.Column="2" x:Uid="DownloadsTaskPrivacyLabel" Text="Privacy" />
+                                    <TextBlock Grid.Row="8" Grid.Column="3" Text="{Binding PrivacyText}" />
+
+                                    <TextBlock Grid.Row="9" x:Uid="DownloadsTaskDatesLabel" Text="Added / completed" />
+                                    <TextBlock Grid.Row="9" Grid.Column="1" TextWrapping="Wrap">
+                                        <Run Text="{Binding AddedAtText}" />
+                                        <Run Text=" · " />
+                                        <Run Text="{Binding CompletedAtText}" />
+                                    </TextBlock>
+                                    <TextBlock Grid.Row="9" Grid.Column="2" x:Uid="DownloadsTaskCreationDateLabel" Text="Created" />
+                                    <TextBlock Grid.Row="9" Grid.Column="3" Text="{Binding CreationDateText}" />
+
+                                    <TextBlock Grid.Row="10" x:Uid="DownloadsTaskCreatedByLabel" Text="Created by" />
+                                    <TextBlock Grid.Row="10" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding CreatedByText}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="11" x:Uid="DownloadsTaskSavePathLabel" Text="Save path" />
+                                    <TextBlock Grid.Row="11" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding SavePathText}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="12" x:Uid="DownloadsTaskContentPathLabel" Text="Content path" />
+                                    <TextBlock Grid.Row="12" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding ContentPathText}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="13" x:Uid="DownloadsTaskCommentLabel" Text="Comment" />
+                                    <TextBlock Grid.Row="13" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding CommentText}" TextWrapping="Wrap" />
+                                </Grid>
+                            </StackPanel>
+
+                            <ListView AutomationProperties.AutomationId="DownloadsTaskDetailsFilesList"
+                                      ItemsSource="{x:Bind ViewModel.TaskDetailFiles, Mode=OneWay}"
+                                      SelectionMode="None"
+                                      Visibility="{x:Bind ViewModel.IsTaskFilesVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                                <ListView.Header>
+                                    <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto"
+                                          ColumnSpacing="12"
+                                          Padding="4,4">
+                                        <TextBlock x:Uid="DownloadsFileNameHeader" Text="Name" />
+                                        <TextBlock Grid.Column="1" x:Uid="DownloadsFileSizeHeader" Text="Size" />
+                                        <TextBlock Grid.Column="2" x:Uid="DownloadsFileProgressHeader" Text="Progress" />
+                                        <TextBlock Grid.Column="3" x:Uid="DownloadsFilePriorityHeader" Text="Priority" />
+                                        <TextBlock Grid.Column="4" x:Uid="DownloadsFileAvailabilityHeader" Text="Availability" />
+                                    </Grid>
+                                </ListView.Header>
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="components:QbittorrentTorrentFileViewModel">
+                                        <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto"
+                                              ColumnSpacing="12"
+                                              Padding="4,8">
+                                            <TextBlock Text="{x:Bind Name}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Grid.Column="1" Text="{x:Bind SizeText}" />
+                                            <TextBlock Grid.Column="2" Text="{x:Bind ProgressText}" />
+                                            <TextBlock Grid.Column="3" Text="{x:Bind PriorityText}" />
+                                            <TextBlock Grid.Column="4" Text="{x:Bind AvailabilityText}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+
+                            <ListView AutomationProperties.AutomationId="DownloadsTaskDetailsTrackersList"
+                                      ItemsSource="{x:Bind ViewModel.TaskDetailTrackers, Mode=OneWay}"
+                                      SelectionMode="None"
+                                      Visibility="{x:Bind ViewModel.IsTaskTrackersVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="components:QbittorrentTorrentTrackerViewModel">
+                                        <StackPanel Spacing="3" Padding="4,8">
+                                            <TextBlock Text="{x:Bind Url}" TextWrapping="Wrap" />
+                                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                                                <Run Text="{x:Bind StatusText}" />
+                                                <Run Text=" · " />
+                                                <Run Text="{x:Bind PeerSummaryText}" />
+                                                <Run Text=" · " />
+                                                <Run Text="{x:Bind TierText}" />
+                                                <Run Text=" · " />
+                                                <Run Text="{x:Bind DownloadedText}" />
+                                            </TextBlock>
+                                            <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                                       Text="{x:Bind MessageText}"
+                                                       TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </ScrollViewer>
+        </ContentDialog>
+    </Grid>
+</Page>
