@@ -24,6 +24,13 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
 {
     private const int SchemaVersion = 1;
     private const int BusyTimeoutMilliseconds = 5000;
+
+    // How long to wait for another instance to finish creating and migrating the database.
+    // This is not the SQLite busy timeout: it covers a whole legacy migration plus compatibility
+    // repairs, which on a large catalog or a slow disk runs far longer than a single statement.
+    // Sharing the 5s busy timeout made a concurrent first launch throw IOException instead of
+    // waiting for the winner to finish.
+    private const int MigrationLockTimeoutMilliseconds = 120_000;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly string _databasePath;
@@ -5918,7 +5925,7 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
     private async Task<FileStream> AcquireMigrationLockAsync(CancellationToken ct)
     {
         var lockPath = _databasePath + ".migration.lock";
-        var deadline = DateTimeOffset.UtcNow.AddMilliseconds(BusyTimeoutMilliseconds);
+        var deadline = DateTimeOffset.UtcNow.AddMilliseconds(MigrationLockTimeoutMilliseconds);
         while (true)
         {
             ct.ThrowIfCancellationRequested();

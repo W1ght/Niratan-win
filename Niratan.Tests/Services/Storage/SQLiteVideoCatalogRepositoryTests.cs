@@ -63,6 +63,58 @@ public sealed class SQLiteVideoCatalogRepositoryTests
     }
 
     [Fact]
+    public async Task Initialize_WaitsOutAnotherInstanceHoldingTheMigrationLock()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var catalogPath = Path.Combine(temp.Path, "video_library.json");
+        var databasePath = Path.Combine(temp.Path, "video_library.sqlite3");
+        await new NiratanJsonFileStore().WriteAsync(catalogPath, new VideoLibraryCatalogDocument(), ct);
+
+        var holder = new FileStream(
+            databasePath + ".migration.lock",
+            FileMode.OpenOrCreate,
+            FileAccess.ReadWrite,
+            FileShare.None);
+        var releasedAt = (DateTimeOffset?)null;
+        var release = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(1.5), ct);
+            releasedAt = DateTimeOffset.UtcNow;
+            await holder.DisposeAsync();
+        }, ct);
+
+        await using var repository = Create(databasePath, catalogPath);
+        var result = await repository.InitializeAsync(ct);
+        var acquiredAt = DateTimeOffset.UtcNow;
+        await release;
+
+        // Initialization must block on the other instance rather than surface its IOException.
+        result.Mode.Should().Be(VideoCatalogMode.Sqlite);
+        releasedAt.Should().NotBeNull();
+        acquiredAt.Should().BeOnOrAfter(releasedAt!.Value);
+        await AssertHealthyAsync(databasePath, ct);
+    }
+
+    [Fact]
+    public void MigrationLockBudget_IsDecoupledFromTheSqliteBusyTimeout()
+    {
+        var source = File.ReadAllText(Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "..", "..", "..", "..", "..",
+            "Niratan", "Services", "Storage", "SQLiteVideoCatalogRepository.cs")));
+
+        // The migration lock covers a whole legacy migration plus compatibility repairs. Sizing
+        // it with the 5s per-statement busy timeout made a concurrent first launch throw
+        // IOException on a slow disk instead of waiting, which is what broke the v0.11.0 build.
+        source.Should().Contain("MigrationLockTimeoutMilliseconds");
+        source.Should().Contain(
+            "var deadline = DateTimeOffset.UtcNow.AddMilliseconds(MigrationLockTimeoutMilliseconds);");
+        source.Should().NotContain(
+            "var deadline = DateTimeOffset.UtcNow.AddMilliseconds(BusyTimeoutMilliseconds);");
+    }
+
+    [Fact]
     public async Task ConcurrentMigration_ProducesOneHealthyDatabase()
     {
         var ct = TestContext.Current.CancellationToken;
