@@ -205,6 +205,9 @@ public partial class SettingsPageViewModel : ObservableObject
     public partial bool ShowPercentage { get; set; }
 
     [ObservableProperty]
+    public partial bool ShowChapterProgress { get; set; }
+
+    [ObservableProperty]
     public partial bool ShowProgressTop { get; set; }
 
     [ObservableProperty]
@@ -216,7 +219,7 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty]
     public partial bool ShowReadingTime { get; set; }
 
-    public bool IsProgressPositionVisible => ShowCharacters || ShowPercentage;
+    public bool IsProgressPositionVisible => ShowCharacters || ShowPercentage || ShowChapterProgress;
 
     // --- Popup appearance ---
     [ObservableProperty]
@@ -352,6 +355,7 @@ public partial class SettingsPageViewModel : ObservableObject
         ShowTitle = s.ShowTitle;
         ShowCharacters = s.ShowCharacters;
         ShowPercentage = s.ShowPercentage;
+        ShowChapterProgress = s.ShowChapterProgress;
         ShowProgressTop = s.ShowProgressTop;
         ShowStatisticsToggle = s.ShowStatisticsToggle;
         ShowReadingSpeed = s.ShowReadingSpeed;
@@ -545,6 +549,11 @@ public partial class SettingsPageViewModel : ObservableObject
     partial void OnShowPercentageChanged(bool value)
     {
         ApplyReaderSetting(s => s.ShowPercentage, value);
+        OnPropertyChanged(nameof(IsProgressPositionVisible));
+    }
+    partial void OnShowChapterProgressChanged(bool value)
+    {
+        ApplyReaderSetting(s => s.ShowChapterProgress, value);
         OnPropertyChanged(nameof(IsProgressPositionVisible));
     }
     partial void OnShowProgressTopChanged(bool value) => ApplyReaderSetting(s => s.ShowProgressTop, value);

@@ -127,4 +127,30 @@ public sealed class ReaderChromeContractTests
         code.Should().Contain("ReaderImageViewerScrollViewer.Visibility = Visibility.Visible;");
         code.Should().NotContain("ReaderGalleryPanelDialog.Hide();");
     }
+
+    [Fact]
+    public void StatisticsToggleGlyph_ReflectsPausedTrackingNotJustTracking()
+    {
+        var code = ReadProjectFile("Views", "Pages", "NovelReaderPage.xaml.cs");
+
+        // Pausing audiobook playback pauses the reading session without ending it. Keying the
+        // glyph on IsStatisticsTracking alone left the button showing the running state.
+        code.Should().Contain(
+            "ViewModel.IsStatisticsTracking && !ViewModel.IsStatisticsPaused");
+        code.Should().NotContain(
+            "NovelReaderStatisticsToggleIcon.Glyph = ViewModel.IsStatisticsTracking\n");
+    }
+
+    [Fact]
+    public void StatisticsChrome_RedrawsWhenPausedStateChanges()
+    {
+        var code = ReadProjectFile("Views", "Pages", "NovelReaderPage.xaml.cs");
+        var handler = code[code.IndexOf(
+            "private void OnReaderViewModelPropertyChanged(",
+            StringComparison.Ordinal)..];
+        var refreshBlock = handler[..handler.IndexOf("RefreshReaderStatisticsChrome();", StringComparison.Ordinal)];
+
+        // Without this subscription the corrected glyph would still never repaint on pause.
+        refreshBlock.Should().Contain("nameof(ViewModel.IsStatisticsPaused)");
+    }
 }

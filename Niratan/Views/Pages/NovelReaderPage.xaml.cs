@@ -866,6 +866,7 @@ public sealed partial class NovelReaderPage : Page
         if (e.PropertyName is nameof(ViewModel.StatisticsSessionSpeedText)
             or nameof(ViewModel.StatisticsSessionTimeText)
             or nameof(ViewModel.IsStatisticsTracking)
+            or nameof(ViewModel.IsStatisticsPaused)
             or nameof(ViewModel.OverallProgressText))
         {
             RefreshReaderStatisticsChrome();
@@ -1606,6 +1607,17 @@ public sealed partial class NovelReaderPage : Page
         NovelReaderHistoryBackButton.Foreground = foregroundBrush;
         NovelReaderHistoryForwardButton.Foreground = foregroundBrush;
         NovelReaderBottomProgressText.Foreground = foregroundBrush;
+
+        // The bar has to read as part of the page, not as a system download indicator, so it
+        // borrows the reader's own ink instead of the accent colour.
+        NovelReaderProgressBar.Foreground = new SolidColorBrush(foregroundColor)
+        {
+            Opacity = settings.UsesCustomColors ? 0.85 : 0.55,
+        };
+        NovelReaderProgressBar.Background = new SolidColorBrush(foregroundColor)
+        {
+            Opacity = 0.12,
+        };
         NovelWebView.DefaultBackgroundColor = backgroundColor;
     }
 
@@ -1648,6 +1660,9 @@ public sealed partial class NovelReaderPage : Page
             parts.Add($"{ViewModel.CurrentCharacterCount} / {ViewModel.TotalCharacterCount}");
         if (readerSettings.Current.ShowPercentage)
             parts.Add(ViewModel.OverallProgressText);
+        // Bracketed so it reads as a qualifier on the book progress next to it.
+        if (readerSettings.Current.ShowChapterProgress)
+            parts.Add($"({ViewModel.ChapterProgressText})");
 
         return string.Join(" ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
     }
@@ -1655,9 +1670,13 @@ public sealed partial class NovelReaderPage : Page
     private void RefreshReaderStatisticsChrome()
     {
         var readerSettings = App.GetService<IReaderSettingsService>();
-        NovelReaderStatisticsToggleIcon.Glyph = ViewModel.IsStatisticsTracking
-            ? "\uE823"
-            : "\uE9D2";
+        // Tracking has two live states: running and paused. Audiobook playback pauses the
+        // session without ending it, so keying the glyph on IsStatisticsTracking alone left
+        // the button showing "running" after the user paused playback.
+        NovelReaderStatisticsToggleIcon.Glyph =
+            ViewModel.IsStatisticsTracking && !ViewModel.IsStatisticsPaused
+                ? "\uE823"
+                : "\uE9D2";
         if (!CurrentStatisticsSettings.EnableStatistics)
         {
             NovelReaderStatisticsText.Text = "";
@@ -3632,12 +3651,60 @@ public sealed partial class NovelReaderPage : Page
     {
         if (_activeReaderPanelDialog == ReaderGalleryPanelDialog)
             UpdateReaderGalleryPanelSize(e.NewSize.Width, e.NewSize.Height);
+        else if (_activeReaderPanelDialog != null)
+            UpdateReaderPanelSize(_activeReaderPanelDialog, e.NewSize.Width, e.NewSize.Height);
+
+        // The Sasayaki panel is tracked separately from _activeReaderPanelDialog.
+        if (_isSasayakiPanelOpen)
+            UpdateReaderPanelSize(SasayakiPanelDialog, e.NewSize.Width, e.NewSize.Height);
     }
 
     private void UpdateReaderGalleryPanelSize(double availableWidth, double availableHeight)
     {
         ReaderGalleryPanelContent.Width = Math.Max(320, availableWidth - 64);
         ReaderGalleryPanelContent.Height = Math.Max(320, availableHeight - 176);
+    }
+
+    // Share of the reader window each panel occupies. Proportional rather than fixed so the
+    // panels stay the same size relative to the window instead of shrinking on a large display
+    // and overflowing a small or high-DPI one.
+    private const double ReaderPanelWidthRatio = 0.70;
+    private const double ReaderPanelHeightRatio = 0.78;
+    private const double ReaderPanelMaxWidth = 1400;
+    private const double ReaderPanelMaxHeight = 900;
+    private const double ReaderPanelMinSize = 320;
+
+    private void UpdateReaderPanelSize(
+        ContentDialog dialog,
+        double availableWidth,
+        double availableHeight)
+    {
+        var content = ResolveReaderPanelContent(dialog);
+        if (content == null)
+            return;
+
+        content.Width = Math.Clamp(
+            availableWidth * ReaderPanelWidthRatio,
+            ReaderPanelMinSize,
+            ReaderPanelMaxWidth);
+        content.Height = Math.Clamp(
+            availableHeight * ReaderPanelHeightRatio,
+            ReaderPanelMinSize,
+            ReaderPanelMaxHeight);
+    }
+
+    private FrameworkElement? ResolveReaderPanelContent(ContentDialog dialog)
+    {
+        if (dialog == ReaderGoToPanelDialog)
+            return ReaderGoToPanelContent;
+        if (dialog == SasayakiPanelDialog)
+            return SasayakiPanelContent;
+        if (dialog == ReaderStatisticsPanelDialog)
+            return ReaderStatisticsPanelContentControl;
+        if (dialog == ReaderAppearancePanelDialog)
+            return ReaderAppearancePanelContent;
+
+        return null;
     }
 
     private async void StatisticsButton_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
@@ -4042,6 +4109,7 @@ public sealed partial class NovelReaderPage : Page
 
         CloseReaderPanels();
         dialog.XamlRoot = XamlRoot;
+        UpdateReaderPanelSize(dialog, ActualWidth, ActualHeight);
         _activeReaderPanelDialog = dialog;
         _ = TrackReaderPanelDialogAsync(dialog);
         return Task.CompletedTask;
@@ -4311,6 +4379,9 @@ public sealed partial class NovelReaderPage : Page
             ? 0
             : _sasayakiVM.IsLoaded && _sasayakiVM.HasChapters ? 1 : 0);
         SasayakiPanelDialog.XamlRoot = XamlRoot;
+        // This panel has its own show path and never goes through ShowReaderPanelDialogAsync,
+        // so it has to ask for the shared sizing itself.
+        UpdateReaderPanelSize(SasayakiPanelDialog, ActualWidth, ActualHeight);
         _isSasayakiPanelOpen = true;
 
         try

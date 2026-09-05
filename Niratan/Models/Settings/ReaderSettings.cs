@@ -77,7 +77,9 @@ public class ReaderSettings
     public bool MouseWheelPageTurn { get; set; } = true;
     public int ChapterSwipeDistance { get; set; } = 20;
     public int HorizontalPadding { get; set; } = 5;
-    public int VerticalPadding { get; set; } = 0;
+    // 0 left vertical text flush against the title bar and the bottom chrome. A small default
+    // gives the page breathing room; anyone who had already picked a value keeps it.
+    public int VerticalPadding { get; set; } = 2;
     public bool AvoidPageBreak { get; set; } = false;
     public bool JustifyText { get; set; } = false;
     public bool BlurImages { get; set; } = false;
@@ -91,6 +93,7 @@ public class ReaderSettings
     public bool ShowCharacters { get; set; } = true;
     public bool ShowPercentage { get; set; } = true;
     public bool ShowProgressTop { get; set; } = true;
+    public bool ShowChapterProgress { get; set; } = true;
     public bool ShowStatisticsToggle { get; set; } = true;
     public bool ShowReadingSpeed { get; set; } = true;
     public bool ShowReadingTime { get; set; } = true;

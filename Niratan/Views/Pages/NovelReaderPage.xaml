@@ -14,13 +14,17 @@
 
     <Page.Resources>
         <helpers:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <!--  Height stays 32: this toolbar is the window title bar (SetTitleBar), so it must
+              line up with the system caption buttons. Width grows instead, which is what buys
+              the 16px icons room to breathe without breaking that alignment.  -->
         <Style x:Key="CompactReaderToolbarButtonStyle" TargetType="Button">
-            <Setter Property="Width" Value="32" />
+            <Setter Property="Width" Value="40" />
             <Setter Property="Height" Value="32" />
-            <Setter Property="MinWidth" Value="32" />
+            <Setter Property="MinWidth" Value="40" />
             <Setter Property="MinHeight" Value="32" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Margin" Value="0" />
+            <Setter Property="CornerRadius" Value="4" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
@@ -29,7 +33,14 @@
             <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
         <Style x:Key="CompactReaderToolbarIconStyle" TargetType="FontIcon">
-            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontSize" Value="16" />
+        </Style>
+        <Style x:Key="ReaderToolbarSeparatorStyle" TargetType="Rectangle">
+            <Setter Property="Width" Value="1" />
+            <Setter Property="Height" Value="16" />
+            <Setter Property="Margin" Value="5,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Fill" Value="{ThemeResource DividerStrokeColorDefaultBrush}" />
         </Style>
         <Style x:Key="CompactReaderTitleTextStyle"
                BasedOn="{StaticResource BodyStrongTextBlockStyle}"
@@ -42,7 +53,8 @@
         <Style x:Key="CompactReaderProgressTextStyle"
                BasedOn="{StaticResource CaptionTextBlockStyle}"
                TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11" />
+            <!--  12 is the WinUI floor for readable secondary text; 11 was below it.  -->
+            <Setter Property="FontSize" Value="12" />
             <Setter Property="MaxLines" Value="1" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         </Style>
@@ -66,8 +78,8 @@
                 BorderThickness="0,0,0,1">
             <Grid Height="32"
                   Padding="4,0,0,0"
-                  ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,*,144"
-                  ColumnSpacing="0">
+                  ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*,144"
+                  ColumnSpacing="2">
             <Button HorizontalAlignment="Left"
                     x:Name="NovelReaderBackButton"
                     AutomationProperties.AutomationId="NovelReaderBackButton"
@@ -92,7 +104,11 @@
                 </Button.Content>
             </Button>
 
-            <Button Grid.Column="3"
+            <!--  Navigation is separated from the view/media commands. Both neighbours are
+                  always visible, so this can never float next to a collapsed button.  -->
+            <Rectangle Grid.Column="2" Style="{StaticResource ReaderToolbarSeparatorStyle}" />
+
+            <Button Grid.Column="4"
                     x:Name="NovelReaderStatisticsButton"
                     HorizontalAlignment="Left"
                     AutomationProperties.AutomationId="NovelReaderStatisticsButton"
@@ -105,7 +121,7 @@
                 </Button.Content>
             </Button>
 
-            <Button Grid.Column="2"
+            <Button Grid.Column="3"
                     HorizontalAlignment="Left"
                     AutomationProperties.AutomationId="NovelReaderAppearanceButton"
                     x:Uid="NovelReaderAppearanceButton"
@@ -117,7 +133,7 @@
                 </Button.Content>
             </Button>
 
-            <Button Grid.Column="4"
+            <Button Grid.Column="5"
                     x:Name="NovelReaderGalleryButton"
                     HorizontalAlignment="Left"
                     AutomationProperties.AutomationId="NovelReaderGalleryButton"
@@ -130,7 +146,7 @@
                 </Button.Content>
             </Button>
 
-            <Button Grid.Column="5"
+            <Button Grid.Column="6"
                     x:Name="SasayakiButton"
                     HorizontalAlignment="Left"
                     AutomationProperties.AutomationId="NovelReaderSasayakiButton"
@@ -224,7 +240,7 @@
                 </Button.ContextFlyout>
             </Button>
 
-            <Button Grid.Column="6"
+            <Button Grid.Column="7"
                     x:Name="NovelReaderLyricsModeButton"
                     x:Uid="NovelReaderLyricsModeButton"
                     HorizontalAlignment="Left"
@@ -238,8 +254,8 @@
                 </Button.Content>
             </Button>
 
-            <Grid Grid.Column="7"
-                  Margin="8,0"
+            <Grid Grid.Column="8"
+                  Margin="12,0"
                   ColumnDefinitions="*,Auto"
                   ColumnSpacing="6">
                 <TextBlock x:Name="NovelReaderTitleText"
@@ -264,6 +280,18 @@
                       VerticalAlignment="Stretch"
                       DefaultBackgroundColor="White"
                       AutomationProperties.AutomationId="NovelWebView" />
+
+            <!--  Sits on the page's top edge like a progress rule rather than inside the
+                  bottom chrome, which collapses whenever its text and buttons are hidden.  -->
+            <ProgressBar x:Name="NovelReaderProgressBar"
+                         AutomationProperties.AutomationId="NovelReaderProgressBar"
+                         Height="2"
+                         Minimum="0"
+                         Maximum="1"
+                         HorizontalAlignment="Stretch"
+                         VerticalAlignment="Top"
+                         IsHitTestVisible="False"
+                         Value="{x:Bind ViewModel.OverallProgress, Mode=OneWay}" />
         </Grid>
 
         <controls:ReaderLyricsModeControl x:Name="ReaderLyricsMode"
@@ -296,14 +324,19 @@
         <ContentDialog x:Name="ReaderGoToPanelDialog"
                        x:Uid="ReaderGoToPanelDialog"
                        AutomationProperties.AutomationId="NovelReaderGoToPanelDialog"
-                       MaxWidth="640"
+                       MaxWidth="1400"
                        CloseButtonText="Close"
                        DefaultButton="Close">
             <ContentDialog.Resources>
-                <x:Double x:Key="ContentDialogMaxWidth">640</x:Double>
+                <x:Double x:Key="ContentDialogMaxWidth">1400</x:Double>
             </ContentDialog.Resources>
-            <Grid Width="580"
-                  Height="640"
+            <!--  Bounds live on the dialog content, never on the ContentDialog itself: the
+                  dialog element sits in row 0 of the page grid, so a minimum there inflates
+                  the title bar even while it is closed. Content is out of the visual tree
+                  until it opens.  -->
+            <Grid x:Name="ReaderGoToPanelContent"
+                  MinWidth="320"
+                  MinHeight="320"
                   RowDefinitions="Auto,Auto,*"
                   RowSpacing="12">
                 <Grid Margin="4,0,4,4"
@@ -644,14 +677,16 @@
         <ContentDialog x:Name="ReaderStatisticsPanelDialog"
                        x:Uid="ReaderStatisticsPanelDialog"
                        AutomationProperties.AutomationId="NovelReaderStatisticsPanelDialog"
-                       MaxWidth="560"
+                       MaxWidth="1400"
                        CloseButtonText="Close"
                        DefaultButton="Close">
             <ContentDialog.Resources>
-                <x:Double x:Key="ContentDialogMaxWidth">560</x:Double>
+                <x:Double x:Key="ContentDialogMaxWidth">1400</x:Double>
             </ContentDialog.Resources>
             <controls:ReaderStatisticsPanelContent
-                MaxWidth="520"
+                x:Name="ReaderStatisticsPanelContentControl"
+                MinWidth="320"
+                MinHeight="320"
                 HorizontalAlignment="Stretch"
                 DataContext="{x:Bind ViewModel, Mode=OneWay}" />
         </ContentDialog>
@@ -659,23 +694,27 @@
         <ContentDialog x:Name="ReaderAppearancePanelDialog"
                        x:Uid="ReaderAppearancePanelDialog"
                        AutomationProperties.AutomationId="NovelReaderAppearancePanelDialog"
-                       MinWidth="1280"
-                       MaxWidth="1600"
+                       MaxWidth="1400"
                        CloseButtonText="Close"
                        DefaultButton="Close">
+            <!--  A hard MinWidth of 1280 made this dialog wider than the window itself on a
+                  small or high-DPI window, pushing the content and the close button off screen.
+                  The content is already responsive (ScrollViewer + MaxWidth), so it only needs
+                  an upper bound.  -->
             <ContentDialog.Resources>
-                <x:Double x:Key="ContentDialogMaxWidth">1600</x:Double>
-                <x:Double x:Key="ContentDialogMinWidth">1280</x:Double>
+                <x:Double x:Key="ContentDialogMaxWidth">1400</x:Double>
             </ContentDialog.Resources>
-            <controls:ReaderAppearanceSettingsContent Width="1280"
-                                                      Height="620" />
+            <controls:ReaderAppearanceSettingsContent x:Name="ReaderAppearancePanelContent"
+                                                      MinWidth="320"
+                                                      MinHeight="320"
+                                                      HorizontalAlignment="Stretch" />
         </ContentDialog>
 
         <Grid Grid.Row="2"
               x:Name="ReaderBottomChrome"
               MinHeight="32"
               Visibility="Collapsed">
-            <Grid Padding="8,0"
+            <Grid Padding="12,0"
                   ColumnDefinitions="*,Auto,*">
                 <StackPanel Grid.Column="0"
                             HorizontalAlignment="Left"
@@ -741,13 +780,11 @@
         <ContentDialog x:Name="SasayakiPanelDialog"
                        x:Uid="NovelReaderSasayakiPanelDialog"
                        AutomationProperties.AutomationId="NovelReaderSasayakiPanelDialog"
-                       MinWidth="640"
-                       MaxWidth="760"
+                       MaxWidth="1400"
                        CloseButtonText="Close"
                        DefaultButton="Close">
             <ContentDialog.Resources>
-                <x:Double x:Key="ContentDialogMaxWidth">760</x:Double>
-                <x:Double x:Key="ContentDialogMinWidth">640</x:Double>
+                <x:Double x:Key="ContentDialogMaxWidth">1400</x:Double>
                 <Style x:Key="SasayakiPanelCardStyle" TargetType="Border">
                     <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
                     <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
@@ -756,7 +793,11 @@
                     <Setter Property="Padding" Value="16" />
                 </Style>
             </ContentDialog.Resources>
-            <Grid Width="600" Height="620" RowDefinitions="Auto,*" RowSpacing="12">
+            <Grid x:Name="SasayakiPanelContent"
+                  MinWidth="320"
+                  MinHeight="320"
+                  RowDefinitions="Auto,*"
+                  RowSpacing="12">
                 <Border x:Name="SasayakiPlaybackHeader"
                         AutomationProperties.AutomationId="NovelReaderSasayakiPlaybackHeader"
                         DataContext="{x:Bind SasayakiPanelViewModel}"

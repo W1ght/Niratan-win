@@ -462,6 +462,15 @@
                                       HeaderIcon="{ui:FontIcon Glyph=&#xE8B4;}">
                     <ToggleSwitch IsOn="{x:Bind ViewModel.ShowPercentage, Mode=TwoWay}" />
                 </toolkit:SettingsCard>
+                <toolkit:SettingsCard x:Uid="ReaderShowChapterProgressCard"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      AutomationProperties.AutomationId="ReaderShowChapterProgressCard"
+                                      Description="Show progress through the current chapter in brackets"
+                                      Header="Show Chapter Progress"
+                                      HeaderIcon="{ui:FontIcon Glyph=&#xE8A5;}">
+                    <ToggleSwitch IsOn="{x:Bind ViewModel.ShowChapterProgress, Mode=TwoWay}" />
+                </toolkit:SettingsCard>
                 <toolkit:SettingsCard x:Uid="ReaderProgressPositionCard"
                                       HorizontalAlignment="Stretch"
                                       HorizontalContentAlignment="Stretch"

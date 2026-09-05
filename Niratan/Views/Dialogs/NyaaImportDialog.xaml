@@ -90,7 +90,7 @@
         </Grid>
 
                 <ListView Grid.Row="3"
-                          MinHeight="360"
+                          MaxHeight="360"
                           ItemsSource="{x:Bind ViewModel.Results, Mode=OneWay}"
                           SelectionMode="None">
             <ListView.ItemContainerStyle>

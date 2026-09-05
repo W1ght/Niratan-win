@@ -9,7 +9,7 @@
                mc:Ignorable="d"
                x:Uid="NovelShelfManagementDialog"
                DefaultButton="Close"
-               MinWidth="520">
+               MinWidth="320">
     <Grid RowDefinitions="Auto,Auto,Auto"
           RowSpacing="20">
         <Grid ColumnDefinitions="*,Auto"

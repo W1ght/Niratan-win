@@ -381,23 +381,26 @@ public class NovelReaderWebAssetTests
         var windowCode = File.ReadAllText(Path.Combine(ProjectRoot, "MainWindow.xaml.cs"));
 
         readerXaml.Should().Contain("x:Key=\"CompactReaderToolbarButtonStyle\"");
-        readerXaml.Should().Contain("<Setter Property=\"Width\" Value=\"32\" />");
+        readerXaml.Should().Contain("<Setter Property=\"Width\" Value=\"40\" />");
         readerXaml.Should().Contain("<Setter Property=\"Height\" Value=\"32\" />");
+        // Height must stay 32: this toolbar is the window title bar and has to line up
+        // with the system caption buttons. Width and icon size may change; height may not.
+        readerXaml.Should().Contain("Height=\"32\"");
         readerXaml.Should().Contain("<Setter Property=\"Background\" Value=\"Transparent\" />");
         readerXaml.Should().Contain("<Setter Property=\"BorderBrush\" Value=\"Transparent\" />");
         readerXaml.Should().Contain("<Setter Property=\"BorderThickness\" Value=\"0\" />");
         readerXaml.Should().Contain("x:Key=\"CompactReaderToolbarIconStyle\"");
-        readerXaml.Should().Contain("<Setter Property=\"FontSize\" Value=\"13\" />");
+        readerXaml.Should().Contain("<Setter Property=\"FontSize\" Value=\"16\" />");
         readerXaml.Should().Contain("x:Key=\"CompactReaderTitleTextStyle\"");
         readerXaml.Should().Contain("RowDefinitions=\"Auto,*,Auto\"");
         readerXaml.Should().Contain("Background=\"{ThemeResource SolidBackgroundFillColorBaseBrush}\"");
         readerXaml.Should().Contain("BorderThickness=\"0,0,0,1\"");
         readerXaml.Should().Contain("Height=\"32\"");
         readerXaml.Should().Contain("Padding=\"4,0,0,0\"");
-        readerXaml.Should().Contain("ColumnDefinitions=\"Auto,Auto,Auto,Auto,Auto,Auto,Auto,*,144\"");
-        readerXaml.Should().Contain("ColumnSpacing=\"0\"");
+        readerXaml.Should().Contain("ColumnDefinitions=\"Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*,144\"");
+        readerXaml.Should().Contain("ColumnSpacing=\"2\"");
         readerXaml.Should().Contain("Orientation=\"Horizontal\"");
-        readerXaml.Should().Contain("<Grid Grid.Column=\"7\"");
+        readerXaml.Should().Contain("<Grid Grid.Column=\"8\"");
         readerXaml.Should().Contain("Style=\"{StaticResource CompactReaderTitleTextStyle}\"");
         readerXaml.Should().Contain("Style=\"{StaticResource CompactReaderProgressTextStyle}\"");
         readerXaml.Should().Contain("Canvas.ZIndex=\"120\"");
@@ -3732,7 +3735,7 @@ public class NovelReaderWebAssetTests
         panelXaml.Should().Contain("ReaderStatisticsAllTimeSection");
         panelXaml.Should().Contain("ToggleStatisticsTrackingCommand");
         statisticsDialogXaml.Should().Contain("<controls:ReaderStatisticsPanelContent");
-        statisticsDialogXaml.Should().Contain("MaxWidth=\"520\"");
+        statisticsDialogXaml.Should().Contain("MaxWidth=\"1400\"");
         statisticsDialogXaml.Should().NotContain("ContentDialogMinWidth");
         statisticsDialogXaml.Should().NotContain("<Grid Width=\"1120\"");
     }
@@ -4454,6 +4457,43 @@ public class NovelReaderWebAssetTests
     }
 
     [Fact]
+    public void ReaderPanels_PutSizeFloorsOnContentNotOnTheDialogElement()
+    {
+        var readerXaml = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Pages", "NovelReaderPage.xaml"));
+
+        // Every ContentDialog here is declared without Grid.Row, so it lands in row 0 — the
+        // title bar — and its own MinWidth/MinHeight inflate that row even while the dialog is
+        // closed. A MinHeight there once stretched the title bar to 320px. Floors belong on the
+        // dialog content, which stays out of the visual tree until the dialog opens.
+        foreach (Match dialog in Regex.Matches(
+            readerXaml,
+            "(?s)<ContentDialog\\s.*?>"))
+        {
+            dialog.Value.Should().NotContain("MinHeight=");
+            dialog.Value.Should().NotContain("MinWidth=");
+        }
+
+        foreach (var panel in new[]
+        {
+            "ReaderGoToPanelDialog",
+            "ReaderGalleryPanelDialog",
+            "ReaderStatisticsPanelDialog",
+            "ReaderAppearancePanelDialog",
+            "SasayakiPanelDialog",
+        })
+        {
+            var start = readerXaml.IndexOf($"x:Name=\"{panel}\"", StringComparison.Ordinal);
+            start.Should().BeGreaterThan(0, "panel {0} should exist", panel);
+            var end = readerXaml.IndexOf("</ContentDialog>", start, StringComparison.Ordinal);
+            readerXaml[start..end].Should().Contain(
+                "MinWidth=\"320\"",
+                "panel {0} content needs the shared size floor",
+                panel);
+        }
+    }
+
+    [Fact]
     public void ReaderPage_StatisticsDialogClampsWithoutHardMinimumWidth()
     {
         var readerXaml = File.ReadAllText(
@@ -4464,7 +4504,7 @@ public class NovelReaderWebAssetTests
 
         dialog.Should().NotContain("MinWidth=\"520\"");
         dialog.Should().NotContain("ContentDialogMinWidth");
-        dialog.Should().Contain("MaxWidth=\"560\"");
+        dialog.Should().Contain("MaxWidth=\"1400\"");
         dialog.Should().Contain("HorizontalAlignment=\"Stretch\"");
     }
 
@@ -4809,21 +4849,36 @@ public class NovelReaderWebAssetTests
             Path.Combine(ProjectRoot, "Views", "Controls", "ReaderAppearanceSettingsContent.xaml")
         );
 
-        readerXaml.Should().Contain("<Grid Width=\"580\"");
-        readerXaml.Should().Contain("<x:Double x:Key=\"ContentDialogMaxWidth\">640</x:Double>");
-        readerXaml.Should().Contain("<controls:ReaderAppearanceSettingsContent Width=\"1280\"");
-        readerXaml.Should().Contain("<Grid Width=\"600\" Height=\"620\"");
-        readerXaml.Should().Contain("<x:Double x:Key=\"ContentDialogMaxWidth\">760</x:Double>");
-        readerXaml.Should().Contain("<x:Double x:Key=\"ContentDialogMinWidth\">640</x:Double>");
-        (readerXaml.Split("<x:Double x:Key=\"ContentDialogMaxWidth\">1600</x:Double>").Length - 1)
-            .Should().Be(1);
+        // Panel size is computed from the window in code-behind, so the XAML only names the
+        // content each dialog sizes and keeps the shared ceiling.
+        readerXaml.Should().Contain("x:Name=\"ReaderGoToPanelContent\"");
+        readerXaml.Should().Contain("x:Name=\"SasayakiPanelContent\"");
+        readerXaml.Should().Contain("x:Name=\"ReaderStatisticsPanelContentControl\"");
+        readerXaml.Should().Contain("x:Name=\"ReaderAppearancePanelContent\"");
+        readerXaml.Should().Contain("<controls:ReaderAppearanceSettingsContent x:Name=");
+        readerXaml.Should().NotContain("<Grid Width=\"580\"");
+        readerXaml.Should().NotContain("<Grid Width=\"600\" Height=\"620\"");
+        readerXaml.Should().NotContain("<x:Double x:Key=\"ContentDialogMinWidth\">640</x:Double>");
+        // All four sized panels share one ceiling now; the gallery keeps its own.
+        (readerXaml.Split("<x:Double x:Key=\"ContentDialogMaxWidth\">1400</x:Double>").Length - 1)
+            .Should().Be(4);
         (readerXaml.Split("<x:Double x:Key=\"ContentDialogMinWidth\">1120</x:Double>").Length - 1)
             .Should().Be(0);
-        readerXaml.Should().Contain("<x:Double x:Key=\"ContentDialogMinWidth\">1280</x:Double>");
+        readerXaml.Should().NotContain("<x:Double x:Key=\"ContentDialogMinWidth\">1280</x:Double>");
         appearanceContentXaml.Should().Contain("MaxWidth=\"1280\"");
 
+        // Panels may be wide, but a hard ContentDialogMinWidth larger than the window makes the
+        // dialog overflow it — content gets clipped and the close button lands off screen.
+        // Width belongs in MaxWidth so the panel shrinks with a small or high-DPI window.
+        foreach (var minWidth in System.Text.RegularExpressions.Regex
+            .Matches(readerXaml, "<x:Double x:Key=\"ContentDialogMinWidth\">(?<value>[0-9]+)</x:Double>")
+            .Select(match => int.Parse(match.Groups["value"].Value)))
+        {
+            minWidth.Should().BeLessThanOrEqualTo(400);
+        }
+
         readerXaml.Should().NotContain("<Grid Width=\"560\"");
-        readerXaml.Should().Contain("MaxWidth=\"560\"");
+        readerXaml.Should().Contain("<x:Double x:Key=\"ContentDialogMaxWidth\">1400</x:Double>");
         readerXaml.Should().NotContain("<Grid Width=\"640\"");
         appearanceContentXaml.Should().NotContain("MaxWidth=\"1000\"");
     }

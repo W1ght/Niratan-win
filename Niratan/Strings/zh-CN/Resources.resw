@@ -263,6 +263,8 @@
   <data name="ReaderShowCharactersCard.Description" xml:space="preserve"><value>在进度栏显示字数</value></data>
   <data name="ReaderShowPercentageCard.Header" xml:space="preserve"><value>显示百分比</value></data>
   <data name="ReaderShowPercentageCard.Description" xml:space="preserve"><value>显示阅读进度百分比</value></data>
+  <data name="ReaderShowChapterProgressCard.Header" xml:space="preserve"><value>显示章节进度</value></data>
+  <data name="ReaderShowChapterProgressCard.Description" xml:space="preserve"><value>在括号中显示当前章节的阅读进度</value></data>
   <data name="ReaderProgressPositionCard.Header" xml:space="preserve"><value>进度位置</value></data>
   <data name="ReaderProgressPositionCard.Description" xml:space="preserve"><value>在顶部或底部显示进度栏</value></data>
   <data name="ReaderProgressTop.Content" xml:space="preserve"><value>顶部</value></data>

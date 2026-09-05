@@ -263,6 +263,8 @@
   <data name="ReaderShowCharactersCard.Description" xml:space="preserve"><value>Show the character count in the progress bar</value></data>
   <data name="ReaderShowPercentageCard.Header" xml:space="preserve"><value>Show Percentage</value></data>
   <data name="ReaderShowPercentageCard.Description" xml:space="preserve"><value>Show reading progress percentage</value></data>
+  <data name="ReaderShowChapterProgressCard.Header" xml:space="preserve"><value>Show Chapter Progress</value></data>
+  <data name="ReaderShowChapterProgressCard.Description" xml:space="preserve"><value>Show progress through the current chapter in brackets</value></data>
   <data name="ReaderProgressPositionCard.Header" xml:space="preserve"><value>Progress Position</value></data>
   <data name="ReaderProgressPositionCard.Description" xml:space="preserve"><value>Show progress bar at the top or bottom</value></data>
   <data name="ReaderProgressTop.Content" xml:space="preserve"><value>Top</value></data>

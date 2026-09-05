@@ -112,6 +112,32 @@ public partial class NovelReaderPageViewModel
             ? Math.Clamp(Progress, 0, 1)
             : Math.Clamp((CurrentChapterIndex + Progress) / ChapterCount, 0, 1);
     public string OverallProgressText => (OverallProgress * 100).ToString("0.00", CultureInfo.InvariantCulture) + "%";
+
+    /// <summary>Progress through the current chapter, independent of the whole book.</summary>
+    public double ChapterProgress => Math.Clamp(Progress, 0, 1);
+
+    /// <summary>Characters in the chapter being read, 0 when the book has no counts yet.</summary>
+    public int ChapterTotalCharacterCount =>
+        _chapterCharacterCounts.Count == 0
+            ? 0
+            : _chapterCharacterCounts[
+                Math.Clamp(CurrentChapterIndex, 0, _chapterCharacterCounts.Count - 1)];
+
+    public int ChapterCurrentCharacterCount => Math.Clamp(
+        (int)(ChapterTotalCharacterCount * ChapterProgress),
+        0,
+        ChapterTotalCharacterCount);
+
+    public string ChapterProgressText
+    {
+        get
+        {
+            var percent = (ChapterProgress * 100).ToString("0.00", CultureInfo.InvariantCulture) + "%";
+            return ChapterTotalCharacterCount > 0
+                ? $"{ChapterCurrentCharacterCount} / {ChapterTotalCharacterCount} {percent}"
+                : percent;
+        }
+    }
     public string ReaderProgressText => TotalCharacterCount <= 0
         ? OverallProgressText
         : $"{CurrentCharacterCount} / {TotalCharacterCount} {OverallProgressText}";
@@ -239,6 +265,8 @@ public partial class NovelReaderPageViewModel
         CurrentChapterIndex = index;
         ChapterCount = count;
         UpdateCharacterProgress();
+        // The chapter's own total changes with the chapter, not just with Progress.
+        NotifyChapterProgressChanged();
         OnPropertyChanged(nameof(ChapterTitle));
         OnPropertyChanged(nameof(OverallProgress));
         OnPropertyChanged(nameof(OverallProgressText));
@@ -247,6 +275,16 @@ public partial class NovelReaderPageViewModel
         OnPropertyChanged(nameof(CanGoPrevious));
         OnStatisticsTextChanged();
         RefreshGalleryReadState();
+    }
+
+    partial void OnProgressChanged(double value) => NotifyChapterProgressChanged();
+
+    private void NotifyChapterProgressChanged()
+    {
+        OnPropertyChanged(nameof(ChapterProgress));
+        OnPropertyChanged(nameof(ChapterTotalCharacterCount));
+        OnPropertyChanged(nameof(ChapterCurrentCharacterCount));
+        OnPropertyChanged(nameof(ChapterProgressText));
     }
 
     public void UpdateProgress(double progress)
@@ -270,6 +308,7 @@ public partial class NovelReaderPageViewModel
         _chapterCharacterCounts = chapterCharacterCounts;
         TotalCharacterCount = chapterCharacterCounts.Sum();
         UpdateCharacterProgress();
+        NotifyChapterProgressChanged();
         OnPropertyChanged(nameof(OverallProgress));
         OnPropertyChanged(nameof(OverallProgressText));
         OnPropertyChanged(nameof(ReaderProgressText));
