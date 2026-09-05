@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--  Slot sizes include the card's own gutter margin, so wrap panels line every card up
+          on the same grid instead of clipping the last 12px off each one.  -->
+    <x:Double x:Key="VideoLandscapeCardWidth">300</x:Double>
+    <x:Double x:Key="VideoLandscapeCardHeight">320</x:Double>
+    <x:Double x:Key="VideoLandscapeArtworkHeight">169</x:Double>
+    <x:Double x:Key="VideoLandscapeCardSlotWidth">312</x:Double>
+    <x:Double x:Key="VideoLandscapeCardSlotHeight">332</x:Double>
+
+    <x:Double x:Key="VideoPortraitCardWidth">176</x:Double>
+    <x:Double x:Key="VideoPortraitCardHeight">360</x:Double>
+    <x:Double x:Key="VideoPortraitArtworkHeight">264</x:Double>
+    <x:Double x:Key="VideoPortraitCardSlotWidth">190</x:Double>
+    <x:Double x:Key="VideoPortraitCardSlotHeight">378</x:Double>
+
+    <x:Double x:Key="VideoSeasonCardWidth">128</x:Double>
+    <x:Double x:Key="VideoSeasonCardHeight">308</x:Double>
+    <x:Double x:Key="VideoSeasonArtworkHeight">192</x:Double>
+    <x:Double x:Key="VideoSeasonCardTitleHeight">72</x:Double>
+
+    <x:Double x:Key="VideoDiscoveryCardWidth">170</x:Double>
+    <x:Double x:Key="VideoDiscoveryCardHeight">350</x:Double>
+    <x:Double x:Key="VideoDiscoveryArtworkHeight">238</x:Double>
+
+    <x:Double x:Key="VideoCardTitleHeight">48</x:Double>
+    <x:Double x:Key="VideoCardMetadataHeight">24</x:Double>
+
+    <Style x:Key="VideoCardButtonBaseStyle"
+           TargetType="Button">
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+    </Style>
+
+    <Style x:Key="VideoLandscapeCardButtonStyle"
+           TargetType="Button"
+           BasedOn="{StaticResource VideoCardButtonBaseStyle}">
+        <Setter Property="Width" Value="{StaticResource VideoLandscapeCardWidth}" />
+        <Setter Property="Height" Value="{StaticResource VideoLandscapeCardHeight}" />
+    </Style>
+
+    <Style x:Key="VideoPortraitCardButtonStyle"
+           TargetType="Button"
+           BasedOn="{StaticResource VideoCardButtonBaseStyle}">
+        <Setter Property="Width" Value="{StaticResource VideoPortraitCardWidth}" />
+        <Setter Property="Height" Value="{StaticResource VideoPortraitCardHeight}" />
+        <Setter Property="Margin" Value="0,0,14,18" />
+    </Style>
+
+    <Style x:Key="VideoDiscoveryCardButtonStyle"
+           TargetType="Button"
+           BasedOn="{StaticResource VideoCardButtonBaseStyle}">
+        <Setter Property="Width" Value="{StaticResource VideoDiscoveryCardWidth}" />
+        <Setter Property="Height" Value="{StaticResource VideoDiscoveryCardHeight}" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="VerticalContentAlignment" Value="Top" />
+    </Style>
+
+    <Style x:Key="VideoSeasonCardButtonStyle"
+           TargetType="Button"
+           BasedOn="{StaticResource VideoCardButtonBaseStyle}">
+        <Setter Property="Width" Value="{StaticResource VideoSeasonCardWidth}" />
+        <Setter Property="Height" Value="{StaticResource VideoSeasonCardHeight}" />
+        <Setter Property="Margin" Value="0,0,12,0" />
+    </Style>
+
+    <Style x:Key="VideoPortraitCardBorderStyle"
+           TargetType="Border">
+        <Setter Property="Width" Value="{StaticResource VideoPortraitCardWidth}" />
+        <Setter Property="Height" Value="{StaticResource VideoPortraitCardHeight}" />
+        <Setter Property="Margin" Value="0,0,14,18" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="8" />
+    </Style>
+
+    <Style x:Key="VideoCardTitleTextBlockStyle"
+           TargetType="TextBlock"
+           BasedOn="{StaticResource BodyStrongTextBlockStyle}">
+        <Setter Property="Height" Value="{StaticResource VideoCardTitleHeight}" />
+        <Setter Property="MaxLines" Value="2" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+
+    <Style x:Key="VideoCardMetadataTextBlockStyle"
+           TargetType="TextBlock">
+        <Setter Property="Height" Value="{StaticResource VideoCardMetadataHeight}" />
+        <Setter Property="MaxLines" Value="1" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+    </Style>
+
+    <Style x:Key="VideoSeasonCardTitleTextBlockStyle"
+           TargetType="TextBlock"
+           BasedOn="{StaticResource VideoCardTitleTextBlockStyle}">
+        <Setter Property="Height" Value="{StaticResource VideoSeasonCardTitleHeight}" />
+        <Setter Property="MaxLines" Value="3" />
+    </Style>
+
+    <Style x:Key="VideoCardAccentMetadataTextBlockStyle"
+           TargetType="TextBlock"
+           BasedOn="{StaticResource VideoCardMetadataTextBlockStyle}">
+        <Setter Property="Foreground" Value="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+    </Style>
+
+    <Style x:Key="VideoPosterArtworkImageStyle"
+           TargetType="Image">
+        <Setter Property="Stretch" Value="UniformToFill" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style x:Key="VideoEpisodeArtworkImageStyle"
+           TargetType="Image">
+        <Setter Property="Stretch" Value="Uniform" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+    </Style>
+</ResourceDictionary>

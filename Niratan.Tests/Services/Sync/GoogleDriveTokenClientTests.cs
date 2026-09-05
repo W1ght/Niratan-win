@@ -115,6 +115,37 @@ public sealed class GoogleDriveTokenClientTests
         refreshed.ClientSecret.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task RefreshAsync_WhenGrantIsInvalid_ThrowsTypedSanitizedError()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var existing = new GoogleDriveCredentials(
+            AccessToken: "old-access",
+            RefreshToken: "revoked-refresh",
+            ClientId: "1234567890-abcdef.apps.googleusercontent.com",
+            ExpiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(-5),
+            Scope: GoogleDriveTokenClient.DriveFileScope,
+            ClientSecret: "desktop-client-secret");
+        var handler = new RecordingHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = JsonContent("""
+                {
+                  "error": "invalid_grant",
+                  "error_description": "Token has been expired or revoked."
+                }
+                """),
+        });
+        var client = new GoogleDriveTokenClient(new HttpClient(handler));
+
+        var action = () => client.RefreshAsync(existing, ct);
+
+        var assertion = await action.Should().ThrowAsync<GoogleDriveTokenRequestException>();
+        assertion.Which.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        assertion.Which.ErrorCode.Should().Be("invalid_grant");
+        assertion.Which.ErrorDescription.Should().Be("Token has been expired or revoked.");
+        assertion.Which.Message.Should().NotContain("Token has been expired or revoked.");
+    }
+
     private static StringContent JsonContent(string json) =>
         new(json, System.Text.Encoding.UTF8, "application/json");
 

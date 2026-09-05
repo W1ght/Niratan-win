@@ -89,6 +89,44 @@ public sealed class NyaaDownloadManagerTests
         manager.GetTasks().Single().ImportResult!.ImportedVideoCount.Should().Be(1);
     }
 
+    [Fact]
+    public async Task Enqueue_does_not_start_download_pipeline_inline_on_caller()
+    {
+        var item = CreateItem("background", "Background start");
+        var callerThreadId = Environment.CurrentManagedThreadId;
+        var callerActive = 1;
+        var invokedInline = 0;
+        var downloadService = new Mock<ITorrentDownloadService>();
+        downloadService
+            .Setup(service => service.DownloadAsync(
+                It.IsAny<string>(),
+                item,
+                It.IsAny<IProgress<TorrentDownloadProgress>?>(),
+                It.IsAny<CancellationToken>()))
+            .Callback(() =>
+            {
+                if (Environment.CurrentManagedThreadId == callerThreadId
+                    && Volatile.Read(ref callerActive) == 1)
+                {
+                    Volatile.Write(ref invokedInline, 1);
+                }
+            })
+            .ReturnsAsync(Result<TorrentDownloadResult>.Failure("stop after dispatch"));
+
+        using var manager = new NyaaDownloadManager(
+            downloadService.Object,
+            Mock.Of<IResourcePackageImportService>(),
+            new WeakReferenceMessenger(),
+            NullLogger<NyaaDownloadManager>.Instance);
+
+        manager.Enqueue(item);
+        Volatile.Write(ref callerActive, 0);
+        await WaitUntilAsync(
+            () => manager.GetTasks().Single().State == NyaaDownloadTaskState.Failed);
+
+        Volatile.Read(ref invokedInline).Should().Be(0);
+    }
+
     private static NyaaTorrentItem CreateItem(string id, string title) =>
         new(
             id,

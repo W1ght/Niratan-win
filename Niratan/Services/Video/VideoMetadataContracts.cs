@@ -94,5 +94,6 @@ public interface IVideoArtworkCache
         string? etag,
         DateTimeOffset? lastModified,
         CancellationToken ct = default);
+    Task ClearAsync(CancellationToken ct = default);
     Task TrimAsync(CancellationToken ct = default);
 }

@@ -402,7 +402,11 @@ public class DictionaryLookupServiceTests
         script.Should().Contain("window.onContextMiningPrepared = function (");
         script.Should().Contain("window.onContextMiningReleased = function (");
         script.Should().Contain("createButtonSlot('viewNote', idx, false)");
-        script.Should().Contain("showAnkiNoteButton(entryIndex, result.noteID)");
+        // The mining result carries every matching note, so the magnifier is wired to the
+        // whole array the host published rather than a single id.
+        script.Should().Contain("function miningResultNoteIDs(result)");
+        script.Should().Contain("showAnkiNoteButton(entryIndex, resultNoteIDs)");
+        script.Should().Contain("slot.dataset.miningFallbackNoteIds = resultNoteIDs.map(String).join(' ')");
         script.Should().Contain("requestDuplicateCheck(idx, expression || '', mineSlot)");
         script.Should().Contain("function applyAnkiDuplicateLookup(entryIndex, duplicateLookup, slots)");
         script.Should().Contain("entry.expression || '',\n    slot,\n    true,\n    attemptId");
@@ -444,6 +448,10 @@ public class DictionaryLookupServiceTests
         popup.Should().Contain("MaxMiningFeedbackDetailLength = 240");
         popup.Should().Contain("noteIDs = noteIds");
         popup.Should().Contain("noteID = result.NoteId");
+        // The magnifier opens every duplicate, so the mining result carries the whole set and
+        // the whitelist grows instead of replacing what the duplicate scan already published.
+        popup.Should().Contain("noteIDs = openableNoteIds");
+        popup.Should().Contain("known.Concat(openableNoteIds).Distinct().ToArray()");
         popup.Should().Contain("await _ankiService.DuplicateLookupExpressionAsync(expression)");
         popup.Should().Contain("if (duplicate.IsDuplicate)");
         popup.Should().Contain("window.{callback}({attempt.EntryIndex}, {attempt.RenderGeneration}, {attempt.PageRevision}, {attempt.AttemptId}, {expression}, {payload}");
@@ -621,6 +629,36 @@ public class DictionaryLookupServiceTests
         ruleStart.Should().BeGreaterThanOrEqualTo(0);
         ruleEnd.Should().BeGreaterThan(ruleStart);
         stylesheet[ruleStart..ruleEnd].Should().Contain("font-size: 1em;");
+    }
+
+    [Fact]
+    public void PopupStyles_DefineStructuredContentSemanticColorsForMediaAndExplicitThemes()
+    {
+        var stylesheet = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "Web",
+            "DictionaryPopup",
+            "popup.css"));
+
+        var expectedThemeDeclarations = new[]
+        {
+            "--danger-color: #c83c28;",
+            "--danger-color-light: #dd6755;",
+            "--danger-color-lighter: #e68d7f;",
+            "--danger-color-lightest: #eeb3aa;",
+            "--danger-color: #dd6755;",
+            "--danger-color-light: #c83c28;",
+            "--danger-color-lighter: #9e301f;",
+            "--danger-color-lightest: #732317;",
+            "--success-color: #51ab30;",
+            "--success-color: #75cf54;",
+        };
+
+        foreach (var declaration in expectedThemeDeclarations)
+        {
+            stylesheet.Split(declaration, StringSplitOptions.None)
+                .Should().HaveCount(3, $"{declaration} should exist in both media and explicit app theme rules");
+        }
     }
 
     [Fact]

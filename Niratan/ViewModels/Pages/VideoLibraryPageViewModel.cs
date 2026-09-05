@@ -47,6 +47,8 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     private readonly HashSet<string> _selectedVideoIds = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<Guid, VideoLibraryScanProgress> _latestScanProgress = [];
     private readonly Dictionary<Guid, VideoMetadataBatchProgress> _latestMetadataProgress = [];
+    private long _metadataUiGeneration;
+    private int _suppressMetadataUiEvents;
     private SynchronizationContext? _uiContext;
     private string? _activeFolderPath;
     private string? _activeCollectionId;
@@ -197,6 +199,23 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     public partial string BackgroundMetadataText { get; set; } = "";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanRunMetadataActions))]
+    [NotifyPropertyChangedFor(nameof(CanRunScanOrRefreshActions))]
+    [NotifyCanExecuteChangedFor(nameof(ScrapeAllMetadataCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ClearAllScrapeRecordsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RetryMetadataTaskCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RetryFailedMetadataTasksCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ScanFolderCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RefreshAllSourcesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RefreshSourceCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RefreshSourceMetadataCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RefreshSelectedMetadataCommand))]
+    [NotifyCanExecuteChangedFor(nameof(FullScanSourceCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ResumeSourceScanCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveMissingVideosCommand))]
+    public partial bool IsClearingScrapeRecords { get; set; }
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsMetadataTaskPanelVisible))]
     public partial bool IsMetadataTaskPanelOpen { get; set; }
 
@@ -255,6 +274,16 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     public bool IsFoldersView => SelectedLibraryView == VideoLibraryView.Folders;
     public bool IsCollectionsView => SelectedLibraryView == VideoLibraryView.Collections;
     public bool IsTagsView => SelectedLibraryView == VideoLibraryView.Tags;
+    public bool IsAllVideosView => SelectedLibraryView == VideoLibraryView.All;
+    public bool IsMoviesView => SelectedLibraryView == VideoLibraryView.Movies;
+    public bool IsAnimeView => SelectedLibraryView == VideoLibraryView.Anime;
+    public bool IsAllVideosFilterView => SelectedLibraryView is
+        VideoLibraryView.All
+        or VideoLibraryView.Movies
+        or VideoLibraryView.Anime
+        or VideoLibraryView.Folders
+        or VideoLibraryView.Collections
+        or VideoLibraryView.Tags;
     public bool IsHomeView => SelectedLibraryView == VideoLibraryView.Home;
     public bool IsDiscoverView => SelectedLibraryView == VideoLibraryView.Discover;
     public bool IsSourcesView => SelectedLibraryView == VideoLibraryView.Sources;
@@ -270,16 +299,10 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     public bool HasHomeContinueWatching => HomeContinueWatching.Count > 0;
     public bool HasHomeNextEpisodes => HomeNextEpisodes.Count > 0;
     public bool HasHomeRecentlyAdded => HomeRecentlyAdded.Count > 0;
-    public string HomeMoviesCountText => FormatVideoCount(_allVideos.Count(video =>
-        video.LibraryMediaType == VideoLibraryMediaType.Movie || video.CatalogNodeKind == VideoCatalogNodeKind.Movie));
-    public string HomeSeriesCountText => FormatVideoCount(_allVideos
-        .Where(video => video.CatalogSeriesNodeId.HasValue && video.LibraryMediaType != VideoLibraryMediaType.Anime)
-        .Select(video => video.CatalogSeriesNodeId).Distinct().Count());
-    public string HomeAnimeCountText => FormatVideoCount(_allVideos.Count(video =>
-        video.LibraryMediaType == VideoLibraryMediaType.Anime));
-    public string HomeCollectionsCountText => FormatVideoCount(_collections.Count);
     public bool IsOnlineMetadataEnabled =>
         _settingsService?.Current.VideoSettings.Metadata.OnlineConsentAccepted == true;
+    public bool CanRunMetadataActions => _metadataCoordinator != null && !IsClearingScrapeRecords;
+    public bool CanRunScanOrRefreshActions => !IsClearingScrapeRecords;
     public IReadOnlyList<VideoItemViewModel> SmartCollectionPreviewRows
     {
         get
@@ -386,9 +409,10 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         await LoadVideosAsync();
         if (_metadataCoordinator != null)
         {
+            var metadataUiGeneration = CurrentMetadataUiGeneration;
             foreach (var progress in _metadataCoordinator.ActiveBatchProgress)
-                ApplyMetadataBatchProgress(progress);
-            await LoadMetadataTasksAsync(CancellationToken.None);
+                ApplyMetadataBatchProgress(progress, metadataUiGeneration);
+            await LoadMetadataTasksAsync(CancellationToken.None, metadataUiGeneration);
         }
         if (_scanCoordinator != null)
             _ = RefreshSourcesInBackgroundAsync();
@@ -406,6 +430,9 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
 
     private async Task RefreshSourcesInBackgroundAsync()
     {
+        if (!CanRunScanOrRefreshActions)
+            return;
+        var metadataUiGeneration = CurrentMetadataUiGeneration;
         try
         {
             _scanCts.Cancel();
@@ -413,7 +440,8 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
             _scanCts = new CancellationTokenSource();
             await _scanCoordinator!.ScanAllAsync(fullScan: false, _scanCts.Token);
             await LoadVideosAsync();
-            if (_metadataCoordinator != null && IsOnlineMetadataEnabled)
+            if (_metadataCoordinator != null && IsOnlineMetadataEnabled
+                && IsMetadataUiGenerationCurrent(metadataUiGeneration))
                 await _metadataCoordinator.QueueAllSourcesAsync(forceRefresh: false, CancellationToken.None);
         }
         catch (OperationCanceledException)
@@ -470,11 +498,13 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         await LoadVideosAsync();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRunScanOrRefreshActions))]
     private async Task ScanFolderAsync()
     {
+        if (!CanRunScanOrRefreshActions)
+            return;
         var folderPath = await _dialogService.OpenFolderPickerAsync();
-        if (folderPath == null)
+        if (folderPath == null || !CanRunScanOrRefreshActions)
             return;
 
         var result = await _videoLibraryService.ScanFolderAsync(folderPath, _cts.Token);
@@ -494,25 +524,123 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         await LoadVideosAsync();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRunScanOrRefreshActions))]
     private async Task RefreshAllSourcesAsync()
     {
+        if (!CanRunScanOrRefreshActions)
+            return;
+        var metadataUiGeneration = CurrentMetadataUiGeneration;
         var result = await _videoLibraryService.RefreshAllSourcesAsync(_cts.Token);
         if (!result.IsSuccess && !result.IsCancelled)
             _notificationService.ShowError(result.Error!, result.ErrorTitle!);
         await LoadVideosAsync();
-        if (result.IsSuccess && _metadataCoordinator != null && IsOnlineMetadataEnabled)
+        if (result.IsSuccess && _metadataCoordinator != null && IsOnlineMetadataEnabled
+            && IsMetadataUiGenerationCurrent(metadataUiGeneration))
             await _metadataCoordinator.QueueAllSourcesAsync(forceRefresh: false, CancellationToken.None);
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRunMetadataActions))]
     private async Task ScrapeAllMetadataAsync()
     {
-        if (_metadataCoordinator == null || !await EnsureOnlineMetadataConsentAsync())
+        if (!CanRunMetadataActions || _metadataCoordinator == null
+            || !await EnsureOnlineMetadataConsentAsync()
+            || !CanRunMetadataActions)
             return;
 
         await _metadataCoordinator.QueueAllSourcesAsync(forceRefresh: true, CancellationToken.None);
         await LoadMetadataTasksAsync(CancellationToken.None);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRunMetadataActions))]
+    private async Task ClearAllScrapeRecordsAsync()
+    {
+        if (!CanRunMetadataActions || _metadataCoordinator == null)
+            return;
+        var confirmed = await _dialogService.ConfirmAsync(
+            ResourceStringHelper.GetString(
+                "VideoLibraryClearAllScrapeRecordsDialogTitle",
+                "Clear all scrape records?"),
+            ResourceStringHelper.GetString(
+                "VideoLibraryClearAllScrapeRecordsDialogMessage",
+                "Stop current scraping and remove scraped series, season, episode, and movie catalog nodes together with imported Local and online metadata, matches, candidates, task history, provider caches, AniDB catalog projections, TMDB mappings, and cached online artwork? Each video returns to an unmatched item under All videos. Source files, sources, playback progress, favorites, tags, collections, AniDB MyList, accounts, credentials, and manual matches in the independent AniDB store are kept. This cannot be undone."),
+            ResourceStringHelper.GetString(
+                "VideoLibraryClearAllScrapeRecordsDialogPrimary",
+                "Clear all"),
+            ResourceStringHelper.GetString(
+                "VideoLibraryClearAllScrapeRecordsDialogCancel",
+                "Cancel"));
+        if (!confirmed || !CanRunMetadataActions)
+            return;
+
+        Volatile.Write(ref _suppressMetadataUiEvents, 1);
+        Interlocked.Increment(ref _metadataUiGeneration);
+        IsClearingScrapeRecords = true;
+        Exception? clearError = null;
+        try
+        {
+            try
+            {
+                await _metadataCoordinator.ClearAllScrapeRecordsAsync(CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                clearError = ex;
+            }
+
+            ResetMetadataScrapeUi();
+            Volatile.Write(ref _suppressMetadataUiEvents, 0);
+            Exception? reconciliationError = null;
+            try
+            {
+                await LoadVideosAsync();
+            }
+            catch (Exception ex)
+            {
+                reconciliationError = ex;
+            }
+            if (clearError != null)
+                await LoadMetadataTasksAsync(CancellationToken.None, CurrentMetadataUiGeneration);
+
+            var errorToReport = clearError ?? reconciliationError;
+            if (errorToReport == null)
+            {
+                _notificationService.ShowSuccess(
+                    ResourceStringHelper.GetString(
+                        "VideoLibraryClearAllScrapeRecordsSuccessMessage",
+                        "All scrape records were cleared."),
+                    ResourceStringHelper.GetString(
+                        "VideoLibraryClearAllScrapeRecordsSuccessTitle",
+                        "Scrape records cleared"));
+            }
+            else
+            {
+                _notificationService.ShowError(
+                    errorToReport.Message,
+                    ResourceStringHelper.GetString(
+                        "VideoLibraryClearAllScrapeRecordsFailedTitle",
+                        "Could not clear scrape records"));
+            }
+        }
+        finally
+        {
+            Volatile.Write(ref _suppressMetadataUiEvents, 0);
+            IsClearingScrapeRecords = false;
+        }
+    }
+
+    private void ResetMetadataScrapeUi()
+    {
+        _latestMetadataProgress.Clear();
+        _lastReloadedMetadataJobId = null;
+        MetadataTasks = new ObservableCollection<VideoMetadataTaskViewModel>();
+        IsMetadataTaskPanelOpen = false;
+        HasBackgroundMetadataTask = false;
+        BackgroundMetadataProgress = 0;
+        BackgroundMetadataText = "";
+        HasActiveMetadataRefresh = false;
+        IsMetadataRefreshIndeterminate = false;
+        MetadataRefreshProgress = 0;
+        MetadataRefreshText = "";
     }
 
     [RelayCommand]
@@ -532,20 +660,24 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         await LoadMetadataTasksAsync(CancellationToken.None);
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRunMetadataActions))]
     private async Task RetryMetadataTaskAsync(VideoMetadataTaskViewModel task)
     {
-        if (_metadataCoordinator == null || !await EnsureOnlineMetadataConsentAsync())
+        if (!CanRunMetadataActions || _metadataCoordinator == null
+            || !await EnsureOnlineMetadataConsentAsync()
+            || !CanRunMetadataActions)
             return;
 
         await _metadataCoordinator.RetryTaskAsync(task.JobId, CancellationToken.None);
         await LoadMetadataTasksAsync(CancellationToken.None);
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRunMetadataActions))]
     private async Task RetryFailedMetadataTasksAsync()
     {
-        if (_metadataCoordinator == null || !await EnsureOnlineMetadataConsentAsync())
+        if (!CanRunMetadataActions || _metadataCoordinator == null
+            || !await EnsureOnlineMetadataConsentAsync()
+            || !CanRunMetadataActions)
             return;
 
         await _metadataCoordinator.RetryFailedTasksAsync(CancellationToken.None);
@@ -559,24 +691,29 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         SelectLibraryView(nameof(VideoLibraryView.NeedsReview));
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRunScanOrRefreshActions))]
     private async Task RefreshSourceAsync(VideoLibrarySourceSummary summary)
     {
+        if (!CanRunScanOrRefreshActions)
+            return;
+        var metadataUiGeneration = CurrentMetadataUiGeneration;
         var result = await _videoLibraryService.RefreshSourceAsync(summary.Source.Id, _cts.Token);
         if (!result.IsSuccess && !result.IsCancelled)
             _notificationService.ShowError(result.Error!, result.ErrorTitle!);
         await LoadVideosAsync();
         if (result.IsSuccess && _metadataCoordinator != null && IsOnlineMetadataEnabled
+            && IsMetadataUiGenerationCurrent(metadataUiGeneration)
             && Guid.TryParse(summary.Source.Id, out var sourceId))
             await _metadataCoordinator.QueueSourceRefreshAsync(sourceId, forceRefresh: false, CancellationToken.None);
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRunMetadataActions))]
     private async Task RefreshSourceMetadataAsync(VideoLibrarySourceSummary summary)
     {
-        if (_metadataCoordinator == null || !Guid.TryParse(summary.Source.Id, out var sourceId))
+        if (!CanRunMetadataActions || _metadataCoordinator == null
+            || !Guid.TryParse(summary.Source.Id, out var sourceId))
             return;
-        if (!await EnsureOnlineMetadataConsentAsync())
+        if (!await EnsureOnlineMetadataConsentAsync() || !CanRunMetadataActions)
             return;
         await _metadataCoordinator.QueueSourceRefreshAsync(sourceId, forceRefresh: true, CancellationToken.None);
     }
@@ -620,9 +757,11 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
             _notificationService.ShowError(result.Error!, result.ErrorTitle!);
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRunScanOrRefreshActions))]
     private async Task RemoveMissingVideosAsync()
     {
+        if (!CanRunScanOrRefreshActions)
+            return;
         var result = await _videoLibraryService.RemoveMissingVideosAsync(_cts.Token);
         if (!result.IsSuccess)
         {
@@ -844,10 +983,9 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
                     series.MetadataYear,
                     cts.Token);
 
-            // A scraped season can have its own provider identity (for example,
-            // Bangumi's season 3 entry).  That detail response is valid but only
-            // contains one season.  Resolve the series title as well and keep
-            // the richer response so every remote season/episode is represented.
+            // A split-cour provider node can expose only its own episodes. Resolve
+            // the root title as a fallback and retain whichever response has the
+            // richer season ordering.
             if (series.MetadataMediaKind != VideoMetadataMediaKind.Movie)
             {
                 var titleResult = await _discoveryService!.GetDetailsByTitleAsync(
@@ -1008,12 +1146,15 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     [RelayCommand]
     private void CloseVideoDetails() => SelectedVideo = null;
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRunMetadataActions))]
     private async Task RefreshSelectedMetadataAsync()
     {
-        if (SelectedVideo?.Video.CatalogAssetId is not Guid assetId || _metadataCoordinator == null)
+        if (!CanRunMetadataActions || _metadataCoordinator == null
+            || SelectedVideo?.Video.CatalogAssetId is not Guid assetId)
             return;
         var allowNetwork = await EnsureOnlineMetadataConsentAsync();
+        if (!CanRunMetadataActions)
+            return;
         try
         {
             var result = await _metadataCoordinator.RefreshAssetAsync(assetId, allowNetwork, _cts.Token);
@@ -1075,10 +1216,11 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         await LoadVideosAsync();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRunScanOrRefreshActions))]
     private async Task FullScanSourceAsync(VideoLibrarySourceSummary summary)
     {
-        if (_scanCoordinator == null || !Guid.TryParse(summary.Source.Id, out var sourceId))
+        if (!CanRunScanOrRefreshActions || _scanCoordinator == null
+            || !Guid.TryParse(summary.Source.Id, out var sourceId))
             return;
         await _scanCoordinator.ScanSourceAsync(sourceId, fullScan: true, _cts.Token);
         await LoadVideosAsync();
@@ -1098,10 +1240,11 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
             await _scanCoordinator.PauseAsync(sourceId, _cts.Token);
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRunScanOrRefreshActions))]
     private async Task ResumeSourceScanAsync(VideoLibrarySourceSummary summary)
     {
-        if (_scanCoordinator != null && Guid.TryParse(summary.Source.Id, out var sourceId))
+        if (CanRunScanOrRefreshActions && _scanCoordinator != null
+            && Guid.TryParse(summary.Source.Id, out var sourceId))
             await _scanCoordinator.ResumeAsync(sourceId, _cts.Token);
     }
 
@@ -1321,7 +1464,10 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         CurrentViewTitle = series.Title;
         CurrentViewSubtitle = series.FactsText;
         SeriesEpisodesError = null;
-        if (_discoveryService is not null)
+        // Scraped season/order data is catalog state. Page entry and player-close
+        // refreshes consume it directly; the background metadata coordinator owns
+        // TTL refreshes, so details navigation must not start another title scrape.
+        if (_discoveryService is not null && !series.HasRemoteSeasonMetadata)
         {
             var cts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
             _seriesEpisodesCts = cts;
@@ -1502,22 +1648,23 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
 
     private async Task LoadVideosAsync()
     {
-        try
-        {
-            _cts.Cancel();
-        }
-        finally
-        {
-            _cts.Dispose();
-        }
-
-        _cts = new CancellationTokenSource();
+        var loadCts = new CancellationTokenSource();
+        var loadToken = loadCts.Token;
+        var previousCts = Interlocked.Exchange(ref _cts, loadCts);
+        previousCts.Cancel();
+        // The previous source can still have asynchronous consumers registering
+        // callbacks through an already captured token. Let it become collectible
+        // with those consumers instead of racing them with Dispose().
         IsContentLoading = true;
 
-        var videosTask = _videoLibraryService.GetVideosAsync(ct: _cts.Token);
-        var collectionsTask = _videoLibraryService.GetCollectionsAsync(_cts.Token);
-        var sourcesTask = _videoLibraryService.GetSourcesAsync(_cts.Token);
+        var videosTask = _videoLibraryService.GetVideosAsync(ct: loadToken);
+        var collectionsTask = _videoLibraryService.GetCollectionsAsync(loadToken);
+        var sourcesTask = _videoLibraryService.GetSourcesAsync(loadToken);
         await Task.WhenAll(videosTask, collectionsTask, sourcesTask);
+
+        if (!ReferenceEquals(Volatile.Read(ref _cts), loadCts)
+            || loadToken.IsCancellationRequested)
+            return;
 
         var videoResult = await videosTask;
         var collectionResult = await collectionsTask;
@@ -1606,16 +1753,28 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
 
     private void OnMetadataBatchProgressChanged(object? sender, VideoMetadataBatchProgress progress)
     {
+        var generation = CurrentMetadataUiGeneration;
+        if (!IsMetadataUiGenerationCurrent(generation))
+            return;
         if (_uiContext != null && SynchronizationContext.Current != _uiContext)
         {
-            _uiContext.Post(_ => ApplyMetadataBatchProgress(progress), null);
+            _uiContext.Post(_ =>
+            {
+                if (IsMetadataUiGenerationCurrent(generation))
+                    ApplyMetadataBatchProgress(progress, generation);
+            }, null);
             return;
         }
-        ApplyMetadataBatchProgress(progress);
+        if (IsMetadataUiGenerationCurrent(generation))
+            ApplyMetadataBatchProgress(progress, generation);
     }
 
-    private void ApplyMetadataBatchProgress(VideoMetadataBatchProgress progress)
+    private void ApplyMetadataBatchProgress(
+        VideoMetadataBatchProgress progress,
+        long metadataUiGeneration)
     {
+        if (!IsMetadataUiGenerationCurrent(metadataUiGeneration))
+            return;
         _latestMetadataProgress[progress.SourceId] = progress;
         ApplyMetadataTaskProgress(progress);
         SourceSummaries.FirstOrDefault(summary =>
@@ -1634,7 +1793,7 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
                 _lastReloadedMetadataJobId = progress.JobId;
                 _ = LoadVideosAsync();
             }
-            _ = LoadMetadataTasksAsync(CancellationToken.None);
+            _ = LoadMetadataTasksAsync(CancellationToken.None, metadataUiGeneration);
             return;
         }
         BackgroundMetadataProgress = active.TotalCount > 0
@@ -1682,8 +1841,13 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         OnPropertyChanged(nameof(MetadataTaskCountText));
     }
 
-    private async Task LoadMetadataTasksAsync(CancellationToken ct)
+    private async Task LoadMetadataTasksAsync(
+        CancellationToken ct,
+        long? expectedMetadataUiGeneration = null)
     {
+        var metadataUiGeneration = expectedMetadataUiGeneration ?? CurrentMetadataUiGeneration;
+        if (!IsMetadataUiGenerationCurrent(metadataUiGeneration))
+            return;
         if (_metadataCoordinator == null)
         {
             MetadataTasks = new ObservableCollection<VideoMetadataTaskViewModel>();
@@ -1693,6 +1857,8 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         try
         {
             var snapshots = await _metadataCoordinator.GetTaskHistoryAsync(50, ct);
+            if (!IsMetadataUiGenerationCurrent(metadataUiGeneration))
+                return;
             var sourceNames = _sources
                 .Where(source => Guid.TryParse(source.Id, out _))
                 .ToDictionary(source => Guid.Parse(source.Id), source => source.Name);
@@ -1709,6 +1875,8 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         }
         catch (Exception ex)
         {
+            if (!IsMetadataUiGenerationCurrent(metadataUiGeneration))
+                return;
             _notificationService.ShowError(
                 ex.Message,
                 ResourceStringHelper.GetString(
@@ -1719,16 +1887,28 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
 
     private void OnMetadataProgressChanged(object? sender, VideoMetadataRefreshProgress progress)
     {
+        var generation = CurrentMetadataUiGeneration;
+        if (!IsMetadataUiGenerationCurrent(generation))
+            return;
         if (_uiContext != null && SynchronizationContext.Current != _uiContext)
         {
-            _uiContext.Post(_ => ApplyMetadataProgress(progress), null);
+            _uiContext.Post(_ =>
+            {
+                if (IsMetadataUiGenerationCurrent(generation))
+                    ApplyMetadataProgress(progress, generation);
+            }, null);
             return;
         }
-        ApplyMetadataProgress(progress);
+        if (IsMetadataUiGenerationCurrent(generation))
+            ApplyMetadataProgress(progress, generation);
     }
 
-    private void ApplyMetadataProgress(VideoMetadataRefreshProgress progress)
+    private void ApplyMetadataProgress(
+        VideoMetadataRefreshProgress progress,
+        long metadataUiGeneration)
     {
+        if (!IsMetadataUiGenerationCurrent(metadataUiGeneration))
+            return;
         if (HasBackgroundMetadataTask)
             return;
         HasActiveMetadataRefresh = progress.Stage != VideoMetadataRefreshStage.Completed;
@@ -1753,7 +1933,23 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         MetadataRefreshText = string.IsNullOrWhiteSpace(itemTitle)
             ? stage
             : $"{stage} · {itemTitle}";
+        if (progress.Stage == VideoMetadataRefreshStage.Completed
+            && (SelectedSeries != null || SelectedVideo != null))
+        {
+            // AniDB identification/enrichment can finish after the original
+            // source batch has already left the pending state. Reload an open
+            // series/detail view immediately, but leave browse/home projections
+            // stable while individual assets settle. Batch completion performs
+            // the single catalog reload those views need.
+            _ = LoadVideosAsync();
+        }
     }
+
+    private long CurrentMetadataUiGeneration => Interlocked.Read(ref _metadataUiGeneration);
+
+    private bool IsMetadataUiGenerationCurrent(long generation) =>
+        Volatile.Read(ref _suppressMetadataUiEvents) == 0
+        && generation == CurrentMetadataUiGeneration;
 
     private void OnScanProgressChanged(object? sender, VideoLibraryScanProgress progress)
     {
@@ -1816,6 +2012,10 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         OnPropertyChanged(nameof(IsFoldersView));
         OnPropertyChanged(nameof(IsCollectionsView));
         OnPropertyChanged(nameof(IsTagsView));
+        OnPropertyChanged(nameof(IsAllVideosView));
+        OnPropertyChanged(nameof(IsMoviesView));
+        OnPropertyChanged(nameof(IsAnimeView));
+        OnPropertyChanged(nameof(IsAllVideosFilterView));
         OnPropertyChanged(nameof(IsSourcesView));
         OnPropertyChanged(nameof(IsVideoCatalogView));
         OnPropertyChanged(nameof(IsSeriesBrowseView));
@@ -1849,13 +2049,17 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     {
         var selectedId = SelectedSeries?.Id;
         var selectedSeason = SelectedSeries?.SelectedSeason;
+        var selectedRemoteSeasons = SelectedSeries?.Seasons
+            .Select(season => season.RemoteSeason)
+            .OfType<VideoDiscoverySeason>()
+            .ToList() ?? [];
         var nodeGroups = _allVideos
             .Where(video => video.CatalogSeriesNodeId.HasValue
                             && video.LibraryMediaType != VideoLibraryMediaType.Anime)
             .GroupBy(video => video.CatalogSeriesNodeId!.Value)
             .Select(group => new SeriesNodeGroup(group.Key, group))
             .ToList();
-        var seriesGroups = MergeRelatedSeriesGroups(nodeGroups, selectedId);
+        var seriesGroups = MergeRelatedSeriesGroups(nodeGroups);
         SeriesCards = new ObservableCollection<VideoSeriesViewModel>(seriesGroups
             .Where(group => string.IsNullOrWhiteSpace(SearchText)
                             || group.Videos.Any(video => MatchesSearch(video, SearchText.Trim())))
@@ -1864,6 +2068,8 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
         SelectedSeries = selectedId.HasValue
             ? SeriesCards.FirstOrDefault(series => series.Id == selectedId.Value)
             : null;
+        if (SelectedSeries != null && selectedRemoteSeasons.Count > 0)
+            SelectedSeries.ApplyRemoteSeasons(selectedRemoteSeasons);
         if (SelectedSeries != null && selectedSeason != null)
             SelectedSeries.SelectSeason(selectedSeason.SeasonNumber);
         if (SelectedLibraryView == VideoLibraryView.Series && SelectedSeries == null)
@@ -1887,8 +2093,7 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     }
 
     private static IReadOnlyList<SeriesNodeGroup> MergeRelatedSeriesGroups(
-        IReadOnlyList<SeriesNodeGroup> groups,
-        Guid? selectedNodeId)
+        IReadOnlyList<SeriesNodeGroup> groups)
     {
         if (groups.Count < 2)
             return groups;
@@ -1931,18 +2136,21 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
             .Select(memberIndexes =>
             {
                 var members = memberIndexes.Select(index => groups[index]).ToList();
-                var selectedMember = selectedNodeId.HasValue
-                    ? members.FirstOrDefault(member => member.NodeIds.Contains(selectedNodeId.Value))
-                    : null;
-                var primary = selectedMember
-                              ?? members
-                                  .OrderByDescending(member => member.Videos.Count)
-                                  .ThenByDescending(member => member.Videos.Count(video => video.IsAvailable))
-                                  .ThenBy(member => member.NodeId)
-                                  .First();
+                // Shoko keeps a stable root series/group even when a later season
+                // has more files or was imported more recently. Prefer the earliest
+                // known series year; use file counts only when metadata cannot tell
+                // the root nodes apart.
+                var primary = members
+                    .OrderBy(member => EarliestSeriesYear(member.Videos) ?? int.MaxValue)
+                    .ThenByDescending(member => member.Videos.Count)
+                    .ThenByDescending(member => member.Videos.Count(video => video.IsAvailable))
+                    .ThenBy(member => member.NodeId)
+                    .First();
                 var merged = new SeriesNodeGroup(
                     primary.NodeId,
-                    members.SelectMany(member => member.Videos));
+                    primary.Videos.Concat(
+                        members.Where(member => member != primary)
+                            .SelectMany(member => member.Videos)));
                 merged.NodeIds.Clear();
                 foreach (var member in members)
                 {
@@ -1955,10 +2163,43 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
             .ToList();
     }
 
+    private static int? EarliestSeriesYear(IEnumerable<VideoItem> videos)
+    {
+        var years = videos
+            .Select(video => video.CatalogSeriesReleaseYear ?? video.ReleaseYear)
+            .Where(year => year.HasValue)
+            .Select(year => year!.Value)
+            .ToList();
+        return years.Count > 0 ? years.Min() : null;
+    }
+
     private static HashSet<string> BuildSeriesIdentityKeys(IEnumerable<VideoItem> videos)
     {
+        var videoList = videos.ToList();
         var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var video in videos)
+
+        // AniDB identifies each anime entry (AID) separately. Shoko only rolls
+        // those entries up when its persisted group projection says they belong
+        // together; shared cross-references, search candidates, and season-less
+        // titles are not strong enough to override that identity boundary.
+        var hasConfirmedAniDbIdentity = videoList.Any(video => video.ExternalIds.Any(pair =>
+            pair.Key.Equals("anidb", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(pair.Value)));
+        if (hasConfirmedAniDbIdentity)
+        {
+            foreach (var groupId in videoList
+                         .SelectMany(video => video.ExternalIds)
+                         .Where(pair => pair.Key.Equals("anidb-group", StringComparison.OrdinalIgnoreCase)
+                                        && !string.IsNullOrWhiteSpace(pair.Value))
+                         .Select(pair => pair.Value.Trim()))
+            {
+                keys.Add($"id:anidb-group:{groupId}");
+            }
+
+            return keys;
+        }
+
+        foreach (var video in videoList)
         {
             foreach (var pair in video.ExternalIds)
             {
@@ -1994,10 +2235,7 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
     private static bool IsSeriesIdentityProvider(string providerId) =>
         providerId.Equals("tmdb", StringComparison.OrdinalIgnoreCase)
         || providerId.Equals("tvmaze", StringComparison.OrdinalIgnoreCase)
-        || providerId.Equals("anilist", StringComparison.OrdinalIgnoreCase)
-        || providerId.Equals("bangumi", StringComparison.OrdinalIgnoreCase)
-        || providerId.Equals("anidb", StringComparison.OrdinalIgnoreCase)
-        || providerId.Equals("mal", StringComparison.OrdinalIgnoreCase);
+        || providerId.Equals("anidb", StringComparison.OrdinalIgnoreCase);
 
     private static string NormalizeSeriesTitle(string title)
     {
@@ -2197,10 +2435,6 @@ public partial class VideoLibraryPageViewModel : ObservableObject,
                 }
                 return summary;
             }));
-        OnPropertyChanged(nameof(HomeMoviesCountText));
-        OnPropertyChanged(nameof(HomeSeriesCountText));
-        OnPropertyChanged(nameof(HomeAnimeCountText));
-        OnPropertyChanged(nameof(HomeCollectionsCountText));
     }
 
     private static bool MatchesSearch(VideoItem video, string query) =>
@@ -2452,7 +2686,6 @@ public sealed partial class VideoLibrarySourceSummary : ObservableObject
         ["tvmaze"] = "tvmaze",
         ["anilist"] = "anilist",
         ["anidb"] = "anidb",
-        ["bangumi"] = "bangumi",
         ["tvdb"] = "tvdb",
     };
 

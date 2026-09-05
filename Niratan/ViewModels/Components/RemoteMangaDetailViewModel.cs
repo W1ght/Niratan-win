@@ -115,6 +115,13 @@ public sealed partial class RemoteMangaDetailViewModel : ObservableObject
     [ObservableProperty]
     public partial string SelectedExtensionId { get; set; } = string.Empty;
 
+    [ObservableProperty]
+    public partial RemoteMangaExtensionOptionViewModel? SelectedExtension
+    {
+        get;
+        set;
+    }
+
     public void ApplyDetails(
         string? title,
         string? author,
@@ -197,6 +204,8 @@ public sealed partial class RemoteMangaDetailViewModel : ObservableObject
                         StringComparison.Ordinal);
                     return option;
                 }));
+        SelectedExtension = ExtensionOptions.FirstOrDefault(option =>
+            string.Equals(option.Id, selectedKey, StringComparison.Ordinal));
         SelectedExtensionId = selectedKey;
     }
 
@@ -210,6 +219,8 @@ public sealed partial class RemoteMangaDetailViewModel : ObservableObject
                 StringComparison.Ordinal);
         }
 
+        SelectedExtension = ExtensionOptions.FirstOrDefault(option =>
+            string.Equals(option.Id, id, StringComparison.Ordinal));
         SelectedExtensionId = id;
     }
 }

@@ -37,7 +37,7 @@ public sealed class VideoLibrarySourceSummaryTests
         var summary = new VideoLibrarySourceSummary(source, 0, 0, 0)
         {
             MediaTypeDraft = VideoLibraryMediaType.Movie,
-            ProviderOrderDraft = "Local → TMDB, bangumi, tmdb",
+            ProviderOrderDraft = "Local → TMDB, anidb, tmdb",
         };
 
         summary.MediaTypeSelectedIndex.Should().Be((int)VideoLibraryMediaType.Movie);
@@ -48,12 +48,12 @@ public sealed class VideoLibrarySourceSummaryTests
         summary.TryApplyProviderOrder(out var invalid).Should().BeTrue();
         invalid.Should().BeNull();
         source.MediaType.Should().Be(VideoLibraryMediaType.Movie);
-        source.ProviderOrder.Should().Equal("local", "tmdb", "bangumi");
+        source.ProviderOrder.Should().Equal("local", "tmdb", "anidb");
 
-        summary.ProviderOrderDraft = "local, unknown-provider";
+        summary.ProviderOrderDraft = "local, bangumi";
         summary.TryApplyProviderOrder(out invalid).Should().BeFalse();
-        invalid.Should().Be("unknown-provider");
-        source.ProviderOrder.Should().Equal("local", "tmdb", "bangumi");
+        invalid.Should().Be("bangumi");
+        source.ProviderOrder.Should().Equal("local", "tmdb", "anidb");
     }
 
     [Fact]

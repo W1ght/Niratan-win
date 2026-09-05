@@ -205,8 +205,7 @@
                                       IsEnabled="{Binding SelectedRemoteMangaDetails.IsActionBusy, Converter={StaticResource BooleanNegationConverter}, Mode=OneWay}"
                                       ItemTemplate="{StaticResource RemoteMangaExtensionTemplate}"
                                       ItemsSource="{Binding SelectedRemoteMangaDetails.ExtensionOptions, Mode=OneWay}"
-                                      SelectedValue="{Binding SelectedRemoteMangaDetails.SelectedExtensionId, Mode=OneWay}"
-                                      SelectedValuePath="Id"
+                                      SelectedItem="{Binding SelectedRemoteMangaDetails.SelectedExtension, Mode=OneWay}"
                                       SelectionChanged="RemoteMangaExtensionsComboBox_SelectionChanged" />
                         </StackPanel>
                         <ListView Grid.Row="2"

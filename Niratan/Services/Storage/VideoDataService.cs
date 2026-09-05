@@ -412,6 +412,7 @@ internal sealed class VideoDataService : IVideoDataService
             Studios = descriptiveNode?.Studios.IsDefault == false ? descriptiveNode.Studios : [],
             People = descriptiveNode?.People.IsDefault == false ? descriptiveNode.People : [],
             RelatedItems = descriptiveNode?.RelatedItems.IsDefault == false ? descriptiveNode.RelatedItems : [],
+            CatalogSeriesSeasons = BuildCatalogSeriesSeasons(snapshot, seriesNode),
             PosterPath = asset.PosterPath ?? node?.PosterPath ?? seriesNode?.PosterPath,
             Tags = asset.Tags.Length == 0 ? null : string.Join(", ", asset.Tags),
             CollectionName = asset.ParentFolder,
@@ -442,6 +443,55 @@ internal sealed class VideoDataService : IVideoDataService
             item.SubtitleSelectionKind = VideoSubtitleSelectionKind.RemoteLanguage;
         }
         return item;
+    }
+
+    private static IReadOnlyList<VideoDiscoverySeason> BuildCatalogSeriesSeasons(
+        VideoCatalogSnapshot snapshot,
+        VideoCatalogNodeSnapshot? seriesNode)
+    {
+        if (seriesNode == null || seriesNode.Seasons.IsDefaultOrEmpty)
+            return [];
+        return seriesNode.Seasons
+            .OrderBy(season => season.SeasonNumber)
+            .Select(season =>
+            {
+                var seasonNode = snapshot.Nodes.FirstOrDefault(node =>
+                    node.ParentId == seriesNode.Id
+                    && node.Kind == VideoCatalogNodeKind.Season
+                    && node.SeasonNumber == season.SeasonNumber);
+                var metadataEpisodes = season.Episodes.IsDefault
+                    ? ImmutableArray<VideoMetadataEpisode>.Empty
+                    : season.Episodes;
+                var episodes = metadataEpisodes.Select(episode =>
+                {
+                    var episodeNode = snapshot.Nodes.FirstOrDefault(node =>
+                        node.Kind == VideoCatalogNodeKind.Episode
+                        && node.EpisodeNumber == episode.EpisodeNumber
+                        && (node.ParentId == seasonNode?.Id
+                            || seasonNode == null && node.ParentId == seriesNode.Id));
+                    return new VideoDiscoveryEpisode(
+                        episode.EpisodeNumber,
+                        episode.Title,
+                        episode.OriginalTitle,
+                        episode.Overview,
+                        episode.AirDate,
+                        episode.RuntimeMinutes,
+                        episode.ThumbnailUrl,
+                        episode.SourceUrl,
+                        episodeNode?.ThumbPath,
+                        episode.DisplayNumber);
+                }).ToImmutableArray();
+                return new VideoDiscoverySeason(
+                    season.SeasonNumber,
+                    season.Title,
+                    season.Overview,
+                    season.AirDate,
+                    Math.Max(0, season.EpisodeCount ?? episodes.Length),
+                    season.PosterUrl,
+                    episodes,
+                    seasonNode?.PosterPath);
+            })
+            .ToArray();
     }
 
     private static VideoCatalogNodeSnapshot? FindAncestor(

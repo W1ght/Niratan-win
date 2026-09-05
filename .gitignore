@@ -378,3 +378,8 @@ native/out/
 
 # Local Codex/Superpowers planning artifacts
 .superpowers/
+
+# Scratch build/diagnostic output. Only the subpaths containing a "x64" segment were
+# covered before, so the rest leaked into `git status` as untracked release candidates.
+.codex-tmp/
+test-output/

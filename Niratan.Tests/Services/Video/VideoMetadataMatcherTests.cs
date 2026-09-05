@@ -138,7 +138,7 @@ public sealed class VideoMetadataMatcherTests
     }
 
     [Fact]
-    public void AnimeJointMatch_FallsBackToAniListDetailsWhenTmdbIsUnavailable()
+    public void AnimeJointMatch_DoesNotUseAniListDetailsWhenTmdbIsUnavailable()
     {
         var aniDb = Candidate("anidb", "10972", "干物妹!うまるちゃん", 2015, null);
         var aniList = Candidate("anilist", "20987", "干物妹!うまるちゃん", 2015, null);
@@ -150,12 +150,12 @@ public sealed class VideoMetadataMatcherTests
         var selected = VideoMetadataCoordinator.SelectPrimaryDetailsCandidate(
             VideoMetadataMediaKind.Anime, accepted, [accepted, aniListScore]);
 
-        selected.ProviderId.Should().Be("anilist");
+        selected.ProviderId.Should().Be("anidb");
         selected.ExternalIds.Should().Contain("anidb", "10972");
     }
 
     [Fact]
-    public void LockedAniDbIdentity_StillUsesExactAniListCandidateForRichDetails()
+    public void LockedAniDbIdentity_DoesNotUseExactAniListCandidateForDetails()
     {
         var aniDb = Candidate("anidb", "10972", "干物妹!うまるちゃん", 2015, null);
         var aniList = Candidate("anilist", "20987", "干物妹!うまるちゃん", 2015, null);
@@ -167,9 +167,9 @@ public sealed class VideoMetadataMatcherTests
         var selected = VideoMetadataCoordinator.SelectPrimaryDetailsCandidate(
             VideoMetadataMediaKind.Anime, accepted, [accepted, aniListScore]);
 
-        selected.ProviderId.Should().Be("anilist");
+        selected.ProviderId.Should().Be("anidb");
         selected.ExternalIds.Should().Contain("anidb", "10972");
-        selected.ExternalIds.Should().Contain("anilist", "20987");
+        selected.ExternalIds.Should().NotContainKey("anilist");
     }
 
     [Fact]
@@ -184,6 +184,32 @@ public sealed class VideoMetadataMatcherTests
             hasYearEvidence: false);
 
         kind.Should().Be(VideoMetadataMediaKind.Anime);
+    }
+
+    [Theory]
+    [InlineData(VideoLibraryMediaType.Anime, VideoMetadataMediaKind.Anime)]
+    [InlineData(VideoLibraryMediaType.Auto, VideoMetadataMediaKind.Anime)]
+    public void AnimeProviderRoute_IsAlwaysAniDbThenTmdb(
+        VideoLibraryMediaType sourceType,
+        VideoMetadataMediaKind mediaKind)
+    {
+        var route = VideoMetadataCoordinator.ResolveProviderOrder(
+            sourceType,
+            mediaKind,
+            ["bangumi", "anilist", "tvmaze", "tmdb"]);
+
+        route.Should().Equal("anidb", "tmdb");
+    }
+
+    [Fact]
+    public void GeneralProviderRoute_DropsLegacyBangumiEntry()
+    {
+        var route = VideoMetadataCoordinator.ResolveProviderOrder(
+            VideoLibraryMediaType.JapaneseDramaTv,
+            VideoMetadataMediaKind.Series,
+            ["bangumi", "tvmaze", "tmdb"]);
+
+        route.Should().Equal("tvmaze", "tmdb");
     }
 
     [Fact]

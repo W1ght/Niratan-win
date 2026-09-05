@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.Messaging;
+using Niratan.Messages;
 
 namespace Niratan.Services.Sync;
 
@@ -14,20 +16,25 @@ public sealed class GoogleDriveAuthService : IGoogleDriveAuthService
     private readonly GoogleDriveTokenClient _tokenClient;
     private readonly IGoogleOAuthLoopbackReceiver _loopbackReceiver;
     private readonly IBrowserLauncher _browserLauncher;
+    private readonly IMessenger _messenger;
+    private int _credentialsInvalidated;
 
     public GoogleDriveAuthService(
         IGoogleDriveCredentialStore credentialStore,
         GoogleDriveTokenClient tokenClient,
         IGoogleOAuthLoopbackReceiver loopbackReceiver,
-        IBrowserLauncher browserLauncher)
+        IBrowserLauncher browserLauncher,
+        IMessenger messenger)
     {
         _credentialStore = credentialStore;
         _tokenClient = tokenClient;
         _loopbackReceiver = loopbackReceiver;
         _browserLauncher = browserLauncher;
+        _messenger = messenger;
     }
 
-    public bool HasCredentials => _credentialStore.HasCredentials;
+    public bool HasCredentials => Volatile.Read(ref _credentialsInvalidated) == 0
+        && _credentialStore.HasCredentials;
 
     public async Task AuthenticateAsync(
         string clientId,
@@ -68,6 +75,8 @@ public sealed class GoogleDriveAuthService : IGoogleDriveAuthService
             codeVerifier,
             ct);
         await _credentialStore.SaveAsync(credentials, ct);
+        Interlocked.Exchange(ref _credentialsInvalidated, 0);
+        _messenger.Send(new GoogleDriveConnectionStateChangedMessage(IsConnected: true));
     }
 
     public async Task<string> GetAccessTokenAsync(CancellationToken ct = default)
@@ -77,15 +86,49 @@ public sealed class GoogleDriveAuthService : IGoogleDriveAuthService
 
         if (credentials.ShouldRefresh(DateTimeOffset.UtcNow))
         {
-            credentials = await _tokenClient.RefreshAsync(credentials, ct);
-            await _credentialStore.SaveAsync(credentials, ct);
+            try
+            {
+                credentials = await _tokenClient.RefreshAsync(credentials, ct);
+                await _credentialStore.SaveAsync(credentials, ct);
+            }
+            catch (GoogleDriveTokenRequestException ex) when (
+                string.Equals(ex.ErrorCode, "invalid_grant", StringComparison.Ordinal))
+            {
+                await InvalidateCredentialsAsync(ex);
+            }
         }
 
         return credentials.AccessToken;
     }
 
-    public Task SignOutAsync(CancellationToken ct = default) =>
-        _credentialStore.DeleteAsync(ct);
+    public async Task SignOutAsync(CancellationToken ct = default)
+    {
+        await _credentialStore.DeleteAsync(ct);
+        Interlocked.Exchange(ref _credentialsInvalidated, 1);
+        _messenger.Send(new GoogleDriveConnectionStateChangedMessage(IsConnected: false));
+    }
+
+    private async Task InvalidateCredentialsAsync(GoogleDriveTokenRequestException refreshError)
+    {
+        Interlocked.Exchange(ref _credentialsInvalidated, 1);
+        Exception cause = refreshError;
+        try
+        {
+            await _credentialStore.DeleteAsync(CancellationToken.None);
+        }
+        catch (Exception deleteError)
+        {
+            cause = new AggregateException(refreshError, deleteError);
+        }
+        finally
+        {
+            _messenger.Send(new GoogleDriveConnectionStateChangedMessage(
+                IsConnected: false,
+                RequiresReconnect: true));
+        }
+
+        throw new GoogleDriveReauthenticationRequiredException(cause);
+    }
 
     private static Uri BuildAuthorizationUri(
         string clientId,

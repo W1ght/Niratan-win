@@ -225,7 +225,7 @@ YYYY-MM-DD-uia-tree.txt
 4. Final boundary：Background 和 Close 都先阻止/排空旧 writer，保存最终 bookmark 与 statistics checkpoint，再 `FlushAsync`；Close 最后才 `Cancel()` 且幂等，Background 完成后恢复 writer admission。mock 调用序列必须证明最后一次 export 看见最终 checkpoint。
 5. Writer lifecycle：让 writer A 以位置 X 入队并阻塞，随后把 UI 位置改为 Y，再放行 A；断言 bookmark、statistics checkpoint 和 sync schedule 对每个 admitted request 使用同一份 snapshot，A 不得混入 Y。后续 writer/final Close/Background 必须明确使用它们各自 admission 时的 Y（或更新后）snapshot。
 6. 设置页：关闭全局 Google Drive/ッツ Sync 时，statistics Sync 控件隐藏或禁用，但 `EnableStatisticsSync`、同步模式等已存值保持不变；重新开启全局 Sync 后恢复显示和值。断开凭据也不得静默重置统计偏好。
-7. 同步设置页：关闭全局同步时只保留 Syncing 区；重新开启后恢复 Client、Connection、Behaviour、Data 及原偏好。连接后 Client Secret 继续以 PasswordBox 掩码显示，离开/返回页面和重启应用后从 Windows Credential Manager 恢复；清缓存不清凭据，退出登录清凭据。
+7. 同步设置页：关闭全局同步时只保留 Syncing 区；重新开启后恢复 Client、Connection、Behaviour、Data 及原偏好。连接后 Client Secret 继续以 PasswordBox 掩码显示，离开/返回页面和重启应用后从 Windows Credential Manager 恢复；进入页面时验证需要刷新的令牌，清缓存不清凭据，退出登录清凭据。用 mock token endpoint 返回 `invalid_grant`，断言保存凭据立即失效、当前页面或重新进入的页面从“已连接”切为重新连接提示并显示连接按钮，错误信息不包含原始响应；5xx/网络错误只显示无法验证且不得误清凭据。
 8. 书籍右键同步：全局同步关闭时不显示 Sync；Auto 模式显示单个 Sync；Manual 模式显示 Import/Export 子菜单。使用鼠标、Shift+F10 和菜单键逐项验证，mock 断言方向和 book/statistics/audio payload 与设置快照一致。
 
 必跑自动化命令：
@@ -433,6 +433,10 @@ native/hoshidicts/src/lookup.cpp
    新组合且旧组合不再触发；用新组合在记事本选词验证后点击重置，确认恢复
    `Ctrl+Alt+D`。再设置一个被其他全局 action 或系统占用的组合，确认编辑器显示
    冲突或注册失败状态，且应用不会保留两个全局 hotkey。
+10. 在 Anki 复习卡片、浏览器页面和其他 Qt/Chromium 文本表面分别选词后触发全局
+    查词，确认 UI Automation 无选区时仍能通过一次性复制兜底打开词典；复制前放入
+    一段文本、图片或文件列表，查词后确认原剪贴板格式与内容已恢复。未选中文字时
+    不得误用旧剪贴板内容，也不得在未触发热键时监控或改写剪贴板。
 
 ---
 
@@ -479,24 +483,27 @@ dotnet build -p:Platform=x64
 自动化与 disposable fixture 至少确认：
 
 1. 迁移覆盖空库、本地/远程资产、Profile/字幕/海报、手动/智能集合、双重 membership、orphan、损坏/未来版本、重复 identity、并发与失败重试；源 JSON、播放历史和测试媒体哈希不变。
-2. 增量扫描只重复读取新增或大小/mtime 变化资产的 sidecar，但每次都执行轻量层级分类；`jellyfin-folder-hierarchy-v11` 只在升级后强制一次本地重解析，即使旧 v10 audit 已存在也必须生效。随后未变化资产不得重复解析或重建，未重读 NFO 时也不得把已有 Local 季集覆盖回文件名结果；完整扫描若 owner/binding 稳定，不得取消已完成 metadata 负缓存。枚举阶段立即显示不定进度，数量确定后显示“已处理 / 总数”、阶段、当前文件名与吞吐率。sidecar 分析并发不超过四路，进度节流且 catalog 按批提交；完整枚举才标记缺失。取消、暂停/恢复、部分枚举失败、来源删除、嵌套/重叠来源和迟到 generation 不清空用户数据或误写旧结果。
+2. 增量扫描只重复读取新增或大小/mtime 变化资产的 sidecar，但每次都执行轻量层级分类；`jellyfin-folder-hierarchy-v11` 与 `local-sidecar-scopes-v12` 只在升级后强制一次本地重解析。v12 fixture 必须覆盖 `remote_url IS NULL` 的重复 Local artwork、首选 artwork ID 重映射、null-safe 唯一索引和重复记录清理。随后未变化资产不得重复解析或重建，未重读 NFO 时也不得把已有 Local 季集覆盖回文件名结果；完整扫描重复两次不得增加 artwork，删除 NFO/图片后再完整扫描必须移除对应 Local 字段、external ID 与 catalog 图片引用，且 owner/binding 稳定时不得取消已完成 metadata 负缓存。枚举阶段立即显示不定进度，数量确定后显示“已处理 / 总数”、阶段、当前文件名与吞吐率。sidecar 分析并发不超过四路，进度节流且 catalog 按批提交；完整枚举才标记缺失。取消、暂停/恢复、部分枚举失败、来源删除、嵌套/重叠来源和迟到 generation 不清空用户数据或误写旧结果。
 3. 文件名 fixture 覆盖 `S01E02`、`1x02`、`S3`、`3rd Season`、全角第 N 話、多集范围、绝对集、cour、第 N 期、SP/OVA/OAD/NCOP/NCED、年份/重拍与显式 external ID；集号后的副标题与 series identity 分离，普通标题中的 `Trailer` 不误判，未知括号标签保留。目录 fixture 覆盖 `Show/Season` 的硬 owner、来源根单发布包回退、Shoko renamer 的 `Series - 01 [anidbid-x]` 新文件与无法确定 owner 的平铺混合来源；Shoko fixture 只验证新扫描，不触发旧 Shoko catalog 迁移。发布包内多个不同 Break Time 副标题不得生成多个 series；显式 `S00E01` 保留编号，`PV`、`menu`、trailers、featurettes、NCOP/NCED 和迷你动画进入无编号 Special Features，增删 supplemental 不改变既有节点 ID。`S01E01-E02` 在完整及增量扫描后都只有一个逻辑 Episode，结束集号保留在 asset。显式 Movie 来源的 `OVA The Movie` 保留完整标题且不得创建 Episode；旧错误 Movie hierarchy 仅在无保护、单资产时自动降级，否则候选必须留在 Needs Review。
-4. Local NFO 使用禁用 DTD/外部实体的受限 XML，超限或越界 sidecar 失败关闭；迁移、扫描、刷新和移除来源前后视频、音频、字幕、NFO 与图片哈希一致。
-5. 匹配确认显式 ID 逐 provider 锁定，provider 自动发现的 ID 只作查询提示，节点上一个锁定 ID 不得连带锁定其他 provider ID；唯一精确别名需要年份/季集佐证，模糊阈值为 `0.92 / 0.15` 且拒绝硬冲突。自动 Series/Anime metadata 只能丰富 series owner，不得改变 season/episode 绑定；结构化系列下的 Movie 结果不得改写 Episode 或接收 Movie artwork。空节点清理必须保留 Local field/artwork、锁定 field/external ID 与 node user data。人工 rematch 必须先显示身份、层级和字段 diff。
-6. Provider 测试只使用注入式 handler 和固定 JSON/XML/图片 fixture；覆盖 401 不重试、429/Retry-After、5xx/超时退避、取消、30 天 cache、ETag/Last-Modified、图片大小/格式/原子替换与旧详情保留。多个 provider 搜索同时启动但不突破各自 transport 限速；故意让后置 provider 先返回时，评分候选仍保持 route 顺序。CI 不访问实时网络。
+4. Local NFO 使用禁用 DTD/外部实体的受限 XML，超限或越界 sidecar 失败关闭；Jellyfin fixture 覆盖 `Show/tvshow.nfo + Show/poster + Season 01/season.nfo + episode.nfo + episode-thumb`，并验证系列、季、集字段和 poster/backdrop/thumb/logo/banner 各自落到正确 owner。title/original title/plot/year/genre/actor/external ID/tagline/rating/status/tag/studio/director 必须可投影；迁移、扫描、刷新和移除来源前后视频、音频、字幕、NFO 与图片哈希一致。
+5. 匹配确认显式 ID 逐 provider 锁定，provider 自动发现的 ID 只作查询提示，节点上一个锁定 ID 不得连带锁定其他 provider ID；AniDB fixture 必须确认显式 AID 不发起模糊标题搜索、AID 保持唯一锁定主身份，而 TMDB 丰富详情后只新增未锁定 cross-reference。两个不同 AID 即使共享同一 TMDB ID，也必须保留两个 AnimeSeries 节点。唯一精确别名需要年份/季集佐证，模糊阈值为 `0.92 / 0.15` 且拒绝硬冲突。自动 Series/Anime metadata 只能丰富 series owner，不得改变 season/episode 绑定；结构化系列下的 Movie 结果不得改写 Episode 或接收 Movie artwork。空节点清理必须保留 Local field/artwork、锁定 field/external ID 与 node user data。人工 rematch 必须先显示身份、层级和字段 diff。
+6. Provider 测试只使用注入式 handler、UDP transport 和固定 JSON/XML/图片 fixture；覆盖 401 不重试、429/Retry-After、5xx/超时退避、取消、30 天 cache、ETag/Last-Modified、图片大小/格式/原子替换与旧详情保留。AniDB fixture 覆盖 RFC1320/ED2K 单块及多块向量、AUTH 注册 UDP client 参数、独立 HTTP client 参数、FILE/FID/EID/AID 与多集百分比、UDP ANIME/EPISODE 降级解析、HTTP Anime/Episode/Relation/Tag/Creator、安全 XML、MYLIST 查询/新增/edit/删除、限流、session 重建、ban/backoff，以及专用 catalog 重启恢复；HTTP 302 必须持久失败并对未修改 identity 短路，只有显式验证可强制重试同 identity，失败 probe 保留短路，成功 probe 后重排已有 FILE match。未显式配置独立 HTTP identity 的 fixture 必须断言后台不发 HTTP 请求而立即生成 UDP degraded 投影；冷启动不访问 Video 页面也必须恢复并推进到期 import/MyList job。302 fixture 还必须证明已确认的本地 AID/EID可获得核心标题、AniDB 封面和真实分集标题，但实体、import job 与 metadata batch 分别保持 degraded、AnimeMetadata failed 和 Needs Review；新增同 AID 文件会增量补齐 EID，降级投影升级为完整 XML 时再次发出完成事件。旧误完成且缺少 Anime 实体的任务在启动时恢复；启动投影重放尊重联网同意和 scrape generation，不能与“清理全部刮削记录”竞态复活数据。Auto pending/retry/failed 不调用通用 provider，到期 unrecognized/Never/shared release match 会重新排队，只有未到期的明确 unrecognized/ignored 才允许回退；远端或不可用资产不进入 ED2K。AniDB 投影事件触发二阶段 enrichment，当前系列详情在单资产完成后原位重载。分集 fixture 必须同时包含 `E1/S1/C1/T1/P1/O1`、两个不同 EID 的 `S1`、重复持久快照和缺失 RawNumber 的旧记录；详情不得抛重复 key、不得丢失 typed 行，本地精确 EID 优先于同号丰富候选，多个 AID 的同号特别内容应合并，而 C/T/P/O 不得生成 `S00E01` 下载查询。测试只用虚拟注册 identity，不访问实时 UDP/HTTP，不写源媒体。设置与凭据测试断言 UDP 与 HTTP client ID/version 分别可持久化而用户名/密码不进入 settings JSON。TMDB fixture 还必须覆盖 Re:Zero 形态的“默认仅一个合并 regular season + type 7 TV episode group”：投影保留 Season 0、生成真实 S1–S4、每季集号从 1 重置且不再请求合并的默认 Season 1；无可用 TV group 时保持默认顺序。系列聚合 fixture 必须让后续季度文件数量更多且排在前面，仍断言最早根节点的标题、年份和 provider identity 不变；同 relation group 内每个 AID 的 regular EID 必须得到独立展示季号、标题和 owner series 海报。多个 provider 搜索同时启动但不突破各自 transport 限速；故意让后置 provider 先返回时，评分候选仍保持 route 顺序。CI 不访问实时网络。
 
 人工验证使用 disposable 动画、日剧、电影与音频目录：
 
 1. 首次打开 Video 自动增量扫描；主页面和来源页可见当前阶段、计数/总数、吞吐率及当前文件名。来源管理必须占用主内容区并随窗口宽度布局，不得回到固定宽度弹窗或裁切操作按钮；可调整 Auto/Anime/日剧/Movie、语言/区域，执行增量/完整扫描、暂停、恢复、取消并看到错误状态。
-2. 依次切换首页、发现、系列、全部视频和导入：首页/发现不得保留空的内容区命令行，系列/全部视频只显示搜索与排序；导入显示“扫描文件夹 / YouTube / 刷新 / 重新刮削 / 后台任务”五个带图标和文字的按钮。点击后台任务在内容区原位展开/收起任务详情；保持面板打开再切换系列、全部视频、发现或首页时，面板必须立即关闭且不得覆盖目标页。来源设置、打开文件夹和移除仍位于对应来源卡片。
+2. 依次切换首页、发现、系列、全部视频和导入：首页/发现不得保留空的内容区命令行，系列只显示搜索与排序；全部视频显示搜索、排序及“全部 / 电影 / 动画 / 文件夹 / 集合 / 标签”筛选，文件夹、集合和标签可继续选择具体筛选卡片。导入依次显示“扫描文件夹 / YouTube / 刷新 / 重新刮削 / 清理全部刮削记录 / 后台任务”六个带图标和文字的按钮。扫描、单项刮削和后台批次正在运行时，进度文字、进度条与任务详情都只在导入页显示；点击后台任务在内容区原位展开/收起任务详情，保持面板打开再切换系列、全部视频、发现或首页时，面板必须立即关闭且任务状态区不得覆盖目标页。来源设置、打开文件夹和移除仍位于对应来源卡片。
 3. Home、Movies、Series、Anime、Continue Watching、Favorites、Needs Review、Unorganized、Collections、Sources 语义分别正确；Needs Review 显示候选分数/证据/外部 ID，Unorganized 仅表示未被集合覆盖。
-4. 首次在线刷新显示传输披露；拒绝后 Local NFO 仍工作。确认后增量扫描自动把未匹配或已过期资产放入独立后台刮削任务；离开并重新进入 Video 后任务继续且进度可恢复显示。顶部任务条和来源卡片持续显示处理数/总数、匹配数、待确认数与错误，并可按来源取消。手动刮削强制刷新来源。不同资产并发不超过两路，相同幂等 provider 查询只产生一次网络请求，仍服从 provider 限速与 `Retry-After`。详情显示日文原题、当前语言副题、简介、年份、层级、进度、provider 来源链接和缓存海报。
-5. 同一未匹配来源完成一次自动刮削后，未变化资产在 30 天内重新进入 Video 不再发起搜索；新增/mtime 变化、TTL 过期或手动强制刷新才重新尝试。响应 cache、未匹配负 cache 和图片 LRU 均使用离线 fixture 验证，凭据不得进入 cache key、SQLite payload 或日志。
-6. Home 只显示“我的媒体 / 继续观看 / 接下来播放 / 最近添加的媒体”横向分区，空分区隐藏且不在下方重复整库列表；窄窗口可横向滚动而不裁切卡片。同一系列先播放第 1 集、再播放第 3 集后，Continue Watching 只显示第 3 集并使用缓存横图。Series 书架每个 series node 只显示一张竖版海报；进入详情后显示横版 hero、竖版 poster、可选 logo、标题/原题、标语、简介、年份区间、分级、评分、状态、类型、标签、工作室、季、正篇、Specials、演员、相关推荐、external IDs、provider 归属和本地媒体信息。
-7. 人工候选绑定先预览 diff，确认后锁定；刷新不覆盖用户标题/本地字段、不改变资产绑定，断网、错误 token 或单 provider 429 不清空旧详情。
-8. 从资料库按层级播放可上一/下一项和自动连播，Specials 不自动插入正篇；多集文件队列只出现一次。文件关联打开使用同目录自然排序，远程或枚举失败退回单项。
+4. 首次在线刷新显示传输披露；拒绝后 Local NFO 仍工作。确认后增量扫描自动把未匹配或已过期资产放入独立后台刮削任务；离开并重新进入 Video 后任务继续且进度可在导入页恢复显示。导入页任务区和来源卡片持续显示处理数/总数、匹配数、待确认数与错误，并可按来源取消。发现页的 XAML/自动化测试必须断言不存在来源、Feed/内容和电影/剧集/动画 selector 及其绑定；界面只保留标题输入与搜索按钮，以及与聚合浏览兼容的年份、类型 ID 和排序筛选。固定 fixture 必须证明标题搜索始终以 `All` 同时启动 AniList Anime、TMDB Movie 和 TMDB Series，筛选浏览也始终使用 AniList + TMDB 聚合；旧 `ExploreProviderOrder`、空 Explore Feed 或注入 TVmaze/AniDB/TVDB 都不得缩减、替换或新增生产来源。故意让后置请求先完成，结果仍按 AniList→TMDB、TMDB Movie→Series 稳定轮询。跨源同年且规范化标题/别名相交时合并双方 external ID；共享强 ID 冲突、TMDB movie/tv 同数字 ID、显式 Movie/Series 冲突及缺失年份不得误并。使用每个来源至少三页、包含跨源重复项且总数超过 40 的 fixture 验证 20 项逻辑分页：第 N 页累积各来源 1..N 页后再按全局偏移切片，连续读取第 1、2、3 页不得重复或缺失，拼接结果必须等于同一稳定聚合序列的对应前缀，上一来源页未进入前页的尾部不能消失。任一来源失败仍显示其他卡片与局部警告，全部失败才显示错误；旧搜索、旧筛选浏览或旧分页请求即使忽略取消并迟到，也不得覆盖当前结果。每个 provider 子搜索仍只调用一次搜索接口，不按结果数追加 artwork metadata 请求，海报和背景图继续通过 App Data 图片缓存显示；聚合详情只凭双方精确 ID 并发读取 AniList/TMDB，主详情保留 provider/item 身份，补充详情只填空并合并 external ID、别名、演职员、季表与图片，补充来源失败仍返回主详情，无精确补充 ID 时不得发跨源请求。已缓存的 AniList 主详情再次携带聚合 TMDB ID 打开时必须在返回值中补上该 ID，且不得用搜索候选的旧 ID 覆盖 provider 最新 ID；详情缓存区分同数字 ID 的 TMDB Movie/Series。手动刮削强制刷新来源。不同资产并发不超过两路，相同幂等 provider 查询只产生一次网络请求，仍服从 provider 限速与 `Retry-After`。详情显示日文原题、当前语言副题、简介、年份、层级、进度、provider 来源链接和缓存海报。检查 `%APPDATA%\Niratan\Data\video_library.sqlite3` 与 `%APPDATA%\Niratan\Cache\VideoMetadataArtwork`：在线 metadata/图片只进入 App Data，源媒体目录不新增 NFO/海报；既有 Local sidecar 只被读取且哈希不变。
+   - 标题专项 fixture 覆盖 AniList 发现卡、详情 Hero、AniList 相关推荐、AniList Anime + TMDB Movie 聚合卡，以及 TMDB 主身份 + 精确 AniList 详情补充：所有动画展示均以 `romaji` 为主标题、`native` 为原题、英文只作 alias；TMDB Movie/provider/item 路由保持不变，无精确 AniList ID 时不得追加跨源标题搜索。
+   - 默认推荐必须稳定显示“趋势 / 本季 / 全部作品”三架；趋势与全部作品调用聚合入口并同时覆盖 AniList、TMDB Movie 与 TMDB Series，本季只调用 AniList。逐 provider 的 `GetPageAsync` 不得由页面直接调用；同一作品分别出现在 TMDB 趋势与 AniList 热门窗口时，两个架中的卡都携带合并后的 AniList 罗马音、日文原题及双方 external ID。
+5. 使用 disposable 资料库先完成一次可见系列、季集、海报和匹配结果的刮削，再点击“清理全部刮削记录”：取消确认时数据库和图片缓存必须不变；确认后正在运行的刮削与 AniDB 自动导入应先停止并排空，series/season/episode/movie 节点、已导入的 Local/在线字段与图片、候选与匹配、metadata 任务历史、provider 缓存、AniDB 视频 catalog 投影、TMDB 映射和 App Data 在线图片缓存应清空，Series 页为空，且每个保留资产只绑定一个根级 `Unmatched` 节点并继续出现在 All videos；等待片刻及重新进入 Video 后，普通增量扫描、自动 metadata 和 AniDB 导入都不得重建目录，清理前的扫描批次也必须因 generation 失效而拒绝提交。源媒体及 Local sidecar 哈希、来源与 membership、播放进度、收藏、标签、集合、AniDB MyList、账号、凭据及 AniDB 独立库中的人工匹配必须保持不变；节点收藏应迁移为对应 asset 收藏。随后点击“重新刮削”，确认解除 reset marker、创建全新任务并从 `Unmatched` 重建匹配、季/集映射和缓存图片；另用显式完整扫描确认可重新导入 Local sidecar。所有在线产物仍只写入 App Data，源媒体目录不新增 NFO/海报。
+6. 同一未匹配来源完成一次自动刮削后，未变化资产在 30 天内重新进入 Video 不再发起搜索；新增/mtime 变化、TTL 过期或手动强制刷新才重新尝试。响应 cache、未匹配负 cache 和图片 LRU 均使用离线 fixture 验证，凭据不得进入 cache key、SQLite payload 或日志。
+7. Home 只显示“继续观看 / 接下来播放 / 最近添加的媒体”横向分区，不显示“我的媒体”快捷库；空分区隐藏且不在下方重复整库列表，窄窗口可横向滚动而不裁切卡片。同一系列先播放第 1 集、再播放第 3 集后，Continue Watching 只显示第 3 集并使用缓存横图。Series 书架每个 series node 只显示一张竖版海报；进入详情后显示横版 hero、竖版 poster、可选 logo、标题/原题、标语、简介、年份区间、分级、评分、状态、类型、标签、工作室、季、正篇、Specials、演员、相关推荐、external IDs、provider 归属和本地媒体信息。用 Re:Zero 式根条目与独立第四季条目确认书架仍以 2016 根系列展示，详情采用 TMDB `Seasons (TV)` 的 S1–S4；播放一集并关闭播放器后，标题、简介、季列表和当前选季不变，退出系列详情再进入也保持相同结果。
+8. 人工候选绑定先预览 diff，确认后锁定；刷新不覆盖用户标题/本地字段、不改变资产绑定，断网、错误 token 或单 provider 429 不清空旧详情。
+9. 从资料库按层级播放可上一/下一项和自动连播，Specials 不自动插入正篇；多集文件队列只出现一次。文件关联打开使用同目录自然排序，远程或枚举失败退回单项。
 
-Provider smoke test 只在合法网络与凭据可用时执行；逐项记录 TMDB token、Bangumi token、TVDB 项目授权、实际 Retry-After、图片 CDN 和账号路径是否实测。不得用用户现有媒体或 AppData 做破坏性验证。
+Provider smoke test 只在合法网络与凭据可用时执行；逐项记录 Niratan 自有 AniDB UDP client ID/version、独立 HTTP client ID/version、AniDB 账号、TMDB token、TVDB 项目授权、实际 Retry-After、图片 CDN 和账号路径是否实测。视频链路不得请求 Bangumi，AniList 只允许用于发现页。不得用用户现有媒体或 AppData 做破坏性验证。
 
 ### 5.1 Video Anime4K 验证
 
@@ -571,6 +578,8 @@ dotnet build -p:Platform=x64
 9. 使用 15 MiB 合法 `.torrent` 与超过 32 MiB、包含越界路径的恶意样本，确认合法元数据可进入 peer 连接阶段，大小限制和下载根目录约束仍生效。
 10. 完成后重启应用，确认已导入小说、Sasayaki 匹配和视频字幕仍可用；下载目录只保留已完成任务。
 11. 在“下载设置”切换内置 MonoTorrent 与 qBittorrent，确认发现按钮文案、任务列表和任务操作随选择切换；切换不删除另一后端的任务。
+12. 内置 MonoTorrent 设置可 round-trip 下载根、附加 HTTP(S)/UDP Tracker、监听端口、UPnP/NAT-PMP、DHT、PEX、LPD、全局/单任务连接上限、打开文件上限、上传槽位和上下行 KiB/s 限速；下载根只接受可创建且可写的绝对目录，非法 scheme、credentials、fragment、相对 URL 和超过 32 个 Tracker 必须在保存前拒绝。
+13. 使用公开 disposable torrent 确认附加 Tracker 从下一个任务开始参与 announce；使用私有 fixture 确认不会覆盖或追加其 announce 列表。更改下载根后，改动只作用于之后新加入的任务，已经排队、正在下载和已完成的任务继续使用原目录且不被移动或删除；恢复默认后新任务回到 `Data/TorrentDownloads`。完成后仍立即停止，设置变更不得启用后台做种。
 
 ---
 
@@ -623,6 +632,7 @@ UI Automation 使用现有 `ImportMangaFolderButton`、`ImportMangaFileButton`�
 
 ```powershell
 dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~Qbittorrent|FullyQualifiedName~DownloadsPageAsset"
+dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~JimakuSubtitleService|FullyQualifiedName~NyaaSubscriptionService|FullyQualifiedName~DiscoverPage"
 dotnet build Niratan/Niratan.csproj -p:Platform=x64
 ```
 
@@ -637,6 +647,11 @@ dotnet build Niratan/Niratan.csproj -p:Platform=x64
 7. 任务详情的 properties、files、trackers 三个 qB 响应正确映射；无效 hash 不发起请求，详情请求只携带已配置的认证信息。
 8. 下载页任务列表声明详情 Panel、概览/文件/Tracker 三个面板、取消/恢复/打开位置/删除入口；删除入口绑定确认流程，且任务删除默认不删除文件。
 9. 下载页后端选择可 round-trip 到 `settings.json`；选择 MonoTorrent 时入队调用 `INyaaDownloadManager`，选择 qBittorrent 时调用 `IQbittorrentDownloadCoordinator`，两者不交叉。
+10. Video 发现卡只导航到独立详情页；详情、资源搜索、字幕搜索和下载订阅管理分别使用独立页面及强类型路由。详情的“搜索资源”只调用 Nyaa；“搜索字幕”只调用 Jimaku，并先按 AniList ID、空结果再按标题/别名回退。缺少或错误 API key、非法 JSON、超限响应、非 Jimaku HTTPS 下载 URL 和非文本字幕扩展都显示受控错误。
+11. Jimaku 字幕分别覆盖另存为、现有视频旁和指定目录三种目的地；目标重名时生成唯一文件名，下载完成的原子移动拒绝覆盖，取消或失败只清理临时文件。
+12. Nyaa 订阅必须由用户选择含发布组、分辨率和可识别单集的非 batch、非 remake 结果；保存时立即把所选集发送到固定的 MonoTorrent 或 qBittorrent 后端，后续从所选集 inclusive 检查，只接受同作品/季度、发布组、分辨率、可信状态和 Nyaa 分类的结果。MonoTorrent 只有完成后才记为已见，失败后可重试；qBittorrent 只在接受后记为已见；电影成功一次后停用。
+13. 订阅 snapshot round-trip provider identity、启用状态、固定后端、最近检查/错误、封面 URL、受控缓存路径、精确可信/分类规则和已处理逻辑季度/集号；旧设置默认启用并使用 MonoTorrent，旧 `SubscribedVideoKeys` 在管理页显示为禁用且待配置。设置页并发保存发现 provider 偏好不得清除订阅或恢复已移除规则；同一集换 Nyaa item id、并发手动/周期检查都不得重复入队。
+14. 下载页四个区包含“订阅”；订阅卡始终保留 40×60 封面或同尺寸占位，缓存文件缺失时通过受控发现图片管线恢复，并提供启用/暂停、检查单项、检查全部和确认移除。暂停或移除会取消在途检查；移除规则不得取消已存在任务或删除下载文件。
 
 使用 disposable qBittorrent 实例和只包含合法测试资源的 Nyaa fixture 做 UI 验证：
 
@@ -646,14 +661,26 @@ dotnet build Niratan/Niratan.csproj -p:Platform=x64
 4. 在 qB 使用远程保存路径时，确认 Niratan 不把该路径当作本机文件夹打开，也不自动导入小说、视频或漫画资料库。
 5. 没有 qB、密码错误、WebUI 关闭、远程 HTTP、HTTPS 证书失败和 Nyaa RSS 超时时，页面显示受控错误；搜索失败不清空已有 qB 任务。
 6. 点击任务打开详情 Panel，确认概览显示 hash、状态、大小、剩余、保存路径、内容路径、速度、ETA、连接数和时间；文件和 Tracker 页显示 qB 返回的列表。取消停止任务但不移除，恢复重新开始；打开本地路径进入资源管理器，远程 qB 路径显示受控错误；点击删除后先出现确认，取消不改变任务，确认只移除 qB 任务且保留文件。
+7. 打开 Video “发现”，确认卡片进入独立详情页，详情的相关推荐仍可继续导航；资源按钮打开独立 Nyaa 页，字幕按钮打开独立 Jimaku 页，订阅操作要求先选择 Nyaa 发布版本。用一次性目录逐一验证三种字幕目的地和重名不覆盖。
+8. 打开“下载 → 订阅”，用 disposable metadata artwork cache 检查 40×60 封面、缓存清理后的重新获取和无封面占位，启用/暂停、单项检查、全部检查与确认移除状态正确。用所选集、同集不同 item id、下一集、batch 和 remake 的 disposable RSS fixture，分别验证所选集立即入队、内置队列完成后才标记逻辑集、qB 接受后标记、同集不重复以及 batch/remake 被排除；在网络检查期间暂停或移除后不得继续入队，但已有任务和文件保持不变。全程不得操作现有媒体目录或真实下载账户。
 
 ## 10. Galgame 游戏捕获验证（Windows 扩展）
 
 ```powershell
 dotnet test Niratan.Tests/Niratan.Tests.csproj -c Debug -p:Platform=x64 --filter "FullyQualifiedName~GalGame"
 dotnet build Niratan/Niratan.csproj -p:Platform=x64
+powershell -NoProfile -ExecutionPolicy Bypass -File native/galgame_hook/tools/build_distribution.ps1 -RunTests
+powershell -NoProfile -ExecutionPolicy Bypass -File native/galgame_hook/tools/install_into_bundle.ps1 -BundleDirectory Niratan
 ```
 
-离线验证只覆盖游戏库纯函数、启动参数转义、helper 架构清单和 IPC 版本常量。UI 手动验证必须使用 disposable 游戏副本：添加/移除 exe 后确认 `Data/Games/galgame-library.json` 原子 round-trip；损坏 JSON 不得被空库覆盖；重复路径按 Windows 分隔符和大小写去重；启动参数中的空格、反斜杠和引号保持 token 边界。
+离线验证覆盖游戏库纯函数、启动参数转义、浮窗设置归一化、helper 架构清单、adapter 契约和 IPC 版本常量。原生 Release 门必须在 x86/x64 各执行全部 CTest，并由打包脚本生成带 SHA-256 sidecar 与源指纹的两个 helper archive；安装后重新构建 App，确认输出目录的 `voice_hook/x86` 与 `voice_hook/x64` 来自本次 archive。
+
+UI 手动验证必须使用 disposable 游戏副本：
+
+1. 在“游戏 → 导入”通过文件选择器、页面拖放和手动路径分别导入 `.exe`；确认源文件未移动、未重命名、未改写，重复路径按 Windows 分隔符和大小写去重。
+2. 在“游戏库”验证搜索、排序、状态筛选、卡片启动/移除和空结果状态；移除只改写 `Data/Games/galgame-library.json` 索引，损坏 JSON 不得被空库覆盖。
+3. 在“工作台”验证启动/附着、线程选择、实时台词、音频、清空与浮窗入口；内部诊断矩阵不再显示为单独页面。启动参数中的空格、反斜杠和引号保持 token 边界。
+4. 在“设置”逐项调整字体、字号、字距、行高、粗体、两轴对齐、三种颜色、背景透明度、描边、内边距和圆角；已打开浮窗应即时变化，重启应用后保持。快速拖动滑杆不得造成 UI 卡顿或高频设置文件写入。
+5. 对带 `textrender.dll` 且运行时存在 `global.TextRender.getCharacters` 的 disposable KiriKiri/KAGEX 样本启用游戏内查词；推进到新台词后确认线程列表出现来源为 `KiriKiri TextRender` 的精确整句 lane，姓名与正文等不同逻辑消息槽不混为同一线程。点击正文字符后记录 hit、popup frame published/applied 与可见卡片；应用日志不得再出现 `GamesPageViewModel.ApplySessionState` 的 `RPC_E_WRONG_THREAD`/`0x8001010E`。
 
 真实运行时验证还必须记录目标游戏进程身份、x86/x64 架构、exe SHA-256、injector 路径、PID、窗口、IPC magic/version、hook/text/audio 信号和会话时间线。未取得真实游戏证据前，只能报告 helper 已实现、引擎支持未验证；不得把占位 exe、无游戏的 injector 启动或仅有 C# contract test 当作捕获成功。

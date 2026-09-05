@@ -58,7 +58,9 @@ internal sealed class VideoLibraryScanCoordinator : IVideoLibraryScanCoordinator
     private readonly IVideoFileNameParser _parser;
     private readonly ILocalVideoMetadataProvider _localMetadata;
     private readonly ILogger<VideoLibraryScanCoordinator> _logger;
+    private readonly IAniDbImportService? _aniDb;
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _active = new();
+    private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _startGates = new();
     private readonly ConcurrentDictionary<Guid, PauseState> _pauseStates = new();
 
     private sealed class PauseState
@@ -91,53 +93,92 @@ internal sealed class VideoLibraryScanCoordinator : IVideoLibraryScanCoordinator
         IVideoCatalogRepository repository,
         IVideoFileNameParser parser,
         ILocalVideoMetadataProvider localMetadata,
-        ILogger<VideoLibraryScanCoordinator> logger)
+        ILogger<VideoLibraryScanCoordinator> logger,
+        IAniDbImportService? aniDb = null)
     {
         _repository = repository;
         _parser = parser;
         _localMetadata = localMetadata;
         _logger = logger;
+        _aniDb = aniDb;
     }
 
     public event EventHandler<VideoLibraryScanProgress>? ProgressChanged;
 
     public async Task ScanAllAsync(bool fullScan = false, CancellationToken ct = default)
     {
+        var aniDbAdmission = _aniDb?.CaptureScrapeAdmission();
         var snapshot = await _repository.GetSnapshotAsync(ct);
         foreach (var source in snapshot.Sources)
         {
             ct.ThrowIfCancellationRequested();
-            await ScanSourceAsync(source.Id, fullScan, ct);
+            await ScanSourceCoreAsync(source.Id, fullScan, aniDbAdmission, ct);
         }
     }
 
-    public async Task ScanSourceAsync(Guid sourceId, bool fullScan = false, CancellationToken ct = default)
+    public Task ScanSourceAsync(Guid sourceId, bool fullScan = false, CancellationToken ct = default) =>
+        ScanSourceCoreAsync(sourceId, fullScan, _aniDb?.CaptureScrapeAdmission(), ct);
+
+    private async Task ScanSourceCoreAsync(
+        Guid sourceId,
+        bool fullScan,
+        AniDbScrapeAdmissionStamp? aniDbAdmission,
+        CancellationToken ct)
     {
-        var snapshot = await _repository.GetSnapshotAsync(ct);
-        var source = snapshot.Sources.FirstOrDefault(item => item.Id == sourceId)
-            ?? throw new KeyNotFoundException("Video source was not found.");
-        var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        if (_active.TryGetValue(sourceId, out var previous))
-        {
-            previous.Cancel();
-            previous.Dispose();
-        }
-        _active[sourceId] = linked;
-        var token = linked.Token;
-        var pauseState = _pauseStates.GetOrAdd(sourceId, _ => new PauseState());
-        pauseState.Resume();
-        var generation = await _repository.BeginSourceScanAsync(
-            sourceId,
-            fullScan ? VideoCatalogJobKind.FullScan : VideoCatalogJobKind.IncrementalScan,
-            token);
         var startedAt = Stopwatch.StartNew();
         var processed = 0;
         var changedCount = 0;
-        Publish(sourceId, generation, VideoCatalogJobState.Running, VideoLibraryScanStage.Enumerating,
-            0, null, 0, 0, null, null);
+        var generation = 0L;
+        var scanStarted = false;
+        CancellationTokenSource? linked = null;
 
         try
         {
+            VideoCatalogSnapshot snapshot;
+            VideoCatalogSourceSnapshot source;
+            var startGate = _startGates.GetOrAdd(sourceId, _ => new SemaphoreSlim(1, 1));
+            await startGate.WaitAsync(ct);
+            try
+            {
+                snapshot = await _repository.GetSnapshotAsync(ct);
+                source = snapshot.Sources.FirstOrDefault(item => item.Id == sourceId)
+                    ?? throw new KeyNotFoundException("Video source was not found.");
+                linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                var startedGeneration = await _repository.TryBeginSourceScanAsync(
+                    sourceId,
+                    fullScan ? VideoCatalogJobKind.FullScan : VideoCatalogJobKind.IncrementalScan,
+                    source.ScanGeneration,
+                    linked.Token);
+                if (!startedGeneration.HasValue)
+                    throw new OperationCanceledException(
+                        "Video scan was superseded before it could enter the catalog generation.",
+                        linked.Token);
+                generation = startedGeneration.Value;
+                scanStarted = true;
+
+                var previous = ReplaceActiveScan(sourceId, linked);
+                if (previous != null)
+                {
+                    try
+                    {
+                        previous.Cancel();
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        // The superseded owner completed between the compare-and-swap and cancel.
+                    }
+                }
+            }
+            finally
+            {
+                startGate.Release();
+            }
+
+            var token = linked!.Token;
+            var pauseState = _pauseStates.GetOrAdd(sourceId, _ => new PauseState());
+            pauseState.Resume();
+            Publish(sourceId, generation, VideoCatalogJobState.Running, VideoLibraryScanStage.Enumerating,
+                0, null, 0, 0, null, null);
             var existingByIdentity = snapshot.Assets.ToDictionary(
                 asset => asset.IdentityKey,
                 StringComparer.OrdinalIgnoreCase);
@@ -232,27 +273,77 @@ internal sealed class VideoLibraryScanCoordinator : IVideoLibraryScanCoordinator
                 CalculateRate(processed, startedAt.Elapsed),
                 null,
                 enumerationError);
+            if (completed && _aniDb != null && aniDbAdmission.HasValue)
+                await _aniDb.QueueSourceAsync(sourceId, aniDbAdmission.Value, token);
         }
         catch (OperationCanceledException)
         {
-            await _repository.CancelSourceScanAsync(sourceId, CancellationToken.None);
-            Publish(sourceId, generation, VideoCatalogJobState.Cancelled,
-                VideoLibraryScanStage.Completed, processed, null, changedCount,
-                CalculateRate(processed, startedAt.Elapsed), null, null);
+            if (scanStarted)
+            {
+                await _repository.CancelSourceScanAsync(
+                    sourceId, generation, CancellationToken.None);
+                Publish(sourceId, generation, VideoCatalogJobState.Cancelled,
+                    VideoLibraryScanStage.Completed, processed, null, changedCount,
+                    CalculateRate(processed, startedAt.Elapsed), null, null);
+            }
             throw;
         }
         finally
         {
-            if (_active.TryRemove(sourceId, out var current))
-                current.Dispose();
+            if (linked != null)
+            {
+                ((ICollection<KeyValuePair<Guid, CancellationTokenSource>>)_active).Remove(
+                    new KeyValuePair<Guid, CancellationTokenSource>(sourceId, linked));
+                linked.Dispose();
+            }
+        }
+    }
+
+    private CancellationTokenSource? ReplaceActiveScan(
+        Guid sourceId,
+        CancellationTokenSource replacement)
+    {
+        while (true)
+        {
+            if (!_active.TryGetValue(sourceId, out var current))
+            {
+                if (_active.TryAdd(sourceId, replacement))
+                    return null;
+                continue;
+            }
+
+            if (_active.TryUpdate(sourceId, replacement, current))
+                return current;
         }
     }
 
     public async Task CancelAsync(Guid sourceId, CancellationToken ct = default)
     {
-        if (_active.TryGetValue(sourceId, out var active))
-            active.Cancel();
-        await _repository.CancelSourceScanAsync(sourceId, ct);
+        var startGate = _startGates.GetOrAdd(sourceId, _ => new SemaphoreSlim(1, 1));
+        await startGate.WaitAsync(ct);
+        try
+        {
+            var snapshot = await _repository.GetSnapshotAsync(ct);
+            var source = snapshot.Sources.FirstOrDefault(item => item.Id == sourceId)
+                ?? throw new KeyNotFoundException("Video source was not found.");
+            if (_active.TryGetValue(sourceId, out var active))
+            {
+                try
+                {
+                    active.Cancel();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // The scan completed after the lookup; the generation-aware repository
+                    // cancellation below is still authoritative.
+                }
+            }
+            await _repository.CancelSourceScanAsync(sourceId, source.ScanGeneration, ct);
+        }
+        finally
+        {
+            startGate.Release();
+        }
     }
 
     public async Task PauseAsync(Guid sourceId, CancellationToken ct = default)
@@ -396,9 +487,8 @@ internal sealed class VideoLibraryScanCoordinator : IVideoLibraryScanCoordinator
                 parsed.EpisodeStart,
                 parsed.EpisodeEnd,
                 BoundSubtitlePath: FindSidecarSubtitle(identity),
-                PosterPath: local?.ArtworkPaths.FirstOrDefault(pathValue =>
-                    !Path.GetFileNameWithoutExtension(pathValue).Contains("fanart", StringComparison.OrdinalIgnoreCase)
-                    && !Path.GetFileNameWithoutExtension(pathValue).Contains("backdrop", StringComparison.OrdinalIgnoreCase))),
+                PosterPath: local?.PreferredAssetArtworkPath(
+                    source.MediaType == VideoLibraryMediaType.Movie)),
             parsed,
             local,
             SkipMetadataProcessing: !changed,

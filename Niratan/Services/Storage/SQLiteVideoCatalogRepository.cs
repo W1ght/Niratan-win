@@ -133,61 +133,204 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         string? etag,
         DateTimeOffset? lastModified,
         CancellationToken ct = default) =>
+        UpsertArtworkCandidateAsync(
+            assetId,
+            ownerKind,
+            new VideoArtworkCandidate(providerId, remoteUrl, kind, null, null, null, null),
+            localPath,
+            etag,
+            lastModified,
+            downloadAttempted: false,
+            lastError: null,
+            ct: ct);
+
+    public Task UpsertArtworkCandidateAsync(
+        Guid assetId,
+        VideoMetadataMediaKind defaultOwnerKind,
+        VideoArtworkCandidate candidate,
+        string? localPath = null,
+        string? etag = null,
+        DateTimeOffset? lastModified = null,
+        bool downloadAttempted = false,
+        string? lastError = null,
+        CancellationToken ct = default) =>
         WriteAsync(async (connection, transaction) =>
         {
-            var desiredKind = ownerKind switch
-            {
-                VideoMetadataMediaKind.Movie => "movie",
-                VideoMetadataMediaKind.Season => "season",
-                VideoMetadataMediaKind.Episode => "episode",
-                _ => "series",
-            };
-            var nodeId = await connection.ExecuteScalarAsync<string?>(
+            var nodeId = await ResolveArtworkOwnerNodeIdAsync(
+                connection, transaction, assetId, candidate.OwnerKind ?? defaultOwnerKind,
+                candidate.SeasonNumber, candidate.EpisodeNumber);
+            if (nodeId == null)
+                return;
+            var existingId = await connection.ExecuteScalarAsync<string?>(
                 """
-                WITH RECURSIVE ancestry(id,parent_id,kind,depth) AS (
-                    SELECT n.id,n.parent_id,n.kind,0 FROM catalog_nodes n
-                    JOIN node_assets na ON na.node_id=n.id WHERE na.asset_id=@Asset
-                    UNION ALL
-                    SELECT parent.id,parent.parent_id,parent.kind,child.depth+1
-                    FROM catalog_nodes parent JOIN ancestry child ON child.parent_id=parent.id
-                )
-                SELECT id FROM ancestry
-                WHERE @RequireExact=0 OR kind=@DesiredKind
-                ORDER BY CASE WHEN kind=@DesiredKind THEN 0 ELSE 1 END,depth
-                LIMIT 1;
+                SELECT id FROM artwork
+                WHERE node_id=@Node AND provider_id=@Provider AND kind=@Kind AND remote_url=@Url
+                ORDER BY created_at,id LIMIT 1;
                 """,
                 new
                 {
-                    Asset = assetId.ToString("D"),
-                    DesiredKind = desiredKind,
-                    RequireExact = ownerKind == VideoMetadataMediaKind.Movie ? 1 : 0,
+                    Node = nodeId,
+                    Provider = candidate.ProviderId,
+                    Kind = candidate.Kind,
+                    Url = candidate.Url,
                 }, transaction);
-            if (nodeId == null)
+            var hasStablePreference = await connection.ExecuteScalarAsync<long>(
+                """
+                SELECT COUNT(*) FROM artwork a
+                WHERE a.node_id=@Node AND a.kind=@Kind
+                  AND (a.selected=1 OR a.preferred=1 OR a.id=(
+                      SELECT preferred_artwork_id FROM node_user_data WHERE node_id=@Node));
+                """,
+                new { Node = nodeId, Kind = candidate.Kind }, transaction) > 0;
+            var makeDefault = !hasStablePreference;
+            var now = ToDb(DateTimeOffset.UtcNow);
+            if (existingId != null)
+            {
+                await connection.ExecuteAsync(
+                    """
+                    UPDATE artwork SET
+                        local_path=COALESCE(@Path,local_path),
+                        etag=COALESCE(@ETag,etag),
+                        last_modified=COALESCE(@LastModified,last_modified),
+                        language=COALESCE(@Language,language),
+                        width=COALESCE(@Width,width),height=COALESCE(@Height,height),
+                        attribution_url=COALESCE(@Attribution,attribution_url),
+                        enabled=@Enabled,desired=@Desired,ordinal=@Ordinal,
+                        download_attempts=download_attempts+@Attempted,
+                        last_error=CASE
+                            WHEN @Path IS NOT NULL THEN NULL
+                            WHEN @Attempted=1 THEN @LastError
+                            ELSE last_error END,
+                        updated_at=@Now
+                    WHERE id=@Id;
+                    """,
+                    new
+                    {
+                        Id = existingId,
+                        Path = localPath,
+                        ETag = etag,
+                        LastModified = lastModified.HasValue ? ToDb(lastModified.Value) : null,
+                        candidate.Language,
+                        candidate.Width,
+                        candidate.Height,
+                        Attribution = candidate.AttributionUrl,
+                        Enabled = candidate.IsEnabled ? 1 : 0,
+                        Desired = candidate.IsDesired ? 1 : 0,
+                        candidate.Ordinal,
+                        Attempted = downloadAttempted ? 1 : 0,
+                        LastError = string.IsNullOrWhiteSpace(lastError) ? null : lastError,
+                        Now = now,
+                    }, transaction);
                 return;
-            var hasSelected = await connection.ExecuteScalarAsync<long>(
-                "SELECT COUNT(*) FROM artwork WHERE node_id=@Node AND kind=@Kind AND selected=1;",
-                new { Node = nodeId, Kind = kind }, transaction) > 0;
+            }
+
             await connection.ExecuteAsync(
                 """
-                INSERT INTO artwork(id,node_id,provider_id,kind,remote_url,local_path,etag,last_modified,selected,ordinal,created_at)
-                VALUES(@Id,@Node,@Provider,@Kind,@Url,@Path,@ETag,@LastModified,@Selected,0,@Now)
-                ON CONFLICT(node_id,provider_id,kind,local_path,remote_url) DO UPDATE SET
-                    etag=excluded.etag,last_modified=excluded.last_modified;
+                INSERT INTO artwork(
+                    id,node_id,provider_id,kind,remote_url,local_path,etag,last_modified,
+                    language,width,height,attribution_url,enabled,desired,preferred,selected,
+                    ordinal,download_attempts,last_error,created_at,updated_at)
+                VALUES(
+                    @Id,@Node,@Provider,@Kind,@Url,@Path,@ETag,@LastModified,
+                    @Language,@Width,@Height,@Attribution,@Enabled,@Desired,@Preferred,@Selected,
+                    @Ordinal,@Attempted,@LastError,@Now,@Now);
                 """,
                 new
                 {
                     Id = Guid.NewGuid().ToString("D"),
                     Node = nodeId,
-                    Provider = providerId,
-                    Kind = kind,
-                    Url = remoteUrl,
+                    Provider = candidate.ProviderId,
+                    Kind = candidate.Kind,
+                    Url = candidate.Url,
                     Path = localPath,
                     ETag = etag,
                     LastModified = lastModified.HasValue ? ToDb(lastModified.Value) : null,
-                    Selected = hasSelected ? 0 : 1,
-                    Now = ToDb(DateTimeOffset.UtcNow),
+                    candidate.Language,
+                    candidate.Width,
+                    candidate.Height,
+                    Attribution = candidate.AttributionUrl,
+                    Enabled = candidate.IsEnabled ? 1 : 0,
+                    Desired = candidate.IsDesired ? 1 : 0,
+                    Preferred = makeDefault ? 1 : 0,
+                    Selected = makeDefault ? 1 : 0,
+                    candidate.Ordinal,
+                    Attempted = downloadAttempted ? 1 : 0,
+                    LastError = string.IsNullOrWhiteSpace(lastError) ? null : lastError,
+                    Now = now,
                 }, transaction);
         }, ct);
+
+    private static async Task<string?> ResolveArtworkOwnerNodeIdAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid assetId,
+        VideoMetadataMediaKind ownerKind,
+        int? seasonNumber,
+        int? episodeNumber)
+    {
+        var asset = assetId.ToString("D");
+        if (ownerKind == VideoMetadataMediaKind.Movie)
+        {
+            return await connection.ExecuteScalarAsync<string?>(
+                """
+                SELECT n.id FROM catalog_nodes n
+                JOIN node_assets na ON na.node_id=n.id
+                WHERE na.asset_id=@Asset AND n.kind='movie' LIMIT 1;
+                """,
+                new { Asset = asset }, transaction);
+        }
+
+        var rootId = await connection.ExecuteScalarAsync<string?>(
+            """
+            WITH RECURSIVE ancestry(id,parent_id,kind,depth) AS (
+                SELECT n.id,n.parent_id,n.kind,0 FROM catalog_nodes n
+                JOIN node_assets na ON na.node_id=n.id WHERE na.asset_id=@Asset
+                UNION ALL
+                SELECT parent.id,parent.parent_id,parent.kind,child.depth+1
+                FROM catalog_nodes parent JOIN ancestry child ON child.parent_id=parent.id
+            )
+            SELECT id FROM ancestry WHERE kind='series' ORDER BY depth DESC LIMIT 1;
+            """,
+            new { Asset = asset }, transaction);
+        if (ownerKind is VideoMetadataMediaKind.Series or VideoMetadataMediaKind.Anime)
+        {
+            return rootId ?? await connection.ExecuteScalarAsync<string?>(
+                "SELECT node_id FROM node_assets WHERE asset_id=@Asset ORDER BY ordinal LIMIT 1;",
+                new { Asset = asset }, transaction);
+        }
+        if (rootId == null)
+            return null;
+
+        if (ownerKind == VideoMetadataMediaKind.Season)
+        {
+            return await connection.ExecuteScalarAsync<string?>(
+                """
+                SELECT id FROM catalog_nodes
+                WHERE parent_id=@Root AND kind='season'
+                  AND (@Season IS NULL OR season_number=@Season)
+                ORDER BY CASE WHEN season_number=@Season THEN 0 ELSE 1 END,season_number,id
+                LIMIT 1;
+                """,
+                new { Root = rootId, Season = seasonNumber }, transaction);
+        }
+
+        return await connection.ExecuteScalarAsync<string?>(
+            """
+            SELECT episode.id
+            FROM catalog_nodes episode
+            LEFT JOIN catalog_nodes season ON season.id=episode.parent_id AND season.kind='season'
+            WHERE episode.kind='episode'
+              AND (episode.parent_id=@Root OR season.parent_id=@Root)
+              AND (@Season IS NULL OR COALESCE(episode.season_number,season.season_number)=@Season)
+              AND (@Episode IS NULL OR episode.episode_number=@Episode)
+            ORDER BY
+              CASE WHEN COALESCE(episode.season_number,season.season_number)=@Season THEN 0 ELSE 1 END,
+              CASE WHEN episode.episode_number=@Episode THEN 0 ELSE 1 END,
+              episode.id
+            LIMIT 1;
+            """,
+            new { Root = rootId, Season = seasonNumber, Episode = episodeNumber }, transaction);
+    }
 
     public Task UpsertAssetAsync(VideoCatalogAssetUpsert asset, CancellationToken ct = default) =>
         WriteAsync(async (connection, transaction) =>
@@ -320,36 +463,84 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         CancellationToken ct = default) =>
         EnqueueAsync(async () =>
         {
-            await EnsureWritableCoreAsync(ct);
-            await using var connection = await OpenConnectionAsync(ct);
-            await using var transaction = await connection.BeginTransactionAsync(ct);
-            var generation = await connection.ExecuteScalarAsync<long>(
-                "UPDATE library_sources SET scan_generation=scan_generation+1 WHERE id=@Id RETURNING scan_generation;",
-                new { Id = sourceId.ToString("D") }, transaction);
-            if (generation <= 0)
-                throw new KeyNotFoundException("Video source was not found.");
-            var now = ToDb(DateTimeOffset.UtcNow);
-            await connection.ExecuteAsync(
-                """
-                UPDATE catalog_jobs SET state='cancelled', updated_at=@Now
-                WHERE source_id=@SourceId AND kind IN ('incremental_scan','full_scan')
-                  AND state IN ('queued','running','paused');
-                INSERT INTO catalog_jobs(
-                    id, source_id, kind, state, generation, processed_count, total_count, created_at, updated_at)
-                VALUES(@Id, @SourceId, @Kind, 'running', @Generation, 0, 0, @Now, @Now);
-                """,
-                new
-                {
-                    Id = Guid.NewGuid().ToString("D"),
-                    SourceId = sourceId.ToString("D"),
-                    Kind = ToDb(kind),
-                    Generation = generation,
-                    Now = now,
-                }, transaction);
-            await transaction.CommitAsync(ct);
-            _lastSnapshot = await ReadSnapshotAsync(ct);
-            return generation;
+            var generation = await BeginSourceScanCoreAsync(
+                sourceId, kind, expectedGeneration: null, ct);
+            return generation
+                   ?? throw new InvalidOperationException("An unconditional video scan could not be started.");
         }, ct);
+
+    public Task<long?> TryBeginSourceScanAsync(
+        Guid sourceId,
+        VideoCatalogJobKind kind,
+        long expectedGeneration,
+        CancellationToken ct = default) =>
+        EnqueueAsync(
+            () => BeginSourceScanCoreAsync(sourceId, kind, expectedGeneration, ct),
+            ct);
+
+    private async Task<long?> BeginSourceScanCoreAsync(
+        Guid sourceId,
+        VideoCatalogJobKind kind,
+        long? expectedGeneration,
+        CancellationToken ct)
+    {
+        await EnsureWritableCoreAsync(ct);
+        await using var connection = await OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        var source = sourceId.ToString("D");
+        var generation = expectedGeneration.HasValue
+            ? await connection.ExecuteScalarAsync<long?>(
+                """
+                UPDATE library_sources
+                SET scan_generation=scan_generation+1
+                WHERE id=@Id AND scan_generation=@ExpectedGeneration
+                RETURNING scan_generation;
+                """,
+                new { Id = source, ExpectedGeneration = expectedGeneration.Value },
+                transaction)
+            : await connection.ExecuteScalarAsync<long?>(
+                """
+                UPDATE library_sources
+                SET scan_generation=scan_generation+1
+                WHERE id=@Id
+                RETURNING scan_generation;
+                """,
+                new { Id = source },
+                transaction);
+        if (!generation.HasValue)
+        {
+            var sourceExists = await connection.ExecuteScalarAsync<long>(
+                "SELECT COUNT(*) FROM library_sources WHERE id=@Id;",
+                new { Id = source },
+                transaction) != 0;
+            await transaction.RollbackAsync(ct);
+            if (!sourceExists)
+                throw new KeyNotFoundException("Video source was not found.");
+            return null;
+        }
+
+        var now = ToDb(DateTimeOffset.UtcNow);
+        await connection.ExecuteAsync(
+            """
+            UPDATE catalog_jobs SET state='cancelled', updated_at=@Now
+            WHERE source_id=@SourceId AND kind IN ('incremental_scan','full_scan')
+              AND state IN ('queued','running','paused');
+            INSERT INTO catalog_jobs(
+                id, source_id, kind, state, generation, processed_count, total_count, created_at, updated_at)
+            VALUES(@Id, @SourceId, @Kind, 'running', @Generation, 0, 0, @Now, @Now);
+            """,
+            new
+            {
+                Id = Guid.NewGuid().ToString("D"),
+                SourceId = source,
+                Kind = ToDb(kind),
+                Generation = generation.Value,
+                Now = now,
+            }, transaction);
+        await transaction.CommitAsync(ct);
+        _lastSnapshot = await ReadSnapshotAsync(ct);
+        return generation.Value;
+    }
 
     public Task<bool> ApplyScanBatchAsync(VideoScanBatch batch, CancellationToken ct = default) =>
         EnqueueAsync(async () =>
@@ -365,6 +556,28 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 await transaction.RollbackAsync(ct);
                 return false;
             }
+            var isFullScan = await connection.ExecuteScalarAsync<long>(
+                """
+                SELECT COUNT(*) FROM catalog_jobs
+                WHERE source_id=@Source AND generation=@Generation
+                  AND kind='full_scan' AND state IN ('running','paused');
+                """,
+                new
+                {
+                    Source = batch.SourceId.ToString("D"),
+                    Generation = batch.ExpectedGeneration,
+                }, transaction) != 0;
+            if (isFullScan)
+            {
+                await connection.ExecuteAsync(
+                    """
+                    DELETE FROM catalog_reset_sources WHERE source_id=@Source;
+                    DELETE FROM catalog_reset_assets
+                    WHERE asset_id IN (
+                        SELECT asset_id FROM source_assets WHERE source_id=@Source);
+                    """,
+                    new { Source = batch.SourceId.ToString("D") }, transaction);
+            }
 
             foreach (var item in batch.Assets)
             {
@@ -374,6 +587,23 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                     (SqliteTransaction)transaction,
                     upsert,
                     batch.ExpectedGeneration);
+                var catalogResetPending = await connection.ExecuteScalarAsync<long>(
+                    """
+                    SELECT CASE WHEN
+                        EXISTS(SELECT 1 FROM catalog_reset_assets
+                               WHERE asset_id=@Asset)
+                        OR EXISTS(
+                            SELECT 1 FROM catalog_reset_sources
+                            WHERE source_id=@Source)
+                        THEN 1 ELSE 0 END;
+                    """,
+                    new
+                    {
+                        Asset = assetId.ToString("D"),
+                        Source = batch.SourceId.ToString("D"),
+                    }, transaction) != 0;
+                if (catalogResetPending && !isFullScan)
+                    continue;
                 await ApplyParsedIdentityAsync(
                     connection,
                     (SqliteTransaction)transaction,
@@ -565,6 +795,41 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 new { Id = sourceId.ToString("D"), Now = now }, transaction);
         }, ct);
 
+    public Task<bool> CancelSourceScanAsync(
+        Guid sourceId,
+        long expectedGeneration,
+        CancellationToken ct = default) =>
+        WriteAsync(async (connection, transaction) =>
+        {
+            var source = sourceId.ToString("D");
+            var cancelledGeneration = await connection.ExecuteScalarAsync<long?>(
+                """
+                UPDATE library_sources
+                SET scan_generation=scan_generation+1
+                WHERE id=@Id AND scan_generation=@ExpectedGeneration
+                RETURNING scan_generation;
+                """,
+                new { Id = source, ExpectedGeneration = expectedGeneration },
+                transaction);
+            if (!cancelledGeneration.HasValue)
+                return false;
+
+            await connection.ExecuteAsync(
+                """
+                UPDATE catalog_jobs SET state='cancelled', updated_at=@Now
+                WHERE source_id=@Id AND generation=@ExpectedGeneration
+                  AND kind IN ('incremental_scan','full_scan')
+                  AND state IN ('queued','running','paused');
+                """,
+                new
+                {
+                    Id = source,
+                    ExpectedGeneration = expectedGeneration,
+                    Now = ToDb(DateTimeOffset.UtcNow),
+                }, transaction);
+            return true;
+        }, ct);
+
     public Task RemoveSourceAsync(Guid sourceId, CancellationToken ct = default) =>
         WriteAsync(async (connection, transaction) =>
         {
@@ -733,6 +998,17 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 candidate.SourceUrl,
                 DateTimeOffset.UtcNow,
                 DateTimeOffset.UtcNow.AddDays(30))).WithInitializedCollections();
+            // The accepted candidate owns catalog identity. A richer provider may
+            // supply the descriptive payload, but it must remain a cross-reference
+            // instead of replacing an explicit AniDB AID (Shoko's AnimeSeries key).
+            metadata = metadata with
+            {
+                ExternalIds = metadata.ExternalIds
+                    .SetItems(candidate.ExternalIds)
+                    .SetItem(candidate.ProviderId, candidate.ProviderItemId),
+            };
+            var identityProviderId = candidate.ProviderId;
+            var identityProviderItemId = candidate.ProviderItemId;
             var allowLockedIdentityReplacement = lockIdentity && !preserveExistingHierarchy;
 
             var isExplicitMovieSource = await connection.ExecuteScalarAsync<long>(
@@ -812,15 +1088,15 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 new
                 {
                     Asset = assetId.ToString("D"),
-                    Provider = metadata.ProviderId,
-                    ExternalId = metadata.ProviderItemId,
+                    Provider = identityProviderId,
+                    ExternalId = identityProviderItemId,
                 }, transaction);
             if (lockedTarget != null
                 && IsMetadataKindCompatibleWithNode(lockedTarget.kind, metadata.MediaKind))
             {
                 var lockedTargetId = Guid.Parse(lockedTarget.id);
                 var identityProvidersToLock = await ResolveIdentityProvidersToLockAsync(
-                    connection, transaction, lockedTargetId, metadata.ProviderId,
+                    connection, transaction, lockedTargetId, identityProviderId,
                     lockIdentity, preserveExistingHierarchy);
                 await ApplyNodeMetadataAsync(
                     connection,
@@ -832,6 +1108,9 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                     allowLockedIdentityReplacement);
                 await connection.ExecuteAsync(
                     "DELETE FROM match_candidates WHERE asset_id=@Asset;",
+                    new { Asset = assetId.ToString("D") }, transaction);
+                await connection.ExecuteAsync(
+                    "DELETE FROM catalog_reset_assets WHERE asset_id=@Asset;",
                     new { Asset = assetId.ToString("D") }, transaction);
                 return true;
             }
@@ -860,8 +1139,8 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                         transaction,
                         assetId,
                         structuredSeries.Value,
-                        metadata.ProviderId,
-                        metadata.ProviderItemId);
+                        identityProviderId,
+                        identityProviderItemId);
                     if (canonicalSeries.HasValue && canonicalSeries.Value != structuredSeries.Value
                         && await CanMergeAutomaticSeriesAsync(
                             connection, transaction, structuredSeries.Value) == 1)
@@ -872,7 +1151,7 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                     }
 
                     var identityProvidersToLock = await ResolveIdentityProvidersToLockAsync(
-                        connection, transaction, structuredSeries.Value, metadata.ProviderId,
+                        connection, transaction, structuredSeries.Value, identityProviderId,
                         lockIdentity, preserveExistingHierarchy);
                     await ApplyNodeMetadataAsync(
                         connection,
@@ -884,6 +1163,9 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                         allowLockedIdentityReplacement);
                     await connection.ExecuteAsync(
                         "DELETE FROM match_candidates WHERE asset_id=@Asset;",
+                        new { Asset = assetId.ToString("D") }, transaction);
+                    await connection.ExecuteAsync(
+                        "DELETE FROM catalog_reset_assets WHERE asset_id=@Asset;",
                         new { Asset = assetId.ToString("D") }, transaction);
                     return true;
                 }
@@ -930,7 +1212,7 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                         new { Node = nodeId.ToString("D") }, transaction);
                 }
                 var identityProvidersToLock = await ResolveIdentityProvidersToLockAsync(
-                    connection, transaction, nodeId, metadata.ProviderId,
+                    connection, transaction, nodeId, identityProviderId,
                     lockIdentity, preserveExistingHierarchy);
                 await ApplyNodeMetadataAsync(
                     connection, transaction, nodeId, "movie", metadata,
@@ -957,6 +1239,7 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 }
                 var seriesId = await FindOrCreateSeriesNodeAsync(
                     connection, transaction, assetId, metadata,
+                    identityProviderId, identityProviderItemId,
                     episodeStart.HasValue ? null : reusableUnmatchedNodeId,
                     lockIdentity, preserveExistingHierarchy, allowLockedIdentityReplacement);
                 if (preserveExistingHierarchy
@@ -969,8 +1252,8 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                         transaction,
                         assetId,
                         seriesId,
-                        metadata.ProviderId,
-                        metadata.ProviderItemId);
+                        identityProviderId,
+                        identityProviderItemId);
                     if (canonicalSeries.HasValue && canonicalSeries.Value != seriesId
                         && await CanMergeAutomaticSeriesAsync(
                             connection, transaction, seriesId) == 1)
@@ -1040,7 +1323,303 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
             await connection.ExecuteAsync(
                 "DELETE FROM match_candidates WHERE asset_id=@Asset;",
                 new { Asset = assetId.ToString("D") }, transaction);
+            await connection.ExecuteAsync(
+                "DELETE FROM catalog_reset_assets WHERE asset_id=@Asset;",
+                new { Asset = assetId.ToString("D") }, transaction);
             return true;
+        }, ct);
+
+    public Task ApplyAniDbIdentityAsync(
+        Guid assetId,
+        VideoAniDbIdentityProjection projection,
+        CancellationToken ct = default) =>
+        WriteAsync(async (connection, transaction) =>
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(projection.GroupId);
+            var assetExists = await connection.ExecuteScalarAsync<long>(
+                "SELECT COUNT(*) FROM media_assets WHERE id=@Asset;",
+                new { Asset = assetId.ToString("D") }, transaction) != 0;
+            if (!assetExists)
+                throw new KeyNotFoundException("Video asset was not found.");
+
+            var aid = projection.AnimeId.ToString(CultureInfo.InvariantCulture);
+            var seriesId = await FindSeriesNodeByExternalIdAsync(
+                connection, transaction, "anidb", aid);
+            if (!seriesId.HasValue)
+            {
+                // Reuse the scanner-owned series for the first confirmed AID when it is
+                // still unclaimed. Once an AID is locked, a different AID always gets a
+                // distinct series node, even if both files originally shared a folder.
+                var currentSeries = await FindBoundAncestorNodeIdAsync(
+                    connection, transaction, assetId, "series");
+                var hasConflictingAniDbIdentity = currentSeries.HasValue
+                    && await connection.ExecuteScalarAsync<long>(
+                        """
+                        SELECT COUNT(*) FROM external_ids
+                        WHERE node_id=@Node AND provider_id='anidb' AND external_id<>@Aid;
+                        """,
+                        new { Node = currentSeries.Value.ToString("D"), Aid = aid }, transaction) != 0;
+                // A scanner series can cover many files before AniDB proves their AIDs.
+                // Claiming that shared root for the first matched file would implicitly put
+                // every still-unmatched sibling under the matched AID. Reuse is safe only
+                // when the entire current hierarchy belongs to this asset alone.
+                var hasOtherHierarchyAssets = currentSeries.HasValue
+                    && await CountOtherSeriesAssetsAsync(
+                        connection, transaction, currentSeries.Value, assetId) != 0;
+                seriesId = currentSeries.HasValue
+                           && !hasConflictingAniDbIdentity
+                           && !hasOtherHierarchyAssets
+                    ? currentSeries
+                    : Guid.NewGuid();
+                if (seriesId != currentSeries)
+                {
+                    await connection.ExecuteAsync(
+                        """
+                        INSERT INTO catalog_nodes(
+                            id,kind,primary_title,is_special,identity_locked,created_at,updated_at)
+                        VALUES(@Id,'series',@Title,0,1,@Now,@Now);
+                        """,
+                        new
+                        {
+                            Id = seriesId.Value.ToString("D"),
+                            Title = projection.SeriesMetadata.Title,
+                            Now = ToDb(DateTimeOffset.UtcNow),
+                        }, transaction);
+                }
+            }
+
+            var seriesMetadata = projection.SeriesMetadata.WithInitializedCollections() with
+            {
+                ProviderId = "anidb",
+                ProviderItemId = aid,
+                MediaKind = VideoMetadataMediaKind.Anime,
+                SeasonNumber = null,
+                EpisodeNumber = null,
+                AbsoluteEpisodeNumber = null,
+                ExternalIds = projection.SeriesMetadata.ExternalIds
+                    .Remove("anidb-file")
+                    .Remove("anidb-episode")
+                    .SetItem("anidb", aid)
+                    .SetItem("anidb-group", projection.GroupId),
+            };
+            await ApplyNodeMetadataAsync(
+                connection,
+                transaction,
+                seriesId.Value,
+                "series",
+                seriesMetadata,
+                ImmutableHashSet.Create(StringComparer.OrdinalIgnoreCase, "anidb"),
+                allowLockedIdentityReplacement: false);
+            var seriesByAnime = new Dictionary<int, (Guid SeriesId, string GroupId, VideoMetadataDetails Metadata)>
+            {
+                [projection.AnimeId] = (seriesId.Value, projection.GroupId, seriesMetadata),
+            };
+
+            var oldEpisodeIds = (await connection.QueryAsync<string>(
+                """
+                SELECT n.id FROM catalog_nodes n
+                JOIN node_assets na ON na.node_id=n.id
+                WHERE na.asset_id=@Asset AND n.kind='episode'
+                ORDER BY na.ordinal,n.id;
+                """,
+                new { Asset = assetId.ToString("D") }, transaction)).ToList();
+            var targetEpisodeIds = new List<Guid>();
+            foreach (var episode in projection.Episodes
+                         .OrderBy(item => item.Ordinal)
+                         .ThenBy(item => item.EpisodeId))
+            {
+                var episodeAnimeId = episode.AnimeId > 0 ? episode.AnimeId : projection.AnimeId;
+                if (!seriesByAnime.TryGetValue(episodeAnimeId, out var episodeOwner))
+                {
+                    if (episode.AnimeMetadata == null
+                        || string.IsNullOrWhiteSpace(episode.AnimeGroupId))
+                        throw new InvalidOperationException(
+                            $"AniDB episode {episode.EpisodeId} has no metadata for owning AID {episodeAnimeId}.");
+                    var episodeAid = episodeAnimeId.ToString(CultureInfo.InvariantCulture);
+                    var ownerSeriesId = await FindSeriesNodeByExternalIdAsync(
+                        connection, transaction, "anidb", episodeAid);
+                    if (!ownerSeriesId.HasValue)
+                    {
+                        ownerSeriesId = Guid.NewGuid();
+                        await connection.ExecuteAsync(
+                            """
+                            INSERT INTO catalog_nodes(
+                                id,kind,primary_title,is_special,identity_locked,created_at,updated_at)
+                            VALUES(@Id,'series',@Title,0,1,@Now,@Now);
+                            """,
+                            new
+                            {
+                                Id = ownerSeriesId.Value.ToString("D"),
+                                episode.AnimeMetadata.Title,
+                                Now = ToDb(DateTimeOffset.UtcNow),
+                            }, transaction);
+                    }
+                    var ownerMetadata = episode.AnimeMetadata.WithInitializedCollections() with
+                    {
+                        ProviderId = "anidb",
+                        ProviderItemId = episodeAid,
+                        MediaKind = VideoMetadataMediaKind.Anime,
+                        SeasonNumber = null,
+                        EpisodeNumber = null,
+                        AbsoluteEpisodeNumber = null,
+                        ExternalIds = episode.AnimeMetadata.ExternalIds
+                            .Remove("anidb-file")
+                            .Remove("anidb-episode")
+                            .SetItem("anidb", episodeAid)
+                            .SetItem("anidb-group", episode.AnimeGroupId),
+                    };
+                    await ApplyNodeMetadataAsync(
+                        connection,
+                        transaction,
+                        ownerSeriesId.Value,
+                        "series",
+                        ownerMetadata,
+                        ImmutableHashSet.Create(StringComparer.OrdinalIgnoreCase, "anidb"),
+                        allowLockedIdentityReplacement: false);
+                    episodeOwner = (ownerSeriesId.Value, episode.AnimeGroupId, ownerMetadata);
+                    seriesByAnime.Add(episodeAnimeId, episodeOwner);
+                }
+
+                var eid = episode.EpisodeId.ToString(CultureInfo.InvariantCulture);
+                var existingEpisode = await connection.ExecuteScalarAsync<string?>(
+                    """
+                    SELECT e.node_id FROM external_ids e
+                    JOIN catalog_nodes n ON n.id=e.node_id
+                    WHERE n.kind='episode' AND e.provider_id='anidb-episode'
+                      AND e.external_id=@Eid
+                    LIMIT 1;
+                    """,
+                    new { Eid = eid }, transaction);
+                Guid episodeId;
+                if (Guid.TryParse(existingEpisode, out var parsedEpisodeId))
+                {
+                    episodeId = parsedEpisodeId;
+                }
+                else
+                {
+                    Guid? reusableEpisodeId = null;
+                    if (targetEpisodeIds.Count == 0 && oldEpisodeIds.Count == 1)
+                    {
+                        var candidateId = Guid.Parse(oldEpisodeIds[0]);
+                        var hasLockedDifferentEid = await connection.ExecuteScalarAsync<long>(
+                            """
+                            SELECT COUNT(*) FROM external_ids
+                            WHERE node_id=@Node AND provider_id='anidb-episode'
+                              AND external_id<>@Eid;
+                            """,
+                            new { Node = candidateId.ToString("D"), Eid = eid }, transaction) != 0;
+                        if (!hasLockedDifferentEid)
+                            reusableEpisodeId = candidateId;
+                    }
+
+                    episodeId = reusableEpisodeId ?? Guid.NewGuid();
+                    if (!reusableEpisodeId.HasValue)
+                    {
+                        await connection.ExecuteAsync(
+                            """
+                            INSERT INTO catalog_nodes(
+                                id,kind,primary_title,is_special,identity_locked,created_at,updated_at)
+                            VALUES(@Id,'episode',@Title,@Special,1,@Now,@Now);
+                            """,
+                            new
+                            {
+                                Id = episodeId.ToString("D"),
+                                episode.Title,
+                                Special = episode.SeasonNumber == 0 ? 1 : 0,
+                                Now = ToDb(DateTimeOffset.UtcNow),
+                            }, transaction);
+                    }
+                }
+
+                var seasonId = await FindOrCreateSeasonNodeAsync(
+                    connection, transaction, episodeOwner.SeriesId, episode.SeasonNumber);
+                await connection.ExecuteAsync(
+                    """
+                    UPDATE catalog_nodes SET parent_id=@Parent,kind='episode',season_number=@Season,
+                        episode_number=@Episode,is_special=@Special,updated_at=@Now
+                    WHERE id=@Id;
+                    """,
+                    new
+                    {
+                        Id = episodeId.ToString("D"),
+                        Parent = seasonId.ToString("D"),
+                        Season = episode.SeasonNumber,
+                        Episode = episode.EpisodeNumber,
+                        Special = episode.SeasonNumber == 0 ? 1 : 0,
+                        Now = ToDb(DateTimeOffset.UtcNow),
+                    }, transaction);
+
+                var episodeMetadata = new VideoMetadataDetails(
+                    "anidb-episode",
+                    eid,
+                    VideoMetadataMediaKind.Episode,
+                    episode.Title,
+                    episode.OriginalTitle,
+                    null,
+                    episode.Overview,
+                    episode.AirDate?.Year ?? episodeOwner.Metadata.Year,
+                    episode.SeasonNumber,
+                    episode.EpisodeNumber,
+                    episode.SeasonNumber == 1 ? episode.EpisodeNumber : null,
+                    [],
+                    [],
+                    [],
+                    ImmutableDictionary<string, string>.Empty
+                        .Add("anidb", episodeAnimeId.ToString(CultureInfo.InvariantCulture))
+                        .Add("anidb-episode", eid)
+                        .Add("anidb-group", episodeOwner.GroupId),
+                    $"https://anidb.net/episode/{eid}",
+                    episodeOwner.Metadata.FetchedAt,
+                    episodeOwner.Metadata.ExpiresAt).WithInitializedCollections();
+                await ApplyNodeMetadataAsync(
+                    connection,
+                    transaction,
+                    episodeId,
+                    "episode",
+                    episodeMetadata,
+                    ImmutableHashSet.Create(StringComparer.OrdinalIgnoreCase, "anidb-episode"),
+                    allowLockedIdentityReplacement: false);
+                targetEpisodeIds.Add(episodeId);
+            }
+
+            await connection.ExecuteAsync(
+                "DELETE FROM node_assets WHERE asset_id=@Asset;",
+                new { Asset = assetId.ToString("D") }, transaction);
+            if (targetEpisodeIds.Count == 0)
+            {
+                await connection.ExecuteAsync(
+                    """
+                    INSERT OR IGNORE INTO node_assets(node_id,asset_id,is_preferred,ordinal)
+                    VALUES(@Node,@Asset,1,0);
+                    """,
+                    new { Node = seriesId.Value.ToString("D"), Asset = assetId.ToString("D") }, transaction);
+            }
+            else
+            {
+                for (var index = 0; index < targetEpisodeIds.Count; index++)
+                {
+                    await connection.ExecuteAsync(
+                        """
+                        INSERT OR IGNORE INTO node_assets(node_id,asset_id,is_preferred,ordinal)
+                        VALUES(@Node,@Asset,@Preferred,@Ordinal);
+                        """,
+                        new
+                        {
+                            Node = targetEpisodeIds[index].ToString("D"),
+                            Asset = assetId.ToString("D"),
+                            Preferred = index == 0 ? 1 : 0,
+                            Ordinal = index,
+                        }, transaction);
+                }
+            }
+
+            await connection.ExecuteAsync(
+                "DELETE FROM match_candidates WHERE asset_id=@Asset;",
+                new { Asset = assetId.ToString("D") }, transaction);
+            await connection.ExecuteAsync(
+                "DELETE FROM catalog_reset_assets WHERE asset_id=@Asset;",
+                new { Asset = assetId.ToString("D") }, transaction);
+            await PruneEmptyAutomaticNodesAsync(connection, transaction);
         }, ct);
 
     public Task UpdateMetadataRefreshCountsAsync(
@@ -1105,10 +1684,1004 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 WHERE asset_id IN (
                     SELECT asset_id FROM source_assets WHERE source_id=@Source
                 );
+                DELETE FROM catalog_reset_assets
+                WHERE asset_id IN (
+                    SELECT asset_id FROM source_assets WHERE source_id=@Source
+                );
+                DELETE FROM catalog_reset_sources WHERE source_id=@Source;
                 DROP TABLE clear_remote_metadata_nodes;
                 """,
                 new { Source = sourceId.ToString("D") }, transaction);
         }, ct);
+
+    public Task ClearAllScrapeRecordsAsync(CancellationToken ct = default) =>
+        ClearAllScrapeRecordsAsync(Array.Empty<VideoManualAniDbIdentity>(), ct);
+
+    public Task ClearAllScrapeRecordsAsync(
+        IReadOnlyCollection<VideoManualAniDbIdentity> manualAniDbIdentities,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(manualAniDbIdentities);
+        return WriteAsync(
+            (connection, transaction) =>
+                ResetCatalogToUnmatchedAfterScrapeClearAsync(connection, transaction),
+            ct);
+    }
+
+    private Task ClearAllScrapeRecordsLegacyAsync(
+        IReadOnlyCollection<VideoManualAniDbIdentity> manualAniDbIdentities,
+        CancellationToken ct) =>
+        WriteAsync(async (connection, transaction) =>
+        {
+            // This is an explicit, user-confirmed reset of every catalog projection.
+            // Source media, source membership, asset user data, playback, collections,
+            // tags and credentials live outside this delete set. Local sidecars remain
+            // untouched on disk and can be imported again by a later scan.
+            await connection.ExecuteAsync(
+                """
+                CREATE TEMP TABLE clear_manual_anidb_identities(
+                    asset_id TEXT NOT NULL,
+                    provider_id TEXT NOT NULL,
+                    external_id TEXT NOT NULL,
+                    PRIMARY KEY(asset_id,provider_id,external_id));
+                CREATE TEMP TABLE clear_manual_anidb_external_ids(
+                    node_id TEXT NOT NULL,
+                    provider_id TEXT NOT NULL,
+                    external_id TEXT NOT NULL,
+                    PRIMARY KEY(node_id,provider_id,external_id));
+                CREATE TEMP TABLE clear_removed_automatic_anidb_lock_nodes(
+                    id TEXT PRIMARY KEY);
+                """,
+                transaction: transaction);
+            var manualIdentityRows = manualAniDbIdentities
+                .SelectMany(identity => identity.AnimeIds
+                    .Select(animeId => new
+                    {
+                        Asset = identity.AssetId.ToString("D"),
+                        Provider = "anidb",
+                        ExternalId = animeId.ToString(CultureInfo.InvariantCulture),
+                    })
+                    .Concat(identity.EpisodeIds.Select(episodeId => new
+                    {
+                        Asset = identity.AssetId.ToString("D"),
+                        Provider = "anidb-episode",
+                        ExternalId = episodeId.ToString(CultureInfo.InvariantCulture),
+                    })))
+                .ToArray();
+            if (manualIdentityRows.Length > 0)
+            {
+                await connection.ExecuteAsync(
+                    """
+                    INSERT OR IGNORE INTO clear_manual_anidb_identities(
+                        asset_id,provider_id,external_id)
+                    VALUES(@Asset,@Provider,@ExternalId);
+                    """,
+                    manualIdentityRows, transaction);
+                await connection.ExecuteAsync(
+                    """
+                    WITH RECURSIVE manual_ancestry(asset_id,id,parent_id) AS (
+                        SELECT identity.asset_id,node.id,node.parent_id
+                        FROM (SELECT DISTINCT asset_id FROM clear_manual_anidb_identities) identity
+                        JOIN node_assets binding ON binding.asset_id=identity.asset_id
+                        JOIN catalog_nodes node ON node.id=binding.node_id
+                        UNION
+                        SELECT child.asset_id,parent.id,parent.parent_id
+                        FROM catalog_nodes parent
+                        JOIN manual_ancestry child ON child.parent_id=parent.id
+                    )
+                    INSERT OR IGNORE INTO clear_manual_anidb_external_ids(
+                        node_id,provider_id,external_id)
+                    SELECT DISTINCT ancestry.id,lower(external.provider_id),external.external_id
+                    FROM manual_ancestry ancestry
+                    JOIN external_ids external ON external.node_id=ancestry.id
+                    JOIN clear_manual_anidb_identities identity
+                      ON identity.asset_id=ancestry.asset_id
+                     AND identity.provider_id=lower(external.provider_id)
+                     AND identity.external_id=external.external_id;
+                    """,
+                    transaction: transaction);
+            }
+            await connection.ExecuteAsync(
+                """
+                INSERT OR IGNORE INTO clear_removed_automatic_anidb_lock_nodes(id)
+                SELECT DISTINCT external.node_id
+                FROM external_ids external
+                WHERE external.provider_id IN ('anidb','anidb-episode')
+                  AND external.is_identity_locked=1
+                  AND NOT EXISTS(
+                      SELECT 1 FROM clear_manual_anidb_external_ids manual
+                      WHERE manual.node_id=external.node_id
+                        AND manual.provider_id=lower(external.provider_id)
+                        AND manual.external_id=external.external_id);
+                """,
+                transaction: transaction);
+            var localFields = (await connection.QueryAsync<SnapshotLocalFieldRow>(
+                    """
+                    SELECT node_id,field,value FROM metadata_field_values
+                    WHERE provider_id='local' AND value IS NOT NULL AND TRIM(value)<>'';
+                    """,
+                    transaction: transaction))
+                .GroupBy(row => row.node_id, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.ToDictionary(
+                        row => row.field,
+                        row => row.value,
+                        StringComparer.OrdinalIgnoreCase),
+                    StringComparer.OrdinalIgnoreCase);
+            var preservedFields = (await connection.QueryAsync<PreservedFieldRow>(
+                    """
+                    SELECT node_id,field,value,provider_id,priority,is_locked,updated_at
+                    FROM metadata_field_values
+                    WHERE (provider_id='local' OR is_locked=1)
+                      AND value IS NOT NULL AND TRIM(value)<>''
+                    ORDER BY is_locked DESC,priority DESC,updated_at DESC,provider_id;
+                    """,
+                    transaction: transaction))
+                .GroupBy(row => row.node_id, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group
+                        .GroupBy(row => row.field, StringComparer.OrdinalIgnoreCase)
+                        .ToDictionary(
+                            fields => fields.Key,
+                            fields => fields.First().value,
+                            StringComparer.OrdinalIgnoreCase),
+                    StringComparer.OrdinalIgnoreCase);
+
+            await connection.ExecuteAsync(
+                """
+                UPDATE node_user_data
+                SET preferred_artwork_id=NULL,updated_at=@Now
+                WHERE preferred_artwork_id IN(
+                    SELECT id FROM artwork WHERE provider_id<>'local');
+                DELETE FROM node_user_data
+                WHERE is_favorite=0 AND preferred_asset_id IS NULL
+                  AND preferred_artwork_id IS NULL;
+
+                DELETE FROM metadata_snapshots;
+                DELETE FROM metadata_field_values
+                WHERE provider_id<>'local' AND is_locked=0;
+                DELETE FROM artwork WHERE provider_id<>'local';
+                DELETE FROM external_ids
+                WHERE provider_id IN ('anidb','anidb-episode')
+                  AND NOT EXISTS(
+                      SELECT 1 FROM clear_manual_anidb_external_ids manual
+                      WHERE manual.node_id=external_ids.node_id
+                        AND manual.provider_id=lower(external_ids.provider_id)
+                        AND manual.external_id=external_ids.external_id);
+                DELETE FROM external_ids WHERE is_identity_locked=0;
+                DELETE FROM catalog_aliases WHERE provider_id NOT IN ('filename','local');
+                DELETE FROM match_candidates;
+                DELETE FROM tmdb_episode_xrefs;
+                DELETE FROM tmdb_show_xrefs;
+                DELETE FROM tmdb_orderings;
+                DELETE FROM provider_cache;
+                DELETE FROM catalog_jobs WHERE kind='metadata_refresh';
+                """,
+                new { Now = ToDb(DateTimeOffset.UtcNow) },
+                transaction);
+
+            // Snapshot only locks that survived the automatic scrape deletion.
+            // A Local sidecar reusing an AniDB provider must not inherit the lock
+            // from the automatic AID/EID row that was just removed.
+            var externalIdentityLocks = (await connection.QueryAsync<ExternalIdRow>(
+                    """
+                    SELECT node_id,provider_id,external_id,is_identity_locked
+                    FROM external_ids;
+                    """,
+                    transaction: transaction))
+                .ToDictionary(
+                    row => $"{row.node_id}\0{row.provider_id}",
+                    row => row.is_identity_locked,
+                    StringComparer.OrdinalIgnoreCase);
+
+            foreach (var pair in localFields)
+            {
+                foreach (var externalId in DeserializeLocalExternalIds(
+                             pair.Value.GetValueOrDefault("externalIds")))
+                {
+                    var providerId = externalId.Key.ToLowerInvariant();
+                    var identityWasLocked = externalIdentityLocks.GetValueOrDefault(
+                        $"{pair.Key}\0{providerId}");
+                    await connection.ExecuteAsync(
+                        """
+                        INSERT INTO external_ids(
+                            node_id,provider_id,external_id,is_identity_locked)
+                        VALUES(@Node,@Provider,@ExternalId,@Locked)
+                        ON CONFLICT(node_id,provider_id) DO UPDATE SET
+                            external_id=CASE WHEN external_ids.is_identity_locked=1
+                                THEN external_ids.external_id ELSE excluded.external_id END,
+                            is_identity_locked=MAX(external_ids.is_identity_locked,excluded.is_identity_locked);
+                        """,
+                        new
+                        {
+                            Node = pair.Key,
+                            Provider = providerId,
+                            ExternalId = externalId.Value,
+                            Locked = identityWasLocked,
+                        },
+                        transaction);
+                }
+            }
+
+            await connection.ExecuteAsync(
+                """
+                UPDATE catalog_nodes
+                SET identity_locked=CASE WHEN
+                    EXISTS(SELECT 1 FROM external_ids external
+                           WHERE external.node_id=catalog_nodes.id
+                             AND external.is_identity_locked=1)
+                    OR EXISTS(SELECT 1 FROM metadata_field_values field
+                              WHERE field.node_id=catalog_nodes.id AND field.is_locked=1)
+                    THEN 1 ELSE 0 END
+                WHERE id IN (SELECT id FROM clear_removed_automatic_anidb_lock_nodes);
+                """,
+                transaction: transaction);
+
+            var nodes = (await connection.QueryAsync<NodeRow>(
+                "SELECT * FROM catalog_nodes ORDER BY created_at,id;",
+                transaction: transaction)).ToArray();
+            var filenameAliases = (await connection.QueryAsync<AliasRow>(
+                    """
+                    SELECT * FROM catalog_aliases
+                    WHERE provider_id='filename' ORDER BY alias;
+                    """,
+                    transaction: transaction))
+                .GroupBy(row => row.node_id, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Select(row => row.alias).FirstOrDefault(),
+                    StringComparer.OrdinalIgnoreCase);
+            var now = ToDb(DateTimeOffset.UtcNow);
+            foreach (var node in nodes)
+            {
+                preservedFields.TryGetValue(node.id, out var fields);
+                filenameAliases.TryGetValue(node.id, out var filenameTitle);
+                var assetTitle = await connection.ExecuteScalarAsync<string?>(
+                    """
+                    WITH RECURSIVE descendants(id) AS (
+                        SELECT @Node
+                        UNION
+                        SELECT child.id FROM catalog_nodes child
+                        JOIN descendants parent ON child.parent_id=parent.id
+                    )
+                    SELECT asset.title FROM descendants node
+                    JOIN node_assets binding ON binding.node_id=node.id
+                    JOIN media_assets asset ON asset.id=binding.asset_id
+                    ORDER BY binding.is_preferred DESC,binding.ordinal,asset.imported_at
+                    LIMIT 1;
+                    """,
+                    new { Node = node.id },
+                    transaction);
+                var structuralTitle = node.kind switch
+                {
+                    "season" when node.season_number == 0 => "Specials",
+                    "season" when node.season_number.HasValue => $"Season {node.season_number.Value}",
+                    "episode" when node.episode_number.HasValue => $"Episode {node.episode_number.Value}",
+                    _ => null,
+                };
+                var title = fields?.GetValueOrDefault("title")
+                            ?? filenameTitle
+                            ?? structuralTitle
+                            ?? assetTitle
+                            ?? node.primary_title;
+                var year = int.TryParse(
+                    fields?.GetValueOrDefault("year"),
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var parsedYear)
+                    ? parsedYear
+                    : (int?)null;
+                await connection.ExecuteAsync(
+                    """
+                    UPDATE catalog_nodes
+                    SET primary_title=@Title,original_title=@OriginalTitle,
+                        subtitle=@Subtitle,overview=@Overview,year=@Year,updated_at=@Now
+                    WHERE id=@Node;
+                    """,
+                    new
+                    {
+                        Node = node.id,
+                        Title = title,
+                        OriginalTitle = fields?.GetValueOrDefault("originalTitle"),
+                        Subtitle = fields?.GetValueOrDefault("subtitle"),
+                        Overview = fields?.GetValueOrDefault("overview"),
+                        Year = year,
+                        Now = now,
+                    },
+                    transaction);
+            }
+
+            await ResetCatalogToUnmatchedAfterScrapeClearAsync(connection, transaction);
+            await connection.ExecuteAsync(
+                """
+                DROP TABLE clear_removed_automatic_anidb_lock_nodes;
+                DROP TABLE clear_manual_anidb_external_ids;
+                DROP TABLE clear_manual_anidb_identities;
+                """,
+                transaction: transaction);
+        }, ct);
+
+    private static async Task ResetCatalogToUnmatchedAfterScrapeClearAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction)
+    {
+        var now = ToDb(DateTimeOffset.UtcNow);
+        await connection.ExecuteAsync(
+            """
+            CREATE TEMP TABLE clear_reset_asset_ancestry(
+                asset_id TEXT NOT NULL,
+                node_id TEXT NOT NULL,
+                depth INTEGER NOT NULL,
+                PRIMARY KEY(asset_id,node_id));
+            WITH RECURSIVE ancestry(asset_id,node_id,parent_id,depth) AS (
+                SELECT binding.asset_id,node.id,node.parent_id,0
+                FROM node_assets binding
+                JOIN catalog_nodes node ON node.id=binding.node_id
+                UNION ALL
+                SELECT child.asset_id,parent.id,parent.parent_id,child.depth+1
+                FROM ancestry child
+                JOIN catalog_nodes parent ON parent.id=child.parent_id
+            )
+            INSERT OR IGNORE INTO clear_reset_asset_ancestry(asset_id,node_id,depth)
+            SELECT asset_id,node_id,depth FROM ancestry;
+
+            CREATE TEMP TABLE clear_reset_favorite_assets(
+                asset_id TEXT PRIMARY KEY);
+            INSERT OR IGNORE INTO clear_reset_favorite_assets(asset_id)
+            SELECT DISTINCT ancestry.asset_id
+            FROM clear_reset_asset_ancestry ancestry
+            JOIN node_user_data user ON user.node_id=ancestry.node_id
+            WHERE user.is_favorite=1;
+
+            INSERT OR IGNORE INTO asset_user_data(asset_id,is_favorite,updated_at)
+            SELECT asset_id,1,@Now FROM clear_reset_favorite_assets;
+            UPDATE asset_user_data
+            SET is_favorite=1,updated_at=@Now
+            WHERE asset_id IN (SELECT asset_id FROM clear_reset_favorite_assets);
+
+            UPDATE library_sources SET scan_generation=scan_generation+1;
+            UPDATE catalog_jobs
+            SET state='cancelled',updated_at=@Now,
+                error='Superseded by scrape catalog reset.'
+            WHERE kind IN ('incremental_scan','full_scan')
+              AND state IN ('queued','running','paused');
+
+            DELETE FROM catalog_nodes;
+            DELETE FROM match_candidates;
+            DELETE FROM tmdb_episode_xrefs;
+            DELETE FROM tmdb_orderings;
+            DELETE FROM tmdb_show_xrefs;
+            DELETE FROM provider_cache;
+            DELETE FROM catalog_jobs WHERE kind='metadata_refresh';
+            DELETE FROM catalog_reset_assets;
+            INSERT INTO catalog_reset_assets(asset_id,reset_at)
+            SELECT id,@Now FROM media_assets;
+            DELETE FROM catalog_reset_sources;
+            INSERT INTO catalog_reset_sources(source_id,reset_at)
+            SELECT id,@Now FROM library_sources;
+
+            CREATE TEMP TABLE clear_reset_nodes(
+                asset_id TEXT PRIMARY KEY,
+                node_id TEXT NOT NULL UNIQUE);
+            """,
+            new { Now = now },
+            transaction);
+
+        var assets = (await connection.QueryAsync<ScrapeResetAssetRow>(
+            """
+            SELECT asset.id AS asset_id,
+                   COALESCE(NULLIF(TRIM(user.display_title),''),asset.title) AS title
+            FROM media_assets asset
+            LEFT JOIN asset_user_data user ON user.asset_id=asset.id
+            ORDER BY asset.id;
+            """,
+            transaction: transaction)).ToArray();
+        var resetNodes = assets.Select(asset => new
+        {
+            Asset = asset.asset_id,
+            Node = Guid.NewGuid().ToString("D"),
+            Title = asset.title,
+            Now = now,
+        }).ToArray();
+        if (resetNodes.Length > 0)
+        {
+            foreach (var resetNode in resetNodes)
+            {
+                await connection.ExecuteAsync(
+                    """
+                    INSERT INTO catalog_nodes(
+                        id,parent_id,kind,primary_title,original_title,subtitle,overview,year,
+                        season_number,episode_number,absolute_episode_number,is_special,
+                        identity_locked,created_at,updated_at)
+                    VALUES(@Node,NULL,'unmatched',@Title,NULL,NULL,NULL,NULL,
+                           NULL,NULL,NULL,0,0,@Now,@Now);
+                    INSERT INTO node_assets(node_id,asset_id,is_preferred,ordinal)
+                    VALUES(@Node,@Asset,1,0);
+                    INSERT INTO clear_reset_nodes(asset_id,node_id)
+                    VALUES(@Asset,@Node);
+                    """,
+                    resetNode,
+                    transaction);
+            }
+        }
+
+        await connection.ExecuteAsync(
+            """
+            DROP TABLE clear_reset_nodes;
+            DROP TABLE clear_reset_favorite_assets;
+            DROP TABLE clear_reset_asset_ancestry;
+            """,
+            new { Now = now },
+            transaction);
+    }
+
+    private static async Task RebuildScannerTopologyAfterScrapeClearAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction)
+    {
+        var memberships = (await connection.QueryAsync<ScrapeResetAssetRow>(
+                """
+                SELECT asset.id AS asset_id,asset.kind,asset.location,asset.title,
+                       source.id AS source_id,source.folder_path,source.media_type
+                FROM media_assets asset
+                LEFT JOIN source_assets membership ON membership.asset_id=asset.id
+                LEFT JOIN library_sources source ON source.id=membership.source_id
+                ORDER BY asset.id,LENGTH(COALESCE(source.normalized_folder_path,'')) DESC;
+                """,
+                transaction: transaction))
+            .GroupBy(row => row.asset_id, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToArray();
+        var parser = new VideoFileNameParser();
+        var parsedByAsset = new Dictionary<string, ParsedVideoIdentity>(StringComparer.OrdinalIgnoreCase);
+        foreach (var sourceGroup in memberships.Where(row =>
+                     string.Equals(row.kind, "local", StringComparison.OrdinalIgnoreCase)
+                     && !string.IsNullOrWhiteSpace(row.source_id)
+                     && !string.IsNullOrWhiteSpace(row.folder_path))
+                 .GroupBy(row => row.source_id!, StringComparer.OrdinalIgnoreCase))
+        {
+            var source = sourceGroup.First();
+            var paths = sourceGroup.Select(row => Path.GetFullPath(row.location)).ToArray();
+            var parsed = VideoScanBundleClassifier.Parse(
+                paths,
+                source.folder_path!,
+                ParseMediaType(source.media_type ?? "auto"),
+                parser);
+            foreach (var row in sourceGroup)
+            {
+                if (parsed.TryGetValue(Path.GetFullPath(row.location), out var identity))
+                    parsedByAsset[row.asset_id] = identity;
+            }
+        }
+
+        foreach (var row in memberships)
+        {
+            var assetId = Guid.Parse(row.asset_id);
+            if (parsedByAsset.TryGetValue(row.asset_id, out var parsed)
+                && Guid.TryParse(row.source_id, out var sourceId))
+            {
+                await RebuildLocalAssetTopologyAfterScrapeClearAsync(
+                    connection, transaction, assetId, sourceId, parsed);
+            }
+            else
+            {
+                await ResetAssetToUnmatchedAfterScrapeClearAsync(
+                    connection, transaction, assetId, row.title);
+            }
+        }
+    }
+
+    private static async Task RebuildLocalAssetTopologyAfterScrapeClearAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid assetId,
+        Guid sourceId,
+        ParsedVideoIdentity parsed)
+    {
+        var currentNodes = (await connection.QueryAsync<BoundNodeRow>(
+            """
+            SELECT node.id,node.kind FROM catalog_nodes node
+            JOIN node_assets binding ON binding.node_id=node.id
+            WHERE binding.asset_id=@Asset ORDER BY binding.ordinal,node.id;
+            """,
+            new { Asset = assetId.ToString("D") }, transaction)).ToList();
+        if (currentNodes.Count == 0)
+            return;
+
+        parsed = await OverlayPersistedLocalStructureAsync(
+            connection, transaction, assetId, parsed);
+
+        // A manually/explicitly locked child is authoritative. Automatic TMDB scaffolds may be
+        // rebuilt around a protected series, but an EID/movie/season lock must keep its binding.
+        var hasLockedChild = await connection.ExecuteScalarAsync<long>(
+            """
+            WITH RECURSIVE ancestry(id,parent_id,kind,identity_locked) AS (
+                SELECT node.id,node.parent_id,node.kind,node.identity_locked
+                FROM catalog_nodes node
+                JOIN node_assets binding ON binding.node_id=node.id
+                WHERE binding.asset_id=@Asset
+                UNION
+                SELECT parent.id,parent.parent_id,parent.kind,parent.identity_locked
+                FROM catalog_nodes parent JOIN ancestry child ON child.parent_id=parent.id
+            )
+            SELECT COUNT(*) FROM ancestry node
+            WHERE node.kind<>'series'
+              AND (node.identity_locked=1
+                   OR EXISTS(SELECT 1 FROM external_ids external
+                             WHERE external.node_id=node.id AND external.is_identity_locked=1)
+                   OR EXISTS(SELECT 1 FROM metadata_field_values field
+                             WHERE field.node_id=node.id AND field.is_locked=1));
+            """,
+            new { Asset = assetId.ToString("D") }, transaction) != 0;
+        if (hasLockedChild)
+            return;
+
+        var preservedSeries = await connection.ExecuteScalarAsync<string?>(
+            """
+            WITH RECURSIVE ancestry(id,parent_id,kind) AS (
+                SELECT node.id,node.parent_id,node.kind
+                FROM catalog_nodes node
+                JOIN node_assets binding ON binding.node_id=node.id
+                WHERE binding.asset_id=@Asset
+                UNION
+                SELECT parent.id,parent.parent_id,parent.kind
+                FROM catalog_nodes parent JOIN ancestry child ON child.parent_id=parent.id
+            )
+            SELECT series.id FROM ancestry current
+            JOIN catalog_nodes series ON series.id=current.id AND series.kind='series'
+            WHERE series.identity_locked=1
+               OR EXISTS(SELECT 1 FROM external_ids external
+                         WHERE external.node_id=series.id AND external.is_identity_locked=1)
+               OR EXISTS(SELECT 1 FROM metadata_field_values field
+                         WHERE field.node_id=series.id
+                           AND (field.provider_id='local' OR field.is_locked=1))
+               OR EXISTS(SELECT 1 FROM artwork art
+                         WHERE art.node_id=series.id AND art.provider_id='local')
+               OR EXISTS(SELECT 1 FROM node_user_data user WHERE user.node_id=series.id)
+               OR EXISTS(SELECT 1 FROM catalog_aliases alias
+                         WHERE alias.node_id=series.id AND alias.provider_id IN ('filename','local'))
+            ORDER BY series.identity_locked DESC,
+                     EXISTS(SELECT 1 FROM external_ids external
+                            WHERE external.node_id=series.id AND external.is_identity_locked=1) DESC,
+                     EXISTS(SELECT 1 FROM metadata_field_values field
+                            WHERE field.node_id=series.id AND field.provider_id='local') DESC,
+                     EXISTS(SELECT 1 FROM catalog_aliases alias
+                            WHERE alias.node_id=series.id AND alias.provider_id='filename') DESC
+            LIMIT 1;
+            """,
+            new { Asset = assetId.ToString("D") }, transaction);
+        var preservedSeriesId = Guid.TryParse(preservedSeries, out var parsedSeriesId)
+            ? parsedSeriesId
+            : (Guid?)null;
+        var episodeStart = parsed.EpisodeStart ?? parsed.AbsoluteEpisodeNumber;
+        var isUnnumberedSupplemental = parsed.SpecialKind != ParsedVideoSpecialKind.None
+                                       && !episodeStart.HasValue;
+        if (!episodeStart.HasValue && !isUnnumberedSupplemental)
+        {
+            if (preservedSeriesId.HasValue
+                && await IsNodeIdentityLockedAsync(connection, transaction, preservedSeriesId.Value))
+                return;
+            await ResetAssetToUnmatchedAfterScrapeClearAsync(
+                connection, transaction, assetId, parsed.NormalizedTitle);
+            return;
+        }
+
+        var reusableEpisode = await connection.ExecuteScalarAsync<string?>(
+            """
+            SELECT episode.id FROM catalog_nodes episode
+            JOIN node_assets binding ON binding.node_id=episode.id
+            WHERE binding.asset_id=@Asset AND episode.kind='episode'
+              AND (EXISTS(SELECT 1 FROM metadata_field_values field
+                          WHERE field.node_id=episode.id AND field.provider_id='local')
+                   OR EXISTS(SELECT 1 FROM artwork art
+                             WHERE art.node_id=episode.id AND art.provider_id='local')
+                   OR EXISTS(SELECT 1 FROM node_user_data user WHERE user.node_id=episode.id)
+                   OR EXISTS(SELECT 1 FROM catalog_aliases alias
+                             WHERE alias.node_id=episode.id
+                               AND alias.provider_id IN ('filename','local')))
+            ORDER BY binding.is_preferred DESC,binding.ordinal,episode.created_at
+            LIMIT 1;
+            """,
+            new { Asset = assetId.ToString("D") }, transaction);
+        Guid? reusableEpisodeId = Guid.TryParse(reusableEpisode, out var parsedEpisodeId)
+            ? parsedEpisodeId
+            : null;
+        if (reusableEpisodeId.HasValue)
+        {
+            preservedSeriesId ??= await FindOrCreateScannerSeriesForResetAsync(
+                connection, transaction, sourceId, parsed);
+            var seasonNumber = parsed.SpecialKind != ParsedVideoSpecialKind.None
+                ? 0
+                : parsed.SeasonNumber;
+            Guid? seasonId = null;
+            if (seasonNumber.HasValue)
+            {
+                var reusableSeason = await connection.ExecuteScalarAsync<string?>(
+                    """
+                    WITH RECURSIVE ancestry(id,parent_id,kind) AS (
+                        SELECT node.id,node.parent_id,node.kind
+                        FROM catalog_nodes node
+                        JOIN node_assets binding ON binding.node_id=node.id
+                        WHERE binding.asset_id=@Asset
+                        UNION
+                        SELECT parent.id,parent.parent_id,parent.kind
+                        FROM catalog_nodes parent JOIN ancestry child ON child.parent_id=parent.id
+                    )
+                    SELECT season.id FROM ancestry current
+                    JOIN catalog_nodes season ON season.id=current.id AND season.kind='season'
+                    WHERE EXISTS(SELECT 1 FROM metadata_field_values field
+                                 WHERE field.node_id=season.id AND field.provider_id='local')
+                       OR EXISTS(SELECT 1 FROM artwork art
+                                 WHERE art.node_id=season.id AND art.provider_id='local')
+                       OR EXISTS(SELECT 1 FROM node_user_data user WHERE user.node_id=season.id)
+                    LIMIT 1;
+                    """,
+                    new { Asset = assetId.ToString("D") }, transaction);
+                if (Guid.TryParse(reusableSeason, out var parsedSeasonId))
+                {
+                    seasonId = parsedSeasonId;
+                    await connection.ExecuteAsync(
+                        """
+                        UPDATE catalog_nodes SET parent_id=@Parent,season_number=@Season,
+                            is_special=@Special,updated_at=@Now WHERE id=@Node;
+                        """,
+                        new
+                        {
+                            Node = parsedSeasonId.ToString("D"),
+                            Parent = preservedSeriesId.Value.ToString("D"),
+                            Season = seasonNumber.Value,
+                            Special = seasonNumber.Value == 0 ? 1 : 0,
+                            Now = ToDb(DateTimeOffset.UtcNow),
+                        }, transaction);
+                }
+                seasonId ??= await FindOrCreateSeasonNodeAsync(
+                    connection, transaction, preservedSeriesId.Value, seasonNumber.Value);
+            }
+            var parentId = seasonId ?? preservedSeriesId.Value;
+            await connection.ExecuteAsync(
+                """
+                UPDATE catalog_nodes SET parent_id=@Parent,kind='episode',
+                    season_number=@Season,episode_number=@Episode,
+                    absolute_episode_number=@Absolute,is_special=@Special,updated_at=@Now
+                WHERE id=@Node;
+                """,
+                new
+                {
+                    Node = reusableEpisodeId.Value.ToString("D"),
+                    Parent = parentId.ToString("D"),
+                    Season = seasonNumber,
+                    Episode = episodeStart,
+                    Absolute = parsed.AbsoluteEpisodeNumber,
+                    Special = parsed.SpecialKind == ParsedVideoSpecialKind.None ? 0 : 1,
+                    Now = ToDb(DateTimeOffset.UtcNow),
+                }, transaction);
+        }
+        else
+        {
+            var unmatchedId = Guid.NewGuid();
+            await connection.ExecuteAsync(
+                """
+                DELETE FROM node_assets WHERE asset_id=@Asset;
+                INSERT INTO catalog_nodes(
+                    id,parent_id,kind,primary_title,is_special,identity_locked,created_at,updated_at)
+                VALUES(@Node,NULL,'unmatched',@Title,0,0,@Now,@Now);
+                INSERT INTO node_assets(node_id,asset_id,is_preferred,ordinal)
+                VALUES(@Node,@Asset,1,0);
+                """,
+                new
+                {
+                    Node = unmatchedId.ToString("D"),
+                    Asset = assetId.ToString("D"),
+                    Title = parsed.NormalizedTitle,
+                    Now = ToDb(DateTimeOffset.UtcNow),
+                }, transaction);
+            currentNodes = [new BoundNodeRow { id = unmatchedId.ToString("D"), kind = "unmatched" }];
+        }
+
+        await PromoteLocalEpisodeHierarchyAsync(
+            connection,
+            transaction,
+            assetId,
+            sourceId,
+            currentNodes,
+            parsed,
+            null,
+            episodeStart,
+            preservedSeriesId);
+    }
+
+    private static async Task<ParsedVideoIdentity> OverlayPersistedLocalStructureAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid assetId,
+        ParsedVideoIdentity parsed)
+    {
+        var rows = (await connection.QueryAsync<LocalStructuralNodeRow>(
+            """
+            WITH RECURSIVE ancestry(id,parent_id) AS (
+                SELECT node.id,node.parent_id
+                FROM catalog_nodes node
+                JOIN node_assets binding ON binding.node_id=node.id
+                WHERE binding.asset_id=@Asset
+                UNION
+                SELECT parent.id,parent.parent_id
+                FROM catalog_nodes parent JOIN ancestry child ON child.parent_id=parent.id
+            )
+            SELECT node.id,node.kind,node.season_number,node.episode_number,
+                   node.absolute_episode_number,node.is_special,
+                   (SELECT field.value FROM metadata_field_values field
+                    WHERE field.node_id=node.id AND field.provider_id='local'
+                      AND field.field='localScope' LIMIT 1) AS local_scope,
+                   (SELECT field.value FROM metadata_field_values field
+                    WHERE field.node_id=node.id AND field.provider_id='local'
+                      AND field.field='seasonNumber' LIMIT 1) AS local_season_number,
+                   (SELECT field.value FROM metadata_field_values field
+                    WHERE field.node_id=node.id AND field.provider_id='local'
+                      AND field.field='episodeNumber' LIMIT 1) AS local_episode_number,
+                   (SELECT field.value FROM metadata_field_values field
+                    WHERE field.node_id=node.id AND field.provider_id='local'
+                      AND field.field='absoluteEpisodeNumber' LIMIT 1) AS local_absolute_episode_number,
+                   (SELECT field.value FROM metadata_field_values field
+                    WHERE field.node_id=node.id AND field.provider_id='local'
+                      AND field.field='isSpecial' LIMIT 1) AS local_is_special,
+                   CASE WHEN EXISTS(
+                       SELECT 1 FROM metadata_field_values field
+                       WHERE field.node_id=node.id AND field.provider_id='local')
+                     OR EXISTS(
+                       SELECT 1 FROM artwork art
+                       WHERE art.node_id=node.id AND art.provider_id='local')
+                   THEN 1 ELSE 0 END AS has_local_provenance
+            FROM ancestry current JOIN catalog_nodes node ON node.id=current.id
+            ORDER BY CASE node.kind WHEN 'episode' THEN 0 WHEN 'season' THEN 1 ELSE 2 END,
+                     node.created_at,node.id;
+            """,
+            new { Asset = assetId.ToString("D") }, transaction)).ToArray();
+
+        static bool HasCompatibleLocalProvenance(LocalStructuralNodeRow row, string scope) =>
+            row.has_local_provenance != 0
+            && (string.IsNullOrWhiteSpace(row.local_scope)
+                || string.Equals(row.local_scope, scope, StringComparison.OrdinalIgnoreCase));
+        static int? ParseNumber(string? value) =>
+            int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)
+                ? number
+                : null;
+        static bool? ParseBoolean(string? value)
+        {
+            if (bool.TryParse(value, out var boolean))
+                return boolean;
+            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number))
+                return number != 0;
+            return null;
+        }
+
+        var episode = rows.FirstOrDefault(row =>
+            string.Equals(row.kind, "episode", StringComparison.OrdinalIgnoreCase)
+            && HasCompatibleLocalProvenance(row, "episode"));
+        var season = rows.FirstOrDefault(row =>
+            string.Equals(row.kind, "season", StringComparison.OrdinalIgnoreCase)
+            && HasCompatibleLocalProvenance(row, "season"));
+        if (episode == null && season == null)
+            return parsed;
+
+        // New catalogs use localScope as a provenance marker and only explicit Local structural
+        // fields may override the filename. Current node scalars are a one-time fallback solely
+        // for legacy Local rows that predate the marker; otherwise they may be remote structure.
+        var episodeUsesLegacyScalars = episode != null
+                                       && string.IsNullOrWhiteSpace(episode.local_scope);
+        var seasonUsesLegacyScalars = season != null
+                                      && string.IsNullOrWhiteSpace(season.local_scope);
+        var localSeasonNumber = ParseNumber(episode?.local_season_number)
+                                ?? ParseNumber(season?.local_season_number)
+                                ?? (episodeUsesLegacyScalars ? episode?.season_number : null)
+                                ?? (seasonUsesLegacyScalars ? season?.season_number : null);
+        var explicitEpisodeNumber = ParseNumber(episode?.local_episode_number);
+        var explicitAbsoluteNumber = ParseNumber(episode?.local_absolute_episode_number);
+        var localEpisodeNumber = explicitEpisodeNumber
+                                 ?? explicitAbsoluteNumber
+                                 ?? (episodeUsesLegacyScalars ? episode?.episode_number : null)
+                                 ?? (episodeUsesLegacyScalars ? episode?.absolute_episode_number : null);
+        var localAbsoluteNumber = explicitAbsoluteNumber
+                                  ?? (episodeUsesLegacyScalars ? episode?.absolute_episode_number : null)
+                                  ?? parsed.AbsoluteEpisodeNumber;
+        var localSpecial = ParseBoolean(episode?.local_is_special)
+                           ?? ParseBoolean(season?.local_is_special)
+                           ?? (localSeasonNumber.HasValue ? localSeasonNumber.Value == 0 : (bool?)null)
+                           ?? (episodeUsesLegacyScalars
+                               ? episode!.is_special != 0
+                               : (bool?)null)
+                           ?? (seasonUsesLegacyScalars
+                               ? season!.is_special != 0
+                               : (bool?)null);
+        var isSpecial = localSpecial ?? parsed.SpecialKind != ParsedVideoSpecialKind.None;
+        var episodeStart = localEpisodeNumber ?? parsed.EpisodeStart ?? parsed.AbsoluteEpisodeNumber;
+        var structureOverridesEpisode = localEpisodeNumber.HasValue;
+
+        return parsed with
+        {
+            SeasonNumber = isSpecial ? 0 : localSeasonNumber ?? parsed.SeasonNumber,
+            EpisodeStart = episodeStart,
+            EpisodeEnd = structureOverridesEpisode ? episodeStart : parsed.EpisodeEnd,
+            AbsoluteEpisodeNumber = localAbsoluteNumber,
+            SpecialKind = isSpecial
+                ? parsed.SpecialKind == ParsedVideoSpecialKind.None
+                    ? ParsedVideoSpecialKind.Special
+                    : parsed.SpecialKind
+                : ParsedVideoSpecialKind.None,
+            IsMultiEpisode = !structureOverridesEpisode && parsed.IsMultiEpisode,
+            HasEpisodeEvidence = episodeStart.HasValue || isSpecial,
+        };
+    }
+
+    private static async Task<Guid> FindOrCreateScannerSeriesForResetAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid sourceId,
+        ParsedVideoIdentity parsed)
+    {
+        var normalizedTitle = NormalizeTitle(parsed.NormalizedTitle);
+        var existing = await connection.ExecuteScalarAsync<string?>(
+            """
+            WITH RECURSIVE descendants(root_id,node_id) AS (
+                SELECT id,id FROM catalog_nodes WHERE kind='series'
+                UNION ALL
+                SELECT tree.root_id,child.id FROM descendants tree
+                JOIN catalog_nodes child ON child.parent_id=tree.node_id
+            )
+            SELECT series.id FROM catalog_nodes series
+            JOIN catalog_aliases alias ON alias.node_id=series.id
+            JOIN descendants tree ON tree.root_id=series.id
+            JOIN node_assets binding ON binding.node_id=tree.node_id
+            JOIN source_assets membership ON membership.asset_id=binding.asset_id
+            WHERE series.kind='series' AND alias.provider_id IN ('filename','local')
+              AND alias.normalized_alias=@Normalized AND membership.source_id=@Source
+              AND (series.year IS NULL OR @Year IS NULL OR series.year=@Year)
+            ORDER BY series.identity_locked DESC,series.created_at LIMIT 1;
+            """,
+            new
+            {
+                Normalized = normalizedTitle,
+                Source = sourceId.ToString("D"),
+                parsed.Year,
+            }, transaction);
+        if (Guid.TryParse(existing, out var existingId))
+            return existingId;
+
+        var seriesId = Guid.NewGuid();
+        var now = ToDb(DateTimeOffset.UtcNow);
+        await connection.ExecuteAsync(
+            """
+            INSERT INTO catalog_nodes(
+                id,parent_id,kind,primary_title,year,is_special,identity_locked,created_at,updated_at)
+            VALUES(@Node,NULL,'series',@Title,@Year,0,@Locked,@Now,@Now);
+            INSERT INTO catalog_aliases(node_id,provider_id,alias,normalized_alias)
+            VALUES(@Node,'filename',@Title,@Normalized);
+            """,
+            new
+            {
+                Node = seriesId.ToString("D"),
+                Title = parsed.NormalizedTitle,
+                parsed.Year,
+                Locked = parsed.ExternalIds.Count > 0 ? 1 : 0,
+                Normalized = normalizedTitle,
+                Now = now,
+            }, transaction);
+        foreach (var pair in parsed.ExternalIds)
+        {
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO external_ids(node_id,provider_id,external_id,is_identity_locked)
+                VALUES(@Node,@Provider,@ExternalId,1);
+                """,
+                new
+                {
+                    Node = seriesId.ToString("D"),
+                    Provider = pair.Key.ToLowerInvariant(),
+                    ExternalId = pair.Value,
+                }, transaction);
+        }
+        return seriesId;
+    }
+
+    private static async Task<bool> IsNodeIdentityLockedAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid nodeId) => await connection.ExecuteScalarAsync<long>(
+        """
+        SELECT COUNT(*) FROM catalog_nodes node
+        WHERE node.id=@Node
+          AND (node.identity_locked=1
+               OR EXISTS(SELECT 1 FROM external_ids external
+                         WHERE external.node_id=node.id AND external.is_identity_locked=1)
+               OR EXISTS(SELECT 1 FROM metadata_field_values field
+                         WHERE field.node_id=node.id AND field.is_locked=1));
+        """,
+        new { Node = nodeId.ToString("D") }, transaction) != 0;
+
+    private static async Task ResetAssetToUnmatchedAfterScrapeClearAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid assetId,
+        string title)
+    {
+        var hasLockedNode = await connection.ExecuteScalarAsync<long>(
+            """
+            WITH RECURSIVE ancestry(id,parent_id,identity_locked) AS (
+                SELECT node.id,node.parent_id,node.identity_locked
+                FROM catalog_nodes node JOIN node_assets binding ON binding.node_id=node.id
+                WHERE binding.asset_id=@Asset
+                UNION
+                SELECT parent.id,parent.parent_id,parent.identity_locked
+                FROM catalog_nodes parent JOIN ancestry child ON child.parent_id=parent.id
+            )
+            SELECT COUNT(*) FROM ancestry node
+            WHERE node.identity_locked=1
+               OR EXISTS(SELECT 1 FROM external_ids external
+                         WHERE external.node_id=node.id AND external.is_identity_locked=1)
+               OR EXISTS(SELECT 1 FROM metadata_field_values field
+                         WHERE field.node_id=node.id AND field.is_locked=1);
+            """,
+            new { Asset = assetId.ToString("D") }, transaction) != 0;
+        if (hasLockedNode)
+            return;
+
+        var reusable = await connection.ExecuteScalarAsync<string?>(
+            """
+            SELECT node.id FROM catalog_nodes node
+            JOIN node_assets binding ON binding.node_id=node.id
+            WHERE binding.asset_id=@Asset
+              AND (EXISTS(SELECT 1 FROM metadata_field_values field
+                          WHERE field.node_id=node.id AND field.provider_id='local')
+                   OR EXISTS(SELECT 1 FROM artwork art
+                             WHERE art.node_id=node.id AND art.provider_id='local')
+                   OR EXISTS(SELECT 1 FROM node_user_data user WHERE user.node_id=node.id)
+                   OR EXISTS(SELECT 1 FROM catalog_aliases alias
+                             WHERE alias.node_id=node.id
+                               AND alias.provider_id IN ('filename','local')))
+            ORDER BY binding.is_preferred DESC,binding.ordinal,node.created_at LIMIT 1;
+            """,
+            new { Asset = assetId.ToString("D") }, transaction);
+        var nodeId = Guid.TryParse(reusable, out var reusableId) ? reusableId : Guid.NewGuid();
+        var now = ToDb(DateTimeOffset.UtcNow);
+        await connection.ExecuteAsync(
+            "DELETE FROM node_assets WHERE asset_id=@Asset;",
+            new { Asset = assetId.ToString("D") }, transaction);
+        if (reusable == null)
+        {
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO catalog_nodes(
+                    id,parent_id,kind,primary_title,is_special,identity_locked,created_at,updated_at)
+                VALUES(@Node,NULL,'unmatched',@Title,0,0,@Now,@Now);
+                """,
+                new { Node = nodeId.ToString("D"), Title = title, Now = now }, transaction);
+        }
+        else
+        {
+            await connection.ExecuteAsync(
+                """
+                UPDATE catalog_nodes SET parent_id=NULL,kind='unmatched',
+                    season_number=NULL,episode_number=NULL,absolute_episode_number=NULL,
+                    is_special=0,updated_at=@Now WHERE id=@Node;
+                """,
+                new { Node = nodeId.ToString("D"), Now = now }, transaction);
+        }
+        await connection.ExecuteAsync(
+            """
+            INSERT OR IGNORE INTO catalog_aliases(node_id,provider_id,alias,normalized_alias)
+            VALUES(@Node,'filename',@Title,@Normalized);
+            INSERT INTO node_assets(node_id,asset_id,is_preferred,ordinal)
+            VALUES(@Node,@Asset,1,0);
+            """,
+            new
+            {
+                Node = nodeId.ToString("D"),
+                Asset = assetId.ToString("D"),
+                Title = title,
+                Normalized = NormalizeTitle(title),
+            }, transaction);
+    }
 
     private static async Task<ImmutableHashSet<string>> ResolveIdentityProvidersToLockAsync(
         SqliteConnection connection,
@@ -1196,11 +2769,36 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
             """,
             new { Asset = assetId.ToString("D") }, transaction);
 
+    private static Task<long> CountOtherSeriesAssetsAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid seriesId,
+        Guid assetId) =>
+        connection.ExecuteScalarAsync<long>(
+            """
+            WITH RECURSIVE descendants(id) AS (
+                SELECT id FROM catalog_nodes WHERE id=@Series AND kind='series'
+                UNION ALL
+                SELECT child.id FROM catalog_nodes child
+                JOIN descendants parent ON child.parent_id=parent.id
+            )
+            SELECT COUNT(DISTINCT na.asset_id)
+            FROM descendants d JOIN node_assets na ON na.node_id=d.id
+            WHERE na.asset_id<>@Asset;
+            """,
+            new
+            {
+                Series = seriesId.ToString("D"),
+                Asset = assetId.ToString("D"),
+            }, transaction);
+
     private static async Task<Guid> FindOrCreateSeriesNodeAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
         Guid assetId,
         VideoMetadataDetails metadata,
+        string identityProviderId,
+        string identityProviderItemId,
         Guid? reusableUnmatchedNodeId,
         bool lockIdentity,
         bool preserveExistingHierarchy,
@@ -1211,7 +2809,7 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
             SELECT e.node_id FROM external_ids e JOIN catalog_nodes n ON n.id=e.node_id
             WHERE n.kind='series' AND e.provider_id=@Provider AND e.external_id=@ExternalId LIMIT 1;
             """,
-            new { Provider = metadata.ProviderId, ExternalId = metadata.ProviderItemId }, transaction);
+            new { Provider = identityProviderId, ExternalId = identityProviderItemId }, transaction);
         if (existing == null)
         {
             existing = await connection.ExecuteScalarAsync<string?>(
@@ -1258,7 +2856,7 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
             }
         }
         var identityProvidersToLock = await ResolveIdentityProvidersToLockAsync(
-            connection, transaction, id, metadata.ProviderId,
+            connection, transaction, id, identityProviderId,
             lockIdentity, preserveExistingHierarchy);
         await ApplyNodeMetadataAsync(
             connection, transaction, id, "series", metadata,
@@ -1799,6 +3397,14 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                     Node = nodeId.ToString("D"), Field = field.Key, Value = field.Value,
                     Provider = metadata.ProviderId, Now = now,
                 }, transaction);
+        }
+        if (string.Equals(kind, "series", StringComparison.OrdinalIgnoreCase))
+        {
+            await PersistTypedTmdbCrossReferencesAsync(
+                connection,
+                transaction,
+                nodeId,
+                metadata);
         }
     }
 
@@ -2516,10 +4122,28 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 await RefreshAutomaticEpisodeFromLocalMetadataAsync(
                     connection, transaction, episodeNode.id, local);
             }
+            foreach (var movieNode in nodeRows.Where(node =>
+                         string.Equals(node.kind, "movie", StringComparison.OrdinalIgnoreCase)))
+            {
+                await ApplyLocalMetadataAsync(
+                    connection, transaction, movieNode.id, local, LocalVideoMetadataScope.Movie);
+            }
             var seriesId = await FindBoundAncestorNodeIdAsync(
                 connection, transaction, assetId, "series");
             if (seriesId.HasValue)
-                await ApplyLocalArtworkAsync(connection, transaction, seriesId.Value.ToString("D"), local);
+            {
+                await ApplyLocalMetadataAsync(
+                    connection, transaction, seriesId.Value.ToString("D"), local,
+                    LocalVideoMetadataScope.Container);
+            }
+            var seasonId = await FindBoundAncestorNodeIdAsync(
+                connection, transaction, assetId, "season");
+            if (seasonId.HasValue)
+            {
+                await ApplyLocalMetadataAsync(
+                    connection, transaction, seasonId.Value.ToString("D"), local,
+                    LocalVideoMetadataScope.Season);
+            }
         }
 
         if (!applyMetadata || nodeRows.Any(node => !string.Equals(node.kind, "unmatched", StringComparison.OrdinalIgnoreCase)))
@@ -2576,7 +4200,14 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 }, transaction);
         }
         if (local != null)
-            await ApplyLocalMetadataAsync(connection, transaction, nodeId, local);
+        {
+            var scope = isMovieSource || local.MovieMetadata != null
+                ? LocalVideoMetadataScope.Movie
+                : local.EpisodeMetadata != null
+                    ? LocalVideoMetadataScope.Episode
+                    : LocalVideoMetadataScope.Container;
+            await ApplyLocalMetadataAsync(connection, transaction, nodeId, local, scope);
+        }
     }
 
     private static async Task RefreshAutomaticEpisodeFromLocalMetadataAsync(
@@ -2585,45 +4216,8 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         string nodeId,
         LocalVideoMetadata local)
     {
-        await connection.ExecuteAsync(
-            """
-            UPDATE catalog_nodes SET
-                primary_title=CASE
-                    WHEN @Title IS NOT NULL AND NOT EXISTS(
-                        SELECT 1 FROM metadata_field_values f
-                        WHERE f.node_id=catalog_nodes.id AND f.field='title' AND f.is_locked=1)
-                    THEN @Title ELSE primary_title END,
-                original_title=CASE
-                    WHEN @OriginalTitle IS NOT NULL AND NOT EXISTS(
-                        SELECT 1 FROM metadata_field_values f
-                        WHERE f.node_id=catalog_nodes.id AND f.field='originalTitle' AND f.is_locked=1)
-                    THEN @OriginalTitle ELSE original_title END,
-                overview=CASE
-                    WHEN @Overview IS NOT NULL AND NOT EXISTS(
-                        SELECT 1 FROM metadata_field_values f
-                        WHERE f.node_id=catalog_nodes.id AND f.field='overview' AND f.is_locked=1)
-                    THEN @Overview ELSE overview END,
-                year=CASE
-                    WHEN @Year IS NOT NULL AND NOT EXISTS(
-                        SELECT 1 FROM metadata_field_values f
-                        WHERE f.node_id=catalog_nodes.id AND f.field='year' AND f.is_locked=1)
-                    THEN @Year ELSE year END,
-                updated_at=@Now
-            WHERE id=@Node AND kind='episode' AND identity_locked=0
-              AND NOT EXISTS(SELECT 1 FROM external_ids e
-                             WHERE e.node_id=catalog_nodes.id AND e.is_identity_locked=1)
-              AND NOT EXISTS(SELECT 1 FROM node_user_data u WHERE u.node_id=catalog_nodes.id);
-            """,
-            new
-            {
-                Node = nodeId,
-                Title = string.IsNullOrWhiteSpace(local.Title) ? null : local.Title,
-                OriginalTitle = local.OriginalTitle,
-                Overview = local.Overview,
-                Year = local.Year,
-                Now = ToDb(DateTimeOffset.UtcNow),
-            }, transaction);
-        await ApplyLocalMetadataAsync(connection, transaction, nodeId, local);
+        await ApplyLocalMetadataAsync(
+            connection, transaction, nodeId, local, LocalVideoMetadataScope.Episode);
     }
 
     private sealed record HierarchyRebuildDecision(bool CanRebuild, Guid? PreservedSeriesId)
@@ -2726,11 +4320,17 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         int? episodeStart,
         Guid? preservedSeriesId)
     {
-        var seriesTitle = string.IsNullOrWhiteSpace(parsed.NormalizedTitle)
+        var seriesLocal = local?.ForScope(LocalVideoMetadataScope.Container);
+        var seasonLocal = local?.ForScope(LocalVideoMetadataScope.Season);
+        var episodeLocal = local?.ForScope(LocalVideoMetadataScope.Episode);
+        var parsedSeriesTitle = string.IsNullOrWhiteSpace(parsed.NormalizedTitle)
             ? parsed.FolderTitle ?? parsed.OriginalName
             : parsed.NormalizedTitle;
-        var normalizedTitle = NormalizeTitle(seriesTitle);
-        var year = local?.Year ?? parsed.Year;
+        var seriesTitle = string.IsNullOrWhiteSpace(seriesLocal?.Title)
+            ? parsedSeriesTitle
+            : seriesLocal.Title;
+        var normalizedTitle = NormalizeTitle(parsedSeriesTitle);
+        var year = seriesLocal?.Year ?? local?.Year ?? parsed.Year;
         var existingSeries = preservedSeriesId?.ToString("D")
             ?? await connection.ExecuteScalarAsync<string?>(
                 """
@@ -2776,7 +4376,7 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 {
                     Id = seriesId.ToString("D"),
                     Title = seriesTitle,
-                    OriginalTitle = local?.OriginalTitle,
+                    OriginalTitle = seriesLocal?.OriginalTitle,
                     Year = year,
                     Locked = parsed.ExternalIds.Count > 0 ? 1 : 0,
                     Now = now,
@@ -2790,7 +4390,7 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
             new
             {
                 Node = seriesId.ToString("D"),
-                Alias = seriesTitle,
+                Alias = parsedSeriesTitle,
                 NormalizedAlias = normalizedTitle,
             }, transaction);
         foreach (var pair in parsed.ExternalIds)
@@ -2812,22 +4412,35 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 }, transaction);
         }
         if (local != null)
-            await ApplyLocalArtworkAsync(connection, transaction, seriesId.ToString("D"), local);
+        {
+            await ApplyLocalMetadataAsync(
+                connection, transaction, seriesId.ToString("D"), local,
+                LocalVideoMetadataScope.Container);
+        }
 
         var seasonNumber = parsed.SpecialKind != ParsedVideoSpecialKind.None
             ? 0
-            : local?.SeasonNumber ?? parsed.SeasonNumber;
+            : seasonLocal?.SeasonNumber ?? episodeLocal?.SeasonNumber
+              ?? local?.SeasonNumber ?? parsed.SeasonNumber;
         Guid? seasonId = seasonNumber.HasValue
             ? await FindOrCreateSeasonNodeAsync(connection, transaction, seriesId, seasonNumber.Value)
             : null;
+        if (local != null && seasonId.HasValue)
+        {
+            await ApplyLocalMetadataAsync(
+                connection, transaction, seasonId.Value.ToString("D"), local,
+                LocalVideoMetadataScope.Season);
+        }
         var parentId = seasonId ?? seriesId;
         // Jellyfin models S01E01-E02 as one logical episode entry backed by one media
         // asset. The ending number stays on media_assets; expanding the range into multiple
         // nodes duplicated the same file in details and playback queues. Supplemental assets
         // such as trailers and featurettes remain unnumbered: scan order is not an episode ID.
-        var absoluteNumber = local?.AbsoluteEpisodeNumber ?? parsed.AbsoluteEpisodeNumber;
-        var episodeTitle = !string.IsNullOrWhiteSpace(local?.Title)
-            ? local.Title
+        var absoluteNumber = episodeLocal?.AbsoluteEpisodeNumber
+                             ?? local?.AbsoluteEpisodeNumber
+                             ?? parsed.AbsoluteEpisodeNumber;
+        var episodeTitle = !string.IsNullOrWhiteSpace(episodeLocal?.Title)
+            ? episodeLocal.Title
             : !string.IsNullOrWhiteSpace(parsed.EpisodeTitle)
                 ? parsed.EpisodeTitle
                 : episodeStart.HasValue && parsed.IsMultiEpisode
@@ -2880,9 +4493,9 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                     Id = episodeId.ToString("D"),
                     Parent = parentId.ToString("D"),
                     Title = episodeTitle,
-                    OriginalTitle = local?.OriginalTitle,
-                    Overview = local?.Overview,
-                    Year = year,
+                    OriginalTitle = episodeLocal?.OriginalTitle,
+                    Overview = episodeLocal?.Overview,
+                    Year = episodeLocal?.Year ?? year,
                     Season = seasonNumber,
                     Episode = episodeStart,
                     Absolute = absoluteNumber,
@@ -2934,10 +4547,10 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 {
                     Id = episodeId.ToString("D"),
                     Title = episodeTitle,
-                    HasLocalTitle = string.IsNullOrWhiteSpace(local?.Title) ? 0 : 1,
-                    OriginalTitle = local?.OriginalTitle,
-                    Overview = local?.Overview,
-                    Year = year,
+                    HasLocalTitle = string.IsNullOrWhiteSpace(episodeLocal?.Title) ? 0 : 1,
+                    OriginalTitle = episodeLocal?.OriginalTitle,
+                    Overview = episodeLocal?.Overview,
+                    Year = episodeLocal?.Year ?? year,
                     Season = seasonNumber,
                     Episode = episodeStart,
                     Absolute = absoluteNumber,
@@ -2957,7 +4570,11 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 NormalizedAlias = NormalizeTitle(parsed.OriginalName),
             }, transaction);
         if (local != null)
-            await ApplyLocalMetadataAsync(connection, transaction, episodeId.ToString("D"), local);
+        {
+            await ApplyLocalMetadataAsync(
+                connection, transaction, episodeId.ToString("D"), local,
+                LocalVideoMetadataScope.Episode);
+        }
 
         await connection.ExecuteAsync(
             "DELETE FROM node_assets WHERE asset_id=@Asset;",
@@ -3008,28 +4625,277 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         SqliteConnection connection,
         SqliteTransaction transaction,
         string nodeId,
-        LocalVideoMetadata local)
+        LocalVideoMetadata local,
+        LocalVideoMetadataScope scope)
     {
+        var values = local.ForScope(scope);
+        var hasLocalProvenance = values != null;
+        if (!HasLocalMetadataValues(values))
+            values = null;
+        var artwork = scope == LocalVideoMetadataScope.Movie
+            ? local.ArtworkForScope(LocalVideoMetadataScope.Movie)
+                .Concat(local.ArtworkForScope(LocalVideoMetadataScope.Container))
+                .Concat(local.ArtworkForScope(LocalVideoMetadataScope.Episode))
+                .DistinctBy(item => $"{item.Kind}\0{item.Path}", StringComparer.OrdinalIgnoreCase)
+                .ToImmutableArray()
+            : local.ArtworkForScope(scope);
+        hasLocalProvenance |= !artwork.IsDefaultOrEmpty;
+        await SynchronizeLocalFieldsAsync(
+            connection, transaction, nodeId, values, scope, hasLocalProvenance);
+        await SynchronizeLocalArtworkAsync(connection, transaction, nodeId, artwork);
+    }
+
+    private static bool HasLocalMetadataValues(LocalVideoMetadataValues? values) =>
+        values?.HasValues == true;
+
+    private static async Task SynchronizeLocalFieldsAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string nodeId,
+        LocalVideoMetadataValues? values,
+        LocalVideoMetadataScope scope,
+        bool hasLocalProvenance)
+    {
+        var previous = (await connection.QueryAsync<LocalFieldRow>(
+                "SELECT field,value FROM metadata_field_values WHERE node_id=@Node AND provider_id='local';",
+                new { Node = nodeId }, transaction))
+            .ToDictionary(row => row.field, row => row.value, StringComparer.OrdinalIgnoreCase);
+        var node = await connection.QuerySingleAsync<LocalNodeScalarRow>(
+            """
+            SELECT kind,primary_title,original_title,overview,year,season_number,
+                   episode_number,absolute_episode_number,is_special
+            FROM catalog_nodes WHERE id=@Node;
+            """,
+            new { Node = nodeId }, transaction);
+        await connection.ExecuteAsync(
+            "DELETE FROM metadata_field_values WHERE node_id=@Node AND provider_id='local';",
+            new { Node = nodeId }, transaction);
+
         var now = ToDb(DateTimeOffset.UtcNow);
-        foreach (var field in new Dictionary<string, string?>
-                 {
-                     ["title"] = local.Title,
-                     ["originalTitle"] = local.OriginalTitle,
-                     ["overview"] = local.Overview,
-                     ["year"] = local.Year?.ToString(CultureInfo.InvariantCulture),
-                 })
+        var people = values == null
+            ? ImmutableArray<VideoPersonCredit>.Empty
+            : values.Directors.Select((name, index) => new VideoPersonCredit(
+                    $"local-director-{index}", name, null, "Director", null))
+                .ToImmutableArray();
+        var fields = new Dictionary<string, string?>
         {
-            if (string.IsNullOrWhiteSpace(field.Value))
-                continue;
+            // Local NFO/artwork ownership is provenance, not a rebuildable node scalar.
+            // Keep the scope even for an empty NFO or artwork-only owner, while a completely
+            // empty scan result writes no marker at all.
+            ["localScope"] = hasLocalProvenance ? scope.ToString().ToLowerInvariant() : null,
+            ["seasonNumber"] = values?.SeasonNumber?.ToString(CultureInfo.InvariantCulture),
+            ["episodeNumber"] = values?.EpisodeNumber?.ToString(CultureInfo.InvariantCulture),
+            ["absoluteEpisodeNumber"] = values?.AbsoluteEpisodeNumber?.ToString(CultureInfo.InvariantCulture),
+            ["isSpecial"] = values?.SeasonNumber == null
+                            || scope is not (LocalVideoMetadataScope.Season or LocalVideoMetadataScope.Episode)
+                ? null
+                : (values.SeasonNumber.Value == 0)
+                    .ToString(CultureInfo.InvariantCulture).ToLowerInvariant(),
+            ["title"] = values?.Title,
+            ["originalTitle"] = values?.OriginalTitle,
+            ["overview"] = values?.Overview,
+            ["year"] = values?.Year?.ToString(CultureInfo.InvariantCulture),
+            ["genres"] = SerializeLocalArray(values?.Genres ?? []),
+            ["actors"] = SerializeLocalArray(values?.Actors ?? []),
+            ["tagline"] = values?.Tagline,
+            ["officialRating"] = values?.OfficialRating,
+            ["communityRating"] = values?.CommunityRating?.ToString(CultureInfo.InvariantCulture),
+            ["status"] = values?.Status,
+            ["tags"] = SerializeLocalArray(values?.Tags ?? []),
+            ["studios"] = SerializeLocalArray(values?.Studios ?? []),
+            ["people"] = people.Length == 0 ? null : JsonSerializer.Serialize(people, JsonOptions),
+            ["externalIds"] = values == null || values.ExternalIds.Count == 0
+                ? null
+                : JsonSerializer.Serialize(values.ExternalIds, JsonOptions),
+        };
+        foreach (var field in fields.Where(field => !string.IsNullOrWhiteSpace(field.Value)))
+        {
             await connection.ExecuteAsync(
                 """
                 INSERT INTO metadata_field_values(node_id,field,value,provider_id,priority,is_locked,updated_at)
-                VALUES(@Node,@Field,@Value,'local',300,0,@Now)
-                ON CONFLICT(node_id,field,provider_id) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at;
+                VALUES(@Node,@Field,@Value,'local',300,0,@Now);
                 """,
                 new { Node = nodeId, Field = field.Key, Value = field.Value, Now = now }, transaction);
         }
-        await ApplyLocalArtworkAsync(connection, transaction, nodeId, local);
+
+        await SynchronizeLocalAliasesAndIdsAsync(
+            connection, transaction, nodeId, previous.GetValueOrDefault("externalIds"), values, now);
+        var remaining = (await connection.QueryAsync<MetadataFieldValueRow>(
+                """
+                SELECT field,value,priority,is_locked,updated_at
+                FROM metadata_field_values
+                WHERE node_id=@Node AND value IS NOT NULL AND TRIM(value)<>''
+                  AND field IN ('title','originalTitle','overview','year');
+                """,
+                new { Node = nodeId }, transaction))
+            .GroupBy(field => field.field, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderByDescending(field => field.is_locked)
+                    .ThenByDescending(field => field.priority)
+                    .ThenByDescending(field => field.updated_at, StringComparer.Ordinal)
+                    .First().value,
+                StringComparer.OrdinalIgnoreCase);
+        var filenameTitle = await connection.ExecuteScalarAsync<string?>(
+            "SELECT alias FROM catalog_aliases WHERE node_id=@Node AND provider_id='filename' ORDER BY alias LIMIT 1;",
+            new { Node = nodeId }, transaction);
+        var structuralTitle = node.kind switch
+        {
+            "season" when node.season_number == 0 => "Specials",
+            "season" when node.season_number.HasValue => $"Season {node.season_number.Value}",
+            "episode" when node.episode_number.HasValue => $"Episode {node.episode_number.Value}",
+            _ => filenameTitle ?? node.primary_title,
+        };
+        var title = ResolveSynchronizedScalar(
+            node.primary_title, previous.GetValueOrDefault("title"), values?.Title,
+            remaining.GetValueOrDefault("title"), structuralTitle);
+        var originalTitle = ResolveSynchronizedScalar(
+            node.original_title, previous.GetValueOrDefault("originalTitle"), values?.OriginalTitle,
+            remaining.GetValueOrDefault("originalTitle"), null);
+        var overview = ResolveSynchronizedScalar(
+            node.overview, previous.GetValueOrDefault("overview"), values?.Overview,
+            remaining.GetValueOrDefault("overview"), null);
+        var currentYear = node.year?.ToString(CultureInfo.InvariantCulture);
+        var resolvedYear = ResolveSynchronizedScalar(
+            currentYear, previous.GetValueOrDefault("year"),
+            values?.Year?.ToString(CultureInfo.InvariantCulture),
+            remaining.GetValueOrDefault("year"), null);
+        await connection.ExecuteAsync(
+            """
+            UPDATE catalog_nodes SET primary_title=@Title,original_title=@OriginalTitle,
+                overview=@Overview,year=@Year,updated_at=@Now WHERE id=@Node;
+            """,
+            new
+            {
+                Node = nodeId,
+                Title = title ?? node.primary_title,
+                OriginalTitle = originalTitle,
+                Overview = overview,
+                Year = int.TryParse(resolvedYear, NumberStyles.Integer, CultureInfo.InvariantCulture, out var year)
+                    ? year
+                    : (int?)null,
+                Now = now,
+            }, transaction);
+    }
+
+    private static async Task SynchronizeLocalAliasesAndIdsAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string nodeId,
+        string? previousExternalIdsJson,
+        LocalVideoMetadataValues? values,
+        string now)
+    {
+        await connection.ExecuteAsync(
+            "DELETE FROM catalog_aliases WHERE node_id=@Node AND provider_id='local';",
+            new { Node = nodeId }, transaction);
+        foreach (var alias in new[] { values?.Title, values?.OriginalTitle }
+                     .Where(value => !string.IsNullOrWhiteSpace(value))
+                     .Select(value => value!)
+                     .Distinct(StringComparer.CurrentCultureIgnoreCase))
+        {
+            await connection.ExecuteAsync(
+                """
+                INSERT OR IGNORE INTO catalog_aliases(node_id,provider_id,alias,normalized_alias)
+                VALUES(@Node,'local',@Alias,@Normalized);
+                """,
+                new { Node = nodeId, Alias = alias, Normalized = NormalizeTitle(alias) }, transaction);
+        }
+
+        foreach (var pair in DeserializeLocalExternalIds(previousExternalIdsJson))
+        {
+            await connection.ExecuteAsync(
+                """
+                DELETE FROM external_ids
+                WHERE node_id=@Node AND provider_id=@Provider AND external_id=@ExternalId
+                  AND is_identity_locked=0;
+                """,
+                new { Node = nodeId, Provider = pair.Key, ExternalId = pair.Value }, transaction);
+        }
+        if (values == null)
+            return;
+        foreach (var pair in values.ExternalIds)
+        {
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO external_ids(node_id,provider_id,external_id,is_identity_locked)
+                VALUES(@Node,@Provider,@ExternalId,0)
+                ON CONFLICT(node_id,provider_id) DO UPDATE SET
+                    external_id=CASE WHEN external_ids.is_identity_locked=1
+                                     THEN external_ids.external_id ELSE excluded.external_id END;
+                """,
+                new { Node = nodeId, Provider = pair.Key.ToLowerInvariant(), ExternalId = pair.Value }, transaction);
+        }
+    }
+
+    private static string? ResolveSynchronizedScalar(
+        string? current,
+        string? previousLocal,
+        string? newLocal,
+        string? bestPersisted,
+        string? fallback)
+    {
+        if (!string.IsNullOrWhiteSpace(bestPersisted))
+            return bestPersisted;
+        if (!string.IsNullOrWhiteSpace(newLocal))
+            return newLocal;
+        return !string.IsNullOrWhiteSpace(previousLocal)
+               && string.Equals(current, previousLocal, StringComparison.Ordinal)
+            ? fallback
+            : current;
+    }
+
+    private static string? SerializeLocalArray(ImmutableArray<string> values) =>
+        values.IsDefaultOrEmpty ? null : JsonSerializer.Serialize(values, JsonOptions);
+
+    private static ImmutableDictionary<string, string> DeserializeLocalExternalIds(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return ImmutableDictionary<string, string>.Empty;
+        try
+        {
+            return JsonSerializer.Deserialize<ImmutableDictionary<string, string>>(value, JsonOptions)
+                   ?? ImmutableDictionary<string, string>.Empty;
+        }
+        catch (JsonException)
+        {
+            return ImmutableDictionary<string, string>.Empty;
+        }
+    }
+
+    private static ImmutableArray<string> DeserializeLocalArray(
+        string? value,
+        ImmutableArray<string> fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return fallback.IsDefault ? [] : fallback;
+        try
+        {
+            return JsonSerializer.Deserialize<ImmutableArray<string>>(value, JsonOptions) is { IsDefault: false } parsed
+                ? parsed
+                : fallback.IsDefault ? [] : fallback;
+        }
+        catch (JsonException)
+        {
+            return value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .ToImmutableArray();
+        }
+    }
+
+    private static ImmutableArray<VideoPersonCredit> DeserializeLocalPeople(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return [];
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<ImmutableArray<VideoPersonCredit>>(value, JsonOptions);
+            return parsed.IsDefault ? [] : parsed;
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
     }
 
     private static Task PruneEmptyAutomaticNodesAsync(
@@ -3081,36 +4947,336 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
             """,
             transaction: transaction);
 
-    private static async Task ApplyLocalArtworkAsync(
+    private static async Task SynchronizeLocalArtworkAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
         string nodeId,
-        LocalVideoMetadata local)
+        ImmutableArray<LocalVideoArtwork> desiredArtwork)
     {
         var now = ToDb(DateTimeOffset.UtcNow);
-        var ordinal = 0;
-        foreach (var path in local.ArtworkPaths)
+        var desired = desiredArtwork
+            .Where(item => File.Exists(item.Path))
+            .DistinctBy(item => $"{item.Kind}\0{item.Path}", StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var existing = (await connection.QueryAsync<LocalArtworkRow>(
+                """
+                SELECT id,kind,local_path,selected,ordinal
+                FROM artwork WHERE node_id=@Node AND provider_id='local';
+                """,
+                new { Node = nodeId }, transaction)).ToList();
+        var desiredKeys = desired
+            .Select(item => $"{item.Kind}\0{item.Path}")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var obsolete = existing
+            .Where(item => item.local_path == null
+                           || !desiredKeys.Contains($"{item.kind}\0{item.local_path}"))
+            .ToArray();
+        var obsoleteIds = obsolete
+            .Select(item => item.id)
+            .ToArray();
+        if (obsoleteIds.Length > 0)
         {
             await connection.ExecuteAsync(
                 """
-                INSERT OR IGNORE INTO artwork(
-                    id,node_id,provider_id,kind,local_path,selected,ordinal,created_at)
-                VALUES(@Id,@Node,'local',@Kind,@Path,@Selected,@Ordinal,@Now);
+                UPDATE node_user_data SET preferred_artwork_id=NULL
+                WHERE node_id=@Node AND preferred_artwork_id IN @Ids;
+                UPDATE asset_user_data SET poster_path=NULL
+                WHERE poster_path IN (
+                    SELECT local_path FROM artwork
+                    WHERE id IN @Ids AND local_path IS NOT NULL);
+                DELETE FROM artwork WHERE id IN @Ids;
+                """,
+                new { Node = nodeId, Ids = obsoleteIds }, transaction);
+        }
+
+        var kindOrdinals = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var artwork in desired)
+        {
+            var ordinal = kindOrdinals.GetValueOrDefault(artwork.Kind);
+            kindOrdinals[artwork.Kind] = ordinal + 1;
+            var match = existing.FirstOrDefault(item => item.local_path != null
+                && item.kind.Equals(artwork.Kind, StringComparison.OrdinalIgnoreCase)
+                && item.local_path.Equals(artwork.Path, StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+            {
+                await connection.ExecuteAsync(
+                    "UPDATE artwork SET selected=@Selected,ordinal=@Ordinal,updated_at=@Now WHERE id=@Id;",
+                    new
+                    {
+                        Id = match.id,
+                        Selected = ordinal == 0 ? 1 : 0,
+                        Ordinal = ordinal,
+                        Now = now,
+                    }, transaction);
+                continue;
+            }
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO artwork(
+                    id,node_id,provider_id,kind,local_path,selected,ordinal,created_at,updated_at)
+                VALUES(@Id,@Node,'local',@Kind,@Path,@Selected,@Ordinal,@Now,@Now);
                 """,
                 new
                 {
                     Id = Guid.NewGuid().ToString("D"),
                     Node = nodeId,
-                    Kind = Path.GetFileNameWithoutExtension(path).Contains("fanart", StringComparison.OrdinalIgnoreCase)
-                        || Path.GetFileNameWithoutExtension(path).Contains("backdrop", StringComparison.OrdinalIgnoreCase)
-                            ? "backdrop" : "poster",
-                    Path = path,
+                    Kind = artwork.Kind,
+                    Path = artwork.Path,
                     Selected = ordinal == 0 ? 1 : 0,
-                    Ordinal = ordinal++,
+                    Ordinal = ordinal,
                     Now = now,
                 }, transaction);
         }
     }
+
+    private static async Task PersistTypedTmdbCrossReferencesAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid seriesNodeId,
+        VideoMetadataDetails metadata)
+    {
+        var tmdbIdText = metadata.ProviderId.Equals("tmdb", StringComparison.OrdinalIgnoreCase)
+            ? metadata.ProviderItemId
+            : metadata.ExternalIds.GetValueOrDefault("tmdb");
+        if (!int.TryParse(tmdbIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var tmdbShowId)
+            || tmdbShowId <= 0)
+        {
+            return;
+        }
+
+        var seriesNode = seriesNodeId.ToString("D");
+        var now = ToDb(DateTimeOffset.UtcNow);
+        var preferredOrdering = metadata.TmdbOrdering;
+        var representedOrderings = metadata.Seasons
+            .Where(season => !string.IsNullOrWhiteSpace(season.TmdbOrderingId))
+            .Select(season => new VideoTmdbOrdering(
+                season.TmdbShowId ?? tmdbShowId,
+                season.TmdbOrderingId!,
+                season.TmdbOrderingType,
+                preferredOrdering != null
+                && string.Equals(
+                    preferredOrdering.OrderingId,
+                    season.TmdbOrderingId,
+                    StringComparison.Ordinal)))
+            .Append(preferredOrdering ?? new VideoTmdbOrdering(
+                tmdbShowId,
+                tmdbShowId.ToString(CultureInfo.InvariantCulture),
+                VideoTmdbOrderingType.Default,
+                IsPreferred: true))
+            .Where(ordering => ordering.TmdbShowId == tmdbShowId)
+            .DistinctBy(ordering => ordering.OrderingId, StringComparer.Ordinal)
+            .ToArray();
+
+        var hasUserPreferredOrdering = await connection.ExecuteScalarAsync<long>(
+            "SELECT COUNT(*) FROM tmdb_orderings WHERE series_node_id=@Series AND tmdb_show_id=@Show AND is_user_preferred=1;",
+            new { Series = seriesNode, Show = tmdbShowId }, transaction) != 0;
+        if (!hasUserPreferredOrdering)
+        {
+            await connection.ExecuteAsync(
+                "UPDATE tmdb_orderings SET is_preferred=0,updated_at=@Now WHERE series_node_id=@Series AND tmdb_show_id=@Show;",
+                new { Series = seriesNode, Show = tmdbShowId, Now = now }, transaction);
+        }
+        foreach (var ordering in representedOrderings)
+        {
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO tmdb_orderings(
+                    series_node_id,tmdb_show_id,ordering_id,ordering_type,
+                    is_preferred,is_user_preferred,created_at,updated_at)
+                VALUES(@Series,@Show,@Ordering,@Type,@Preferred,0,@Now,@Now)
+                ON CONFLICT(series_node_id,tmdb_show_id,ordering_id) DO UPDATE SET
+                    ordering_type=excluded.ordering_type,
+                    is_preferred=CASE
+                        WHEN tmdb_orderings.is_user_preferred=1 THEN tmdb_orderings.is_preferred
+                        WHEN @HasUserPreferred=1 THEN 0
+                        ELSE excluded.is_preferred END,
+                    updated_at=excluded.updated_at;
+                """,
+                new
+                {
+                    Series = seriesNode,
+                    Show = tmdbShowId,
+                    Ordering = ordering.OrderingId,
+                    Type = (int)ordering.Type,
+                    Preferred = ordering.IsPreferred ? 1 : 0,
+                    HasUserPreferred = hasUserPreferredOrdering ? 1 : 0,
+                    Now = now,
+                }, transaction);
+        }
+
+        var aidText = metadata.ExternalIds.GetValueOrDefault("anidb")
+                      ?? await connection.ExecuteScalarAsync<string?>(
+                          "SELECT external_id FROM external_ids WHERE node_id=@Node AND provider_id='anidb';",
+                          new { Node = seriesNode }, transaction);
+        if (!int.TryParse(aidText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var animeId)
+            || animeId <= 0)
+        {
+            return;
+        }
+
+        var chosenOrdering = preferredOrdering
+                             ?? representedOrderings.FirstOrDefault(ordering => ordering.IsPreferred)
+                             ?? representedOrderings.First();
+        await connection.ExecuteAsync(
+            """
+            INSERT INTO tmdb_show_xrefs(
+                series_node_id,anidb_anime_id,tmdb_show_id,chosen_ordering_id,
+                chosen_ordering_type,match_rating,created_at,updated_at)
+            VALUES(@Series,@Aid,@Show,@Ordering,@OrderingType,@Rating,@Now,@Now)
+            ON CONFLICT(series_node_id,anidb_anime_id,tmdb_show_id) DO UPDATE SET
+                chosen_ordering_id=excluded.chosen_ordering_id,
+                chosen_ordering_type=excluded.chosen_ordering_type,
+                match_rating=CASE WHEN tmdb_show_xrefs.match_rating=@UserVerified
+                                  THEN tmdb_show_xrefs.match_rating ELSE excluded.match_rating END,
+                updated_at=excluded.updated_at;
+            """,
+            new
+            {
+                Series = seriesNode,
+                Aid = animeId,
+                Show = tmdbShowId,
+                Ordering = chosenOrdering.OrderingId,
+                OrderingType = (int)chosenOrdering.Type,
+                Rating = (int)VideoMetadataMatchRating.FirstAvailable,
+                UserVerified = (int)VideoMetadataMatchRating.UserVerified,
+                Now = now,
+            }, transaction);
+
+        var localEpisodes = (await connection.QueryAsync<TypedAniDbEpisodeRow>(
+            """
+            WITH RECURSIVE descendants(id,parent_id,kind,primary_title,year,season_number,episode_number) AS (
+                SELECT id,parent_id,kind,primary_title,year,season_number,episode_number
+                FROM catalog_nodes WHERE id=@Series
+                UNION ALL
+                SELECT child.id,child.parent_id,child.kind,child.primary_title,child.year,
+                       child.season_number,child.episode_number
+                FROM catalog_nodes child
+                JOIN descendants parent ON child.parent_id=parent.id
+            )
+            SELECT d.id AS episode_node_id,d.primary_title,d.year,d.season_number,d.episode_number,
+                   eid.external_id AS anidb_episode_id,
+                   COALESCE(owner.external_id,@AidText) AS anidb_anime_id
+            FROM descendants d
+            JOIN external_ids eid ON eid.node_id=d.id AND eid.provider_id='anidb-episode'
+            LEFT JOIN external_ids owner ON owner.node_id=d.id AND owner.provider_id='anidb'
+            WHERE d.kind='episode';
+            """,
+            new { Series = seriesNode, AidText = animeId.ToString(CultureInfo.InvariantCulture) }, transaction)).ToArray();
+        var tmdbEpisodes = metadata.Seasons
+            .SelectMany(season => (season.Episodes.IsDefault ? [] : season.Episodes)
+                .Where(episode => episode.TmdbEpisodeId is > 0)
+                .Select(episode => new TypedTmdbEpisodeCandidate(season, episode)))
+            .ToArray();
+        foreach (var localEpisode in localEpisodes)
+        {
+            if (!int.TryParse(
+                    localEpisode.anidb_episode_id,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var episodeId)
+                || !int.TryParse(
+                    localEpisode.anidb_anime_id,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var ownerAnimeId))
+            {
+                continue;
+            }
+
+            var localTitle = NormalizeTitle(localEpisode.primary_title);
+            var candidates = tmdbEpisodes
+                .Select(candidate => new
+                {
+                    Candidate = candidate,
+                    TitleMatches = localTitle.Length > 0
+                                   && string.Equals(
+                                       localTitle,
+                                       NormalizeTitle(candidate.Episode.Title),
+                                       StringComparison.Ordinal),
+                    YearMatches = localEpisode.year.HasValue
+                                  && YearFromProviderDate(candidate.Episode.AirDate) == localEpisode.year,
+                    SeasonMatches = localEpisode.season_number.HasValue
+                                    && candidate.Season.SeasonNumber == localEpisode.season_number,
+                    EpisodeMatches = localEpisode.episode_number.HasValue
+                                     && candidate.Episode.EpisodeNumber == localEpisode.episode_number,
+                })
+                .Where(candidate => candidate.TitleMatches || candidate.EpisodeMatches)
+                .OrderByDescending(candidate => candidate.TitleMatches)
+                .ThenByDescending(candidate => candidate.YearMatches)
+                .ThenByDescending(candidate => candidate.SeasonMatches)
+                .ThenByDescending(candidate => candidate.EpisodeMatches)
+                .ThenBy(candidate => candidate.Candidate.Season.Ordinal)
+                .ThenBy(candidate => candidate.Candidate.Episode.Ordinal)
+                .ToArray();
+            if (candidates.FirstOrDefault() is not { } best)
+                continue;
+
+            var tmdbEpisode = best.Candidate.Episode;
+            var tmdbSeason = best.Candidate.Season;
+            var orderingId = tmdbEpisode.TmdbOrderingId
+                             ?? tmdbSeason.TmdbOrderingId
+                             ?? chosenOrdering.OrderingId;
+            var seasonId = tmdbEpisode.TmdbEpisodeGroupId
+                           ?? tmdbSeason.TmdbEpisodeGroupId
+                           ?? tmdbEpisode.TmdbSeasonId?.ToString(CultureInfo.InvariantCulture)
+                           ?? tmdbSeason.TmdbSeasonId?.ToString(CultureInfo.InvariantCulture);
+            var matchRating = best.TitleMatches
+                ? best.YearMatches
+                    ? VideoMetadataMatchRating.DateAndTitleKindaMatches
+                    : VideoMetadataMatchRating.TitleMatches
+                : best.YearMatches
+                    ? VideoMetadataMatchRating.DateKindaMatches
+                    : VideoMetadataMatchRating.FirstAvailable;
+            await connection.ExecuteAsync(
+                """
+                INSERT INTO tmdb_episode_xrefs(
+                    episode_node_id,series_node_id,anidb_anime_id,anidb_episode_id,
+                    tmdb_show_id,tmdb_episode_id,ordering_id,season_id,season_number,
+                    episode_number,ordinal,match_rating,created_at,updated_at)
+                VALUES(@EpisodeNode,@Series,@Aid,@Eid,@Show,@TmdbEpisode,@Ordering,
+                       @SeasonId,@Season,@Episode,@Ordinal,@Rating,@Now,@Now)
+                ON CONFLICT(
+                    episode_node_id,anidb_episode_id,tmdb_show_id,tmdb_episode_id,ordering_id)
+                DO UPDATE SET
+                    series_node_id=excluded.series_node_id,
+                    anidb_anime_id=excluded.anidb_anime_id,
+                    season_id=excluded.season_id,
+                    season_number=excluded.season_number,
+                    episode_number=excluded.episode_number,
+                    ordinal=excluded.ordinal,
+                    match_rating=CASE WHEN tmdb_episode_xrefs.match_rating=@UserVerified
+                                      THEN tmdb_episode_xrefs.match_rating ELSE excluded.match_rating END,
+                    updated_at=excluded.updated_at;
+                """,
+                new
+                {
+                    EpisodeNode = localEpisode.episode_node_id,
+                    Series = seriesNode,
+                    Aid = ownerAnimeId,
+                    Eid = episodeId,
+                    Show = tmdbShowId,
+                    TmdbEpisode = tmdbEpisode.TmdbEpisodeId!.Value,
+                    Ordering = orderingId,
+                    SeasonId = seasonId,
+                    Season = tmdbSeason.SeasonNumber,
+                    Episode = tmdbEpisode.EpisodeNumber,
+                    Ordinal = tmdbEpisode.Ordinal,
+                    Rating = (int)matchRating,
+                    UserVerified = (int)VideoMetadataMatchRating.UserVerified,
+                    Now = now,
+                }, transaction);
+        }
+    }
+
+    private static int? YearFromProviderDate(string? value) =>
+        value?.Length >= 4
+        && int.TryParse(value.AsSpan(0, 4), NumberStyles.None, CultureInfo.InvariantCulture, out var year)
+            ? year
+            : null;
+
+    private sealed record TypedTmdbEpisodeCandidate(
+        VideoMetadataSeason Season,
+        VideoMetadataEpisode Episode);
 
     private async Task<VideoCatalogSnapshot> ReadSnapshotAsync(CancellationToken ct)
     {
@@ -3126,8 +5292,21 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 (SELECT art.local_path FROM artwork art
                  JOIN node_assets na ON na.node_id=art.node_id
                  WHERE na.asset_id=a.id AND art.kind='poster' AND art.local_path IS NOT NULL
-                 ORDER BY CASE WHEN art.provider_id='local' THEN 0 WHEN art.selected=1 THEN 1 ELSE 2 END,art.ordinal
-                 LIMIT 1) AS catalog_poster_path
+                   AND art.enabled=1 AND art.desired=1
+                 ORDER BY
+                    CASE WHEN art.id=(SELECT preferred_artwork_id FROM node_user_data WHERE node_id=art.node_id)
+                         THEN 0 ELSE 1 END,
+                    CASE WHEN art.provider_id='local' THEN 0 WHEN art.selected=1 THEN 1
+                         WHEN art.preferred=1 THEN 2 ELSE 3 END,
+                    art.ordinal,art.created_at,art.id
+                 LIMIT 1) AS catalog_poster_path,
+                (EXISTS(SELECT 1 FROM catalog_reset_assets reset
+                        WHERE reset.asset_id=a.id)
+                 OR EXISTS(
+                    SELECT 1 FROM source_assets membership
+                    JOIN catalog_reset_sources reset
+                      ON reset.source_id=membership.source_id
+                    WHERE membership.asset_id=a.id)) AS catalog_reset_pending
             FROM media_assets a LEFT JOIN asset_user_data u ON u.asset_id=a.id
             WHERE a.is_hidden=0 ORDER BY a.imported_at DESC,a.title;
             """)).ToList();
@@ -3142,10 +5321,25 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
 
         var aliasRows = (await connection.QueryAsync<AliasRow>("SELECT * FROM catalog_aliases;")).ToList();
         var externalRows = (await connection.QueryAsync<ExternalIdRow>("SELECT * FROM external_ids;")).ToList();
+        var localFieldRows = (await connection.QueryAsync<SnapshotLocalFieldRow>(
+            """
+            SELECT node_id,field,value FROM metadata_field_values
+            WHERE provider_id='local' AND value IS NOT NULL AND TRIM(value)<>'';
+            """)).ToList();
         var metadataRows = (await connection.QueryAsync<MetadataSnapshotRow>(
             "SELECT node_id,provider_id,payload_json,source_url,fetched_at,expires_at FROM metadata_snapshots;")).ToList();
+        var tmdbShowXrefRows = (await connection.QueryAsync<TmdbShowXrefRow>(
+            "SELECT * FROM tmdb_show_xrefs;")).ToList();
+        var tmdbEpisodeXrefRows = (await connection.QueryAsync<TmdbEpisodeXrefRow>(
+            "SELECT * FROM tmdb_episode_xrefs;")).ToList();
+        var tmdbOrderingRows = (await connection.QueryAsync<TmdbOrderingRow>(
+            "SELECT * FROM tmdb_orderings;")).ToList();
         var artworkRows = (await connection.QueryAsync<ArtworkSnapshotRow>(
-            "SELECT node_id,provider_id,kind,local_path,selected,ordinal FROM artwork WHERE local_path IS NOT NULL;")).ToList();
+            """
+            SELECT a.*,
+                CASE WHEN u.preferred_artwork_id=a.id THEN 1 ELSE 0 END AS user_preferred
+            FROM artwork a LEFT JOIN node_user_data u ON u.node_id=a.node_id;
+            """)).ToList();
         var nodeRows = (await connection.QueryAsync<NodeRow>(
             """
             SELECT n.*,
@@ -3155,24 +5349,55 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
             """)).ToList();
         var nodes = nodeRows.Select(row =>
         {
+            var nodeLocalFields = localFieldRows
+                .Where(item => item.node_id == row.id)
+                .ToDictionary(item => item.field, item => item.value, StringComparer.OrdinalIgnoreCase);
             var nodeMetadataRows = metadataRows.Where(item => item.node_id == row.id).ToList();
-            var details = nodeMetadataRows
-                .OrderByDescending(item => ParseDate(item.fetched_at))
-                .Select(item => TryDeserializeMetadataDetails(item.payload_json))
-                .FirstOrDefault(item => item != null);
+            var parsedMetadata = nodeMetadataRows
+                .Select(item => new
+                {
+                    Row = item,
+                    Details = TryDeserializeMetadataDetails(item.payload_json),
+                })
+                .Where(item => item.Details != null)
+                .ToList();
+            var details = parsedMetadata
+                .OrderByDescending(item => ParseDate(item.Row.fetched_at))
+                .Select(item => item.Details)
+                .FirstOrDefault();
+            var persistedSeasons = parsedMetadata
+                .Where(item => item.Details is { Seasons.IsDefaultOrEmpty: false })
+                .OrderByDescending(item => item.Details!.Seasons.Length)
+                .ThenByDescending(item => item.Details!.Seasons.Sum(season =>
+                    season.Episodes.IsDefault ? season.EpisodeCount ?? 0 : season.Episodes.Length))
+                .ThenByDescending(item => ParseDate(item.Row.fetched_at))
+                .Select(item => item.Details!.Seasons)
+                .FirstOrDefault();
             var sourceUrls = nodeMetadataRows
                 .Where(item => !string.IsNullOrWhiteSpace(item.source_url))
                 .GroupBy(item => item.provider_id, StringComparer.OrdinalIgnoreCase)
                 .ToImmutableDictionary(group => group.Key, group => group.First().source_url!, StringComparer.OrdinalIgnoreCase);
-            string? ArtworkPath(string kind) => artworkRows
-                .Where(item => item.node_id == row.id && item.kind == kind)
-                .OrderByDescending(item => item.selected)
+            var nodeArtwork = artworkRows
+                .Where(item => item.node_id == row.id)
+                .ToArray();
+            string? ArtworkPath(string kind) => nodeArtwork
+                .Where(item => item.local_path != null
+                               && item.enabled != 0
+                               && item.desired != 0
+                               && item.kind.Equals(kind, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(item => item.user_preferred)
+                .ThenByDescending(item => item.selected)
+                .ThenByDescending(item => item.preferred)
                 .ThenBy(item => item.provider_id == "local" ? 0 : 1)
                 .ThenBy(item => item.ordinal)
                 .Select(item => item.local_path)
                 .FirstOrDefault();
-            var people = details is { People.IsDefault: false }
-                ? details.People.Select(person => person with
+            var localPeople = DeserializeLocalPeople(nodeLocalFields.GetValueOrDefault("people"));
+            var peopleSource = localPeople.Length > 0
+                ? localPeople
+                : details is { People.IsDefault: false } ? details.People : [];
+            var people = peopleSource.Length > 0
+                ? peopleSource.Select(person => person with
                 {
                     LocalImagePath = ArtworkPath($"person:{person.ProviderPersonId}"),
                 }).ToImmutableArray()
@@ -3202,20 +5427,30 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                 externalRows.Where(external => external.node_id == row.id)
                     .ToImmutableDictionary(external => external.provider_id, external => external.external_id, StringComparer.OrdinalIgnoreCase),
                 ParseDate(row.metadata_expires_at),
-                details?.Genres ?? [],
-                details?.Actors ?? [],
+                DeserializeLocalArray(nodeLocalFields.GetValueOrDefault("genres"), details?.Genres ?? []),
+                DeserializeLocalArray(nodeLocalFields.GetValueOrDefault("actors"), details?.Actors ?? []),
                 sourceUrls,
                 ArtworkPath("backdrop"),
                 ArtworkPath("poster"),
                 ArtworkPath("thumb"),
                 ArtworkPath("logo"),
-                details?.Tagline,
-                details?.OfficialRating,
-                details?.CommunityRating,
+                nodeLocalFields.GetValueOrDefault("tagline") ?? details?.Tagline,
+                nodeLocalFields.GetValueOrDefault("officialRating") ?? details?.OfficialRating,
+                double.TryParse(
+                    nodeLocalFields.GetValueOrDefault("communityRating"),
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out var localRating)
+                    ? localRating
+                    : details?.CommunityRating,
                 details?.EndYear,
-                details?.Status,
-                details is { Tags.IsDefault: false } ? details.Tags : [],
-                details is { Studios.IsDefault: false } ? details.Studios : [],
+                nodeLocalFields.GetValueOrDefault("status") ?? details?.Status,
+                DeserializeLocalArray(
+                    nodeLocalFields.GetValueOrDefault("tags"),
+                    details is { Tags.IsDefault: false } ? details.Tags : []),
+                DeserializeLocalArray(
+                    nodeLocalFields.GetValueOrDefault("studios"),
+                    details is { Studios.IsDefault: false } ? details.Studios : []),
                 people,
                 relatedItems)
             {
@@ -3223,6 +5458,82 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
                     .Where(external => external.node_id == row.id && external.is_identity_locked != 0)
                     .Select(external => external.provider_id)
                     .ToImmutableHashSet(StringComparer.OrdinalIgnoreCase),
+                ArtworkCandidates = nodeArtwork
+                    .OrderBy(item => item.kind, StringComparer.OrdinalIgnoreCase)
+                    .ThenByDescending(item => item.user_preferred)
+                    .ThenByDescending(item => item.selected)
+                    .ThenByDescending(item => item.preferred)
+                    .ThenBy(item => item.ordinal)
+                    .ThenBy(item => item.created_at, StringComparer.Ordinal)
+                    .Select(item => new VideoCatalogArtworkSnapshot(
+                        Guid.Parse(item.id),
+                        Guid.Parse(item.node_id),
+                        item.provider_id,
+                        item.kind,
+                        item.remote_url,
+                        item.local_path,
+                        item.language,
+                        item.width,
+                        item.height,
+                        item.attribution_url,
+                        item.enabled != 0,
+                        item.desired != 0,
+                        item.preferred != 0,
+                        item.selected != 0,
+                        item.user_preferred != 0,
+                        item.ordinal,
+                        item.download_attempts,
+                        item.last_error,
+                        ParseDate(item.created_at) ?? DateTimeOffset.UnixEpoch,
+                        ParseDate(item.updated_at) ?? ParseDate(item.created_at) ?? DateTimeOffset.UnixEpoch))
+                    .ToImmutableArray(),
+                Seasons = persistedSeasons.IsDefault ? [] : persistedSeasons,
+                TmdbShowCrossReferences = tmdbShowXrefRows
+                    .Where(xref => xref.series_node_id == row.id)
+                    .OrderBy(xref => xref.anidb_anime_id)
+                    .ThenBy(xref => xref.tmdb_show_id)
+                    .Select(xref => new VideoTmdbShowCrossReference(
+                        Guid.Parse(xref.series_node_id),
+                        xref.anidb_anime_id,
+                        xref.tmdb_show_id,
+                        xref.chosen_ordering_id,
+                        (VideoTmdbOrderingType)xref.chosen_ordering_type,
+                        (VideoMetadataMatchRating)xref.match_rating,
+                        ParseDate(xref.updated_at) ?? DateTimeOffset.UnixEpoch))
+                    .ToImmutableArray(),
+                TmdbEpisodeCrossReferences = tmdbEpisodeXrefRows
+                    .Where(xref => xref.episode_node_id == row.id)
+                    .OrderBy(xref => xref.ordering_id, StringComparer.Ordinal)
+                    .ThenBy(xref => xref.ordinal)
+                    .Select(xref => new VideoTmdbEpisodeCrossReference(
+                        Guid.Parse(xref.episode_node_id),
+                        Guid.Parse(xref.series_node_id),
+                        xref.anidb_anime_id,
+                        xref.anidb_episode_id,
+                        xref.tmdb_show_id,
+                        xref.tmdb_episode_id,
+                        xref.ordering_id,
+                        xref.season_id,
+                        xref.season_number,
+                        xref.episode_number,
+                        xref.ordinal,
+                        (VideoMetadataMatchRating)xref.match_rating,
+                        ParseDate(xref.updated_at) ?? DateTimeOffset.UnixEpoch))
+                    .ToImmutableArray(),
+                TmdbOrderings = tmdbOrderingRows
+                    .Where(ordering => ordering.series_node_id == row.id)
+                    .OrderByDescending(ordering => ordering.is_user_preferred)
+                    .ThenByDescending(ordering => ordering.is_preferred)
+                    .ThenBy(ordering => ordering.ordering_id, StringComparer.Ordinal)
+                    .Select(ordering => new VideoTmdbOrderingSnapshot(
+                        Guid.Parse(ordering.series_node_id),
+                        ordering.tmdb_show_id,
+                        ordering.ordering_id,
+                        (VideoTmdbOrderingType)ordering.ordering_type,
+                        ordering.is_preferred != 0,
+                        ordering.is_user_preferred != 0,
+                        ParseDate(ordering.updated_at) ?? DateTimeOffset.UnixEpoch))
+                    .ToImmutableArray(),
             };
         })
             .ToImmutableArray();
@@ -3257,7 +5568,8 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
             sourceAssets.Where(link => link.right_id == row.id).Select(link => Guid.Parse(link.left_id)).ToImmutableArray(),
             nodeAssets.Where(link => link.right_id == row.id).Select(link => Guid.Parse(link.left_id)).ToImmutableArray(),
             collectionAssets.Where(link => link.right_id == row.id).Select(link => Guid.Parse(link.left_id)).ToImmutableArray(),
-            row.is_hidden != 0)).ToImmutableArray();
+            row.is_hidden != 0,
+            row.catalog_reset_pending != 0)).ToImmutableArray();
 
         var collectionRows = (await connection.QueryAsync<CollectionRow>("SELECT * FROM collections ORDER BY manual_sort_order,name;")).ToList();
         var ruleRows = (await connection.QueryAsync<RuleRow>("SELECT * FROM collection_rules ORDER BY collection_id,ordinal;")).ToList();
@@ -3326,6 +5638,11 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
     private async Task ApplyCompatibilityRepairsAsync(CancellationToken ct)
     {
         await EnsureMetadataJobCounterColumnsAsync(ct);
+        await EnsureArtworkCandidateColumnsAsync(ct);
+        await EnsureTypedTmdbCrossReferenceTablesAsync(ct);
+        await EnsureCatalogResetAssetsTableAsync(ct);
+        await ApplyLocalSidecarCompatibilityRepairAsync(ct);
+        await EnsureArtworkIdentityIndexAsync(ct);
         const string category = "anilist-null-id-search-v9";
         await using var connection = await OpenConnectionAsync(ct);
         await using var transaction = await connection.BeginTransactionAsync(ct);
@@ -3389,6 +5706,62 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         await ApplyEpisodicBundleCompatibilityRepairAsync(ct);
     }
 
+    private async Task ApplyLocalSidecarCompatibilityRepairAsync(CancellationToken ct)
+    {
+        const string category = "local-sidecar-scopes-v12";
+        await using var connection = await OpenConnectionAsync(ct);
+        await using var transaction = await connection.BeginTransactionAsync(ct);
+        var applied = await connection.ExecuteScalarAsync<long>(
+            "SELECT COUNT(*) FROM migration_audit WHERE category=@Category;",
+            new { Category = category }, transaction);
+        if (applied != 0)
+        {
+            await transaction.RollbackAsync(ct);
+            return;
+        }
+
+        var now = ToDb(DateTimeOffset.UtcNow);
+        await connection.ExecuteAsync(
+            """
+            CREATE TEMP TABLE artwork_dedupe_map(
+                old_id TEXT PRIMARY KEY,
+                keep_id TEXT NOT NULL);
+            INSERT INTO artwork_dedupe_map(old_id,keep_id)
+            WITH ranked AS (
+                SELECT id,
+                       FIRST_VALUE(id) OVER (
+                           PARTITION BY node_id,provider_id,kind,
+                                        COALESCE(local_path,''),COALESCE(remote_url,'')
+                           ORDER BY selected DESC,ordinal,created_at,id) AS keep_id,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY node_id,provider_id,kind,
+                                        COALESCE(local_path,''),COALESCE(remote_url,'')
+                           ORDER BY selected DESC,ordinal,created_at,id) AS row_number
+                FROM artwork)
+            SELECT id,keep_id FROM ranked WHERE row_number>1;
+            UPDATE node_user_data
+            SET preferred_artwork_id=(
+                SELECT keep_id FROM artwork_dedupe_map
+                WHERE old_id=node_user_data.preferred_artwork_id)
+            WHERE preferred_artwork_id IN (SELECT old_id FROM artwork_dedupe_map);
+            DELETE FROM artwork WHERE id IN (SELECT old_id FROM artwork_dedupe_map);
+            DROP TABLE artwork_dedupe_map;
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_artwork_identity_nullsafe
+            ON artwork(node_id,provider_id,kind,COALESCE(local_path,''),COALESCE(remote_url,''));
+            UPDATE media_assets SET modified_at=NULL WHERE kind='local';
+            INSERT INTO migration_audit(id,category,details_json,created_at)
+            VALUES(@Id,@Category,@Details,@Now);
+            """,
+            new
+            {
+                Id = Guid.NewGuid().ToString("D"),
+                Category = category,
+                Details = "{\"reason\":\"deduplicate local artwork and reparse read-only Jellyfin sidecars with scoped metadata\"}",
+                Now = now,
+            }, transaction);
+        await transaction.CommitAsync(ct);
+    }
+
     private async Task EnsureMetadataJobCounterColumnsAsync(CancellationToken ct)
     {
         await using var connection = await OpenConnectionAsync(ct);
@@ -3403,6 +5776,70 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
             await connection.ExecuteAsync(
                 $"ALTER TABLE catalog_jobs ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0;");
         }
+    }
+
+    private async Task EnsureCatalogResetAssetsTableAsync(CancellationToken ct)
+    {
+        await using var connection = await OpenConnectionAsync(ct);
+        await connection.ExecuteAsync(
+            """
+            CREATE TABLE IF NOT EXISTS catalog_reset_sources(
+                source_id TEXT PRIMARY KEY REFERENCES library_sources(id) ON DELETE CASCADE,
+                reset_at TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS catalog_reset_assets(
+                asset_id TEXT PRIMARY KEY REFERENCES media_assets(id) ON DELETE CASCADE,
+                reset_at TEXT NOT NULL);
+            """);
+    }
+
+    private async Task EnsureArtworkCandidateColumnsAsync(CancellationToken ct)
+    {
+        await using var connection = await OpenConnectionAsync(ct);
+        var columns = (await connection.QueryAsync<SchemaColumnRow>(
+                "PRAGMA table_info(artwork);"))
+            .Select(column => column.name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var additions = new (string Name, string Definition)[]
+        {
+            ("language", "TEXT NULL"),
+            ("width", "INTEGER NULL"),
+            ("height", "INTEGER NULL"),
+            ("attribution_url", "TEXT NULL"),
+            ("enabled", "INTEGER NOT NULL DEFAULT 1"),
+            ("desired", "INTEGER NOT NULL DEFAULT 1"),
+            ("preferred", "INTEGER NOT NULL DEFAULT 0"),
+            ("download_attempts", "INTEGER NOT NULL DEFAULT 0"),
+            ("last_error", "TEXT NULL"),
+            ("updated_at", "TEXT NULL"),
+        };
+        var addedPreferred = false;
+        foreach (var (name, definition) in additions.Where(item => !columns.Contains(item.Name)))
+        {
+            ct.ThrowIfCancellationRequested();
+            await connection.ExecuteAsync($"ALTER TABLE artwork ADD COLUMN {name} {definition};");
+            addedPreferred |= name.Equals("preferred", StringComparison.OrdinalIgnoreCase);
+        }
+        if (addedPreferred)
+            await connection.ExecuteAsync("UPDATE artwork SET preferred=selected;");
+        await connection.ExecuteAsync(
+            "UPDATE artwork SET updated_at=COALESCE(NULLIF(updated_at,''),created_at);");
+    }
+
+    private async Task EnsureArtworkIdentityIndexAsync(CancellationToken ct)
+    {
+        await using var connection = await OpenConnectionAsync(ct);
+        await connection.ExecuteAsync(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_artwork_identity_nullsafe
+            ON artwork(node_id,provider_id,kind,COALESCE(local_path,''),COALESCE(remote_url,''));
+            """);
+    }
+
+    private async Task EnsureTypedTmdbCrossReferenceTablesAsync(CancellationToken ct)
+    {
+        await using var connection = await OpenConnectionAsync(ct);
+        await connection.ExecuteAsync(TypedTmdbSchemaSql);
+        ct.ThrowIfCancellationRequested();
     }
 
     private async Task ApplyEpisodicBundleCompatibilityRepairAsync(CancellationToken ct)
@@ -3449,6 +5886,7 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
     private static async Task CreateSchemaAsync(SqliteConnection connection, CancellationToken ct)
     {
         await connection.ExecuteAsync(SchemaSql);
+        await connection.ExecuteAsync(TypedTmdbSchemaSql);
         ct.ThrowIfCancellationRequested();
     }
 
@@ -3803,6 +6241,13 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
     private sealed class AliasRow { public string node_id { get; set; } = ""; public string alias { get; set; } = ""; }
     private sealed class ExternalIdRow { public string node_id { get; set; } = ""; public string provider_id { get; set; } = ""; public string external_id { get; set; } = ""; public int is_identity_locked { get; set; } }
     private sealed class MetadataFieldValueRow { public string field { get; set; } = ""; public string value { get; set; } = ""; public int priority { get; set; } public int is_locked { get; set; } public string updated_at { get; set; } = ""; }
+    private sealed class LocalFieldRow { public string field { get; set; } = ""; public string value { get; set; } = ""; }
+    private sealed class SnapshotLocalFieldRow { public string node_id { get; set; } = ""; public string field { get; set; } = ""; public string value { get; set; } = ""; }
+    private sealed class PreservedFieldRow { public string node_id { get; set; } = ""; public string field { get; set; } = ""; public string value { get; set; } = ""; public string provider_id { get; set; } = ""; public int priority { get; set; } public int is_locked { get; set; } public string updated_at { get; set; } = ""; }
+    private sealed class ScrapeResetAssetRow { public string asset_id { get; set; } = ""; public string kind { get; set; } = "local"; public string location { get; set; } = ""; public string title { get; set; } = ""; public string? source_id { get; set; } public string? folder_path { get; set; } public string? media_type { get; set; } }
+    private sealed class LocalStructuralNodeRow { public string id { get; set; } = ""; public string kind { get; set; } = ""; public int? season_number { get; set; } public int? episode_number { get; set; } public int? absolute_episode_number { get; set; } public int is_special { get; set; } public string? local_scope { get; set; } public string? local_season_number { get; set; } public string? local_episode_number { get; set; } public string? local_absolute_episode_number { get; set; } public string? local_is_special { get; set; } public int has_local_provenance { get; set; } }
+    private sealed class LocalNodeScalarRow { public string kind { get; set; } = ""; public string primary_title { get; set; } = ""; public string? original_title { get; set; } public string? overview { get; set; } public int? year { get; set; } public int? season_number { get; set; } public int? episode_number { get; set; } public int? absolute_episode_number { get; set; } public int is_special { get; set; } }
+    private sealed class LocalArtworkRow { public string id { get; set; } = ""; public string kind { get; set; } = ""; public string? local_path { get; set; } public int selected { get; set; } public int ordinal { get; set; } }
     private sealed class MetadataSnapshotRow
     {
         public string node_id { get; set; } = ""; public string provider_id { get; set; } = "";
@@ -3811,9 +6256,16 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
     }
     private sealed class ArtworkSnapshotRow
     {
-        public string node_id { get; set; } = ""; public string provider_id { get; set; } = "";
-        public string kind { get; set; } = ""; public string? local_path { get; set; }
-        public int selected { get; set; } public int ordinal { get; set; }
+        public string id { get; set; } = ""; public string node_id { get; set; } = "";
+        public string provider_id { get; set; } = ""; public string kind { get; set; } = "";
+        public string? remote_url { get; set; } public string? local_path { get; set; }
+        public string? language { get; set; } public int? width { get; set; } public int? height { get; set; }
+        public string? attribution_url { get; set; } public int enabled { get; set; } = 1;
+        public int desired { get; set; } = 1; public int preferred { get; set; }
+        public int selected { get; set; } public int user_preferred { get; set; }
+        public int ordinal { get; set; } public int download_attempts { get; set; }
+        public string? last_error { get; set; } public string created_at { get; set; } = "";
+        public string? updated_at { get; set; }
     }
     private sealed class NodeRow
     {
@@ -3834,6 +6286,7 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         public string? remote_id { get; set; } public string? original_url { get; set; } public string? canonical_url { get; set; }
         public string? remote_thumbnail_url { get; set; } public string? remote_subtitle_language { get; set; } public double? duration_seconds { get; set; }
         public int is_hidden { get; set; } public string? display_title { get; set; } public int is_favorite { get; set; }
+        public int catalog_reset_pending { get; set; }
         public string? bound_subtitle_path { get; set; } public string? user_poster_path { get; set; } public string? catalog_poster_path { get; set; } public string? profile_id { get; set; }
     }
     private sealed class CollectionRow { public string id { get; set; } = ""; public string name { get; set; } = ""; public string kind { get; set; } = "manual"; public int manual_sort_order { get; set; } public string created_at { get; set; } = ""; public string updated_at { get; set; } = ""; }
@@ -3845,6 +6298,89 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
     private sealed class JobRow { public string id { get; set; } = ""; public string? source_id { get; set; } public string kind { get; set; } = "incremental_scan"; public string state { get; set; } = "queued"; public long generation { get; set; } public int processed_count { get; set; } public int total_count { get; set; } public int matched_count { get; set; } public int needs_review_count { get; set; } public int failed_count { get; set; } public string? error { get; set; } public string created_at { get; set; } = ""; public string updated_at { get; set; } = ""; }
     private sealed class SchemaColumnRow { public string name { get; set; } = ""; }
     private sealed class ProviderCacheRow { public string cache_key { get; set; } = ""; public string provider_id { get; set; } = ""; public string? etag { get; set; } public string? last_modified { get; set; } public byte[]? payload { get; set; } public string? content_type { get; set; } public string fetched_at { get; set; } = ""; public string expires_at { get; set; } = ""; }
+
+    private sealed class TypedAniDbEpisodeRow
+    {
+        public string episode_node_id { get; set; } = "";
+        public string primary_title { get; set; } = "";
+        public int? year { get; set; }
+        public int? season_number { get; set; }
+        public int? episode_number { get; set; }
+        public string anidb_episode_id { get; set; } = "";
+        public string anidb_anime_id { get; set; } = "";
+    }
+
+    private sealed class TmdbShowXrefRow
+    {
+        public string series_node_id { get; set; } = "";
+        public int anidb_anime_id { get; set; }
+        public int tmdb_show_id { get; set; }
+        public string? chosen_ordering_id { get; set; }
+        public int chosen_ordering_type { get; set; }
+        public int match_rating { get; set; }
+        public string updated_at { get; set; } = "";
+    }
+
+    private sealed class TmdbEpisodeXrefRow
+    {
+        public string episode_node_id { get; set; } = "";
+        public string series_node_id { get; set; } = "";
+        public int anidb_anime_id { get; set; }
+        public int anidb_episode_id { get; set; }
+        public int tmdb_show_id { get; set; }
+        public int tmdb_episode_id { get; set; }
+        public string ordering_id { get; set; } = "";
+        public string? season_id { get; set; }
+        public int season_number { get; set; }
+        public int episode_number { get; set; }
+        public int ordinal { get; set; }
+        public int match_rating { get; set; }
+        public string updated_at { get; set; } = "";
+    }
+
+    private sealed class TmdbOrderingRow
+    {
+        public string series_node_id { get; set; } = "";
+        public int tmdb_show_id { get; set; }
+        public string ordering_id { get; set; } = "";
+        public int ordering_type { get; set; }
+        public int is_preferred { get; set; }
+        public int is_user_preferred { get; set; }
+        public string updated_at { get; set; } = "";
+    }
+
+    private const string TypedTmdbSchemaSql = """
+        CREATE TABLE IF NOT EXISTS tmdb_show_xrefs(
+            series_node_id TEXT NOT NULL REFERENCES catalog_nodes(id) ON DELETE CASCADE,
+            anidb_anime_id INTEGER NOT NULL, tmdb_show_id INTEGER NOT NULL,
+            chosen_ordering_id TEXT NULL, chosen_ordering_type INTEGER NOT NULL DEFAULT -1,
+            match_rating INTEGER NOT NULL DEFAULT 5,
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+            PRIMARY KEY(series_node_id,anidb_anime_id,tmdb_show_id));
+        CREATE TABLE IF NOT EXISTS tmdb_orderings(
+            series_node_id TEXT NOT NULL REFERENCES catalog_nodes(id) ON DELETE CASCADE,
+            tmdb_show_id INTEGER NOT NULL, ordering_id TEXT NOT NULL,
+            ordering_type INTEGER NOT NULL, is_preferred INTEGER NOT NULL DEFAULT 0,
+            is_user_preferred INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+            PRIMARY KEY(series_node_id,tmdb_show_id,ordering_id));
+        CREATE TABLE IF NOT EXISTS tmdb_episode_xrefs(
+            episode_node_id TEXT NOT NULL REFERENCES catalog_nodes(id) ON DELETE CASCADE,
+            series_node_id TEXT NOT NULL REFERENCES catalog_nodes(id) ON DELETE CASCADE,
+            anidb_anime_id INTEGER NOT NULL, anidb_episode_id INTEGER NOT NULL,
+            tmdb_show_id INTEGER NOT NULL, tmdb_episode_id INTEGER NOT NULL,
+            ordering_id TEXT NOT NULL, season_id TEXT NULL,
+            season_number INTEGER NOT NULL, episode_number INTEGER NOT NULL,
+            ordinal INTEGER NOT NULL DEFAULT 0, match_rating INTEGER NOT NULL DEFAULT 5,
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+            PRIMARY KEY(episode_node_id,anidb_episode_id,tmdb_show_id,tmdb_episode_id,ordering_id));
+        CREATE INDEX IF NOT EXISTS ix_tmdb_show_xrefs_identity
+            ON tmdb_show_xrefs(anidb_anime_id,tmdb_show_id);
+        CREATE INDEX IF NOT EXISTS ix_tmdb_episode_xrefs_identity
+            ON tmdb_episode_xrefs(anidb_episode_id,tmdb_show_id,tmdb_episode_id);
+        CREATE INDEX IF NOT EXISTS ix_tmdb_episode_xrefs_series
+            ON tmdb_episode_xrefs(series_node_id,ordering_id,ordinal);
+        """;
 
     private const string SchemaSql = """
         CREATE TABLE IF NOT EXISTS library_sources(
@@ -3877,6 +6413,12 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
             asset_id TEXT NOT NULL REFERENCES media_assets(id) ON DELETE CASCADE,
             last_seen_generation INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY(source_id,asset_id));
+        CREATE TABLE IF NOT EXISTS catalog_reset_sources(
+            source_id TEXT PRIMARY KEY REFERENCES library_sources(id) ON DELETE CASCADE,
+            reset_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS catalog_reset_assets(
+            asset_id TEXT PRIMARY KEY REFERENCES media_assets(id) ON DELETE CASCADE,
+            reset_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS node_assets(
             node_id TEXT NOT NULL REFERENCES catalog_nodes(id) ON DELETE CASCADE,
             asset_id TEXT NOT NULL REFERENCES media_assets(id) ON DELETE CASCADE,
@@ -3905,8 +6447,12 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         CREATE TABLE IF NOT EXISTS artwork(
             id TEXT PRIMARY KEY, node_id TEXT NOT NULL REFERENCES catalog_nodes(id) ON DELETE CASCADE,
             provider_id TEXT NOT NULL, kind TEXT NOT NULL, remote_url TEXT NULL, local_path TEXT NULL,
-            etag TEXT NULL, last_modified TEXT NULL, selected INTEGER NOT NULL DEFAULT 0,
-            ordinal INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
+            etag TEXT NULL, last_modified TEXT NULL, language TEXT NULL,
+            width INTEGER NULL, height INTEGER NULL, attribution_url TEXT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1, desired INTEGER NOT NULL DEFAULT 1,
+            preferred INTEGER NOT NULL DEFAULT 0, selected INTEGER NOT NULL DEFAULT 0,
+            ordinal INTEGER NOT NULL DEFAULT 0, download_attempts INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT '',
             UNIQUE(node_id,provider_id,kind,local_path,remote_url));
         CREATE TABLE IF NOT EXISTS asset_user_data(
             asset_id TEXT PRIMARY KEY REFERENCES media_assets(id) ON DELETE CASCADE,
@@ -3958,5 +6504,7 @@ internal sealed class SQLiteVideoCatalogRepository : IVideoCatalogRepository, IA
         CREATE INDEX IF NOT EXISTS ix_catalog_nodes_parent ON catalog_nodes(parent_id,kind);
         CREATE INDEX IF NOT EXISTS ix_match_candidates_asset_score ON match_candidates(asset_id,score DESC);
         CREATE INDEX IF NOT EXISTS ix_catalog_jobs_source_state ON catalog_jobs(source_id,state);
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_artwork_identity_nullsafe
+        ON artwork(node_id,provider_id,kind,COALESCE(local_path,''),COALESCE(remote_url,''));
         """;
 }

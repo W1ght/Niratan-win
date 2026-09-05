@@ -4,6 +4,8 @@ Niratan Win 是面向 Windows 10+ x64 的原生日语沉浸学习 App。单一 W
 
 `docs/reference/Niratan` 是共有用户可见行为的唯一对齐源。Windows 实现使用原生控件、窗口和输入规则；Niratan 没有的 Windows 扩展必须在本仓库规格或架构文档中明确记录，且不得反向改变共有行为。
 
+`docs/reference/ShokoServer` 是视频动画识别与刮削能力的长期上游参考，以 git submodule 固定版本。涉及 ED2K/AniDB 文件身份、分集映射、系列关系分组、跨源 metadata、图片、MyList、缓存、限流或失败恢复时，先读其根 `CLAUDE.md` 和最邻近实现；只移植与单机 Niratan 架构相容的行为，不修改子模块，也不引入 Shoko 的服务端 API、媒体移动/重命名或多用户假设。共有 UI/播放/学习行为仍以 `docs/reference/Niratan` 为唯一真源。
+
 本文件只保存每个任务都必须知道的产品边界、高后果不变量、仓库陷阱和上下文入口。专项架构、验证矩阵、调查记录和操作步骤按需读取，不在这里重复。
 
 ## 常驻边界
@@ -11,6 +13,7 @@ Niratan Win 是面向 Windows 10+ x64 的原生日语沉浸学习 App。单一 W
 - 禁止修改 `native/hoshidicts/` 下的任何代码。字典功能只能通过 C# P/Invoke 调用 `hoshidicts_c_api` 暴露的窄接口。
 - 保护用户的书籍、漫画、视频、sidecar、catalog、阅读/播放进度、Profile、词典、Anki 配置、凭据和 token；不得通过清空、重建或迁移用户数据掩盖 bug。
 - 本地漫画和视频库是非破坏性索引。导入、刷新、移除和验证不得移动、重命名、改写或删除用户源媒体；小说导入后的私有副本也不得被越界访问。
+- Shoko 对齐保持文件身份为 `ED2K + file size`、AniDB AID/EID/FID 与本地层级分离，并把 provider 原始缓存、跨源映射和用户覆盖区分持久化；不得以文件夹季号或 TMDB 季号覆盖已确认的 AniDB 身份。
 - EPUB、CBZ/ZIP、Mokuro、字幕、torrent 元数据、远端响应和 WebView2 消息均视为不可信输入。校验路径、来源、大小、格式、跳转和消息类型；native/JS bridge 保持窄、强类型、带版本。
 - 保留当前工作树中与任务无关的改动。未经用户明确要求，不 commit、push、打 tag 或 release。
 - 新增用户可见文案进入 `Niratan/Strings/en-US/Resources.resw` 和 `Niratan/Strings/zh-CN/Resources.resw`；XAML 优先使用 `x:Uid`。
@@ -40,6 +43,8 @@ Niratan Win 是面向 Windows 10+ x64 的原生日语沉浸学习 App。单一 W
 - `docs/ARCHITECTURE.md`：持久架构、模块所有权、数据与安全边界。
 - `docs/VERIFICATION.md`：Reader、Dictionary、Audio、Video、Manga 和导入流程的验证矩阵。
 - `docs/reference/Niratan/AGENTS.md` 与最邻近的 Niratan 源码：共有产品行为。
+- `docs/reference/ShokoServer/CLAUDE.md` 与最邻近的 Shoko 源码：动画文件识别、AniDB/跨源刮削、关系分组、图片和 MyList 行为；仅作只读参考。
+- `docs/SHOKO_SCRAPING_ALIGNMENT.md`：Shoko 固定版本对应的 Niratan 动画刮削链路、身份层级、存储位置、桌面等价边界与验收门槛。
 - `docs/superpowers/specs/`、`docs/superpowers/plans/`：已批准扩展和历史设计。
 - `docs/CHANGELOG.md`：已解决问题的根因与用户可见结果。
 - `.claude/skills/`：Claude Code 的专项构建、测试和 UI 约定。

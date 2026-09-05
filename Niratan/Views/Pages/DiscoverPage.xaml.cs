@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
+using Niratan.Models.Video;
 using Niratan.ViewModels.Pages;
 using Windows.System;
 
@@ -48,18 +49,6 @@ public sealed partial class DiscoverPage : Page, IDisposable
         base.OnNavigatedFrom(e);
     }
 
-    private void ResourceSearchBox_KeyDown(object sender, KeyRoutedEventArgs e)
-    {
-        if (e.Key != VirtualKey.Enter)
-            return;
-        e.Handled = true;
-        var command = ViewModel.IsSubtitleSearch
-            ? ViewModel.SearchSubtitlesCommand
-            : ViewModel.SearchResourcesCommand;
-        if (command.CanExecute(null))
-            command.Execute(null);
-    }
-
     private void VideoSearchBox_KeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key != VirtualKey.Enter)
@@ -80,6 +69,12 @@ public sealed partial class DiscoverPage : Page, IDisposable
             return;
         if (ViewModel.LoadMoreCommand.CanExecute(null))
             ViewModel.LoadMoreCommand.Execute(null);
+    }
+
+    private void DiscoveryCard_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: VideoDiscoveryNavigationTarget target })
+            Frame.Navigate(typeof(VideoDiscoveryDetailPage), target);
     }
 
     private void HorizontalVideoList_Loaded(object sender, RoutedEventArgs e)

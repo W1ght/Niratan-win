@@ -48,6 +48,6 @@ public sealed partial class RemoteMangaDetailView : UserControl
         await ViewModel.SelectRemoteMangaExtensionCommand.ExecuteAsync(option);
 
         if (ViewModel.SelectedRemoteMangaDetails is { } details)
-            comboBox.SelectedValue = details.SelectedExtensionId;
+            comboBox.SelectedItem = details.SelectedExtension;
     }
 }

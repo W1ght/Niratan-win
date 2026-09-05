@@ -107,6 +107,8 @@ public sealed class TtuSyncSettingsAssetTests
             "TtuSyncModeManual",
             "TtuSyncStatusConnected",
             "TtuSyncStatusNotConnected",
+            "TtuSyncStatusAuthorizationExpired",
+            "TtuSyncStatusConnectionCheckFailedFormat",
             "TtuSyncStatusConnecting",
             "TtuSyncClientIdRequiredStatus",
             "TtuSyncClientSecretRequiredStatus",

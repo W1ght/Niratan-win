@@ -1,4 +1,5 @@
 {
+  "model": "deepseek-chat",
   "env": {
     "NIRATAN_NOVEL_READER_ARTIFACT_DIR": "${projectDir}/docs/superpowers/artifacts/novel-reader"
   },

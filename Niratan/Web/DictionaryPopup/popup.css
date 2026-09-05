@@ -603,6 +603,14 @@ html[data-niratan-color-scheme="dark"] .gloss-image-link[data-appearance="monoch
         --background-color: #FFFFFF;
         --background-color-light: #FFFFFF;
         --text-color: #000;
+        --danger-color: #c83c28;
+        --danger-color-light: #dd6755;
+        --danger-color-lighter: #e68d7f;
+        --danger-color-lightest: #eeb3aa;
+        --danger-color-transparent0: rgba(200, 60, 40, 0);
+        --danger-color-transparent5: rgba(200, 60, 40, 0.05);
+        --danger-color-transparent25: rgba(200, 60, 40, 0.25);
+        --success-color: #51ab30;
     }
 }
 
@@ -617,6 +625,14 @@ html[data-niratan-color-scheme="dark"] .gloss-image-link[data-appearance="monoch
         --text-color-light3: #888888;
         --text-color-light4: #777777;
         --background-color-dark1: #333333;
+        --danger-color: #dd6755;
+        --danger-color-light: #c83c28;
+        --danger-color-lighter: #9e301f;
+        --danger-color-lightest: #732317;
+        --danger-color-transparent0: rgba(221, 103, 85, 0);
+        --danger-color-transparent5: rgba(221, 103, 85, 0.05);
+        --danger-color-transparent25: rgba(221, 103, 85, 0.25);
+        --success-color: #75cf54;
         --popup-card-border-color: rgba(255, 255, 255, 0.18);
         --popup-card-inner-highlight: rgba(255, 255, 255, 0);
         --popup-card-shadow-color: rgba(0, 0, 0, 0.36);
@@ -630,6 +646,14 @@ html[data-niratan-color-scheme="light"] body {
     --background-color: #FFFFFF;
     --background-color-light: #FFFFFF;
     --text-color: #000;
+    --danger-color: #c83c28;
+    --danger-color-light: #dd6755;
+    --danger-color-lighter: #e68d7f;
+    --danger-color-lightest: #eeb3aa;
+    --danger-color-transparent0: rgba(200, 60, 40, 0);
+    --danger-color-transparent5: rgba(200, 60, 40, 0.05);
+    --danger-color-transparent25: rgba(200, 60, 40, 0.25);
+    --success-color: #51ab30;
     --popup-card-border-color: rgba(0, 0, 0, 0.14);
     --popup-card-inner-highlight: rgba(255, 255, 255, 0.34);
     --popup-card-shadow-color: rgba(0, 0, 0, 0.10);
@@ -645,6 +669,14 @@ html[data-niratan-color-scheme="dark"] body {
     --text-color-light3: #888888;
     --text-color-light4: #777777;
     --background-color-dark1: #333333;
+    --danger-color: #dd6755;
+    --danger-color-light: #c83c28;
+    --danger-color-lighter: #9e301f;
+    --danger-color-lightest: #732317;
+    --danger-color-transparent0: rgba(221, 103, 85, 0);
+    --danger-color-transparent5: rgba(221, 103, 85, 0.05);
+    --danger-color-transparent25: rgba(221, 103, 85, 0.25);
+    --success-color: #75cf54;
     --popup-card-border-color: rgba(255, 255, 255, 0.18);
     --popup-card-inner-highlight: rgba(255, 255, 255, 0);
     --popup-card-shadow-color: rgba(0, 0, 0, 0.36);

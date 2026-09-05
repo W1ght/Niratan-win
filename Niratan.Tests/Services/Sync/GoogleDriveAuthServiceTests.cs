@@ -1,5 +1,7 @@
 using System.Net;
+using CommunityToolkit.Mvvm.Messaging;
 using FluentAssertions;
+using Niratan.Messages;
 using Niratan.Models.Sync;
 using Niratan.Services.Sync;
 
@@ -27,7 +29,8 @@ public sealed class GoogleDriveAuthServiceTests
             store,
             new GoogleDriveTokenClient(new HttpClient(handler)),
             new SuccessfulLoopbackReceiver(),
-            new RecordingBrowserLauncher());
+            new RecordingBrowserLauncher(),
+            new WeakReferenceMessenger());
 
         await service.AuthenticateAsync(
             " 1234567890-abcdef.apps.googleusercontent.com ",
@@ -39,6 +42,88 @@ public sealed class GoogleDriveAuthServiceTests
         store.Saved.Should().NotBeNull();
         store.Saved!.ClientId.Should().Be("1234567890-abcdef.apps.googleusercontent.com");
         store.Saved.ClientSecret.Should().Be("desktop-client-secret");
+    }
+
+    [Fact]
+    public async Task GetAccessTokenAsync_WhenGrantIsInvalid_ClearsCredentialsAndPublishesReconnectState()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = new StringContent("""
+                {
+                  "error": "invalid_grant",
+                  "error_description": "Token has been expired or revoked."
+                }
+                """, System.Text.Encoding.UTF8, "application/json"),
+        });
+        var store = new RecordingCredentialStore(new GoogleDriveCredentials(
+            "expired-access",
+            "revoked-refresh",
+            "client-id",
+            DateTimeOffset.UtcNow.AddMinutes(-5),
+            GoogleDriveTokenClient.DriveFileScope,
+            "client-secret"));
+        var messenger = new WeakReferenceMessenger();
+        GoogleDriveConnectionStateChangedMessage? state = null;
+        var recipient = new object();
+        messenger.Register<object, GoogleDriveConnectionStateChangedMessage>(
+            recipient,
+            (_, message) => state = message);
+        var service = new GoogleDriveAuthService(
+            store,
+            new GoogleDriveTokenClient(new HttpClient(handler)),
+            new SuccessfulLoopbackReceiver(),
+            new RecordingBrowserLauncher(),
+            messenger);
+
+        var action = () => service.GetAccessTokenAsync(ct);
+
+        await action.Should().ThrowAsync<GoogleDriveReauthenticationRequiredException>();
+        store.Saved.Should().BeNull();
+        store.DeleteCount.Should().Be(1);
+        service.HasCredentials.Should().BeFalse();
+        state.Should().Be(new GoogleDriveConnectionStateChangedMessage(
+            IsConnected: false,
+            RequiresReconnect: true));
+    }
+
+    [Fact]
+    public async Task GetAccessTokenAsync_WhenRefreshFailsTransiently_KeepsCredentialsAndConnectionState()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+        {
+            Content = new StringContent("temporarily unavailable"),
+        });
+        var original = new GoogleDriveCredentials(
+            "expired-access",
+            "still-valid-refresh",
+            "client-id",
+            DateTimeOffset.UtcNow.AddMinutes(-5),
+            GoogleDriveTokenClient.DriveFileScope,
+            "client-secret");
+        var store = new RecordingCredentialStore(original);
+        var messenger = new WeakReferenceMessenger();
+        var receivedStates = 0;
+        var recipient = new object();
+        messenger.Register<object, GoogleDriveConnectionStateChangedMessage>(
+            recipient,
+            (_, _) => receivedStates++);
+        var service = new GoogleDriveAuthService(
+            store,
+            new GoogleDriveTokenClient(new HttpClient(handler)),
+            new SuccessfulLoopbackReceiver(),
+            new RecordingBrowserLauncher(),
+            messenger);
+
+        var action = () => service.GetAccessTokenAsync(ct);
+
+        await action.Should().ThrowAsync<GoogleDriveTokenRequestException>();
+        store.Saved.Should().BeSameAs(original);
+        store.DeleteCount.Should().Be(0);
+        service.HasCredentials.Should().BeTrue();
+        receivedStates.Should().Be(0);
     }
 
     private sealed class SuccessfulLoopbackReceiver : IGoogleOAuthLoopbackReceiver
@@ -71,8 +156,12 @@ public sealed class GoogleDriveAuthServiceTests
 
     private sealed class RecordingCredentialStore : IGoogleDriveCredentialStore
     {
+        public RecordingCredentialStore(GoogleDriveCredentials? credentials = null) =>
+            Saved = credentials;
+
         public bool HasCredentials => Saved != null;
         public GoogleDriveCredentials? Saved { get; private set; }
+        public int DeleteCount { get; private set; }
 
         public Task<GoogleDriveCredentials?> LoadAsync(CancellationToken ct = default) =>
             Task.FromResult(Saved);
@@ -85,6 +174,7 @@ public sealed class GoogleDriveAuthServiceTests
 
         public Task DeleteAsync(CancellationToken ct = default)
         {
+            DeleteCount++;
             Saved = null;
             return Task.CompletedTask;
         }

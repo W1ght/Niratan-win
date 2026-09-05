@@ -47,15 +47,18 @@ internal sealed class VideoResourceSearchService : IVideoResourceSearchService
 
     private static IEnumerable<string> PreferredSearchTerms(VideoMetadataCandidate identity)
     {
-        // Nyaa titles are normally English or romanized. Put those before a local-language
-        // title, while still retaining aliases supplied by AniList/Bangumi/TMDB.
-        var terms = new[] { identity.OriginalTitle }
+        // Nyaa release names overwhelmingly use English or romanized titles. Prefer
+        // those aliases and avoid issuing redundant CJK queries when one is available.
+        // Titles without a Latin alias still retain their provider title as a fallback.
+        var terms = new[] { identity.Title, identity.OriginalTitle }
             .Concat(identity.Aliases.IsDefault ? [] : identity.Aliases)
-            .Concat([identity.Title]);
-        return terms
             .Where(term => !string.IsNullOrWhiteSpace(term))
             .Select(term => term!.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var nyaaFriendlyTerms = terms.Where(IsNyaaFriendlyTitle).ToList();
+        return (nyaaFriendlyTerms.Count > 0 ? nyaaFriendlyTerms : terms)
+            .Where(term => !string.IsNullOrWhiteSpace(term))
             .Select((term, index) => (term, index))
             .OrderByDescending(item => IsNyaaFriendlyTitle(item.term))
             .ThenBy(item => item.index)
@@ -71,7 +74,12 @@ internal sealed class VideoResourceSearchService : IVideoResourceSearchService
 
     private static string AppendIdentitySuffix(string title, VideoMetadataCandidate identity)
     {
-        var suffix = identity.Year is int year ? " " + year : string.Empty;
+        // Release groups commonly include a movie year, but anime/series torrents
+        // generally identify installments by season/episode instead of air year.
+        var suffix = identity.MediaKind == VideoMetadataMediaKind.Movie
+                     && identity.Year is int year
+            ? " " + year
+            : string.Empty;
         if (identity.SeasonNumber is int season)
             suffix += $" S{season:00}";
         if (identity.EpisodeNumber is int episode)

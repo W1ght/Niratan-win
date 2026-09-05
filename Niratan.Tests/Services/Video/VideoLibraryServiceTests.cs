@@ -85,6 +85,51 @@ public class VideoLibraryServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task RefreshAllSources_WithScanCoordinator_UsesOneOuterScanAllAdmission()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var first = new VideoLibrarySource
+        {
+            Id = Guid.NewGuid().ToString("D"),
+            Name = "First",
+            FolderPath = Path.Combine(_directory, "First"),
+        };
+        var second = new VideoLibrarySource
+        {
+            Id = Guid.NewGuid().ToString("D"),
+            Name = "Second",
+            FolderPath = Path.Combine(_directory, "Second"),
+        };
+        var videos = new[]
+        {
+            new VideoItem { Id = "one", SourceId = first.Id, FilePath = Path.Combine(first.FolderPath, "1.mkv") },
+            new VideoItem { Id = "two", SourceId = second.Id, FilePath = Path.Combine(second.FolderPath, "2.mkv") },
+        };
+        var data = new Mock<IVideoDataService>();
+        data.Setup(item => item.GetVideoLibrarySourcesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([first, second]);
+        data.Setup(item => item.GetVideosAsync(
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(videos);
+        var scan = new Mock<IVideoLibraryScanCoordinator>();
+        scan.Setup(item => item.ScanAllAsync(false, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var sut = new VideoLibraryService(
+            data.Object,
+            scan.Object,
+            NullLogger<VideoLibraryService>.Instance);
+
+        var result = await sut.RefreshAllSourcesAsync(ct);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().HaveCount(2)
+            .And.OnlyContain(item => item.VideoCount == 1);
+        scan.Verify(item => item.ScanAllAsync(false, It.IsAny<CancellationToken>()), Times.Once);
+        scan.Verify(item => item.ScanSourceAsync(
+            It.IsAny<Guid>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public void FindPosterImage_PrefersSameStemPosterBeforeFolderPoster()
     {
         var mediaPath = Touch(Path.Combine(_directory, "Episode 03.mkv"));

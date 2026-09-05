@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -12,6 +13,8 @@ using MonoTorrent.Client;
 using Niratan.Helpers;
 using Niratan.Models.Common;
 using Niratan.Models.Nyaa;
+using Niratan.Models.Settings;
+using Niratan.Services.Settings;
 
 namespace Niratan.Services.Nyaa;
 
@@ -20,36 +23,23 @@ public sealed class MonoTorrentDownloadService : ITorrentDownloadService, IDispo
     private static readonly Uri NyaaBaseUri = new("https://nyaa.si/");
     private const long MaximumTorrentMetadataBytes = 32 * 1024 * 1024;
     private readonly HttpClient _httpClient;
-    private readonly ClientEngine _engine;
+    private readonly ISettingsService _settingsService;
+    private ClientEngine? _engine;
+    private MonoTorrentSettings? _appliedSettings;
     private readonly ILogger<MonoTorrentDownloadService> _logger;
     private readonly SemaphoreSlim _downloadGate = new(1, 1);
     private readonly ConcurrentDictionary<string, TorrentManager> _activeManagers =
         new(StringComparer.OrdinalIgnoreCase);
-    private readonly string _downloadBasePath;
     private bool _disposed;
 
     public MonoTorrentDownloadService(
         HttpClient httpClient,
-        ILogger<MonoTorrentDownloadService> logger)
+        ILogger<MonoTorrentDownloadService> logger,
+        ISettingsService settingsService)
     {
         _httpClient = httpClient;
         _logger = logger;
-        _downloadBasePath = Path.Combine(AppDataHelper.GetDataPath(), "TorrentDownloads");
-        var cachePath = Path.Combine(AppDataHelper.GetAppDataPath(), "Cache", "MonoTorrent");
-        Directory.CreateDirectory(_downloadBasePath);
-        Directory.CreateDirectory(cachePath);
-        _engine = new ClientEngine(new EngineSettingsBuilder
-        {
-            AllowPortForwarding = true,
-            AutoSaveLoadDhtCache = true,
-            AutoSaveLoadFastResume = true,
-            AutoSaveLoadMagnetLinkMetadata = true,
-            CacheDirectory = cachePath,
-            MaximumConnections = 120,
-            MaximumHalfOpenConnections = 20,
-            MaximumOpenFiles = 96,
-            MaximumUploadRate = 2 * 1024 * 1024,
-        }.ToSettings());
+        _settingsService = settingsService;
     }
 
     public async Task<Result<TorrentDownloadResult>> DownloadAsync(
@@ -62,7 +52,13 @@ public sealed class MonoTorrentDownloadService : ITorrentDownloadService, IDispo
         ArgumentNullException.ThrowIfNull(item);
         ObjectDisposedException.ThrowIf(_disposed, this);
         var gateAcquired = false;
-        var jobRoot = Path.Combine(_downloadBasePath, BuildJobDirectoryName(item));
+        // Capture the settings before entering the single-download gate. A root
+        // change affects tasks enqueued afterwards, never a task already waiting
+        // or downloading.
+        var settings = (_settingsService.Current.MonoTorrentSettings ?? new MonoTorrentSettings())
+            .Normalize();
+        var downloadBasePath = MonoTorrentDownloadRootPolicy.Resolve(settings);
+        var jobRoot = Path.Combine(downloadBasePath, BuildJobDirectoryName(item));
         TorrentManager? manager = null;
         var completed = false;
 
@@ -70,18 +66,17 @@ public sealed class MonoTorrentDownloadService : ITorrentDownloadService, IDispo
         {
             await _downloadGate.WaitAsync(ct);
             gateAcquired = true;
+            var engine = EnsureEngine(settings);
             Directory.CreateDirectory(jobRoot);
             progress?.Report(new TorrentDownloadProgress("Downloading torrent metadata…", 0, 0, 0));
             var metadataPath = await DownloadTorrentMetadataAsync(item, jobRoot, ct);
-            manager = await _engine.AddAsync(
+            manager = await engine.AddAsync(
                 metadataPath,
                 jobRoot,
-                new TorrentSettingsBuilder
-                {
-                    MaximumConnections = 80,
-                }.ToSettings());
+                CreateTorrentSettings(settings));
 
             ValidateTorrentPaths(manager, jobRoot);
+            await AddConfiguredTrackersAsync(manager, settings);
             if (!_activeManagers.TryAdd(taskId, manager))
                 throw new InvalidOperationException("A torrent task with the same identifier is already active.");
             await manager.StartAsync();
@@ -127,7 +122,7 @@ public sealed class MonoTorrentDownloadService : ITorrentDownloadService, IDispo
             if (manager is not null)
                 await StopAndRemoveAsync(manager);
             if (!completed)
-                TryDeleteIncompleteDownload(jobRoot);
+                TryDeleteIncompleteDownload(downloadBasePath, jobRoot);
             if (gateAcquired)
                 _downloadGate.Release();
         }
@@ -247,7 +242,8 @@ public sealed class MonoTorrentDownloadService : ITorrentDownloadService, IDispo
         {
             if (manager.State != TorrentState.Stopped)
                 await manager.StopAsync(TimeSpan.FromSeconds(5));
-            await _engine.RemoveAsync(manager);
+            if (_engine is not null)
+                await _engine.RemoveAsync(manager);
         }
         catch (Exception ex)
         {
@@ -255,11 +251,11 @@ public sealed class MonoTorrentDownloadService : ITorrentDownloadService, IDispo
         }
     }
 
-    private void TryDeleteIncompleteDownload(string path)
+    private void TryDeleteIncompleteDownload(string downloadBasePath, string path)
     {
         try
         {
-            var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(_downloadBasePath));
+            var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(downloadBasePath));
             var target = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
             var relative = Path.GetRelativePath(root, target);
             if (relative.Length > 0
@@ -284,12 +280,117 @@ public sealed class MonoTorrentDownloadService : ITorrentDownloadService, IDispo
         return $"{DateTime.UtcNow:yyyyMMdd-HHmmss}-{id}-{Guid.NewGuid():N}";
     }
 
+    private ClientEngine EnsureEngine(MonoTorrentSettings settings)
+    {
+        if (_engine is not null && HasSameEngineConfiguration(_appliedSettings, settings))
+            return _engine;
+
+        _engine?.Dispose();
+        var cachePath = Path.Combine(AppDataHelper.GetAppDataPath(), "Cache", "MonoTorrent");
+        Directory.CreateDirectory(cachePath);
+        _engine = new ClientEngine(CreateEngineSettings(settings, cachePath));
+        _appliedSettings = settings;
+        return _engine;
+    }
+
+    internal static EngineSettings CreateEngineSettings(
+        MonoTorrentSettings settings,
+        string cachePath)
+    {
+        var normalized = settings.Normalize();
+        return new EngineSettingsBuilder
+        {
+            AllowLocalPeerDiscovery = normalized.EnableLocalPeerDiscovery,
+            AllowPortForwarding = normalized.EnablePortForwarding,
+            AutoSaveLoadDhtCache = true,
+            AutoSaveLoadFastResume = true,
+            AutoSaveLoadMagnetLinkMetadata = true,
+            CacheDirectory = cachePath,
+            DhtEndPoint = new IPEndPoint(IPAddress.Any, normalized.ListenPort),
+            ListenEndPoints = new Dictionary<string, IPEndPoint>
+            {
+                ["ipv4"] = new(IPAddress.Any, normalized.ListenPort),
+                ["ipv6"] = new(IPAddress.IPv6Any, normalized.ListenPort),
+            },
+            MaximumConnections = normalized.MaximumConnections,
+            MaximumDownloadRate = ToBytesPerSecond(normalized.DownloadRateLimitKiB),
+            MaximumHalfOpenConnections = normalized.MaximumHalfOpenConnections,
+            MaximumOpenFiles = normalized.MaximumOpenFiles,
+            MaximumUploadRate = ToBytesPerSecond(normalized.UploadRateLimitKiB),
+        }.ToSettings();
+    }
+
+    internal static TorrentSettings CreateTorrentSettings(MonoTorrentSettings settings)
+    {
+        var normalized = settings.Normalize();
+        return new TorrentSettingsBuilder
+        {
+            AllowDht = normalized.EnableDht,
+            AllowPeerExchange = normalized.EnablePeerExchange,
+            MaximumConnections = normalized.MaximumConnectionsPerTorrent,
+            UploadSlots = normalized.UploadSlotsPerTorrent,
+        }.ToSettings();
+    }
+
+    private async Task AddConfiguredTrackersAsync(
+        TorrentManager manager,
+        MonoTorrentSettings settings)
+    {
+        if (settings.AdditionalTrackers.Count == 0)
+            return;
+
+        if (manager.TrackerManager.Private)
+        {
+            _logger.LogInformation(
+                "Skipped {TrackerCount} configured trackers for a private torrent",
+                settings.AdditionalTrackers.Count);
+            return;
+        }
+
+        var added = 0;
+        foreach (var tracker in settings.AdditionalTrackers)
+        {
+            try
+            {
+                await manager.TrackerManager.AddTrackerAsync(new Uri(tracker, UriKind.Absolute));
+                added++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    "Could not add one configured MonoTorrent tracker ({ExceptionType})",
+                    ex.GetType().Name);
+            }
+        }
+
+        _logger.LogInformation(
+            "Added {AddedTrackerCount} of {ConfiguredTrackerCount} configured trackers",
+            added,
+            settings.AdditionalTrackers.Count);
+    }
+
+    private static int ToBytesPerSecond(int kibibytesPerSecond) =>
+        checked(Math.Clamp(kibibytesPerSecond, 0, 1_000_000) * 1024);
+
+    private static bool HasSameEngineConfiguration(
+        MonoTorrentSettings? left,
+        MonoTorrentSettings right) =>
+        left is not null
+        && left.ListenPort == right.ListenPort
+        && left.EnablePortForwarding == right.EnablePortForwarding
+        && left.EnableLocalPeerDiscovery == right.EnableLocalPeerDiscovery
+        && left.MaximumConnections == right.MaximumConnections
+        && left.MaximumHalfOpenConnections == right.MaximumHalfOpenConnections
+        && left.MaximumOpenFiles == right.MaximumOpenFiles
+        && left.DownloadRateLimitKiB == right.DownloadRateLimitKiB
+        && left.UploadRateLimitKiB == right.UploadRateLimitKiB;
+
     public void Dispose()
     {
         if (_disposed)
             return;
         _disposed = true;
-        _engine.Dispose();
+        _engine?.Dispose();
         _downloadGate.Dispose();
     }
 }

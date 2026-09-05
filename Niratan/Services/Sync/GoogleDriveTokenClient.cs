@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Net;
 using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -9,6 +10,43 @@ using System.Threading.Tasks;
 using Niratan.Models.Sync;
 
 namespace Niratan.Services.Sync;
+
+public sealed class GoogleDriveTokenRequestException : InvalidOperationException
+{
+    public GoogleDriveTokenRequestException(
+        HttpStatusCode statusCode,
+        string? errorCode,
+        string? errorDescription)
+        : base(BuildMessage(statusCode, errorCode))
+    {
+        StatusCode = statusCode;
+        ErrorCode = errorCode;
+        ErrorDescription = errorDescription;
+    }
+
+    public HttpStatusCode StatusCode { get; }
+
+    public string? ErrorCode { get; }
+
+    public string? ErrorDescription { get; }
+
+    private static string BuildMessage(HttpStatusCode statusCode, string? errorCode) =>
+        string.IsNullOrWhiteSpace(errorCode)
+            ? string.Create(
+                CultureInfo.InvariantCulture,
+                $"Google token request failed ({(int)statusCode}).")
+            : string.Create(
+                CultureInfo.InvariantCulture,
+                $"Google token request failed ({(int)statusCode}): {errorCode}.");
+}
+
+public sealed class GoogleDriveReauthenticationRequiredException : InvalidOperationException
+{
+    public GoogleDriveReauthenticationRequiredException(Exception innerException)
+        : base("Google Drive authorization expired or was revoked. Connect Google Drive again.", innerException)
+    {
+    }
+}
 
 public sealed class GoogleDriveTokenClient
 {
@@ -89,9 +127,19 @@ public sealed class GoogleDriveTokenClient
         var body = await response.Content.ReadAsStringAsync(ct);
         if (!response.IsSuccessStatusCode)
         {
-            throw new InvalidOperationException(string.Create(
-                CultureInfo.InvariantCulture,
-                $"Google token request failed ({(int)response.StatusCode}): {body}"));
+            TokenErrorResponse? error = null;
+            try
+            {
+                error = JsonSerializer.Deserialize<TokenErrorResponse>(body, JsonOptions);
+            }
+            catch (JsonException)
+            {
+            }
+
+            throw new GoogleDriveTokenRequestException(
+                response.StatusCode,
+                error?.Error,
+                error?.ErrorDescription);
         }
 
         var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(body, JsonOptions);
@@ -130,5 +178,14 @@ public sealed class GoogleDriveTokenClient
 
         [JsonPropertyName("scope")]
         public string Scope { get; set; } = "";
+    }
+
+    private sealed class TokenErrorResponse
+    {
+        [JsonPropertyName("error")]
+        public string? Error { get; set; }
+
+        [JsonPropertyName("error_description")]
+        public string? ErrorDescription { get; set; }
     }
 }

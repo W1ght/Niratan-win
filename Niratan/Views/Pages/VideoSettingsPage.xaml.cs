@@ -55,15 +55,34 @@ public sealed partial class VideoSettingsPage : Page
         TmdbTokenBox.Password = string.Empty;
     }
 
-    private async void SaveBangumiTokenButton_Click(object sender, RoutedEventArgs e)
+    private async void SaveJimakuTokenButton_Click(object sender, RoutedEventArgs e)
     {
-        await ViewModel.SaveProviderTokenAsync("bangumi", BangumiTokenBox.Password);
-        BangumiTokenBox.Password = string.Empty;
+        await ViewModel.SaveProviderTokenAsync("jimaku", JimakuTokenBox.Password);
+        JimakuTokenBox.Password = string.Empty;
     }
 
-    private async void ClearBangumiTokenButton_Click(object sender, RoutedEventArgs e)
+    private async void ClearJimakuTokenButton_Click(object sender, RoutedEventArgs e)
     {
-        await ViewModel.ClearProviderTokenAsync("bangumi");
-        BangumiTokenBox.Password = string.Empty;
+        await ViewModel.ClearProviderTokenAsync("jimaku");
+        JimakuTokenBox.Password = string.Empty;
     }
+
+    private async void SaveAniDbCredentialsButton_Click(object sender, RoutedEventArgs e)
+    {
+        await ViewModel.SaveAniDbCredentialsAsync(AniDbUsernameBox.Text, AniDbPasswordBox.Password);
+        AniDbPasswordBox.Password = string.Empty;
+    }
+
+    private async void ClearAniDbCredentialsButton_Click(object sender, RoutedEventArgs e)
+    {
+        await ViewModel.ClearAniDbCredentialsAsync();
+        AniDbUsernameBox.Text = string.Empty;
+        AniDbPasswordBox.Password = string.Empty;
+    }
+
+    private async void TestAniDbLoginButton_Click(object sender, RoutedEventArgs e) =>
+        await ViewModel.TestAniDbLoginAsync();
+
+    private async void SyncAniDbMyListButton_Click(object sender, RoutedEventArgs e) =>
+        await ViewModel.SyncAniDbMyListAsync();
 }

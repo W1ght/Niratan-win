@@ -8,19 +8,41 @@ public sealed class DownloadsPageAssetTests
         Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "Niratan"));
 
     [Fact]
-    public void Downloads_page_exposes_discovery_tasks_and_settings_sections()
+    public void Downloads_page_exposes_discovery_tasks_subscriptions_and_settings_sections()
     {
         var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "DownloadsPage.xaml"));
 
         xaml.Should().Contain("DownloadsDiscoveryTab");
         xaml.Should().Contain("DownloadsTasksTab");
+        xaml.Should().Contain("DownloadsSubscriptionsTab");
         xaml.Should().Contain("DownloadsSettingsTab");
         xaml.Should().Contain("PaneDisplayMode=\"Top\"");
         xaml.Should().Contain("DownloadsSectionNavigation_ItemInvoked");
         xaml.Should().Contain("DownloadsSearchResults");
         xaml.Should().Contain("DownloadsTaskList");
         xaml.Should().Contain("DownloadsMonoTorrentTaskList");
+        xaml.Should().Contain("DownloadsSubscriptionsList");
+        xaml.Should().Contain("DownloadsCheckAllSubscriptionsButton");
+        xaml.Should().Contain("ToggleSubscriptionCommand");
+        xaml.Should().Contain("CheckSubscriptionCommand");
+        xaml.Should().Contain("RemoveSubscriptionCommand");
+        xaml.Should().Contain("Width=\"40\"");
+        xaml.Should().Contain("Height=\"60\"");
+        xaml.Should().Contain("Source=\"{x:Bind PosterImage, Mode=OneTime}\"");
         xaml.Should().Contain("DownloadsBackendBox");
+        xaml.Should().Contain("DownloadsMonoTorrentTrackersBox");
+        xaml.Should().Contain("DownloadsMonoTorrentDownloadRootBox");
+        xaml.Should().Contain("DownloadsMonoTorrentBrowseDownloadRootButton");
+        xaml.Should().Contain("DownloadsMonoTorrentResetDownloadRootButton");
+        xaml.Should().Contain("DownloadsMonoTorrentListenPortBox");
+        xaml.Should().Contain("DownloadsMonoTorrentMaximumConnectionsBox");
+        xaml.Should().Contain("DownloadsMonoTorrentPerTorrentConnectionsBox");
+        xaml.Should().Contain("DownloadsMonoTorrentDownloadLimitBox");
+        xaml.Should().Contain("DownloadsMonoTorrentUploadLimitBox");
+        xaml.Should().Contain("DownloadsMonoTorrentPortForwardingCheckBox");
+        xaml.Should().Contain("DownloadsMonoTorrentDhtCheckBox");
+        xaml.Should().Contain("DownloadsMonoTorrentPeerExchangeCheckBox");
+        xaml.Should().Contain("DownloadsMonoTorrentLocalPeerDiscoveryCheckBox");
         xaml.Should().Contain("AddToBackendCommand");
         xaml.Should().Contain("DownloadsTaskDetailsDialog");
         xaml.Should().Contain("DownloadsTaskDetailsFilesList");
@@ -37,6 +59,8 @@ public sealed class DownloadsPageAssetTests
         xaml.Should().Contain("ItemClick=\"TaskList_ItemClick\"");
         var codeBehind = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "DownloadsPage.xaml.cs"));
         codeBehind.Should().Contain("ContentDialogMaxWidth");
+        codeBehind.Should().Contain("public enum DownloadsPageSection");
+        codeBehind.Should().Contain("DownloadsPageSection.Subscriptions");
         xaml.Should().Contain("DownloadsSaveSettingsButton");
         xaml.Should().Contain("DownloadsTestConnectionButton");
     }

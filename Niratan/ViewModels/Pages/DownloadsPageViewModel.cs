@@ -1,16 +1,20 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Niratan.Enums;
 using Niratan.Helpers;
 using Niratan.Models.Nyaa;
 using Niratan.Models.QBittorrent;
+using Niratan.Models.Settings;
 using Niratan.Models.Video;
 using Niratan.Services.Nyaa;
 using Niratan.Services.QBittorrent;
@@ -23,6 +27,162 @@ namespace Niratan.ViewModels.Pages;
 
 public sealed record DownloadBackendOption(DownloadBackendKind Kind, string DisplayName);
 
+public partial class NyaaSubscriptionItemViewModel : ObservableObject
+{
+    public NyaaVideoSubscription Subscription { get; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanCheck))]
+    [NotifyPropertyChangedFor(nameof(CanToggle))]
+    public partial bool IsBusy { get; set; }
+
+    public string Key => Subscription.Key;
+    public string Title => Subscription.Year is int year
+        ? $"{Subscription.Title} ({year})"
+        : Subscription.Title;
+    public bool IsLegacy => string.IsNullOrWhiteSpace(Subscription.ReleaseGroup)
+        || string.IsNullOrWhiteSpace(Subscription.Resolution);
+    public string StateText => IsLegacy
+        ? ResourceStringHelper.GetString(
+            "DownloadsSubscriptionNeedsSetup",
+            "Needs release setup")
+        : Subscription.Enabled
+        ? ResourceStringHelper.GetString("DownloadsSubscriptionEnabled", "Enabled")
+        : ResourceStringHelper.GetString("DownloadsSubscriptionDisabled", "Paused");
+    public string ToggleButtonText => IsLegacy
+        ? ResourceStringHelper.GetString(
+            "DownloadsSubscriptionNeedsSetupButton",
+            "Needs setup")
+        : Subscription.Enabled
+        ? ResourceStringHelper.GetString("DownloadsSubscriptionDisableButton", "Pause")
+        : ResourceStringHelper.GetString("DownloadsSubscriptionEnableButton", "Enable");
+    public bool CanToggle => !IsLegacy && !IsBusy;
+    public bool CanCheck => !IsLegacy && Subscription.Enabled && !IsBusy;
+    public string BackendText => IsLegacy
+        ? ResourceStringHelper.GetString(
+            "DownloadsSubscriptionLegacyBackend",
+            "Download backend not selected")
+        : Subscription.DownloadBackend == DownloadBackendKind.MonoTorrent
+        ? ResourceStringHelper.GetString("DownloadsBackendMonoTorrent", "Built-in MonoTorrent")
+        : ResourceStringHelper.GetString("DownloadsBackendQbittorrent", "qBittorrent (external)");
+    public string RulesText => IsLegacy
+        ? ResourceStringHelper.GetString(
+            "DownloadsSubscriptionLegacyRule",
+            "Open Video discovery and subscribe again to choose a release rule.")
+        : string.Join(" · ", new[]
+    {
+        string.IsNullOrWhiteSpace(Subscription.Query) ? null : Subscription.Query,
+        string.IsNullOrWhiteSpace(Subscription.ReleaseGroup) ? null : $"[{Subscription.ReleaseGroup}]",
+        string.IsNullOrWhiteSpace(Subscription.Resolution) ? null : Subscription.Resolution,
+        Subscription.Trusted is true || Subscription.RequireTrusted
+            ? ResourceStringHelper.GetString("DownloadsSubscriptionTrusted", "Trusted")
+            : Subscription.Trusted is false
+                ? ResourceStringHelper.GetString("DownloadsSubscriptionUntrusted", "Untrusted")
+                : null,
+        Subscription.StartAfterEpisode is int episode
+            ? ResourceStringHelper.FormatString(
+                "DownloadsSubscriptionStartsFromEpisode",
+                "From episode {0}",
+                episode)
+            : null,
+    }.Where(value => !string.IsNullOrWhiteSpace(value)));
+    public string LastCheckedText => Subscription.LastCheckedAt is DateTimeOffset checkedAt
+        ? ResourceStringHelper.FormatString(
+            "DownloadsSubscriptionLastChecked",
+            "Last checked {0}",
+            checkedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))
+        : ResourceStringHelper.GetString(
+            "DownloadsSubscriptionNeverChecked",
+            "Never checked");
+    public string LastError => Subscription.LastError ?? "";
+    public bool HasError => !string.IsNullOrWhiteSpace(Subscription.LastError);
+    public BitmapImage? PosterImage { get; }
+
+    public NyaaSubscriptionItemViewModel(NyaaVideoSubscription subscription)
+    {
+        Subscription = subscription.Clone();
+        PosterImage = CreatePosterImage(Subscription);
+    }
+
+    private static BitmapImage? CreatePosterImage(NyaaVideoSubscription subscription)
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(subscription.PosterPath))
+            {
+                var posterPath = Path.GetFullPath(subscription.PosterPath);
+                var cacheRoot = Path.GetFullPath(Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "Niratan",
+                    "Cache",
+                    "VideoMetadataArtwork"));
+                if (posterPath.StartsWith(
+                        cacheRoot.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar,
+                        StringComparison.OrdinalIgnoreCase)
+                    && File.Exists(posterPath))
+                {
+                    return new BitmapImage(new Uri(posterPath, UriKind.Absolute));
+                }
+            }
+
+        }
+        catch
+        {
+        }
+        return null;
+    }
+}
+
+public sealed class NyaaDownloadTaskItemViewModel : ObservableObject
+{
+    public NyaaDownloadTaskSnapshot Snapshot { get; private set; }
+
+    public string TaskId => Snapshot.TaskId;
+    public NyaaTorrentItem Item => Snapshot.Item;
+    public string StateText => Snapshot.StateText;
+    public string Status => Snapshot.Status;
+    public double ProgressPercent => Snapshot.ProgressPercent;
+    public string ProgressText => Snapshot.ProgressText;
+    public string DownloadRateText => Snapshot.DownloadRateText;
+    public int ConnectedPeers => Snapshot.ConnectedPeers;
+    public string? Error => Snapshot.Error;
+    public string? DownloadRootPath => Snapshot.DownloadRootPath;
+    public bool CanPause => Snapshot.CanPause;
+    public bool CanResume => Snapshot.CanResume;
+    public bool CanCancel => Snapshot.CanCancel;
+    public bool CanRetry => Snapshot.CanRetry;
+    public bool CanOpenFolder => Snapshot.CanOpenFolder;
+    public bool CanRemove => Snapshot.CanRemove;
+
+    public NyaaDownloadTaskItemViewModel(NyaaDownloadTaskSnapshot snapshot)
+    {
+        Snapshot = snapshot;
+    }
+
+    public void Update(NyaaDownloadTaskSnapshot snapshot)
+    {
+        if (Equals(Snapshot, snapshot))
+            return;
+
+        Snapshot = snapshot;
+        OnPropertyChanged(nameof(Snapshot));
+        OnPropertyChanged(nameof(StateText));
+        OnPropertyChanged(nameof(Status));
+        OnPropertyChanged(nameof(ProgressPercent));
+        OnPropertyChanged(nameof(ProgressText));
+        OnPropertyChanged(nameof(DownloadRateText));
+        OnPropertyChanged(nameof(ConnectedPeers));
+        OnPropertyChanged(nameof(Error));
+        OnPropertyChanged(nameof(DownloadRootPath));
+        OnPropertyChanged(nameof(CanPause));
+        OnPropertyChanged(nameof(CanResume));
+        OnPropertyChanged(nameof(CanCancel));
+        OnPropertyChanged(nameof(CanRetry));
+        OnPropertyChanged(nameof(CanOpenFolder));
+        OnPropertyChanged(nameof(CanRemove));
+    }
+}
+
 public partial class DownloadsPageViewModel : ObservableObject, IDisposable
 {
     private readonly INyaaClient _nyaaClient;
@@ -34,10 +194,12 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
     private readonly IDialogService _dialogService;
     private readonly IFileRevealService _fileRevealService;
     private readonly IVideoDownloadImportService _videoImportService;
+    private readonly INyaaSubscriptionService _subscriptionService;
     private readonly DispatcherQueue? _dispatcherQueue;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private readonly CancellationTokenSource _cts = new();
     private readonly object _nyaaDownloadManagerSync = new();
+    private readonly HashSet<string> _subscriptionArtworkRefreshes = new(StringComparer.OrdinalIgnoreCase);
     private Task<INyaaDownloadManager>? _nyaaDownloadManagerTask;
     private INyaaDownloadManager? _resolvedNyaaDownloadManager;
     private IReadOnlyList<NyaaTorrentItem> _allSearchResults = [];
@@ -52,7 +214,24 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
     public partial bool IsTasksVisible { get; set; }
 
     [ObservableProperty]
+    public partial bool IsSubscriptionsVisible { get; set; }
+
+    [ObservableProperty]
     public partial bool IsSettingsVisible { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSubscriptionEmpty))]
+    [NotifyPropertyChangedFor(nameof(CanCheckAllSubscriptions))]
+    public partial ObservableCollection<NyaaSubscriptionItemViewModel> Subscriptions { get; set; } = [];
+
+    [ObservableProperty]
+    public partial string SubscriptionStatusText { get; set; } = ResourceStringHelper.GetString(
+        "DownloadsSubscriptionsInitialStatus",
+        "Subscriptions are checked every 30 minutes while enabled.");
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanCheckAllSubscriptions))]
+    public partial bool IsCheckingSubscriptions { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSearch))]
@@ -83,7 +262,7 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
     public partial ObservableCollection<QbittorrentTorrentViewModel> Tasks { get; set; } = [];
 
     [ObservableProperty]
-    public partial ObservableCollection<NyaaDownloadTaskSnapshot> BuiltInTasks { get; set; } = [];
+    public partial ObservableCollection<NyaaDownloadTaskItemViewModel> BuiltInTasks { get; set; } = [];
 
     [ObservableProperty]
     public partial string TaskStatusText { get; set; } = ResourceStringHelper.GetString(
@@ -153,10 +332,55 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
     public partial bool AddPaused { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MonoTorrentDownloadRootIsDefault))]
+    public partial string MonoTorrentDownloadRootPath { get; set; } =
+        MonoTorrentDownloadRootPolicy.DefaultPath;
+
+    [ObservableProperty]
+    public partial string MonoTorrentAdditionalTrackersText { get; set; } = "";
+
+    [ObservableProperty]
+    public partial int MonoTorrentListenPort { get; set; }
+
+    [ObservableProperty]
+    public partial bool MonoTorrentPortForwardingEnabled { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool MonoTorrentDhtEnabled { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool MonoTorrentPeerExchangeEnabled { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool MonoTorrentLocalPeerDiscoveryEnabled { get; set; } = true;
+
+    [ObservableProperty]
+    public partial int MonoTorrentMaximumConnections { get; set; } = 120;
+
+    [ObservableProperty]
+    public partial int MonoTorrentMaximumConnectionsPerTorrent { get; set; } = 80;
+
+    [ObservableProperty]
+    public partial int MonoTorrentMaximumHalfOpenConnections { get; set; } = 20;
+
+    [ObservableProperty]
+    public partial int MonoTorrentMaximumOpenFiles { get; set; } = 96;
+
+    [ObservableProperty]
+    public partial int MonoTorrentDownloadRateLimitKiB { get; set; }
+
+    [ObservableProperty]
+    public partial int MonoTorrentUploadRateLimitKiB { get; set; } = 2048;
+
+    [ObservableProperty]
+    public partial int MonoTorrentUploadSlotsPerTorrent { get; set; } = 8;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsBuiltInBackend))]
     [NotifyPropertyChangedFor(nameof(IsQbittorrentBackend))]
     [NotifyPropertyChangedFor(nameof(BackendDescription))]
     [NotifyPropertyChangedFor(nameof(DownloadActionText))]
+    [NotifyPropertyChangedFor(nameof(DownloadNotice))]
     public partial DownloadBackendOption? SelectedBackendOption { get; set; }
 
     [ObservableProperty]
@@ -190,9 +414,16 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
     ];
 
     public bool CanSearch => !IsSearching && !string.IsNullOrWhiteSpace(SearchQuery);
+    public bool IsSubscriptionEmpty => Subscriptions.Count == 0;
+    public bool CanCheckAllSubscriptions => !IsCheckingSubscriptions && Subscriptions.Count > 0;
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
     public bool IsBuiltInBackend => SelectedBackendOption?.Kind == DownloadBackendKind.MonoTorrent;
     public bool IsQbittorrentBackend => SelectedBackendOption?.Kind == DownloadBackendKind.Qbittorrent;
+    public bool MonoTorrentDownloadRootIsDefault =>
+        string.IsNullOrWhiteSpace(MonoTorrentDownloadRootPath)
+        || MonoTorrentDownloadRootPolicy.PathsEqual(
+            MonoTorrentDownloadRootPath,
+            MonoTorrentDownloadRootPolicy.DefaultPath);
     public string BackendDescription => IsBuiltInBackend
         ? ResourceStringHelper.GetString(
             "DownloadsBackendMonoTorrentDescription",
@@ -237,7 +468,8 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
         ISettingsService settingsService,
         IDialogService dialogService,
         IFileRevealService fileRevealService,
-        IVideoDownloadImportService videoImportService)
+        IVideoDownloadImportService videoImportService,
+        INyaaSubscriptionService subscriptionService)
     {
         _nyaaClient = nyaaClient;
         _nyaaDownloadManager = nyaaDownloadManager;
@@ -248,6 +480,7 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
         _dialogService = dialogService;
         _fileRevealService = fileRevealService;
         _videoImportService = videoImportService;
+        _subscriptionService = subscriptionService;
         SelectedCategory = Categories[0];
         try
         {
@@ -260,6 +493,7 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
 
         SelectedBackendOption = BackendOptions[0];
         _downloadCoordinator.TasksChanged += OnTasksChanged;
+        _subscriptionService.SubscriptionsChanged += OnSubscriptionsChanged;
     }
 
     partial void OnSelectedBackendOptionChanged(
@@ -299,6 +533,7 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
             return;
 
         LoadSettingsDraft();
+        UpdateSubscriptions(_subscriptionService.GetSubscriptions());
         _initialized = true;
         await RefreshTasksAsync();
     }
@@ -308,6 +543,7 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
     {
         IsDiscoveryVisible = true;
         IsTasksVisible = false;
+        IsSubscriptionsVisible = false;
         IsSettingsVisible = false;
     }
 
@@ -316,8 +552,19 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
     {
         IsDiscoveryVisible = false;
         IsTasksVisible = true;
+        IsSubscriptionsVisible = false;
         IsSettingsVisible = false;
         await RefreshTasksAsync();
+    }
+
+    [RelayCommand]
+    private void SelectSubscriptions()
+    {
+        IsDiscoveryVisible = false;
+        IsTasksVisible = false;
+        IsSubscriptionsVisible = true;
+        IsSettingsVisible = false;
+        UpdateSubscriptions(_subscriptionService.GetSubscriptions());
     }
 
     [RelayCommand]
@@ -325,8 +572,135 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
     {
         IsDiscoveryVisible = false;
         IsTasksVisible = false;
+        IsSubscriptionsVisible = false;
         IsSettingsVisible = true;
         LoadSettingsDraft();
+    }
+
+    [RelayCommand]
+    private async Task CheckAllSubscriptionsAsync()
+    {
+        if (IsCheckingSubscriptions)
+            return;
+
+        IsCheckingSubscriptions = true;
+        ErrorMessage = null;
+        try
+        {
+            await _subscriptionService.CheckAllAsync(_cts.Token);
+            UpdateSubscriptions(_subscriptionService.GetSubscriptions());
+            SubscriptionStatusText = ResourceStringHelper.GetString(
+                "DownloadsSubscriptionsChecked",
+                "Finished checking enabled subscriptions.");
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            SubscriptionStatusText = ex.Message;
+        }
+        finally
+        {
+            IsCheckingSubscriptions = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task CheckSubscriptionAsync(NyaaSubscriptionItemViewModel item)
+    {
+        if (item is null || !item.CanCheck)
+            return;
+
+        item.IsBusy = true;
+        try
+        {
+            var result = await _subscriptionService.CheckOneAsync(item.Key, _cts.Token);
+            if (result.IsSuccess)
+            {
+                SubscriptionStatusText = ResourceStringHelper.FormatString(
+                    "DownloadsSubscriptionCheckResult",
+                    "Queued {0} new releases.",
+                    result.Value);
+            }
+            else if (!result.IsCancelled)
+            {
+                ErrorMessage = result.Error;
+                SubscriptionStatusText = result.Error ?? ResourceStringHelper.GetString(
+                    "DownloadsSubscriptionCheckFailed",
+                    "Subscription check failed.");
+            }
+        }
+        finally
+        {
+            item.IsBusy = false;
+            UpdateSubscriptions(_subscriptionService.GetSubscriptions());
+        }
+    }
+
+    [RelayCommand]
+    private async Task ToggleSubscriptionAsync(NyaaSubscriptionItemViewModel item)
+    {
+        if (item is null || item.IsBusy)
+            return;
+
+        item.IsBusy = true;
+        try
+        {
+            await _subscriptionService.SetEnabledAsync(
+                item.Key,
+                !item.Subscription.Enabled,
+                _cts.Token);
+            SubscriptionStatusText = item.Subscription.Enabled
+                ? ResourceStringHelper.GetString(
+                    "DownloadsSubscriptionPausedStatus",
+                    "Subscription paused. Existing downloads were not changed.")
+                : ResourceStringHelper.GetString(
+                    "DownloadsSubscriptionEnabledStatus",
+                    "Subscription enabled.");
+        }
+        finally
+        {
+            item.IsBusy = false;
+            UpdateSubscriptions(_subscriptionService.GetSubscriptions());
+        }
+    }
+
+    [RelayCommand]
+    private async Task RemoveSubscriptionAsync(NyaaSubscriptionItemViewModel item)
+    {
+        if (item is null || item.IsBusy)
+            return;
+
+        var confirmed = await _dialogService.ConfirmAsync(
+            ResourceStringHelper.GetString(
+                "DownloadsRemoveSubscriptionTitle",
+                "Remove subscription?"),
+            ResourceStringHelper.FormatString(
+                "DownloadsRemoveSubscriptionMessage",
+                "Stop following '{0}'? Existing download tasks and downloaded files will be kept.",
+                item.Subscription.Title),
+            ResourceStringHelper.GetString(
+                "DownloadsRemoveSubscriptionConfirmButton",
+                "Remove subscription"),
+            ResourceStringHelper.GetString("DownloadsCancelButton", "Cancel"));
+        if (!confirmed)
+            return;
+
+        item.IsBusy = true;
+        try
+        {
+            await _subscriptionService.RemoveAsync(item.Key, _cts.Token);
+            SubscriptionStatusText = ResourceStringHelper.GetString(
+                "DownloadsSubscriptionRemovedStatus",
+                "Subscription removed. Existing downloads were kept.");
+        }
+        finally
+        {
+            item.IsBusy = false;
+            UpdateSubscriptions(_subscriptionService.GetSubscriptions());
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanSearch))]
@@ -439,7 +813,7 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private async Task PauseBuiltInTaskAsync(NyaaDownloadTaskSnapshot task)
+    private async Task PauseBuiltInTaskAsync(NyaaDownloadTaskItemViewModel task)
     {
         if (task is null)
             return;
@@ -449,7 +823,7 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private async Task ResumeBuiltInTaskAsync(NyaaDownloadTaskSnapshot task)
+    private async Task ResumeBuiltInTaskAsync(NyaaDownloadTaskItemViewModel task)
     {
         if (task is null)
             return;
@@ -459,7 +833,7 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private async Task CancelBuiltInTaskAsync(NyaaDownloadTaskSnapshot task)
+    private async Task CancelBuiltInTaskAsync(NyaaDownloadTaskItemViewModel task)
     {
         if (task is null)
             return;
@@ -469,7 +843,7 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private async Task RetryBuiltInTaskAsync(NyaaDownloadTaskSnapshot task)
+    private async Task RetryBuiltInTaskAsync(NyaaDownloadTaskItemViewModel task)
     {
         if (task is null)
             return;
@@ -479,7 +853,7 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private async Task RemoveBuiltInTaskAsync(NyaaDownloadTaskSnapshot task)
+    private async Task RemoveBuiltInTaskAsync(NyaaDownloadTaskItemViewModel task)
     {
         if (task is null || !task.CanRemove)
             return;
@@ -502,7 +876,7 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private async Task OpenBuiltInTaskFolderAsync(NyaaDownloadTaskSnapshot task)
+    private async Task OpenBuiltInTaskFolderAsync(NyaaDownloadTaskItemViewModel task)
     {
         if (task is null || string.IsNullOrWhiteSpace(task.DownloadRootPath))
         {
@@ -764,6 +1138,21 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
         ErrorMessage = null;
         try
         {
+            if (!TryBuildMonoTorrentSettings(out var monoTorrentSettings))
+                return;
+
+            if (!string.IsNullOrWhiteSpace(monoTorrentSettings.DownloadRootPath))
+            {
+                var rootIssue = await MonoTorrentDownloadRootPolicy.CheckWritableAsync(
+                    monoTorrentSettings.DownloadRootPath,
+                    _cts.Token);
+                if (rootIssue is not null)
+                {
+                    ErrorMessage = GetMonoTorrentDownloadRootIssueMessage(rootIssue.Value);
+                    return;
+                }
+            }
+
             var existing = await _credentialStore.LoadAsync(_cts.Token);
             var credentials = BuildCredentials(existing);
             var settings = new QbittorrentSettings
@@ -776,6 +1165,7 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
             _settingsService.Set(
                 value => value.DownloadBackend,
                 SelectedBackendOption?.Kind ?? DownloadBackendKind.MonoTorrent);
+            _settingsService.Set(s => s.MonoTorrentSettings, monoTorrentSettings);
             _settingsService.Set(s => s.QbittorrentSettings, settings);
             await _settingsService.SaveAsync();
             if (string.IsNullOrWhiteSpace(credentials.Username)
@@ -812,6 +1202,28 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
             IsSavingSettings = false;
         }
     }
+
+    [RelayCommand]
+    private async Task BrowseMonoTorrentDownloadRootAsync()
+    {
+        try
+        {
+            var selected = await _dialogService.OpenFolderPickerAsync();
+            if (!string.IsNullOrWhiteSpace(selected))
+                MonoTorrentDownloadRootPath = selected;
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private void ResetMonoTorrentDownloadRoot() =>
+        MonoTorrentDownloadRootPath = MonoTorrentDownloadRootPolicy.DefaultPath;
 
     [RelayCommand]
     private async Task TestConnectionAsync()
@@ -931,6 +1343,15 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
             _dispatcherQueue.TryEnqueue(() => UpdateTasks(_downloadCoordinator.GetTasks()));
     }
 
+    private void OnSubscriptionsChanged(object? sender, EventArgs e)
+    {
+        void Update() => UpdateSubscriptions(_subscriptionService.GetSubscriptions());
+        if (_dispatcherQueue is null || _dispatcherQueue.HasThreadAccess)
+            Update();
+        else
+            _dispatcherQueue.TryEnqueue(Update);
+    }
+
     private void OnBuiltInTasksChanged(object? sender, EventArgs e)
     {
         var downloadManager = _resolvedNyaaDownloadManager;
@@ -954,9 +1375,90 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
             : Tasks.FirstOrDefault(task => task.Hash.Equals(selectedHash, StringComparison.OrdinalIgnoreCase));
     }
 
-    private void UpdateBuiltInTasks(IReadOnlyList<NyaaDownloadTaskSnapshot> tasks) =>
-        BuiltInTasks = new ObservableCollection<NyaaDownloadTaskSnapshot>(
-            tasks.OrderByDescending(task => task.CreatedAt));
+    private void UpdateBuiltInTasks(IReadOnlyList<NyaaDownloadTaskSnapshot> tasks)
+    {
+        var next = tasks
+            .OrderByDescending(task => task.CreatedAt)
+            .ToList();
+        var nextTaskIds = next
+            .Select(task => task.TaskId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        for (var index = BuiltInTasks.Count - 1; index >= 0; index--)
+        {
+            if (!nextTaskIds.Contains(BuiltInTasks[index].TaskId))
+                BuiltInTasks.RemoveAt(index);
+        }
+
+        for (var index = 0; index < next.Count; index++)
+        {
+            var task = next[index];
+            var currentIndex = FindBuiltInTaskIndex(task.TaskId);
+            if (currentIndex < 0)
+            {
+                BuiltInTasks.Insert(index, new NyaaDownloadTaskItemViewModel(task));
+                continue;
+            }
+
+            if (currentIndex != index)
+                BuiltInTasks.Move(currentIndex, index);
+
+            BuiltInTasks[index].Update(task);
+        }
+    }
+
+    private int FindBuiltInTaskIndex(string taskId)
+    {
+        for (var index = 0; index < BuiltInTasks.Count; index++)
+        {
+            if (BuiltInTasks[index].TaskId.Equals(taskId, StringComparison.OrdinalIgnoreCase))
+                return index;
+        }
+
+        return -1;
+    }
+
+    private void UpdateSubscriptions(IReadOnlyList<NyaaVideoSubscription> subscriptions)
+    {
+        Subscriptions = new ObservableCollection<NyaaSubscriptionItemViewModel>(
+            subscriptions.Select(subscription => new NyaaSubscriptionItemViewModel(subscription)));
+        foreach (var item in Subscriptions.Where(item =>
+                     !item.IsLegacy
+                     && item.PosterImage is null
+                     && !string.IsNullOrWhiteSpace(item.Subscription.PosterUrl)))
+        {
+            _ = RefreshSubscriptionArtworkAsync(item.Key);
+        }
+        SubscriptionStatusText = Subscriptions.Count == 0
+            ? ResourceStringHelper.GetString(
+                "DownloadsSubscriptionsEmptyStatus",
+                "Subscriptions created from Video discovery will appear here.")
+            : ResourceStringHelper.FormatString(
+                "DownloadsSubscriptionsCount",
+                "{0} subscriptions.",
+                Subscriptions.Count);
+    }
+
+    private async Task RefreshSubscriptionArtworkAsync(string key)
+    {
+        if (!_subscriptionArtworkRefreshes.Add(key))
+            return;
+        try
+        {
+            await _subscriptionService.RefreshArtworkAsync(key, _cts.Token);
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch
+        {
+            // A missing/expired cover is non-fatal; the fixed-size placeholder remains visible.
+        }
+        finally
+        {
+            _subscriptionArtworkRefreshes.Remove(key);
+        }
+    }
 
     private void LoadSettingsDraft()
     {
@@ -968,6 +1470,24 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
         DefaultSavePath = settings.DefaultSavePath;
         DefaultCategory = settings.DefaultCategory;
         AddPaused = settings.AddPaused;
+        var monoTorrent = (_settingsService.Current.MonoTorrentSettings ?? new MonoTorrentSettings())
+            .Normalize();
+        MonoTorrentDownloadRootPath = string.IsNullOrWhiteSpace(monoTorrent.DownloadRootPath)
+            ? MonoTorrentDownloadRootPolicy.DefaultPath
+            : monoTorrent.DownloadRootPath;
+        MonoTorrentAdditionalTrackersText = string.Join(Environment.NewLine, monoTorrent.AdditionalTrackers);
+        MonoTorrentListenPort = monoTorrent.ListenPort;
+        MonoTorrentPortForwardingEnabled = monoTorrent.EnablePortForwarding;
+        MonoTorrentDhtEnabled = monoTorrent.EnableDht;
+        MonoTorrentPeerExchangeEnabled = monoTorrent.EnablePeerExchange;
+        MonoTorrentLocalPeerDiscoveryEnabled = monoTorrent.EnableLocalPeerDiscovery;
+        MonoTorrentMaximumConnections = monoTorrent.MaximumConnections;
+        MonoTorrentMaximumConnectionsPerTorrent = monoTorrent.MaximumConnectionsPerTorrent;
+        MonoTorrentMaximumHalfOpenConnections = monoTorrent.MaximumHalfOpenConnections;
+        MonoTorrentMaximumOpenFiles = monoTorrent.MaximumOpenFiles;
+        MonoTorrentDownloadRateLimitKiB = monoTorrent.DownloadRateLimitKiB;
+        MonoTorrentUploadRateLimitKiB = monoTorrent.UploadRateLimitKiB;
+        MonoTorrentUploadSlotsPerTorrent = monoTorrent.UploadSlotsPerTorrent;
         PasswordDraft = "";
         ApiKeyDraft = "";
         var credentials = _credentialStore.LoadAsync(_cts.Token).GetAwaiter().GetResult();
@@ -976,6 +1496,93 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
             ? ResourceStringHelper.GetString("DownloadsCredentialsMissing", "Not configured")
             : ResourceStringHelper.GetString("DownloadsCredentialsConfigured", "Configured");
     }
+
+    private bool TryBuildMonoTorrentSettings(out MonoTorrentSettings settings)
+    {
+        if (!MonoTorrentSettings.TryNormalizeDownloadRootPath(
+                MonoTorrentDownloadRootPath,
+                out var normalizedDownloadRoot))
+        {
+            ErrorMessage = ResourceStringHelper.GetString(
+                "DownloadsMonoTorrentDownloadRootNotAbsolute",
+                "Choose an absolute download folder path.");
+            settings = new MonoTorrentSettings();
+            return false;
+        }
+
+        if (MonoTorrentDownloadRootPolicy.PathsEqual(
+                normalizedDownloadRoot,
+                MonoTorrentDownloadRootPolicy.DefaultPath))
+        {
+            // Empty is the durable marker for the default path. This keeps old
+            // settings compatible if the Windows profile location changes.
+            normalizedDownloadRoot = "";
+        }
+
+        var trackers = MonoTorrentAdditionalTrackersText
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (trackers.Length > MonoTorrentSettings.MaximumAdditionalTrackerCount)
+        {
+            ErrorMessage = ResourceStringHelper.FormatString(
+                "DownloadsMonoTorrentTooManyTrackers",
+                "Configure no more than {0} additional trackers.",
+                MonoTorrentSettings.MaximumAdditionalTrackerCount);
+            settings = new MonoTorrentSettings();
+            return false;
+        }
+
+        var normalizedTrackers = new List<string>();
+        var seenTrackers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var tracker in trackers)
+        {
+            if (!MonoTorrentSettings.TryNormalizeTrackerUrl(tracker, out var normalized))
+            {
+                var displayValue = tracker.Length <= 120 ? tracker : $"{tracker[..120]}…";
+                ErrorMessage = ResourceStringHelper.FormatString(
+                    "DownloadsMonoTorrentInvalidTracker",
+                    "Invalid tracker URL: {0}",
+                    displayValue);
+                settings = new MonoTorrentSettings();
+                return false;
+            }
+
+            if (seenTrackers.Add(normalized))
+                normalizedTrackers.Add(normalized);
+        }
+
+        settings = new MonoTorrentSettings
+        {
+            DownloadRootPath = normalizedDownloadRoot,
+            AdditionalTrackers = normalizedTrackers,
+            ListenPort = MonoTorrentListenPort,
+            EnablePortForwarding = MonoTorrentPortForwardingEnabled,
+            EnableDht = MonoTorrentDhtEnabled,
+            EnablePeerExchange = MonoTorrentPeerExchangeEnabled,
+            EnableLocalPeerDiscovery = MonoTorrentLocalPeerDiscoveryEnabled,
+            MaximumConnections = MonoTorrentMaximumConnections,
+            MaximumConnectionsPerTorrent = MonoTorrentMaximumConnectionsPerTorrent,
+            MaximumHalfOpenConnections = MonoTorrentMaximumHalfOpenConnections,
+            MaximumOpenFiles = MonoTorrentMaximumOpenFiles,
+            DownloadRateLimitKiB = MonoTorrentDownloadRateLimitKiB,
+            UploadRateLimitKiB = MonoTorrentUploadRateLimitKiB,
+            UploadSlotsPerTorrent = MonoTorrentUploadSlotsPerTorrent,
+        }.Normalize();
+        return true;
+    }
+
+    private static string GetMonoTorrentDownloadRootIssueMessage(
+        MonoTorrentDownloadRootIssue issue) => issue switch
+    {
+        MonoTorrentDownloadRootIssue.NotAbsolute => ResourceStringHelper.GetString(
+            "DownloadsMonoTorrentDownloadRootNotAbsolute",
+            "Choose an absolute download folder path."),
+        MonoTorrentDownloadRootIssue.CreateFailed => ResourceStringHelper.GetString(
+            "DownloadsMonoTorrentDownloadRootCreateFailed",
+            "The download folder could not be created. Check the drive and permissions."),
+        _ => ResourceStringHelper.GetString(
+            "DownloadsMonoTorrentDownloadRootNotWritable",
+            "The download folder is not writable."),
+    };
 
     private async Task<INyaaDownloadManager> GetNyaaDownloadManagerAsync(CancellationToken cancellationToken)
     {
@@ -1019,6 +1626,7 @@ public partial class DownloadsPageViewModel : ObservableObject, IDisposable
             return;
         _disposed = true;
         _downloadCoordinator.TasksChanged -= OnTasksChanged;
+        _subscriptionService.SubscriptionsChanged -= OnSubscriptionsChanged;
         if (_nyaaTasksSubscribed && _resolvedNyaaDownloadManager is not null)
             _resolvedNyaaDownloadManager.TasksChanged -= OnBuiltInTasksChanged;
         TaskDetailsRequested = null;

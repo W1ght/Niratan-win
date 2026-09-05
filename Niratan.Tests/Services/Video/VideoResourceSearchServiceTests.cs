@@ -19,7 +19,8 @@ public sealed class VideoResourceSearchServiceTests
 
         service.BuildDefaultQuery(identity).Should().Be("Moana 2026");
         service.BuildSearchQueries(identity).Should().ContainInOrder(
-            "Moana 2026", "Moana and the ... 2026", "モアナ 2026");
+            "Moana 2026", "Moana and the ... 2026");
+        service.BuildSearchQueries(identity).Should().NotContain("モアナ 2026");
     }
 
     [Fact]
@@ -34,7 +35,24 @@ public sealed class VideoResourceSearchServiceTests
             null);
 
         service.BuildSearchQueries(identity).Should().ContainInOrder(
-            "Moana 2026", "Moana and the ... 2026", "原題 2026", "モアナ 2026");
+            "Moana 2026", "Moana and the ... 2026");
+        service.BuildSearchQueries(identity).Should().NotContain(query => query.Contains('モ') || query.Contains('原'));
+    }
+
+    [Fact]
+    public void BuildDefaultQuery_UsesLatinAliasAndOmitsSeriesAirYear()
+    {
+        var service = new VideoResourceSearchService(new FixtureNyaaClient());
+        var identity = new VideoMetadataCandidate(
+            "bangumi", "123", VideoMetadataMediaKind.Anime,
+            "無職転生Ⅱ ～異世界行ったら本気だす～", "無職転生Ⅱ ～異世界行ったら本気だす～",
+            2023, null, null, null,
+            ["Mushoku Tensei II: Isekai Ittara Honki Dasu"],
+            ImmutableDictionary<string, string>.Empty,
+            null);
+
+        service.BuildDefaultQuery(identity)
+            .Should().Be("Mushoku Tensei II: Isekai Ittara Honki Dasu");
     }
 
     [Fact]
@@ -46,16 +64,17 @@ public sealed class VideoResourceSearchServiceTests
     }
 
     [Fact]
-    public async Task SearchAsync_MergesAndDeduplicatesLanguageQueries()
+    public async Task SearchAsync_MergesAndDeduplicatesNyaaFriendlyQueries()
     {
+        var ct = TestContext.Current.CancellationToken;
         var client = new FixtureNyaaClient();
         var service = new VideoResourceSearchService(client);
 
-        var result = await service.SearchAsync(new VideoResourceSearchRequest(CreateIdentity()));
+        var result = await service.SearchAsync(new VideoResourceSearchRequest(CreateIdentity()), ct);
 
         result.IsSuccess.Should().BeTrue();
         client.Queries.Should().Contain("Moana 2026");
-        client.Queries.Should().Contain("モアナ 2026");
+        client.Queries.Should().NotContain("モアナ 2026");
         result.Value.Should().HaveCount(1);
     }
 

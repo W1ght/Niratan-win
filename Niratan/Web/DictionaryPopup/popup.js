@@ -1663,18 +1663,26 @@ window.onContextMiningPrepared = function (
   });
 };
 
+function miningResultNoteIDs(result) {
+  if (!result) return [];
+  var noteIDs = normalizedAnkiNoteIDs(result.noteIDs);
+  if (noteIDs.length > 0) return noteIDs;
+  return normalizedAnkiNoteIDs(result.noteID);
+}
+
 function applyMiningVisualResult(entryIndex, attemptId, result, slots) {
   slots = slots || entryMiningSlots(entryIndex);
   var slot = slots.mine;
   if (!slot) return;
   var status = result && result.status ? result.status : 'failed';
-  if ((status === 'added' || status === 'duplicate') && result.noteID) {
-    showAnkiNoteButton(entryIndex, result.noteID);
+  var resultNoteIDs = miningResultNoteIDs(result);
+  if ((status === 'added' || status === 'duplicate') && resultNoteIDs.length > 0) {
+    showAnkiNoteButton(entryIndex, resultNoteIDs);
   }
   var isDuplicateResult = status === 'added' || status === 'duplicate';
   slot.dataset.latestMiningAttemptId = String(attemptId);
   slot.dataset.miningFallbackDuplicate = String(isDuplicateResult);
-  slot.dataset.miningFallbackNoteIds = result && result.noteID ? String(result.noteID) : '';
+  slot.dataset.miningFallbackNoteIds = resultNoteIDs.map(String).join(' ');
   updateButtonSlot(slot, {
     state: isDuplicateResult ? 'duplicate' : 'default',
     enabled: !isDuplicateResult || !!window.allowDupes,
@@ -1707,8 +1715,9 @@ function applyMiningResult(
   if (keepAttempt) {
     slots.mine.dataset.contextMiningPendingResult = JSON.stringify(result || {});
     var status = result && result.status ? result.status : 'failed';
-    if ((status === 'added' || status === 'duplicate') && result.noteID) {
-      showAnkiNoteButton(entryIndex, result.noteID);
+    var resultNoteIDs = miningResultNoteIDs(result);
+    if ((status === 'added' || status === 'duplicate') && resultNoteIDs.length > 0) {
+      showAnkiNoteButton(entryIndex, resultNoteIDs);
     }
     updateButtonSlot(slots.mine, {
       state: status === 'added' || status === 'duplicate' ? 'duplicate' : 'default',

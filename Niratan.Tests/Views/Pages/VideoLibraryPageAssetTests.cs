@@ -45,7 +45,7 @@ public class VideoLibraryPageAssetTests
         xaml.Should().Contain("x:Key=\"VideoPosterItemTemplate\"");
         xaml.Should().Contain("x:Name=\"VideoPosterTitleText\"");
         xaml.Should().Contain("MaxLines=\"2\"");
-        xaml.Should().Contain("ItemHeight=\"320\"");
+        xaml.Should().Contain("ItemHeight=\"{StaticResource VideoLandscapeCardSlotHeight}\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryDiscoverPage\"");
         xaml.Should().Contain("Command=\"{x:Bind ViewModel.CreateSmartCollectionCommand}\"");
         xaml.Should().Contain("ItemsSource=\"{x:Bind ViewModel.SmartRuleDrafts");
@@ -77,6 +77,13 @@ public class VideoLibraryPageAssetTests
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryFolderFilters\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryCollectionFilters\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryTagFilters\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryAllFilterButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryMoviesFilterButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryAnimeFilterButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryFoldersFilterButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryCollectionsFilterButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryTagsFilterButton\"");
+        xaml.Should().Contain("ViewModel.IsAllVideosFilterView");
         xaml.Should().Contain("Source=\"{x:Bind ArtworkImage");
         xaml.Should().Contain("Command=\"{Binding ViewModel.OpenVideoCommand, ElementName=ThisPage}\"");
         xaml.Should().Contain("Command=\"{Binding ViewModel.OpenVideoFromBeginningCommand, ElementName=ThisPage}\"");
@@ -107,6 +114,27 @@ public class VideoLibraryPageAssetTests
     }
 
     [Fact]
+    public void VideoLibraryPage_ShowsTaskStatusOnlyOnImportView()
+    {
+        var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml"));
+        var document = XDocument.Parse(xaml);
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var taskStatusHost = document.Descendants(presentation + "StackPanel")
+            .Single(element =>
+                (string?)element.Attribute("Grid.Row") == "1"
+                && (string?)element.Attribute("Margin") == "20,0,28,10");
+
+        taskStatusHost.Attribute("Visibility")?.Value.Should().Contain("ViewModel.IsSourcesView");
+        taskStatusHost.Descendants(presentation + "TextBlock")
+            .Should().Contain(element =>
+                element.Attribute("Text") != null
+                && element.Attribute("Text")!.Value.Contains(
+                    "BackgroundMetadataText",
+                    StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void VideoLibraryPage_HomeVideoCardsKeepOneFixedLandscapeWidth()
     {
         var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml"));
@@ -122,22 +150,22 @@ public class VideoLibraryPageAssetTests
         var artwork = button.Descendants()
             .Single(element =>
                 element.Name.LocalName == "Border"
-                && (string?)element.Attribute("Height") == "169");
+                && (string?)element.Attribute("Height") == "{StaticResource VideoLandscapeArtworkHeight}");
         var title = button.Descendants()
             .Single(element =>
                 element.Name.LocalName == "TextBlock"
                 && (string?)element.Attribute(x + "Name") == "VideoPosterTitleText");
 
-        card.Attribute("Width")?.Value.Should().Be("300");
-        card.Attribute("MaxWidth")?.Value.Should().Be("300");
-        card.Attribute("Margin")?.Value.Should().Be("0,0,12,0");
-        button.Attribute("Width")?.Value.Should().Be("300");
-        button.Attribute("MaxWidth")?.Value.Should().Be("300");
-        artwork.Attribute("Width")?.Value.Should().Be("300");
-        artwork.Attribute("Height")?.Value.Should().Be("169");
-        title.Attribute("Width")?.Value.Should().Be("300");
-        title.Attribute("MaxWidth")?.Value.Should().Be("300");
-        title.Attribute("MaxLines")?.Value.Should().Be("2");
+        card.Attribute("Width")?.Value.Should().Be("{StaticResource VideoLandscapeCardWidth}");
+        card.Attribute("Height")?.Value.Should().Be("{StaticResource VideoLandscapeCardHeight}");
+        card.Attribute("MaxWidth")?.Value.Should().Be("{StaticResource VideoLandscapeCardWidth}");
+        card.Attribute("Margin")?.Value.Should().Be("0,0,12,12");
+        button.Attribute("Style")?.Value.Should().Be("{StaticResource VideoLandscapeCardButtonStyle}");
+        artwork.Attribute("Width")?.Value.Should().Be("{StaticResource VideoLandscapeCardWidth}");
+        artwork.Attribute("Height")?.Value.Should().Be("{StaticResource VideoLandscapeArtworkHeight}");
+        title.Attribute("Width")?.Value.Should().Be("{StaticResource VideoLandscapeCardWidth}");
+        title.Attribute("MaxWidth")?.Value.Should().Be("{StaticResource VideoLandscapeCardWidth}");
+        title.Attribute("Style")?.Value.Should().Be("{StaticResource VideoCardTitleTextBlockStyle}");
 
         var homeItems = document.Descendants()
             .Where(element => element.Name.LocalName == "ItemsControl")
@@ -221,7 +249,15 @@ public class VideoLibraryPageAssetTests
         var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml"));
 
         xaml.Should().Contain("AutomationProperties.AutomationId=\"VideoLibraryHomePage\"");
-        xaml.Should().Contain("x:Uid=\"VideoLibraryHomeMyMediaHeading\"");
+        xaml.Should().NotContain("VideoLibraryHomeMyMediaHeading");
+        xaml.Should().NotContain("VideoLibraryHomeMoviesTile");
+        xaml.Should().NotContain("VideoLibraryHomeSeriesTile");
+        xaml.Should().NotContain("VideoLibraryHomeAnimeTile");
+        xaml.Should().NotContain("VideoLibraryHomeCollectionsTile");
+        xaml.Should().NotContain("HomeMoviesCountText");
+        xaml.Should().NotContain("HomeSeriesCountText");
+        xaml.Should().NotContain("HomeAnimeCountText");
+        xaml.Should().NotContain("HomeCollectionsCountText");
         xaml.Should().Contain("ViewModel.HomeContinueWatching");
         xaml.Should().Contain("ViewModel.HomeNextEpisodes");
         xaml.Should().Contain("VideoLibraryEpisodeSlots");
@@ -232,6 +268,7 @@ public class VideoLibraryPageAssetTests
         xaml.Should().Contain("HorizontalScrollMode=\"Enabled\"");
 
         var document = XDocument.Parse(xaml);
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
         var importCommandBar = document.Descendants()
             .Where(element => element.Name.LocalName == "CommandBar")
             .Single(element => element.Descendants().Any(button =>
@@ -246,7 +283,20 @@ public class VideoLibraryPageAssetTests
             "AddYouTubeLinkButton",
             "RefreshVideoSourcesButton",
             "VideoLibraryScrapeAllButton",
+            "VideoLibraryClearAllScrapeRecordsButton",
             "VideoLibraryMetadataTasksButton");
+
+        var clearAllScrapeRecordsButton = importCommandBar.Descendants()
+            .Single(element =>
+                element.Name.LocalName == "AppBarButton"
+                && (string?)element.Attribute("AutomationProperties.AutomationId")
+                    == "VideoLibraryClearAllScrapeRecordsButton");
+        clearAllScrapeRecordsButton.Attribute(x + "Uid")?.Value
+            .Should().Be("VideoLibraryClearAllScrapeRecordsButton");
+        clearAllScrapeRecordsButton.Attribute("AutomationProperties.AutomationId")?.Value
+            .Should().Be("VideoLibraryClearAllScrapeRecordsButton");
+        clearAllScrapeRecordsButton.Attribute("Command")?.Value
+            .Should().Be("{x:Bind ViewModel.ClearAllScrapeRecordsCommand}");
     }
 
     [Fact]
@@ -266,12 +316,19 @@ public class VideoLibraryPageAssetTests
             "VideoLibraryTopSeriesNavItem",
             "VideoLibraryTopAllVideosNavItem",
             "VideoLibraryTopImportNavItem",
+            "VideoLibraryAllFilterButton",
+            "VideoLibraryMoviesFilterButton",
+            "VideoLibraryAnimeFilterButton",
+            "VideoLibraryFoldersFilterButton",
+            "VideoLibraryCollectionsFilterButton",
+            "VideoLibraryTagsFilterButton",
             "VideoLibrarySearchBox",
             "VideoLibrarySortComboBox",
             "ScanVideoFolderButton",
             "AddYouTubeLinkButton",
             "RefreshVideoSourcesButton",
             "VideoLibraryScrapeAllButton",
+            "VideoLibraryClearAllScrapeRecordsButton",
             "VideoLibraryMetadataTasksButton",
             "VideoLibrarySmartCollectionName",
             "VideoLibraryPlayMenuItem",
@@ -300,12 +357,27 @@ public class VideoLibraryPageAssetTests
             "VideoLibraryTopSeriesNavItem.Content",
             "VideoLibraryTopAllVideosNavItem.Content",
             "VideoLibraryTopImportNavItem.Content",
+            "VideoLibraryAllFilterButton.Content",
+            "VideoLibraryMoviesFilterButton.Content",
+            "VideoLibraryAnimeFilterButton.Content",
+            "VideoLibraryFoldersFilterButton.Content",
+            "VideoLibraryCollectionsFilterButton.Content",
+            "VideoLibraryTagsFilterButton.Content",
             "VideoLibrarySearchBox.PlaceholderText",
             "VideoLibrarySortComboBox.AutomationProperties.Name",
             "ScanVideoFolderButton.Label",
             "AddYouTubeLinkButton.Label",
             "RefreshVideoSourcesButton.Label",
             "VideoLibraryScrapeAllButton.Label",
+            "VideoLibraryClearAllScrapeRecordsButton.Label",
+            "VideoLibraryClearAllScrapeRecordsButton.ToolTipService.ToolTip",
+            "VideoLibraryClearAllScrapeRecordsDialogTitle",
+            "VideoLibraryClearAllScrapeRecordsDialogMessage",
+            "VideoLibraryClearAllScrapeRecordsDialogPrimary",
+            "VideoLibraryClearAllScrapeRecordsDialogCancel",
+            "VideoLibraryClearAllScrapeRecordsSuccessMessage",
+            "VideoLibraryClearAllScrapeRecordsSuccessTitle",
+            "VideoLibraryClearAllScrapeRecordsFailedTitle",
             "VideoLibraryMetadataTasksButton.Label",
             "VideoLibrarySmartCollectionName.PlaceholderText",
             "VideoLibrarySmartCollectionRuleField.Header",
@@ -360,6 +432,8 @@ public class VideoLibraryPageAssetTests
 
         zhResources.Should().Contain("<value>继续观看</value>");
         zhResources.Should().Contain("<value>扫描文件夹</value>");
+        enResources.Should().Contain("<value>Clear all scrape records</value>");
+        zhResources.Should().Contain("<value>清理全部刮削记录</value>");
     }
 
     [Fact]
@@ -368,6 +442,53 @@ public class VideoLibraryPageAssetTests
         var source = File.ReadAllText(Path.Combine(ProjectRoot, "Services", "Video", "VideoPlayerWindowService.cs"));
 
         source.Should().NotContain("PlaybackStateSaved -= OnWindowPlaybackStateSaved");
+    }
+
+    [Fact]
+    public void VideoCardStyles_ReserveWrapGridSlotsLargeEnoughForCardPlusGutter()
+    {
+        var styles = XDocument.Parse(
+            File.ReadAllText(Path.Combine(ProjectRoot, "Styles", "VideoCardStyles.xaml")));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        double Value(string key) => double.Parse(
+            styles.Root!.Elements()
+                .Single(element =>
+                    element.Name.LocalName == "Double"
+                    && (string?)element.Attribute(x + "Key") == key)
+                .Value,
+            System.Globalization.CultureInfo.InvariantCulture);
+
+        // A card whose own margin overflows its wrap-grid cell gets clipped, which is what
+        // knocks the poster grid out of alignment.
+        Value("VideoLandscapeCardSlotWidth").Should()
+            .BeGreaterThanOrEqualTo(Value("VideoLandscapeCardWidth") + 12);
+        Value("VideoLandscapeCardSlotHeight").Should()
+            .BeGreaterThanOrEqualTo(Value("VideoLandscapeCardHeight") + 12);
+        Value("VideoPortraitCardSlotWidth").Should()
+            .BeGreaterThanOrEqualTo(Value("VideoPortraitCardWidth") + 14);
+        Value("VideoPortraitCardSlotHeight").Should()
+            .BeGreaterThanOrEqualTo(Value("VideoPortraitCardHeight") + 18);
+    }
+
+    [Fact]
+    public void VideoLibraryPage_PortraitWrapGridsReserveTheSharedPortraitSlot()
+    {
+        var document = XDocument.Parse(
+            File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml")));
+
+        var portraitPanels = document.Descendants()
+            .Where(element => element.Name.LocalName == "ItemsWrapGrid")
+            .Where(element =>
+                ((string?)element.Attribute("ItemWidth"))?.Contains(
+                    "VideoPortraitCardSlotWidth",
+                    StringComparison.Ordinal) == true)
+            .ToList();
+
+        portraitPanels.Should().HaveCount(2);
+        portraitPanels.Should().OnlyContain(element =>
+            (string?)element.Attribute("ItemHeight")
+                == "{StaticResource VideoPortraitCardSlotHeight}");
     }
 
     private static void AssertFilterTemplateWidth(

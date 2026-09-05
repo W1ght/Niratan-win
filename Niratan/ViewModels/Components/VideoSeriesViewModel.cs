@@ -16,6 +16,7 @@ namespace Niratan.ViewModels.Components;
 public sealed class VideoSeriesViewModel : ObservableObject
 {
     private readonly IReadOnlyList<VideoItem> _sourceVideos;
+    private readonly int? _metadataYear;
     private ObservableCollection<VideoItemViewModel> _episodes = new();
     private VideoSeasonViewModel? _selectedSeason;
 
@@ -23,7 +24,15 @@ public sealed class VideoSeriesViewModel : ObservableObject
     {
         Id = id;
         _sourceVideos = videos.ToList();
-        var representative = _sourceVideos
+        // A merged series can contain provider nodes for later cours/seasons.
+        // Keep the explicit group id as the root identity, like Shoko's
+        // AnimeSeries -> AnimeGroup relationship, instead of letting the newest
+        // or richest child season replace the series title and provider id.
+        var rootVideos = _sourceVideos
+            .Where(video => video.CatalogSeriesNodeId == id)
+            .ToList();
+        var metadataVideos = rootVideos.Count > 0 ? rootVideos : _sourceVideos;
+        var representative = metadataVideos
             .OrderByDescending(MetadataWeight)
             .ThenByDescending(video => video.LastOpenedAt ?? video.ImportedAt)
             .First();
@@ -52,12 +61,18 @@ public sealed class VideoSeriesViewModel : ObservableObject
         PosterPath = FirstExisting(_sourceVideos.Select(video => video.SeriesPosterPath ?? video.PosterPath));
         BackdropPath = FirstExisting(_sourceVideos.Select(video => video.SeriesThumbPath ?? video.BackdropPath));
         LogoPath = FirstExisting(_sourceVideos.Select(video => video.LogoPath));
-        var identitySource = _sourceVideos
+        var identitySource = metadataVideos
             .OrderByDescending(video => video.ExternalIds.Count)
             .ThenByDescending(video => video.MatchCandidates.Count)
             .ThenByDescending(MetadataWeight)
             .FirstOrDefault() ?? representative;
         MetadataIdentity = BuildMetadataIdentity(identitySource);
+        var metadataYears = metadataVideos
+            .Select(video => video.CatalogSeriesReleaseYear ?? video.ReleaseYear)
+            .Where(year => year.HasValue)
+            .Select(year => year!.Value)
+            .ToList();
+        _metadataYear = metadataYears.Count > 0 ? metadataYears.Min() : null;
         MetadataMediaKind = representative.LibraryMediaType == VideoLibraryMediaType.Anime
             ? VideoMetadataMediaKind.Anime
             : VideoMetadataMediaKind.Series;
@@ -83,7 +98,13 @@ public sealed class VideoSeriesViewModel : ObservableObject
         Seasons = new ObservableCollection<VideoSeasonViewModel>(RegularEpisodes
             .GroupBy(item => item.Video.SeasonNumber)
             .OrderBy(group => group.Key ?? int.MaxValue)
-            .Select(group => new VideoSeasonViewModel(group.Key, group, PosterPath)));
+            .Select(group => new VideoSeasonViewModel(
+                group.Key,
+                group,
+                ResolveSeasonPosterPath(
+                    group,
+                    remotePosterPath: null,
+                    seriesPosterPath: PosterPath))));
         FirstEpisode = RegularEpisodes.FirstOrDefault();
         ContinueEpisode = RegularEpisodes
             .Where(item => item.Video.LastPositionSeconds >= VideoPlaybackState.MinimumPersistablePositionSeconds
@@ -92,7 +113,11 @@ public sealed class VideoSeriesViewModel : ObservableObject
             .FirstOrDefault();
         PrimaryPlayItem = ContinueEpisode ?? FirstEpisode;
 
-        if (Seasons.Count > 0)
+        var catalogSeasons = MergeRemoteSeasons(
+            _sourceVideos.SelectMany(video => video.CatalogSeriesSeasons));
+        if (catalogSeasons.Count > 0)
+            ApplyRemoteSeasons(catalogSeasons);
+        else if (Seasons.Count > 0)
             SelectSeason(Seasons[0]);
         else
             Episodes = new ObservableCollection<VideoItemViewModel>(RegularEpisodes);
@@ -152,6 +177,7 @@ public sealed class VideoSeriesViewModel : ObservableObject
     public bool HasRelatedItems => RelatedItems.Count > 0;
     public bool HasProviderSources => ProviderSourceUrls.Count > 0;
     public bool HasSeasons => Seasons.Any(season => season.SeasonNumber.HasValue);
+    public bool HasRemoteSeasonMetadata => Seasons.Any(season => season.RemoteSeason != null);
     public bool HasSpecialFeatures => SpecialFeatures.Count > 0;
     public bool HasBackdrop => BackdropImage != null;
     public bool HasPoster => PosterImage != null;
@@ -206,9 +232,7 @@ public sealed class VideoSeriesViewModel : ObservableObject
     public VideoMetadataCandidate? MetadataIdentity { get; private set; }
     public VideoMetadataMediaKind MetadataMediaKind { get; }
     public IReadOnlyList<string> MetadataSearchTitles { get; }
-    public int? MetadataYear => _sourceVideos
-        .Select(video => video.CatalogSeriesReleaseYear ?? video.ReleaseYear)
-        .FirstOrDefault(year => year.HasValue);
+    public int? MetadataYear => _metadataYear;
 
     public void ApplyRemoteMetadata(VideoMetadataDetails metadata)
     {
@@ -241,13 +265,14 @@ public sealed class VideoSeriesViewModel : ObservableObject
 
     public void ApplyRemoteSeasons(IEnumerable<VideoDiscoverySeason> remoteSeasons)
     {
-        var remoteByNumber = remoteSeasons
-            .GroupBy(season => season.SeasonNumber)
-            .ToDictionary(group => group.Key, group => group.First());
+        var remoteByNumber = MergeRemoteSeasons(remoteSeasons)
+            .ToDictionary(season => season.SeasonNumber);
         var localByNumber = RegularEpisodes
             .Where(item => item.Video.SeasonNumber.HasValue)
             .GroupBy(item => item.Video.SeasonNumber!.Value)
             .ToDictionary(group => group.Key, group => group.ToList());
+        if (remoteByNumber.ContainsKey(0) && SpecialFeatures.Count > 0)
+            localByNumber[0] = SpecialFeatures.ToList();
         var seasonNumbers = remoteByNumber.Keys
             .Concat(localByNumber.Keys)
             .Distinct()
@@ -264,11 +289,15 @@ public sealed class VideoSeriesViewModel : ObservableObject
             return new VideoSeasonViewModel(
                 number,
                 localEpisodes ?? [],
-                PosterPath,
+                ResolveSeasonPosterPath(
+                    localEpisodes ?? [],
+                    remoteSeason?.LocalPosterPath,
+                    PosterPath),
                 remoteSeason);
         }));
         OnPropertyChanged(nameof(Seasons));
         OnPropertyChanged(nameof(HasSeasons));
+        OnPropertyChanged(nameof(HasRemoteSeasonMetadata));
 
         var selected = Seasons.FirstOrDefault(season => season.SeasonNumber == selectedNumber)
                        ?? Seasons.FirstOrDefault();
@@ -324,17 +353,15 @@ public sealed class VideoSeriesViewModel : ObservableObject
         var reviewCandidate = video.MatchCandidates
             .Where(candidate => !candidate.HasHardConflict)
             .OrderByDescending(candidate => candidate.Score)
+            .ThenBy(candidate => MetadataIdentityPriority(candidate.ProviderId))
             .FirstOrDefault(candidate => candidate.Score > 0.25
                 && (candidate.ProviderId.Equals("tmdb", StringComparison.OrdinalIgnoreCase)
                     || candidate.ProviderId.Equals("tvmaze", StringComparison.OrdinalIgnoreCase)
-                    || candidate.ProviderId.Equals("anilist", StringComparison.OrdinalIgnoreCase)
-                    || candidate.ProviderId.Equals("bangumi", StringComparison.OrdinalIgnoreCase)));
-        var providerId = video.ProviderId
-                         ?? video.ExternalIds.Keys.FirstOrDefault(key =>
-                             key.Equals("tmdb", StringComparison.OrdinalIgnoreCase)
-                             || key.Equals("tvmaze", StringComparison.OrdinalIgnoreCase)
-                             || key.Equals("anilist", StringComparison.OrdinalIgnoreCase)
-                             || key.Equals("bangumi", StringComparison.OrdinalIgnoreCase));
+                    || candidate.ProviderId.Equals("anidb", StringComparison.OrdinalIgnoreCase)));
+        var providerId = video.ProviderId ?? video.ExternalIds.Keys
+            .Where(key => MetadataIdentityPriority(key) < int.MaxValue)
+            .OrderBy(MetadataIdentityPriority)
+            .FirstOrDefault();
         var providerItemId = string.IsNullOrWhiteSpace(providerId)
             ? null
             : video.ExternalIds.FirstOrDefault(pair =>
@@ -376,11 +403,104 @@ public sealed class VideoSeriesViewModel : ObservableObject
                 pair.Key.Equals(providerId, StringComparison.OrdinalIgnoreCase)).Value
                 is { Length: > 0 } sourceUrl
                 ? sourceUrl
-                : null);
+            : null);
     }
+
+    private static int MetadataIdentityPriority(string providerId) =>
+        providerId.ToLowerInvariant() switch
+        {
+            "anidb" => 0,
+            "tmdb" => 1,
+            "tvmaze" => 2,
+            _ => int.MaxValue,
+        };
+
+    private static IReadOnlyList<VideoDiscoverySeason> MergeRemoteSeasons(
+        IEnumerable<VideoDiscoverySeason> seasons) => seasons
+        .GroupBy(season => season.SeasonNumber)
+        .Select(group =>
+        {
+            var candidates = group.ToList();
+            var primary = candidates
+                .OrderByDescending(season => !string.IsNullOrWhiteSpace(season.LocalPosterPath))
+                .ThenByDescending(season => !string.IsNullOrWhiteSpace(season.PosterPath))
+                .ThenByDescending(season => season.Episodes.IsDefaultOrEmpty ? 0 : season.Episodes.Length)
+                .ThenByDescending(season => !string.IsNullOrWhiteSpace(season.Title))
+                .ThenByDescending(season => !string.IsNullOrWhiteSpace(season.Overview))
+                .ThenByDescending(season => season.EpisodeCount)
+                .ThenBy(season => season.Title, StringComparer.CurrentCultureIgnoreCase)
+                .First();
+            var episodes = candidates
+                .SelectMany(season => season.Episodes.IsDefault
+                    ? ImmutableArray<VideoDiscoveryEpisode>.Empty
+                    : season.Episodes)
+                .GroupBy(RemoteEpisodeIdentityKey, StringComparer.OrdinalIgnoreCase)
+                .Select(episodeGroup => episodeGroup
+                    .OrderByDescending(RemoteEpisodeMetadataWeight)
+                    .ThenBy(episode => episode.SourceUrl, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(episode => episode.DisplayNumber, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(episode => episode.Title, StringComparer.CurrentCultureIgnoreCase)
+                    .First())
+                .OrderBy(episode => SpecialEpisodeTypeOrder(episode.DisplayNumber))
+                .ThenBy(episode => episode.EpisodeNumber)
+                .ThenBy(episode => episode.SourceUrl, StringComparer.OrdinalIgnoreCase)
+                .ToImmutableArray();
+            return primary with
+            {
+                EpisodeCount = Math.Max(
+                    primary.EpisodeCount,
+                    group.Key == 0
+                        ? episodes.Length
+                        : episodes.Select(episode => episode.EpisodeNumber).Distinct().Count()),
+                Episodes = episodes,
+            };
+        })
+        .OrderBy(season => season.SeasonNumber)
+        .ToList();
+
+    private static string RemoteEpisodeIdentityKey(VideoDiscoveryEpisode episode)
+    {
+        if (!string.IsNullOrWhiteSpace(episode.SourceUrl))
+            return $"url:{episode.SourceUrl.Trim().TrimEnd('/')}";
+        return string.Join(
+            "\u001f",
+            episode.DisplayNumber ?? episode.EpisodeNumber.ToString(CultureInfo.InvariantCulture),
+            episode.Title,
+            episode.OriginalTitle,
+            episode.AirDate);
+    }
+
+    private static int RemoteEpisodeMetadataWeight(VideoDiscoveryEpisode episode) =>
+        (string.IsNullOrWhiteSpace(episode.Title) ? 0 : 4)
+        + (!string.IsNullOrWhiteSpace(episode.OriginalTitle) ? 2 : 0)
+        + (!string.IsNullOrWhiteSpace(episode.Overview) ? 4 : 0)
+        + (!string.IsNullOrWhiteSpace(episode.AirDate) ? 2 : 0)
+        + (episode.RuntimeMinutes is > 0 ? 1 : 0)
+        + (!string.IsNullOrWhiteSpace(episode.LocalThumbnailPath) ? 3 : 0)
+        + (!string.IsNullOrWhiteSpace(episode.ThumbnailPath) ? 1 : 0);
+
+    private static int SpecialEpisodeTypeOrder(string? displayNumber) =>
+        string.IsNullOrWhiteSpace(displayNumber)
+            ? int.MaxValue
+            : char.ToUpperInvariant(displayNumber[0]) switch
+            {
+                'S' => 0,
+                'C' => 1,
+                'T' => 2,
+                'P' => 3,
+                'O' => 4,
+                _ => int.MaxValue,
+            };
 
     private static string? FirstExisting(IEnumerable<string?> candidates) =>
         candidates.FirstOrDefault(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path));
+
+    private static string? ResolveSeasonPosterPath(
+        IEnumerable<VideoItemViewModel> episodes,
+        string? remotePosterPath,
+        string? seriesPosterPath) =>
+        FirstExisting(episodes.Select(item => item.Video.SeriesPosterPath))
+        ?? FirstExisting([remotePosterPath, seriesPosterPath]);
 
     private static BitmapImage? LoadLocalImage(string? path)
     {
@@ -411,9 +531,9 @@ public sealed class VideoSeasonViewModel : ObservableObject
         Episodes = episodes.ToList();
         RemoteSeason = remoteSeason;
         EpisodeSlots = new ObservableCollection<VideoEpisodeSlotViewModel>(
-            BuildEpisodeSlots(Episodes, remoteSeason));
+            BuildEpisodeSlots(seasonNumber, Episodes, remoteSeason));
         EpisodeCount = remoteSeason?.EpisodeCount > 0
-            ? remoteSeason.EpisodeCount
+            ? Math.Max(remoteSeason.EpisodeCount, EpisodeSlots.Count)
             : EpisodeSlots.Count;
         Title = remoteSeason?.Title ?? seasonNumber switch
         {
@@ -424,10 +544,10 @@ public sealed class VideoSeasonViewModel : ObservableObject
                 ResourceStringHelper.GetString("VideoLibrarySeasonTitleFormat", "Season {0}"),
                 seasonNumber.Value),
         };
-        var seasonPosterPath = remoteSeason?.LocalPosterPath ?? posterPath;
-        PosterImage = !string.IsNullOrWhiteSpace(seasonPosterPath) && File.Exists(seasonPosterPath)
-            ? new BitmapImage(new Uri(seasonPosterPath))
+        PosterPath = !string.IsNullOrWhiteSpace(posterPath) && File.Exists(posterPath)
+            ? posterPath
             : null;
+        PosterImage = LoadLocalImage(PosterPath);
     }
 
     public int? SeasonNumber { get; }
@@ -436,6 +556,7 @@ public sealed class VideoSeasonViewModel : ObservableObject
     public VideoDiscoverySeason? RemoteSeason { get; }
     public int EpisodeCount { get; }
     public string Title { get; }
+    public string? PosterPath { get; }
     public BitmapImage? PosterImage { get; }
     public bool HasPoster => PosterImage != null;
     public bool IsSelected
@@ -451,7 +572,24 @@ public sealed class VideoSeasonViewModel : ObservableObject
         ResourceStringHelper.GetString("VideoLibrarySeriesEpisodeCountFormat", "{0} episodes"),
         EpisodeCount);
 
+    private static BitmapImage? LoadLocalImage(string? path)
+    {
+        try
+        {
+            return !string.IsNullOrWhiteSpace(path) && File.Exists(path)
+                ? new BitmapImage(new Uri(path))
+                : null;
+        }
+        catch
+        {
+            // BitmapImage needs a live WinUI apartment. Preserve PosterPath for
+            // later UI materialization and keep headless/catalog rebuilds safe.
+            return null;
+        }
+    }
+
     private static IEnumerable<VideoEpisodeSlotViewModel> BuildEpisodeSlots(
+        int? seasonNumber,
         IReadOnlyList<VideoItemViewModel> localEpisodes,
         VideoDiscoverySeason? remoteSeason)
     {
@@ -469,21 +607,35 @@ public sealed class VideoSeasonViewModel : ObservableObject
                     null,
                     null,
                     null,
-                    null,
-                    null))
+                     null,
+                     null))
                 .ToImmutableArray();
+        var resolvedSeasonNumber = remoteSeason?.SeasonNumber
+                                   ?? seasonNumber
+                                   ?? localEpisodes.Select(item => item.Video.SeasonNumber)
+                                       .FirstOrDefault(number => number.HasValue)
+                                   ?? 0;
+        if (resolvedSeasonNumber == 0)
+            return BuildSpecialEpisodeSlots(remoteEpisodes, localEpisodes);
+
         var numbers = remoteEpisodes.Select(episode => episode.EpisodeNumber)
             .Concat(localByNumber.Keys)
             .Distinct()
             .OrderBy(number => number);
-        var remoteByNumber = remoteEpisodes.ToDictionary(episode => episode.EpisodeNumber);
+        var remoteByNumber = remoteEpisodes
+            .GroupBy(episode => episode.EpisodeNumber)
+            .ToDictionary(
+                group => group.Key,
+                group => SelectRegularRemoteEpisode(
+                    group,
+                    localByNumber.GetValueOrDefault(group.Key)));
         var slots = new List<VideoEpisodeSlotViewModel>();
         foreach (var number in numbers)
         {
             localByNumber.TryGetValue(number, out var local);
             remoteByNumber.TryGetValue(number, out var remote);
             slots.Add(new VideoEpisodeSlotViewModel(
-                remoteSeason?.SeasonNumber ?? 0,
+                resolvedSeasonNumber,
                 number,
                 remote,
                 local));
@@ -492,12 +644,117 @@ public sealed class VideoSeasonViewModel : ObservableObject
         slots.AddRange(localEpisodes
             .Where(item => !item.Video.EpisodeNumber.HasValue)
             .Select(item => new VideoEpisodeSlotViewModel(
-                remoteSeason?.SeasonNumber ?? item.Video.SeasonNumber ?? 0,
+                resolvedSeasonNumber,
                 item.Video.AbsoluteEpisodeNumber ?? slots.Count + 1,
                 null,
                 item)));
         return slots;
     }
+
+    private static IEnumerable<VideoEpisodeSlotViewModel> BuildSpecialEpisodeSlots(
+        IEnumerable<VideoDiscoveryEpisode> remoteEpisodes,
+        IReadOnlyList<VideoItemViewModel> localEpisodes)
+    {
+        var remainingLocal = localEpisodes.ToList();
+        var slots = new List<VideoEpisodeSlotViewModel>();
+        foreach (var remote in remoteEpisodes
+                     .OrderBy(episode => SpecialEpisodeTypeOrder(episode.DisplayNumber))
+                     .ThenBy(episode => episode.EpisodeNumber)
+                     .ThenBy(episode => episode.DisplayNumber, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(episode => episode.SourceUrl, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(episode => episode.Title, StringComparer.CurrentCultureIgnoreCase))
+        {
+            var local = FindSpecialLocalMatch(remote, remainingLocal);
+            if (local != null)
+                remainingLocal.Remove(local);
+            slots.Add(new VideoEpisodeSlotViewModel(0, remote.EpisodeNumber, remote, local));
+        }
+
+        slots.AddRange(remainingLocal
+            .OrderBy(item => item.Video.EpisodeNumber ?? int.MaxValue)
+            .ThenBy(item => item.Video.AbsoluteEpisodeNumber ?? int.MaxValue)
+            .ThenBy(item => item.Video.FilePath, StringComparer.OrdinalIgnoreCase)
+            .Select((item, index) => new VideoEpisodeSlotViewModel(
+                0,
+                item.Video.EpisodeNumber ?? item.Video.AbsoluteEpisodeNumber ?? slots.Count + index + 1,
+                null,
+                item)));
+        return slots;
+    }
+
+    private static VideoItemViewModel? FindSpecialLocalMatch(
+        VideoDiscoveryEpisode remote,
+        IReadOnlyList<VideoItemViewModel> localEpisodes) =>
+        localEpisodes.FirstOrDefault(local => RemoteIdentityMatchesLocal(remote, local))
+        ?? localEpisodes.FirstOrDefault(local =>
+            local.Video.EpisodeNumber == remote.EpisodeNumber
+            && (string.Equals(local.Video.Title, remote.Title, StringComparison.CurrentCultureIgnoreCase)
+                || string.Equals(
+                    local.Video.OriginalTitle,
+                    remote.OriginalTitle,
+                    StringComparison.CurrentCultureIgnoreCase)));
+
+    private static VideoDiscoveryEpisode SelectRegularRemoteEpisode(
+        IEnumerable<VideoDiscoveryEpisode> candidates,
+        VideoItemViewModel? local) =>
+        candidates
+            .OrderByDescending(candidate => local != null && RemoteIdentityMatchesLocal(candidate, local))
+            .ThenByDescending(RemoteEpisodeMetadataWeight)
+            .ThenBy(candidate => candidate.SourceUrl, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(candidate => candidate.Title, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(candidate => candidate.OriginalTitle, StringComparer.CurrentCultureIgnoreCase)
+            .First();
+
+    private static bool RemoteIdentityMatchesLocal(
+        VideoDiscoveryEpisode remote,
+        VideoItemViewModel local)
+    {
+        if (!local.Video.ExternalIds.TryGetValue("anidb-episode", out var localEpisodeId)
+            || string.IsNullOrWhiteSpace(localEpisodeId)
+            || string.IsNullOrWhiteSpace(remote.SourceUrl))
+        {
+            return false;
+        }
+
+        var separator = remote.SourceUrl.LastIndexOf('/');
+        var remoteEpisodeId = separator >= 0
+            ? remote.SourceUrl[(separator + 1)..]
+            : remote.SourceUrl;
+        return string.Equals(
+            remoteEpisodeId.TrimEnd('/'),
+            localEpisodeId,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int RemoteEpisodeMetadataWeight(VideoDiscoveryEpisode episode)
+    {
+        var genericTitle = string.IsNullOrWhiteSpace(episode.Title)
+                           || string.Equals(
+                               episode.Title,
+                               $"Episode {episode.EpisodeNumber}",
+                               StringComparison.OrdinalIgnoreCase);
+        return (genericTitle ? 0 : 4)
+               + (!string.IsNullOrWhiteSpace(episode.OriginalTitle) ? 2 : 0)
+               + (!string.IsNullOrWhiteSpace(episode.Overview) ? 4 : 0)
+               + (!string.IsNullOrWhiteSpace(episode.AirDate) ? 2 : 0)
+               + (episode.RuntimeMinutes is > 0 ? 1 : 0)
+               + (!string.IsNullOrWhiteSpace(episode.LocalThumbnailPath) ? 3 : 0)
+               + (!string.IsNullOrWhiteSpace(episode.ThumbnailPath) ? 1 : 0)
+               + (!string.IsNullOrWhiteSpace(episode.SourceUrl) ? 1 : 0);
+    }
+
+    private static int SpecialEpisodeTypeOrder(string? displayNumber) =>
+        string.IsNullOrWhiteSpace(displayNumber)
+            ? int.MaxValue
+            : char.ToUpperInvariant(displayNumber[0]) switch
+            {
+                'S' => 0,
+                'C' => 1,
+                'T' => 2,
+                'P' => 3,
+                'O' => 4,
+                _ => int.MaxValue,
+            };
 }
 
 public sealed partial class VideoEpisodeSlotViewModel : ObservableObject
@@ -529,7 +786,9 @@ public sealed partial class VideoEpisodeSlotViewModel : ObservableObject
 
     public int EpisodeNumber { get; }
     public int SeasonNumber { get; }
-    public string NumberText => $"{EpisodeNumber}.";
+    public string NumberText => $"{(string.IsNullOrWhiteSpace(RemoteEpisode?.DisplayNumber)
+        ? EpisodeNumber.ToString(CultureInfo.CurrentCulture)
+        : RemoteEpisode.DisplayNumber)}.";
     public string Title { get; }
     public string Overview { get; }
     public string AirDate { get; }
@@ -539,6 +798,9 @@ public sealed partial class VideoEpisodeSlotViewModel : ObservableObject
     public bool HasArtwork => ArtworkImage is not null;
     public bool IsDownloaded => DownloadedEpisode?.Video.IsAvailable == true
                                 && !DownloadedEpisode.IsMissing;
+    public bool IsSupplemental => SeasonNumber == 0
+                                  && RemoteEpisode?.DisplayNumber is { Length: > 0 } displayNumber
+                                  && char.ToUpperInvariant(displayNumber[0]) is 'C' or 'T' or 'P' or 'O';
     public bool HasOverview => !string.IsNullOrWhiteSpace(Overview);
     public bool HasAirDate => !string.IsNullOrWhiteSpace(AirDate);
 
@@ -555,7 +817,7 @@ public sealed partial class VideoEpisodeSlotViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(StatusText))]
     public partial string DownloadStatus { get; set; } = "";
 
-    public bool CanDownload => !IsDownloaded && !IsDownloading && !IsQueued;
+    public bool CanDownload => !IsSupplemental && !IsDownloaded && !IsDownloading && !IsQueued;
     public string StatusText => IsDownloaded
         ? DownloadedEpisode!.WatchStatusText
         : !string.IsNullOrWhiteSpace(DownloadStatus)

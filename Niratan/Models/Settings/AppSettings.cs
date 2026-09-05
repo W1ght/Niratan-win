@@ -27,7 +27,9 @@ public class AppSettings
     public SasayakiSettings SasayakiSettings { get; set; } = new();
     public NovelStatisticsSettings StatisticsSettings { get; set; } = new();
     public TtuSyncSettings TtuSyncSettings { get; set; } = new();
+    public MonoTorrentSettings MonoTorrentSettings { get; set; } = new();
     public QbittorrentSettings QbittorrentSettings { get; set; } = new();
     public DiscoverySettings DiscoverySettings { get; set; } = new();
+    public GalGameSettings GalGameSettings { get; set; } = new();
     public DownloadBackendKind DownloadBackend { get; set; } = DownloadBackendKind.MonoTorrent;
 }

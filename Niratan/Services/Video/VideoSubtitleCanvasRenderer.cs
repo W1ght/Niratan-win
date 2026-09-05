@@ -20,7 +20,14 @@ public readonly record struct VideoSubtitleCanvasRenderOptions(
     int SelectionStart,
     int SelectionLength,
     Color SelectionBackground,
-    Color SelectionForeground);
+    Color SelectionForeground,
+    double LetterSpacing = 0,
+    double LineHeight = 1.25,
+    string HorizontalAlignment = "Center",
+    string VerticalAlignment = "Center",
+    Color? OutlineColor = null,
+    double OutlineWidth = 0,
+    double HorizontalPadding = 28);
 
 public readonly record struct VideoSubtitleCanvasHitTestResult(
     int CharacterIndex,
@@ -40,9 +47,10 @@ public static class VideoSubtitleCanvasRenderer
         if (string.IsNullOrEmpty(options.Text) || size.Width <= 0 || size.Height <= 0)
             return default;
 
-        var layoutBounds = CalculateLayoutBounds(size);
+        var layoutBounds = CalculateLayoutBounds(size, options.HorizontalPadding);
         using var format = CreateTextFormat(options);
         using var layout = CreateTextLayout(drawingSession, layoutBounds, options.Text, format);
+        ApplyCharacterSpacing(layout, options);
         var drawBounds = layout.DrawBounds;
         var visibleBounds = new Rect(
             drawBounds.X + layoutBounds.X,
@@ -54,6 +62,7 @@ public static class VideoSubtitleCanvasRenderer
         {
             DrawShadow(compositeSession, layout, layoutBounds, options.ShadowRadius);
             DrawSelection(compositeSession, layout, layoutBounds, options);
+            DrawOutline(compositeSession, layout, layoutBounds, options);
             compositeSession.DrawTextLayout(
                 layout,
                 (float)layoutBounds.X,
@@ -95,9 +104,10 @@ public static class VideoSubtitleCanvasRenderer
             return false;
         }
 
-        var layoutBounds = CalculateLayoutBounds(size);
+        var layoutBounds = CalculateLayoutBounds(size, options.HorizontalPadding);
         using var format = CreateTextFormat(options);
         using var layout = CreateTextLayout(resourceCreator, layoutBounds, options.Text, format);
+        ApplyCharacterSpacing(layout, options);
         var isHit = layout.HitTest(
             (float)(point.X - layoutBounds.X),
             (float)(point.Y - layoutBounds.Y),
@@ -116,11 +126,12 @@ public static class VideoSubtitleCanvasRenderer
         return true;
     }
 
-    public static Rect CalculateLayoutBounds(Size size)
+    public static Rect CalculateLayoutBounds(Size size, double horizontalPadding = HorizontalInset)
     {
+        var inset = Math.Clamp(horizontalPadding, 0, Math.Max(0, size.Width / 2));
         var width = Math.Min(
             MaximumTextWidth,
-            Math.Max(1, size.Width - (HorizontalInset * 2)));
+            Math.Max(1, size.Width - (inset * 2)));
         return new Rect(
             Math.Max(0, (size.Width - width) / 2),
             0,
@@ -140,6 +151,16 @@ public static class VideoSubtitleCanvasRenderer
             (float)bounds.Width,
             (float)bounds.Height);
 
+    private static void ApplyCharacterSpacing(
+        CanvasTextLayout layout,
+        VideoSubtitleCanvasRenderOptions options)
+    {
+        if (options.Text.Length == 0 || Math.Abs(options.LetterSpacing) < 0.001)
+            return;
+        var spacing = (float)Math.Clamp(options.LetterSpacing, -2, 12);
+        layout.SetCharacterSpacing(0, options.Text.Length, spacing / 2, spacing / 2, 0);
+    }
+
     private static CanvasTextFormat CreateTextFormat(VideoSubtitleCanvasRenderOptions options)
     {
         var fontSize = (float)Math.Clamp(options.FontSize, 12, 160);
@@ -153,12 +174,53 @@ public static class VideoSubtitleCanvasRenderer
             {
                 Weight = (ushort)Math.Clamp(options.FontWeight, 100, 900),
             },
-            HorizontalAlignment = CanvasHorizontalAlignment.Center,
-            VerticalAlignment = CanvasVerticalAlignment.Center,
+            HorizontalAlignment = string.Equals(
+                options.HorizontalAlignment,
+                "Left",
+                StringComparison.OrdinalIgnoreCase)
+                    ? CanvasHorizontalAlignment.Left
+                    : CanvasHorizontalAlignment.Center,
+            VerticalAlignment = string.Equals(
+                options.VerticalAlignment,
+                "Top",
+                StringComparison.OrdinalIgnoreCase)
+                    ? CanvasVerticalAlignment.Top
+                    : CanvasVerticalAlignment.Center,
             WordWrapping = CanvasWordWrapping.Wrap,
-            LineSpacing = fontSize * 1.25f,
+            LineSpacing = fontSize * (float)Math.Clamp(options.LineHeight, 0.8, 2),
             LineSpacingBaseline = fontSize,
         };
+    }
+
+    private static void DrawOutline(
+        CanvasDrawingSession drawingSession,
+        CanvasTextLayout layout,
+        Rect layoutBounds,
+        VideoSubtitleCanvasRenderOptions options)
+    {
+        var width = Math.Clamp(options.OutlineWidth, 0, 6);
+        if (width <= 0 || options.OutlineColor is not { } color || color.A == 0)
+            return;
+
+        // Keep the outline in the same text layout as hit testing. Eight
+        // symmetric samples avoid the directional shadow look while retaining
+        // straight-alpha composition on the transparent overlay surface.
+        var radius = (float)width;
+        var diagonal = radius * 0.70710678f;
+        var offsets = new (float X, float Y)[]
+        {
+            (-radius, 0), (radius, 0), (0, -radius), (0, radius),
+            (-diagonal, -diagonal), (diagonal, -diagonal),
+            (-diagonal, diagonal), (diagonal, diagonal),
+        };
+        foreach (var offset in offsets)
+        {
+            drawingSession.DrawTextLayout(
+                layout,
+                (float)layoutBounds.X + offset.X,
+                (float)layoutBounds.Y + offset.Y,
+                color);
+        }
     }
 
     private static void DrawShadow(

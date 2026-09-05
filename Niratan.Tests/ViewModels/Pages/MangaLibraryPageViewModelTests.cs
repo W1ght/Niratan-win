@@ -833,6 +833,9 @@ public sealed class MangaLibraryPageViewModelTests
             .IsSelected.Should().BeTrue();
         viewModel.SelectedRemoteMangaDetails.SelectedExtensionId.Should().Be(
             RemoteMangaExtensionOptionViewModel.GetKey(secondSource));
+        viewModel.SelectedRemoteMangaDetails.SelectedExtension.Should().NotBeNull();
+        viewModel.SelectedRemoteMangaDetails.SelectedExtension!.Name.Should().Be(
+            "Second source");
         mihon.Verify(service => service.BrowseAsync(
             It.IsAny<MihonExtensionConfiguration>(),
             secondSource,

@@ -16,6 +16,7 @@ public partial class VideoSettingsPageViewModel : ObservableObject
 {
     private readonly ISettingsService _settingsService;
     private readonly IVideoMetadataCredentialStore? _credentialStore;
+    private readonly IAniDbImportService? _aniDb;
     private bool _isInitializing = true;
 
     public IReadOnlyList<JapaneseFontOption> AvailableSubtitleFonts { get; } = JapaneseFontCatalog.Fonts;
@@ -51,16 +52,69 @@ public partial class VideoSettingsPageViewModel : ObservableObject
     public partial bool AniDbMetadataEnabled { get; set; }
 
     [ObservableProperty]
-    public partial bool BangumiMetadataEnabled { get; set; }
+    public partial string AniDbClientId { get; set; } = "";
 
     [ObservableProperty]
-    public partial string DiscoveryProviderOrderText { get; set; } = "tmdb,bangumi,anilist";
+    public partial int AniDbClientVersion { get; set; } = 1;
+
+    [ObservableProperty]
+    public partial string AniDbHttpClientId { get; set; } = "";
+
+    [ObservableProperty]
+    public partial int AniDbHttpClientVersion { get; set; } = 1;
+
+    [ObservableProperty]
+    public partial string AniDbUdpServerHost { get; set; } = "api.anidb.net";
+
+    [ObservableProperty]
+    public partial int AniDbUdpServerPort { get; set; } = 9000;
+
+    [ObservableProperty]
+    public partial string AniDbUdpBindAddress { get; set; } = "";
+
+    [ObservableProperty]
+    public partial int AniDbUdpLocalPort { get; set; } = 45500;
+
+    [ObservableProperty]
+    public partial bool AniDbHashMatchingEnabled { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool AniDbMyListSyncEnabled { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool AniDbAutoAddToMyList { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool AniDbMyListReadWatched { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool AniDbMyListReadUnwatched { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool AniDbMyListSetWatched { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool AniDbMyListSetUnwatched { get; set; } = true;
+
+    [ObservableProperty]
+    public partial int AniDbRelationDepth { get; set; } = 1;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AniDbCredentialStatusText))]
+    public partial bool HasAniDbCredentials { get; set; }
+
+    [ObservableProperty]
+    public partial string AniDbConnectionStatusText { get; set; } = "";
+
+    public string AniDbCredentialStatusText => HasAniDbCredentials
+        ? ResourceStringHelper.GetString("VideoMetadataCredentialConfigured", "Configured")
+        : ResourceStringHelper.GetString("VideoMetadataCredentialMissing", "Not configured");
+
+    [ObservableProperty]
+    public partial string DiscoveryProviderOrderText { get; set; } = "tmdb,anilist";
 
     [ObservableProperty]
     public partial bool TmdbRecommendationsEnabled { get; set; } = true;
-
-    [ObservableProperty]
-    public partial bool BangumiCalendarEnabled { get; set; } = true;
 
     [ObservableProperty]
     public partial bool AniListRecommendationsEnabled { get; set; } = true;
@@ -70,16 +124,16 @@ public partial class VideoSettingsPageViewModel : ObservableObject
     public partial bool HasTmdbToken { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(BangumiCredentialStatusText))]
-    public partial bool HasBangumiToken { get; set; }
+    [NotifyPropertyChangedFor(nameof(JimakuCredentialStatusText))]
+    public partial bool HasJimakuToken { get; set; }
 
     public string TmdbCredentialStatusText => HasTmdbToken
         ? ResourceStringHelper.GetString("VideoMetadataCredentialConfigured", "Configured")
         : ResourceStringHelper.GetString("VideoMetadataCredentialMissing", "Not configured");
 
-    public string BangumiCredentialStatusText => HasBangumiToken
+    public string JimakuCredentialStatusText => HasJimakuToken
         ? ResourceStringHelper.GetString("VideoMetadataCredentialConfigured", "Configured")
-        : ResourceStringHelper.GetString("VideoMetadataCredentialOptional", "Optional");
+        : ResourceStringHelper.GetString("VideoMetadataCredentialMissing", "Not configured");
 
     [ObservableProperty]
     public partial bool RememberPlaybackState { get; set; }
@@ -211,16 +265,25 @@ public partial class VideoSettingsPageViewModel : ObservableObject
     public partial string SubtitleMaskHiddenOpacityText { get; set; } = "0%";
 
     public VideoSettingsPageViewModel(ISettingsService settingsService)
-        : this(settingsService, null)
+        : this(settingsService, null, null)
     {
     }
 
     public VideoSettingsPageViewModel(
         ISettingsService settingsService,
         IVideoMetadataCredentialStore? credentialStore)
+        : this(settingsService, credentialStore, null)
+    {
+    }
+
+    public VideoSettingsPageViewModel(
+        ISettingsService settingsService,
+        IVideoMetadataCredentialStore? credentialStore,
+        IAniDbImportService? aniDb)
     {
         _settingsService = settingsService;
         _credentialStore = credentialStore;
+        _aniDb = aniDb;
         LoadSettings();
         _isInitializing = false;
         _ = RefreshCredentialStatusAsync();
@@ -236,11 +299,30 @@ public partial class VideoSettingsPageViewModel : ObservableObject
         TvMazeMetadataEnabled = settings.Metadata.TvMazeEnabled;
         AniListMetadataEnabled = settings.Metadata.AniListEnabled;
         AniDbMetadataEnabled = settings.Metadata.AniDbEnabled;
-        BangumiMetadataEnabled = settings.Metadata.BangumiEnabled;
+        AniDbClientId = settings.Metadata.AniDbClientId;
+        AniDbClientVersion = settings.Metadata.AniDbClientVersion;
+        AniDbHttpClientId = settings.Metadata.AniDbHttpClientId;
+        AniDbHttpClientVersion = settings.Metadata.AniDbHttpClientVersion;
+        AniDbUdpServerHost = string.IsNullOrWhiteSpace(settings.Metadata.AniDbUdpServerHost)
+            ? "api.anidb.net"
+            : settings.Metadata.AniDbUdpServerHost;
+        AniDbUdpServerPort = settings.Metadata.AniDbUdpServerPort;
+        AniDbUdpBindAddress = settings.Metadata.AniDbUdpBindAddress ?? "";
+        AniDbUdpLocalPort = settings.Metadata.AniDbUdpLocalPort;
+        AniDbHashMatchingEnabled = settings.Metadata.AniDbHashMatchingEnabled;
+        AniDbMyListSyncEnabled = settings.Metadata.AniDbMyListSyncEnabled;
+        AniDbAutoAddToMyList = settings.Metadata.AniDbAutoAddToMyList;
+        AniDbMyListReadWatched = settings.Metadata.AniDbMyListReadWatched;
+        AniDbMyListReadUnwatched = settings.Metadata.AniDbMyListReadUnwatched;
+        AniDbMyListSetWatched = settings.Metadata.AniDbMyListSetWatched;
+        AniDbMyListSetUnwatched = settings.Metadata.AniDbMyListSetUnwatched;
+        AniDbRelationDepth = settings.Metadata.AniDbRelationDepth;
         var discovery = _settingsService.Current.DiscoverySettings ?? new DiscoverySettings();
-        DiscoveryProviderOrderText = string.Join(",", discovery.ExploreProviderOrder);
+        DiscoveryProviderOrderText = string.Join(",", discovery.ExploreProviderOrder
+            .Where(providerId => providerId.Equals("tmdb", StringComparison.OrdinalIgnoreCase)
+                                 || providerId.Equals("anilist", StringComparison.OrdinalIgnoreCase))
+            .Select(providerId => providerId.ToLowerInvariant()));
         TmdbRecommendationsEnabled = IsRecommendationGroupEnabled(discovery, "tmdb:");
-        BangumiCalendarEnabled = IsRecommendationGroupEnabled(discovery, "bangumi:calendar");
         AniListRecommendationsEnabled = IsRecommendationGroupEnabled(discovery, "anilist:");
 
         AutoPlayNextEpisode = settings.AutoPlayNextEpisode;
@@ -276,6 +358,30 @@ public partial class VideoSettingsPageViewModel : ObservableObject
         if (_isInitializing)
             return;
 
+        var metadata = (_settingsService.Current.VideoSettings.Metadata ?? new VideoMetadataSettings()).Clone();
+        metadata.OnlineConsentAccepted = OnlineMetadataConsentAccepted;
+        metadata.TmdbEnabled = TmdbMetadataEnabled;
+        metadata.TvMazeEnabled = TvMazeMetadataEnabled;
+        metadata.AniListEnabled = AniListMetadataEnabled;
+        metadata.AniDbEnabled = AniDbMetadataEnabled;
+        metadata.AniDbClientId = AniDbClientId.Trim();
+        metadata.AniDbClientVersion = Math.Max(1, AniDbClientVersion);
+        metadata.AniDbHttpClientId = AniDbHttpClientId.Trim();
+        metadata.AniDbHttpClientVersion = Math.Max(1, AniDbHttpClientVersion);
+        metadata.AniDbUdpServerHost = string.IsNullOrWhiteSpace(AniDbUdpServerHost)
+            ? "api.anidb.net"
+            : AniDbUdpServerHost.Trim();
+        metadata.AniDbUdpServerPort = Math.Clamp(AniDbUdpServerPort, 1, 65535);
+        metadata.AniDbUdpBindAddress = AniDbUdpBindAddress?.Trim() ?? "";
+        metadata.AniDbUdpLocalPort = Math.Clamp(AniDbUdpLocalPort, 1024, 65535);
+        metadata.AniDbHashMatchingEnabled = AniDbHashMatchingEnabled;
+        metadata.AniDbMyListSyncEnabled = AniDbMyListSyncEnabled;
+        metadata.AniDbAutoAddToMyList = AniDbAutoAddToMyList;
+        metadata.AniDbMyListReadWatched = AniDbMyListReadWatched;
+        metadata.AniDbMyListReadUnwatched = AniDbMyListReadUnwatched;
+        metadata.AniDbMyListSetWatched = AniDbMyListSetWatched;
+        metadata.AniDbMyListSetUnwatched = AniDbMyListSetUnwatched;
+        metadata.AniDbRelationDepth = Math.Clamp(AniDbRelationDepth, 0, 5);
         _settingsService.Set(
             settings => settings.VideoSettings,
             new VideoSettings
@@ -307,28 +413,18 @@ public partial class VideoSettingsPageViewModel : ObservableObject
                 SubtitleMaskMode = SelectedSubtitleMaskMode,
                 SubtitleMaskBlurRadius = SubtitleMaskBlurRadius,
                 SubtitleMaskHiddenOpacity = SubtitleMaskHiddenOpacity,
-                Metadata = new VideoMetadataSettings
-                {
-                    OnlineConsentAccepted = OnlineMetadataConsentAccepted,
-                    TmdbEnabled = TmdbMetadataEnabled,
-                    TvMazeEnabled = TvMazeMetadataEnabled,
-                    AniListEnabled = AniListMetadataEnabled,
-                    AniDbEnabled = AniDbMetadataEnabled,
-                    BangumiEnabled = BangumiMetadataEnabled,
-                    TvDbEnabled = false,
-                },
+                Metadata = metadata,
             });
-        _settingsService.Set(
-            settings => settings.DiscoverySettings,
-            new DiscoverySettings
-            {
-                ExploreProviderOrder = DiscoveryProviderOrderText
-                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .Where(value => value is "tmdb" or "bangumi" or "anilist")
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList(),
-                EnabledRecommendationFeeds = new Dictionary<string, bool>
-                {
+        var discovery = _settingsService.Current.DiscoverySettings.Clone();
+        discovery.ExploreProviderOrder = DiscoveryProviderOrderText
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(value => value.Equals("tmdb", StringComparison.OrdinalIgnoreCase)
+                            || value.Equals("anilist", StringComparison.OrdinalIgnoreCase))
+            .Select(value => value.ToLowerInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        discovery.EnabledRecommendationFeeds = new Dictionary<string, bool>
+        {
                     ["tmdb:trending-movie"] = TmdbRecommendationsEnabled,
                     ["tmdb:trending-tv"] = TmdbRecommendationsEnabled,
                     ["tmdb:popular-movie"] = TmdbRecommendationsEnabled,
@@ -338,11 +434,10 @@ public partial class VideoSettingsPageViewModel : ObservableObject
                     ["tmdb:now-playing"] = TmdbRecommendationsEnabled,
                     ["tmdb:upcoming"] = TmdbRecommendationsEnabled,
                     ["tmdb:on-air"] = TmdbRecommendationsEnabled,
-                    ["bangumi:calendar"] = BangumiCalendarEnabled,
                     ["anilist:popular"] = AniListRecommendationsEnabled,
                     ["anilist:seasonal"] = AniListRecommendationsEnabled,
-                },
-            });
+        };
+        _settingsService.Set(settings => settings.DiscoverySettings, discovery);
         _ = _settingsService.SaveAsync();
     }
 
@@ -352,10 +447,24 @@ public partial class VideoSettingsPageViewModel : ObservableObject
     partial void OnTvMazeMetadataEnabledChanged(bool value) => SaveSettings();
     partial void OnAniListMetadataEnabledChanged(bool value) => SaveSettings();
     partial void OnAniDbMetadataEnabledChanged(bool value) => SaveSettings();
-    partial void OnBangumiMetadataEnabledChanged(bool value) => SaveSettings();
+    partial void OnAniDbClientIdChanged(string value) => SaveSettings();
+    partial void OnAniDbClientVersionChanged(int value) => SaveSettings();
+    partial void OnAniDbHttpClientIdChanged(string value) => SaveSettings();
+    partial void OnAniDbHttpClientVersionChanged(int value) => SaveSettings();
+    partial void OnAniDbUdpServerHostChanged(string value) => SaveSettings();
+    partial void OnAniDbUdpServerPortChanged(int value) => SaveSettings();
+    partial void OnAniDbUdpBindAddressChanged(string value) => SaveSettings();
+    partial void OnAniDbUdpLocalPortChanged(int value) => SaveSettings();
+    partial void OnAniDbHashMatchingEnabledChanged(bool value) => SaveSettings();
+    partial void OnAniDbMyListSyncEnabledChanged(bool value) => SaveSettings();
+    partial void OnAniDbAutoAddToMyListChanged(bool value) => SaveSettings();
+    partial void OnAniDbMyListReadWatchedChanged(bool value) => SaveSettings();
+    partial void OnAniDbMyListReadUnwatchedChanged(bool value) => SaveSettings();
+    partial void OnAniDbMyListSetWatchedChanged(bool value) => SaveSettings();
+    partial void OnAniDbMyListSetUnwatchedChanged(bool value) => SaveSettings();
+    partial void OnAniDbRelationDepthChanged(int value) => SaveSettings();
     partial void OnDiscoveryProviderOrderTextChanged(string value) => SaveSettings();
     partial void OnTmdbRecommendationsEnabledChanged(bool value) => SaveSettings();
-    partial void OnBangumiCalendarEnabledChanged(bool value) => SaveSettings();
     partial void OnAniListRecommendationsEnabledChanged(bool value) => SaveSettings();
     partial void OnRememberPlaybackStateChanged(bool value) => SaveSettings();
     partial void OnSeekIntervalSecondsChanged(int value)
@@ -495,12 +604,62 @@ public partial class VideoSettingsPageViewModel : ObservableObject
         await RefreshCredentialStatusAsync();
     }
 
+    public async Task SaveAniDbCredentialsAsync(string username, string password)
+    {
+        if (_credentialStore == null) return;
+        if (!string.IsNullOrWhiteSpace(username))
+            await _credentialStore.WriteAsync("anidb", "username", username.Trim());
+        if (!string.IsNullOrWhiteSpace(password))
+            await _credentialStore.WriteAsync("anidb", "password", password);
+        await RefreshCredentialStatusAsync();
+    }
+
+    public async Task ClearAniDbCredentialsAsync()
+    {
+        if (_credentialStore == null) return;
+        await _credentialStore.DeleteAsync("anidb", "username");
+        await _credentialStore.DeleteAsync("anidb", "password");
+        await RefreshCredentialStatusAsync();
+    }
+
+    public async Task TestAniDbLoginAsync()
+    {
+        if (_aniDb == null) return;
+        try
+        {
+            AniDbConnectionStatusText = await _aniDb.TestLoginAsync()
+                ? ResourceStringHelper.GetString("VideoAniDbLoginSucceeded", "Login succeeded")
+                : ResourceStringHelper.GetString("VideoAniDbLoginFailed", "Login failed");
+        }
+        catch (AniDbHttpApiException ex) when (ex.IsClientConfigurationError)
+        {
+            AniDbConnectionStatusText = ResourceStringHelper.GetString(
+                "VideoAniDbHttpClientInvalid",
+                "The HTTP API client ID/version is not registered or valid.");
+        }
+        catch (Exception ex) { AniDbConnectionStatusText = ex.Message; }
+    }
+
+    public async Task SyncAniDbMyListAsync()
+    {
+        if (_aniDb == null) return;
+        try
+        {
+            await _aniDb.SyncMyListAsync();
+            AniDbConnectionStatusText = ResourceStringHelper.GetString(
+                "VideoAniDbMyListSynced", "MyList synchronized");
+        }
+        catch (Exception ex) { AniDbConnectionStatusText = ex.Message; }
+    }
+
     private async Task RefreshCredentialStatusAsync()
     {
         if (_credentialStore == null)
             return;
         HasTmdbToken = !string.IsNullOrWhiteSpace(await _credentialStore.ReadAsync("tmdb", "token"));
-        HasBangumiToken = !string.IsNullOrWhiteSpace(await _credentialStore.ReadAsync("bangumi", "token"));
+        HasJimakuToken = !string.IsNullOrWhiteSpace(await _credentialStore.ReadAsync("jimaku", "token"));
+        HasAniDbCredentials = !string.IsNullOrWhiteSpace(await _credentialStore.ReadAsync("anidb", "username"))
+                              && !string.IsNullOrWhiteSpace(await _credentialStore.ReadAsync("anidb", "password"));
     }
 
     private static int RoundInt(double value, int fallback) =>

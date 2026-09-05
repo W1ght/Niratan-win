@@ -218,15 +218,31 @@ public sealed class VideoSettings
 
 public sealed class VideoMetadataSettings
 {
-    public const int CurrentArtworkPolicyVersion = 1;
+    public const int CurrentArtworkPolicyVersion = 2;
 
     public bool OnlineConsentAccepted { get; set; }
     public bool TmdbEnabled { get; set; } = true;
     public bool TvMazeEnabled { get; set; } = true;
     public bool AniListEnabled { get; set; } = true;
     public bool AniDbEnabled { get; set; } = true;
-    public bool BangumiEnabled { get; set; } = true;
     public bool TvDbEnabled { get; set; }
+    public string AniDbClientId { get; set; } = "";
+    public int AniDbClientVersion { get; set; } = 1;
+    public string AniDbHttpClientId { get; set; } = "";
+    public int AniDbHttpClientVersion { get; set; } = 1;
+    public string AniDbUdpServerHost { get; set; } = "api.anidb.net";
+    public int AniDbUdpServerPort { get; set; } = 9000;
+    public string AniDbUdpBindAddress { get; set; } = "";
+    public int AniDbUdpLocalPort { get; set; } = 45500;
+    public bool AniDbHashMatchingEnabled { get; set; } = true;
+    public bool AniDbMyListSyncEnabled { get; set; } = true;
+    public bool AniDbAutoAddToMyList { get; set; } = true;
+    public bool AniDbMyListReadWatched { get; set; } = true;
+    public bool AniDbMyListReadUnwatched { get; set; } = true;
+    public bool AniDbMyListSetWatched { get; set; } = true;
+    public bool AniDbMyListSetUnwatched { get; set; } = true;
+    public int AniDbDefaultMyListState { get; set; } = 1;
+    public int AniDbRelationDepth { get; set; } = 1;
     public int ArtworkPolicyVersion { get; set; } = CurrentArtworkPolicyVersion;
     public Dictionary<string, bool> ArtworkEnabled { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -234,8 +250,7 @@ public sealed class VideoMetadataSettings
         ["tmdb"] = true,
         ["tvmaze"] = true,
         ["anilist"] = true,
-        ["anidb"] = false,
-        ["bangumi"] = false,
+        ["anidb"] = true,
         ["tvdb"] = false,
     };
 
@@ -246,8 +261,24 @@ public sealed class VideoMetadataSettings
         TvMazeEnabled = TvMazeEnabled,
         AniListEnabled = AniListEnabled,
         AniDbEnabled = AniDbEnabled,
-        BangumiEnabled = BangumiEnabled,
-        TvDbEnabled = false,
+        TvDbEnabled = TvDbEnabled,
+        AniDbClientId = AniDbClientId,
+        AniDbClientVersion = AniDbClientVersion,
+        AniDbHttpClientId = AniDbHttpClientId,
+        AniDbHttpClientVersion = AniDbHttpClientVersion,
+        AniDbUdpServerHost = AniDbUdpServerHost,
+        AniDbUdpServerPort = AniDbUdpServerPort,
+        AniDbUdpBindAddress = AniDbUdpBindAddress,
+        AniDbUdpLocalPort = AniDbUdpLocalPort,
+        AniDbHashMatchingEnabled = AniDbHashMatchingEnabled,
+        AniDbMyListSyncEnabled = AniDbMyListSyncEnabled,
+        AniDbAutoAddToMyList = AniDbAutoAddToMyList,
+        AniDbMyListReadWatched = AniDbMyListReadWatched,
+        AniDbMyListReadUnwatched = AniDbMyListReadUnwatched,
+        AniDbMyListSetWatched = AniDbMyListSetWatched,
+        AniDbMyListSetUnwatched = AniDbMyListSetUnwatched,
+        AniDbDefaultMyListState = AniDbDefaultMyListState,
+        AniDbRelationDepth = AniDbRelationDepth,
         ArtworkPolicyVersion = ArtworkPolicyVersion,
         ArtworkEnabled = new Dictionary<string, bool>(ArtworkEnabled, StringComparer.OrdinalIgnoreCase),
     };

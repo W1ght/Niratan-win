@@ -35,6 +35,21 @@ public sealed class AnkiServiceDuplicateLookupTests
     }
 
     [Fact]
+    public async Task DuplicateLookupExpressionAsync_WhenMiningAllowsDuplicates_StillFindsExistingNoteIds()
+    {
+        var settingsService = new MutableSettingsService(CreateAppSettings(allowDupes: true));
+        var scenario = new ExpressionDuplicateScenario("無償", 1788357084281);
+        using var service = CreateService(settingsService, () => new ScenarioHandler(scenario.RespondAsync));
+
+        var result = await service.DuplicateLookupExpressionAsync("無償");
+
+        result.IsDuplicate.Should().BeTrue();
+        result.NoteIds.Should().Equal(1788357084281);
+        scenario.AllowDuplicateValues.Should().OnlyContain(value => !value);
+        scenario.Actions.Should().Equal("canAddNotesWithErrorDetail", "multi");
+    }
+
+    [Fact]
     public async Task SettingChanged_ClearsDuplicateCache()
     {
         var settingsService = new MutableSettingsService(CreateAppSettings());
@@ -202,6 +217,56 @@ public sealed class AnkiServiceDuplicateLookupTests
     }
 
     [Fact]
+    public async Task DuplicateLookupExpressionAsync_WhenExpressionIsNotInTheFirstField_FallsBackToFieldSearch()
+    {
+        var settingsService = new MutableSettingsService(CreateCustomFieldOrderAppSettings());
+        var scenario = new FieldSearchOnlyDuplicateScenario("無償", 4242);
+        using var service = CreateService(settingsService, () => new ScenarioHandler(scenario.RespondAsync));
+
+        var duplicate = await service.DuplicateLookupExpressionAsync("無償");
+        var fresh = await service.DuplicateLookupExpressionAsync("星");
+
+        // canAddNotes only ever compares "Key", so without the field search both lookups
+        // would come back clean and the popup would offer to mine the word again.
+        duplicate.IsDuplicate.Should().BeTrue();
+        duplicate.NoteIds.Should().Equal(4242);
+        fresh.IsDuplicate.Should().BeFalse();
+        scenario.Queries.Should().Contain(query => query.Contains("word:無償", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task MineEntryAsync_WhenFieldSearchFindsExistingNote_DoesNotAddADuplicate()
+    {
+        var settingsService = new MutableSettingsService(CreateCustomFieldOrderAppSettings());
+        var scenario = new FieldSearchOnlyDuplicateScenario("無償", 4242);
+        using var service = CreateService(settingsService, () => new ScenarioHandler(scenario.RespondAsync));
+
+        var noteId = await service.MineEntryAsync(
+            """{"expression":"無償"}""",
+            new AnkiMiningContext());
+
+        noteId.Should().BeNull();
+        scenario.AddRequestCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task MineEntryAsync_WhenDuplicatesAlreadyKnown_KeepsThemAlongsideTheNewNote()
+    {
+        var settingsService = new MutableSettingsService(CreateAppSettings(allowDupes: true));
+        var scenario = new ExpressionDuplicateScenario("星", 77);
+        using var service = CreateService(settingsService, () => new ScenarioHandler(scenario.RespondAsync));
+
+        (await service.DuplicateLookupExpressionAsync("星")).NoteIds.Should().Equal(77);
+        await service.MineEntryAsync("""{"expression":"星"}""", new AnkiMiningContext());
+        var afterMining = await service.DuplicateLookupExpressionAsync("星");
+
+        // The popup forces a re-check right after mining; caching only the added note would
+        // leave the magnifier able to open just the last card.
+        afterMining.IsDuplicate.Should().BeTrue();
+        afterMining.NoteIds.Should().Contain(77);
+    }
+
+    [Fact]
     public void Dispose_UnsubscribesFromSettingsChanges()
     {
         var settingsService = new MutableSettingsService(CreateAppSettings());
@@ -252,6 +317,35 @@ public sealed class AnkiServiceDuplicateLookupTests
             },
         };
 
+    private static AppSettings CreateCustomFieldOrderAppSettings() =>
+        new()
+        {
+            AnkiSettings = new AnkiSettings
+            {
+                AnkiConnectUrl = "http://anki.test",
+                SelectedDeckId = 1,
+                SelectedDeckName = "Mining",
+                SelectedNoteTypeId = 2,
+                SelectedNoteTypeName = "Custom",
+                AvailableDecks = [new AnkiDeck { Id = 1, Name = "Mining" }],
+                AvailableNoteTypes =
+                [
+                    new AnkiNoteType
+                    {
+                        Id = 2,
+                        Name = "Custom",
+                        Fields = ["Key", "Word"],
+                    },
+                ],
+                FieldMappings = new Dictionary<string, string>
+                {
+                    ["Key"] = "{furigana-plain}",
+                    ["Word"] = "{expression}",
+                },
+                EmbedMedia = false,
+            },
+        };
+
     private static HttpResponseMessage JsonResponse(object? result) =>
         new(HttpStatusCode.OK)
         {
@@ -265,6 +359,7 @@ public sealed class AnkiServiceDuplicateLookupTests
     {
         public ConcurrentQueue<string> Actions { get; } = new();
         public ConcurrentQueue<int> CanAddBatchSizes { get; } = new();
+        public ConcurrentQueue<bool> AllowDuplicateValues { get; } = new();
 
         public Task<HttpResponseMessage> RespondAsync(JsonElement request)
         {
@@ -275,10 +370,19 @@ public sealed class AnkiServiceDuplicateLookupTests
                 var notes = request.GetProperty("params").GetProperty("notes");
                 CanAddBatchSizes.Enqueue(notes.GetArrayLength());
                 var result = notes.EnumerateArray()
-                    .Select(note => new
+                    .Select(note =>
                     {
-                        canAdd = note.GetProperty("fields").GetProperty("Front").GetString()
-                            != duplicateExpression,
+                        var allowDuplicate = note
+                            .GetProperty("options")
+                            .GetProperty("allowDuplicate")
+                            .GetBoolean();
+                        AllowDuplicateValues.Enqueue(allowDuplicate);
+                        return new
+                        {
+                            canAdd = allowDuplicate
+                                || note.GetProperty("fields").GetProperty("Front").GetString()
+                                    != duplicateExpression,
+                        };
                     })
                     .ToArray();
                 return Task.FromResult(JsonResponse(result));
@@ -289,6 +393,52 @@ public sealed class AnkiServiceDuplicateLookupTests
                 .Select(_ => new { result = new[] { noteId }, error = (string?)null })
                 .ToArray();
             return Task.FromResult(JsonResponse(actionResults));
+        }
+    }
+
+    /// <summary>
+    /// Models an Anki collection whose first field never holds the expression: canAddNotes
+    /// always says the note can be added, and only findNotes knows about the existing note.
+    /// </summary>
+    private sealed class FieldSearchOnlyDuplicateScenario(string duplicateExpression, long noteId)
+    {
+        private int _addRequestCount;
+
+        public ConcurrentQueue<string> Queries { get; } = new();
+        public int AddRequestCount => Volatile.Read(ref _addRequestCount);
+
+        public Task<HttpResponseMessage> RespondAsync(JsonElement request)
+        {
+            var action = request.GetProperty("action").GetString()!;
+            if (action == "canAddNotesWithErrorDetail")
+            {
+                var count = request.GetProperty("params").GetProperty("notes").GetArrayLength();
+                return Task.FromResult(JsonResponse(
+                    Enumerable.Range(0, count).Select(_ => new { canAdd = true }).ToArray()));
+            }
+
+            var results = request.GetProperty("params").GetProperty("actions")
+                .EnumerateArray()
+                .Select(nested =>
+                {
+                    if (nested.GetProperty("action").GetString() != "findNotes")
+                    {
+                        Interlocked.Increment(ref _addRequestCount);
+                        return new { result = (object?)null, error = (string?)"unexpected add" };
+                    }
+
+                    var query = nested.GetProperty("params").GetProperty("query").GetString() ?? "";
+                    Queries.Enqueue(query);
+                    return new
+                    {
+                        result = (object?)(query.Contains(duplicateExpression, StringComparison.Ordinal)
+                            ? new[] { noteId }
+                            : []),
+                        error = (string?)null,
+                    };
+                })
+                .ToArray();
+            return Task.FromResult(JsonResponse(results));
         }
     }
 

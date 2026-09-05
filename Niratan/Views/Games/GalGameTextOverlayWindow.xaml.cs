@@ -12,6 +12,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Niratan.Models.Games;
+using Niratan.Models.Settings;
 using Niratan.Services.Video;
 using Windows.Foundation;
 using Windows.Graphics;
@@ -46,6 +47,7 @@ public sealed partial class GalGameTextOverlayWindow : Window
     private PointInt32 _resizeStartCursor;
     private PointInt32 _resizeStartWindow;
     private SizeInt32 _resizeStartSize;
+    private GalGameOverlayAppearanceSettings _appearance = new();
 
     public GalGameTextOverlayWindow()
     {
@@ -123,6 +125,16 @@ public sealed partial class GalGameTextOverlayWindow : Window
         // is reserved for the sentence and its direct controls, so session
         // status prose is deliberately not rendered here.
         _ = status;
+    }
+
+    public void ApplyAppearance(GalGameOverlayAppearanceSettings appearance)
+    {
+        _appearance = (appearance ?? new GalGameOverlayAppearanceSettings()).Normalize();
+        var padding = Math.Clamp(_appearance.Padding, 0, 80);
+        CurrentTextHost.Margin = new Thickness(padding, 0, padding, Math.Max(8, padding * 0.6));
+        Surface.CornerRadius = new CornerRadius(_appearance.CornerRadius);
+        ApplySurfaceBackground();
+        CurrentTextCanvas.Invalidate();
     }
 
     public void ShowOverlay()
@@ -242,13 +254,14 @@ public sealed partial class GalGameTextOverlayWindow : Window
 
     private void ApplySurfaceBackground()
     {
-        var source = Application.Current.Resources["SolidBackgroundFillColorBaseBrush"]
-            as SolidColorBrush;
-        var color = source?.Color
-            ?? Windows.UI.Color.FromArgb(0xFF, 0x20, 0x20, 0x20);
-        color.A = _transparent ? (byte)0x32 : (byte)0xFF;
+        var color = ParseColor(
+            _appearance.BackgroundColor,
+            Windows.UI.Color.FromArgb(0xFF, 0, 0, 0));
+        color.A = _transparent
+            ? (byte)0
+            : (byte)Math.Round(Math.Clamp(_appearance.BackgroundOpacity, 0, 1) * 255);
         Surface.Background = new SolidColorBrush(color);
-        RootGrid.Background = new SolidColorBrush(color);
+        RootGrid.Background = new SolidColorBrush(Colors.Transparent);
     }
 
     private void CurrentTextCanvasDraw(
@@ -296,23 +309,60 @@ public sealed partial class GalGameTextOverlayWindow : Window
             GetScreenBounds(CurrentTextCanvas, hit.Bounds));
     }
 
-    private static VideoSubtitleCanvasRenderOptions CreateCurrentTextCanvasOptions(
+    private VideoSubtitleCanvasRenderOptions CreateCurrentTextCanvasOptions(
         GalGameTextLine line)
     {
-        var brush = Application.Current.Resources["TextFillColorPrimaryBrush"]
-            as SolidColorBrush;
+        var foreground = ParseColor(
+            _appearance.TextColor,
+            Colors.White);
+        var outline = ParseColor(
+            _appearance.OutlineColor,
+            Windows.UI.Color.FromArgb(0xE0, 0, 0, 0));
         return new VideoSubtitleCanvasRenderOptions(
             Text: line.Text,
-            FontFamily: "Segoe UI, Yu Gothic UI, Meiryo",
-            FontSize: 26,
-            FontWeight: 400,
-            Foreground: brush?.Color ?? Colors.White,
+            FontFamily: _appearance.FontFamily,
+            FontSize: _appearance.FontSize,
+            FontWeight: _appearance.Bold ? 700 : 400,
+            Foreground: foreground,
             ShadowRadius: 0,
             MaskBlurRadius: 0,
             SelectionStart: -1,
             SelectionLength: 0,
             SelectionBackground: Colors.Transparent,
-            SelectionForeground: brush?.Color ?? Colors.White);
+            SelectionForeground: foreground,
+            LetterSpacing: _appearance.LetterSpacing,
+            LineHeight: _appearance.LineHeight,
+            HorizontalAlignment: _appearance.HorizontalAlignment ==
+                GalGameOverlayHorizontalAlignment.Left ? "Left" : "Center",
+            VerticalAlignment: _appearance.VerticalAlignment ==
+                GalGameOverlayVerticalAlignment.Top ? "Top" : "Center",
+            OutlineColor: outline,
+            OutlineWidth: _appearance.OutlineWidth,
+            HorizontalPadding: 0);
+    }
+
+    private static Windows.UI.Color ParseColor(
+        string? value,
+        Windows.UI.Color fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return fallback;
+        var text = value.Trim().TrimStart('#');
+        if (text.Length == 6)
+            text = "FF" + text;
+        if (text.Length != 8 || !uint.TryParse(
+                text,
+                System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var argb))
+        {
+            return fallback;
+        }
+        return Windows.UI.Color.FromArgb(
+            (byte)(argb >> 24),
+            (byte)(argb >> 16),
+            (byte)(argb >> 8),
+            (byte)argb);
     }
 
     private void RootGridPointerPressed(object sender, PointerRoutedEventArgs e)

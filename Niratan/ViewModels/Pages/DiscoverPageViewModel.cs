@@ -7,10 +7,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Niratan.Helpers;
-using Niratan.Models.Nyaa;
 using Niratan.Models.Video;
-using Niratan.Services.Nyaa;
-using Niratan.Services.QBittorrent;
 using Niratan.Services.Settings;
 using Niratan.Services.UI;
 using Niratan.Services.Video;
@@ -19,33 +16,25 @@ using Niratan.Views.Pages;
 
 namespace Niratan.ViewModels.Pages;
 
+/// <summary>
+/// Owns only the discovery feeds, search and recommendation shelves. Detail and
+/// acquisition work live in their route-specific view models.
+/// </summary>
 public partial class DiscoverPageViewModel : ObservableObject, IDisposable
 {
+    private static readonly string[] AggregatedSearchProviderOrder = ["anilist", "tmdb"];
     private readonly IVideoDiscoveryService _discovery;
-    private readonly IVideoResourceSearchService _resources;
-    private readonly Lazy<INyaaDownloadManager> _nyaaDownloadManager;
-    private readonly IQbittorrentCredentialStore _credentials;
-    private readonly IQbittorrentDownloadCoordinator _downloads;
     private readonly ISettingsService _settings;
     private readonly INavigationService _navigation;
     private CancellationTokenSource _cts = new();
+    private CancellationTokenSource? _resultCts;
     private bool _recommendationsLoaded;
     private bool _disposed;
     private bool _loadingMore;
-    private bool _isRecommendationsTab;
-    private CancellationTokenSource? _detailsCts;
-    private Task<INyaaDownloadManager>? _nyaaDownloadManagerTask;
     private int _explorePage = 1;
     private int? _exploreTotalPages;
-
-    [ObservableProperty]
-    public partial bool IsExploreVisible { get; set; } = true;
-
-    [ObservableProperty]
-    public partial bool IsRecommendationsVisible { get; set; }
-
-    [ObservableProperty]
-    public partial bool IsDetailsVisible { get; set; }
+    private int _resultGeneration;
+    private DiscoverResultMode _resultMode = DiscoverResultMode.Recommendations;
 
     [ObservableProperty]
     public partial bool IsLoading { get; set; }
@@ -57,29 +46,24 @@ public partial class DiscoverPageViewModel : ObservableObject, IDisposable
     public partial bool IsLoadingMore { get; set; }
 
     [ObservableProperty]
-    public partial bool IsLoadingDetails { get; set; }
-
-    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasError))]
     public partial string? ErrorMessage { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasProviderWarning))]
+    public partial string? ProviderWarning { get; set; }
+
+    [ObservableProperty]
     public partial string StatusText { get; set; } = "";
-
-    [ObservableProperty]
-    public partial VideoDiscoveryProviderOption? SelectedProvider { get; set; }
-
-    [ObservableProperty]
-    public partial VideoDiscoveryFeed? SelectedExploreFeed { get; set; }
-
-    [ObservableProperty]
-    public partial VideoDiscoveryMediaKindOption? SelectedMediaKind { get; set; }
 
     [ObservableProperty]
     public partial string SearchText { get; set; } = "";
 
     [ObservableProperty]
     public partial bool IsSearchMode { get; set; }
+
+    [ObservableProperty]
+    public partial string ResultsHeading { get; set; } = "";
 
     [ObservableProperty]
     public partial string YearText { get; set; } = "";
@@ -91,85 +75,35 @@ public partial class DiscoverPageViewModel : ObservableObject, IDisposable
     public partial VideoDiscoverySortOption? SelectedSortOption { get; set; }
 
     [ObservableProperty]
-    public partial string ResourceQuery { get; set; } = "";
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ResourceSearchHeading))]
-    [NotifyPropertyChangedFor(nameof(ResourceSearchButtonText))]
-    public partial bool IsSubtitleSearch { get; set; }
-
-    [ObservableProperty]
-    public partial NyaaSearchCategory SelectedResourceCategory { get; set; }
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsSelectedDetailsSubscribed))]
-    [NotifyPropertyChangedFor(nameof(SubscriptionButtonText))]
-    public partial VideoDiscoveryDetailsViewModel? SelectedDetails { get; set; }
-
-    [ObservableProperty]
     public partial ObservableCollection<VideoDiscoveryCardViewModel> ExploreItems { get; set; } = [];
 
     [ObservableProperty]
     public partial ObservableCollection<VideoDiscoverySectionViewModel> RecommendationSections { get; set; } = [];
 
-    [ObservableProperty]
-    public partial ObservableCollection<NyaaTorrentItemViewModel> ResourceResults { get; set; } = [];
-
     public ObservableCollection<VideoDiscoveryProviderOption> Providers { get; } = [];
-    public ObservableCollection<VideoDiscoveryFeed> ExploreFeeds { get; } = [];
-    public ObservableCollection<VideoDiscoveryMediaKindOption> MediaKinds { get; } = [];
     public IReadOnlyList<VideoDiscoverySortOption> SortOptions { get; } =
     [
         new("popularity.desc", ResourceStringHelper.GetString("DiscoverSortPopularity", "Popularity")),
         new("vote_average.desc", ResourceStringHelper.GetString("DiscoverSortRating", "Rating")),
-        new("primary_release_date.desc", ResourceStringHelper.GetString("DiscoverSortMovieRelease", "Movie release date")),
-        new("first_air_date.desc", ResourceStringHelper.GetString("DiscoverSortSeriesAir", "Series first air date")),
-        new("revenue.desc", ResourceStringHelper.GetString("DiscoverSortRevenue", "Revenue")),
+        new("release_date.desc", ResourceStringHelper.GetString("DiscoverSortRelease", "Release date")),
     ];
-    public IReadOnlyList<NyaaSearchCategory> ResourceCategories { get; } =
-    [
-        new("0_0", ResourceStringHelper.GetString("NyaaCategoryAll", "All categories")),
-        new("1_0", ResourceStringHelper.GetString("NyaaCategoryAnime", "Anime")),
-        new("4_0", ResourceStringHelper.GetString("NyaaCategoryLiveAction", "Live action")),
-    ];
+
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
-    public bool IsSelectedDetailsSubscribed =>
-        SelectedDetails is not null && IsSubscribed(SelectedDetails.Identity);
-    public string SubscriptionButtonText => IsSelectedDetailsSubscribed
-        ? ResourceStringHelper.GetString("DiscoverUnsubscribeButton", "Unsubscribe")
-        : ResourceStringHelper.GetString("DiscoverSubscribeButton", "Subscribe");
-    public string ResourceSearchHeading => IsSubtitleSearch
-        ? ResourceStringHelper.GetString("DiscoverSubtitleHeading", "Search subtitles")
-        : ResourceStringHelper.GetString("DiscoverResourceHeading", "Search Nyaa resources");
-    public string ResourceSearchButtonText => IsSubtitleSearch
-        ? ResourceStringHelper.GetString("DiscoverSearchSubtitlesButton", "Search subtitles")
-        : ResourceStringHelper.GetString("DiscoverSearchNyaaButton", "Search Nyaa");
-    public string SearchResourcesButtonText =>
-        ResourceStringHelper.GetString("DiscoverSearchResourcesButton", "Search resources");
-    public string SearchSubtitlesButtonText =>
-        ResourceStringHelper.GetString("DiscoverSearchSubtitlesButton", "Search subtitles");
+    public bool HasProviderWarning => !string.IsNullOrWhiteSpace(ProviderWarning);
     public bool HasMoreExplorePages =>
-        SelectedExploreFeed?.SupportsPaging == true
+        _resultMode == DiscoverResultMode.Explore
         && ExploreItems.Count > 0
         && (_exploreTotalPages is null || _explorePage < _exploreTotalPages);
+    public string SortBy => SelectedSortOption?.Value ?? "popularity.desc";
 
     public DiscoverPageViewModel(
         IVideoDiscoveryService discovery,
-        IVideoResourceSearchService resources,
-        Lazy<INyaaDownloadManager> nyaaDownloadManager,
-        IQbittorrentCredentialStore credentials,
-        IQbittorrentDownloadCoordinator downloads,
         ISettingsService settings,
         INavigationService navigation)
     {
         _discovery = discovery;
-        _resources = resources;
-        _nyaaDownloadManager = nyaaDownloadManager;
-        _credentials = credentials;
-        _downloads = downloads;
         _settings = settings;
         _navigation = navigation;
-        SelectedResourceCategory = ResourceCategories[0];
         SelectedSortOption = SortOptions[0];
     }
 
@@ -177,7 +111,6 @@ public partial class DiscoverPageViewModel : ObservableObject, IDisposable
     {
         if (_disposed)
             return;
-
         if (_cts.IsCancellationRequested)
         {
             _cts.Dispose();
@@ -186,15 +119,17 @@ public partial class DiscoverPageViewModel : ObservableObject, IDisposable
 
         ConfigureProviders();
         _recommendationsLoaded = false;
-        IsSearchMode = false;
-        if (SelectedProvider is not null)
+        if (Providers.Count > 0)
             await LoadRecommendationsAsync();
     }
 
     public void OnNavigatedFrom()
     {
         if (!_disposed)
+        {
+            CancelPendingResultRequest();
             _cts.Cancel();
+        }
     }
 
     private void ConfigureProviders()
@@ -202,118 +137,48 @@ public partial class DiscoverPageViewModel : ObservableObject, IDisposable
         Providers.Clear();
         var configuredOrder = _settings.Current.DiscoverySettings.ExploreProviderOrder;
         IEnumerable<string> order = configuredOrder.Count == 0
-            ? new[] { "tmdb", "bangumi", "anilist" }
-            : configuredOrder;
-        foreach (var id in order.Concat(["tmdb", "bangumi", "anilist"]).Distinct(StringComparer.OrdinalIgnoreCase))
+            ? AggregatedSearchProviderOrder
+            : configuredOrder.Where(id => AggregatedSearchProviderOrder.Contains(id, StringComparer.OrdinalIgnoreCase));
+        foreach (var id in order.Concat(AggregatedSearchProviderOrder).Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            if (!IsProviderEnabled(id) || _discovery.GetFeeds(id, VideoDiscoveryFeedKind.Explore).Count == 0)
+            if (!IsProviderEnabled(id))
                 continue;
             Providers.Add(new VideoDiscoveryProviderOption(id, ProviderName(id)));
         }
-        SelectedProvider = Providers.FirstOrDefault();
-        UpdateExploreFeeds();
     }
+
+    private string[] GetEnabledAggregateProviderIds() => AggregatedSearchProviderOrder
+        .Where(IsProviderEnabled)
+        .ToArray();
 
     private bool IsProviderEnabled(string id) => id.ToLowerInvariant() switch
     {
         "tmdb" => _settings.Current.VideoSettings.Metadata.TmdbEnabled,
         "anilist" => _settings.Current.VideoSettings.Metadata.AniListEnabled,
-        "bangumi" => _settings.Current.VideoSettings.Metadata.BangumiEnabled,
         _ => false,
     };
 
     private static string ProviderName(string id) => id.ToLowerInvariant() switch
     {
         "tmdb" => "TMDB",
-        "bangumi" => "Bangumi",
         "anilist" => "AniList",
         _ => id,
     };
 
-    partial void OnSelectedProviderChanged(
-        VideoDiscoveryProviderOption? oldValue,
-        VideoDiscoveryProviderOption? newValue)
-    {
-        UpdateExploreFeeds();
-        OnPropertyChanged(nameof(HasMoreExplorePages));
-    }
-
-    private void UpdateExploreFeeds()
-    {
-        ExploreFeeds.Clear();
-        if (SelectedProvider is null)
-            return;
-        ExploreItems.Clear();
-        _explorePage = 1;
-        _exploreTotalPages = null;
-        foreach (var feed in _discovery.GetFeeds(SelectedProvider.Id, VideoDiscoveryFeedKind.Explore))
-        {
-            ExploreFeeds.Add(feed with
-            {
-                DisplayName = ResourceStringHelper.GetString(
-                    $"DiscoverFeed_{feed.ProviderId}_{feed.Id}",
-                    feed.DisplayName),
-            });
-        }
-        SelectedExploreFeed = ExploreFeeds.FirstOrDefault();
-        UpdateMediaKinds();
-    }
-
-    partial void OnSelectedExploreFeedChanged(VideoDiscoveryFeed? oldValue, VideoDiscoveryFeed? newValue)
-    {
-        UpdateMediaKinds();
-        OnPropertyChanged(nameof(HasMoreExplorePages));
-    }
-
     partial void OnSelectedSortOptionChanged(
         VideoDiscoverySortOption? oldValue,
-        VideoDiscoverySortOption? newValue)
-    {
-        OnPropertyChanged(nameof(SortBy));
-    }
-
-    public string SortBy => SelectedSortOption?.Value ?? "popularity.desc";
-
-    private void UpdateMediaKinds()
-    {
-        MediaKinds.Clear();
-        if (SelectedExploreFeed is null)
-            return;
-        foreach (var kind in SelectedExploreFeed.SupportedMediaKinds.Distinct())
-            MediaKinds.Add(new VideoDiscoveryMediaKindOption(kind, MediaKindName(kind)));
-        SelectedMediaKind = MediaKinds.FirstOrDefault();
-    }
-
-    private static string MediaKindName(VideoMetadataMediaKind kind) => kind switch
-    {
-        VideoMetadataMediaKind.Movie => ResourceStringHelper.GetString("DiscoverMovie", "Movie"),
-        VideoMetadataMediaKind.Series => ResourceStringHelper.GetString("DiscoverSeries", "Series"),
-        VideoMetadataMediaKind.Anime => ResourceStringHelper.GetString("DiscoverAnime", "Anime"),
-        _ => kind.ToString(),
-    };
-
-    [RelayCommand]
-    private void SelectExplore()
-    {
-        IsExploreVisible = true;
-        IsRecommendationsVisible = false;
-        IsDetailsVisible = false;
-        _isRecommendationsTab = false;
-    }
+        VideoDiscoverySortOption? newValue) => OnPropertyChanged(nameof(SortBy));
 
     [RelayCommand]
     private void OpenVideoSettings() => _navigation.Navigate(typeof(VideoSettingsPage));
 
     [RelayCommand]
-    private async Task SelectRecommendationsAsync()
-    {
-        IsExploreVisible = false;
-        IsRecommendationsVisible = true;
-        IsDetailsVisible = false;
-        _isRecommendationsTab = true;
-        if (!_recommendationsLoaded)
-            await LoadRecommendationsAsync();
-    }
+    private void OpenDownloadTasks() =>
+        _navigation.Navigate(typeof(DownloadsPage), DownloadsPageSection.Tasks);
+
+    [RelayCommand]
+    private void OpenSubscriptions() =>
+        _navigation.Navigate(typeof(DownloadsPage), DownloadsPageSection.Subscriptions);
 
     [RelayCommand]
     private Task ApplyFiltersAsync() => LoadExploreAsync();
@@ -322,28 +187,46 @@ public partial class DiscoverPageViewModel : ObservableObject, IDisposable
     private Task RefreshAsync()
     {
         _discovery.ClearCache();
-        return IsSearchMode ? SearchVideosAsync() : LoadRecommendationsAsync(true);
+        return _resultMode switch
+        {
+            DiscoverResultMode.Search => SearchVideosAsync(),
+            DiscoverResultMode.Explore => LoadExploreAsync(),
+            _ => LoadRecommendationsAsync(true),
+        };
     }
 
-    [RelayCommand]
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task SearchVideosAsync()
     {
-        if (_disposed || SelectedProvider is null || SelectedMediaKind is null)
+        if (_disposed)
             return;
         var query = SearchText.Trim();
         if (query.Length == 0)
         {
-            IsSearchMode = false;
+            ExploreItems.Clear();
+            ProviderWarning = null;
             await LoadRecommendationsAsync(true);
             return;
         }
 
+        var generation = BeginResultRequest(DiscoverResultMode.Search, out var requestCts);
         IsLoading = true;
         ErrorMessage = null;
+        ProviderWarning = null;
+        StatusText = "";
+        _explorePage = 1;
+        _exploreTotalPages = 1;
+        ExploreItems.Clear();
+        OnPropertyChanged(nameof(HasMoreExplorePages));
         try
         {
-            var result = await _discovery.SearchAsync(
-                SelectedProvider.Id, query, SelectedMediaKind.Value, _cts.Token);
+            var result = await _discovery.SearchAggregatedAsync(
+                GetEnabledAggregateProviderIds(),
+                query,
+                VideoDiscoverySearchCategory.All,
+                requestCts.Token);
+            if (!IsCurrentResultRequest(generation, requestCts))
+                return;
             if (result.IsCancelled)
                 return;
             if (!result.IsSuccess || result.Value is null)
@@ -353,33 +236,51 @@ public partial class DiscoverPageViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            _explorePage = 1;
-            _exploreTotalPages = 1;
-            IsSearchMode = true;
             ExploreItems = new ObservableCollection<VideoDiscoveryCardViewModel>(
                 result.Value.Items.Select(item => new VideoDiscoveryCardViewModel(item)));
+            ProviderWarning = result.Value.Error;
             StatusText = ResourceStringHelper.FormatString(
-                "DiscoverResultSummary", "Showing {0} results.", ExploreItems.Count);
+                "DiscoverResultSummary",
+                "Showing {0} results.",
+                ExploreItems.Count);
             OnPropertyChanged(nameof(HasMoreExplorePages));
         }
-        catch (OperationCanceledException) when (_cts.IsCancellationRequested) { }
-        catch (Exception ex) { ErrorMessage = ex.Message; }
-        finally { IsLoading = false; }
+        catch (OperationCanceledException) when (requestCts.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            if (IsCurrentResultRequest(generation, requestCts))
+                ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            if (IsCurrentResultRequest(generation, requestCts))
+                IsLoading = false;
+        }
     }
 
     [RelayCommand]
     private async Task LoadMoreAsync()
     {
-        if (_loadingMore || !HasMoreExplorePages || SelectedProvider is null || SelectedExploreFeed is null || SelectedMediaKind is null)
+        if (_loadingMore
+            || !HasMoreExplorePages
+            || _resultMode != DiscoverResultMode.Explore)
             return;
+
+        var requestCts = _resultCts;
+        if (requestCts is null || requestCts.IsCancellationRequested)
+            return;
+        var generation = Volatile.Read(ref _resultGeneration);
         _loadingMore = true;
         IsLoadingMore = true;
         try
         {
-            var result = await _discovery.GetPageAsync(
-                SelectedProvider.Id,
+            var result = await _discovery.GetAggregatedPageAsync(
+                GetEnabledAggregateProviderIds(),
                 BuildExploreRequest(_explorePage + 1),
-                _cts.Token);
+                requestCts.Token);
+            if (!IsCurrentResultRequest(generation, requestCts)
+                || _resultMode != DiscoverResultMode.Explore)
+                return;
             if (!result.IsSuccess || result.Value is null)
             {
                 if (!result.IsCancelled)
@@ -388,33 +289,50 @@ public partial class DiscoverPageViewModel : ObservableObject, IDisposable
             }
             _explorePage = result.Value.Page;
             _exploreTotalPages = result.Value.TotalPages;
+            ProviderWarning = result.Value.Error;
             foreach (var item in result.Value.Items)
                 ExploreItems.Add(new VideoDiscoveryCardViewModel(item));
-            OnPropertyChanged(nameof(HasMoreExplorePages));
             StatusText = ResourceStringHelper.FormatString(
-                "DiscoverResultSummary", "Showing {0} results.", ExploreItems.Count);
+                "DiscoverResultSummary",
+                "Showing {0} results.",
+                ExploreItems.Count);
+            OnPropertyChanged(nameof(HasMoreExplorePages));
         }
-        catch (OperationCanceledException) when (_cts.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (requestCts.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            if (IsCurrentResultRequest(generation, requestCts))
+                ErrorMessage = ex.Message;
+        }
         finally
         {
-            _loadingMore = false;
-            IsLoadingMore = false;
+            if (IsCurrentResultRequest(generation, requestCts))
+            {
+                _loadingMore = false;
+                IsLoadingMore = false;
+            }
         }
     }
 
     private async Task LoadExploreAsync()
     {
-        if (_disposed || SelectedProvider is null || SelectedExploreFeed is null || SelectedMediaKind is null)
+        if (_disposed)
             return;
-        IsSearchMode = false;
+        var generation = BeginResultRequest(DiscoverResultMode.Explore, out var requestCts);
         IsLoading = true;
         ErrorMessage = null;
+        ProviderWarning = null;
+        StatusText = "";
+        ExploreItems.Clear();
+        OnPropertyChanged(nameof(HasMoreExplorePages));
         try
         {
-            var result = await _discovery.GetPageAsync(
-                SelectedProvider.Id,
+            var result = await _discovery.GetAggregatedPageAsync(
+                GetEnabledAggregateProviderIds(),
                 BuildExploreRequest(1),
-                _cts.Token);
+                requestCts.Token);
+            if (!IsCurrentResultRequest(generation, requestCts))
+                return;
             if (result.IsCancelled)
                 return;
             if (!result.IsSuccess || result.Value is null)
@@ -427,309 +345,113 @@ public partial class DiscoverPageViewModel : ObservableObject, IDisposable
             }
             _explorePage = result.Value.Page;
             _exploreTotalPages = result.Value.TotalPages;
+            ProviderWarning = result.Value.Error;
             ExploreItems = new ObservableCollection<VideoDiscoveryCardViewModel>(
                 result.Value.Items.Select(item => new VideoDiscoveryCardViewModel(item)));
             StatusText = ResourceStringHelper.FormatString(
-                "DiscoverResultSummary", "Showing {0} results.", ExploreItems.Count);
+                "DiscoverResultSummary",
+                "Showing {0} results.",
+                ExploreItems.Count);
             OnPropertyChanged(nameof(HasMoreExplorePages));
         }
-        catch (OperationCanceledException) when (_cts.IsCancellationRequested) { }
-        finally { IsLoading = false; }
+        catch (OperationCanceledException) when (requestCts.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            if (IsCurrentResultRequest(generation, requestCts))
+                ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            if (IsCurrentResultRequest(generation, requestCts))
+                IsLoading = false;
+        }
     }
 
-    private VideoDiscoveryRequest BuildExploreRequest(int page) => new(
-        SelectedExploreFeed!.Id,
-        SelectedMediaKind!.Value,
-        page,
-        int.TryParse(YearText, out var year) ? year : null,
-        string.IsNullOrWhiteSpace(GenreId) ? null : GenreId.Trim(),
-        string.IsNullOrWhiteSpace(SortBy) ? null : SortBy,
-        null,
-        "ja-JP",
-        "JP");
+    private VideoDiscoveryAggregateRequest BuildExploreRequest(int page) => new(
+        Page: page,
+        PageSize: 20,
+        Year: int.TryParse(YearText, out var year) ? year : null,
+        GenreId: string.IsNullOrWhiteSpace(GenreId) ? null : GenreId.Trim(),
+        SortBy: string.IsNullOrWhiteSpace(SortBy) ? null : SortBy,
+        Language: "ja-JP",
+        Region: "JP");
 
     private async Task LoadRecommendationsAsync(bool refresh = false)
     {
-        if (_disposed)
+        if (_disposed || (_recommendationsLoaded && !refresh))
             return;
+        var generation = BeginResultRequest(
+            DiscoverResultMode.Recommendations,
+            out var requestCts);
         IsLoadingRecommendations = true;
         ErrorMessage = null;
+        ProviderWarning = null;
+        StatusText = "";
+        ExploreItems.Clear();
         if (refresh)
             _recommendationsLoaded = false;
         try
         {
-            var configured = _settings.Current.DiscoverySettings.EnabledRecommendationFeeds;
-            var jobs = new List<(VideoDiscoveryProviderOption Provider, VideoDiscoveryFeed Feed, VideoMetadataMediaKind Kind)>();
-            foreach (var provider in Providers)
-            {
-                foreach (var feed in _discovery.GetFeeds(provider.Id, VideoDiscoveryFeedKind.Recommendation))
-                {
-                    if (configured.TryGetValue(provider.Id + ":" + feed.Id, out var enabled) && !enabled)
-                        continue;
-                    var kind = feed.SupportedMediaKinds.FirstOrDefault();
-                    jobs.Add((provider, feed, kind));
-                }
-            }
-            var sections = (await Task.WhenAll(jobs.Select(async job =>
-            {
-                try
-                {
-                    var result = await _discovery.GetPageAsync(
-                        job.Provider.Id,
-                        new VideoDiscoveryRequest(job.Feed.Id, job.Kind, 1, Language: "ja-JP", Region: "JP"),
-                        _cts.Token);
-                    return result.IsSuccess && result.Value is { Items.Length: > 0 } page
-                        ? new VideoDiscoverySectionViewModel(job.Feed, page.Items)
-                        : null;
-                }
-                catch (OperationCanceledException) when (_cts.IsCancellationRequested)
-                {
-                    return null;
-                }
-                catch
-                {
-                    return null;
-                }
-            }))).Where(section => section is not null).Cast<VideoDiscoverySectionViewModel>().ToList();
-            RecommendationSections = new ObservableCollection<VideoDiscoverySectionViewModel>(sections);
-            _recommendationsLoaded = true;
-        }
-        catch (OperationCanceledException) when (_cts.IsCancellationRequested) { }
-        catch (Exception ex) { ErrorMessage = ex.Message; }
-        finally { IsLoadingRecommendations = false; }
-    }
-
-    [RelayCommand]
-    private void OpenDetails(VideoDiscoveryCardViewModel card)
-    {
-        if (card is null || _disposed)
-            return;
-
-        _detailsCts?.Cancel();
-        var detailsCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
-        _detailsCts = detailsCts;
-        ErrorMessage = null;
-        ResourceResults.Clear();
-        ResourceQuery = _resources.BuildDefaultQuery(card.Identity);
-        IsSubtitleSearch = false;
-        var placeholderDetails = new VideoDiscoveryDetailsViewModel(card.Item);
-        SelectedDetails = placeholderDetails;
-        IsExploreVisible = false;
-        IsRecommendationsVisible = false;
-        IsDetailsVisible = true;
-        IsLoadingDetails = true;
-
-        _ = LoadDetailsAsync(card.Identity, placeholderDetails.Artwork, detailsCts);
-    }
-
-    private async Task LoadDetailsAsync(
-        VideoMetadataCandidate identity,
-        VideoDiscoveryArtwork fallbackArtwork,
-        CancellationTokenSource detailsCts)
-    {
-        try
-        {
-            // Let the page visibility and placeholder state render before any
-            // provider performs request setup or cache work on the UI thread.
-            await Task.Yield();
-            var result = await Task.Run(
-                () => _discovery.GetDetailsAsync(identity, detailsCts.Token),
-                detailsCts.Token);
-            if (result.IsCancelled
-                || !ReferenceEquals(_detailsCts, detailsCts)
-                || detailsCts.IsCancellationRequested)
+            var result = await _discovery.GetAggregatedRecommendationsAsync(
+                GetEnabledAggregateProviderIds(),
+                requestCts.Token);
+            if (!IsCurrentResultRequest(generation, requestCts))
                 return;
-            if (!result.IsSuccess || result.Value is null)
-            {
-                if (ReferenceEquals(_detailsCts, detailsCts))
-                    ErrorMessage = result.Error;
-                return;
-            }
-            // BitmapImage is a WinUI object and must be created on the UI thread.
-            // Keep provider/cache work off-thread, but project the completed details
-            // back on the captured page context before publishing them to XAML.
-            var detailsViewModel = new VideoDiscoveryDetailsViewModel(
-                result.Value,
-                fallbackArtwork);
-            if (!ReferenceEquals(_detailsCts, detailsCts)
-                || detailsCts.IsCancellationRequested)
-                return;
-            SelectedDetails = detailsViewModel;
-            ResourceQuery = _resources.BuildDefaultQuery(SelectedDetails.Identity);
-        }
-        catch (OperationCanceledException) when (detailsCts.IsCancellationRequested) { }
-        catch (Exception ex) { ErrorMessage = ex.Message; }
-        finally
-        {
-            if (ReferenceEquals(_detailsCts, detailsCts))
-            {
-                _detailsCts = null;
-                IsLoadingDetails = false;
-            }
-            detailsCts.Dispose();
-        }
-    }
-
-    [RelayCommand]
-    private void CloseDetails()
-    {
-        _detailsCts?.Cancel();
-        IsLoadingDetails = false;
-        IsDetailsVisible = false;
-        IsRecommendationsVisible = _isRecommendationsTab;
-        IsExploreVisible = !_isRecommendationsTab;
-        SelectedDetails = null;
-    }
-
-    [RelayCommand]
-    private Task SearchResourcesAsync() => SearchResourceResultsAsync(false);
-
-    [RelayCommand]
-    private Task SearchSubtitlesAsync() => SearchResourceResultsAsync(true);
-
-    private async Task SearchResourceResultsAsync(bool subtitles)
-    {
-        if (SelectedDetails is null)
-            return;
-        IsSubtitleSearch = subtitles;
-        var query = ResourceQuery.Trim();
-        if (subtitles)
-        {
-            var defaultQuery = _resources.BuildDefaultQuery(SelectedDetails.Identity);
-            query = query.Length == 0 || query.Equals(defaultQuery, StringComparison.OrdinalIgnoreCase)
-                ? _resources.BuildSubtitleQuery(SelectedDetails.Identity)
-                : query.Contains("srt", StringComparison.OrdinalIgnoreCase)
-                    || query.Contains("subtitle", StringComparison.OrdinalIgnoreCase)
-                    || query.Contains("字幕", StringComparison.Ordinal)
-                    ? query
-                    : $"{query} srt";
-            ResourceQuery = query;
-        }
-        IsLoading = true;
-        ErrorMessage = null;
-        try
-        {
-            var result = await _resources.SearchAsync(new VideoResourceSearchRequest(
-                SelectedDetails.Identity,
-                query,
-                SelectedResourceCategory.Code), _cts.Token);
             if (result.IsCancelled)
                 return;
             if (!result.IsSuccess || result.Value is null)
             {
                 ErrorMessage = result.Error;
+                RecommendationSections.Clear();
                 return;
             }
-            ResourceResults = new ObservableCollection<NyaaTorrentItemViewModel>(
-                result.Value.Select(item => new NyaaTorrentItemViewModel(item)));
-            StatusText = ResourceStringHelper.FormatString(
-                subtitles ? "DiscoverSubtitleSummary" : "DiscoverResourceSummary",
-                subtitles ? "Showing {0} subtitle results." : "Showing {0} Nyaa results.",
-                ResourceResults.Count);
+
+            ProviderWarning = string.Join(
+                Environment.NewLine,
+                result.Value
+                    .Select(page => page.Error)
+                    .Where(error => !string.IsNullOrWhiteSpace(error))
+                    .Distinct(StringComparer.CurrentCultureIgnoreCase));
+            if (string.IsNullOrWhiteSpace(ProviderWarning))
+                ProviderWarning = null;
+            RecommendationSections = new ObservableCollection<VideoDiscoverySectionViewModel>(
+                result.Value
+                    .Where(page => page.Items.Length > 0)
+                    .Select(page => new VideoDiscoverySectionViewModel(
+                        CreateAggregateRecommendationFeed(page.FeedId),
+                        page.Items)));
+            _recommendationsLoaded = true;
         }
-        catch (OperationCanceledException) when (_cts.IsCancellationRequested) { }
-        catch (Exception ex) { ErrorMessage = ex.Message; }
-        finally { IsLoading = false; }
-    }
-
-    [RelayCommand]
-    private async Task ToggleSubscriptionAsync()
-    {
-        if (SelectedDetails is null)
-            return;
-
-        var settings = _settings.Current.DiscoverySettings.Clone();
-        var key = SubscriptionKey(SelectedDetails.Identity);
-        var existing = settings.SubscribedVideoKeys.FirstOrDefault(
-            value => value.Equals(key, StringComparison.OrdinalIgnoreCase));
-        if (existing is null)
-            settings.SubscribedVideoKeys.Add(key);
-        else
-            settings.SubscribedVideoKeys.Remove(existing);
-
-        _settings.Set(value => value.DiscoverySettings, settings);
-        OnPropertyChanged(nameof(IsSelectedDetailsSubscribed));
-        OnPropertyChanged(nameof(SubscriptionButtonText));
-        await _settings.SaveAsync();
-    }
-
-    private bool IsSubscribed(VideoMetadataCandidate identity) =>
-        (_settings.Current.DiscoverySettings.SubscribedVideoKeys ?? []).Any(
-            value => value.Equals(SubscriptionKey(identity), StringComparison.OrdinalIgnoreCase));
-
-    private static string SubscriptionKey(VideoMetadataCandidate identity) =>
-        $"{identity.ProviderId}:{identity.ProviderItemId}";
-
-    [RelayCommand]
-    private async Task DownloadAndImportResource(NyaaTorrentItemViewModel row)
-    {
-        if (row is null || !row.CanDownload)
-            return;
-
-        try
-        {
-            var downloadManager = await GetNyaaDownloadManagerAsync(_cts.Token);
-            downloadManager.Enqueue(row.Item);
-            row.IsImported = true;
-            row.Status = ResourceStringHelper.GetString(
-                "NyaaStatusQueued", "Added to downloads");
-        }
+        catch (OperationCanceledException) when (requestCts.IsCancellationRequested) { }
         catch (Exception ex)
         {
-            row.Status = ex.Message;
-            ErrorMessage = ex.Message;
+            if (IsCurrentResultRequest(generation, requestCts))
+                ErrorMessage = ex.Message;
         }
-    }
-
-    private Task<INyaaDownloadManager> GetNyaaDownloadManagerAsync(CancellationToken ct)
-    {
-        if (_nyaaDownloadManagerTask is not null)
-            return _nyaaDownloadManagerTask;
-
-        return _nyaaDownloadManagerTask = Task.Run(
-            () => _nyaaDownloadManager.Value,
-            ct);
-    }
-
-    [RelayCommand]
-    private async Task AddResourceToQbAsync(NyaaTorrentItemViewModel row)
-    {
-        if (row is null || !row.CanDownload)
-            return;
-        if (!await HasQbCredentialsAsync())
+        finally
         {
-            row.Status = ResourceStringHelper.GetString(
-                "DiscoverQbMissing", "Configure qBittorrent in Downloads first.");
-            ErrorMessage = row.Status;
-            return;
+            if (IsCurrentResultRequest(generation, requestCts))
+                IsLoadingRecommendations = false;
         }
-        row.IsDownloading = true;
-        row.Status = ResourceStringHelper.GetString("DownloadsAddingStatus", "Adding to qBittorrent…");
-        try
-        {
-            var result = await _downloads.AddAsync(row.Item, _cts.Token);
-            if (result.IsSuccess)
-            {
-                row.IsImported = true;
-                row.Status = ResourceStringHelper.GetString("DownloadsAddedStatus", "Added to qBittorrent");
-            }
-            else if (!result.IsCancelled)
-            {
-                row.Status = result.Error ?? ResourceStringHelper.GetString(
-                    "DownloadsAddFailedStatus", "Could not add torrent.");
-                ErrorMessage = result.Error;
-            }
-        }
-        catch (OperationCanceledException) when (_cts.IsCancellationRequested) { }
-        catch (Exception ex) { row.Status = ex.Message; ErrorMessage = ex.Message; }
-        finally { row.IsDownloading = false; }
     }
 
-    private async Task<bool> HasQbCredentialsAsync()
+    private static VideoDiscoveryFeed CreateAggregateRecommendationFeed(string feedId)
     {
-        if (!_credentials.HasCredentials)
-            return false;
-        return await _credentials.LoadAsync(_cts.Token) is not null;
+        var normalized = feedId.ToLowerInvariant();
+        return new VideoDiscoveryFeed(
+            "aggregate",
+            normalized,
+            normalized,
+            VideoDiscoveryFeedKind.Recommendation,
+            normalized == "seasonal"
+                ? [VideoMetadataMediaKind.Anime]
+                : [
+                    VideoMetadataMediaKind.Movie,
+                    VideoMetadataMediaKind.Series,
+                    VideoMetadataMediaKind.Anime,
+                ],
+            SupportsPaging: false,
+            SupportsFilters: false);
     }
 
     public void Dispose()
@@ -737,9 +459,57 @@ public partial class DiscoverPageViewModel : ObservableObject, IDisposable
         if (_disposed)
             return;
         _disposed = true;
+        CancelPendingResultRequest();
         _cts.Cancel();
-        _detailsCts?.Cancel();
         _cts.Dispose();
-        _detailsCts?.Dispose();
+    }
+
+    private int BeginResultRequest(
+        DiscoverResultMode mode,
+        out CancellationTokenSource requestCts)
+    {
+        var generation = Interlocked.Increment(ref _resultGeneration);
+        requestCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+        var previousRequest = Interlocked.Exchange(ref _resultCts, requestCts);
+        previousRequest?.Cancel();
+        previousRequest?.Dispose();
+        _resultMode = mode;
+        IsSearchMode = mode != DiscoverResultMode.Recommendations;
+        ResultsHeading = mode == DiscoverResultMode.Search
+            ? ResourceStringHelper.GetString("DiscoverSearchResultsHeadingText", "Search results")
+            : ResourceStringHelper.GetString("DiscoverExploreResultsHeadingText", "Discover");
+        IsLoading = false;
+        IsLoadingRecommendations = false;
+        IsLoadingMore = false;
+        _loadingMore = false;
+        OnPropertyChanged(nameof(HasMoreExplorePages));
+        return generation;
+    }
+
+    private bool IsCurrentResultRequest(
+        int generation,
+        CancellationTokenSource requestCts) =>
+        generation == Volatile.Read(ref _resultGeneration)
+        && ReferenceEquals(Volatile.Read(ref _resultCts), requestCts)
+        && !requestCts.IsCancellationRequested;
+
+    private void CancelPendingResultRequest()
+    {
+        Interlocked.Increment(ref _resultGeneration);
+        var requestCts = Interlocked.Exchange(ref _resultCts, null);
+        requestCts?.Cancel();
+        requestCts?.Dispose();
+        IsLoading = false;
+        IsLoadingRecommendations = false;
+        IsLoadingMore = false;
+        _loadingMore = false;
+        OnPropertyChanged(nameof(HasMoreExplorePages));
+    }
+
+    private enum DiscoverResultMode
+    {
+        Recommendations,
+        Search,
+        Explore,
     }
 }

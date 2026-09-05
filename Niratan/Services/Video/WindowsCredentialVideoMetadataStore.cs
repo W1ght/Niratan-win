@@ -13,8 +13,8 @@ internal sealed class WindowsCredentialVideoMetadataStore : IVideoMetadataCreden
     private const uint CredTypeGeneric = 1;
     private const uint CredPersistLocalMachine = 2;
     private const int ErrorNotFound = 1168;
-    private static readonly string[] AllowedProviders = ["tmdb", "bangumi", "tvdb"];
-    private static readonly string[] AllowedSecretNames = ["token", "pin"];
+    private static readonly string[] AllowedProviders = ["tmdb", "tvdb", "jimaku", "anidb"];
+    private static readonly string[] AllowedSecretNames = ["token", "pin", "username", "password"];
 
     public Task<string?> ReadAsync(string providerId, string secretName, CancellationToken ct = default)
     {

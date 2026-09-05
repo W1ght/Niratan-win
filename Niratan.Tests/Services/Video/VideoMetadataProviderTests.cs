@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -21,7 +22,7 @@ public sealed class VideoMetadataProviderTests
     {
         var ct = TestContext.Current.CancellationToken;
         var transport = new FixtureTransport("""
-            {"results":[{"id":123,"name":"アンナチュラル","original_name":"アンナチュラル","first_air_date":"2018-01-12"}]}
+            {"results":[{"id":123,"name":"アンナチュラル","original_name":"アンナチュラル","first_air_date":"2018-01-12","poster_path":"/poster.jpg","backdrop_path":"/backdrop.jpg"}]}
             """);
         var provider = new TmdbVideoMetadataProvider(transport, new FixtureCredentialStore("secret"));
         var query = new VideoMetadataSearchQuery(
@@ -30,7 +31,10 @@ public sealed class VideoMetadataProviderTests
 
         var candidates = await provider.SearchAsync(query, ct);
 
-        candidates.Should().ContainSingle().Which.ProviderItemId.Should().Be("123");
+        var candidate = candidates.Should().ContainSingle().Subject;
+        candidate.ProviderItemId.Should().Be("123");
+        candidate.PosterUrl.Should().Be("https://image.tmdb.org/t/p/w500/poster.jpg");
+        candidate.BackdropUrl.Should().Be("https://image.tmdb.org/t/p/w780/backdrop.jpg");
         transport.LastRequest!.Headers!["Authorization"].Should().Be("Bearer secret");
         transport.LastRequest.Uri.Host.Should().Be("api.themoviedb.org");
     }
@@ -121,6 +125,9 @@ public sealed class VideoMetadataProviderTests
               "credits":{"cast":[{"id":7,"name":"声優 A","character":"主人公","profile_path":"/person.jpg"}]},
               "keywords":{"results":[{"name":"time travel"}]},
               "content_ratings":{"results":[{"iso_3166_1":"JP","rating":"PG12"}]},
+              "translations":{"translations":[
+                {"iso_639_1":"en","iso_3166_1":"US","data":{"name":"English Work Title"}},
+                {"iso_639_1":"fr","iso_3166_1":"FR","data":{"name":"Titre français"}}]},
               "recommendations":{"results":[{"id":99,"name":"関連作品","original_name":"Related","first_air_date":"2021-01-01","poster_path":"/p.jpg","backdrop_path":"/b.jpg"}]}
             }
             """);
@@ -140,9 +147,12 @@ public sealed class VideoMetadataProviderTests
         details.Status.Should().Be("Returning Series");
         details.Tags.Should().Contain("time travel");
         details.Studios.Should().Contain("Studio A");
+        details.Aliases.Should().Contain("English Work Title");
+        details.Aliases.Should().NotContain("Titre français");
         details.People.Should().ContainSingle(person => person.Name == "声優 A" && person.Role == "主人公");
         details.RelatedItems.Should().ContainSingle(item => item.ProviderItemId == "99");
         transport.LastRequest!.Uri.Query.Should().Contain("recommendations");
+        transport.LastRequest.Uri.Query.Should().Contain("translations");
     }
 
     [Fact]
@@ -166,6 +176,80 @@ public sealed class VideoMetadataProviderTests
     }
 
     [Fact]
+    public async Task TmdbDetails_UsesTvEpisodeGroupWhenDefaultOrderCollapsesMultipleSeasons()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var transport = new CollapsedTvOrderFixtureTransport();
+        var provider = new TmdbVideoMetadataProvider(transport, new FixtureCredentialStore("secret"));
+        var candidate = new VideoMetadataCandidate(
+            "tmdb", "65942", VideoMetadataMediaKind.Series, "Re:ゼロから始める異世界生活", null, 2016,
+            null, null, null, ["Re:Zero − Starting Life in Another World"],
+            ImmutableDictionary<string, string>.Empty,
+            "https://www.themoviedb.org/tv/65942");
+
+        var details = await provider.GetDetailsAsync(candidate, "ja-JP", "JP", ct);
+
+        details.Should().NotBeNull();
+        details!.TmdbOrdering.Should().Be(new VideoTmdbOrdering(
+            65942,
+            "re-zero-tv",
+            VideoTmdbOrderingType.Tv,
+            IsPreferred: true));
+        details.Seasons.Select(season => season.SeasonNumber).Should().Equal(0, 1, 2, 3, 4);
+        details.Seasons[1].Title.Should().Be("Season 1");
+        details.Seasons[1].TmdbShowId.Should().Be(65942);
+        details.Seasons[1].TmdbOrderingId.Should().Be("re-zero-tv");
+        details.Seasons[1].TmdbEpisodeGroupId.Should().Be("season-1");
+        details.Seasons[1].TmdbOrderingType.Should().Be(VideoTmdbOrderingType.Tv);
+        details.Seasons[1].Episodes.Select(episode => episode.EpisodeNumber).Should().Equal(1, 2);
+        details.Seasons[1].Episodes[0].TmdbEpisodeId.Should().Be(1001);
+        details.Seasons[1].Episodes[0].TmdbOrderingId.Should().Be("re-zero-tv");
+        details.Seasons[1].Episodes[0].TmdbEpisodeGroupId.Should().Be("season-1");
+        details.Seasons[1].Episodes[0].Ordinal.Should().Be(0);
+        details.Seasons[2].Episodes.Select(episode => episode.EpisodeNumber).Should().Equal(1, 2);
+        details.Seasons[2].Episodes[0].SourceUrl.Should()
+            .EndWith("/tv/65942/season/1/episode/3");
+        transport.RequestPaths.Should().Contain("/3/tv/65942/episode_groups");
+        transport.RequestPaths.Should().Contain("/3/tv/episode_group/re-zero-tv");
+        transport.RequestPaths.Should().Contain("/3/tv/65942/season/0");
+        transport.RequestPaths.Should().NotContain("/3/tv/65942/season/1");
+    }
+
+    [Fact]
+    public async Task AniDbExplicitIdentity_DoesNotRequireTitleSearchAndProvidesCanonicalTitles()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var transport = new AniDbTitleFixtureTransport();
+        var provider = new AniDbTitleIndexProvider(transport);
+        var query = new VideoMetadataSearchQuery(
+            "Renamed release",
+            VideoMetadataMediaKind.Anime,
+            2016,
+            1,
+            1,
+            1,
+            "ja-JP",
+            "JP",
+            ImmutableDictionary<string, string>.Empty.Add("anidb", "11370"));
+
+        var candidates = await provider.SearchAsync(query, ct);
+
+        var candidate = candidates.Should().ContainSingle().Subject;
+        candidate.ProviderId.Should().Be("anidb");
+        candidate.ProviderItemId.Should().Be("11370");
+        transport.RequestCount.Should().Be(0, "an explicit Shoko/AniDB identity is authoritative");
+
+        var details = await provider.GetDetailsAsync(candidate, "ja-JP", "JP", ct);
+
+        details.Should().NotBeNull();
+        details!.Title.Should().Be("Re:ゼロから始める異世界生活");
+        details.OriginalTitle.Should().Be("Re:ゼロから始める異世界生活");
+        details.Aliases.Should().Contain("Re:Zero kara Hajimeru Isekai Seikatsu");
+        details.ExternalIds.Should().Contain("anidb", "11370");
+        transport.RequestCount.Should().Be(1);
+    }
+
+    [Fact]
     public async Task AniListDetails_ProjectsRichSeriesTextFromFixture()
     {
         var ct = TestContext.Current.CancellationToken;
@@ -177,26 +261,36 @@ public sealed class VideoMetadataProviderTests
               "tags":[{"name":"School"}],"studios":{"nodes":[{"name":"Doga Kobo","isAnimationStudio":true}]},
               "characters":{"edges":[{"role":"MAIN","node":{"name":{"full":"Umaru Doma","native":"土間うまる"}},
                 "voiceActors":[{"id":100,"name":{"full":"Aimi Tanaka","native":"田中あいみ"},"image":{"large":"https://img.test/person.jpg"},"siteUrl":"https://anilist.co/staff/100"}]}]},
-              "recommendations":{"nodes":[{"mediaRecommendation":{"id":21268,"title":{"romaji":"Related","english":null,"native":"関連作品"},"seasonYear":2016,"coverImage":{"large":"https://img.test/poster.jpg"},"bannerImage":"https://img.test/backdrop.jpg","siteUrl":"https://anilist.co/anime/21268"}}]},
-              "siteUrl":"https://anilist.co/anime/20987","externalLinks":[]}}}
+              "recommendations":{"nodes":[{"mediaRecommendation":{"id":21268,"title":{"romaji":"Related Romaji","english":"Related English","native":"関連作品"},"seasonYear":2016,"coverImage":{"large":"https://img.test/poster.jpg"},"bannerImage":"https://img.test/backdrop.jpg","siteUrl":"https://anilist.co/anime/21268"}}]},
+              "siteUrl":"https://anilist.co/anime/20987","externalLinks":[
+                {"id":999999,"site":"IMDb","url":"https://www.imdb.com/title/tt1234567/"}]}}}
             """);
         var provider = new AniListVideoMetadataProvider(transport);
         var candidate = new VideoMetadataCandidate(
             "anilist", "20987", VideoMetadataMediaKind.Anime, "干物妹！うまるちゃん", null, 2015,
             null, 8, 8, ["Himouto! Umaru-chan"],
-            ImmutableDictionary<string, string>.Empty.Add("anilist", "20987"),
+            ImmutableDictionary<string, string>.Empty
+                .Add("anilist", "20987")
+                .Add("tmdb", "12345"),
             "https://anilist.co/anime/20987");
 
         var details = await provider.GetDetailsAsync(candidate, "ja-JP", "JP", ct);
 
         details.Should().NotBeNull();
+        details!.Title.Should().Be("Himouto! Umaru-chan");
         details!.OriginalTitle.Should().Be("干物妹！うまるちゃん");
         details.CommunityRating.Should().Be(7.1);
         details.Status.Should().Be("FINISHED");
         details.Tags.Should().Contain("School");
         details.Studios.Should().Contain("Doga Kobo");
         details.People.Should().ContainSingle(person => person.Name == "田中あいみ" && person.Role == "土間うまる");
-        details.RelatedItems.Should().ContainSingle(item => item.ProviderItemId == "21268");
+        var related = details.RelatedItems.Should().ContainSingle(item => item.ProviderItemId == "21268").Subject;
+        related.Title.Should().Be("Related Romaji");
+        related.OriginalTitle.Should().Be("関連作品");
+        related.Aliases.Should().Contain("Related English");
+        details.ExternalIds.Should().Contain("tmdb", "12345");
+        details.ExternalIds.Should().Contain("imdb", "tt1234567");
+        details.ExternalIds.Values.Should().NotContain("999999");
     }
 
     [Fact]
@@ -206,7 +300,9 @@ public sealed class VideoMetadataProviderTests
         var transport = new FixtureTransport("""
             {"data":{"Page":{"media":[{"id":20987,"idMal":28825,
               "title":{"romaji":"Himouto! Umaru-chan","english":"Himouto! Umaru-chan","native":"干物妹！うまるちゃん"},
-              "synonyms":[],"seasonYear":2015,"siteUrl":"https://anilist.co/anime/20987"}]}}}
+              "synonyms":[],"seasonYear":2015,
+              "coverImage":{"extraLarge":"https://img.test/poster-xl.jpg","large":"https://img.test/poster.jpg"},
+              "bannerImage":"https://img.test/backdrop.jpg","siteUrl":"https://anilist.co/anime/20987"}]}}}
             """);
         var provider = new AniListVideoMetadataProvider(transport);
         var query = new VideoMetadataSearchQuery(
@@ -218,11 +314,36 @@ public sealed class VideoMetadataProviderTests
         var candidate = candidates.Should().ContainSingle().Subject;
         candidate.ProviderItemId.Should().Be("20987");
         candidate.Title.Should().Be("Himouto! Umaru-chan");
+        candidate.PosterUrl.Should().Be("https://img.test/poster-xl.jpg");
+        candidate.BackdropUrl.Should().Be("https://img.test/backdrop.jpg");
         using var body = JsonDocument.Parse(transport.LastRequest!.Body!);
         var variables = body.RootElement.GetProperty("variables");
         variables.GetProperty("search").GetString().Should().Be("Himouto! Umaru-chan");
         variables.TryGetProperty("id", out _).Should().BeFalse();
         variables.TryGetProperty("idMal", out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AniListTitleSearch_PrefersRomajiAndKeepsEnglishAsAlias()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var transport = new FixtureTransport("""
+            {"data":{"Page":{"media":[{"id":21355,"idMal":31240,
+              "title":{"romaji":"Re:Zero kara Hajimeru Isekai Seikatsu","english":"Re:ZERO -Starting Life in Another World-","native":"Re:ゼロから始める異世界生活"},
+              "synonyms":[],"seasonYear":2016,
+              "coverImage":{"extraLarge":"https://img.test/re-zero.jpg"},
+              "bannerImage":"https://img.test/re-zero-banner.jpg","siteUrl":"https://anilist.co/anime/21355"}]}}}
+            """);
+        var provider = new AniListVideoMetadataProvider(transport);
+        var query = new VideoMetadataSearchQuery(
+            "re zero", VideoMetadataMediaKind.Anime, null, null, null, null,
+            "en-US", "US", ImmutableDictionary<string, string>.Empty);
+
+        var candidate = (await provider.SearchAsync(query, ct)).Should().ContainSingle().Subject;
+
+        candidate.Title.Should().Be("Re:Zero kara Hajimeru Isekai Seikatsu");
+        candidate.OriginalTitle.Should().Be("Re:ゼロから始める異世界生活");
+        candidate.Aliases.Should().Contain("Re:ZERO -Starting Life in Another World-");
     }
 
     [Fact]
@@ -320,8 +441,80 @@ public sealed class VideoMetadataProviderTests
         var metadata = await new LocalVideoMetadataProvider().ReadAsync(media, temp.Path, ct);
 
         metadata.ArtworkPaths.Select(Path.GetFileName).Should().Equal(
-            "Episode 01.jpeg", "folder.webp", "backdrop.png", "season01-poster.jpg");
+            "folder.webp", "backdrop.png", "season01-poster.jpg", "Episode 01.jpeg");
+        metadata.Artwork.Should().SatisfyRespectively(
+            item => item.Should().Be(new LocalVideoArtwork(
+                Path.Combine(temp.Path, "folder.webp"), "poster", LocalVideoMetadataScope.Container)),
+            item => item.Should().Be(new LocalVideoArtwork(
+                Path.Combine(temp.Path, "backdrop.png"), "backdrop", LocalVideoMetadataScope.Container)),
+            item => item.Should().Be(new LocalVideoArtwork(
+                Path.Combine(temp.Path, "season01-poster.jpg"), "poster", LocalVideoMetadataScope.Season)),
+            item => item.Should().Be(new LocalVideoArtwork(
+                Path.Combine(temp.Path, "Episode 01.jpeg"), "thumb", LocalVideoMetadataScope.Episode)));
         metadata.ArtworkPaths.Should().NotContain(path => Path.GetFileName(path) == "unrelated.jpg");
+    }
+
+    [Fact]
+    public async Task LocalMetadata_ReadsJellyfinSeriesSeasonAndEpisodeSidecarsWithScopedArtwork()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var seriesDirectory = Directory.CreateDirectory(Path.Combine(temp.Path, "Example Show")).FullName;
+        var seasonDirectory = Directory.CreateDirectory(Path.Combine(seriesDirectory, "Season 01")).FullName;
+        var media = Path.Combine(seasonDirectory, "Example Show S01E02.mkv");
+        var seriesNfo = Path.Combine(seriesDirectory, "tvshow.nfo");
+        var seasonNfo = Path.Combine(seasonDirectory, "season.nfo");
+        var episodeNfo = Path.ChangeExtension(media, ".nfo");
+        var seriesPoster = Path.Combine(seriesDirectory, "poster.jpg");
+        var seasonPoster = Path.Combine(seasonDirectory, "poster.jpg");
+        var episodeThumb = Path.Combine(seasonDirectory, "Example Show S01E02-thumb.jpg");
+        await File.WriteAllBytesAsync(media, [1], ct);
+        await File.WriteAllTextAsync(seriesNfo, """
+            <tvshow>
+              <title>Series title</title><originaltitle>Original series</originaltitle>
+              <plot>Series overview</plot><year>2024</year><genre>Drama</genre>
+              <tagline>Series tagline</tagline><mpaa>TV-14</mpaa><rating>8.25</rating>
+              <status>Continuing</status><tag>Favourite</tag><studio>Example Studio</studio>
+              <director>Series Director</director><actor><name>Series Actor</name></actor>
+              <uniqueid type="tmdb">123</uniqueid>
+            </tvshow>
+            """, ct);
+        await File.WriteAllTextAsync(seasonNfo, "<season><title>Season title</title><season>1</season></season>", ct);
+        await File.WriteAllTextAsync(episodeNfo, """
+            <episodedetails><title>Episode title</title><season>1</season><episode>2</episode>
+              <plot>Episode overview</plot><actor><name>Episode Actor</name></actor>
+            </episodedetails>
+            """, ct);
+        foreach (var path in new[] { seriesPoster, seasonPoster, episodeThumb })
+            await File.WriteAllBytesAsync(path, [1], ct);
+
+        var metadata = await new LocalVideoMetadataProvider().ReadAsync(media, temp.Path, ct);
+
+        metadata.ContainerMetadata.Should().NotBeNull();
+        metadata.ContainerMetadata!.Title.Should().Be("Series title");
+        metadata.ContainerMetadata.OriginalTitle.Should().Be("Original series");
+        metadata.ContainerMetadata.Genres.Should().Equal("Drama");
+        metadata.ContainerMetadata.Actors.Should().Equal("Series Actor");
+        metadata.ContainerMetadata.ExternalIds.Should().Contain("tmdb", "123");
+        metadata.ContainerMetadata.Tagline.Should().Be("Series tagline");
+        metadata.ContainerMetadata.OfficialRating.Should().Be("TV-14");
+        metadata.ContainerMetadata.CommunityRating.Should().Be(8.25);
+        metadata.ContainerMetadata.Status.Should().Be("Continuing");
+        metadata.ContainerMetadata.Tags.Should().Equal("Favourite");
+        metadata.ContainerMetadata.Studios.Should().Equal("Example Studio");
+        metadata.ContainerMetadata.Directors.Should().Equal("Series Director");
+        metadata.SeasonMetadata!.Title.Should().Be("Season title");
+        metadata.EpisodeMetadata!.Title.Should().Be("Episode title");
+        metadata.EpisodeMetadata.Actors.Should().Equal("Episode Actor");
+        metadata.SourceFiles.Should().BeEquivalentTo(seriesNfo, seasonNfo, episodeNfo);
+        metadata.Artwork.Should().BeEquivalentTo(new[]
+        {
+            new LocalVideoArtwork(seriesPoster, "poster", LocalVideoMetadataScope.Container),
+            new LocalVideoArtwork(seasonPoster, "poster", LocalVideoMetadataScope.Season),
+            new LocalVideoArtwork(episodeThumb, "thumb", LocalVideoMetadataScope.Episode),
+        });
+        metadata.PreferredAssetArtworkPath(isMovie: false).Should().BeNull();
+        metadata.PreferredAssetArtworkPath(isMovie: true).Should().Be(seriesPoster);
     }
 
     [Fact]
@@ -402,6 +595,11 @@ public sealed class VideoMetadataProviderTests
         File.Exists(stored.LocalPath).Should().BeTrue();
         await invalid.Should().ThrowAsync<InvalidDataException>();
         Directory.EnumerateFiles(temp.Path, "*.tmp").Should().BeEmpty();
+
+        await cache.ClearAsync(ct);
+
+        Directory.EnumerateFiles(temp.Path).Should().BeEmpty();
+        (await cache.GetAsync(stored.Url, ct)).Should().BeNull();
     }
 
     private sealed class FixtureTransport(string json) : IVideoMetadataTransport
@@ -466,6 +664,106 @@ public sealed class VideoMetadataProviderTests
                 runtime = (int?)null,
             }),
         });
+    }
+
+    private sealed class CollapsedTvOrderFixtureTransport : IVideoMetadataTransport
+    {
+        public List<string> RequestPaths { get; } = [];
+
+        public Task<VideoMetadataResponse> SendAsync(
+            VideoMetadataRequest request,
+            CancellationToken ct = default)
+        {
+            RequestPaths.Add(request.Uri.AbsolutePath);
+            var json = request.Uri.AbsolutePath switch
+            {
+                "/3/tv/65942/episode_groups" => """
+                    {"results":[
+                      {"id":"re-zero-tv","name":"Seasons (TV)","type":7,"group_count":4,"episode_count":8},
+                      {"id":"re-zero-dvd","name":"DVD","type":3,"group_count":6,"episode_count":8}
+                    ]}
+                    """,
+                "/3/tv/episode_group/re-zero-tv" => BuildEpisodeGroupJson(),
+                "/3/tv/65942/season/0" => """
+                    {"episodes":[{"episode_number":1,"name":"Special","air_date":"2016-06-01"}]}
+                    """,
+                _ => """
+                    {
+                      "id":65942,"name":"Re:ゼロから始める異世界生活","first_air_date":"2016-04-04",
+                      "seasons":[
+                        {"season_number":0,"name":"Specials","episode_count":1},
+                        {"season_number":1,"name":"第1期～第4期","episode_count":8}
+                      ]
+                    }
+                    """,
+            };
+            return Task.FromResult(new VideoMetadataResponse(
+                200,
+                Encoding.UTF8.GetBytes(json),
+                "application/json",
+                null,
+                null,
+                DateTimeOffset.UtcNow,
+                false));
+        }
+
+        private static string BuildEpisodeGroupJson() => JsonSerializer.Serialize(new
+        {
+            id = "re-zero-tv",
+            name = "Seasons (TV)",
+            type = 7,
+            groups = Enumerable.Range(0, 4).Select(seasonIndex => new
+            {
+                id = $"season-{seasonIndex + 1}",
+                name = $"Season {seasonIndex + 1}",
+                order = seasonIndex,
+                episodes = Enumerable.Range(1, 2).Select(episodeIndex => new
+                {
+                    id = (seasonIndex + 1) * 1000 + episodeIndex,
+                    order = episodeIndex - 1,
+                    episode_number = seasonIndex * 2 + episodeIndex,
+                    season_number = 1,
+                    name = $"S{seasonIndex + 1}E{episodeIndex}",
+                    air_date = $"20{16 + seasonIndex}-01-0{episodeIndex}",
+                    still_path = (string?)null,
+                    overview = (string?)null,
+                    runtime = 24,
+                }),
+            }),
+        });
+    }
+
+    private sealed class AniDbTitleFixtureTransport : IVideoMetadataTransport
+    {
+        public int RequestCount { get; private set; }
+
+        public Task<VideoMetadataResponse> SendAsync(
+            VideoMetadataRequest request,
+            CancellationToken ct = default)
+        {
+            RequestCount++;
+            const string xml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <animetitles>
+                  <anime aid="11370">
+                    <title xml:lang="x-jat" type="main">Re:Zero kara Hajimeru Isekai Seikatsu</title>
+                    <title xml:lang="ja" type="official">Re:ゼロから始める異世界生活</title>
+                    <title xml:lang="en" type="official">Re:ZERO -Starting Life in Another World-</title>
+                  </anime>
+                </animetitles>
+                """;
+            using var output = new MemoryStream();
+            using (var gzip = new GZipStream(output, CompressionLevel.SmallestSize, leaveOpen: true))
+                gzip.Write(Encoding.UTF8.GetBytes(xml));
+            return Task.FromResult(new VideoMetadataResponse(
+                200,
+                output.ToArray(),
+                "application/gzip",
+                null,
+                null,
+                DateTimeOffset.UtcNow,
+                false));
+        }
     }
 
     private sealed class FixtureCredentialStore(string token) : IVideoMetadataCredentialStore

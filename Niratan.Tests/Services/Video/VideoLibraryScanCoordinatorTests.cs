@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using Niratan.Models.Video;
 using Niratan.Services.Storage;
 using Niratan.Services.Video;
@@ -625,6 +626,485 @@ public sealed class VideoLibraryScanCoordinatorTests
         local.ReadCount.Should().Be(1);
     }
 
+    [Fact]
+    public async Task FullScan_SynchronizesScopedLocalSidecarsWithoutDuplicatingOrRetainingDeletedData()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "video_library.sqlite3");
+        var sourcePath = Directory.CreateDirectory(Path.Combine(temp.Path, "Library")).FullName;
+        var seriesDirectory = Directory.CreateDirectory(Path.Combine(sourcePath, "Show")).FullName;
+        var seasonDirectory = Directory.CreateDirectory(Path.Combine(seriesDirectory, "Season 01")).FullName;
+        var mediaPath = Path.Combine(seasonDirectory, "Show S01E01.mkv");
+        var seriesNfo = Path.Combine(seriesDirectory, "tvshow.nfo");
+        var seasonNfo = Path.Combine(seasonDirectory, "season.nfo");
+        var episodeNfo = Path.ChangeExtension(mediaPath, ".nfo");
+        var seriesPoster = Path.Combine(seriesDirectory, "poster.jpg");
+        var seasonPoster = Path.Combine(seasonDirectory, "poster.jpg");
+        var episodeThumb = Path.Combine(seasonDirectory, "Show S01E01-thumb.jpg");
+        await File.WriteAllBytesAsync(mediaPath, [1, 2, 3], ct);
+        await File.WriteAllTextAsync(
+            seriesNfo,
+            "<tvshow><title>NFO Show</title><genre>Drama</genre></tvshow>",
+            ct);
+        await File.WriteAllTextAsync(
+            seasonNfo,
+            "<season><title>NFO Season</title><season>1</season></season>",
+            ct);
+        await File.WriteAllTextAsync(
+            episodeNfo,
+            "<episodedetails><title>NFO Episode</title><season>1</season><episode>1</episode></episodedetails>",
+            ct);
+        foreach (var path in new[] { seriesPoster, seasonPoster, episodeThumb })
+            await File.WriteAllBytesAsync(path, [1], ct);
+        var sourceId = Guid.NewGuid();
+        await using var repository = new SQLiteVideoCatalogRepository(
+            database,
+            Path.Combine(temp.Path, "video_library.json"),
+            logger: NullLogger<SQLiteVideoCatalogRepository>.Instance);
+        await repository.InitializeAsync(ct);
+        await repository.UpsertSourceAsync(new VideoLibrarySource
+        {
+            Id = sourceId.ToString("D"), Name = "Library", FolderPath = sourcePath,
+            MediaType = VideoLibraryMediaType.Anime,
+        }, ct);
+        var coordinator = new VideoLibraryScanCoordinator(
+            repository,
+            new VideoFileNameParser(),
+            new LocalVideoMetadataProvider(),
+            NullLogger<VideoLibraryScanCoordinator>.Instance);
+
+        await coordinator.ScanSourceAsync(sourceId, fullScan: true, ct);
+        await coordinator.ScanSourceAsync(sourceId, fullScan: true, ct);
+
+        var withSidecars = (await repository.GetSnapshotAsync(ct)).Nodes.Single(node =>
+            node.Kind == VideoCatalogNodeKind.Series);
+        withSidecars.PrimaryTitle.Should().Be("NFO Show");
+        withSidecars.Genres.Should().Equal("Drama");
+        withSidecars.PosterPath.Should().Be(seriesPoster);
+        var seasonWithSidecars = (await repository.GetSnapshotAsync(ct)).Nodes.Single(node =>
+            node.Kind == VideoCatalogNodeKind.Season);
+        seasonWithSidecars.PrimaryTitle.Should().Be("NFO Season");
+        seasonWithSidecars.PosterPath.Should().Be(seasonPoster);
+        var episodeWithSidecars = (await repository.GetSnapshotAsync(ct)).Nodes.Single(node =>
+            node.Kind == VideoCatalogNodeKind.Episode);
+        episodeWithSidecars.PrimaryTitle.Should().Be("NFO Episode");
+        episodeWithSidecars.ThumbPath.Should().Be(episodeThumb);
+        (await repository.GetSnapshotAsync(ct)).Assets.Single().PosterPath.Should().BeNull();
+        await using (var connection = new SqliteConnection($"Data Source={database};Pooling=False"))
+        {
+            await connection.OpenAsync(ct);
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT COUNT(*) FROM artwork WHERE provider_id='local';";
+            (await command.ExecuteScalarAsync(ct)).Should().Be(3L);
+        }
+
+        File.Delete(seriesNfo);
+        File.Delete(seasonNfo);
+        File.Delete(episodeNfo);
+        await coordinator.ScanSourceAsync(sourceId, fullScan: true, ct);
+
+        await using (var artworkOnly = new SqliteConnection($"Data Source={database};Pooling=False"))
+        {
+            await artworkOnly.OpenAsync(ct);
+            using var command = artworkOnly.CreateCommand();
+            command.CommandText =
+                """
+                SELECT COUNT(*) FROM metadata_field_values
+                WHERE provider_id='local' AND field='localScope';
+                """;
+            (await command.ExecuteScalarAsync(ct)).Should().Be(3L,
+                "each remaining Local artwork owner keeps provenance without inventing structure");
+            command.CommandText =
+                """
+                SELECT COUNT(*) FROM metadata_field_values
+                WHERE provider_id='local' AND field<>'localScope';
+                """;
+            (await command.ExecuteScalarAsync(ct)).Should().Be(0L);
+        }
+
+        File.Delete(seriesPoster);
+        File.Delete(seasonPoster);
+        File.Delete(episodeThumb);
+        await coordinator.ScanSourceAsync(sourceId, fullScan: true, ct);
+
+        var withoutSidecars = (await repository.GetSnapshotAsync(ct)).Nodes.Single(node =>
+            node.Kind == VideoCatalogNodeKind.Series);
+        withoutSidecars.PrimaryTitle.Should().Be("Show");
+        withoutSidecars.Genres.Should().BeEmpty();
+        withoutSidecars.PosterPath.Should().BeNull();
+        var seasonWithoutSidecars = (await repository.GetSnapshotAsync(ct)).Nodes.Single(node =>
+            node.Kind == VideoCatalogNodeKind.Season);
+        seasonWithoutSidecars.PrimaryTitle.Should().Be("Season 1");
+        seasonWithoutSidecars.PosterPath.Should().BeNull();
+        var episodeWithoutSidecars = (await repository.GetSnapshotAsync(ct)).Nodes.Single(node =>
+            node.Kind == VideoCatalogNodeKind.Episode);
+        episodeWithoutSidecars.PrimaryTitle.Should().Be("Episode 1");
+        episodeWithoutSidecars.ThumbPath.Should().BeNull();
+        (await repository.GetSnapshotAsync(ct)).Assets.Single().PosterPath.Should().BeNull();
+        await using var verify = new SqliteConnection($"Data Source={database};Pooling=False");
+        await verify.OpenAsync(ct);
+        using var verifyCommand = verify.CreateCommand();
+        verifyCommand.CommandText =
+            "SELECT COUNT(*) FROM artwork WHERE provider_id='local';";
+        (await verifyCommand.ExecuteScalarAsync(ct)).Should().Be(0L);
+        verifyCommand.CommandText =
+            "SELECT COUNT(*) FROM metadata_field_values WHERE provider_id='local';";
+        (await verifyCommand.ExecuteScalarAsync(ct)).Should().Be(0L);
+    }
+
+    [Fact]
+    public async Task ScanSnapshotInvalidatedBeforeBegin_DoesNotEnterReplacementGeneration()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var sourceId = Guid.NewGuid();
+        var snapshotGeneration = 7L;
+        var currentGeneration = snapshotGeneration;
+        var source = new VideoCatalogSourceSnapshot(
+            sourceId,
+            "Anime",
+            Directory.CreateDirectory(Path.Combine(temp.Path, "Anime")).FullName,
+            Path.Combine(temp.Path, "Anime").ToUpperInvariant(),
+            VideoLibraryMediaType.Anime,
+            "ja-JP",
+            "JP",
+            [],
+            snapshotGeneration,
+            DateTimeOffset.UtcNow,
+            null,
+            null);
+        var snapshot = VideoCatalogSnapshot.Empty() with { Sources = [source] };
+        var beginEntered = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseBegin = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var repository = new Mock<IVideoCatalogRepository>(MockBehavior.Strict);
+        repository.Setup(item => item.GetSnapshotAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(snapshot);
+        repository.Setup(item => item.TryBeginSourceScanAsync(
+                sourceId,
+                VideoCatalogJobKind.FullScan,
+                snapshotGeneration,
+                It.IsAny<CancellationToken>()))
+            .Returns<Guid, VideoCatalogJobKind, long, CancellationToken>(
+                async (_, _, expectedGeneration, token) =>
+                {
+                    beginEntered.TrySetResult(true);
+                    await releaseBegin.Task.WaitAsync(token);
+                    return expectedGeneration == Interlocked.Read(ref currentGeneration)
+                        ? expectedGeneration + 1
+                        : null;
+                });
+        var coordinator = new VideoLibraryScanCoordinator(
+            repository.Object,
+            new VideoFileNameParser(),
+            new FixedLocalMetadataProvider(LocalVideoMetadata.Empty),
+            NullLogger<VideoLibraryScanCoordinator>.Instance);
+
+        var scan = coordinator.ScanSourceAsync(sourceId, fullScan: true, ct);
+        await beginEntered.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        Interlocked.Increment(ref currentGeneration);
+        releaseBegin.TrySetResult(true);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => scan.WaitAsync(TimeSpan.FromSeconds(5), ct));
+        repository.Verify(item => item.TryBeginSourceScanAsync(
+            sourceId,
+            VideoCatalogJobKind.FullScan,
+            snapshotGeneration,
+            It.IsAny<CancellationToken>()), Times.Once);
+        repository.Verify(item => item.ApplyScanBatchAsync(
+            It.IsAny<VideoScanBatch>(), It.IsAny<CancellationToken>()), Times.Never);
+        repository.Verify(item => item.CancelSourceScanAsync(
+            sourceId, It.IsAny<long>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SupersededScanCannotRemoveReplacementActiveCancellation()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var sourcePath = Directory.CreateDirectory(Path.Combine(temp.Path, "Anime")).FullName;
+        await File.WriteAllBytesAsync(Path.Combine(sourcePath, "Work S01E01.mkv"), [1], ct);
+        var sourceId = Guid.NewGuid();
+        await using var repository = new SQLiteVideoCatalogRepository(
+            Path.Combine(temp.Path, "video_library.sqlite3"),
+            Path.Combine(temp.Path, "video_library.json"),
+            logger: NullLogger<SQLiteVideoCatalogRepository>.Instance);
+        await repository.InitializeAsync(ct);
+        await repository.UpsertSourceAsync(new VideoLibrarySource
+        {
+            Id = sourceId.ToString("D"),
+            Name = "Anime",
+            FolderPath = sourcePath,
+            MediaType = VideoLibraryMediaType.Anime,
+        }, ct);
+        var local = new SupersededScanLocalMetadataProvider();
+        var coordinator = new VideoLibraryScanCoordinator(
+            repository,
+            new VideoFileNameParser(),
+            local,
+            NullLogger<VideoLibraryScanCoordinator>.Instance);
+
+        var firstScan = coordinator.ScanSourceAsync(sourceId, fullScan: true, ct);
+        await local.FirstStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        var secondScan = coordinator.ScanSourceAsync(sourceId, fullScan: true, ct);
+        await local.SecondStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        local.ReleaseFirst();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => firstScan.WaitAsync(TimeSpan.FromSeconds(5), ct));
+
+        await coordinator.CancelAsync(sourceId, ct);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => secondScan.WaitAsync(TimeSpan.FromSeconds(5), ct));
+        var snapshot = await repository.GetSnapshotAsync(ct);
+        snapshot.Jobs.Where(job => job.Kind == VideoCatalogJobKind.FullScan)
+            .Should().OnlyContain(job => job.State == VideoCatalogJobState.Cancelled);
+    }
+
+    [Fact]
+    public async Task Cancel_UsesSnapshotGenerationInsteadOfBroadCancellation()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var sourceId = Guid.NewGuid();
+        const long expectedGeneration = 11;
+        var sourcePath = Directory.CreateDirectory(Path.Combine(temp.Path, "Anime")).FullName;
+        var source = new VideoCatalogSourceSnapshot(
+            sourceId,
+            "Anime",
+            sourcePath,
+            sourcePath.ToUpperInvariant(),
+            VideoLibraryMediaType.Anime,
+            "ja-JP",
+            "JP",
+            [],
+            expectedGeneration,
+            DateTimeOffset.UtcNow,
+            null,
+            null);
+        var repository = new Mock<IVideoCatalogRepository>(MockBehavior.Strict);
+        repository.Setup(item => item.GetSnapshotAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(VideoCatalogSnapshot.Empty() with { Sources = [source] });
+        repository.Setup(item => item.CancelSourceScanAsync(
+                sourceId, expectedGeneration, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var coordinator = new VideoLibraryScanCoordinator(
+            repository.Object,
+            new VideoFileNameParser(),
+            new FixedLocalMetadataProvider(LocalVideoMetadata.Empty),
+            NullLogger<VideoLibraryScanCoordinator>.Instance);
+
+        await coordinator.CancelAsync(sourceId, ct);
+
+        repository.Verify(item => item.CancelSourceScanAsync(
+            sourceId, expectedGeneration, It.IsAny<CancellationToken>()), Times.Once);
+        repository.Verify(item => item.CancelSourceScanAsync(
+            sourceId, It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ScanStartedBeforeScrapeReset_CannotQueueAniDbInReplacementGeneration()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var sourcePath = Directory.CreateDirectory(Path.Combine(temp.Path, "Anime")).FullName;
+        await File.WriteAllBytesAsync(
+            Path.Combine(sourcePath, "Work S01E01.mkv"),
+            [1, 2, 3],
+            ct);
+        var sourceId = Guid.NewGuid();
+        await using var repository = new SQLiteVideoCatalogRepository(
+            Path.Combine(temp.Path, "video_library.sqlite3"),
+            Path.Combine(temp.Path, "video_library.json"),
+            logger: NullLogger<SQLiteVideoCatalogRepository>.Instance);
+        await repository.InitializeAsync(ct);
+        await repository.UpsertSourceAsync(new VideoLibrarySource
+        {
+            Id = sourceId.ToString("D"),
+            Name = "Anime",
+            FolderPath = sourcePath,
+            MediaType = VideoLibraryMediaType.Anime,
+        }, ct);
+        var scrapeGeneration = 0L;
+        var queued = false;
+        AniDbScrapeAdmissionStamp? observedAdmission = null;
+        var aniDb = new Mock<IAniDbImportService>();
+        aniDb.Setup(item => item.CaptureScrapeAdmission())
+            .Returns(() => new AniDbScrapeAdmissionStamp(
+                Interlocked.Read(ref scrapeGeneration),
+                StartedDuringReset: false));
+        aniDb.Setup(item => item.QueueSourceAsync(
+                sourceId,
+                It.IsAny<AniDbScrapeAdmissionStamp>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<Guid, AniDbScrapeAdmissionStamp, CancellationToken>((_, admission, _) =>
+            {
+                observedAdmission = admission;
+                queued = !admission.StartedDuringReset
+                         && admission.Generation == Interlocked.Read(ref scrapeGeneration);
+            })
+            .Returns(Task.CompletedTask);
+        var local = new BlockingLocalMetadataProvider();
+        var coordinator = new VideoLibraryScanCoordinator(
+            repository,
+            new VideoFileNameParser(),
+            local,
+            NullLogger<VideoLibraryScanCoordinator>.Instance,
+            aniDb.Object);
+
+        var scan = coordinator.ScanSourceAsync(sourceId, fullScan: true, ct);
+        await local.Started.Task.WaitAsync(ct);
+        Interlocked.Increment(ref scrapeGeneration);
+        local.Release();
+        await scan;
+
+        observedAdmission.Should().Be(new AniDbScrapeAdmissionStamp(0, false));
+        queued.Should().BeFalse();
+        aniDb.Verify(item => item.QueueSourceAsync(
+            sourceId,
+            new AniDbScrapeAdmissionStamp(0, false),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ScanAllStartedBeforeScrapeReset_ReusesOuterAdmissionForEverySource()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var firstPath = Directory.CreateDirectory(Path.Combine(temp.Path, "A-Anime")).FullName;
+        var secondPath = Directory.CreateDirectory(Path.Combine(temp.Path, "B-Anime")).FullName;
+        await File.WriteAllBytesAsync(Path.Combine(firstPath, "Work A S01E01.mkv"), [1], ct);
+        await File.WriteAllBytesAsync(Path.Combine(secondPath, "Work B S01E01.mkv"), [2], ct);
+        var firstSourceId = Guid.NewGuid();
+        var secondSourceId = Guid.NewGuid();
+        await using var repository = new SQLiteVideoCatalogRepository(
+            Path.Combine(temp.Path, "video_library.sqlite3"),
+            Path.Combine(temp.Path, "video_library.json"),
+            logger: NullLogger<SQLiteVideoCatalogRepository>.Instance);
+        await repository.InitializeAsync(ct);
+        var createdAt = DateTimeOffset.UtcNow;
+        await repository.UpsertSourceAsync(new VideoLibrarySource
+        {
+            Id = firstSourceId.ToString("D"),
+            Name = "A-Anime",
+            FolderPath = firstPath,
+            MediaType = VideoLibraryMediaType.Anime,
+            CreatedAt = createdAt.UtcDateTime,
+        }, ct);
+        await repository.UpsertSourceAsync(new VideoLibrarySource
+        {
+            Id = secondSourceId.ToString("D"),
+            Name = "B-Anime",
+            FolderPath = secondPath,
+            MediaType = VideoLibraryMediaType.Anime,
+            CreatedAt = createdAt.AddSeconds(1).UtcDateTime,
+        }, ct);
+
+        var scrapeGeneration = 0L;
+        var resetInProgress = 0;
+        var admittedSources = new ConcurrentBag<Guid>();
+        var observedAdmissions = new ConcurrentBag<AniDbScrapeAdmissionStamp>();
+        var aniDb = new Mock<IAniDbImportService>();
+        aniDb.Setup(item => item.CaptureScrapeAdmission())
+            .Returns(() => new AniDbScrapeAdmissionStamp(
+                Interlocked.Read(ref scrapeGeneration),
+                Volatile.Read(ref resetInProgress) != 0));
+        aniDb.Setup(item => item.QueueSourceAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<AniDbScrapeAdmissionStamp>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<Guid, AniDbScrapeAdmissionStamp, CancellationToken>((sourceId, admission, _) =>
+            {
+                observedAdmissions.Add(admission);
+                if (!admission.StartedDuringReset
+                    && admission.Generation == Interlocked.Read(ref scrapeGeneration)
+                    && Volatile.Read(ref resetInProgress) == 0)
+                    admittedSources.Add(sourceId);
+            })
+            .Returns(Task.CompletedTask);
+        var local = new BlockingLocalMetadataProvider();
+        var coordinator = new VideoLibraryScanCoordinator(
+            repository,
+            new VideoFileNameParser(),
+            local,
+            NullLogger<VideoLibraryScanCoordinator>.Instance,
+            aniDb.Object);
+
+        var scan = coordinator.ScanAllAsync(fullScan: true, ct);
+        await local.Started.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        Interlocked.Exchange(ref resetInProgress, 1);
+        Interlocked.Increment(ref scrapeGeneration);
+        Interlocked.Exchange(ref resetInProgress, 0);
+        local.Release();
+        await scan.WaitAsync(TimeSpan.FromSeconds(5), ct);
+
+        aniDb.Verify(item => item.CaptureScrapeAdmission(), Times.Once);
+        observedAdmissions.Should().HaveCount(2)
+            .And.OnlyContain(item => item == new AniDbScrapeAdmissionStamp(0, false));
+        admittedSources.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ScanSourceStartedDuringScrapeReset_CannotEnterReplacementGeneration()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var sourcePath = Directory.CreateDirectory(Path.Combine(temp.Path, "Anime")).FullName;
+        await File.WriteAllBytesAsync(Path.Combine(sourcePath, "Work S01E01.mkv"), [1], ct);
+        var sourceId = Guid.NewGuid();
+        await using var repository = new SQLiteVideoCatalogRepository(
+            Path.Combine(temp.Path, "video_library.sqlite3"),
+            Path.Combine(temp.Path, "video_library.json"),
+            logger: NullLogger<SQLiteVideoCatalogRepository>.Instance);
+        await repository.InitializeAsync(ct);
+        await repository.UpsertSourceAsync(new VideoLibrarySource
+        {
+            Id = sourceId.ToString("D"),
+            Name = "Anime",
+            FolderPath = sourcePath,
+            MediaType = VideoLibraryMediaType.Anime,
+        }, ct);
+
+        var resetInProgress = 1;
+        var admitted = false;
+        AniDbScrapeAdmissionStamp? observedAdmission = null;
+        var aniDb = new Mock<IAniDbImportService>();
+        aniDb.Setup(item => item.CaptureScrapeAdmission())
+            .Returns(() => new AniDbScrapeAdmissionStamp(
+                1,
+                Volatile.Read(ref resetInProgress) != 0));
+        aniDb.Setup(item => item.QueueSourceAsync(
+                sourceId,
+                It.IsAny<AniDbScrapeAdmissionStamp>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<Guid, AniDbScrapeAdmissionStamp, CancellationToken>((_, admission, _) =>
+            {
+                observedAdmission = admission;
+                admitted = !admission.StartedDuringReset
+                           && admission.Generation == 1
+                           && Volatile.Read(ref resetInProgress) == 0;
+            })
+            .Returns(Task.CompletedTask);
+        var local = new BlockingLocalMetadataProvider();
+        var coordinator = new VideoLibraryScanCoordinator(
+            repository,
+            new VideoFileNameParser(),
+            local,
+            NullLogger<VideoLibraryScanCoordinator>.Instance,
+            aniDb.Object);
+
+        var scan = coordinator.ScanSourceAsync(sourceId, fullScan: true, ct);
+        await local.Started.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        Interlocked.Exchange(ref resetInProgress, 0);
+        local.Release();
+        await scan.WaitAsync(TimeSpan.FromSeconds(5), ct);
+
+        observedAdmission.Should().Be(new AniDbScrapeAdmissionStamp(1, true));
+        admitted.Should().BeFalse();
+    }
+
     private sealed class FixedLocalMetadataProvider(LocalVideoMetadata metadata)
         : ILocalVideoMetadataProvider
     {
@@ -639,6 +1119,57 @@ public sealed class VideoLibraryScanCoordinatorTests
             Interlocked.Increment(ref _readCount);
             return Task.FromResult(metadata);
         }
+    }
+
+    private sealed class BlockingLocalMetadataProvider : ILocalVideoMetadataProvider
+    {
+        private readonly TaskCompletionSource<bool> _release = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<bool> Started { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<LocalVideoMetadata> ReadAsync(
+            string mediaPath,
+            string sourceRoot,
+            CancellationToken ct = default)
+        {
+            Started.TrySetResult(true);
+            await _release.Task.WaitAsync(ct);
+            return LocalVideoMetadata.Empty;
+        }
+
+        public void Release() => _release.TrySetResult(true);
+    }
+
+    private sealed class SupersededScanLocalMetadataProvider : ILocalVideoMetadataProvider
+    {
+        private readonly TaskCompletionSource<bool> _firstRelease = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _readCount;
+
+        public TaskCompletionSource<bool> FirstStarted { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<bool> SecondStarted { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<LocalVideoMetadata> ReadAsync(
+            string mediaPath,
+            string sourceRoot,
+            CancellationToken ct = default)
+        {
+            if (Interlocked.Increment(ref _readCount) == 1)
+            {
+                FirstStarted.TrySetResult(true);
+                await _firstRelease.Task;
+                return LocalVideoMetadata.Empty;
+            }
+
+            SecondStarted.TrySetResult(true);
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return LocalVideoMetadata.Empty;
+        }
+
+        public void ReleaseFirst() => _firstRelease.TrySetResult(true);
     }
 
     private sealed class DelayedLocalMetadataProvider : ILocalVideoMetadataProvider

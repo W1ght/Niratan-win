@@ -5,7 +5,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using Niratan.Helpers;
+using Niratan.Messages;
 using Niratan.Models.Sasayaki;
 using Niratan.Models.Settings;
 using Niratan.Models.Sync;
@@ -15,7 +17,8 @@ using Niratan.Services.UI;
 
 namespace Niratan.ViewModels.Pages;
 
-public partial class TtuSyncSettingsPageViewModel : ObservableObject
+public partial class TtuSyncSettingsPageViewModel : ObservableObject,
+    IRecipient<GoogleDriveConnectionStateChangedMessage>
 {
     private readonly ISettingsService _settingsService;
     private readonly IGoogleDriveAuthService _googleDriveAuthService;
@@ -23,6 +26,7 @@ public partial class TtuSyncSettingsPageViewModel : ObservableObject
     private readonly IGoogleDriveSyncCache _googleDriveSyncCache;
     private readonly IGoogleDriveCoverCacheService _googleDriveCoverCacheService;
     private readonly IDialogService _dialogService;
+    private SynchronizationContext? _uiContext;
     private bool _isInitializing = true;
 
     public IReadOnlyList<TtuSyncModeItem> AvailableSyncModes { get; } =
@@ -94,7 +98,8 @@ public partial class TtuSyncSettingsPageViewModel : ObservableObject
         IGoogleDriveCredentialStore credentialStore,
         IGoogleDriveSyncCache googleDriveSyncCache,
         IGoogleDriveCoverCacheService googleDriveCoverCacheService,
-        IDialogService dialogService)
+        IDialogService dialogService,
+        IMessenger messenger)
     {
         _settingsService = settingsService;
         _googleDriveAuthService = googleDriveAuthService;
@@ -102,6 +107,10 @@ public partial class TtuSyncSettingsPageViewModel : ObservableObject
         _googleDriveSyncCache = googleDriveSyncCache;
         _googleDriveCoverCacheService = googleDriveCoverCacheService;
         _dialogService = dialogService;
+        _uiContext = SynchronizationContext.Current;
+        messenger.Register<TtuSyncSettingsPageViewModel, GoogleDriveConnectionStateChangedMessage>(
+            this,
+            static (recipient, message) => recipient.Receive(message));
         LoadSettings();
         RefreshConnectionState();
         _isInitializing = false;
@@ -109,8 +118,11 @@ public partial class TtuSyncSettingsPageViewModel : ObservableObject
 
     public async Task InitializeAsync(CancellationToken ct = default)
     {
+        _uiContext ??= SynchronizationContext.Current;
         _isInitializing = true;
         var loadFailed = false;
+        var authorizationExpired = false;
+        var connectionCheckFailed = false;
         try
         {
             var credentials = await _credentialStore.LoadAsync(ct);
@@ -118,6 +130,25 @@ public partial class TtuSyncSettingsPageViewModel : ObservableObject
             {
                 GoogleClientId = credentials.ClientId;
                 GoogleClientSecret = credentials.ClientSecret;
+                try
+                {
+                    await _googleDriveAuthService.GetAccessTokenAsync(ct);
+                }
+                catch (GoogleDriveReauthenticationRequiredException)
+                {
+                    authorizationExpired = true;
+                    ApplyConnectionState(new GoogleDriveConnectionStateChangedMessage(
+                        IsConnected: false,
+                        RequiresReconnect: true));
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    connectionCheckFailed = true;
+                    GoogleDriveConnectionStatus = ResourceStringHelper.FormatString(
+                        "TtuSyncStatusConnectionCheckFailedFormat",
+                        "Unable to verify the Google Drive connection: {0}",
+                        ex.Message);
+                }
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -132,7 +163,7 @@ public partial class TtuSyncSettingsPageViewModel : ObservableObject
         {
             _isInitializing = false;
             IsGoogleDriveConnected = _googleDriveAuthService.HasCredentials;
-            if (!loadFailed)
+            if (!loadFailed && !authorizationExpired && !connectionCheckFailed)
                 RefreshConnectionState();
         }
     }
@@ -370,6 +401,33 @@ public partial class TtuSyncSettingsPageViewModel : ObservableObject
         GoogleDriveConnectionStatus = IsGoogleDriveConnected
             ? ResourceStringHelper.GetString("TtuSyncStatusConnected", "Connected")
             : ResourceStringHelper.GetString("TtuSyncStatusNotConnected", "Not connected");
+    }
+
+    public void Receive(GoogleDriveConnectionStateChangedMessage message)
+    {
+        var uiContext = _uiContext;
+        if (uiContext != null && SynchronizationContext.Current != uiContext)
+        {
+            uiContext.Post(_ => ApplyConnectionState(message), null);
+            return;
+        }
+
+        ApplyConnectionState(message);
+    }
+
+    private void ApplyConnectionState(GoogleDriveConnectionStateChangedMessage message)
+    {
+        IsGoogleDriveConnected = message.IsConnected;
+        if (!message.IsConnected)
+            GoogleClientSecret = "";
+
+        GoogleDriveConnectionStatus = message.RequiresReconnect
+            ? ResourceStringHelper.GetString(
+                "TtuSyncStatusAuthorizationExpired",
+                "Authorization expired or was revoked. Connect Google Drive again.")
+            : message.IsConnected
+                ? ResourceStringHelper.GetString("TtuSyncStatusConnected", "Connected")
+                : ResourceStringHelper.GetString("TtuSyncStatusNotConnected", "Not connected");
     }
 
     public void OnNavigatedFrom() => SaveSettings();

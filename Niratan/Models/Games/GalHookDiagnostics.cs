@@ -49,7 +49,8 @@ public static class GalHookDiagnosticFunctions
             && GalHookDiagnosticBits.HasResourceEvidence(
                 ipc.HookDiagnostics,
                 ipc.ReservedLunaDiagnostics,
-                ipc.ReservedHookDiagnostics);
+                ipc.ReservedHookDiagnostics,
+                ipc.XAudioDiagnostics);
         var isFailure = state.Phase == GalHookSessionPhase.Error;
         var stopped = false;
         var results = new List<GalHookDiagnosticResult>();
@@ -239,6 +240,63 @@ public static class GalHookDiagnosticBits
         (0x20000000u, "kDiagElfAi6ArcTaskRejected"),
     ];
 
+    private static readonly (uint Mask, string Name)[] XAudio =
+    [
+        (0x00000001u, "kXAudioDiagQueueReady"),
+        (0x00000002u, "kXAudioDiagJobQueued"),
+        (0x00000004u, "kXAudioDiagDescriptorExhausted"),
+        (0x00000008u, "kXAudioDiagArenaExhausted"),
+        (0x00000010u, "kXAudioDiagBufferRejected"),
+        (0x00000020u, "kXAudioDiagRegistryMiss"),
+        (0x00000040u, "kXAudioDiagStaleInvalidated"),
+        (0x00000080u, "kXAudioDiagDecodeRejected"),
+        (0x00000100u, "kXAudioDiagPcmPublished"),
+        (0x00000200u, "kXAudioDiagFlushObserved"),
+        (0x00000400u, "kXAudioDiagDestroyObserved"),
+        (0x00000800u, "kXAudioDiagDeferredQueued"),
+        (0x00001000u, "kXAudioDiagDeferredExhausted"),
+        (0x00002000u, "kXAudioDiagCommitObserved"),
+        (0x00004000u, "kXAudioDiagSubmitFailed"),
+        (0x00008000u, "kXAudioDiagUnsupportedFormat"),
+        (0x00010000u, "kXAudioDiagRegistryExhausted"),
+        (0x00020000u, "kXAudioDiagCommitFailed"),
+        (0x00040000u, "kXAudioDiagCommitQueueExhausted"),
+        (0x00080000u, "kXAudioDiagGameResourcePublished"),
+        (0x00100000u, "kXAudioDiagRuntimeXwmaPublished"),
+        (0x00200000u, "kXAudioDiagLeafLacHooksReady"),
+        (0x00400000u, "kXAudioDiagLeafLacHandleTracked"),
+        (0x00800000u, "kXAudioDiagLeafLacReadObserved"),
+        (0x01000000u, "kXAudioDiagLeafLacVoiceQueued"),
+        (0x02000000u, "kXAudioDiagLeafLacTaskRejected"),
+        (0x04000000u, "kXAudioDiagLeafLacVoicePublished"),
+        (0x08000000u, "kXAudioDiagHunexHfaHooksReady"),
+        (0x10000000u, "kXAudioDiagHunexHfaHandleTracked"),
+        (0x20000000u, "kXAudioDiagHunexHfaReadObserved"),
+        (0x40000000u, "kXAudioDiagHunexHfaVoiceQueued"),
+        (0x80000000u, "kXAudioDiagHunexHfaTaskRejected"),
+    ];
+
+    private static readonly (uint Mask, string Name)[] XAudio2 =
+    [
+        (0x00000001u, "kXAudioDiag2SgreFamilyMatched"),
+        (0x00000002u, "kXAudioDiag2SgreAnchorsResolved"),
+        (0x00000004u, "kXAudioDiag2SgreAnchorsUnresolved"),
+        (0x00000008u, "kXAudioDiag2LeafProfileUnmatched"),
+        (0x00000010u, "kXAudioDiag2LeafFileHooksUnavailable"),
+        (0x00000020u, "kXAudioDiag2LeafVoiceArchivesMissing"),
+        (0x00000040u, "kXAudioDiag2LeafIdentityHashMatched"),
+        (0x00000080u, "kXAudioDiag2LeafStructureRejected"),
+        (0x00000100u, "kXAudioDiag2LeafImageUnopened"),
+        (0x00000200u, "kXAudioDiag2LeafSectionRolesRejected"),
+        (0x00000400u, "kXAudioDiag2LeafTraversalAnchorMissed"),
+        (0x00000800u, "kXAudioDiag2LeafRasterAnchorMissed"),
+        (0x00001000u, "kXAudioDiag2LeafInputAnchorMissed"),
+        (0x00002000u, "kXAudioDiag2LeafEmbedAnchorMissed"),
+        (0x00004000u, "kXAudioDiag2LeafDeviceAnchorMissed"),
+        (0x00008000u, "kXAudioDiag2LeafReturnSitesRejected"),
+        (0x00010000u, "kXAudioDiag2LeafExecutableUnmeasurable"),
+    ];
+
     private const uint PrimaryResourceEvidenceMask =
         0x00000004u | 0x00000040u | 0x00020000u | 0x00080000u
         | 0x00200000u | 0x00800000u | 0x02000000u | 0x08000000u
@@ -247,19 +305,24 @@ public static class GalHookDiagnosticBits
     private const uint ReservedLunaResourceEvidenceMask = 0x00080000u;
     private const uint ReservedHookResourceEvidenceMask =
         0x00000080u | 0x00000200u | 0x01000000u;
+    private const uint XAudioResourceEvidenceMask = 0x00080000u;
 
     public static bool HasResourceEvidence(
         uint primary,
         uint reservedLuna,
-        uint reservedHook) =>
+        uint reservedHook,
+        uint xaudio = 0) =>
         (primary & PrimaryResourceEvidenceMask) != 0
         || (reservedLuna & ReservedLunaResourceEvidenceMask) != 0
-        || (reservedHook & ReservedHookResourceEvidenceMask) != 0;
+        || (reservedHook & ReservedHookResourceEvidenceMask) != 0
+        || (xaudio & XAudioResourceEvidenceMask) != 0;
 
     public static IReadOnlyList<string> Explain(
         uint primary,
         uint reservedLuna,
-        uint reservedHook) =>
+        uint reservedHook,
+        uint xaudio = 0,
+        uint xaudio2 = 0) =>
         Primary
             .Where(flag => (primary & flag.Mask) != 0)
             .Select(flag => flag.Name)
@@ -268,6 +331,12 @@ public static class GalHookDiagnosticBits
                 .Select(flag => flag.Name))
             .Concat(ReservedHook
                 .Where(flag => (reservedHook & flag.Mask) != 0)
+                .Select(flag => flag.Name))
+            .Concat(XAudio
+                .Where(flag => (xaudio & flag.Mask) != 0)
+                .Select(flag => flag.Name))
+            .Concat(XAudio2
+                .Where(flag => (xaudio2 & flag.Mask) != 0)
                 .Select(flag => flag.Name))
             .ToArray();
 }

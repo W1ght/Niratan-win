@@ -23,8 +23,17 @@ public interface IVideoCatalogRepository
         string? error,
         CancellationToken ct = default);
     Task<long> BeginSourceScanAsync(Guid sourceId, VideoCatalogJobKind kind, CancellationToken ct = default);
+    Task<long?> TryBeginSourceScanAsync(
+        Guid sourceId,
+        VideoCatalogJobKind kind,
+        long expectedGeneration,
+        CancellationToken ct = default);
     Task<bool> ApplyScanBatchAsync(VideoScanBatch batch, CancellationToken ct = default);
     Task CancelSourceScanAsync(Guid sourceId, CancellationToken ct = default);
+    Task<bool> CancelSourceScanAsync(
+        Guid sourceId,
+        long expectedGeneration,
+        CancellationToken ct = default);
     Task SetSourceScanPausedAsync(Guid sourceId, bool paused, CancellationToken ct = default);
     Task RemoveSourceAsync(Guid sourceId, CancellationToken ct = default);
     Task<Guid> BeginMetadataRefreshAsync(Guid sourceId, int totalCount, CancellationToken ct = default);
@@ -41,6 +50,10 @@ public interface IVideoCatalogRepository
         CancellationToken ct = default,
         int failedCount = 0);
     Task ClearRemoteMetadataAsync(Guid sourceId, CancellationToken ct = default);
+    Task ClearAllScrapeRecordsAsync(CancellationToken ct = default);
+    Task ClearAllScrapeRecordsAsync(
+        IReadOnlyCollection<VideoManualAniDbIdentity> manualAniDbIdentities,
+        CancellationToken ct = default);
 
     Task UpsertCollectionAsync(VideoCollection collection, CancellationToken ct = default);
     Task DeleteCollectionAsync(Guid collectionId, CancellationToken ct = default);
@@ -62,6 +75,11 @@ public interface IVideoCatalogRepository
         bool preserveExistingHierarchy,
         CancellationToken ct = default);
 
+    Task ApplyAniDbIdentityAsync(
+        Guid assetId,
+        VideoAniDbIdentityProjection projection,
+        CancellationToken ct = default);
+
     Task<VideoProviderCacheEntry?> GetProviderCacheAsync(string cacheKey, CancellationToken ct = default);
     Task UpsertProviderCacheAsync(VideoProviderCacheEntry entry, CancellationToken ct = default);
     Task ApplyArtworkAsync(
@@ -73,5 +91,16 @@ public interface IVideoCatalogRepository
         string localPath,
         string? etag,
         DateTimeOffset? lastModified,
+        CancellationToken ct = default);
+
+    Task UpsertArtworkCandidateAsync(
+        Guid assetId,
+        VideoMetadataMediaKind defaultOwnerKind,
+        VideoArtworkCandidate candidate,
+        string? localPath = null,
+        string? etag = null,
+        DateTimeOffset? lastModified = null,
+        bool downloadAttempted = false,
+        string? lastError = null,
         CancellationToken ct = default);
 }

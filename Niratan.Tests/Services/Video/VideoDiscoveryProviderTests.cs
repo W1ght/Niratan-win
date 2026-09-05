@@ -54,20 +54,6 @@ public sealed class VideoDiscoveryProviderTests
     }
 
     [Fact]
-    public async Task BangumiCalendar_EmptyResponseIsAnEmptyPage()
-    {
-        var provider = new BangumiVideoDiscoveryProvider(
-            new FixtureTransport("[]"),
-            new FixtureCredentialStore());
-
-        var page = await provider.GetPageAsync(new VideoDiscoveryRequest(
-            "calendar", VideoMetadataMediaKind.Anime));
-
-        page.Items.Should().BeEmpty();
-        page.TotalPages.Should().BeNull();
-    }
-
-    [Fact]
     public async Task AniListSeasonal_ParsesPagingAndUsesGraphqlBody()
     {
         var transport = new FixtureTransport(
@@ -80,8 +66,31 @@ public sealed class VideoDiscoveryProviderTests
         page.Page.Should().Be(2);
         page.TotalPages.Should().Be(4);
         page.Items.Should().ContainSingle();
+        page.Items[0].Identity.Title.Should().Be("Romaji");
+        page.Items[0].Identity.OriginalTitle.Should().Be("Native");
+        page.Items[0].Identity.Aliases.Should().Contain("English");
         page.Items[0].CommunityRating.Should().Be(8.2);
         Encoding.UTF8.GetString(transport.LastRequest!.Body!).Should().Contain("seasonYear");
+    }
+
+    [Fact]
+    public async Task AniListPopular_MapsNeutralYearGenreAndSortFilters()
+    {
+        var transport = new FixtureTransport(
+            """{"data":{"Page":{"pageInfo":{"lastPage":1},"media":[]}}}""");
+        var provider = new AniListVideoDiscoveryProvider(transport);
+
+        await provider.GetPageAsync(new VideoDiscoveryRequest(
+            "popular",
+            VideoMetadataMediaKind.Anime,
+            Year: 2025,
+            GenreId: "28",
+            SortBy: "vote_average.desc"), TestContext.Current.CancellationToken);
+
+        var body = Encoding.UTF8.GetString(transport.LastRequest!.Body!);
+        body.Should().Contain("SCORE_DESC");
+        body.Should().Contain("seasonYear:2025");
+        body.Should().Contain("genre:\\u0022Action\\u0022");
     }
 
     [Fact]
@@ -201,7 +210,7 @@ public sealed class VideoDiscoveryProviderTests
     }
 
     [Fact]
-    public async Task DiscoveryService_SearchCachesArtworkForSearchCards()
+    public async Task DiscoveryService_SearchUsesEmbeddedArtworkWithoutPerResultArtworkRequests()
     {
         var candidate = new VideoMetadataCandidate(
             "fixture",
@@ -215,7 +224,9 @@ public sealed class VideoDiscoveryProviderTests
             null,
             ["Movie", "Original"],
             ImmutableDictionary<string, string>.Empty,
-            "https://example.test/movie-1");
+            "https://example.test/movie-1",
+            "https://image.tmdb.org/poster.jpg",
+            "https://image.tmdb.org/backdrop.jpg");
         var searchProvider = new Mock<IVideoMetadataSearchProvider>();
         ConfigureProvider(searchProvider, "fixture", VideoMetadataCapabilities.Search);
         searchProvider
@@ -272,7 +283,494 @@ public sealed class VideoDiscoveryProviderTests
             It.IsAny<CancellationToken>()), Times.Once);
         artworkProvider.Verify(provider => provider.GetArtworkAsync(
             It.Is<VideoMetadataCandidate>(value => value.ProviderItemId == "movie-1"),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_AggregatedSearch_UsesOnlyFushiSourcesAndStableRoundRobinOrder()
+    {
+        var anilist = CreateSearchProvider("anilist", query =>
+            query.MediaKind == VideoMetadataMediaKind.Anime
+                ? [
+                    CreateSearchCandidate("anilist", "ani-1", VideoMetadataMediaKind.Anime, "Anime One", 2024),
+                    CreateSearchCandidate("anilist", "ani-2", VideoMetadataMediaKind.Anime, "Anime Two", 2023),
+                ]
+                : []);
+        var tmdb = CreateSearchProvider("tmdb", query => query.MediaKind switch
+        {
+            VideoMetadataMediaKind.Movie =>
+                [CreateSearchCandidate("tmdb", "movie-1", VideoMetadataMediaKind.Movie, "Movie One", 2025)],
+            VideoMetadataMediaKind.Series =>
+                [CreateSearchCandidate("tmdb", "series-1", VideoMetadataMediaKind.Series, "Series One", 2022)],
+            _ => [],
+        });
+        var tvmaze = CreateSearchProvider("tvmaze", _ =>
+            [CreateSearchCandidate("tvmaze", "ignored", VideoMetadataMediaKind.Series, "Ignored", 2020)]);
+        var service = CreateOnlineDiscoveryService(anilist.Object, tmdb.Object, tvmaze.Object);
+
+        var result = await service.SearchAggregatedAsync(
+            ["tmdb", "tvmaze", "anilist"],
+            "work",
+            VideoDiscoverySearchCategory.All,
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Items.Select(item => item.Identity.ProviderItemId)
+            .Should().Equal("ani-1", "movie-1", "ani-2", "series-1");
+        anilist.Verify(provider => provider.SearchAsync(
+            It.Is<VideoMetadataSearchQuery>(query => query.MediaKind == VideoMetadataMediaKind.Anime),
             It.IsAny<CancellationToken>()), Times.Once);
+        tmdb.Verify(provider => provider.SearchAsync(
+            It.Is<VideoMetadataSearchQuery>(query => query.MediaKind == VideoMetadataMediaKind.Movie),
+            It.IsAny<CancellationToken>()), Times.Once);
+        tmdb.Verify(provider => provider.SearchAsync(
+            It.Is<VideoMetadataSearchQuery>(query => query.MediaKind == VideoMetadataMediaKind.Series),
+            It.IsAny<CancellationToken>()), Times.Once);
+        tvmaze.Verify(provider => provider.SearchAsync(
+            It.IsAny<VideoMetadataSearchQuery>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_AggregatedBrowse_UsesOnlyFushiSourcesAndStableNestedRoundRobinOrder()
+    {
+        var anilist = CreateDiscoveryProvider("anilist", request => new VideoDiscoveryPage(
+            "anilist",
+            request.FeedId,
+            request.Page,
+            1,
+            [
+                CreateDiscoveryItem("anilist", "ani-1", VideoMetadataMediaKind.Anime, "Anime One"),
+                CreateDiscoveryItem("anilist", "ani-2", VideoMetadataMediaKind.Anime, "Anime Two"),
+                CreateDiscoveryItem("anilist", "ani-3", VideoMetadataMediaKind.Anime, "Anime Three"),
+            ]));
+        var tmdb = CreateDiscoveryProvider("tmdb", request => new VideoDiscoveryPage(
+            "tmdb",
+            request.FeedId,
+            request.Page,
+            1,
+            request.MediaKind == VideoMetadataMediaKind.Movie
+                ? [
+                    CreateDiscoveryItem("tmdb", "movie-1", VideoMetadataMediaKind.Movie, "Movie One"),
+                    CreateDiscoveryItem("tmdb", "movie-2", VideoMetadataMediaKind.Movie, "Movie Two"),
+                ]
+                : [
+                    CreateDiscoveryItem("tmdb", "series-1", VideoMetadataMediaKind.Series, "Series One"),
+                    CreateDiscoveryItem("tmdb", "series-2", VideoMetadataMediaKind.Series, "Series Two"),
+                ]));
+        var tvmaze = CreateDiscoveryProvider("tvmaze", request => new VideoDiscoveryPage(
+            "tvmaze",
+            request.FeedId,
+            request.Page,
+            1,
+            [CreateDiscoveryItem("tvmaze", "ignored", VideoMetadataMediaKind.Series, "Ignored")]));
+        var service = CreateOnlineBrowseService(anilist.Object, tmdb.Object, tvmaze.Object);
+
+        var result = await service.GetAggregatedPageAsync(
+            ["tmdb", "tvmaze", "anilist"],
+            new VideoDiscoveryAggregateRequest(PageSize: 20),
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Items.Select(item => item.Identity.ProviderItemId)
+            .Should().Equal(
+                "ani-1", "movie-1", "ani-2", "series-1",
+                "ani-3", "movie-2", "series-2");
+        anilist.Verify(provider => provider.GetPageAsync(
+            It.Is<VideoDiscoveryRequest>(request =>
+                request.FeedId == "popular"
+                && request.MediaKind == VideoMetadataMediaKind.Anime
+                && request.Page == 1),
+            It.IsAny<CancellationToken>()), Times.Once);
+        tmdb.Verify(provider => provider.GetPageAsync(
+            It.Is<VideoDiscoveryRequest>(request =>
+                request.FeedId == "popular-movie"
+                && request.MediaKind == VideoMetadataMediaKind.Movie
+                && request.Page == 1),
+            It.IsAny<CancellationToken>()), Times.Once);
+        tmdb.Verify(provider => provider.GetPageAsync(
+            It.Is<VideoDiscoveryRequest>(request =>
+                request.FeedId == "popular-tv"
+                && request.MediaKind == VideoMetadataMediaKind.Series
+                && request.Page == 1),
+            It.IsAny<CancellationToken>()), Times.Once);
+        tvmaze.Verify(provider => provider.GetPageAsync(
+            It.IsAny<VideoDiscoveryRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_AggregatedRecommendationsUseFushiConceptShelves()
+    {
+        const string romaji = "Re:Zero kara Hajimeru Isekai Seikatsu";
+        const string english = "Re:ZERO -Starting Life in Another World-";
+        const string native = "Re:ゼロから始める異世界生活";
+        var aniListReZero = new VideoDiscoveryItem(
+            CreateSearchCandidate(
+                "anilist",
+                "21355",
+                VideoMetadataMediaKind.Anime,
+                romaji,
+                2016,
+                [english, native]) with
+            {
+                OriginalTitle = native,
+            },
+            null, null, null, null, null);
+        var tmdbReZero = new VideoDiscoveryItem(
+            CreateSearchCandidate(
+                "tmdb",
+                "65942",
+                VideoMetadataMediaKind.Series,
+                english,
+                2016,
+                [romaji, native]),
+            null, null, null, null, null);
+        var anilist = CreateDiscoveryProvider("anilist", request => new VideoDiscoveryPage(
+            "anilist",
+            request.FeedId,
+            request.Page,
+            1,
+            request.FeedId == "popular"
+                ? [aniListReZero]
+                : [CreateDiscoveryItem(
+                    "anilist",
+                    $"{request.FeedId}-anime",
+                    VideoMetadataMediaKind.Anime,
+                    $"{request.FeedId} anime")]));
+        var tmdb = CreateDiscoveryProvider("tmdb", request => new VideoDiscoveryPage(
+            "tmdb",
+            request.FeedId,
+            request.Page,
+            1,
+            request.FeedId == "trending-tv"
+                ? [tmdbReZero]
+                : [CreateDiscoveryItem(
+                    "tmdb",
+                    request.FeedId,
+                    request.MediaKind,
+                    request.FeedId)]));
+        var service = CreateOnlineBrowseService(anilist.Object, tmdb.Object);
+
+        var result = await service.GetAggregatedRecommendationsAsync(
+            ["anilist", "tmdb"],
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.Should().BeTrue();
+        var pages = result.Value!;
+        pages.Select(page => page.FeedId)
+            .Should().Equal("trending", "seasonal", "popular");
+        pages.Single(page => page.FeedId == "seasonal").Items
+            .Should().OnlyContain(item => item.Identity.ProviderId == "anilist");
+        var trendingReZero = pages.Single(page => page.FeedId == "trending").Items
+            .Where(item =>
+                item.Identity.ExternalIds.TryGetValue("tmdb", out var tmdbId)
+                && tmdbId == "65942"
+                && item.Identity.ExternalIds.ContainsKey("anilist"))
+            .Should().ContainSingle().Subject;
+        trendingReZero.Identity.Title.Should().Be(romaji);
+        trendingReZero.Identity.OriginalTitle.Should().Be(native);
+        trendingReZero.Identity.Aliases.Should().Contain(english);
+        trendingReZero.Identity.ExternalIds.Should().Contain("tmdb", "65942");
+        foreach (var feed in new[] { "trending", "seasonal", "popular" })
+        {
+            anilist.Verify(provider => provider.GetPageAsync(
+                It.Is<VideoDiscoveryRequest>(request => request.FeedId == feed),
+                It.IsAny<CancellationToken>()), Times.Once);
+        }
+        foreach (var feed in new[]
+                 {
+                     "trending-movie", "trending-tv", "popular-movie", "popular-tv",
+                 })
+        {
+            tmdb.Verify(provider => provider.GetPageAsync(
+                It.Is<VideoDiscoveryRequest>(request => request.FeedId == feed),
+                It.IsAny<CancellationToken>()), Times.Once);
+        }
+        tmdb.Invocations.Count(invocation =>
+                invocation.Method.Name == nameof(IVideoDiscoveryProvider.GetPageAsync))
+            .Should().Be(4);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_AggregatedBrowse_KeepsSuccessfulStreamsWhenOneTmdbKindFails()
+    {
+        var anilist = CreateDiscoveryProvider("anilist", request => new VideoDiscoveryPage(
+            "anilist",
+            request.FeedId,
+            request.Page,
+            1,
+            [CreateDiscoveryItem("anilist", "ani-1", VideoMetadataMediaKind.Anime, "Anime")]));
+        var tmdb = CreateDiscoveryProvider("tmdb", request =>
+        {
+            if (request.MediaKind == VideoMetadataMediaKind.Movie)
+                throw new HttpRequestException("movie stream offline");
+            return new VideoDiscoveryPage(
+                "tmdb",
+                request.FeedId,
+                request.Page,
+                1,
+                [CreateDiscoveryItem("tmdb", "series-1", VideoMetadataMediaKind.Series, "Series")]);
+        });
+        var service = CreateOnlineBrowseService(anilist.Object, tmdb.Object);
+
+        var result = await service.GetAggregatedPageAsync(
+            ["anilist", "tmdb"],
+            new VideoDiscoveryAggregateRequest(),
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Items.Select(item => item.Identity.ProviderItemId)
+            .Should().Equal("ani-1", "series-1");
+        result.Value.Error.Should().ContainEquivalentOf("tmdb");
+    }
+
+    [Fact]
+    public async Task DiscoveryService_AggregatedBrowse_FailsOnlyWhenEveryStreamFails()
+    {
+        var anilist = CreateDiscoveryProvider("anilist", _ =>
+            throw new HttpRequestException("anilist offline"));
+        var tmdb = CreateDiscoveryProvider("tmdb", _ =>
+            throw new HttpRequestException("tmdb offline"));
+        var service = CreateOnlineBrowseService(anilist.Object, tmdb.Object);
+
+        var result = await service.GetAggregatedPageAsync(
+            ["anilist", "tmdb"],
+            new VideoDiscoveryAggregateRequest(),
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.Should().BeFalse();
+        result.Value.Should().BeNull();
+        result.Error.Should().ContainEquivalentOf("anilist");
+        result.Error.Should().ContainEquivalentOf("tmdb");
+        result.ErrorTitle.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task DiscoveryService_AggregatedBrowse_RebuildsCumulativePrefixWithoutDroppingPriorPageTail()
+    {
+        var anilist = CreateDiscoveryProvider("anilist", request =>
+        {
+            var firstId = request.Page == 1 ? 1 : 5;
+            return new VideoDiscoveryPage(
+                "anilist",
+                request.FeedId,
+                request.Page,
+                2,
+                Enumerable.Range(firstId, 4)
+                    .Select(id => CreateDiscoveryItem(
+                        "anilist",
+                        $"ani-{id}",
+                        VideoMetadataMediaKind.Anime,
+                        $"Anime {id}"))
+                    .ToImmutableArray());
+        });
+        var service = CreateOnlineBrowseService(anilist.Object);
+        var request = new VideoDiscoveryAggregateRequest(PageSize: 3);
+
+        var first = await service.GetAggregatedPageAsync(
+            ["anilist"],
+            request,
+            TestContext.Current.CancellationToken);
+        var second = await service.GetAggregatedPageAsync(
+            ["anilist"],
+            request with { Page = 2 },
+            TestContext.Current.CancellationToken);
+
+        first.Value!.Items.Select(item => item.Identity.ProviderItemId)
+            .Should().Equal("ani-1", "ani-2", "ani-3");
+        second.Value!.Items.Select(item => item.Identity.ProviderItemId)
+            .Should().Equal("ani-4", "ani-5", "ani-6");
+        anilist.Verify(provider => provider.GetPageAsync(
+            It.Is<VideoDiscoveryRequest>(page => page.Page == 1),
+            It.IsAny<CancellationToken>()), Times.Once);
+        anilist.Verify(provider => provider.GetPageAsync(
+            It.Is<VideoDiscoveryRequest>(page => page.Page == 2),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(VideoDiscoverySearchCategory.Movie, 1, 0, VideoMetadataMediaKind.Movie)]
+    [InlineData(VideoDiscoverySearchCategory.Series, 1, 0, VideoMetadataMediaKind.Series)]
+    [InlineData(VideoDiscoverySearchCategory.Anime, 0, 1, VideoMetadataMediaKind.Anime)]
+    public async Task DiscoveryService_AggregatedSearch_RoutesCategoriesToSupportedSourceOnly(
+        VideoDiscoverySearchCategory category,
+        int expectedTmdbCalls,
+        int expectedAniListCalls,
+        VideoMetadataMediaKind expectedKind)
+    {
+        var tmdb = CreateSearchProvider("tmdb", _ => []);
+        var anilist = CreateSearchProvider("anilist", _ => []);
+        var service = CreateOnlineDiscoveryService(tmdb.Object, anilist.Object);
+
+        var result = await service.SearchAggregatedAsync(
+            ["tmdb", "anilist"],
+            "work",
+            category,
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.Should().BeTrue();
+        tmdb.Verify(provider => provider.SearchAsync(
+            It.Is<VideoMetadataSearchQuery>(query => query.MediaKind == expectedKind),
+            It.IsAny<CancellationToken>()), Times.Exactly(expectedTmdbCalls));
+        anilist.Verify(provider => provider.SearchAsync(
+            It.Is<VideoMetadataSearchQuery>(query => query.MediaKind == expectedKind),
+            It.IsAny<CancellationToken>()), Times.Exactly(expectedAniListCalls));
+        tmdb.Invocations.Count(invocation => invocation.Method.Name == nameof(IVideoMetadataSearchProvider.SearchAsync))
+            .Should().Be(expectedTmdbCalls);
+        anilist.Invocations.Count(invocation => invocation.Method.Name == nameof(IVideoMetadataSearchProvider.SearchAsync))
+            .Should().Be(expectedAniListCalls);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_AggregatedSearch_KeepsSuccessfulSourceWhenOtherSourceFails()
+    {
+        var anilist = CreateSearchProvider("anilist", _ =>
+            [CreateSearchCandidate("anilist", "ani-1", VideoMetadataMediaKind.Anime, "Anime", 2024)]);
+        var tmdb = CreateSearchProvider("tmdb", _ => throw new HttpRequestException("offline"));
+        var service = CreateOnlineDiscoveryService(anilist.Object, tmdb.Object);
+
+        var result = await service.SearchAggregatedAsync(
+            ["anilist", "tmdb"],
+            "anime",
+            VideoDiscoverySearchCategory.All,
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Items.Should().ContainSingle()
+            .Which.Identity.ProviderId.Should().Be("anilist");
+        result.Value.Error.Should().ContainEquivalentOf("tmdb");
+    }
+
+    [Fact]
+    public async Task DiscoveryService_AggregatedSearch_FailsOnlyWhenEverySourceFails()
+    {
+        var anilist = CreateSearchProvider("anilist", _ => throw new HttpRequestException("offline"));
+        var tmdb = CreateSearchProvider("tmdb", _ => throw new HttpRequestException("offline"));
+        var service = CreateOnlineDiscoveryService(anilist.Object, tmdb.Object);
+
+        var result = await service.SearchAggregatedAsync(
+            ["anilist", "tmdb"],
+            "work",
+            VideoDiscoverySearchCategory.All,
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.Should().BeFalse();
+        result.Value.Should().BeNull();
+        result.Error.Should().NotBeNullOrWhiteSpace();
+        result.Error.Should().ContainEquivalentOf("anilist");
+        result.Error.Should().ContainEquivalentOf("tmdb");
+        result.ErrorTitle.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task DiscoveryService_AggregatedSearch_MergesExactTitleAndYearAndPreservesBothIdentities()
+    {
+        var aniIds = ImmutableDictionary<string, string>.Empty
+            .Add("anilist", "100")
+            .Add("mal", "200");
+        var tmdbIds = ImmutableDictionary<string, string>.Empty.Add("tmdb", "300");
+        var anilist = CreateSearchProvider("anilist", _ =>
+            [CreateSearchCandidate(
+                "anilist", "100", VideoMetadataMediaKind.Anime,
+                "Sousou no Frieren", 2023, ["Frieren: Beyond Journey's End"], aniIds)]);
+        var tmdb = CreateSearchProvider("tmdb", query => query.MediaKind == VideoMetadataMediaKind.Series
+            ? [CreateSearchCandidate(
+                "tmdb", "300", VideoMetadataMediaKind.Series,
+                "Frieren: Beyond Journey's End", 2023, ["Sousou no Frieren"], tmdbIds)]
+            : []);
+        var service = CreateOnlineDiscoveryService(anilist.Object, tmdb.Object);
+
+        var result = await service.SearchAggregatedAsync(
+            ["anilist", "tmdb"],
+            "frieren",
+            VideoDiscoverySearchCategory.All,
+            TestContext.Current.CancellationToken);
+
+        var item = result.Value!.Items.Should().ContainSingle().Subject;
+        item.Identity.ProviderId.Should().Be("anilist");
+        item.Identity.ExternalIds.Should().Contain("anilist", "100");
+        item.Identity.ExternalIds.Should().Contain("tmdb", "300");
+        item.Identity.Aliases.Should().Contain("Frieren: Beyond Journey's End");
+    }
+
+    [Fact]
+    public async Task DiscoveryService_AggregatedAnimeMovieKeepsTmdbIdentityAndUsesAniListRomajiTitle()
+    {
+        const string romaji = "Kimi no Na wa.";
+        const string english = "Your Name.";
+        const string native = "君の名は。";
+        var aniListCandidate = CreateSearchCandidate(
+            "anilist",
+            "21519",
+            VideoMetadataMediaKind.Anime,
+            romaji,
+            2016,
+            [english, native]) with
+        {
+            OriginalTitle = native,
+        };
+        var anilist = CreateSearchProvider("anilist", _ => [aniListCandidate]);
+        var tmdb = CreateSearchProvider("tmdb", query => query.MediaKind == VideoMetadataMediaKind.Movie
+            ? [CreateSearchCandidate(
+                "tmdb",
+                "372058",
+                VideoMetadataMediaKind.Movie,
+                english,
+                2016,
+                [romaji, native])]
+            : []);
+        var service = CreateOnlineDiscoveryService(anilist.Object, tmdb.Object);
+
+        var result = await service.SearchAggregatedAsync(
+            ["anilist", "tmdb"],
+            "your name",
+            VideoDiscoverySearchCategory.All,
+            TestContext.Current.CancellationToken);
+
+        var item = result.Value!.Items.Should().ContainSingle().Subject;
+        item.Identity.ProviderId.Should().Be("tmdb");
+        item.Identity.ProviderItemId.Should().Be("372058");
+        item.Identity.MediaKind.Should().Be(VideoMetadataMediaKind.Movie);
+        item.Identity.Title.Should().Be(romaji);
+        item.Identity.OriginalTitle.Should().Be(native);
+        item.Identity.Aliases.Should().Contain(english);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_AggregatedSearch_DoesNotMergeConflictsKindsOrMissingYears()
+    {
+        var anilist = CreateSearchProvider("anilist", _ =>
+        [
+            CreateSearchCandidate(
+                "anilist", "ani-conflict", VideoMetadataMediaKind.Anime, "Conflict", 2020,
+                externalIds: ImmutableDictionary<string, string>.Empty.Add("mal", "1")),
+            CreateSearchCandidate("anilist", "ani-no-year", VideoMetadataMediaKind.Anime, "No Year", null),
+        ]);
+        var tmdb = CreateSearchProvider("tmdb", query => query.MediaKind switch
+        {
+            VideoMetadataMediaKind.Movie =>
+                [CreateSearchCandidate("tmdb", "7", VideoMetadataMediaKind.Movie, "Same Numeric Id", 2021)],
+            VideoMetadataMediaKind.Series =>
+            [
+                CreateSearchCandidate(
+                    "tmdb", "series-conflict", VideoMetadataMediaKind.Series, "Conflict", 2020,
+                    externalIds: ImmutableDictionary<string, string>.Empty.Add("mal", "2")),
+                CreateSearchCandidate("tmdb", "series-no-year", VideoMetadataMediaKind.Series, "No Year", null),
+                CreateSearchCandidate("tmdb", "7", VideoMetadataMediaKind.Series, "Same Numeric Id", 2021),
+            ],
+            _ => [],
+        });
+        var service = CreateOnlineDiscoveryService(anilist.Object, tmdb.Object);
+
+        var result = await service.SearchAggregatedAsync(
+            ["anilist", "tmdb"],
+            "work",
+            VideoDiscoverySearchCategory.All,
+            TestContext.Current.CancellationToken);
+
+        result.Value!.Items.Should().HaveCount(6);
+        result.Value.Items.Count(item => item.Identity.ProviderItemId == "7").Should().Be(2);
+        result.Value.Items.Count(item => item.Identity.Title == "Conflict").Should().Be(2);
+        result.Value.Items.Count(item => item.Identity.Title == "No Year").Should().Be(2);
     }
 
     [Fact]
@@ -384,6 +882,415 @@ public sealed class VideoDiscoveryProviderTests
         artworkProvider.Verify(provider => provider.GetArtworkAsync(
             It.IsAny<VideoMetadataCandidate>(),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_DetailsCacheSeparatesTmdbMovieAndSeriesWithSameNumericId()
+    {
+        var detailsProvider = new Mock<IVideoMetadataDetailsProvider>();
+        ConfigureProvider(detailsProvider, "tmdb", VideoMetadataCapabilities.Details);
+        detailsProvider.Setup(provider => provider.GetDetailsAsync(
+                It.IsAny<VideoMetadataCandidate>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<VideoMetadataCandidate, string, string, CancellationToken>((identity, _, _, _) =>
+                Task.FromResult<VideoMetadataDetails?>(new VideoMetadataDetails(
+                    identity.ProviderId,
+                    identity.ProviderItemId,
+                    identity.MediaKind,
+                    identity.Title,
+                    null,
+                    null,
+                    null,
+                    identity.Year,
+                    null,
+                    null,
+                    null,
+                    [identity.Title],
+                    [],
+                    [],
+                    identity.ExternalIds,
+                    identity.SourceUrl,
+                    DateTimeOffset.UtcNow,
+                    DateTimeOffset.UtcNow.AddDays(1))));
+        var settings = new Mock<ISettingsService>();
+        settings.SetupGet(service => service.Current).Returns(new AppSettings
+        {
+            VideoSettings = new VideoSettings
+            {
+                Metadata = new VideoMetadataSettings { OnlineConsentAccepted = true },
+            },
+        });
+        var service = new VideoDiscoveryService(
+            [],
+            [detailsProvider.Object],
+            [],
+            Mock.Of<IVideoMetadataTransport>(),
+            Mock.Of<IVideoArtworkCache>(),
+            settings.Object);
+        var movie = CreateSearchCandidate(
+            "tmdb", "7", VideoMetadataMediaKind.Movie, "Movie", 2020);
+        var series = CreateSearchCandidate(
+            "tmdb", "7", VideoMetadataMediaKind.Series, "Series", 2021);
+
+        var movieResult = await service.GetDetailsAsync(movie, TestContext.Current.CancellationToken);
+        var seriesResult = await service.GetDetailsAsync(series, TestContext.Current.CancellationToken);
+
+        movieResult.Value!.Metadata.MediaKind.Should().Be(VideoMetadataMediaKind.Movie);
+        seriesResult.Value!.Metadata.MediaKind.Should().Be(VideoMetadataMediaKind.Series);
+        detailsProvider.Verify(provider => provider.GetDetailsAsync(
+            It.IsAny<VideoMetadataCandidate>(),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task DiscoveryService_CachedDetailsAddAggregatedIdentityWithoutOverwritingProviderIds()
+    {
+        var detailsProvider = new Mock<IVideoMetadataDetailsProvider>();
+        ConfigureProvider(detailsProvider, "anilist", VideoMetadataCapabilities.Details);
+        detailsProvider.Setup(provider => provider.GetDetailsAsync(
+                It.IsAny<VideoMetadataCandidate>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<VideoMetadataCandidate, string, string, CancellationToken>((candidate, _, _, _) =>
+                Task.FromResult<VideoMetadataDetails?>(new VideoMetadataDetails(
+                    "anilist",
+                    "100",
+                    VideoMetadataMediaKind.Anime,
+                    "Work",
+                    null,
+                    null,
+                    null,
+                    2024,
+                    null,
+                    null,
+                    null,
+                    ["Work"],
+                    [],
+                    [],
+                    candidate.ExternalIds.SetItem("mal", "200"),
+                    null,
+                    DateTimeOffset.UtcNow,
+                    DateTimeOffset.UtcNow.AddDays(1))));
+        var settings = new Mock<ISettingsService>();
+        settings.SetupGet(service => service.Current).Returns(new AppSettings
+        {
+            VideoSettings = new VideoSettings
+            {
+                Metadata = new VideoMetadataSettings { OnlineConsentAccepted = true },
+            },
+        });
+        var service = new VideoDiscoveryService(
+            [],
+            [detailsProvider.Object],
+            [],
+            Mock.Of<IVideoMetadataTransport>(),
+            Mock.Of<IVideoArtworkCache>(),
+            settings.Object);
+        var cachedIdentity = CreateSearchCandidate(
+            "anilist",
+            "100",
+            VideoMetadataMediaKind.Anime,
+            "Work",
+            2024,
+            externalIds: ImmutableDictionary<string, string>.Empty
+                .Add("anilist", "100")
+                .Add("tmdb", "stale-cross-reference"));
+        var aggregatedIdentity = cachedIdentity with
+        {
+            ExternalIds = cachedIdentity.ExternalIds
+                .SetItem("tmdb", "300")
+                .Add("mal", "stale"),
+        };
+
+        var first = await service.GetDetailsAsync(
+            cachedIdentity,
+            TestContext.Current.CancellationToken);
+        var second = await service.GetDetailsAsync(
+            aggregatedIdentity,
+            TestContext.Current.CancellationToken);
+
+        first.IsSuccess.Should().BeTrue();
+        first.Value!.Metadata.ExternalIds.Should().Contain("tmdb", "stale-cross-reference");
+        second.Value!.Metadata.ExternalIds.Should().Contain("tmdb", "300");
+        second.Value.Metadata.ExternalIds.Should().Contain("mal", "200");
+        detailsProvider.Verify(provider => provider.GetDetailsAsync(
+            It.Is<VideoMetadataCandidate>(candidate =>
+                candidate.ExternalIds.Count == 1
+                && candidate.ExternalIds["anilist"] == "100"),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_AggregatedIdentityHydratesDetailsFromAniListAndTmdb()
+    {
+        var identity = CreateSearchCandidate(
+            "anilist",
+            "100",
+            VideoMetadataMediaKind.Anime,
+            "Work",
+            2024,
+            externalIds: ImmutableDictionary<string, string>.Empty
+                .Add("anilist", "100")
+                .Add("tmdb", "300"));
+        var aniListDetails = BuildSeriesDetails(identity, 0) with
+        {
+            Overview = null,
+            ExternalIds = ImmutableDictionary<string, string>.Empty.Add("anilist", "100"),
+        };
+        var tmdbIdentity = identity with
+        {
+            ProviderId = "tmdb",
+            ProviderItemId = "300",
+            MediaKind = VideoMetadataMediaKind.Series,
+        };
+        var tmdbDetails = BuildSeriesDetails(tmdbIdentity, 1) with
+        {
+            Overview = "TMDB overview",
+            OfficialRating = "TV-14",
+            ExternalIds = ImmutableDictionary<string, string>.Empty
+                .Add("tmdb", "300")
+                .Add("imdb", "tt1234567"),
+            People = [new VideoPersonCredit("9", "Actor", "Role", "Actor", null)],
+        };
+        var aniList = new Mock<IVideoMetadataDetailsProvider>();
+        ConfigureProvider(aniList, "anilist", VideoMetadataCapabilities.Details);
+        aniList.Setup(provider => provider.GetDetailsAsync(
+                It.IsAny<VideoMetadataCandidate>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(aniListDetails);
+        var tmdb = new Mock<IVideoMetadataDetailsProvider>();
+        ConfigureProvider(tmdb, "tmdb", VideoMetadataCapabilities.Details);
+        tmdb.Setup(provider => provider.GetDetailsAsync(
+                It.IsAny<VideoMetadataCandidate>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(tmdbDetails);
+        var service = CreateOnlineDetailsService(aniList.Object, tmdb.Object);
+
+        var result = await service.GetDetailsAsync(
+            identity,
+            TestContext.Current.CancellationToken);
+        var cachedResult = await service.GetDetailsAsync(
+            identity,
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.Should().BeTrue();
+        cachedResult.IsSuccess.Should().BeTrue();
+        result.Value!.Metadata.ProviderId.Should().Be("anilist");
+        result.Value.Metadata.ProviderItemId.Should().Be("100");
+        result.Value.Metadata.Overview.Should().Be("TMDB overview");
+        result.Value.Metadata.OfficialRating.Should().Be("TV-14");
+        result.Value.Metadata.ExternalIds.Should().Contain("imdb", "tt1234567");
+        result.Value.Metadata.People.Should().ContainSingle(person => person.Name == "Actor");
+        result.Value.Seasons.Should().ContainSingle();
+        tmdb.Verify(provider => provider.GetDetailsAsync(
+            It.Is<VideoMetadataCandidate>(candidate =>
+                candidate.ProviderItemId == "300"
+                && candidate.MediaKind == VideoMetadataMediaKind.Series),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        aniList.Verify(provider => provider.GetDetailsAsync(
+            It.IsAny<VideoMetadataCandidate>(),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_TmdbPrimaryHydratesAniListWithoutReplacingMovieIdentity()
+    {
+        const string romaji = "Re:Zero kara Hajimeru Isekai Seikatsu";
+        const string english = "Re:ZERO -Starting Life in Another World-";
+        const string native = "Re:ゼロから始める異世界生活";
+        var identity = CreateSearchCandidate(
+            "tmdb",
+            "7",
+            VideoMetadataMediaKind.Movie,
+            english,
+            2024,
+            externalIds: ImmutableDictionary<string, string>.Empty
+                .Add("tmdb", "7")
+                .Add("anilist", "100"));
+        var tmdb = new Mock<IVideoMetadataDetailsProvider>();
+        ConfigureProvider(tmdb, "tmdb", VideoMetadataCapabilities.Details);
+        tmdb.Setup(provider => provider.GetDetailsAsync(
+                It.IsAny<VideoMetadataCandidate>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(BuildSeriesDetails(identity, 0) with { OriginalTitle = null });
+        var aniList = new Mock<IVideoMetadataDetailsProvider>();
+        ConfigureProvider(aniList, "anilist", VideoMetadataCapabilities.Details);
+        aniList.Setup(provider => provider.GetDetailsAsync(
+                It.IsAny<VideoMetadataCandidate>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<VideoMetadataCandidate, string, string, CancellationToken>((candidate, _, _, _) =>
+                Task.FromResult<VideoMetadataDetails?>(BuildSeriesDetails(candidate, 0) with
+                {
+                    Title = romaji,
+                    OriginalTitle = native,
+                    Aliases = [english],
+                }));
+        var service = CreateOnlineDetailsService(tmdb.Object, aniList.Object);
+
+        var result = await service.GetDetailsAsync(
+            identity,
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Metadata.ProviderId.Should().Be("tmdb");
+        result.Value.Metadata.ProviderItemId.Should().Be("7");
+        result.Value.Metadata.MediaKind.Should().Be(VideoMetadataMediaKind.Movie);
+        result.Value.Metadata.Title.Should().Be(romaji);
+        result.Value.Metadata.OriginalTitle.Should().Be(native);
+        result.Value.Metadata.Aliases.Should().Contain(english);
+        aniList.Verify(provider => provider.GetDetailsAsync(
+            It.Is<VideoMetadataCandidate>(candidate =>
+                candidate.ProviderItemId == "100"
+                && candidate.MediaKind == VideoMetadataMediaKind.Anime),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_SupplementalDetailsFailureKeepsPrimaryDetails()
+    {
+        var identity = CreateSearchCandidate(
+            "anilist",
+            "100",
+            VideoMetadataMediaKind.Anime,
+            "Work",
+            2024,
+            externalIds: ImmutableDictionary<string, string>.Empty
+                .Add("anilist", "100")
+                .Add("tmdb", "300"));
+        var aniList = new Mock<IVideoMetadataDetailsProvider>();
+        ConfigureProvider(aniList, "anilist", VideoMetadataCapabilities.Details);
+        aniList.Setup(provider => provider.GetDetailsAsync(
+                It.IsAny<VideoMetadataCandidate>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(BuildSeriesDetails(identity, 0) with { Overview = "AniList overview" });
+        var tmdb = new Mock<IVideoMetadataDetailsProvider>();
+        ConfigureProvider(tmdb, "tmdb", VideoMetadataCapabilities.Details);
+        tmdb.Setup(provider => provider.GetDetailsAsync(
+                It.IsAny<VideoMetadataCandidate>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("offline"));
+        var service = CreateOnlineDetailsService(aniList.Object, tmdb.Object);
+
+        var result = await service.GetDetailsAsync(
+            identity,
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Metadata.ProviderId.Should().Be("anilist");
+        result.Value.Metadata.Overview.Should().Be("AniList overview");
+    }
+
+    [Fact]
+    public async Task DiscoveryService_TmdbPrimaryKeepsCanonicalAniListTitleWhenSupplementFails()
+    {
+        const string romaji = "Kimi no Na wa.";
+        const string english = "Your Name.";
+        const string native = "君の名は。";
+        var identity = CreateSearchCandidate(
+            "tmdb",
+            "372058",
+            VideoMetadataMediaKind.Movie,
+            romaji,
+            2016,
+            [english, native],
+            ImmutableDictionary<string, string>.Empty
+                .Add("tmdb", "372058")
+                .Add("anilist", "21519")) with
+        {
+            OriginalTitle = native,
+        };
+        var tmdb = new Mock<IVideoMetadataDetailsProvider>();
+        ConfigureProvider(tmdb, "tmdb", VideoMetadataCapabilities.Details);
+        tmdb.Setup(provider => provider.GetDetailsAsync(
+                It.IsAny<VideoMetadataCandidate>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(BuildSeriesDetails(identity, 0) with
+            {
+                Title = english,
+                OriginalTitle = null,
+                Aliases = [english],
+            });
+        var aniList = new Mock<IVideoMetadataDetailsProvider>();
+        ConfigureProvider(aniList, "anilist", VideoMetadataCapabilities.Details);
+        aniList.Setup(provider => provider.GetDetailsAsync(
+                It.IsAny<VideoMetadataCandidate>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("offline"));
+        var service = CreateOnlineDetailsService(tmdb.Object, aniList.Object);
+
+        var result = await service.GetDetailsAsync(
+            identity,
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Metadata.ProviderId.Should().Be("tmdb");
+        result.Value.Metadata.ProviderItemId.Should().Be("372058");
+        result.Value.Metadata.MediaKind.Should().Be(VideoMetadataMediaKind.Movie);
+        result.Value.Metadata.Title.Should().Be(romaji);
+        result.Value.Metadata.OriginalTitle.Should().Be(native);
+        result.Value.Metadata.Aliases.Should().Contain(english);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_DetailsWithoutExactSupplementIdDoNotSearchAnotherSource()
+    {
+        var identity = CreateSearchCandidate(
+            "anilist",
+            "100",
+            VideoMetadataMediaKind.Anime,
+            "Work",
+            2024);
+        var aniList = new Mock<IVideoMetadataDetailsProvider>();
+        ConfigureProvider(aniList, "anilist", VideoMetadataCapabilities.Details);
+        aniList.Setup(provider => provider.GetDetailsAsync(
+                It.IsAny<VideoMetadataCandidate>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(BuildSeriesDetails(identity, 0));
+        var tmdb = new Mock<IVideoMetadataDetailsProvider>();
+        ConfigureProvider(tmdb, "tmdb", VideoMetadataCapabilities.Details);
+        var service = CreateOnlineDetailsService(aniList.Object, tmdb.Object);
+
+        var result = await service.GetDetailsAsync(
+            identity,
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.Should().BeTrue();
+        tmdb.Verify(provider => provider.GetDetailsAsync(
+            It.IsAny<VideoMetadataCandidate>(),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -558,6 +1465,183 @@ public sealed class VideoDiscoveryProviderTests
         result.Value.Seasons.Should().HaveCount(3);
     }
 
+    [Fact]
+    public async Task DiscoveryService_AnimeLibraryLookup_UsesOnlyAniDbThenTmdb()
+    {
+        var searchProviders = new Dictionary<string, Mock<IVideoMetadataSearchProvider>>(
+            StringComparer.OrdinalIgnoreCase);
+        var detailsProviders = new List<IVideoMetadataDetailsProvider>();
+        foreach (var providerId in new[] { "anidb", "tmdb", "anilist", "bangumi", "tvmaze" })
+        {
+            var search = new Mock<IVideoMetadataSearchProvider>();
+            ConfigureProvider(search, providerId, VideoMetadataCapabilities.Search);
+            search.Setup(provider => provider.SearchAsync(
+                    It.IsAny<VideoMetadataSearchQuery>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync([]);
+            searchProviders[providerId] = search;
+
+            var details = new Mock<IVideoMetadataDetailsProvider>();
+            ConfigureProvider(details, providerId, VideoMetadataCapabilities.Details);
+            detailsProviders.Add(details.Object);
+        }
+        var settings = new Mock<ISettingsService>();
+        settings.SetupGet(service => service.Current).Returns(new AppSettings
+        {
+            VideoSettings = new VideoSettings
+            {
+                Metadata = new VideoMetadataSettings { OnlineConsentAccepted = true },
+            },
+        });
+        var service = new VideoDiscoveryService(
+            [],
+            detailsProviders,
+            [],
+            Mock.Of<IVideoMetadataTransport>(),
+            Mock.Of<IVideoArtworkCache>(),
+            settings.Object,
+            searchProviders.Values.Select(provider => provider.Object));
+
+        await service.GetDetailsByTitleAsync(
+            ["Re:Zero kara Hajimeru Isekai Seikatsu"],
+            VideoMetadataMediaKind.Anime,
+            2016);
+
+        searchProviders["anidb"].Verify(provider => provider.SearchAsync(
+            It.IsAny<VideoMetadataSearchQuery>(), It.IsAny<CancellationToken>()), Times.Once);
+        searchProviders["tmdb"].Verify(provider => provider.SearchAsync(
+            It.IsAny<VideoMetadataSearchQuery>(), It.IsAny<CancellationToken>()), Times.Once);
+        foreach (var providerId in new[] { "anilist", "bangumi", "tvmaze" })
+        {
+            searchProviders[providerId].Verify(provider => provider.SearchAsync(
+                It.IsAny<VideoMetadataSearchQuery>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+    }
+
+    private static Mock<IVideoMetadataSearchProvider> CreateSearchProvider(
+        string providerId,
+        Func<VideoMetadataSearchQuery, IReadOnlyList<VideoMetadataCandidate>> search)
+    {
+        var provider = new Mock<IVideoMetadataSearchProvider>();
+        ConfigureProvider(provider, providerId, VideoMetadataCapabilities.Search);
+        provider.Setup(value => value.SearchAsync(
+                It.IsAny<VideoMetadataSearchQuery>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<VideoMetadataSearchQuery, CancellationToken>((query, _) =>
+                Task.FromResult(search(query)));
+        return provider;
+    }
+
+    private static Mock<IVideoDiscoveryProvider> CreateDiscoveryProvider(
+        string providerId,
+        Func<VideoDiscoveryRequest, VideoDiscoveryPage> load)
+    {
+        var provider = new Mock<IVideoDiscoveryProvider>();
+        provider.SetupGet(value => value.Id).Returns(providerId);
+        provider.SetupGet(value => value.DisplayName).Returns(providerId);
+        provider.SetupGet(value => value.Feeds).Returns([]);
+        provider.Setup(value => value.GetPageAsync(
+                It.IsAny<VideoDiscoveryRequest>(),
+                It.IsAny<CancellationToken>()))
+            .Returns<VideoDiscoveryRequest, CancellationToken>((request, _) =>
+                Task.FromResult(load(request)));
+        return provider;
+    }
+
+    private static VideoDiscoveryService CreateOnlineDiscoveryService(
+        params IVideoMetadataSearchProvider[] searchProviders)
+    {
+        var settings = new Mock<ISettingsService>();
+        settings.SetupGet(service => service.Current).Returns(new AppSettings
+        {
+            VideoSettings = new VideoSettings
+            {
+                Metadata = new VideoMetadataSettings { OnlineConsentAccepted = true },
+            },
+        });
+        return new VideoDiscoveryService(
+            [],
+            [],
+            [],
+            Mock.Of<IVideoMetadataTransport>(),
+            Mock.Of<IVideoArtworkCache>(),
+            settings.Object,
+            searchProviders);
+    }
+
+    private static VideoDiscoveryService CreateOnlineBrowseService(
+        params IVideoDiscoveryProvider[] providers)
+    {
+        var settings = new Mock<ISettingsService>();
+        settings.SetupGet(service => service.Current).Returns(new AppSettings
+        {
+            VideoSettings = new VideoSettings
+            {
+                Metadata = new VideoMetadataSettings { OnlineConsentAccepted = true },
+            },
+        });
+        return new VideoDiscoveryService(
+            providers,
+            [],
+            [],
+            Mock.Of<IVideoMetadataTransport>(),
+            Mock.Of<IVideoArtworkCache>(),
+            settings.Object);
+    }
+
+    private static VideoDiscoveryService CreateOnlineDetailsService(
+        params IVideoMetadataDetailsProvider[] detailsProviders)
+    {
+        var settings = new Mock<ISettingsService>();
+        settings.SetupGet(service => service.Current).Returns(new AppSettings
+        {
+            VideoSettings = new VideoSettings
+            {
+                Metadata = new VideoMetadataSettings { OnlineConsentAccepted = true },
+            },
+        });
+        return new VideoDiscoveryService(
+            [],
+            detailsProviders,
+            [],
+            Mock.Of<IVideoMetadataTransport>(),
+            Mock.Of<IVideoArtworkCache>(),
+            settings.Object);
+    }
+
+    private static VideoMetadataCandidate CreateSearchCandidate(
+        string providerId,
+        string providerItemId,
+        VideoMetadataMediaKind mediaKind,
+        string title,
+        int? year,
+        ImmutableArray<string> aliases = default,
+        ImmutableDictionary<string, string>? externalIds = null) => new(
+        providerId,
+        providerItemId,
+        mediaKind,
+        title,
+        null,
+        year,
+        null,
+        null,
+        null,
+        aliases.IsDefault ? [title] : aliases,
+        externalIds ?? ImmutableDictionary<string, string>.Empty.Add(providerId, providerItemId),
+        null);
+
+    private static VideoDiscoveryItem CreateDiscoveryItem(
+        string providerId,
+        string providerItemId,
+        VideoMetadataMediaKind mediaKind,
+        string title) => new(
+        CreateSearchCandidate(providerId, providerItemId, mediaKind, title, 2026),
+        null,
+        null,
+        null,
+        null,
+        null);
+
     private static VideoMetadataDetails BuildSeriesDetails(
         VideoMetadataCandidate candidate,
         int seasonCount) =>
@@ -694,5 +1778,7 @@ public sealed class VideoDiscoveryProviderTests
         }
 
         public Task TrimAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task ClearAsync(CancellationToken ct = default) => Task.CompletedTask;
     }
 }

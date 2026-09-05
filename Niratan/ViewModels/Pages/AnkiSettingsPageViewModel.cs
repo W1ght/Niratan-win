@@ -27,6 +27,7 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
     private readonly ISettingsService _settingsService;
     private readonly IAnkiService _ankiService;
     private bool _isInitializing = true;
+    private bool _isRefreshingFieldMappings;
 
     [ObservableProperty]
     public partial string AnkiConnectUrl { get; set; } = "http://localhost:8765";
@@ -133,7 +134,10 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
     {
         if (_isInitializing) return;
 
-        var anki = _settingsService.Current.AnkiSettings;
+        // Save onto a copy: the live instance is the one AnkiService already holds, so
+        // mutating it in place would change mining behaviour without bumping the settings
+        // generation that invalidates its caches.
+        var anki = AnkiSettings.Clone(_settingsService.Current.AnkiSettings);
         anki.AnkiConnectUrl = AnkiConnectUrl;
         anki.AnkiConnectForceSync = AnkiConnectForceSync;
         anki.Tags = Tags;
@@ -149,7 +153,7 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
         anki.AvailableDecks = AvailableDecks.ToList();
         anki.AvailableNoteTypes = AvailableNoteTypes.ToList();
 
-        anki.FieldMappings.Clear();
+        anki.FieldMappings = new System.Collections.Generic.Dictionary<string, string>();
         foreach (var fm in FieldMappings)
         {
             if (!string.IsNullOrWhiteSpace(fm.Template) && fm.Template != "-")
@@ -226,26 +230,59 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
 
     private void RefreshFieldMappings(System.Collections.Generic.Dictionary<string, string>? mappings = null)
     {
-        FieldMappings.Clear();
-        if (SelectedNoteType == null) return;
-
-        mappings ??= _settingsService.Current.AnkiSettings.FieldMappings;
-
-        foreach (var field in SelectedNoteType.Fields)
+        _isRefreshingFieldMappings = true;
+        try
         {
-            var template = mappings.TryGetValue(field, out var t) ? t : "";
-            FieldMappings.Add(new AnkiFieldMappingViewModel
+            foreach (var existing in FieldMappings)
+                existing.PropertyChanged -= FieldMapping_PropertyChanged;
+            FieldMappings.Clear();
+            if (SelectedNoteType == null) return;
+
+            mappings ??= _settingsService.Current.AnkiSettings.FieldMappings;
+
+            foreach (var field in SelectedNoteType.Fields)
             {
-                FieldName = field,
-                Template = template,
-            });
+                var template = mappings.TryGetValue(field, out var t) ? t : "";
+                var mapping = new AnkiFieldMappingViewModel
+                {
+                    FieldName = field,
+                    Template = template,
+                };
+                mapping.PropertyChanged += FieldMapping_PropertyChanged;
+                FieldMappings.Add(mapping);
+            }
         }
+        finally
+        {
+            _isRefreshingFieldMappings = false;
+        }
+    }
+
+    // The field mapping combo boxes bind straight to the row view model, so an edit only
+    // reaches settings.json (and AnkiService) if the row itself asks for a save.
+    private void FieldMapping_PropertyChanged(
+        object? sender,
+        System.ComponentModel.PropertyChangedEventArgs args)
+    {
+        if (_isRefreshingFieldMappings
+            || args.PropertyName != nameof(AnkiFieldMappingViewModel.Template))
+        {
+            return;
+        }
+
+        SaveSettings();
     }
 
     private void RefreshHandlebarOptions()
     {
+        var options = AnkiHandlebarRenderer.GetHandlebarOptions();
+        if (HandlebarOptions.SequenceEqual(options))
+            return;
+
+        // Clearing the source resets every bound ComboBox to a null selection, which would
+        // write empty templates back over the saved mappings. Only rebuild on a real change.
         HandlebarOptions.Clear();
-        foreach (var option in AnkiHandlebarRenderer.GetHandlebarOptions())
+        foreach (var option in options)
             HandlebarOptions.Add(option);
     }
 
@@ -260,8 +297,9 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
                 "Testing connection...");
 
             // Save URL first so the client uses the right endpoint
-            var anki = _settingsService.Current.AnkiSettings;
+            var anki = AnkiSettings.Clone(_settingsService.Current.AnkiSettings);
             anki.AnkiConnectUrl = AnkiConnectUrl;
+            _settingsService.Set(s => s.AnkiSettings, anki);
             _ankiService.UpdateSettings(anki);
 
             var available = await _ankiService.IsAvailableAsync();
@@ -330,12 +368,6 @@ public partial class AnkiSettingsPageViewModel : ObservableObject
         {
             IsFetchingData = false;
         }
-    }
-
-    public void OnFieldMappingChanged(AnkiFieldMappingViewModel mapping, string newTemplate)
-    {
-        mapping.Template = newTemplate;
-        SaveSettings();
     }
 
     public void OnNavigatedFrom()

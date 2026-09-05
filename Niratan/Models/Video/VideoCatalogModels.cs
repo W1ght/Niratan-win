@@ -109,7 +109,68 @@ public sealed record VideoCatalogNodeSnapshot(
 {
     public ImmutableHashSet<string> IdentityLockedProviders { get; init; } =
         ImmutableHashSet<string>.Empty.WithComparer(StringComparer.OrdinalIgnoreCase);
+
+    public ImmutableArray<VideoCatalogArtworkSnapshot> ArtworkCandidates { get; init; } = [];
+    public ImmutableArray<VideoMetadataSeason> Seasons { get; init; } = [];
+    public ImmutableArray<VideoTmdbShowCrossReference> TmdbShowCrossReferences { get; init; } = [];
+    public ImmutableArray<VideoTmdbEpisodeCrossReference> TmdbEpisodeCrossReferences { get; init; } = [];
+    public ImmutableArray<VideoTmdbOrderingSnapshot> TmdbOrderings { get; init; } = [];
 }
+
+public sealed record VideoTmdbShowCrossReference(
+    Guid SeriesNodeId,
+    int AniDbAnimeId,
+    int TmdbShowId,
+    string? ChosenOrderingId,
+    VideoTmdbOrderingType ChosenOrderingType,
+    VideoMetadataMatchRating MatchRating,
+    DateTimeOffset UpdatedAt);
+
+public sealed record VideoTmdbEpisodeCrossReference(
+    Guid EpisodeNodeId,
+    Guid SeriesNodeId,
+    int AniDbAnimeId,
+    int AniDbEpisodeId,
+    int TmdbShowId,
+    int TmdbEpisodeId,
+    string OrderingId,
+    string? SeasonId,
+    int SeasonNumber,
+    int EpisodeNumber,
+    int Ordinal,
+    VideoMetadataMatchRating MatchRating,
+    DateTimeOffset UpdatedAt);
+
+public sealed record VideoTmdbOrderingSnapshot(
+    Guid SeriesNodeId,
+    int TmdbShowId,
+    string OrderingId,
+    VideoTmdbOrderingType Type,
+    bool IsPreferred,
+    bool IsUserPreferred,
+    DateTimeOffset UpdatedAt);
+
+public sealed record VideoCatalogArtworkSnapshot(
+    Guid Id,
+    Guid NodeId,
+    string ProviderId,
+    string Kind,
+    string? RemoteUrl,
+    string? LocalPath,
+    string? Language,
+    int? Width,
+    int? Height,
+    string? AttributionUrl,
+    bool IsEnabled,
+    bool IsDesired,
+    bool IsPreferred,
+    bool IsSelected,
+    bool IsUserPreferred,
+    int Ordinal,
+    int DownloadAttempts,
+    string? LastError,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
 
 public sealed record VideoCatalogAssetSnapshot(
     Guid Id,
@@ -141,7 +202,8 @@ public sealed record VideoCatalogAssetSnapshot(
     ImmutableArray<Guid> SourceIds,
     ImmutableArray<Guid> NodeIds,
     ImmutableArray<Guid> CollectionIds,
-    bool IsHidden = false);
+    bool IsHidden = false,
+    bool CatalogResetPending = false);
 
 public sealed record VideoCatalogCollectionSnapshot(
     Guid Id,
@@ -247,6 +309,52 @@ public sealed record VideoCatalogAssetUpsert(
     string? ProfileId = null,
     string? Tags = null,
     bool IsFavorite = false);
+
+/// <summary>
+/// A single authoritative AniDB episode binding returned by the FILE command.
+/// AniDB EIDs belong to episode nodes; release percentages and ordering stay on
+/// the file-to-episode cross reference instead of being flattened onto a series.
+/// </summary>
+public sealed record VideoAniDbEpisodeProjection(
+    int EpisodeId,
+    int SeasonNumber,
+    int EpisodeNumber,
+    string Title,
+    string? OriginalTitle,
+    string? Overview,
+    int Ordinal,
+    byte Percentage,
+    bool IsOther,
+    DateOnly? AirDate)
+{
+    /// <summary>The authoritative AID which owns this EID.</summary>
+    public int AnimeId { get; init; }
+    public string? AnimeGroupId { get; init; }
+    public VideoMetadataDetails? AnimeMetadata { get; init; }
+}
+
+/// <summary>
+/// Desktop catalog projection of Shoko's release -> AniDB series/episode graph.
+/// FID remains release-level data in the AniDB store; AID and EID are projected
+/// to their own catalog node levels and the persistent group key only controls
+/// presentation grouping.
+/// </summary>
+public sealed record VideoAniDbIdentityProjection(
+    int AnimeId,
+    int FileId,
+    string GroupId,
+    VideoMetadataDetails SeriesMetadata,
+    ImmutableArray<VideoAniDbEpisodeProjection> Episodes);
+
+/// <summary>
+/// Exact user-authored AniDB identity allowed to survive a global scrape reset.
+/// Asset scoping prevents a not-yet-projected manual release from protecting an
+/// unrelated stale automatic catalog ancestry.
+/// </summary>
+public sealed record VideoManualAniDbIdentity(
+    Guid AssetId,
+    ImmutableHashSet<int> AnimeIds,
+    ImmutableHashSet<int> EpisodeIds);
 
 public sealed record VideoCatalogUserDataUpdate(
     string IdentityKey,

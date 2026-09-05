@@ -179,7 +179,11 @@ public sealed partial class MangaReaderWindow : Window
             var host = new MangaPageView
             {
                 Page = page,
-                Margin = new Thickness(pages.Count > 1 ? 4 : 0),
+                PageHorizontalAlignment = pages.Count > 1
+                    ? index == 0
+                        ? HorizontalAlignment.Right
+                        : HorizontalAlignment.Left
+                    : HorizontalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Stretch,
             };

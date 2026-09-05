@@ -16,6 +16,17 @@ public sealed class VideoSettingsPageViewModelTests
         {
             VideoSettings = new VideoSettings
             {
+                Metadata = new VideoMetadataSettings
+                {
+                    AniDbClientId = "udp-client",
+                    AniDbClientVersion = 2,
+                    AniDbHttpClientId = "http-client",
+                    AniDbHttpClientVersion = 3,
+                    AniDbUdpServerHost = "94.130.237.200",
+                    AniDbUdpServerPort = 9001,
+                    AniDbUdpBindAddress = "192.168.1.88",
+                    AniDbUdpLocalPort = 45501,
+                },
                 AutoPlayNextEpisode = false,
                 RememberPlaybackState = false,
                 SeekIntervalSeconds = 9,
@@ -50,6 +61,14 @@ public sealed class VideoSettingsPageViewModelTests
         var viewModel = new VideoSettingsPageViewModel(settingsService.Object);
 
         viewModel.AutoPlayNextEpisode.Should().BeFalse();
+        viewModel.AniDbClientId.Should().Be("udp-client");
+        viewModel.AniDbClientVersion.Should().Be(2);
+        viewModel.AniDbHttpClientId.Should().Be("http-client");
+        viewModel.AniDbHttpClientVersion.Should().Be(3);
+        viewModel.AniDbUdpServerHost.Should().Be("94.130.237.200");
+        viewModel.AniDbUdpServerPort.Should().Be(9001);
+        viewModel.AniDbUdpBindAddress.Should().Be("192.168.1.88");
+        viewModel.AniDbUdpLocalPort.Should().Be(45501);
         viewModel.RememberPlaybackState.Should().BeFalse();
         viewModel.SeekIntervalSeconds.Should().Be(9);
         viewModel.MiningHistoryLimit.Should().Be(42);
@@ -98,6 +117,14 @@ public sealed class VideoSettingsPageViewModelTests
 
         var viewModel = new VideoSettingsPageViewModel(settingsService.Object)
         {
+            AniDbClientId = "  udp-client  ",
+            AniDbClientVersion = 2,
+            AniDbHttpClientId = "  http-client  ",
+            AniDbHttpClientVersion = 3,
+            AniDbUdpServerHost = "  94.130.237.200  ",
+            AniDbUdpServerPort = 70000,
+            AniDbUdpBindAddress = "  192.168.1.88  ",
+            AniDbUdpLocalPort = 80,
             AutoPlayNextEpisode = false,
             RememberPlaybackState = false,
             SeekIntervalSecondsValue = 99,
@@ -127,7 +154,15 @@ public sealed class VideoSettingsPageViewModelTests
         };
 
         saved.Should().NotBeNull();
-        saved!.AutoPlayNextEpisode.Should().BeFalse();
+        saved!.Metadata.AniDbClientId.Should().Be("udp-client");
+        saved.Metadata.AniDbClientVersion.Should().Be(2);
+        saved.Metadata.AniDbHttpClientId.Should().Be("http-client");
+        saved.Metadata.AniDbHttpClientVersion.Should().Be(3);
+        saved.Metadata.AniDbUdpServerHost.Should().Be("94.130.237.200");
+        saved.Metadata.AniDbUdpServerPort.Should().Be(65535);
+        saved.Metadata.AniDbUdpBindAddress.Should().Be("192.168.1.88");
+        saved.Metadata.AniDbUdpLocalPort.Should().Be(1024);
+        saved.AutoPlayNextEpisode.Should().BeFalse();
         saved.RememberPlaybackState.Should().BeFalse();
         saved.SeekIntervalSeconds.Should().Be(60);
         saved.MiningHistoryLimit.Should().Be(0);
@@ -159,6 +194,53 @@ public sealed class VideoSettingsPageViewModelTests
             .Should()
             .NotContain(name => name.Contains("ControlBar", StringComparison.OrdinalIgnoreCase));
         settingsService.Verify(service => service.SaveAsync(), Times.AtLeastOnce);
+    }
+
+    [Fact]
+    public void Updating_discovery_preferences_preserves_Nyaa_subscriptions()
+    {
+        var appSettings = new AppSettings
+        {
+            DiscoverySettings = new DiscoverySettings
+            {
+                ExploreProviderOrder = ["bangumi", "tmdb"],
+                NyaaSubscriptions =
+                [
+                    new NyaaVideoSubscription
+                    {
+                        Key = "anilist:123",
+                        ProviderId = "anilist",
+                        ProviderItemId = "123",
+                        Title = "Test Anime",
+                        Query = "Test Anime",
+                        ReleaseGroup = "Group",
+                        Resolution = "1080p",
+                    },
+                ],
+            },
+        };
+        DiscoverySettings? savedDiscovery = null;
+        var settingsService = new Mock<ISettingsService>();
+        settingsService.SetupGet(service => service.Current).Returns(appSettings);
+        settingsService.Setup(service => service.Set(
+                It.IsAny<Expression<Func<AppSettings, DiscoverySettings>>>(),
+                It.IsAny<DiscoverySettings>()))
+            .Callback<Expression<Func<AppSettings, DiscoverySettings>>, DiscoverySettings>((_, value) =>
+            {
+                savedDiscovery = value;
+                appSettings.DiscoverySettings = value;
+            });
+        settingsService.Setup(service => service.SaveAsync()).Returns(Task.CompletedTask);
+        var viewModel = new VideoSettingsPageViewModel(settingsService.Object);
+
+        viewModel.DiscoveryProviderOrderText.Should().Be("tmdb");
+        viewModel.DiscoveryProviderOrderText = "bangumi,anilist,tmdb";
+        viewModel.TmdbRecommendationsEnabled = false;
+
+        savedDiscovery.Should().NotBeNull();
+        savedDiscovery!.ExploreProviderOrder.Should().Equal("anilist", "tmdb");
+        savedDiscovery.NyaaSubscriptions.Should().ContainSingle()
+            .Which.Key.Should().Be("anilist:123");
     }
 
 }

@@ -243,6 +243,57 @@ public class GlobalSelectionLookupServiceTests
         second.ReadCount.Should().Be(1);
     }
 
+    [Fact]
+    public async Task ClipboardCopySelectedTextReader_WhenCopyProducesText_ReturnsItAndRestoresClipboard()
+    {
+        var platform = new RecordingClipboardSelectionPlatform
+        {
+            CopiedText = "選択した言葉",
+        };
+        var sut = new ClipboardCopySelectedTextReader(platform);
+
+        var selection = await sut.TryReadSelectedTextAsync(TestContext.Current.CancellationToken);
+
+        selection.Should().Be(new SelectedTextSnapshot("選択した言葉", null));
+        platform.ClearCount.Should().Be(1);
+        platform.CopyCount.Should().Be(1);
+        platform.Snapshot.RestoreCount.Should().Be(1);
+        platform.Snapshot.DisposeCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ClipboardCopySelectedTextReader_WhenCopyFails_RestoresClipboardAndReturnsNull()
+    {
+        var platform = new RecordingClipboardSelectionPlatform
+        {
+            CopyException = new InvalidOperationException("copy failed"),
+        };
+        var sut = new ClipboardCopySelectedTextReader(platform);
+
+        var selection = await sut.TryReadSelectedTextAsync(TestContext.Current.CancellationToken);
+
+        selection.Should().BeNull();
+        platform.Snapshot.RestoreCount.Should().Be(1);
+        platform.Snapshot.DisposeCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ClipboardCopySelectedTextReader_WhenCancelledDuringPolling_RestoresClipboard()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var platform = new RecordingClipboardSelectionPlatform
+        {
+            CopyAction = cancellation.Cancel,
+        };
+        var sut = new ClipboardCopySelectedTextReader(platform);
+
+        var act = () => sut.TryReadSelectedTextAsync(cancellation.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        platform.Snapshot.RestoreCount.Should().Be(1);
+        platform.Snapshot.DisposeCount.Should().Be(1);
+    }
+
     private sealed class RecordingSettingsService : ISettingsService
     {
         public AppSettings Current { get; init; } = new();
@@ -391,6 +442,50 @@ public class GlobalSelectionLookupServiceTests
             ReadCount++;
             throw new InvalidOperationException("reader failed");
         }
+    }
+
+    private sealed class RecordingClipboardSelectionPlatform : IClipboardSelectionPlatform
+    {
+        private uint _sequenceNumber = 1;
+
+        public RecordingClipboardSnapshot Snapshot { get; } = new();
+        public string? CopiedText { get; init; }
+        public Exception? CopyException { get; init; }
+        public Action? CopyAction { get; init; }
+        public int ClearCount { get; private set; }
+        public int CopyCount { get; private set; }
+
+        public IClipboardSnapshot CaptureClipboard() => Snapshot;
+
+        public uint GetClipboardSequenceNumber() => _sequenceNumber;
+
+        public void ClearClipboard()
+        {
+            ClearCount++;
+            _sequenceNumber++;
+        }
+
+        public void SendCleanCopyShortcut()
+        {
+            CopyCount++;
+            CopyAction?.Invoke();
+            if (CopyException is not null)
+                throw CopyException;
+            if (CopiedText is not null)
+                _sequenceNumber++;
+        }
+
+        public string? TryReadUnicodeText() => CopiedText;
+    }
+
+    private sealed class RecordingClipboardSnapshot : IClipboardSnapshot
+    {
+        public int RestoreCount { get; private set; }
+        public int DisposeCount { get; private set; }
+
+        public void Restore() => RestoreCount++;
+
+        public void Dispose() => DisposeCount++;
     }
 
     private sealed class RecordingGlobalLookupPopupService : IGlobalLookupPopupService

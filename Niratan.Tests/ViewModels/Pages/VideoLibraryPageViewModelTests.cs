@@ -1,8 +1,11 @@
+using System.Collections.Concurrent;
 using FluentAssertions;
 using Moq;
 using Niratan.Models;
 using Niratan.Models.Common;
+using Niratan.Models.Settings;
 using Niratan.Models.Video;
+using Niratan.Services.Settings;
 using Niratan.Services.UI;
 using Niratan.Services.Video;
 using Niratan.ViewModels.Components;
@@ -164,7 +167,7 @@ public class VideoLibraryPageViewModelTests
     }
 
     [Fact]
-    public async Task SeriesCards_MergeScrapedSeasonNodesBySharedIdentity()
+    public async Task SeriesCards_DoNotMergeSeasonNodesByLegacyBangumiIdentity()
     {
         var mainSeriesId = Guid.NewGuid();
         var seasonOnlySeriesId = Guid.NewGuid();
@@ -204,9 +207,164 @@ public class VideoLibraryPageViewModelTests
 
         await sut.InitializeAsync();
 
+        sut.SeriesCards.Should().HaveCount(2);
+        sut.SeriesCards.SelectMany(card => card.RegularEpisodes)
+            .Select(item => item.Video.Id)
+            .Should().BeEquivalentTo("season-2-episode-1", "season-3-episode-8");
+    }
+
+    [Fact]
+    public async Task SeriesCards_MergeDifferentAniDbAnimeEntriesOnlyWhenPersistentGroupMatches()
+    {
+        var firstSeriesId = Guid.NewGuid();
+        var secondSeriesId = Guid.NewGuid();
+        var firstEpisode = SeriesEpisode("anidb-100-episode", firstSeriesId, Guid.NewGuid(), 1, 1);
+        firstEpisode.CatalogSeriesTitle = "Shared franchise first entry";
+        firstEpisode.ExternalIds = new Dictionary<string, string>
+        {
+            ["anidb"] = "100",
+            ["anidb-group"] = "stable-franchise",
+        };
+        var secondEpisode = SeriesEpisode("anidb-200-episode", secondSeriesId, Guid.NewGuid(), 2, 1);
+        secondEpisode.CatalogSeriesTitle = "Shared franchise second entry";
+        secondEpisode.ExternalIds = new Dictionary<string, string>
+        {
+            ["anidb"] = "200",
+            ["anidb-group"] = "stable-franchise",
+        };
+        var sut = CreateSut(videoService: new RecordingVideoLibraryService
+        {
+            Videos = [firstEpisode, secondEpisode],
+        });
+
+        await sut.InitializeAsync();
+
         sut.SeriesCards.Should().ContainSingle();
         sut.SeriesCards[0].RegularEpisodes.Select(item => item.Video.Id)
-            .Should().Equal("season-2-episode-1", "season-3-episode-8");
+            .Should().BeEquivalentTo("anidb-100-episode", "anidb-200-episode");
+    }
+
+    [Fact]
+    public async Task SeriesCards_KeepDifferentAniDbGroupsSeparateDespiteSharedTmdbTitleAndCandidates()
+    {
+        var firstSeriesId = Guid.NewGuid();
+        var secondSeriesId = Guid.NewGuid();
+        var firstEpisode = SeriesEpisode("anidb-100-episode", firstSeriesId, Guid.NewGuid(), 1, 1);
+        firstEpisode.CatalogSeriesTitle = "Example Anime 1st Season";
+        firstEpisode.ExternalIds = new Dictionary<string, string>
+        {
+            ["anidb"] = "100",
+            ["anidb-group"] = "first-group",
+            ["tmdb"] = "999",
+        };
+        firstEpisode.MatchCandidates =
+        [
+            new VideoMatchCandidateSnapshot(
+                Guid.NewGuid(), Guid.NewGuid(), "bangumi", "shared-candidate", "Example Anime",
+                2020, 0.99, 0.99, "shared candidate", false, DateTimeOffset.UtcNow),
+        ];
+        var secondEpisode = SeriesEpisode("anidb-200-episode", secondSeriesId, Guid.NewGuid(), 2, 1);
+        secondEpisode.CatalogSeriesTitle = "Example Anime 2nd Season";
+        secondEpisode.ExternalIds = new Dictionary<string, string>
+        {
+            ["anidb"] = "200",
+            ["anidb-group"] = "second-group",
+            ["tmdb"] = "999",
+        };
+        secondEpisode.MatchCandidates =
+        [
+            new VideoMatchCandidateSnapshot(
+                Guid.NewGuid(), Guid.NewGuid(), "bangumi", "shared-candidate", "Example Anime",
+                2020, 0.99, 0.99, "shared candidate", false, DateTimeOffset.UtcNow),
+        ];
+        var sut = CreateSut(videoService: new RecordingVideoLibraryService
+        {
+            Videos = [firstEpisode, secondEpisode],
+        });
+
+        await sut.InitializeAsync();
+
+        sut.SeriesCards.Should().HaveCount(2);
+        sut.SeriesCards.Select(card => card.Id).Should()
+            .BeEquivalentTo(new[] { firstSeriesId, secondSeriesId });
+    }
+
+    [Fact]
+    public async Task SeriesCards_DoNotFallbackToSharedMetadataWhileAniDbGroupIsMissing()
+    {
+        var firstSeriesId = Guid.NewGuid();
+        var secondSeriesId = Guid.NewGuid();
+        var firstEpisode = SeriesEpisode("anidb-100-episode", firstSeriesId, Guid.NewGuid(), 1, 1);
+        firstEpisode.CatalogSeriesTitle = "Example Anime 1st Season";
+        firstEpisode.ExternalIds = new Dictionary<string, string>
+        {
+            ["anidb"] = "100",
+            ["tmdb"] = "999",
+        };
+        var secondEpisode = SeriesEpisode("anidb-200-episode", secondSeriesId, Guid.NewGuid(), 2, 1);
+        secondEpisode.CatalogSeriesTitle = "Example Anime 2nd Season";
+        secondEpisode.ExternalIds = new Dictionary<string, string>
+        {
+            ["anidb"] = "200",
+            ["tmdb"] = "999",
+        };
+        var sut = CreateSut(videoService: new RecordingVideoLibraryService
+        {
+            Videos = [firstEpisode, secondEpisode],
+        });
+
+        await sut.InitializeAsync();
+
+        sut.SeriesCards.Should().HaveCount(2);
+        sut.SeriesCards.Select(card => card.Id).Should()
+            .BeEquivalentTo(new[] { firstSeriesId, secondSeriesId });
+    }
+
+    [Fact]
+    public async Task SeriesCards_MergedSeasonNodesUseTheEarliestRootSeries()
+    {
+        var rootSeriesId = Guid.NewGuid();
+        var seasonFourSeriesId = Guid.NewGuid();
+        var rootEpisode = SeriesEpisode("root-episode", rootSeriesId, Guid.NewGuid(), 1, 1);
+        rootEpisode.CatalogSeriesTitle = "Re:ゼロから始める異世界生活";
+        rootEpisode.CatalogSeriesReleaseYear = 2016;
+        rootEpisode.ExternalIds = new Dictionary<string, string>
+        {
+            ["anidb"] = "11370",
+            ["anidb-group"] = "re-zero",
+        };
+        var seasonFourEpisodes = Enumerable.Range(1, 3).Select(episodeNumber =>
+        {
+            var episode = SeriesEpisode(
+                $"season-4-episode-{episodeNumber}",
+                seasonFourSeriesId,
+                Guid.NewGuid(),
+                4,
+                episodeNumber);
+            episode.CatalogSeriesTitle = "Re:ゼロから始める異世界生活 4th season";
+            episode.CatalogSeriesReleaseYear = 2026;
+            episode.ExternalIds = new Dictionary<string, string>
+            {
+                ["anidb"] = "20000",
+                ["anidb-group"] = "re-zero",
+            };
+            return episode;
+        }).ToArray();
+        var sut = CreateSut(videoService: new RecordingVideoLibraryService
+        {
+            Videos = [.. seasonFourEpisodes, rootEpisode],
+        });
+
+        await sut.InitializeAsync();
+
+        sut.SeriesCards.Should().ContainSingle();
+        var series = sut.SeriesCards[0];
+        series.Id.Should().Be(rootSeriesId);
+        series.Title.Should().Be("Re:ゼロから始める異世界生活");
+        series.MetadataYear.Should().Be(2016);
+        series.MetadataIdentity!.ProviderId.Should().Be("anidb");
+        series.MetadataIdentity.ProviderItemId.Should().Be("11370");
+        series.RegularEpisodes.Should().HaveCount(4);
     }
 
     [Fact]
@@ -319,6 +477,30 @@ public class VideoLibraryPageViewModelTests
         sut.SelectLibraryViewCommand.Execute(nameof(VideoLibraryView.Series));
         sut.IsMetadataTaskPanelOpen.Should().BeFalse();
         sut.IsMetadataTaskPanelVisible.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AllVideosFilterHub_TracksAllMovieAnimeFolderCollectionAndTagViews()
+    {
+        var sut = CreateSut();
+        await sut.InitializeAsync();
+
+        foreach (var view in new[]
+                 {
+                     VideoLibraryView.All,
+                     VideoLibraryView.Movies,
+                     VideoLibraryView.Anime,
+                     VideoLibraryView.Folders,
+                     VideoLibraryView.Collections,
+                     VideoLibraryView.Tags,
+                 })
+        {
+            sut.SelectLibraryViewCommand.Execute(view.ToString());
+            sut.IsAllVideosFilterView.Should().BeTrue();
+        }
+
+        sut.SelectLibraryViewCommand.Execute(nameof(VideoLibraryView.Series));
+        sut.IsAllVideosFilterView.Should().BeFalse();
     }
 
     [Fact]
@@ -722,6 +904,42 @@ public class VideoLibraryPageViewModelTests
     }
 
     [Fact]
+    public async Task PlayerLibraryChanged_PreservesEnrichedSeriesDetailsAndSelectedSeason()
+    {
+        var seriesId = Guid.NewGuid();
+        var service = new RecordingVideoLibraryService
+        {
+            Videos =
+            [
+                SeriesEpisode("season-1-episode-1", seriesId, Guid.NewGuid(), 1, 1),
+                SeriesEpisode("season-2-episode-8", seriesId, Guid.NewGuid(), 2, 8),
+            ],
+        };
+        var player = new RecordingVideoPlayerWindowService();
+        var sut = CreateSut(videoService: service, playerService: player);
+        await sut.InitializeAsync();
+        var originalSeries = sut.SeriesCards.Single();
+        sut.SelectSeriesCommand.Execute(originalSeries);
+        originalSeries.ApplyRemoteSeasons(
+        [
+            new VideoDiscoverySeason(0, "Special Edition", null, null, 3, null, []),
+            new VideoDiscoverySeason(1, "First Cour", null, null, 11, null, []),
+            new VideoDiscoverySeason(2, "Second Cour", null, null, 24, null, []),
+        ]);
+        originalSeries.SelectSeason(2);
+
+        player.RaiseLibraryChanged();
+
+        sut.SelectedSeries.Should().NotBeNull().And.NotBeSameAs(originalSeries);
+        sut.SelectedSeries!.Seasons.Select(season => season.Title)
+            .Should().Equal("Special Edition", "First Cour", "Second Cour");
+        sut.SelectedSeries.Seasons.Select(season => season.EpisodeCount)
+            .Should().Equal(3, 11, 24);
+        sut.SelectedSeries.SelectedSeason!.SeasonNumber.Should().Be(2);
+        sut.SelectedSeries.SelectedEpisodeSlots.Should().HaveCount(24);
+    }
+
+    [Fact]
     public async Task SelectionCommands_ApplyBatchPlaybackChanges()
     {
         var service = new RecordingVideoLibraryService
@@ -797,13 +1015,625 @@ public class VideoLibraryPageViewModelTests
         service.UpdatedSmartCollections[0].Rules.Should().HaveCount(2);
     }
 
+    [Fact]
+    public async Task ClearAllScrapeRecordsCommand_WhenConfirmationIsRejected_DoesNotClear()
+    {
+        var dialog = new Mock<IDialogService>();
+        dialog
+            .Setup(service => service.ConfirmAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()))
+            .ReturnsAsync(false);
+        var metadata = new Mock<IVideoMetadataCoordinator>();
+        var videoService = new RecordingVideoLibraryService();
+        var sut = CreateSut(
+            videoService: videoService,
+            dialogService: dialog.Object,
+            metadataCoordinator: metadata.Object);
+
+        await sut.ClearAllScrapeRecordsCommand.ExecuteAsync(null);
+
+        metadata.Verify(
+            service => service.ClearAllScrapeRecordsAsync(It.IsAny<CancellationToken>()),
+            Times.Never);
+        videoService.LoadCount.Should().Be(0);
+        sut.IsClearingScrapeRecords.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ScanAndRefreshCommands_AreDisabledWhileScrapeRecordsAreClearing()
+    {
+        var sut = CreateSut(
+            metadataCoordinator: Mock.Of<IVideoMetadataCoordinator>(),
+            scanCoordinator: Mock.Of<IVideoLibraryScanCoordinator>());
+        var task = new VideoMetadataTaskViewModel(
+            new VideoMetadataTaskSnapshot(
+                Guid.NewGuid(), Guid.NewGuid(), VideoCatalogJobState.Failed,
+                1, 0, 1, 1, "failed", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+            "Anime");
+        var source = new VideoLibrarySourceSummary(new VideoLibrarySource
+        {
+            Id = Guid.NewGuid().ToString("D"),
+            Name = "Anime",
+            FolderPath = @"C:\Anime",
+        }, 0, 0, 0);
+
+        sut.RetryMetadataTaskCommand.CanExecute(task).Should().BeTrue();
+        sut.RetryFailedMetadataTasksCommand.CanExecute(null).Should().BeTrue();
+        sut.ScanFolderCommand.CanExecute(null).Should().BeTrue();
+        sut.RefreshAllSourcesCommand.CanExecute(null).Should().BeTrue();
+        sut.RefreshSourceCommand.CanExecute(source).Should().BeTrue();
+        sut.RefreshSourceMetadataCommand.CanExecute(source).Should().BeTrue();
+        sut.RefreshSelectedMetadataCommand.CanExecute(null).Should().BeTrue();
+        sut.FullScanSourceCommand.CanExecute(source).Should().BeTrue();
+        sut.ResumeSourceScanCommand.CanExecute(source).Should().BeTrue();
+        sut.RemoveMissingVideosCommand.CanExecute(null).Should().BeTrue();
+
+        sut.IsClearingScrapeRecords = true;
+
+        sut.RetryMetadataTaskCommand.CanExecute(task).Should().BeFalse();
+        sut.RetryFailedMetadataTasksCommand.CanExecute(null).Should().BeFalse();
+        sut.ScanFolderCommand.CanExecute(null).Should().BeFalse();
+        sut.RefreshAllSourcesCommand.CanExecute(null).Should().BeFalse();
+        sut.RefreshSourceCommand.CanExecute(source).Should().BeFalse();
+        sut.RefreshSourceMetadataCommand.CanExecute(source).Should().BeFalse();
+        sut.RefreshSelectedMetadataCommand.CanExecute(null).Should().BeFalse();
+        sut.FullScanSourceCommand.CanExecute(source).Should().BeFalse();
+        sut.ResumeSourceScanCommand.CanExecute(source).Should().BeFalse();
+        sut.RemoveMissingVideosCommand.CanExecute(null).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ScanFolderCommand_ClearBeginsWhilePickerIsOpen_DoesNotStartScan()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var pickerStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releasePicker = new TaskCompletionSource<string?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var dialog = new Mock<IDialogService>();
+        dialog.Setup(item => item.OpenFolderPickerAsync())
+            .Returns(async () =>
+            {
+                pickerStarted.TrySetResult();
+                return await releasePicker.Task;
+            });
+        var video = new Mock<IVideoLibraryService>();
+        var sut = CreateSut(videoService: video.Object, dialogService: dialog.Object);
+
+        var scan = sut.ScanFolderCommand.ExecuteAsync(null);
+        await pickerStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        sut.IsClearingScrapeRecords = true;
+        releasePicker.TrySetResult(@"C:\Anime");
+        await scan.WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        video.Verify(item => item.ScanFolderAsync(
+            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ScrapeAllMetadataCommand_ClearBeginsWhileConsentIsOpen_DoesNotQueue()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var consentStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseConsent = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var dialog = new Mock<IDialogService>();
+        dialog.Setup(item => item.ConfirmAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Returns(async () =>
+            {
+                consentStarted.TrySetResult();
+                return await releaseConsent.Task;
+            });
+        var settings = new Mock<ISettingsService>();
+        settings.SetupGet(item => item.Current).Returns(new AppSettings
+        {
+            VideoSettings = new VideoSettings
+            {
+                Metadata = new VideoMetadataSettings { OnlineConsentAccepted = false },
+            },
+        });
+        settings.Setup(item => item.SaveAsync()).Returns(Task.CompletedTask);
+        var metadata = new Mock<IVideoMetadataCoordinator>();
+        var sut = CreateSut(
+            dialogService: dialog.Object,
+            metadataCoordinator: metadata.Object,
+            settingsService: settings.Object);
+
+        var scrape = sut.ScrapeAllMetadataCommand.ExecuteAsync(null);
+        await consentStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        sut.IsClearingScrapeRecords = true;
+        releaseConsent.TrySetResult(true);
+        await scrape.WaitAsync(TimeSpan.FromSeconds(2), ct);
+
+        metadata.Verify(item => item.QueueAllSourcesAsync(
+            It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ClearAllScrapeRecordsCommand_ClearsStaleTaskUiAndReloadsLibrary()
+    {
+        var dialog = new Mock<IDialogService>();
+        dialog
+            .Setup(service => service.ConfirmAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()))
+            .ReturnsAsync(true);
+        var metadata = new Mock<IVideoMetadataCoordinator>();
+        metadata
+            .Setup(service => service.ClearAllScrapeRecordsAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var notification = new Mock<INotificationService>();
+        var videoService = new RecordingVideoLibraryService();
+        var sut = CreateSut(
+            videoService: videoService,
+            dialogService: dialog.Object,
+            notificationService: notification.Object,
+            metadataCoordinator: metadata.Object);
+        sut.MetadataTasks.Add(new VideoMetadataTaskViewModel(
+            new VideoMetadataTaskSnapshot(
+                Guid.NewGuid(), Guid.NewGuid(), VideoCatalogJobState.Completed,
+                1, 1, 1, 0, null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+            "Anime"));
+        sut.IsMetadataTaskPanelOpen = true;
+        sut.HasBackgroundMetadataTask = true;
+        sut.BackgroundMetadataProgress = 0.5;
+        sut.BackgroundMetadataText = "old background task";
+        sut.HasActiveMetadataRefresh = true;
+        sut.IsMetadataRefreshIndeterminate = true;
+        sut.MetadataRefreshProgress = 0.5;
+        sut.MetadataRefreshText = "old direct task";
+
+        await sut.ClearAllScrapeRecordsCommand.ExecuteAsync(null);
+
+        metadata.Verify(
+            service => service.ClearAllScrapeRecordsAsync(It.IsAny<CancellationToken>()),
+            Times.Once);
+        sut.MetadataTasks.Should().BeEmpty();
+        sut.IsMetadataTaskPanelOpen.Should().BeFalse();
+        sut.HasBackgroundMetadataTask.Should().BeFalse();
+        sut.BackgroundMetadataProgress.Should().Be(0);
+        sut.BackgroundMetadataText.Should().BeEmpty();
+        sut.HasActiveMetadataRefresh.Should().BeFalse();
+        sut.IsMetadataRefreshIndeterminate.Should().BeFalse();
+        sut.MetadataRefreshProgress.Should().Be(0);
+        sut.MetadataRefreshText.Should().BeEmpty();
+        sut.IsClearingScrapeRecords.Should().BeFalse();
+        videoService.LoadCount.Should().Be(1);
+        notification.Verify(
+            service => service.ShowSuccess(
+                It.Is<string>(message => !string.IsNullOrWhiteSpace(message)),
+                It.Is<string>(title => !string.IsNullOrWhiteSpace(title))),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ClearAllScrapeRecordsCommand_WhenBackendFails_ReportsErrorAndLeavesCommandUsable()
+    {
+        var dialog = new Mock<IDialogService>();
+        dialog
+            .Setup(service => service.ConfirmAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()))
+            .ReturnsAsync(true);
+        var metadata = new Mock<IVideoMetadataCoordinator>();
+        var survivingJob = new VideoMetadataTaskSnapshot(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            VideoCatalogJobState.Interrupted,
+            3,
+            10,
+            1,
+            2,
+            "surviving repository state",
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow);
+        metadata
+            .Setup(service => service.ClearAllScrapeRecordsAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("clear failed"));
+        metadata.Setup(service => service.GetTaskHistoryAsync(
+                It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([survivingJob]);
+        var notification = new Mock<INotificationService>();
+        var videoService = new RecordingVideoLibraryService();
+        var sut = CreateSut(
+            videoService: videoService,
+            dialogService: dialog.Object,
+            notificationService: notification.Object,
+            metadataCoordinator: metadata.Object);
+        sut.MetadataTasks.Add(new VideoMetadataTaskViewModel(
+            new VideoMetadataTaskSnapshot(
+                Guid.NewGuid(), Guid.NewGuid(), VideoCatalogJobState.Running,
+                1, 10, 0, 1, "stale ui", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+            "Old"));
+        sut.HasBackgroundMetadataTask = true;
+        sut.BackgroundMetadataText = "old progress";
+
+        await sut.ClearAllScrapeRecordsCommand.ExecuteAsync(null);
+
+        sut.IsClearingScrapeRecords.Should().BeFalse();
+        sut.ClearAllScrapeRecordsCommand.CanExecute(null).Should().BeTrue();
+        videoService.LoadCount.Should().Be(1);
+        sut.MetadataTasks.Should().ContainSingle(item => item.JobId == survivingJob.JobId);
+        sut.HasBackgroundMetadataTask.Should().BeFalse();
+        sut.BackgroundMetadataText.Should().BeEmpty();
+        metadata.Verify(service => service.GetTaskHistoryAsync(
+            It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once);
+        notification.Verify(
+            service => service.ShowError(
+                "clear failed",
+                It.Is<string>(title => !string.IsNullOrWhiteSpace(title))),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ClearAllScrapeRecordsCommand_WhenReconciliationAlsoFails_ReportsOriginalClearError()
+    {
+        var dialog = new Mock<IDialogService>();
+        dialog.Setup(service => service.ConfirmAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(true);
+        var metadata = new Mock<IVideoMetadataCoordinator>();
+        metadata.Setup(service => service.ClearAllScrapeRecordsAsync(
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("clear failed"));
+        metadata.Setup(service => service.GetTaskHistoryAsync(
+                It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var video = new Mock<IVideoLibraryService>();
+        video.Setup(service => service.GetVideosAsync(
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new IOException("reload failed"));
+        video.Setup(service => service.GetCollectionsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<IReadOnlyList<VideoCollection>>.Success([]));
+        video.Setup(service => service.GetSourcesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<IReadOnlyList<VideoLibrarySource>>.Success([]));
+        var notification = new Mock<INotificationService>();
+        var sut = CreateSut(
+            videoService: video.Object,
+            dialogService: dialog.Object,
+            notificationService: notification.Object,
+            metadataCoordinator: metadata.Object);
+
+        await sut.ClearAllScrapeRecordsCommand.ExecuteAsync(null);
+
+        notification.Verify(service => service.ShowError(
+            "clear failed", It.IsAny<string>()), Times.Once);
+        notification.Verify(service => service.ShowError(
+            "reload failed", It.IsAny<string>()), Times.Never);
+        notification.Verify(service => service.ShowSuccess(
+            It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        sut.IsClearingScrapeRecords.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ClearAllScrapeRecordsCommand_IgnoresQueuedAndInFlightOldGenerationProgress()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var dialog = new Mock<IDialogService>();
+        dialog.Setup(service => service.ConfirmAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()))
+            .ReturnsAsync(true);
+        var clearStarted = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseClear = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        IReadOnlyCollection<VideoMetadataBatchProgress> activeProgress = [];
+        var metadata = new Mock<IVideoMetadataCoordinator>();
+        metadata.SetupGet(service => service.ActiveBatchProgress)
+            .Returns(() => activeProgress);
+        metadata.Setup(service => service.GetTaskHistoryAsync(
+                It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        metadata.Setup(service => service.ClearAllScrapeRecordsAsync(
+                It.IsAny<CancellationToken>()))
+            .Returns(async (CancellationToken _) =>
+            {
+                clearStarted.TrySetResult(true);
+                await releaseClear.Task;
+            });
+        var sut = CreateSut(
+            videoService: new RecordingVideoLibraryService(),
+            dialogService: dialog.Object,
+            metadataCoordinator: metadata.Object);
+        var uiContext = new QueuedSynchronizationContext();
+        var previousContext = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(uiContext);
+        try
+        {
+            await sut.InitializeAsync();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previousContext);
+        }
+        var sourceId = Guid.NewGuid();
+        var assetId = Guid.NewGuid();
+        var batch = new VideoMetadataBatchProgress(
+            Guid.NewGuid(), sourceId, VideoCatalogJobState.Running,
+            1, 10, 0, 1, assetId);
+        activeProgress = [batch];
+        metadata.Raise(service => service.BatchProgressChanged += null, metadata.Object, batch);
+
+        var clear = sut.ClearAllScrapeRecordsCommand.ExecuteAsync(null);
+        await clearStarted.Task.WaitAsync(ct);
+        metadata.Raise(service => service.ProgressChanged += null, metadata.Object,
+            new VideoMetadataRefreshProgress(
+                assetId, VideoMetadataRefreshStage.Artwork, 0, 1, "tmdb"));
+        metadata.Raise(service => service.BatchProgressChanged += null, metadata.Object, batch);
+        releaseClear.TrySetResult(true);
+        await clear;
+        uiContext.Drain();
+
+        sut.MetadataTasks.Should().BeEmpty();
+        sut.HasBackgroundMetadataTask.Should().BeFalse();
+        sut.BackgroundMetadataText.Should().BeEmpty();
+        sut.HasActiveMetadataRefresh.Should().BeFalse();
+        sut.MetadataRefreshText.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ClearAllScrapeRecordsCommand_InvalidatesPendingAutomaticQueuesFromAllRefreshPaths()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var source = new VideoLibrarySource
+        {
+            Id = Guid.NewGuid().ToString("D"),
+            Name = "Anime",
+            FolderPath = @"C:\Anime",
+            MediaType = VideoLibraryMediaType.Anime,
+        };
+        var videoService = new Mock<IVideoLibraryService>();
+        videoService.Setup(item => item.GetVideosAsync(
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<IReadOnlyList<VideoItem>>.Success([]));
+        videoService.Setup(item => item.GetCollectionsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<IReadOnlyList<VideoCollection>>.Success([]));
+        videoService.Setup(item => item.GetSourcesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<IReadOnlyList<VideoLibrarySource>>.Success([source]));
+        var allStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allRelease = new TaskCompletionSource<Result<IReadOnlyList<VideoSourceRefreshResult>>>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        videoService.Setup(item => item.RefreshAllSourcesAsync(It.IsAny<CancellationToken>()))
+            .Callback(() => allStarted.TrySetResult(true))
+            .Returns(allRelease.Task);
+        var sourceStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sourceRelease = new TaskCompletionSource<Result<VideoSourceRefreshResult>>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        videoService.Setup(item => item.RefreshSourceAsync(source.Id, It.IsAny<CancellationToken>()))
+            .Callback(() => sourceStarted.TrySetResult(true))
+            .Returns(sourceRelease.Task);
+        var scanStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var scanRelease = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var scan = new Mock<IVideoLibraryScanCoordinator>();
+        scan.Setup(item => item.ScanAllAsync(false, It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                scanStarted.TrySetResult(true);
+                await scanRelease.Task;
+            });
+        var metadata = new Mock<IVideoMetadataCoordinator>();
+        metadata.SetupGet(item => item.ActiveBatchProgress).Returns([]);
+        metadata.Setup(item => item.GetTaskHistoryAsync(
+                It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        metadata.Setup(item => item.ClearAllScrapeRecordsAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var settings = new Mock<ISettingsService>();
+        settings.SetupGet(item => item.Current).Returns(new AppSettings
+        {
+            VideoSettings = new VideoSettings
+            {
+                Metadata = new VideoMetadataSettings { OnlineConsentAccepted = true },
+            },
+        });
+        var dialog = new Mock<IDialogService>();
+        dialog.Setup(item => item.ConfirmAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(true);
+        var sut = CreateSut(
+            videoService: videoService.Object,
+            dialogService: dialog.Object,
+            metadataCoordinator: metadata.Object,
+            scanCoordinator: scan.Object,
+            settingsService: settings.Object);
+        await sut.InitializeAsync();
+        await scanStarted.Task.WaitAsync(ct);
+        var refreshAll = sut.RefreshAllSourcesCommand.ExecuteAsync(null);
+        var summary = new VideoLibrarySourceSummary(source, 0, 0, 0);
+        var refreshSource = sut.RefreshSourceCommand.ExecuteAsync(summary);
+        await Task.WhenAll(allStarted.Task, sourceStarted.Task).WaitAsync(ct);
+
+        await sut.ClearAllScrapeRecordsCommand.ExecuteAsync(null);
+        allRelease.TrySetResult(Result<IReadOnlyList<VideoSourceRefreshResult>>.Success([]));
+        sourceRelease.TrySetResult(Result<VideoSourceRefreshResult>.Success(
+            new VideoSourceRefreshResult(source, 0, [])));
+        scanRelease.TrySetResult(true);
+        await Task.WhenAll(refreshAll, refreshSource).WaitAsync(ct);
+        await Task.Delay(50, ct);
+
+        metadata.Verify(item => item.QueueAllSourcesAsync(
+            It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+        metadata.Verify(item => item.QueueSourceRefreshAsync(
+            It.IsAny<Guid>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CompletedSingleAssetMetadataRefresh_ReloadsAnOpenVideoDetail()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var service = new RecordingVideoLibraryService();
+        var metadata = new Mock<IVideoMetadataCoordinator>();
+        metadata.SetupGet(item => item.ActiveBatchProgress).Returns([]);
+        metadata.Setup(item => item.GetTaskHistoryAsync(
+                It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var sut = CreateSut(
+            videoService: service,
+            metadataCoordinator: metadata.Object);
+        await sut.InitializeAsync();
+        sut.SelectedVideo = new VideoItemViewModel(new VideoItem
+        {
+            Id = "selected",
+            Title = "Selected",
+            FilePath = @"C:\Anime\selected.mkv",
+        });
+
+        metadata.Raise(item => item.ProgressChanged += null, metadata.Object,
+            new VideoMetadataRefreshProgress(
+                Guid.NewGuid(), VideoMetadataRefreshStage.Completed, 1, 1, "anidb"));
+
+        for (var attempt = 0; attempt < 50 && service.LoadCount < 2; attempt++)
+            await Task.Delay(10, ct);
+        service.LoadCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task CompletedSingleAssetMetadataRefresh_DoesNotRebuildHomeSections()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var service = new RecordingVideoLibraryService();
+        var metadata = new Mock<IVideoMetadataCoordinator>();
+        metadata.SetupGet(item => item.ActiveBatchProgress).Returns([]);
+        metadata.Setup(item => item.GetTaskHistoryAsync(
+                It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var sut = CreateSut(
+            videoService: service,
+            metadataCoordinator: metadata.Object);
+        await sut.InitializeAsync();
+
+        metadata.Raise(item => item.ProgressChanged += null, metadata.Object,
+            new VideoMetadataRefreshProgress(
+                Guid.NewGuid(), VideoMetadataRefreshStage.Completed, 1, 1, "anidb"));
+
+        await Task.Delay(50, ct);
+        service.LoadCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ConcurrentRefreshLoads_LateCanceledLoadDoesNotOverwriteNewestSnapshot()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var source = new VideoLibrarySource
+        {
+            Id = Guid.NewGuid().ToString("D"),
+            Name = "Anime",
+            FolderPath = @"C:\Anime",
+            MediaType = VideoLibraryMediaType.Anime,
+        };
+        var staleLoadStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseStaleLoad = new TaskCompletionSource<Result<IReadOnlyList<VideoItem>>>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var getVideosCall = 0;
+        var videoService = new Mock<IVideoLibraryService>();
+        videoService.Setup(item => item.GetVideosAsync(
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Returns((string? _, CancellationToken _) =>
+            {
+                return Interlocked.Increment(ref getVideosCall) switch
+                {
+                    1 => Task.FromResult(Result<IReadOnlyList<VideoItem>>.Success([])),
+                    2 => WaitForStaleLoadAsync(),
+                    _ => Task.FromResult(Result<IReadOnlyList<VideoItem>>.Success(
+                    [
+                        new VideoItem
+                        {
+                            Id = "newest",
+                            Title = "Newest",
+                            FilePath = @"C:\Anime\newest.mkv",
+                        },
+                    ])),
+                };
+
+                Task<Result<IReadOnlyList<VideoItem>>> WaitForStaleLoadAsync()
+                {
+                    staleLoadStarted.TrySetResult();
+                    return releaseStaleLoad.Task;
+                }
+            });
+        videoService.Setup(item => item.GetCollectionsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<IReadOnlyList<VideoCollection>>.Success([]));
+        videoService.Setup(item => item.GetSourcesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<IReadOnlyList<VideoLibrarySource>>.Success([source]));
+        videoService.Setup(item => item.RefreshAllSourcesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<IReadOnlyList<VideoSourceRefreshResult>>.Success([]));
+        videoService.Setup(item => item.RefreshSourceAsync(
+                source.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<VideoSourceRefreshResult>.Success(
+                new VideoSourceRefreshResult(source, 0, [])));
+        var sut = CreateSut(videoService: videoService.Object);
+        await sut.InitializeAsync();
+
+        var staleRefresh = sut.RefreshAllSourcesCommand.ExecuteAsync(null);
+        await staleLoadStarted.Task.WaitAsync(ct);
+        var newestRefresh = sut.RefreshSourceCommand.ExecuteAsync(
+            new VideoLibrarySourceSummary(source, 0, 0, 0));
+        await newestRefresh.WaitAsync(ct);
+
+        sut.Videos.Select(item => item.Video.Id).Should().Equal("newest");
+        sut.IsContentLoading.Should().BeFalse();
+
+        releaseStaleLoad.TrySetResult(Result<IReadOnlyList<VideoItem>>.Success(
+        [
+            new VideoItem
+            {
+                Id = "stale",
+                Title = "Stale",
+                FilePath = @"C:\Anime\stale.mkv",
+            },
+        ]));
+        await staleRefresh.WaitAsync(ct);
+
+        sut.Videos.Select(item => item.Video.Id).Should().Equal("newest");
+        sut.IsContentLoading.Should().BeFalse();
+    }
+
+    private sealed class QueuedSynchronizationContext : SynchronizationContext
+    {
+        private readonly ConcurrentQueue<(SendOrPostCallback Callback, object? State)> _callbacks = [];
+
+        public override void Post(SendOrPostCallback callback, object? state) =>
+            _callbacks.Enqueue((callback, state));
+
+        public void Drain()
+        {
+            var previous = Current;
+            SetSynchronizationContext(this);
+            try
+            {
+                while (_callbacks.TryDequeue(out var work))
+                    work.Callback(work.State);
+            }
+            finally
+            {
+                SetSynchronizationContext(previous);
+            }
+        }
+    }
+
     private static VideoLibraryPageViewModel CreateSut(
         IVideoLibraryService? videoService = null,
         IDialogService? dialogService = null,
         INotificationService? notificationService = null,
         IVideoPlayerWindowService? playerService = null,
         IVideoThumbnailService? thumbnailService = null,
-        IFileRevealService? fileRevealService = null)
+        IFileRevealService? fileRevealService = null,
+        IVideoMetadataCoordinator? metadataCoordinator = null,
+        IVideoLibraryScanCoordinator? scanCoordinator = null,
+        ISettingsService? settingsService = null)
     {
         return new VideoLibraryPageViewModel(
             videoService ?? new RecordingVideoLibraryService(),
@@ -811,7 +1641,10 @@ public class VideoLibraryPageViewModelTests
             notificationService ?? Mock.Of<INotificationService>(),
             playerService ?? new RecordingVideoPlayerWindowService(),
             thumbnailService ?? new RecordingVideoThumbnailService(),
-            fileRevealService ?? new RecordingFileRevealService());
+            fileRevealService ?? new RecordingFileRevealService(),
+            scanCoordinator,
+            metadataCoordinator,
+            settingsService);
     }
 
     private static VideoItem SeriesEpisode(

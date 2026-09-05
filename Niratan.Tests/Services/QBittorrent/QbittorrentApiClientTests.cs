@@ -201,6 +201,37 @@ public sealed class QbittorrentApiClientTests
         body.Should().Contain("niratan");
     }
 
+    [Theory]
+    [InlineData("https://nyaa.si/download/123.torrent?redirect=https://example.com/evil")]
+    [InlineData("https://nyaa.si/download/123.torrent#fragment")]
+    public async Task AddTorrent_rejects_nyaa_urls_with_query_or_fragment(string torrentUrl)
+    {
+        var handler = new RecordingHandler(_ => Response(HttpStatusCode.OK, "Ok."));
+        using var http = new HttpClient(handler);
+        using var client = new QbittorrentApiClient(http);
+        var item = new NyaaTorrentItem(
+            "123",
+            "Example",
+            new Uri(torrentUrl),
+            new Uri("https://nyaa.si/view/123"),
+            "Anime",
+            1024,
+            10,
+            1,
+            5,
+            DateTimeOffset.UtcNow,
+            true,
+            false);
+
+        var result = await client.AddTorrentAsync(
+            new QbittorrentSettings { BaseUrl = "http://127.0.0.1:8080" },
+            new QbittorrentCredentials("admin", "password", ""),
+            item);
+
+        result.IsSuccess.Should().BeFalse();
+        handler.Requests.Should().BeEmpty();
+    }
+
     [Fact]
     public async Task Remote_http_endpoint_is_rejected_before_request()
     {

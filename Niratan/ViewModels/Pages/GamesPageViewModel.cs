@@ -7,10 +7,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.UI.Dispatching;
 using Niratan.Helpers;
 using Niratan.Models.Anki;
 using Niratan.Models.Games;
+using Niratan.Models.Settings;
 using Niratan.Services.Games;
+using Niratan.Services.Settings;
 
 namespace Niratan.ViewModels.Pages;
 
@@ -20,12 +23,16 @@ public partial class GamesPageViewModel : ObservableObject, IDisposable
     private readonly IGalGameSessionService _session;
     private readonly GalGameMediaCapture _mediaCapture;
     private readonly GalGameIngameLookupController _ingameLookup;
+    private readonly ISettingsService _settings;
+    private readonly DispatcherQueue? _dispatcherQueue;
     private readonly SemaphoreSlim _pollGate = new(1, 1);
     private bool _initialized;
     private bool _disposed;
     private string? _lastDiagnosticEventKey;
     private readonly Dictionary<ulong, List<string>> _threadPreviewHistory = [];
     private readonly Dictionary<ulong, GalGameThreadPreview> _discoveredThreads = [];
+    private bool _loadingAppearance;
+    private CancellationTokenSource? _appearanceSaveCts;
 
     [ObservableProperty]
     public partial string GamePath { get; set; } = string.Empty;
@@ -51,6 +58,15 @@ public partial class GamesPageViewModel : ObservableObject, IDisposable
     public partial int SelectedSectionIndex { get; set; }
 
     [ObservableProperty]
+    public partial string LibrarySearchText { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial int LibrarySortIndex { get; set; }
+
+    [ObservableProperty]
+    public partial int LibraryStatusFilterIndex { get; set; }
+
+    [ObservableProperty]
     public partial bool IsPolling { get; set; }
 
     [ObservableProperty]
@@ -71,7 +87,50 @@ public partial class GamesPageViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     public partial string VoiceStatusText { get; set; } = string.Empty;
 
+    [ObservableProperty]
+    public partial string OverlayFontFamily { get; set; } = "Yu Gothic UI";
+
+    [ObservableProperty]
+    public partial double OverlayFontSize { get; set; } = 30;
+
+    [ObservableProperty]
+    public partial double OverlayLetterSpacing { get; set; }
+
+    [ObservableProperty]
+    public partial double OverlayLineHeight { get; set; } = 1;
+
+    [ObservableProperty]
+    public partial bool OverlayBold { get; set; } = true;
+
+    [ObservableProperty]
+    public partial int OverlayHorizontalAlignmentIndex { get; set; }
+
+    [ObservableProperty]
+    public partial int OverlayVerticalAlignmentIndex { get; set; }
+
+    [ObservableProperty]
+    public partial string OverlayTextColor { get; set; } = "#FFFFFFFF";
+
+    [ObservableProperty]
+    public partial string OverlayBackgroundColor { get; set; } = "#FF000000";
+
+    [ObservableProperty]
+    public partial double OverlayBackgroundOpacity { get; set; }
+
+    [ObservableProperty]
+    public partial string OverlayOutlineColor { get; set; } = "#E0000000";
+
+    [ObservableProperty]
+    public partial double OverlayOutlineWidth { get; set; } = 1.6;
+
+    [ObservableProperty]
+    public partial double OverlayPadding { get; set; } = 20;
+
+    [ObservableProperty]
+    public partial double OverlayCornerRadius { get; set; } = 14;
+
     public ObservableCollection<GalGameEntry> Games { get; } = [];
+    public ObservableCollection<GalGameEntry> VisibleGames { get; } = [];
     public ObservableCollection<GalGameTextLine> CapturedLines { get; } = [];
     public ObservableCollection<GalGameThreadPreview> ThreadPreviews { get; } = [];
     public ObservableCollection<GalGameDiagnosticDisplayItem> Diagnostics { get; } = [];
@@ -80,18 +139,56 @@ public partial class GamesPageViewModel : ObservableObject, IDisposable
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
     public bool CanStop => _session.State.IsActive || _session.State.Phase == GalHookSessionPhase.Error;
     public bool IsCaptureActive => _session.State.IsActive;
+    public bool HasLibraryGames => Games.Count > 0;
+    public bool HasVisibleGames => VisibleGames.Count > 0;
+
+    public IReadOnlyList<string> LibrarySortOptions { get; } =
+    [
+        ResourceStringHelper.GetString("GamesSortName", "Name"),
+        ResourceStringHelper.GetString("GamesSortAdded", "Recently added"),
+        ResourceStringHelper.GetString("GamesSortPlayed", "Recently played"),
+        ResourceStringHelper.GetString("GamesSortStatus", "Play status"),
+        ResourceStringHelper.GetString("GamesSortDuration", "Play time"),
+    ];
+
+    public IReadOnlyList<string> LibraryStatusFilterOptions { get; } =
+    [
+        ResourceStringHelper.GetString("GamesStatusAll", "All statuses"),
+        ResourceStringHelper.GetString("GamesStatusWant", "Want to play"),
+        ResourceStringHelper.GetString("GamesStatusPlaying", "Playing"),
+        ResourceStringHelper.GetString("GamesStatusPlayed", "Played"),
+        ResourceStringHelper.GetString("GamesStatusOnHold", "On hold"),
+        ResourceStringHelper.GetString("GamesStatusDropped", "Dropped"),
+        ResourceStringHelper.GetString("GamesStatusUnset", "Not set"),
+    ];
+
+    public IReadOnlyList<string> OverlayHorizontalAlignmentOptions { get; } =
+    [
+        ResourceStringHelper.GetString("GamesOverlayAlignCenter", "Center"),
+        ResourceStringHelper.GetString("GamesOverlayAlignLeft", "Left"),
+    ];
+
+    public IReadOnlyList<string> OverlayVerticalAlignmentOptions { get; } =
+    [
+        ResourceStringHelper.GetString("GamesOverlayAlignMiddle", "Middle"),
+        ResourceStringHelper.GetString("GamesOverlayAlignTop", "Top"),
+    ];
 
     public GamesPageViewModel(
         IGalGameRepository repository,
         IGalGameSessionService session,
         GalGameMediaCapture mediaCapture,
-        GalGameIngameLookupController ingameLookup)
+        GalGameIngameLookupController ingameLookup,
+        ISettingsService settings)
     {
         _repository = repository;
         _session = session;
         _mediaCapture = mediaCapture;
         _ingameLookup = ingameLookup;
+        _settings = settings;
+        _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         _session.StateChanged += Session_StateChanged;
+        LoadOverlayAppearance(_settings.Current.GalGameSettings?.OverlayAppearance);
         ApplySessionState(_session.State);
     }
 
@@ -114,6 +211,7 @@ public partial class GamesPageViewModel : ObservableObject, IDisposable
             Games.Clear();
             foreach (var game in result.Games.OrderBy(game => game.SortOrder).ThenBy(game => game.DisplayName))
                 Games.Add(game);
+            RefreshLibraryView();
             ErrorMessage = result.Error;
         }
         catch (Exception ex)
@@ -150,10 +248,7 @@ public partial class GamesPageViewModel : ObservableObject, IDisposable
         {
             IsBusy = true;
             ErrorMessage = null;
-            var entry = GalGameLibraryFunctions.NewFromExe(path);
-            await _repository.AddAsync(entry);
-            Games.Add(entry);
-            GamePath = string.Empty;
+            await ImportPathsAsync([path]);
         }
         catch (Exception ex)
         {
@@ -163,6 +258,39 @@ public partial class GamesPageViewModel : ObservableObject, IDisposable
         {
             IsBusy = false;
         }
+    }
+
+    public async Task<int> ImportPathsAsync(IEnumerable<string> paths)
+    {
+        var candidates = GalGameLibraryFunctions.FilterNewExes(
+                Games,
+                paths.Where(path => !string.IsNullOrWhiteSpace(path))
+                    .Select(path => path.Trim().Trim('"')))
+            .Where(File.Exists)
+            .ToArray();
+        var imported = 0;
+        foreach (var path in candidates)
+        {
+            var entry = GalGameLibraryFunctions.NewFromExe(path);
+            await _repository.AddAsync(entry);
+            Games.Add(entry);
+            imported++;
+        }
+
+        if (imported > 0)
+        {
+            GamePath = string.Empty;
+            SelectedGame = Games.LastOrDefault();
+            RefreshLibraryView();
+            OnPropertyChanged(nameof(HasLibraryGames));
+        }
+        else if (candidates.Length == 0)
+        {
+            ErrorMessage = ResourceStringHelper.GetString(
+                "GamesNoNewExecutables",
+                "No new .exe files were found.");
+        }
+        return imported;
     }
 
     [RelayCommand]
@@ -501,6 +629,8 @@ public partial class GamesPageViewModel : ObservableObject, IDisposable
         {
             await _repository.RemoveAsync(game.Id);
             Games.Remove(game);
+            RefreshLibraryView();
+            OnPropertyChanged(nameof(HasLibraryGames));
             if (ReferenceEquals(SelectedGame, game))
                 SelectedGame = null;
         }
@@ -510,18 +640,182 @@ public partial class GamesPageViewModel : ObservableObject, IDisposable
         }
     }
 
+    [RelayCommand]
+    private void ResetOverlayAppearance()
+    {
+        LoadOverlayAppearance(new GalGameOverlayAppearanceSettings());
+        PersistOverlayAppearance();
+    }
+
+    partial void OnLibrarySearchTextChanged(string value) => RefreshLibraryView();
+    partial void OnLibrarySortIndexChanged(int value) => RefreshLibraryView();
+    partial void OnLibraryStatusFilterIndexChanged(int value) => RefreshLibraryView();
+
+    partial void OnOverlayFontFamilyChanged(string value) => PersistOverlayAppearance();
+    partial void OnOverlayFontSizeChanged(double value) => PersistOverlayAppearance();
+    partial void OnOverlayLetterSpacingChanged(double value) => PersistOverlayAppearance();
+    partial void OnOverlayLineHeightChanged(double value) => PersistOverlayAppearance();
+    partial void OnOverlayBoldChanged(bool value) => PersistOverlayAppearance();
+    partial void OnOverlayHorizontalAlignmentIndexChanged(int value) => PersistOverlayAppearance();
+    partial void OnOverlayVerticalAlignmentIndexChanged(int value) => PersistOverlayAppearance();
+    partial void OnOverlayTextColorChanged(string value) => PersistOverlayAppearance();
+    partial void OnOverlayBackgroundColorChanged(string value) => PersistOverlayAppearance();
+    partial void OnOverlayBackgroundOpacityChanged(double value) => PersistOverlayAppearance();
+    partial void OnOverlayOutlineColorChanged(string value) => PersistOverlayAppearance();
+    partial void OnOverlayOutlineWidthChanged(double value) => PersistOverlayAppearance();
+    partial void OnOverlayPaddingChanged(double value) => PersistOverlayAppearance();
+    partial void OnOverlayCornerRadiusChanged(double value) => PersistOverlayAppearance();
+
+    private void RefreshLibraryView()
+    {
+        IEnumerable<GalGameEntry> query = Games;
+        var search = LibrarySearchText?.Trim();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(game =>
+                game.DisplayName.Contains(search, StringComparison.CurrentCultureIgnoreCase)
+                || game.ExePath.Contains(search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var status = LibraryStatusFilterIndex switch
+        {
+            1 => GalGamePlayStatus.WantToPlay,
+            2 => GalGamePlayStatus.Playing,
+            3 => GalGamePlayStatus.Played,
+            4 => GalGamePlayStatus.OnHold,
+            5 => GalGamePlayStatus.Dropped,
+            6 => GalGamePlayStatus.Unset,
+            _ => (GalGamePlayStatus?)null,
+        };
+        if (status is not null)
+            query = query.Where(game => game.PlayStatus == status.Value);
+
+        query = LibrarySortIndex switch
+        {
+            1 => query.OrderByDescending(game => game.AddedAt).ThenBy(game => game.DisplayName),
+            2 => query.OrderByDescending(game => game.LastPlayedMs).ThenBy(game => game.DisplayName),
+            3 => query.OrderBy(game => game.PlayStatus).ThenBy(game => game.DisplayName),
+            4 => query.OrderByDescending(game => game.TotalPlaySeconds).ThenBy(game => game.DisplayName),
+            _ => query.OrderBy(game => game.DisplayName, StringComparer.CurrentCultureIgnoreCase),
+        };
+
+        VisibleGames.Clear();
+        foreach (var game in query)
+            VisibleGames.Add(game);
+        OnPropertyChanged(nameof(HasVisibleGames));
+    }
+
+    private void LoadOverlayAppearance(GalGameOverlayAppearanceSettings? source)
+    {
+        var value = (source ?? new GalGameOverlayAppearanceSettings()).Normalize();
+        _loadingAppearance = true;
+        try
+        {
+            OverlayFontFamily = value.FontFamily;
+            OverlayFontSize = value.FontSize;
+            OverlayLetterSpacing = value.LetterSpacing;
+            OverlayLineHeight = value.LineHeight;
+            OverlayBold = value.Bold;
+            OverlayHorizontalAlignmentIndex = value.HorizontalAlignment ==
+                GalGameOverlayHorizontalAlignment.Left ? 1 : 0;
+            OverlayVerticalAlignmentIndex = value.VerticalAlignment ==
+                GalGameOverlayVerticalAlignment.Top ? 1 : 0;
+            OverlayTextColor = value.TextColor;
+            OverlayBackgroundColor = value.BackgroundColor;
+            OverlayBackgroundOpacity = value.BackgroundOpacity;
+            OverlayOutlineColor = value.OutlineColor;
+            OverlayOutlineWidth = value.OutlineWidth;
+            OverlayPadding = value.Padding;
+            OverlayCornerRadius = value.CornerRadius;
+        }
+        finally
+        {
+            _loadingAppearance = false;
+        }
+    }
+
+    private void PersistOverlayAppearance()
+    {
+        if (_loadingAppearance || _disposed)
+            return;
+        var appearance = new GalGameOverlayAppearanceSettings
+        {
+            FontFamily = OverlayFontFamily,
+            FontSize = OverlayFontSize,
+            LetterSpacing = OverlayLetterSpacing,
+            LineHeight = OverlayLineHeight,
+            Bold = OverlayBold,
+            HorizontalAlignment = OverlayHorizontalAlignmentIndex == 1
+                ? GalGameOverlayHorizontalAlignment.Left
+                : GalGameOverlayHorizontalAlignment.Center,
+            VerticalAlignment = OverlayVerticalAlignmentIndex == 1
+                ? GalGameOverlayVerticalAlignment.Top
+                : GalGameOverlayVerticalAlignment.Center,
+            TextColor = OverlayTextColor,
+            BackgroundColor = OverlayBackgroundColor,
+            BackgroundOpacity = OverlayBackgroundOpacity,
+            OutlineColor = OverlayOutlineColor,
+            OutlineWidth = OverlayOutlineWidth,
+            Padding = OverlayPadding,
+            CornerRadius = OverlayCornerRadius,
+        }.Normalize();
+        _settings.Set(settings => settings.GalGameSettings, new GalGameSettings
+        {
+            OverlayAppearance = appearance,
+        });
+        _appearanceSaveCts?.Cancel();
+        _appearanceSaveCts?.Dispose();
+        _appearanceSaveCts = new CancellationTokenSource();
+        _ = SaveOverlayAppearanceAsync(_appearanceSaveCts.Token);
+    }
+
+    private async Task SaveOverlayAppearanceAsync(CancellationToken ct)
+    {
+        try
+        {
+            // Sliders update the live overlay immediately. Debounce only the
+            // persistent write so dragging a thumb does not enqueue one JSON
+            // save for every pointer-move event.
+            await Task.Delay(250, ct);
+            ct.ThrowIfCancellationRequested();
+            await _settings.SaveAsync();
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed)
             return;
         _disposed = true;
+        _appearanceSaveCts?.Cancel();
+        _appearanceSaveCts?.Dispose();
+        _appearanceSaveCts = null;
         _session.StateChanged -= Session_StateChanged;
         _ingameLookup.Dispose();
         _pollGate.Dispose();
     }
 
-    private void Session_StateChanged(object? sender, GalHookSessionState state) =>
+    private void Session_StateChanged(object? sender, GalHookSessionState state)
+    {
+        _ = sender;
+        if (_disposed)
+            return;
+
+        if (_dispatcherQueue is { HasThreadAccess: false } dispatcher)
+        {
+            dispatcher.TryEnqueue(() =>
+            {
+                if (!_disposed)
+                    ApplySessionState(state);
+            });
+            return;
+        }
+
         ApplySessionState(state);
+    }
 
     private void ApplySessionState(GalHookSessionState state)
     {
@@ -561,7 +855,8 @@ public partial class GamesPageViewModel : ObservableObject, IDisposable
                 || GalHookDiagnosticBits.HasResourceEvidence(
                     voiceIpc.HookDiagnostics,
                     voiceIpc.ReservedLunaDiagnostics,
-                    voiceIpc.ReservedHookDiagnostics) => ResourceStringHelper.GetString(
+                    voiceIpc.ReservedHookDiagnostics,
+                    voiceIpc.XAudioDiagnostics) => ResourceStringHelper.GetString(
                         "GamesVoiceObserved",
                         "Voice observed"),
             _ => ResourceStringHelper.GetString(
@@ -639,11 +934,15 @@ public partial class GamesPageViewModel : ObservableObject, IDisposable
             : GalHookDiagnosticBits.Explain(
                 ipc.HookDiagnostics,
                 ipc.ReservedLunaDiagnostics,
-                ipc.ReservedHookDiagnostics);
+                ipc.ReservedHookDiagnostics,
+                ipc.XAudioDiagnostics,
+                ipc.XAudioDiagnostics2);
         DiagnosticFlags = ipc is null
             ? "hookdiag=not_observed"
             : $"hookdiag=0x{ipc.HookDiagnostics:x8} · luna=0x{ipc.ReservedLunaDiagnostics:x8}"
                 + $" · hookio=0x{ipc.ReservedHookDiagnostics:x8}"
+                + $" · xaudio=0x{ipc.XAudioDiagnostics:x8}"
+                + $" · xaudio2=0x{ipc.XAudioDiagnostics2:x8}"
                 + (flags.Count == 0 ? string.Empty : $"\n{string.Join(" · ", flags)}");
     }
 

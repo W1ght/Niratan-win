@@ -3,6 +3,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Navigation;
 using Niratan.ViewModels.Pages;
 using Niratan.ViewModels.Components;
 using Windows.System;
@@ -10,11 +11,20 @@ using DispatcherTimer = Microsoft.UI.Dispatching.DispatcherQueueTimer;
 
 namespace Niratan.Views.Pages;
 
+public enum DownloadsPageSection
+{
+    Discovery,
+    Tasks,
+    Subscriptions,
+    Settings,
+}
+
 public sealed partial class DownloadsPage : Page, IDisposable
 {
     private DispatcherTimer? _refreshTimer;
     private bool _disposed;
     private bool _taskDetailsDialogOpen;
+    private DownloadsPageSection _requestedSection = DownloadsPageSection.Discovery;
 
     public DownloadsPageViewModel ViewModel { get; }
 
@@ -32,10 +42,21 @@ public sealed partial class DownloadsPage : Page, IDisposable
         ViewModel.TaskDetailsRequested += OnTaskDetailsRequested;
     }
 
+    protected override void OnNavigatedTo(NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        _requestedSection = e.Parameter switch
+        {
+            DownloadsPageSection section => section,
+            string route when Enum.TryParse<DownloadsPageSection>(route, true, out var parsedSection) => parsedSection,
+            _ => DownloadsPageSection.Discovery,
+        };
+    }
+
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        DownloadsSectionNavigation.SelectedItem = DownloadsDiscoveryNavItem;
         await ViewModel.InitializeAsync();
+        SelectSection(_requestedSection);
         _refreshTimer ??= DispatcherQueue.CreateTimer();
         _refreshTimer.Interval = TimeSpan.FromSeconds(4);
         _refreshTimer.IsRepeating = true;
@@ -62,10 +83,36 @@ public sealed partial class DownloadsPage : Page, IDisposable
             case "tasks":
                 ViewModel.SelectTasksCommand.Execute(null);
                 break;
+            case "subscriptions":
+                ViewModel.SelectSubscriptionsCommand.Execute(null);
+                break;
             case "settings":
                 ViewModel.SelectSettingsCommand.Execute(null);
                 break;
             default:
+                ViewModel.SelectDiscoveryCommand.Execute(null);
+                break;
+        }
+    }
+
+    private void SelectSection(DownloadsPageSection section)
+    {
+        switch (section)
+        {
+            case DownloadsPageSection.Tasks:
+                DownloadsSectionNavigation.SelectedItem = DownloadsTasksNavItem;
+                ViewModel.SelectTasksCommand.Execute(null);
+                break;
+            case DownloadsPageSection.Subscriptions:
+                DownloadsSectionNavigation.SelectedItem = DownloadsSubscriptionsNavItem;
+                ViewModel.SelectSubscriptionsCommand.Execute(null);
+                break;
+            case DownloadsPageSection.Settings:
+                DownloadsSectionNavigation.SelectedItem = DownloadsSettingsNavItem;
+                ViewModel.SelectSettingsCommand.Execute(null);
+                break;
+            default:
+                DownloadsSectionNavigation.SelectedItem = DownloadsDiscoveryNavItem;
                 ViewModel.SelectDiscoveryCommand.Execute(null);
                 break;
         }

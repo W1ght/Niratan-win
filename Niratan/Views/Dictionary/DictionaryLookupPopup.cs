@@ -3221,12 +3221,10 @@ public sealed class DictionaryLookupPopup : IDisposable
             var preflight = await _ankiService.PreflightMiningAsync(rawPayload, miningContext);
             if (!preflight.CanMine)
             {
-                var duplicateNoteId = preflight.DuplicateNoteIds?
-                    .FirstOrDefault(noteId => noteId > 0);
                 return preflight.IsDuplicate
                     ? AnkiMiningResult.Duplicate(
                         AlreadyExistsMessage,
-                        duplicateNoteId > 0 ? duplicateNoteId : null)
+                        preflight.DuplicateNoteIds)
                     : AnkiMiningResult.Failed(preflight.ErrorMessage ?? AddCardFailedMessage);
             }
 
@@ -3254,10 +3252,9 @@ public sealed class DictionaryLookupPopup : IDisposable
                     var duplicate = await _ankiService.DuplicateLookupExpressionAsync(expression);
                     if (duplicate.IsDuplicate)
                     {
-                        var duplicateNoteId = duplicate.NoteIds.FirstOrDefault(id => id > 0);
                         return AnkiMiningResult.Duplicate(
                             AlreadyExistsMessage,
-                            duplicateNoteId > 0 ? duplicateNoteId : null);
+                            duplicate.NoteIds);
                     }
                 }
             }
@@ -3629,15 +3626,19 @@ public sealed class DictionaryLookupPopup : IDisposable
             return;
         }
 
-        if (result is
-            {
-                Status: AnkiMiningStatus.Added or AnkiMiningStatus.Duplicate,
-                NoteId: > 0,
-            })
+        // The magnifier must reach every note matching this expression, so a mining result
+        // adds to whatever the duplicate scan already published instead of replacing it.
+        // The whitelist and the payload are the same array: HandleOpenAnkiNote compares the
+        // request with SequenceEqual, so any divergence here silently rejects the click.
+        var openableNoteIds = result.OpenableNoteIds;
+        if (result.Status is AnkiMiningStatus.Added or AnkiMiningStatus.Duplicate
+            && openableNoteIds.Count > 0)
         {
-            _openableAnkiNotes[
-                (attempt.RenderGeneration, attempt.PageRevision, attempt.EntryIndex)] =
-                [result.NoteId.Value];
+            var key = (attempt.RenderGeneration, attempt.PageRevision, attempt.EntryIndex);
+            openableNoteIds = _openableAnkiNotes.TryGetValue(key, out var known)
+                ? known.Concat(openableNoteIds).Distinct().ToArray()
+                : openableNoteIds;
+            _openableAnkiNotes[key] = [.. openableNoteIds];
         }
 
         var payload = JsonSerializer.Serialize(new
@@ -3645,6 +3646,7 @@ public sealed class DictionaryLookupPopup : IDisposable
             status = result.WebStatus,
             message = result.Message,
             noteID = result.NoteId,
+            noteIDs = openableNoteIds,
         });
         var expression = JsonSerializer.Serialize(attempt.Expression);
         await _contentWebView.CoreWebView2.ExecuteScriptAsync(

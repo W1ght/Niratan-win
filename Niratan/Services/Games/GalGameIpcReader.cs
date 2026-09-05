@@ -10,9 +10,13 @@ namespace Niratan.Services.Games;
 
 internal sealed class GalGameIpcReader
 {
+    private readonly object _lookupControlGate = new();
     private const uint FileMapRead = 0x0004;
     private const uint FileMapWrite = 0x0002;
-    private const int SharedHeaderSize = 272;
+    // Measured from the native v21 SharedHeader with MSVC for both x86/x64.
+    // The Unity event table is embedded in the header, so the PCM ring begins
+    // after the full 21,560 bytes rather than after the small scalar prefix.
+    private const int SharedHeaderSize = 21560;
     private const int TextLaneSize = 24;
     private const int TextSlotBytes = 2048;
     private const int TextLaneCount = 64;
@@ -29,50 +33,62 @@ internal sealed class GalGameIpcReader
     private const int MagicOffset = 0;
     private const int VersionOffset = 4;
     private const int IpcProtocolVersionOffset = 8;
-    private const int SampleRateOffset = 24;
-    private const int ChannelsOffset = 28;
-    private const int BitsPerSampleOffset = 32;
-    private const int RingCapacityOffset = 40;
-    private const int HookedOffset = 52;
-    private const int TextHookedOffset = 60;
-    private const int TotalWrittenOffset = 64;
-    private const int TextWriteCountOffset = 80;
-    private const int ClipWriteCountOffset = 88;
-    private const int LunaActiveOffset = 104;
-    private const int HookDiagnosticsOffset = 112;
-    private const int BlockAlignOffset = 44;
-    private const int IsFloatOffset = 36;
-    private const int WritePosOffset = 48;
-    private const int TextRegionOffset = 72;
-    private const int ClipRegionOffset = 76;
-    private const int SelectedTextThreadIdOffset = 96;
-    private const int ReservedLunaDiagnosticsOffset = 108;
-    private const int ReservedHookDiagnosticsOffset = 116;
-    private const int LoopbackRingOffset = 21120;
-    private const int LoopbackRingCapacityOffset = 21124;
-    private const int LoopbackMarkerOffset = 21128;
-    private const int LoopbackMarkerSlotCountOffset = 21132;
-    private const int LoopbackSampleRateOffset = 21136;
-    private const int LoopbackChannelsOffset = 21140;
-    private const int LoopbackBitsPerSampleOffset = 21144;
-    private const int LoopbackDiagnosticsOffset = 21156;
-    private const int LoopbackTotalWrittenOffset = 21160;
-    private const int LoopbackMarkerCountOffset = 21168;
+    private const int XAudioDiagnosticsOffset = 20;
+    private const int XAudioDiagnostics2Offset = 24;
+    private const int SampleRateOffset = 28;
+    private const int ChannelsOffset = 32;
+    private const int BitsPerSampleOffset = 36;
+    private const int RingCapacityOffset = 44;
+    private const int HookedOffset = 56;
+    private const int TextHookedOffset = 64;
+    private const int TotalWrittenOffset = 72;
+    private const int TextWriteCountOffset = 88;
+    private const int ClipWriteCountOffset = 96;
+    private const int LunaActiveOffset = 112;
+    private const int HookDiagnosticsOffset = 120;
+    private const int BlockAlignOffset = 48;
+    private const int IsFloatOffset = 40;
+    private const int WritePosOffset = 52;
+    private const int TextRegionOffset = 80;
+    private const int ClipRegionOffset = 84;
+    private const int SelectedTextThreadIdOffset = 104;
+    private const int ReservedLunaDiagnosticsOffset = 116;
+    private const int ReservedHookDiagnosticsOffset = 124;
+    private const int LoopbackRingOffset = 21128;
+    private const int LoopbackRingCapacityOffset = 21132;
+    private const int LoopbackMarkerOffset = 21136;
+    private const int LoopbackMarkerSlotCountOffset = 21140;
+    private const int LoopbackSampleRateOffset = 21144;
+    private const int LoopbackChannelsOffset = 21148;
+    private const int LoopbackBitsPerSampleOffset = 21152;
+    private const int LoopbackDiagnosticsOffset = 21164;
+    private const int LoopbackTotalWrittenOffset = 21168;
+    private const int LoopbackMarkerCountOffset = 21176;
     private const int LoopbackMarkerSize = 24;
-    private const int TextLaneCountOffset = 21192;
-    private const int TextLaneSlotCountOffset = 21196;
-    private const int TextLaneRecycleCountOffset = 21200;
-    private const int TextLaneOverflowCountOffset = 21208;
-    private const int LookupRegionOffset = 21216;
-    private const int LookupBitmapBytesOffset = 21220;
-    private const int LookupFrameCountOffset = 21224;
-    private const int LookupInputSlotCountOffset = 21228;
-    private const int LookupHitCountOffset = 21232;
-    private const int LookupFrameCountWrittenOffset = 21240;
-    private const int LookupInputCountOffset = 21248;
-    private const int LookupEnabledOffset = 21256;
-    private const int LookupDiagnosticsOffset = 21260;
-    private const int LookupFrameAppliedSequenceOffset = 21264;
+    private const int ThreadPreviewRegionOffset = 21184;
+    private const int ThreadPreviewSlotCountOffset = 21188;
+    private const int TextLaneCountOffset = 21200;
+    private const int TextLaneSlotCountOffset = 21204;
+    private const int TextLaneRecycleCountOffset = 21208;
+    private const int TextLaneOverflowCountOffset = 21216;
+    private const int LookupRegionOffset = 21224;
+    private const int LookupBitmapBytesOffset = 21228;
+    private const int LookupFrameCountOffset = 21232;
+    private const int LookupInputSlotCountOffset = 21236;
+    private const int LookupHitCountOffset = 21240;
+    private const int LookupFrameCountWrittenOffset = 21248;
+    private const int LookupInputCountOffset = 21256;
+    private const int LookupEnabledOffset = 21264;
+    private const int LookupDiagnosticsOffset = 21268;
+    private const int LookupFrameAppliedSequenceOffset = 21272;
+    private const int LookupGeometryAdmissionModeOffset = 21464;
+    private const int LookupGeometryAdmissionFlagsOffset = 21468;
+    private const int LookupGeometryAdmissionRequestSequenceOffset = 21472;
+    private const uint LookupGeometryAdmissionDisabled = 0;
+    private const uint LookupGeometryAdmissionNativeOnly = 2;
+    private const uint LookupGeometryAdmissionNativeInputReady = 0x00000002;
+    private const uint LookupGeometryAdmissionWriteInProgress = 0x80000000;
+    private const uint LookupGeometryAdmissionSequenceMask = 0x7fffffff;
     private const int LookupHitBytes = 1072;
     private const int LookupInputBytes = 32;
     private const int LookupFrameBytes = 64;
@@ -118,6 +134,8 @@ internal sealed class GalGameIpcReader
                     ClipWriteCount = ReadUInt64(view, ClipWriteCountOffset),
                     LunaActive = ReadUInt32(view, LunaActiveOffset),
                     HookDiagnostics = ReadUInt32(view, HookDiagnosticsOffset),
+                    XAudioDiagnostics = ReadUInt32(view, XAudioDiagnosticsOffset),
+                    XAudioDiagnostics2 = ReadUInt32(view, XAudioDiagnostics2Offset),
                     TextRegionOffset = ReadUInt32(view, TextRegionOffset),
                     ClipRegionOffset = ReadUInt32(view, ClipRegionOffset),
                     SelectedTextThreadId = ReadUInt64(view, SelectedTextThreadIdOffset),
@@ -254,8 +272,11 @@ internal sealed class GalGameIpcReader
         {
             if (!HasCompatibleHeader(view))
                 return [];
-            var offset = ReadUInt32(view, 21176);
-            var count = Math.Clamp((int)ReadUInt32(view, 21180), 0, TextLaneCount);
+            var offset = ReadUInt32(view, ThreadPreviewRegionOffset);
+            var count = Math.Clamp(
+                (int)ReadUInt32(view, ThreadPreviewSlotCountOffset),
+                0,
+                TextLaneCount);
             if (offset == 0 || count == 0)
                 return [];
 
@@ -410,13 +431,65 @@ internal sealed class GalGameIpcReader
 
     public bool TrySetLookupEnabled(int processId, bool enabled)
     {
-        return WithWritableView(processId, view =>
+        lock (_lookupControlGate)
         {
-            if (!HasCompatibleHeader(view) || !HasLookupRegion(view))
-                return false;
-            Marshal.WriteInt32(view, LookupEnabledOffset, enabled ? 1 : 0);
-            return true;
-        });
+            return WithWritableView(processId, view =>
+            {
+                if (!HasCompatibleHeader(view) || !HasLookupRegion(view))
+                    return false;
+                if (enabled)
+                {
+                    if (!PublishLookupGeometryAdmission(
+                            view,
+                            LookupGeometryAdmissionNativeOnly,
+                            LookupGeometryAdmissionNativeInputReady))
+                    {
+                        return false;
+                    }
+                    Thread.MemoryBarrier();
+                    Marshal.WriteInt32(view, LookupEnabledOffset, 1);
+                }
+                else
+                {
+                    Marshal.WriteInt32(view, LookupEnabledOffset, 0);
+                    Thread.MemoryBarrier();
+                    if (!PublishLookupGeometryAdmission(
+                            view,
+                            LookupGeometryAdmissionDisabled,
+                            0))
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            });
+        }
+    }
+
+    private static bool PublishLookupGeometryAdmission(IntPtr view, uint mode, uint flags)
+    {
+        var current = ReadUInt32(view, LookupGeometryAdmissionRequestSequenceOffset);
+        if ((current & LookupGeometryAdmissionWriteInProgress) != 0)
+            return false;
+
+        Marshal.WriteInt32(
+            view,
+            LookupGeometryAdmissionRequestSequenceOffset,
+            unchecked((int)(current | LookupGeometryAdmissionWriteInProgress)));
+        Thread.MemoryBarrier();
+        Marshal.WriteInt32(view, LookupGeometryAdmissionModeOffset, unchecked((int)mode));
+        Marshal.WriteInt32(view, LookupGeometryAdmissionFlagsOffset, unchecked((int)flags));
+        Thread.MemoryBarrier();
+
+        var published = ((current & LookupGeometryAdmissionSequenceMask) + 1)
+            & LookupGeometryAdmissionSequenceMask;
+        if (published == 0)
+            published = 1;
+        Marshal.WriteInt32(
+            view,
+            LookupGeometryAdmissionRequestSequenceOffset,
+            unchecked((int)published));
+        return true;
     }
 
     public bool TryPublishLookupFrame(int processId, GalGameLookupCardFrame frame)

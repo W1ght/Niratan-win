@@ -25,6 +25,40 @@ public enum VideoMetadataMediaKind
     Anime,
 }
 
+/// <summary>
+/// Confidence of a provider cross-reference. Numeric values intentionally
+/// match Shoko's MatchRating contract so persisted xrefs remain comparable.
+/// </summary>
+public enum VideoMetadataMatchRating : byte
+{
+    None = 0,
+    UserVerified = 1,
+    DateAndTitleMatches = 2,
+    DateMatches = 3,
+    TitleMatches = 4,
+    FirstAvailable = 5,
+    TitleKindaMatches = 7,
+    DateAndTitleKindaMatches = 8,
+    DateKindaMatches = 9,
+}
+
+/// <summary>
+/// TMDB episode-group ordering type. Values follow TMDB/Shoko, including the
+/// synthetic default ordering which is represented by the show ID.
+/// </summary>
+public enum VideoTmdbOrderingType
+{
+    Default = -1,
+    Unknown = 0,
+    OriginalAirDate = 1,
+    Absolute = 2,
+    Dvd = 3,
+    Digital = 4,
+    StoryArc = 5,
+    Production = 6,
+    Tv = 7,
+}
+
 public sealed record VideoMetadataSearchQuery(
     string Title,
     VideoMetadataMediaKind MediaKind,
@@ -48,7 +82,9 @@ public sealed record VideoMetadataCandidate(
     int? AbsoluteEpisodeNumber,
     ImmutableArray<string> Aliases,
     ImmutableDictionary<string, string> ExternalIds,
-    string? SourceUrl);
+    string? SourceUrl,
+    string? PosterUrl = null,
+    string? BackdropUrl = null);
 
 public sealed record VideoMetadataDetails(
     string ProviderId,
@@ -78,7 +114,8 @@ public sealed record VideoMetadataDetails(
     ImmutableArray<string> Studios = default,
     ImmutableArray<VideoPersonCredit> People = default,
     ImmutableArray<VideoRelatedItem> RelatedItems = default,
-    ImmutableArray<VideoMetadataSeason> Seasons = default)
+    ImmutableArray<VideoMetadataSeason> Seasons = default,
+    VideoTmdbOrdering? TmdbOrdering = null)
 {
     public VideoMetadataDetails WithInitializedCollections() => this with
     {
@@ -89,7 +126,12 @@ public sealed record VideoMetadataDetails(
         Tags = Tags.IsDefault ? [] : Tags,
         Studios = Studios.IsDefault ? [] : Studios,
         People = People.IsDefault ? [] : People,
-        RelatedItems = RelatedItems.IsDefault ? [] : RelatedItems,
+        RelatedItems = RelatedItems.IsDefault
+            ? []
+            : RelatedItems.Select(item => item with
+            {
+                Aliases = item.Aliases.IsDefault ? [] : item.Aliases,
+            }).ToImmutableArray(),
         Seasons = Seasons.IsDefault
             ? []
             : Seasons.Select(season => season with
@@ -106,7 +148,22 @@ public sealed record VideoMetadataSeason(
     string? AirDate,
     int? EpisodeCount,
     string? PosterUrl,
-    ImmutableArray<VideoMetadataEpisode> Episodes = default);
+    ImmutableArray<VideoMetadataEpisode> Episodes = default)
+{
+    public int? TmdbShowId { get; init; }
+
+    public int? TmdbSeasonId { get; init; }
+
+    public string? TmdbOrderingId { get; init; }
+
+    public string? TmdbEpisodeGroupId { get; init; }
+
+    public VideoTmdbOrderingType TmdbOrderingType { get; init; } = VideoTmdbOrderingType.Default;
+
+    public int Ordinal { get; init; }
+
+    public VideoMetadataMatchRating MatchRating { get; init; } = VideoMetadataMatchRating.FirstAvailable;
+}
 
 public sealed record VideoMetadataEpisode(
     int EpisodeNumber,
@@ -116,7 +173,29 @@ public sealed record VideoMetadataEpisode(
     string? AirDate,
     int? RuntimeMinutes,
     string? ThumbnailUrl,
-    string? SourceUrl);
+    string? SourceUrl,
+    string? DisplayNumber = null)
+{
+    public int? TmdbShowId { get; init; }
+
+    public int? TmdbEpisodeId { get; init; }
+
+    public int? TmdbSeasonId { get; init; }
+
+    public string? TmdbOrderingId { get; init; }
+
+    public string? TmdbEpisodeGroupId { get; init; }
+
+    public int Ordinal { get; init; }
+
+    public VideoMetadataMatchRating MatchRating { get; init; } = VideoMetadataMatchRating.FirstAvailable;
+}
+
+public sealed record VideoTmdbOrdering(
+    int TmdbShowId,
+    string OrderingId,
+    VideoTmdbOrderingType Type,
+    bool IsPreferred);
 
 public sealed record VideoPersonCredit(
     string ProviderPersonId,
@@ -136,7 +215,8 @@ public sealed record VideoRelatedItem(
     string? BackdropUrl,
     string? SourceUrl,
     string? LocalPosterPath = null,
-    string? LocalBackdropPath = null);
+    string? LocalBackdropPath = null,
+    ImmutableArray<string> Aliases = default);
 
 public sealed record VideoArtworkCandidate(
     string ProviderId,
@@ -145,7 +225,30 @@ public sealed record VideoArtworkCandidate(
     string? Language,
     int? Width,
     int? Height,
-    string? AttributionUrl);
+    string? AttributionUrl)
+{
+    /// <summary>
+    /// Optional catalog owner override for provider detail images such as season
+    /// posters and episode stills. When omitted, the matched metadata owner is used.
+    /// </summary>
+    public VideoMetadataMediaKind? OwnerKind { get; init; }
+
+    public int? SeasonNumber { get; init; }
+
+    public int? EpisodeNumber { get; init; }
+
+    /// <summary>
+    /// Shoko-style cross-reference state. Refreshes may update availability policy,
+    /// but the catalog owns the stable preferred/selected decision.
+    /// </summary>
+    public bool IsEnabled { get; init; } = true;
+
+    public bool IsDesired { get; init; } = true;
+
+    public bool IsPreferred { get; init; }
+
+    public int Ordinal { get; init; }
+}
 
 public sealed record VideoMetadataMatchScore(
     VideoMetadataCandidate Candidate,

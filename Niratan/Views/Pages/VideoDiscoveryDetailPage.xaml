@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page x:Class="Niratan.Views.Pages.VideoDiscoveryDetailPage"
+      x:Name="ThisPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:components="using:Niratan.ViewModels.Components"
+      xmlns:converters="using:Niratan.Helpers.UI.Converters">
+    <Page.Resources>
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </Page.Resources>
+
+    <Grid Padding="20,12,24,24" RowDefinitions="Auto,*">
+        <CommandBar Grid.Row="0" DefaultLabelPosition="Right">
+            <CommandBar.Content>
+                <TextBlock x:Uid="VideoDiscoveryDetailPageTitleText"
+                           Text="Video details"
+                           Style="{StaticResource TitleTextBlockStyle}" />
+            </CommandBar.Content>
+            <AppBarButton x:Uid="VideoDiscoveryDetailBackButton"
+                          AutomationProperties.AutomationId="VideoDiscoveryDetailBackButton"
+                          Label="Back"
+                          Click="BackButton_Click">
+                <AppBarButton.Icon><SymbolIcon Symbol="Back" /></AppBarButton.Icon>
+            </AppBarButton>
+        </CommandBar>
+
+        <ScrollViewer Grid.Row="1"
+                      Margin="0,8,0,0"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="16">
+                <StackPanel Orientation="Horizontal"
+                            Spacing="10"
+                            Visibility="{x:Bind ViewModel.IsLoading, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                    <ProgressRing Width="22" Height="22" IsActive="True" />
+                    <TextBlock x:Uid="DiscoverDetailsLoadingText"
+                               Text="Loading details…"
+                               TextAlignment="Left"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+
+                <Grid Height="480" HorizontalAlignment="Stretch">
+                    <Image Source="{x:Bind ViewModel.Details.BackdropImage, Mode=OneWay}"
+                           Stretch="UniformToFill"
+                           HorizontalAlignment="Stretch"
+                           VerticalAlignment="Stretch" />
+                    <Border>
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#00000000" Offset="0.25" />
+                                <GradientStop Color="#DD000000" Offset="1" />
+                            </LinearGradientBrush>
+                        </Border.Background>
+                    </Border>
+                    <StackPanel VerticalAlignment="Bottom"
+                                HorizontalAlignment="Left"
+                                Margin="32,24"
+                                Spacing="8">
+                        <TextBlock Text="{x:Bind ViewModel.Details.Title, Mode=OneWay}"
+                                   Foreground="White"
+                                   FontSize="36"
+                                   FontWeight="SemiBold"
+                                   TextAlignment="Left"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Text="{x:Bind ViewModel.Details.OriginalTitle, Mode=OneWay}"
+                                   Foreground="#E6FFFFFF"
+                                   FontSize="18"
+                                   TextAlignment="Left"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Text="{x:Bind ViewModel.Details.FactsText, Mode=OneWay}"
+                                   Foreground="#E6FFFFFF"
+                                   FontSize="16"
+                                   TextAlignment="Left"
+                                   TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button x:Uid="VideoDiscoveryDetailSearchResourcesButton"
+                                    AutomationProperties.AutomationId="VideoDiscoveryDetailSearchResourcesButton"
+                                    Content="Search resources"
+                                    Click="SearchResourcesButton_Click" />
+                            <Button x:Uid="VideoDiscoveryDetailSearchSubtitlesButton"
+                                    AutomationProperties.AutomationId="VideoDiscoveryDetailSearchSubtitlesButton"
+                                    Content="Search subtitles"
+                                    Click="SearchSubtitlesButton_Click" />
+                            <Button AutomationProperties.AutomationId="VideoDiscoveryDetailSubscribeButton"
+                                    Content="{x:Bind ViewModel.SubscriptionButtonText, Mode=OneWay}"
+                                    Click="SubscribeButton_Click"
+                                    Style="{StaticResource AccentButtonStyle}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+
+                <Grid ColumnDefinitions="220,*" ColumnSpacing="20">
+                    <Grid Height="310" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                        <FontIcon Glyph="&#xE8B4;"
+                                  FontSize="48"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                        <Image Source="{x:Bind ViewModel.Details.PosterImage, Mode=OneWay}"
+                               Stretch="Uniform"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                    </Grid>
+                    <StackPanel Grid.Column="1"
+                                HorizontalAlignment="Left"
+                                Spacing="8">
+                        <TextBlock Text="{x:Bind ViewModel.Details.GenresText, Mode=OneWay}"
+                                   TextAlignment="Left"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Text="{x:Bind ViewModel.Details.TagsText, Mode=OneWay}"
+                                   TextAlignment="Left"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Text="{x:Bind ViewModel.Details.StudiosText, Mode=OneWay}"
+                                   TextAlignment="Left"
+                                   TextWrapping="Wrap" />
+                        <TextBlock x:Uid="DiscoverOverviewHeading"
+                                   Text="Overview"
+                                   TextAlignment="Left"
+                                   Style="{StaticResource SubtitleTextBlockStyle}" />
+                        <TextBlock Text="{x:Bind ViewModel.Details.Overview, Mode=OneWay}"
+                                   HorizontalAlignment="Left"
+                                   TextAlignment="Left"
+                                   TextWrapping="Wrap"
+                                   MaxWidth="900" />
+                        <TextBlock Text="{x:Bind ViewModel.Details.ActorsText, Mode=OneWay}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   TextAlignment="Left"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Text="{x:Bind ViewModel.Details.SourceText, Mode=OneWay}"
+                                   TextAlignment="Left"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </Grid>
+
+                <StackPanel Spacing="8"
+                            Visibility="{x:Bind ViewModel.Details.HasPeople, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                    <TextBlock x:Uid="DiscoverPeopleHeading"
+                               Style="{StaticResource SubtitleTextBlockStyle}"
+                               TextAlignment="Left"
+                               Text="Cast and staff" />
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Disabled">
+                        <ItemsRepeater ItemsSource="{x:Bind ViewModel.Details.People, Mode=OneWay}">
+                            <ItemsRepeater.Layout>
+                                <StackLayout Orientation="Horizontal" Spacing="12" />
+                            </ItemsRepeater.Layout>
+                            <ItemsRepeater.ItemTemplate>
+                                <DataTemplate x:DataType="components:VideoDiscoveryPersonViewModel">
+                                    <StackPanel Width="105" Spacing="4">
+                                        <Grid Width="96" Height="120" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                                            <Image Source="{x:Bind Image}" Stretch="UniformToFill" />
+                                        </Grid>
+                                        <TextBlock Text="{x:Bind Name}"
+                                                   TextAlignment="Left"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{x:Bind RoleText}"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   TextAlignment="Left"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsRepeater.ItemTemplate>
+                        </ItemsRepeater>
+                    </ScrollViewer>
+                </StackPanel>
+
+                <StackPanel Spacing="8"
+                            Visibility="{x:Bind ViewModel.Details.HasRelatedItems, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                    <TextBlock x:Uid="DiscoverRelatedHeading"
+                               Style="{StaticResource SubtitleTextBlockStyle}"
+                               TextAlignment="Left"
+                               Text="Related titles" />
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Disabled">
+                        <ItemsRepeater ItemsSource="{x:Bind ViewModel.Details.RelatedItems, Mode=OneWay}">
+                            <ItemsRepeater.Layout>
+                                <StackLayout Orientation="Horizontal" Spacing="14" />
+                            </ItemsRepeater.Layout>
+                            <ItemsRepeater.ItemTemplate>
+                                <DataTemplate x:DataType="components:VideoDiscoveryRelatedItemViewModel">
+                                    <Button Style="{StaticResource VideoDiscoveryCardButtonStyle}"
+                                            Tag="{x:Bind NavigationTarget}"
+                                            Click="RelatedItem_Click"
+                                            AutomationProperties.AutomationId="VideoDiscoveryRelatedCardButton">
+                                        <StackPanel Width="{StaticResource VideoDiscoveryCardWidth}" Spacing="4">
+                                            <Grid Height="{StaticResource VideoDiscoveryArtworkHeight}" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                                                <Image Source="{x:Bind PosterImage}" Stretch="Uniform" />
+                                            </Grid>
+                                            <TextBlock Text="{x:Bind Title}"
+                                                       TextAlignment="Left"
+                                                       Style="{StaticResource VideoCardTitleTextBlockStyle}" />
+                                            <TextBlock Text="{x:Bind FactsText}"
+                                                       TextAlignment="Left"
+                                                       Style="{StaticResource VideoCardMetadataTextBlockStyle}" />
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsRepeater.ItemTemplate>
+                        </ItemsRepeater>
+                    </ScrollViewer>
+                </StackPanel>
+
+                <InfoBar IsClosable="False"
+                         IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
+                         Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
+                         Severity="Warning" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

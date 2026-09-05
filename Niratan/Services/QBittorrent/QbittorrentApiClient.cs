@@ -559,7 +559,9 @@ public sealed class QbittorrentApiClient : IQbittorrentClient, IDisposable
         if (!uri.Scheme.Equals(NyaaBaseUri.Scheme, StringComparison.OrdinalIgnoreCase)
             || !uri.Host.Equals(NyaaBaseUri.Host, StringComparison.OrdinalIgnoreCase)
             || uri.Port != NyaaBaseUri.Port
-            || uri.UserInfo.Length > 0)
+            || uri.UserInfo.Length > 0
+            || uri.Query.Length > 0
+            || uri.Fragment.Length > 0)
         {
             throw new InvalidDataException("Only torrent URLs from the allowed Nyaa origin can be sent to qBittorrent.");
         }

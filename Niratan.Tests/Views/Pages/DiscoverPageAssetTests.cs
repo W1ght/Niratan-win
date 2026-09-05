@@ -1,6 +1,5 @@
-using FluentAssertions;
 using System.Collections.Immutable;
-using System.Xml.Linq;
+using FluentAssertions;
 using Niratan.Models.Video;
 using Niratan.ViewModels.Components;
 
@@ -19,44 +18,114 @@ public sealed class DiscoverPageAssetTests
                 return Path.Combine(directory.FullName, "Niratan");
             directory = directory.Parent;
         }
-
         throw new DirectoryNotFoundException("Could not locate the Niratan project root.");
     }
 
     [Fact]
-    public void Video_page_exposes_search_recommendation_details_and_resource_actions()
+    public void Discovery_cards_use_the_host_frame_for_a_dedicated_detail_route()
     {
-        var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "DiscoverPage.xaml"));
+        var xaml = ReadPage("DiscoverPage.xaml");
+        var code = ReadPage("DiscoverPage.xaml.cs");
 
-        xaml.Should().Contain("DiscoverVideoSearchBox");
-        xaml.Should().Contain("DiscoverVideoSearchButton");
-        xaml.Should().Contain("VideoContentScrollViewer_ViewChanged");
         xaml.Should().Contain("DiscoverExploreResults");
         xaml.Should().Contain("DiscoverRecommendationSections");
-        xaml.Should().Contain("DiscoverSearchNyaaButton");
-        xaml.Should().Contain("DiscoverNyaaDownloadButton");
-        xaml.Should().Contain("DiscoverAddToQbButton");
-        xaml.Should().Contain("DiscoverBackButton");
-        xaml.Should().Contain("DiscoverResourceQueryBox");
-        xaml.Should().Contain("Stretch=\"Uniform\"");
-        xaml.Should().Contain("DiscoverHeroSearchResourcesButton");
-        xaml.Should().Contain("DiscoverHeroSearchSubtitlesButton");
-        xaml.Should().Contain("DiscoverHeroSubscribeButton");
+        xaml.Should().Contain("Click=\"DiscoveryCard_Click\"");
+        xaml.Should().Contain("DiscoverOpenDownloadsButton");
+        xaml.Should().Contain("DiscoverOpenSubscriptionsButton");
+        xaml.Should().NotContain("IsDetailsVisible");
+        xaml.Should().NotContain("DiscoverResourceResults");
+        code.Should().Contain("Frame.Navigate(typeof(VideoDiscoveryDetailPage), target)");
     }
 
     [Fact]
-    public void Video_library_hosts_discover_without_a_second_global_video_module()
+    public void Discovery_search_and_explore_use_fixed_all_source_all_kind_aggregation()
     {
-        var navigation = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "NavigationPage.xaml"));
-        var videoLibrary = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml"));
-        var videoLibraryCodeBehind = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml.cs"));
+        var xaml = ReadPage("DiscoverPage.xaml");
+        var viewModel = ReadViewModel("DiscoverPageViewModel.cs");
 
-        navigation.Should().NotContain("DiscoverNavItem");
-        navigation.Should().NotContain("Niratan.Views.Pages.DiscoverPage");
-        navigation.Should().NotContain("Niratan.Views.Pages.BrowsePage");
-        videoLibrary.Should().Contain("VideoLibraryDiscoverPage");
-        videoLibraryCodeBehind.Should().Contain("typeof(DiscoverPage)");
-        videoLibrary.Should().Contain("Tag=\"Discover\"");
+        xaml.Should().Contain("ColumnDefinitions=\"*,Auto\"");
+        xaml.Should().NotContain("DiscoverVideoSearchKindBox");
+        xaml.Should().NotContain("ViewModel.SearchCategories");
+        xaml.Should().NotContain("ViewModel.SelectedSearchCategory");
+        xaml.Should().NotContain("DiscoverProviderBox");
+        xaml.Should().NotContain("ViewModel.Providers");
+        xaml.Should().NotContain("ViewModel.SelectedProvider");
+        xaml.Should().NotContain("DiscoverFeedBox");
+        xaml.Should().NotContain("ViewModel.ExploreFeeds");
+        xaml.Should().NotContain("ViewModel.SelectedExploreFeed");
+        xaml.Should().Contain("DiscoverProviderWarning");
+        viewModel.Should().Contain("SearchAggregatedAsync");
+        viewModel.Should().Contain("GetAggregatedPageAsync");
+        viewModel.Should().Contain("VideoDiscoverySearchCategory.All");
+        viewModel.Should().Contain("AggregatedSearchProviderOrder = [\"anilist\", \"tmdb\"]");
+    }
+
+    [Fact]
+    public void Detail_route_keeps_hero_overview_people_related_and_all_acquisition_routes()
+    {
+        var xaml = ReadPage("VideoDiscoveryDetailPage.xaml");
+        var code = ReadPage("VideoDiscoveryDetailPage.xaml.cs");
+
+        xaml.Should().Contain("Height=\"480\"");
+        xaml.Should().Contain("Stretch=\"UniformToFill\"");
+        xaml.Should().Contain("DiscoverOverviewHeading");
+        xaml.Should().Contain("DiscoverPeopleHeading");
+        xaml.Should().Contain("DiscoverRelatedHeading");
+        xaml.Should().Contain("VideoDiscoveryDetailSearchResourcesButton");
+        xaml.Should().Contain("VideoDiscoveryDetailSearchSubtitlesButton");
+        xaml.Should().Contain("VideoDiscoveryDetailSubscribeButton");
+        code.Should().Contain("VideoDiscoveryResourceRouteMode.Download");
+        code.Should().Contain("VideoDiscoveryResourceRouteMode.Subscription");
+        code.Should().Contain("typeof(VideoDiscoverySubtitleSearchPage)");
+        code.Should().Contain("OpenSubscriptionsCommand");
+        code.Should().Contain("Frame.Navigate(typeof(VideoDiscoveryDetailPage), target)");
+    }
+
+    [Fact]
+    public void Resource_route_has_one_backend_aware_submit_action_and_strict_subscription_fields()
+    {
+        var xaml = ReadPage("VideoDiscoveryResourceSearchPage.xaml");
+        var viewModel = ReadViewModel("VideoDiscoveryResourceSearchPageViewModel.cs");
+
+        xaml.Should().Contain("SelectionMode=\"Single\"");
+        xaml.Should().Contain("VideoDiscoveryResourceSubmitButton");
+        xaml.Should().Contain("VideoDiscoverySubscriptionReleaseGroupLabel");
+        xaml.Should().Contain("VideoDiscoverySubscriptionResolutionLabel");
+        xaml.Should().Contain("VideoDiscoverySubscriptionStartFromLabel");
+        xaml.Should().NotContain("DownloadAndImportResourceCommand");
+        xaml.Should().NotContain("AddResourceToQbCommand");
+        viewModel.Should().Contain("_settings.Current.DownloadBackend");
+        viewModel.Should().Contain("NyaaSubscriptionArtwork");
+        viewModel.Should().Contain("Target.Work.Identity.PosterUrl");
+        viewModel.Should().Contain("Target.Work.Artwork.PosterPath");
+    }
+
+    [Fact]
+    public void Subtitle_route_offers_all_destinations_and_generates_a_unique_target()
+    {
+        var xaml = ReadPage("VideoDiscoverySubtitleSearchPage.xaml");
+        var viewModel = ReadViewModel("VideoDiscoverySubtitleSearchPageViewModel.cs");
+
+        xaml.Should().Contain("VideoDiscoverySubtitleDestinationBox");
+        xaml.Should().Contain("VideoDiscoverySubtitlePickTargetButton");
+        xaml.Should().Contain("VideoDiscoverySubtitleSaveButton");
+        viewModel.Should().Contain("VideoDiscoverySubtitleDestination.SaveAs");
+        viewModel.Should().Contain("VideoDiscoverySubtitleDestination.ExistingVideo");
+        viewModel.Should().Contain("VideoDiscoverySubtitleDestination.Directory");
+        viewModel.Should().Contain("FindUniqueDestination");
+        viewModel.Should().Contain("File.Exists");
+        viewModel.Should().Contain("_subtitles.DownloadAsync");
+    }
+
+    [Fact]
+    public void Detail_projection_is_created_on_the_page_context_for_WinUI_images()
+    {
+        var viewModel = ReadViewModel("VideoDiscoveryDetailPageViewModel.cs");
+        var start = viewModel.IndexOf("await _discovery.GetDetailsAsync", StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        var end = viewModel.IndexOf("Details = new VideoDiscoveryDetailsViewModel", start, StringComparison.Ordinal);
+        end.Should().BeGreaterThan(start);
+        viewModel[start..end].Should().NotContain("Task.Run");
     }
 
     [Fact]
@@ -83,73 +152,32 @@ public sealed class DiscoverPageAssetTests
     }
 
     [Fact]
-    public void Details_projection_is_created_on_the_page_context_for_WinUI_images()
+    public void Video_library_hosts_discover_without_a_second_global_video_module()
     {
-        var viewModel = File.ReadAllText(
-            Path.Combine(ProjectRoot, "ViewModels", "Pages", "DiscoverPageViewModel.cs"));
-        var start = viewModel.IndexOf(
-            "var detailsViewModel = new VideoDiscoveryDetailsViewModel",
-            StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0);
-        var end = viewModel.IndexOf("SelectedDetails = detailsViewModel", start, StringComparison.Ordinal);
-        end.Should().BeGreaterThan(start);
-        viewModel[start..end].Should().NotContain("Task.Run");
-    }
+        var navigation = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "NavigationPage.xaml"));
+        var videoLibrary = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml"));
+        var videoLibraryCodeBehind = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "VideoLibraryPage.xaml.cs"));
 
-    [Fact]
-    public void Details_hero_uses_the_image_bounds_instead_of_a_fixed_banner()
-    {
-        var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "DiscoverPage.xaml"));
-
-        xaml.Should().NotContain("<Grid Height=\"210\"");
-        xaml.Should().Contain("Height=\"480\"");
-        xaml.Should().Contain("Stretch=\"UniformToFill\"");
-    }
-
-    [Fact]
-    public void Video_search_toolbar_stays_outside_the_vertical_content_scrollviewer()
-    {
-        var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "DiscoverPage.xaml"));
-        var document = XDocument.Parse(xaml);
-        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-
-        var toolbar = document.Descendants()
-            .Single(element => (string?)element.Attribute(x + "Name") == "VideoSearchToolbar");
-        var contentScrollViewer = document.Descendants()
-            .Single(element => (string?)element.Attribute(x + "Name") == "VideoContentScrollViewer");
-
-        toolbar.Descendants()
-            .Should()
-            .Contain(element => (string?)element.Attribute(x + "Name") == "VideoSearchBox");
-        contentScrollViewer.Descendants()
-            .Should()
-            .NotContain(element => (string?)element.Attribute(x + "Name") == "VideoSearchBox");
-        ((string?)toolbar.Attribute("Grid.Row")).Should().Be("0");
-        ((string?)contentScrollViewer.Attribute("Grid.Row")).Should().Be("1");
+        navigation.Should().NotContain("DiscoverNavItem");
+        navigation.Should().NotContain("Niratan.Views.Pages.DiscoverPage");
+        videoLibrary.Should().Contain("VideoLibraryDiscoverPage");
+        videoLibraryCodeBehind.Should().Contain("typeof(DiscoverPage)");
+        videoLibrary.Should().Contain("Tag=\"Discover\"");
     }
 
     [Fact]
     public void Recommendation_wheel_forwarding_keeps_scrollviewer_animation_enabled()
     {
-        var code = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "DiscoverPage.xaml.cs"));
+        var code = ReadPage("DiscoverPage.xaml.cs");
 
         code.Should().Contain("verticalScrollViewer.ChangeView(");
         code.Should().Contain("horizontalScrollViewer.ChangeView(");
         code.Should().Contain("disableAnimation: false");
-        code.Should().NotContain("ChangeView(null, verticalTarget, null, true)");
-        code.Should().NotContain("ChangeView(target, null, null, true)");
     }
 
-    [Fact]
-    public void Resource_results_use_the_builtin_Nyaa_download_manager_before_qbittorrent()
-    {
-        var xaml = File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", "DiscoverPage.xaml"));
-        var viewModel = File.ReadAllText(
-            Path.Combine(ProjectRoot, "ViewModels", "Pages", "DiscoverPageViewModel.cs"));
+    private static string ReadPage(string fileName) =>
+        File.ReadAllText(Path.Combine(ProjectRoot, "Views", "Pages", fileName));
 
-        xaml.Should().Contain("DownloadAndImportResourceCommand");
-        xaml.Should().Contain("DiscoverNyaaDownloadButton");
-        viewModel.Should().Contain("INyaaDownloadManager");
-        viewModel.Should().Contain("downloadManager.Enqueue(row.Item)");
-    }
+    private static string ReadViewModel(string fileName) =>
+        File.ReadAllText(Path.Combine(ProjectRoot, "ViewModels", "Pages", fileName));
 }

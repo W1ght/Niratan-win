@@ -48,11 +48,7 @@ internal sealed class VideoMetadataTransport : IVideoMetadataTransport
             }),
             ["anidb"] = new(1, TimeSpan.FromSeconds(2.1), new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                "api.anidb.net", "anidb.net",
-            }),
-            ["bangumi"] = new(1, TimeSpan.FromSeconds(1), new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                "api.bgm.tv", "lain.bgm.tv",
+                "api.anidb.net", "anidb.net", "cdn.anidb.net",
             }),
             ["tvdb"] = new(1, TimeSpan.FromSeconds(1), new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {

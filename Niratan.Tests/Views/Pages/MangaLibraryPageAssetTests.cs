@@ -275,6 +275,15 @@ public sealed class MangaLibraryPageAssetTests
         code.Should().Contain("VirtualKeyModifiers.Control");
         code.Should().Contain("VirtualKey.Left");
         code.Should().Contain("VirtualKey.Right");
+        code.Should().Contain("PageHorizontalAlignment = pages.Count > 1");
+        code.Should().Contain("HorizontalAlignment.Right");
+        code.Should().Contain("HorizontalAlignment.Left");
+
+        var pageViewCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Views", "Manga", "MangaPageView.xaml.cs"));
+        pageViewCode.Should().Contain("PageImage.Width = image.PixelWidth * scale");
+        pageViewCode.Should().Contain(
+            "HorizontalAlignment.Right => PageRoot.ActualWidth - renderedWidth");
     }
 
     [Fact]
@@ -719,13 +728,14 @@ public sealed class MangaLibraryPageAssetTests
         details.Should().Contain(
             "ItemsSource=\"{Binding SelectedRemoteMangaDetails.ExtensionOptions, Mode=OneWay}\"");
         details.Should().Contain(
-            "SelectedValue=\"{Binding SelectedRemoteMangaDetails.SelectedExtensionId, Mode=OneWay}\"");
+            "SelectedItem=\"{Binding SelectedRemoteMangaDetails.SelectedExtension, Mode=OneWay}\"");
         details.Should().Contain(
             "SelectionChanged=\"RemoteMangaExtensionsComboBox_SelectionChanged\"");
         details.Should().NotContain("<ToggleButton MinWidth=\"150\"");
         viewModel.Should().Contain("FindMihonMangaAsync");
         viewModel.Should().Contain("SelectRemoteMangaExtensionAsync");
         component.Should().Contain("SetExtensionOptions");
+        component.Should().Contain("SelectedExtension");
         component.Should().Contain("SelectedExtensionId");
         component.Should().Contain("RemoteMangaExtensionOptionViewModel");
     }

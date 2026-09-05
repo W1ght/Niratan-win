@@ -210,6 +210,31 @@ internal sealed class VideoLibraryService : IVideoLibraryService
     public async Task<Result<IReadOnlyList<VideoSourceRefreshResult>>> RefreshAllSourcesAsync(
         CancellationToken ct = default)
     {
+        if (_scanCoordinator != null)
+        {
+            return await ExecuteAsync(
+                async token =>
+                {
+                    // Enter ScanAll before any awaited source lookup so the whole user action
+                    // receives one AniDB scrape admission stamp. A reset between sources cannot
+                    // make the remaining work look like a new-generation scan.
+                    await _scanCoordinator.ScanAllAsync(fullScan: false, token);
+                    var sources = await _dataService.GetVideoLibrarySourcesAsync(token);
+                    var videos = await _dataService.GetVideosAsync(ct: token);
+                    var results = sources.Select(source =>
+                    {
+                        var sourceVideos = videos.Where(video =>
+                                video.SourceId == source.Id
+                                || !video.IsRemote && IsWithinSource(video.FilePath, source.FolderPath))
+                            .ToList();
+                        return new VideoSourceRefreshResult(source, sourceVideos.Count, sourceVideos);
+                    }).ToList();
+                    return Result<IReadOnlyList<VideoSourceRefreshResult>>.Success(results);
+                },
+                "Error scanning video folders",
+                ct);
+        }
+
         var sourcesResult = await GetSourcesAsync(ct);
         if (!sourcesResult.IsSuccess)
         {
@@ -233,6 +258,16 @@ internal sealed class VideoLibraryService : IVideoLibraryService
             ? Result<IReadOnlyList<VideoSourceRefreshResult>>.Success(refreshed)
             : Result<IReadOnlyList<VideoSourceRefreshResult>>.Failure(
                 firstError, "Some sources could not be refreshed");
+    }
+
+    private static bool IsWithinSource(string path, string sourceRoot)
+    {
+        var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(sourceRoot));
+        var fullPath = Path.GetFullPath(path);
+        return fullPath.Equals(fullRoot, StringComparison.OrdinalIgnoreCase)
+               || fullPath.StartsWith(
+                   fullRoot + Path.DirectorySeparatorChar,
+                   StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<Result> RemoveSourceAsync(string sourceId, CancellationToken ct = default) =>

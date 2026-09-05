@@ -1,6 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using Niratan.Models.Games;
+using Niratan.Models.Settings;
+using Niratan.Models.DTO;
+using Niratan.Services.Settings;
 using Niratan.Views.Games;
 using Windows.Graphics;
 
@@ -8,9 +11,16 @@ namespace Niratan.Services.Games;
 
 public sealed class GalGameTextOverlayService : IDisposable
 {
+    private readonly ISettingsService _settings;
     private GalGameTextOverlayWindow? _window;
     private bool _visible;
     private bool _dismissedByUser;
+
+    public GalGameTextOverlayService(ISettingsService settings)
+    {
+        _settings = settings;
+        _settings.SettingChanged += Settings_SettingChanged;
+    }
 
     public void Show(
         Func<GalGameTextLine, int, string?, RectInt32, Task> lookup,
@@ -26,6 +36,7 @@ public sealed class GalGameTextOverlayService : IDisposable
             return;
 
         _window ??= CreateWindow();
+        _window.ApplyAppearance(CurrentAppearance());
         _window.LookupRequested = lookup;
         _window.ThreadSelected = selectThread;
         _window.RefreshRequested = refresh;
@@ -66,6 +77,7 @@ public sealed class GalGameTextOverlayService : IDisposable
 
     public void Dispose()
     {
+        _settings.SettingChanged -= Settings_SettingChanged;
         _visible = false;
         _dismissedByUser = true;
         _window?.Close();
@@ -75,6 +87,7 @@ public sealed class GalGameTextOverlayService : IDisposable
     private GalGameTextOverlayWindow CreateWindow()
     {
         var window = new GalGameTextOverlayWindow();
+        window.ApplyAppearance(CurrentAppearance());
         window.Hidden += (_, _) => _visible = false;
         window.Hidden += (_, _) => _dismissedByUser = true;
         window.Closed += (_, _) =>
@@ -87,5 +100,19 @@ public sealed class GalGameTextOverlayService : IDisposable
             }
         };
         return window;
+    }
+
+    private GalGameOverlayAppearanceSettings CurrentAppearance() =>
+        (_settings.Current.GalGameSettings?.OverlayAppearance
+            ?? new GalGameOverlayAppearanceSettings()).Normalize();
+
+    private void Settings_SettingChanged(object? sender, SettingsChangedEventArgs e)
+    {
+        _ = sender;
+        if (e.PropertyName is nameof(AppSettings.GalGameSettings)
+            or nameof(ISettingsService.Current))
+        {
+            _window?.ApplyAppearance(CurrentAppearance());
+        }
     }
 }

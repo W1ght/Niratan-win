@@ -202,109 +202,6 @@ internal sealed class TmdbVideoDiscoveryProvider : IVideoDiscoveryProvider
     }
 }
 
-internal sealed class BangumiVideoDiscoveryProvider : IVideoDiscoveryProvider
-{
-    private readonly IVideoMetadataTransport _transport;
-    private readonly IVideoMetadataCredentialStore _credentials;
-
-    public BangumiVideoDiscoveryProvider(
-        IVideoMetadataTransport transport,
-        IVideoMetadataCredentialStore credentials)
-    {
-        _transport = transport;
-        _credentials = credentials;
-    }
-
-    public string Id => "bangumi";
-    public string DisplayName => "Bangumi";
-    public IReadOnlyList<VideoDiscoveryFeed> Feeds { get; } =
-    [
-        new("bangumi", "subjects", "Browse anime", VideoDiscoveryFeedKind.Explore,
-            [VideoMetadataMediaKind.Anime], true, true),
-        new("bangumi", "calendar", "Broadcast calendar", VideoDiscoveryFeedKind.Recommendation,
-            [VideoMetadataMediaKind.Anime], false, false),
-    ];
-
-    public async Task<VideoDiscoveryPage> GetPageAsync(
-        VideoDiscoveryRequest request,
-        CancellationToken ct = default)
-    {
-        var headers = new Dictionary<string, string>
-        {
-            ["Accept"] = "application/json",
-            ["User-Agent"] = "Niratan/0.9 (https://github.com/wight554/Hoshi-Reader)",
-        };
-        var token = await _credentials.ReadAsync(Id, "token", ct);
-        if (!string.IsNullOrWhiteSpace(token))
-            headers["Authorization"] = "Bearer " + token;
-
-        var uri = request.FeedId.Equals("calendar", StringComparison.OrdinalIgnoreCase)
-            ? new Uri("https://api.bgm.tv/calendar")
-            : new Uri($"https://api.bgm.tv/v0/subjects?type=2&sort=rank&limit=24&offset={Math.Max(0, request.Page - 1) * 24}");
-        var response = await _transport.SendAsync(new VideoMetadataRequest(
-            Id, HttpMethod.Get, uri, Headers: headers), ct);
-        using var json = VideoDiscoveryJson.Parse(response);
-        var items = request.FeedId.Equals("calendar", StringComparison.OrdinalIgnoreCase)
-            ? ParseCalendar(json.RootElement)
-            : ParseSubjects(json.RootElement);
-        return new VideoDiscoveryPage(Id, request.FeedId, request.Page, null, items);
-    }
-
-    private static ImmutableArray<VideoDiscoveryItem> ParseSubjects(JsonElement root)
-    {
-        if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
-            return [];
-        return data.EnumerateArray().Select(MapSubject).Where(item => item != null).Cast<VideoDiscoveryItem>().ToImmutableArray();
-    }
-
-    private static ImmutableArray<VideoDiscoveryItem> ParseCalendar(JsonElement root)
-    {
-        if (root.ValueKind != JsonValueKind.Array)
-            return [];
-        return root.EnumerateArray()
-            .SelectMany(day => day.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array
-                ? items.EnumerateArray()
-                : Enumerable.Empty<JsonElement>())
-            .Select(MapSubject)
-            .Where(item => item != null)
-            .Cast<VideoDiscoveryItem>()
-            .DistinctBy(item => item.Identity.ProviderItemId, StringComparer.OrdinalIgnoreCase)
-            .ToImmutableArray();
-    }
-
-    private static VideoDiscoveryItem? MapSubject(JsonElement item)
-    {
-        var id = VideoDiscoveryJson.Int(item, "id");
-        var native = VideoDiscoveryJson.String(item, "name");
-        var translated = VideoDiscoveryJson.String(item, "name_cn");
-        if (id is null || string.IsNullOrWhiteSpace(native ?? translated))
-            return null;
-        var idText = id.Value.ToString(CultureInfo.InvariantCulture);
-        var image = item.TryGetProperty("images", out var images)
-            ? VideoDiscoveryJson.String(images, "large") ?? VideoDiscoveryJson.String(images, "common")
-            : null;
-        return new VideoDiscoveryItem(
-            new VideoMetadataCandidate(
-                "bangumi",
-                idText,
-                VideoMetadataMediaKind.Anime,
-                translated ?? native!,
-                native,
-                VideoDiscoveryJson.Year(VideoDiscoveryJson.String(item, "date")),
-                null,
-                null,
-                null,
-                VideoDiscoveryJson.Titles(native, translated),
-                ImmutableDictionary<string, string>.Empty.Add("bangumi", idText),
-                $"https://bgm.tv/subject/{idText}"),
-            VideoDiscoveryJson.String(item, "summary"),
-            null,
-            null,
-            image,
-            null);
-    }
-}
-
 internal sealed class AniListVideoDiscoveryProvider : IVideoDiscoveryProvider
 {
     private readonly IVideoMetadataTransport _transport;
@@ -327,10 +224,17 @@ internal sealed class AniListVideoDiscoveryProvider : IVideoDiscoveryProvider
         VideoDiscoveryRequest request,
         CancellationToken ct = default)
     {
-        var sort = request.FeedId.Equals("popular", StringComparison.OrdinalIgnoreCase)
-            || request.FeedId.Equals("seasonal", StringComparison.OrdinalIgnoreCase)
-            ? "POPULARITY_DESC"
-            : "TRENDING_DESC";
+        var sort = request.SortBy?.ToLowerInvariant() switch
+        {
+            "vote_average.desc" => "SCORE_DESC",
+            "release_date.desc" or "primary_release_date.desc" or "first_air_date.desc" =>
+                "START_DATE_DESC",
+            _ when request.FeedId.Equals("popular", StringComparison.OrdinalIgnoreCase)
+                   || request.FeedId.Equals("seasonal", StringComparison.OrdinalIgnoreCase) =>
+                "POPULARITY_DESC",
+            _ => "TRENDING_DESC",
+        };
+        var genre = MapGenre(request.GenreId);
         var today = DateTime.UtcNow;
         var seasonName = today.Month switch
         {
@@ -340,10 +244,19 @@ internal sealed class AniListVideoDiscoveryProvider : IVideoDiscoveryProvider
             _ => "WINTER",
         };
         var seasonalFilter = request.FeedId.Equals("seasonal", StringComparison.OrdinalIgnoreCase)
-            ? ",season:" + seasonName + ",seasonYear:" + today.Year.ToString(CultureInfo.InvariantCulture)
+            ? ",season:" + seasonName
+              + (request.Year is null
+                  ? ",seasonYear:" + today.Year.ToString(CultureInfo.InvariantCulture)
+                  : string.Empty)
             : string.Empty;
+        var yearFilter = request.Year is int year
+            ? ",seasonYear:" + year.ToString(CultureInfo.InvariantCulture)
+            : string.Empty;
+        var genreFilter = genre is null
+            ? string.Empty
+            : ",genre:\"" + genre + "\"";
         var graph = "query($page:Int,$perPage:Int){Page(page:$page,perPage:$perPage){pageInfo{total currentPage lastPage hasNextPage}" +
-            "media(type:ANIME,sort:[" + sort + "]" + seasonalFilter + "){id idMal title{romaji english native}synonyms description seasonYear averageScore genres coverImage{extraLarge large}bannerImage siteUrl}}}";
+            "media(type:ANIME,sort:[" + sort + "]" + seasonalFilter + yearFilter + genreFilter + "){id idMal title{romaji english native}synonyms description seasonYear averageScore genres coverImage{extraLarge large}bannerImage siteUrl}}}";
         var body = JsonSerializer.SerializeToUtf8Bytes(new
         {
             query = graph,
@@ -371,19 +284,51 @@ internal sealed class AniListVideoDiscoveryProvider : IVideoDiscoveryProvider
             items);
     }
 
+    private static string? MapGenre(string? genreId)
+    {
+        var value = genreId?.Trim();
+        if (string.IsNullOrWhiteSpace(value) || value == "16")
+            return null;
+        return value.ToLowerInvariant() switch
+        {
+            "28" => "Action",
+            "12" => "Adventure",
+            "35" => "Comedy",
+            "18" => "Drama",
+            "14" => "Fantasy",
+            "27" => "Horror",
+            "10402" => "Music",
+            "9648" => "Mystery",
+            "10749" => "Romance",
+            "878" => "Sci-Fi",
+            "53" => "Thriller",
+            "action" => "Action",
+            "adventure" => "Adventure",
+            "comedy" => "Comedy",
+            "drama" => "Drama",
+            "fantasy" => "Fantasy",
+            "horror" => "Horror",
+            "music" => "Music",
+            "mystery" => "Mystery",
+            "romance" => "Romance",
+            "sci-fi" => "Sci-Fi",
+            "thriller" => "Thriller",
+            _ => throw new ArgumentException(
+                "AniList does not recognize the requested genre filter.",
+                nameof(genreId)),
+        };
+    }
+
     private static VideoDiscoveryItem? MapItem(JsonElement item)
     {
         var id = VideoDiscoveryJson.Int(item, "id");
-        var title = item.TryGetProperty("title", out var titleObject)
-            ? VideoDiscoveryJson.String(titleObject, "native")
-              ?? VideoDiscoveryJson.String(titleObject, "english")
-              ?? VideoDiscoveryJson.String(titleObject, "romaji")
-            : null;
+        var hasTitles = item.TryGetProperty("title", out var titleObject);
+        var native = hasTitles ? VideoDiscoveryJson.String(titleObject, "native") : null;
+        var romaji = hasTitles ? VideoDiscoveryJson.String(titleObject, "romaji") : null;
+        var english = hasTitles ? VideoDiscoveryJson.String(titleObject, "english") : null;
+        var title = romaji ?? english ?? native;
         if (id is null || string.IsNullOrWhiteSpace(title))
             return null;
-        var original = item.TryGetProperty("title", out titleObject)
-            ? VideoDiscoveryJson.String(titleObject, "romaji")
-            : null;
         var image = item.TryGetProperty("coverImage", out var cover)
             ? VideoDiscoveryJson.String(cover, "extraLarge") ?? VideoDiscoveryJson.String(cover, "large")
             : null;
@@ -398,15 +343,15 @@ internal sealed class AniListVideoDiscoveryProvider : IVideoDiscoveryProvider
                 idText,
                 VideoMetadataMediaKind.Anime,
                 title,
-                original,
+                native,
                 VideoDiscoveryJson.Int(item, "seasonYear"),
                 null,
                 null,
                 null,
                 VideoDiscoveryJson.Titles(
                     title,
-                    original,
-                    item.TryGetProperty("title", out var names) ? VideoDiscoveryJson.String(names, "english") : null),
+                    native,
+                    english),
                 ids,
                 VideoDiscoveryJson.String(item, "siteUrl") ?? $"https://anilist.co/anime/{idText}"),
             VideoDiscoveryJson.String(item, "description"),

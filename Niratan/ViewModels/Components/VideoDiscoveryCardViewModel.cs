@@ -12,6 +12,7 @@ namespace Niratan.ViewModels.Components;
 public sealed class VideoDiscoveryCardViewModel
 {
     public VideoDiscoveryItem Item { get; }
+    public VideoDiscoveryNavigationTarget NavigationTarget { get; }
     public VideoMetadataCandidate Identity => Item.Identity;
     public string Title => Item.Identity.Title;
     public string OriginalTitle => Item.Identity.OriginalTitle ?? "";
@@ -27,6 +28,7 @@ public sealed class VideoDiscoveryCardViewModel
     public VideoDiscoveryCardViewModel(VideoDiscoveryItem item)
     {
         Item = item;
+        NavigationTarget = VideoDiscoveryNavigationTarget.FromItem(item);
         PosterImage = CreateImage(item.LocalPosterPath);
     }
 
@@ -63,6 +65,20 @@ public sealed class VideoDiscoveryMediaKindOption
     public string DisplayName { get; }
 
     public VideoDiscoveryMediaKindOption(VideoMetadataMediaKind value, string displayName)
+    {
+        Value = value;
+        DisplayName = displayName;
+    }
+}
+
+public sealed class VideoDiscoverySearchCategoryOption
+{
+    public VideoDiscoverySearchCategory Value { get; }
+    public string DisplayName { get; }
+
+    public VideoDiscoverySearchCategoryOption(
+        VideoDiscoverySearchCategory value,
+        string displayName)
     {
         Value = value;
         DisplayName = displayName;
@@ -117,12 +133,16 @@ public sealed class VideoDiscoveryPersonViewModel
 
 public sealed class VideoDiscoveryRelatedItemViewModel
 {
+    public VideoDiscoveryNavigationTarget NavigationTarget { get; }
     public string Title { get; }
     public string FactsText { get; }
     public BitmapImage? PosterImage { get; }
 
-    public VideoDiscoveryRelatedItemViewModel(VideoRelatedItem item)
+    public VideoDiscoveryRelatedItemViewModel(
+        VideoRelatedItem item,
+        VideoMetadataMediaKind mediaKind)
     {
+        NavigationTarget = VideoDiscoveryNavigationTarget.FromRelated(item, mediaKind);
         Title = item.Title;
         FactsText = item.Year?.ToString(CultureInfo.CurrentCulture) ?? item.ProviderId.ToUpperInvariant();
         var imagePath = item.LocalPosterPath ?? item.LocalBackdropPath;
@@ -190,6 +210,15 @@ public sealed class VideoDiscoveryDetailsViewModel
     {
     }
 
+    public VideoDiscoveryDetailsViewModel(VideoDiscoveryNavigationTarget target)
+        : this(CreatePlaceholderDetails(
+            target.Identity,
+            target.Artwork,
+            target.Overview,
+            target.CommunityRating))
+    {
+    }
+
     private static VideoDiscoveryDetails CreatePlaceholderDetails(
         VideoMetadataCandidate identity,
         VideoDiscoveryArtwork? artwork,
@@ -238,7 +267,9 @@ public sealed class VideoDiscoveryDetailsViewModel
         PosterImage = CreateImage(Artwork.PosterPath);
         BackdropImage = CreateImage(Artwork.BackdropPath);
         People = Metadata.People.Select(person => new VideoDiscoveryPersonViewModel(person)).ToList();
-        RelatedItems = Metadata.RelatedItems.Select(item => new VideoDiscoveryRelatedItemViewModel(item)).ToList();
+        RelatedItems = Metadata.RelatedItems
+            .Select(item => new VideoDiscoveryRelatedItemViewModel(item, Metadata.MediaKind))
+            .ToList();
     }
 
     public VideoDiscoveryDetailsViewModel(

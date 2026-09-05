@@ -70,6 +70,31 @@ public interface IVideoMetadataCoordinator
     Task CancelTaskAsync(Guid jobId, CancellationToken ct = default);
     Task RetryTaskAsync(Guid jobId, CancellationToken ct = default);
     Task RetryFailedTasksAsync(CancellationToken ct = default);
+    Task ClearAllScrapeRecordsAsync(CancellationToken ct = default);
+}
+
+internal sealed class VideoMetadataBatchExecution(CancellationTokenSource cancellation)
+{
+    public CancellationTokenSource Cancellation { get; } = cancellation;
+    public Task Task { get; set; } = Task.CompletedTask;
+}
+
+internal sealed class VideoMetadataBatchRegistry
+{
+    private readonly ConcurrentDictionary<Guid, VideoMetadataBatchExecution> _items = [];
+
+    public bool ContainsKey(Guid sourceId) => _items.ContainsKey(sourceId);
+
+    public bool TryAdd(Guid sourceId, VideoMetadataBatchExecution execution) =>
+        _items.TryAdd(sourceId, execution);
+
+    public bool TryGetValue(Guid sourceId, out VideoMetadataBatchExecution execution) =>
+        _items.TryGetValue(sourceId, out execution!);
+
+    public VideoMetadataBatchExecution[] Snapshot() => _items.Values.ToArray();
+
+    public bool Remove(Guid sourceId, VideoMetadataBatchExecution execution) =>
+        _items.TryRemove(new KeyValuePair<Guid, VideoMetadataBatchExecution>(sourceId, execution));
 }
 
 internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
@@ -83,10 +108,49 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
     private readonly IReadOnlyDictionary<string, IVideoArtworkProvider> _artworkProviders;
     private readonly IVideoMetadataTransport? _transport;
     private readonly IVideoArtworkCache? _artworkCache;
-    private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _activeBatches = [];
+    private readonly IAniDbImportService? _aniDbImportService;
+    private readonly IAniDbCatalogStore? _aniDbCatalogStore;
+    private readonly SemaphoreSlim _scrapeLifecycleGate = new(1, 1);
+    private readonly VideoMetadataBatchRegistry _activeBatches = new();
+    private readonly object _scrapeOperationGate = new();
+    private readonly HashSet<TaskCompletionSource<bool>> _activeScrapeOperations = [];
+    private CancellationTokenSource _scrapeGeneration = new();
+    private int _scrapeResetInProgress;
     private readonly ConcurrentDictionary<Guid, VideoMetadataBatchProgress> _batchProgress = [];
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _artworkDownloadGates =
         new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<Guid, byte> _aniDbSettledRefreshes = [];
+
+    private sealed class ScrapeOperationLease(
+        VideoMetadataCoordinator owner,
+        TaskCompletionSource<bool> completion,
+        CancellationTokenSource linkedCancellation) : IDisposable
+    {
+        private int _disposed;
+
+        public CancellationToken Token => linkedCancellation.Token;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                return;
+            linkedCancellation.Dispose();
+            owner.CompleteScrapeOperation(completion);
+        }
+    }
+
+    private readonly record struct ScrapeRequestStamp(
+        CancellationTokenSource Generation,
+        bool RequestedDuringReset);
+
+    private ScrapeRequestStamp CaptureScrapeRequest() =>
+        new(
+            Volatile.Read(ref _scrapeGeneration),
+            Volatile.Read(ref _scrapeResetInProgress) != 0);
+
+    private bool IsScrapeRequestSuperseded(ScrapeRequestStamp request) =>
+        request.RequestedDuringReset
+        || !ReferenceEquals(request.Generation, Volatile.Read(ref _scrapeGeneration));
 
     public event EventHandler<VideoMetadataRefreshProgress>? ProgressChanged;
     public event EventHandler<VideoMetadataBatchProgress>? BatchProgressChanged;
@@ -154,7 +218,9 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         ISettingsService? settings,
         IEnumerable<IVideoArtworkProvider> artworkProviders,
         IVideoMetadataTransport? transport,
-        IVideoArtworkCache? artworkCache)
+        IVideoArtworkCache? artworkCache,
+        IAniDbImportService? aniDbImportService = null,
+        IAniDbCatalogStore? aniDbCatalogStore = null)
     {
         _repository = repository;
         _matcher = matcher;
@@ -165,12 +231,73 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         _artworkProviders = artworkProviders.ToDictionary(provider => provider.Id, StringComparer.OrdinalIgnoreCase);
         _transport = transport;
         _artworkCache = artworkCache;
+        _aniDbImportService = aniDbImportService;
+        _aniDbCatalogStore = aniDbCatalogStore;
+        if (_aniDbImportService != null)
+        {
+            _aniDbImportService.AssetIdentificationSettled += OnAniDbIdentificationSettled;
+            if (_aniDbCatalogStore != null)
+                _ = ReplayPersistedAniDbIdentificationsAsync(CaptureScrapeRequest());
+        }
     }
 
     public async Task<VideoMetadataRefreshResult> RefreshAssetAsync(
         Guid assetId,
         bool allowNetwork,
         CancellationToken ct = default)
+    {
+        using var operation = await BeginScrapeOperationAsync(ct);
+        return await RefreshAssetCoreAsync(assetId, allowNetwork, operation.Token);
+    }
+
+    private async Task<ScrapeOperationLease> BeginScrapeOperationAsync(CancellationToken ct)
+    {
+        return await BeginScrapeOperationAsync(CaptureScrapeRequest(), ct);
+    }
+
+    private async Task<ScrapeOperationLease> BeginScrapeOperationAsync(
+        ScrapeRequestStamp request,
+        CancellationToken ct)
+    {
+        if (request.RequestedDuringReset)
+            throw new OperationCanceledException(
+                "The metadata operation was rejected while scrape records were being reset.");
+        await _scrapeLifecycleGate.WaitAsync(ct);
+        try
+        {
+            if (IsScrapeRequestSuperseded(request))
+                throw new OperationCanceledException(
+                    "The metadata operation was superseded by a scrape reset.");
+            TaskCompletionSource<bool> completion;
+            CancellationTokenSource linkedCancellation;
+            lock (_scrapeOperationGate)
+            {
+                linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                    ct,
+                    request.Generation.Token);
+                completion = new TaskCompletionSource<bool>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+                _activeScrapeOperations.Add(completion);
+            }
+            return new ScrapeOperationLease(this, completion, linkedCancellation);
+        }
+        finally
+        {
+            _scrapeLifecycleGate.Release();
+        }
+    }
+
+    private void CompleteScrapeOperation(TaskCompletionSource<bool> completion)
+    {
+        lock (_scrapeOperationGate)
+            _activeScrapeOperations.Remove(completion);
+        completion.TrySetResult(true);
+    }
+
+    private async Task<VideoMetadataRefreshResult> RefreshAssetCoreAsync(
+        Guid assetId,
+        bool allowNetwork,
+        CancellationToken ct)
     {
         var snapshot = await _repository.GetSnapshotAsync(ct);
         var asset = snapshot.Assets.FirstOrDefault(item => item.Id == assetId)
@@ -184,7 +311,75 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
             .Where(node => node != null)
             .Select(node => node!)
             .ToList();
+        var routeSource = ResolveSource(snapshot, asset);
         var route = ResolveRoute(snapshot, asset, nodes);
+        AniDbAssetSnapshot? aniDbAsset = null;
+        AniDbFileMatch? aniDbFileMatch = null;
+        var sourceType = routeSource?.MediaType ?? VideoLibraryMediaType.Auto;
+        var metadataSettings = _settings?.Current.VideoSettings.Metadata;
+        var aniDbAdmissionEnabled = _aniDbCatalogStore != null
+                                    && asset.Kind == VideoMediaAssetKind.LocalFile
+                                    && asset.Availability == VideoMediaAvailability.Available
+                                    && sourceType is VideoLibraryMediaType.Auto or VideoLibraryMediaType.Anime
+                                    && (metadataSettings == null
+                                        || metadataSettings.AniDbEnabled
+                                        && metadataSettings.AniDbHashMatchingEnabled);
+        if (aniDbAdmissionEnabled)
+        {
+            aniDbAsset = await _aniDbCatalogStore!.GetAssetAsync(assetId, ct);
+            aniDbFileMatch = aniDbAsset?.FileMatch;
+            if (aniDbFileMatch == null)
+            {
+                AniDbReleaseState? release = null;
+                if (aniDbAsset is { Ed2k: not null, FileSize: var fileSize })
+                {
+                    release = await _aniDbCatalogStore.GetReleaseStateAsync(
+                        aniDbAsset.Ed2k,
+                        fileSize,
+                        ct);
+                }
+                var now = DateTimeOffset.UtcNow;
+                var lookupDue = release?.IsAutomaticLookupDue(now) == true;
+                var definitivelyNotMatched = release?.Status == AniDbReleaseStatus.Ignored
+                                             || release?.Status == AniDbReleaseStatus.Unrecognized
+                                             && !lookupDue;
+                var shouldQueue = allowNetwork
+                                  && _aniDbImportService != null
+                                  && (aniDbAsset?.Ed2k == null
+                                      || release == null
+                                      || release.Status == AniDbReleaseStatus.Never
+                                      || release.Match != null
+                                      || lookupDue);
+                if (shouldQueue)
+                    await _aniDbImportService!.QueueAssetAsync(assetId, ct);
+                if (!definitivelyNotMatched || sourceType == VideoLibraryMediaType.Anime)
+                {
+                    return new VideoMetadataRefreshResult(
+                        assetId,
+                        false,
+                        true,
+                        "anidb",
+                        definitivelyNotMatched
+                            ? "AniDB did not recognize this anime release. Link it manually or rescan the release."
+                            : "AniDB file identification is still pending.",
+                        []);
+                }
+            }
+        }
+        if (aniDbFileMatch != null)
+        {
+            // An AniDB FILE match is exact release identity. It must immediately
+            // close the automatic provider route to AniDB -> TMDB, even while the
+            // richer Anime XML import is still pending or retrying.
+            route = (
+                VideoMetadataMediaKind.Anime,
+                route.Language,
+                route.Region,
+                ResolveProviderOrder(
+                    VideoLibraryMediaType.Anime,
+                    VideoMetadataMediaKind.Anime,
+                    []));
+        }
         if (route.MediaKind == null)
         {
             return new VideoMetadataRefreshResult(
@@ -203,6 +398,12 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
             ? FindAncestor(snapshot, primaryNode, VideoCatalogNodeKind.Series) ?? primaryNode
             : primaryNode;
         var queryExternalIds = identityNode?.ExternalIds ?? ImmutableDictionary<string, string>.Empty;
+        if (aniDbFileMatch != null)
+        {
+            queryExternalIds = queryExternalIds.SetItem(
+                "anidb",
+                aniDbFileMatch.AnimeId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
         // Provider-discovered IDs are useful query hints, but only individually locked IDs are
         // explicit identity evidence. A node-level lock must not promote every provider ID on
         // that node into a permanent identity lock.
@@ -214,6 +415,12 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
                     pair => pair.Key,
                     pair => pair.Value,
                     StringComparer.OrdinalIgnoreCase);
+        if (aniDbFileMatch != null)
+        {
+            trustedIdentityExternalIds = trustedIdentityExternalIds.SetItem(
+                "anidb",
+                aniDbFileMatch.AnimeId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
         var isSeasonScopedRoute = route.MediaKind is VideoMetadataMediaKind.Anime or VideoMetadataMediaKind.Series
                                   && (primaryNode?.SeasonNumber.HasValue == true
                                       || primaryNode?.EpisodeNumber.HasValue == true
@@ -228,7 +435,9 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
             primaryNode?.AbsoluteEpisodeNumber,
             route.Language,
             route.Region,
-            queryExternalIds);
+            aniDbFileMatch != null
+                ? trustedIdentityExternalIds
+                : queryExternalIds);
         var candidates = new List<VideoMetadataCandidate>();
         var errors = new List<string>();
         var searchable = route.ProviderIds
@@ -311,17 +520,17 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
                 scored);
         }
 
-        var primaryCandidate = SelectPrimaryDetailsCandidate(
+        var detailsCandidate = SelectPrimaryDetailsCandidate(
             route.MediaKind.Value, accepted, scored);
 
         VideoMetadataDetails? details = null;
-        if (_details.TryGetValue(primaryCandidate.ProviderId, out var detailsProvider))
+        if (_details.TryGetValue(detailsCandidate.ProviderId, out var detailsProvider))
         {
-            Publish(assetId, VideoMetadataRefreshStage.Details, 0, 1, primaryCandidate.ProviderId);
+            Publish(assetId, VideoMetadataRefreshStage.Details, 0, 1, detailsCandidate.ProviderId);
             try
             {
                 details = await detailsProvider.GetDetailsAsync(
-                    primaryCandidate,
+                    detailsCandidate,
                     route.Language,
                     route.Region,
                     ct);
@@ -333,16 +542,34 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
                 errors.Add($"{detailsProvider.DisplayName}: {ex.Message}");
             }
         }
+        if (aniDbFileMatch != null
+            && detailsCandidate.ProviderId.Equals("anidb", StringComparison.OrdinalIgnoreCase)
+            && details == null)
+        {
+            // Do not fabricate a partial Series from only AID plus a filename.
+            // Shoko creates the series/episodes after a valid Anime XML entity;
+            // the persistent AniDB import job retains and retries this exact match.
+            Publish(assetId, VideoMetadataRefreshStage.Completed, 1, 1, detailsCandidate.ProviderId);
+            return new VideoMetadataRefreshResult(
+                assetId,
+                false,
+                true,
+                detailsCandidate.ProviderId,
+                errors.Count == 0
+                    ? "AniDB anime metadata is still pending."
+                    : string.Join(Environment.NewLine, errors),
+                scored);
+        }
         var applied = await _repository.ApplyMetadataMatchAsync(
             assetId,
-            primaryCandidate,
+            accepted.Candidate,
             details,
             accepted.IsIdentityLocked,
             preserveExistingHierarchy: true,
             ct);
         if (!applied)
         {
-            Publish(assetId, VideoMetadataRefreshStage.Completed, 1, 1, primaryCandidate.ProviderId);
+            Publish(assetId, VideoMetadataRefreshStage.Completed, 1, 1, detailsCandidate.ProviderId);
             return new VideoMetadataRefreshResult(
                 assetId,
                 false,
@@ -351,23 +578,31 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
                 errors.Count == 0 ? null : string.Join(Environment.NewLine, errors),
                 scored);
         }
-        Publish(assetId, VideoMetadataRefreshStage.Artwork, 0, 1, primaryCandidate.ProviderId);
+        Publish(assetId, VideoMetadataRefreshStage.Artwork, 0, 1, detailsCandidate.ProviderId);
         try
         {
-            await RefreshArtworkAsync(assetId, primaryCandidate, details, ct);
+            await RefreshArtworkAsync(assetId, detailsCandidate, details, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogWarning(ex, "Video artwork refresh failed for {ProviderId}", primaryCandidate.ProviderId);
-            errors.Add($"{primaryCandidate.ProviderId} artwork: {ex.Message}");
+            _logger.LogWarning(ex, "Video artwork refresh failed for {ProviderId}", detailsCandidate.ProviderId);
+            errors.Add($"{detailsCandidate.ProviderId} artwork: {ex.Message}");
         }
-        Publish(assetId, VideoMetadataRefreshStage.Completed, 1, 1, primaryCandidate.ProviderId);
+        Publish(assetId, VideoMetadataRefreshStage.Completed, 1, 1, detailsCandidate.ProviderId);
+        var degradedAniDb = aniDbFileMatch != null
+                            && _aniDbCatalogStore != null
+                            && (await _aniDbCatalogStore.GetAnimeAsync(
+                                aniDbFileMatch.AnimeId,
+                                ct))?.IsDegraded == true;
         return new VideoMetadataRefreshResult(
             assetId,
-            true,
-            false,
-            primaryCandidate.ProviderId,
-            errors.Count == 0 ? null : string.Join(Environment.NewLine, errors),
+            !degradedAniDb,
+            degradedAniDb,
+            detailsCandidate.ProviderId,
+            degradedAniDb
+                ? CompactErrors(errors.Prepend(
+                    "AniDB core metadata was loaded through the reduced UDP fallback; complete Anime XML metadata still requires a registered HTTP API client ID/version."))
+                : errors.Count == 0 ? null : string.Join(Environment.NewLine, errors),
             scored);
     }
 
@@ -378,7 +613,9 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
     {
         if (routeKind is not (VideoMetadataMediaKind.Anime or VideoMetadataMediaKind.Series))
             return accepted.Candidate;
-        var detailPriority = new[] { "tmdb", "anilist", "bangumi", "tvmaze" };
+        var detailPriority = routeKind == VideoMetadataMediaKind.Anime
+            ? new[] { "tmdb" }
+            : new[] { "tmdb", "tvmaze" };
         var richCandidate = scored
             .Where(result => detailPriority.Contains(
                                  result.Candidate.ProviderId,
@@ -407,11 +644,131 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
 
     public async Task QueueAllSourcesAsync(bool forceRefresh = false, CancellationToken ct = default)
     {
-        var snapshot = await _repository.GetSnapshotAsync(ct);
-        foreach (var source in snapshot.Sources)
+        var requestedGeneration = Volatile.Read(ref _scrapeGeneration);
+        var requestedDuringReset = Volatile.Read(ref _scrapeResetInProgress) != 0;
+        if (requestedDuringReset)
+            return;
+        await _scrapeLifecycleGate.WaitAsync(ct);
+        try
         {
-            ct.ThrowIfCancellationRequested();
-            await QueueSourceRefreshAsync(source.Id, forceRefresh, ct);
+            if (requestedDuringReset
+                || !ReferenceEquals(requestedGeneration, Volatile.Read(ref _scrapeGeneration)))
+                return;
+            var snapshot = await _repository.GetSnapshotAsync(ct);
+            if (forceRefresh)
+            {
+                foreach (var source in snapshot.Sources)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    await _repository.ClearRemoteMetadataAsync(source.Id, ct);
+                }
+            }
+            foreach (var source in snapshot.Sources)
+            {
+                ct.ThrowIfCancellationRequested();
+                await QueueSourceRefreshCoreAsync(
+                    source.Id,
+                    forceRefresh,
+                    clearRemoteMetadata: false,
+                    ct);
+            }
+        }
+        finally
+        {
+            _scrapeLifecycleGate.Release();
+        }
+    }
+
+    private void OnAniDbIdentificationSettled(
+        object? sender,
+        AniDbAssetIdentificationSettledEventArgs args)
+    {
+        _ = RefreshAfterAniDbIdentificationAsync(args.AssetId);
+    }
+
+    private async Task ReplayPersistedAniDbIdentificationsAsync(ScrapeRequestStamp request)
+    {
+        try
+        {
+            var metadata = _settings?.Current.VideoSettings.Metadata;
+            if (metadata is not
+                {
+                    OnlineConsentAccepted: true,
+                    AniDbEnabled: true,
+                    AniDbHashMatchingEnabled: true,
+                })
+            {
+                return;
+            }
+            var assets = await _aniDbCatalogStore!.GetAssetsAsync(CancellationToken.None);
+            if (assets.IsDefaultOrEmpty)
+                return;
+            var availableAnimeIds = new HashSet<int>();
+            foreach (var animeId in assets
+                         .Where(asset => asset.FileMatch != null)
+                         .Select(asset => asset.FileMatch!.AnimeId)
+                         .Where(animeId => animeId > 0)
+                         .Distinct())
+            {
+                if (await _aniDbCatalogStore.GetAnimeAsync(animeId, CancellationToken.None) != null)
+                    availableAnimeIds.Add(animeId);
+            }
+            foreach (var asset in assets.Where(asset =>
+                         asset.FileMatch != null
+                         && availableAnimeIds.Contains(asset.FileMatch.AnimeId)))
+            {
+                if (IsScrapeRequestSuperseded(request))
+                    return;
+                if (!_aniDbSettledRefreshes.TryAdd(asset.AssetId, 0))
+                    continue;
+                try
+                {
+                    using var operation = await BeginScrapeOperationAsync(
+                        request,
+                        CancellationToken.None);
+                    await RefreshAssetCoreAsync(
+                        asset.AssetId,
+                        allowNetwork: true,
+                        operation.Token);
+                }
+                finally
+                {
+                    _aniDbSettledRefreshes.TryRemove(asset.AssetId, out _);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // A scrape reset invalidated the startup replay generation.
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Persisted AniDB metadata replay failed");
+        }
+    }
+
+    private async Task RefreshAfterAniDbIdentificationAsync(Guid assetId)
+    {
+        if (!_aniDbSettledRefreshes.TryAdd(assetId, 0))
+            return;
+        try
+        {
+            await RefreshAssetAsync(assetId, allowNetwork: true, CancellationToken.None);
+        }
+        catch (OperationCanceledException)
+        {
+            // A scrape reset or application shutdown owns cancellation.
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Metadata enrichment after AniDB identification failed for {AssetId}",
+                assetId);
+        }
+        finally
+        {
+            _aniDbSettledRefreshes.TryRemove(assetId, out _);
         }
     }
 
@@ -419,6 +776,41 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         Guid sourceId,
         bool forceRefresh = false,
         CancellationToken ct = default)
+    {
+        var request = CaptureScrapeRequest();
+        await QueueSourceRefreshWithStampAsync(sourceId, forceRefresh, request, ct);
+    }
+
+    private async Task QueueSourceRefreshWithStampAsync(
+        Guid sourceId,
+        bool forceRefresh,
+        ScrapeRequestStamp request,
+        CancellationToken ct)
+    {
+        if (request.RequestedDuringReset)
+            return;
+        await _scrapeLifecycleGate.WaitAsync(ct);
+        try
+        {
+            if (IsScrapeRequestSuperseded(request))
+                return;
+            await QueueSourceRefreshCoreAsync(
+                sourceId,
+                forceRefresh,
+                clearRemoteMetadata: forceRefresh,
+                ct);
+        }
+        finally
+        {
+            _scrapeLifecycleGate.Release();
+        }
+    }
+
+    private async Task QueueSourceRefreshCoreAsync(
+        Guid sourceId,
+        bool forceRefresh,
+        bool clearRemoteMetadata,
+        CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         if (_activeBatches.ContainsKey(sourceId))
@@ -443,11 +835,14 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
             .ToArray();
         if (assets.Length == 0)
             return;
-        if (forceRefresh)
+        if (clearRemoteMetadata)
             await _repository.ClearRemoteMetadataAsync(sourceId, ct);
+        if (forceRefresh && _aniDbImportService != null)
+            await _aniDbImportService.QueueSourceAsync(sourceId, ct);
         var jobId = await _repository.BeginMetadataRefreshAsync(sourceId, assets.Length, ct);
         var batchCts = new CancellationTokenSource();
-        if (!_activeBatches.TryAdd(sourceId, batchCts))
+        var execution = new VideoMetadataBatchExecution(batchCts);
+        if (!_activeBatches.TryAdd(sourceId, execution))
         {
             batchCts.Dispose();
             await _repository.UpdateMetadataRefreshAsync(
@@ -457,13 +852,72 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         var initial = new VideoMetadataBatchProgress(
             jobId, sourceId, VideoCatalogJobState.Running, 0, assets.Length, 0, 0, null);
         PublishBatch(initial);
-        _ = RunBatchAsync(initial, assets, batchCts);
+        execution.Task = RunBatchAsync(initial, assets, execution);
+    }
+
+    public async Task ClearAllScrapeRecordsAsync(CancellationToken ct = default)
+    {
+        Interlocked.Increment(ref _scrapeResetInProgress);
+        var lifecycleGateHeld = false;
+        var irreversibleCleanupStarted = false;
+        CancellationTokenSource? priorGeneration = null;
+        try
+        {
+            await _scrapeLifecycleGate.WaitAsync(ct);
+            lifecycleGateHeld = true;
+            Task[] directOperations;
+            lock (_scrapeOperationGate)
+            {
+                priorGeneration = _scrapeGeneration;
+                _scrapeGeneration = new CancellationTokenSource();
+                directOperations = _activeScrapeOperations.Select(item => item.Task).ToArray();
+            }
+            priorGeneration.Cancel();
+
+            var activeBatches = _activeBatches.Snapshot();
+            foreach (var active in activeBatches)
+                active.Cancellation.Cancel();
+            var running = activeBatches.Select(item => item.Task)
+                .Concat(directOperations)
+                .ToArray();
+            if (running.Length > 0)
+                await Task.WhenAll(running).WaitAsync(ct);
+
+            irreversibleCleanupStarted = true;
+            if (_aniDbImportService != null)
+            {
+                await _aniDbImportService.ClearScrapingRecordsAsync(
+                    async (manualAniDbAssets, resetToken) =>
+                    {
+                        await _repository.ClearAllScrapeRecordsAsync(
+                            manualAniDbAssets, resetToken);
+                        if (_artworkCache != null)
+                            await _artworkCache.ClearAsync(resetToken);
+                    },
+                    ct);
+            }
+            else
+            {
+                await _repository.ClearAllScrapeRecordsAsync(ct);
+                if (_artworkCache != null)
+                    await _artworkCache.ClearAsync(ct);
+            }
+        }
+        finally
+        {
+            if (irreversibleCleanupStarted)
+                _batchProgress.Clear();
+            priorGeneration?.Dispose();
+            if (lifecycleGateHeld)
+                _scrapeLifecycleGate.Release();
+            Interlocked.Decrement(ref _scrapeResetInProgress);
+        }
     }
 
     public async Task CancelSourceRefreshAsync(Guid sourceId, CancellationToken ct = default)
     {
         if (_activeBatches.TryGetValue(sourceId, out var active))
-            active.Cancel();
+            active.Cancellation.Cancel();
         if (_batchProgress.TryGetValue(sourceId, out var progress))
         {
             await _repository.UpdateMetadataRefreshAsync(
@@ -498,6 +952,9 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
 
     public async Task RetryTaskAsync(Guid jobId, CancellationToken ct = default)
     {
+        var request = CaptureScrapeRequest();
+        if (request.RequestedDuringReset)
+            return;
         var snapshot = await _repository.GetSnapshotAsync(ct);
         var job = snapshot.Jobs.FirstOrDefault(candidate =>
             candidate.Id == jobId && candidate.Kind == VideoCatalogJobKind.MetadataRefresh);
@@ -507,11 +964,14 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
                 or VideoCatalogJobState.Interrupted))
             return;
 
-        await QueueSourceRefreshAsync(sourceId, forceRefresh: true, ct);
+        await QueueSourceRefreshWithStampAsync(sourceId, forceRefresh: true, request, ct);
     }
 
     public async Task RetryFailedTasksAsync(CancellationToken ct = default)
     {
+        var request = CaptureScrapeRequest();
+        if (request.RequestedDuringReset)
+            return;
         var snapshot = await _repository.GetSnapshotAsync(ct);
         var sourceIds = snapshot.Jobs
             .Where(job => job.Kind == VideoCatalogJobKind.MetadataRefresh
@@ -525,14 +985,14 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         foreach (var sourceId in sourceIds)
         {
             ct.ThrowIfCancellationRequested();
-            await QueueSourceRefreshAsync(sourceId, forceRefresh: true, ct);
+            await QueueSourceRefreshWithStampAsync(sourceId, forceRefresh: true, request, ct);
         }
     }
 
     private async Task RunBatchAsync(
         VideoMetadataBatchProgress initial,
         IReadOnlyList<VideoCatalogAssetSnapshot> assets,
-        CancellationTokenSource batchCts)
+        VideoMetadataBatchExecution execution)
     {
         var processed = 0;
         var matched = 0;
@@ -545,7 +1005,7 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
                 assets,
                 new ParallelOptions
                 {
-                    CancellationToken = batchCts.Token,
+                    CancellationToken = execution.Cancellation.Token,
                     MaxDegreeOfParallelism = 2,
                 },
                 async (asset, token) =>
@@ -648,8 +1108,8 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         }
         finally
         {
-            if (_activeBatches.TryRemove(initial.SourceId, out var active))
-                active.Dispose();
+            _activeBatches.Remove(initial.SourceId, execution);
+            execution.Cancellation.Dispose();
         }
     }
 
@@ -658,6 +1118,8 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         IReadOnlyDictionary<Guid, VideoCatalogNodeSnapshot> nodesById,
         DateTimeOffset? lastCompletedRefresh)
     {
+        if (asset.CatalogResetPending)
+            return false;
         var directNodes = asset.NodeIds
             .Select(id => nodesById.GetValueOrDefault(id))
             .Where(node => node != null)
@@ -749,7 +1211,6 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
             "tvmaze" => metadata?.TvMazeEnabled != false,
             "anilist" => metadata?.AniListEnabled != false,
             "anidb" => metadata?.AniDbEnabled != false,
-            "bangumi" => metadata?.BangumiEnabled != false,
             "tvdb" => metadata?.TvDbEnabled == true,
             _ => true,
         };
@@ -761,51 +1222,206 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         VideoMetadataDetails? details,
         CancellationToken ct)
     {
-        if (_transport == null || _artworkCache == null
-            || !_artworkProviders.TryGetValue(candidate.ProviderId, out var provider))
+        if (_transport == null || _artworkCache == null)
             return;
-        var configured = _settings?.Current.VideoSettings.Metadata.ArtworkEnabled;
-        if (configured != null
-            && configured.TryGetValue(candidate.ProviderId, out var enabled)
-            && !enabled)
-            return;
-        var primaryArtwork = (await provider.GetArtworkAsync(candidate, ct))
-            .Where(item => item.Kind is "poster" or "backdrop" or "thumb" or "logo")
-            .GroupBy(item => item.Kind, StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.First());
+
+        var primaryArtwork = new List<VideoArtworkCandidate>();
+        foreach (var identity in LinkedArtworkIdentities(candidate))
+        {
+            if (!_artworkProviders.TryGetValue(identity.ProviderId, out var provider)
+                || !IsArtworkEnabled(identity.ProviderId))
+                continue;
+            try
+            {
+                var providerArtwork = await provider.GetArtworkAsync(identity, ct);
+                primaryArtwork.AddRange(providerArtwork
+                    .Where(item => item.Kind is "poster" or "backdrop" or "thumb" or "logo")
+                    .GroupBy(item => item.Kind, StringComparer.OrdinalIgnoreCase)
+                    .SelectMany(group => group.Take(PrimaryArtworkLimit(group.Key)))
+                    .Select(item => item with
+                    {
+                        OwnerKind = RootArtworkOwner(candidate.MediaKind),
+                    }));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Video artwork candidate lookup failed for {ProviderId}",
+                    identity.ProviderId);
+            }
+        }
+
+        var rootOwner = RootArtworkOwner(candidate.MediaKind);
         var peopleArtwork = details?.People.IsDefault == false
             ? details.People
                 .Where(person => !string.IsNullOrWhiteSpace(person.ImageUrl))
-                .Take(10)
+                .Take(12)
                 .Select(person => new VideoArtworkCandidate(
-                    candidate.ProviderId,
+                    details.ProviderId,
                     person.ImageUrl!,
                     $"person:{person.ProviderPersonId}",
-                    null, null, null, person.ImageUrl))
+                    null, null, null, person.ImageUrl)
+                {
+                    OwnerKind = rootOwner,
+                })
             : [];
         var relatedArtwork = details?.RelatedItems.IsDefault == false
             ? details.RelatedItems
-                .Where(item => !string.IsNullOrWhiteSpace(item.PosterUrl))
                 .Take(8)
-                .Select(item => new VideoArtworkCandidate(
-                    candidate.ProviderId,
-                    item.PosterUrl!,
-                    $"related:{item.ProviderId}:{item.ProviderItemId}:poster",
-                    null, null, null, item.SourceUrl))
+                .SelectMany(item => new[]
+                {
+                    string.IsNullOrWhiteSpace(item.PosterUrl)
+                        ? null
+                        : new VideoArtworkCandidate(
+                            item.ProviderId,
+                            item.PosterUrl!,
+                            $"related:{item.ProviderId}:{item.ProviderItemId}:poster",
+                            null, null, null, item.SourceUrl)
+                        {
+                            OwnerKind = rootOwner,
+                        },
+                    string.IsNullOrWhiteSpace(item.BackdropUrl)
+                        ? null
+                        : new VideoArtworkCandidate(
+                            item.ProviderId,
+                            item.BackdropUrl!,
+                            $"related:{item.ProviderId}:{item.ProviderItemId}:backdrop",
+                            null, null, null, item.SourceUrl)
+                        {
+                            OwnerKind = rootOwner,
+                        },
+                })
+                .Where(item => item != null)
+                .Select(item => item!)
             : [];
-        var artworkCandidates = primaryArtwork
+
+        var seasonArtwork = details?.Seasons.IsDefault == false
+            ? details.Seasons
+                .Where(season => !string.IsNullOrWhiteSpace(season.PosterUrl))
+                .OrderBy(season => season.SeasonNumber == candidate.SeasonNumber ? 0 : 1)
+                .ThenBy(season => season.SeasonNumber)
+                .Take(12)
+                .Select(season => new VideoArtworkCandidate(
+                    details.ProviderId,
+                    season.PosterUrl!,
+                    "poster",
+                    null, null, null, details.SourceUrl)
+                {
+                    OwnerKind = VideoMetadataMediaKind.Season,
+                    SeasonNumber = season.SeasonNumber,
+                })
+            : [];
+        var episodeArtwork = details?.Seasons.IsDefault == false
+            ? details.Seasons
+                .SelectMany(season => season.Episodes.IsDefault
+                    ? []
+                    : season.Episodes.Select(episode => (Season: season, Episode: episode)))
+                .Where(item => !string.IsNullOrWhiteSpace(item.Episode.ThumbnailUrl))
+                .OrderBy(item => item.Season.SeasonNumber == candidate.SeasonNumber
+                                 && item.Episode.EpisodeNumber == candidate.EpisodeNumber ? 0 : 1)
+                .ThenBy(item => item.Season.SeasonNumber)
+                .ThenBy(item => item.Episode.EpisodeNumber)
+                .Take(24)
+                .Select(item => new VideoArtworkCandidate(
+                    details.ProviderId,
+                    item.Episode.ThumbnailUrl!,
+                    "thumb",
+                    null, null, null, item.Episode.SourceUrl)
+                {
+                    OwnerKind = VideoMetadataMediaKind.Episode,
+                    SeasonNumber = item.Season.SeasonNumber,
+                    EpisodeNumber = item.Episode.EpisodeNumber,
+                })
+            : [];
+        var rawCandidates = primaryArtwork
             .Concat(peopleArtwork)
             .Concat(relatedArtwork)
+            .Concat(seasonArtwork)
+            .Concat(episodeArtwork)
             .Where(item => Uri.TryCreate(item.Url, UriKind.Absolute, out var uri)
                            && uri.Scheme == Uri.UriSchemeHttps)
-            .DistinctBy(item => item.Url, StringComparer.Ordinal)
+            .DistinctBy(
+                item => $"{item.ProviderId}\0{item.OwnerKind}\0{item.SeasonNumber}\0{item.EpisodeNumber}\0{item.Kind}\0{item.Url}",
+                StringComparer.Ordinal)
             .ToArray();
+        var artworkCandidates = rawCandidates
+            .GroupBy(item => new
+            {
+                Owner = item.OwnerKind ?? rootOwner,
+                item.SeasonNumber,
+                item.EpisodeNumber,
+                Kind = item.Kind.ToLowerInvariant(),
+            })
+            .SelectMany(group => group.Select((item, ordinal) => item with
+            {
+                Ordinal = ordinal,
+                IsPreferred = ordinal == 0,
+            }))
+            .ToArray();
+
+        // Persist candidate ordering before any download starts. The catalog only
+        // assigns a default when a kind has no existing/user preference, so network
+        // completion order can never replace a stable choice.
+        foreach (var artwork in artworkCandidates)
+        {
+            await _repository.UpsertArtworkCandidateAsync(
+                assetId, candidate.MediaKind, artwork, ct: ct);
+        }
         await Parallel.ForEachAsync(
             artworkCandidates,
             new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = 4 },
             async (artwork, itemToken) =>
                 await CacheAndApplyArtworkAsync(assetId, candidate, artwork, itemToken));
     }
+
+    private bool IsArtworkEnabled(string providerId)
+    {
+        var configured = _settings?.Current.VideoSettings.Metadata.ArtworkEnabled;
+        return configured == null
+               || !configured.TryGetValue(providerId, out var enabled)
+               || enabled;
+    }
+
+    private static IEnumerable<VideoMetadataCandidate> LinkedArtworkIdentities(
+        VideoMetadataCandidate candidate)
+    {
+        var providerIds = candidate.MediaKind == VideoMetadataMediaKind.Anime
+            ? new[] { "anidb", "tmdb" }
+            : new[] { candidate.ProviderId };
+        foreach (var providerId in providerIds)
+        {
+            var providerItemId = providerId.Equals(candidate.ProviderId, StringComparison.OrdinalIgnoreCase)
+                ? candidate.ProviderItemId
+                : candidate.ExternalIds.GetValueOrDefault(providerId);
+            if (string.IsNullOrWhiteSpace(providerItemId))
+                continue;
+            yield return candidate with
+            {
+                ProviderId = providerId,
+                ProviderItemId = providerItemId,
+                SourceUrl = providerId.Equals(candidate.ProviderId, StringComparison.OrdinalIgnoreCase)
+                    ? candidate.SourceUrl
+                    : null,
+            };
+        }
+    }
+
+    private static VideoMetadataMediaKind RootArtworkOwner(VideoMetadataMediaKind kind) => kind switch
+    {
+        VideoMetadataMediaKind.Movie => VideoMetadataMediaKind.Movie,
+        VideoMetadataMediaKind.Anime => VideoMetadataMediaKind.Anime,
+        _ => VideoMetadataMediaKind.Series,
+    };
+
+    private static int PrimaryArtworkLimit(string kind) => kind.ToLowerInvariant() switch
+    {
+        "poster" => 8,
+        "backdrop" => 8,
+        "logo" => 4,
+        "thumb" => 4,
+        _ => 0,
+    };
 
     private async Task CacheAndApplyArtworkAsync(
         Guid assetId,
@@ -817,36 +1433,65 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         await gate.WaitAsync(ct);
         try
         {
-            var existing = await _artworkCache!.GetAsync(artwork.Url, ct);
-            VideoArtworkCacheEntry cached;
-            if (existing != null)
+            var attemptedDownload = false;
+            try
             {
-                cached = existing;
+                var existing = await _artworkCache!.GetAsync(artwork.Url, ct);
+                VideoArtworkCacheEntry cached;
+                if (existing != null)
+                {
+                    cached = existing;
+                }
+                else
+                {
+                    attemptedDownload = true;
+                    var response = await _transport!.SendAsync(new VideoMetadataRequest(
+                        artwork.ProviderId,
+                        HttpMethod.Get,
+                        new Uri(artwork.Url),
+                        IsIdempotent: false,
+                        MaxResponseBytes: 20L * 1024 * 1024), ct);
+                    if (response.StatusCode is < 200 or >= 300)
+                    {
+                        await _repository.UpsertArtworkCandidateAsync(
+                            assetId,
+                            owner.MediaKind,
+                            artwork,
+                            downloadAttempted: true,
+                            lastError: $"HTTP {response.StatusCode}",
+                            ct: ct);
+                        return;
+                    }
+                    await using var stream = new MemoryStream(response.Content, writable: false);
+                    cached = await _artworkCache.StoreAsync(
+                        artwork.Url, stream, response.ContentType, response.ETag, response.LastModified, ct);
+                }
+                await _repository.UpsertArtworkCandidateAsync(
+                    assetId,
+                    owner.MediaKind,
+                    artwork,
+                    cached.LocalPath,
+                    cached.ETag,
+                    cached.LastModified,
+                    attemptedDownload,
+                    lastError: null,
+                    ct);
             }
-            else
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                var response = await _transport!.SendAsync(new VideoMetadataRequest(
-                    owner.ProviderId,
-                    HttpMethod.Get,
-                    new Uri(artwork.Url),
-                    IsIdempotent: false,
-                    MaxResponseBytes: 20L * 1024 * 1024), ct);
-                if (response.StatusCode is < 200 or >= 300)
-                    return;
-                await using var stream = new MemoryStream(response.Content, writable: false);
-                cached = await _artworkCache.StoreAsync(
-                    artwork.Url, stream, response.ContentType, response.ETag, response.LastModified, ct);
+                await _repository.UpsertArtworkCandidateAsync(
+                    assetId,
+                    owner.MediaKind,
+                    artwork,
+                    downloadAttempted: attemptedDownload,
+                    lastError: ex.Message,
+                    ct: CancellationToken.None);
+                _logger.LogWarning(
+                    ex,
+                    "Video artwork download failed for {ProviderId} {ArtworkUrl}",
+                    artwork.ProviderId,
+                    artwork.Url);
             }
-            await _repository.ApplyArtworkAsync(
-                assetId,
-                owner.MediaKind,
-                owner.ProviderId,
-                artwork.Kind,
-                artwork.Url,
-                cached.LocalPath,
-                cached.ETag,
-                cached.LastModified,
-                ct);
         }
         finally
         {
@@ -858,6 +1503,15 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         Guid assetId,
         VideoMetadataCandidate candidate,
         CancellationToken ct = default)
+    {
+        using var operation = await BeginScrapeOperationAsync(ct);
+        return await PreviewRematchCoreAsync(assetId, candidate, operation.Token);
+    }
+
+    private async Task<VideoRematchPreview> PreviewRematchCoreAsync(
+        Guid assetId,
+        VideoMetadataCandidate candidate,
+        CancellationToken ct)
     {
         var snapshot = await _repository.GetSnapshotAsync(ct);
         var asset = snapshot.Assets.FirstOrDefault(item => item.Id == assetId)
@@ -902,6 +1556,12 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
 
     public async Task ConfirmRematchAsync(VideoRematchPreview preview, CancellationToken ct = default)
     {
+        using var operation = await BeginScrapeOperationAsync(ct);
+        await ConfirmRematchCoreAsync(preview, operation.Token);
+    }
+
+    private async Task ConfirmRematchCoreAsync(VideoRematchPreview preview, CancellationToken ct)
+    {
         VideoMetadataDetails? details = null;
         if (_details.TryGetValue(preview.Candidate.ProviderId, out var provider)
             && provider is not TvDbLicenseGatedProvider)
@@ -923,11 +1583,7 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
         VideoCatalogAssetSnapshot asset,
         IReadOnlyList<VideoCatalogNodeSnapshot> nodes)
     {
-        var source = asset.SourceIds.Select(id => snapshot.Sources.FirstOrDefault(item => item.Id == id))
-            .Where(item => item != null)
-            .OrderByDescending(item => item!.FolderPath.Length)
-            .ThenBy(item => item!.CreatedAt)
-            .FirstOrDefault();
+        var source = ResolveSource(snapshot, asset);
         var type = source?.MediaType ?? VideoLibraryMediaType.Auto;
         var evidenceNodes = CollectRouteEvidenceNodes(snapshot, nodes);
         var hasAnimeIdentity = evidenceNodes
@@ -942,23 +1598,47 @@ internal sealed class VideoMetadataCoordinator : IVideoMetadataCoordinator
             evidenceNodes.Any(node => node.Kind is VideoCatalogNodeKind.Series or VideoCatalogNodeKind.Season),
             asset.EpisodeStart.HasValue || evidenceNodes.Any(node => node.EpisodeNumber.HasValue),
             evidenceNodes.Any(node => node.Year.HasValue));
-        var defaults = type switch
-        {
-            // Keep TMDB as the canonical library identity for anime too.  The
-            // other providers remain fallbacks for titles TMDB cannot resolve.
-            VideoLibraryMediaType.Anime => new[] { "tmdb", "tvmaze", "anilist", "anidb", "bangumi" },
-            VideoLibraryMediaType.JapaneseDramaTv => new[] { "tmdb", "tvmaze", "bangumi" },
-            VideoLibraryMediaType.Movie => new[] { "tmdb", "bangumi" },
-            _ when kind == VideoMetadataMediaKind.Anime => new[] { "tmdb", "tvmaze", "anilist", "anidb", "bangumi" },
-            _ when kind == VideoMetadataMediaKind.Series => new[] { "tmdb", "tvmaze", "bangumi" },
-            _ when kind == VideoMetadataMediaKind.Movie => new[] { "tmdb", "bangumi" },
-            _ => Array.Empty<string>(),
-        };
         return (
             kind,
             source?.Language ?? "ja-JP",
             source?.Region ?? "JP",
-            source is { ProviderOrder.Length: > 0 } ? source.ProviderOrder : defaults.ToImmutableArray());
+            ResolveProviderOrder(type, kind, source?.ProviderOrder ?? []));
+    }
+
+    private static VideoCatalogSourceSnapshot? ResolveSource(
+        VideoCatalogSnapshot snapshot,
+        VideoCatalogAssetSnapshot asset) =>
+        asset.SourceIds.Select(id => snapshot.Sources.FirstOrDefault(item => item.Id == id))
+            .Where(item => item != null)
+            .OrderByDescending(item => item!.FolderPath.Length)
+            .ThenBy(item => item!.CreatedAt)
+            .FirstOrDefault();
+
+    internal static ImmutableArray<string> ResolveProviderOrder(
+        VideoLibraryMediaType sourceType,
+        VideoMetadataMediaKind? mediaKind,
+        IReadOnlyList<string> configuredOrder)
+    {
+        // Shoko's anime identity chain is deliberately closed: AniDB owns the
+        // file/anime identity and TMDB may enrich that identity through a cross-ref.
+        // A legacy custom source route must not re-introduce AniList, Bangumi or
+        // TVmaze into automatic anime scraping.
+        if (sourceType == VideoLibraryMediaType.Anime || mediaKind == VideoMetadataMediaKind.Anime)
+            return ["anidb", "tmdb"];
+
+        var defaults = sourceType switch
+        {
+            VideoLibraryMediaType.JapaneseDramaTv => new[] { "tmdb", "tvmaze" },
+            VideoLibraryMediaType.Movie => new[] { "tmdb" },
+            _ when mediaKind == VideoMetadataMediaKind.Series => new[] { "tmdb", "tvmaze" },
+            _ when mediaKind == VideoMetadataMediaKind.Movie => new[] { "tmdb" },
+            _ => Array.Empty<string>(),
+        };
+        var sanitized = configuredOrder
+            .Where(providerId => !providerId.Equals("bangumi", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToImmutableArray();
+        return sanitized.Length > 0 ? sanitized : defaults.ToImmutableArray();
     }
 
     internal static VideoMetadataMediaKind? ResolveMediaKind(

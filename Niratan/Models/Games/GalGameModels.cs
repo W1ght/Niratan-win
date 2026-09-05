@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json.Serialization;
+using Niratan.Helpers;
 
 namespace Niratan.Models.Games;
 
@@ -99,7 +100,7 @@ public sealed record GalHookSessionState
 public sealed record GalGameIpcSnapshot
 {
     public const uint SharedMagic = 0x31485648;
-    public const uint SharedVersion = 15;
+    public const uint SharedVersion = 21;
     public const uint StableIpcVersion = 1;
 
     public required int ProcessId { get; init; }
@@ -114,6 +115,8 @@ public sealed record GalGameIpcSnapshot
     public required uint TextHooked { get; init; }
     public required uint LunaActive { get; init; }
     public required uint HookDiagnostics { get; init; }
+    public uint XAudioDiagnostics { get; init; }
+    public uint XAudioDiagnostics2 { get; init; }
     public required ulong TotalWritten { get; init; }
     public required ulong TextWriteCount { get; init; }
     public required ulong ClipWriteCount { get; init; }
@@ -239,6 +242,9 @@ public sealed record GalGameTextLine
         2 => "LunaHook",
         3 => "Unity TMP",
         4 => "Siglus",
+        6 => ResourceStringHelper.GetString(
+            "GamesTextSourceKirikiriTextRender",
+            "KiriKiri TextRender"),
         _ => "Hook",
     };
 }

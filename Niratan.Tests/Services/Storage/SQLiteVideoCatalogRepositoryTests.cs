@@ -137,6 +137,50 @@ public sealed class SQLiteVideoCatalogRepositoryTests
     }
 
     [Fact]
+    public async Task SourceScanGenerationCompareAndSwap_RejectsStaleBeginAndCancel()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var sourceId = Guid.NewGuid();
+        await using var repository = Create(
+            Path.Combine(temp.Path, "video_library.sqlite3"),
+            Path.Combine(temp.Path, "video_library.json"));
+        await repository.InitializeAsync(ct);
+        await repository.UpsertSourceAsync(new VideoLibrarySource
+        {
+            Id = sourceId.ToString("D"),
+            Name = "Anime",
+            FolderPath = Directory.CreateDirectory(Path.Combine(temp.Path, "Anime")).FullName,
+            MediaType = VideoLibraryMediaType.Anime,
+        }, ct);
+
+        var initialGeneration = (await repository.GetSnapshotAsync(ct)).Sources.Single().ScanGeneration;
+        var firstGeneration = await repository.TryBeginSourceScanAsync(
+            sourceId, VideoCatalogJobKind.FullScan, initialGeneration, ct);
+        var staleBegin = await repository.TryBeginSourceScanAsync(
+            sourceId, VideoCatalogJobKind.FullScan, initialGeneration, ct);
+        var secondGeneration = await repository.TryBeginSourceScanAsync(
+            sourceId, VideoCatalogJobKind.FullScan, firstGeneration!.Value, ct);
+        var staleCancel = await repository.CancelSourceScanAsync(
+            sourceId, firstGeneration.Value, ct);
+
+        firstGeneration.Should().Be(initialGeneration + 1);
+        staleBegin.Should().BeNull();
+        secondGeneration.Should().Be(firstGeneration.Value + 1);
+        staleCancel.Should().BeFalse();
+        var afterStaleOperations = await repository.GetSnapshotAsync(ct);
+        afterStaleOperations.Sources.Single().ScanGeneration.Should().Be(secondGeneration.Value);
+        afterStaleOperations.Jobs.Should().ContainSingle(job =>
+            job.Generation == secondGeneration.Value && job.State == VideoCatalogJobState.Running);
+
+        (await repository.CancelSourceScanAsync(sourceId, secondGeneration.Value, ct)).Should().BeTrue();
+        var cancelled = await repository.GetSnapshotAsync(ct);
+        cancelled.Sources.Single().ScanGeneration.Should().Be(secondGeneration.Value + 1);
+        cancelled.Jobs.Should().ContainSingle(job =>
+            job.Generation == secondGeneration.Value && job.State == VideoCatalogJobState.Cancelled);
+    }
+
+    [Fact]
     public async Task IncrementalScan_PromotesUnchangedParsedEpisodesIntoOneLocalSeries()
     {
         var ct = TestContext.Current.CancellationToken;
@@ -235,6 +279,152 @@ public sealed class SQLiteVideoCatalogRepositoryTests
             .Should().Be(posterPath);
         snapshot.Nodes.Single(node => node.Kind == VideoCatalogNodeKind.Episode).PosterPath
             .Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ArtworkCandidates_PersistShokoStateAndKeepExistingAndUserPreferenceStable()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "video_library.sqlite3");
+        var mediaPath = Path.Combine(temp.Path, "Show S01E01.mkv");
+        var anidbPath = Path.Combine(temp.Path, "anidb.jpg");
+        var tmdbPath = Path.Combine(temp.Path, "tmdb.jpg");
+        var now = new DateTimeOffset(2026, 8, 23, 12, 0, 0, TimeSpan.Zero);
+        await using var repository = Create(database, Path.Combine(temp.Path, "video_library.json"));
+        await repository.InitializeAsync(ct);
+        await repository.UpsertAssetAsync(new VideoCatalogAssetUpsert(
+            mediaPath, VideoMediaAssetKind.LocalFile, mediaPath, "Show", temp.Path,
+            1, now, now, now, VideoMediaAvailability.Available,
+            EpisodeStart: 1, EpisodeEnd: 1), ct);
+        var assetId = (await repository.GetSnapshotAsync(ct)).Assets.Single().Id;
+        var anidb = new VideoArtworkCandidate(
+            "anidb", "https://cdn.anidb.net/images/main/1.jpg", "poster",
+            "ja", 680, 1000, "https://anidb.net/anime/1")
+        {
+            OwnerKind = VideoMetadataMediaKind.Series,
+            IsEnabled = true,
+            IsDesired = true,
+            IsPreferred = true,
+            Ordinal = 0,
+        };
+        var tmdb = new VideoArtworkCandidate(
+            "tmdb", "https://image.tmdb.org/t/p/original/2.jpg", "poster",
+            "en", 1000, 1500, "https://www.themoviedb.org/tv/2")
+        {
+            OwnerKind = VideoMetadataMediaKind.Series,
+            IsEnabled = true,
+            IsDesired = true,
+            Ordinal = 1,
+        };
+
+        await repository.UpsertArtworkCandidateAsync(
+            assetId, VideoMetadataMediaKind.Anime, anidb, anidbPath,
+            "\"anidb\"", now, downloadAttempted: true, ct: ct);
+        await repository.UpsertArtworkCandidateAsync(
+            assetId, VideoMetadataMediaKind.Anime, tmdb, tmdbPath,
+            "\"tmdb\"", now, downloadAttempted: true, ct: ct);
+
+        var initial = (await repository.GetSnapshotAsync(ct)).Nodes.Single();
+        initial.PosterPath.Should().Be(anidbPath);
+        initial.ArtworkCandidates.Should().HaveCount(2);
+        initial.ArtworkCandidates.Single(item => item.ProviderId == "anidb").Should().Match<VideoCatalogArtworkSnapshot>(
+            item => item.Language == "ja"
+                    && item.Width == 680
+                    && item.Height == 1000
+                    && item.IsEnabled
+                    && item.IsDesired
+                    && item.IsPreferred
+                    && item.IsSelected
+                    && item.Ordinal == 0
+                    && item.DownloadAttempts == 1);
+
+        var tmdbId = initial.ArtworkCandidates.Single(item => item.ProviderId == "tmdb").Id;
+        await using (var connection = new SqliteConnection($"Data Source={database};Pooling=False"))
+        {
+            await connection.OpenAsync(ct);
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                INSERT INTO node_user_data(node_id,preferred_artwork_id,updated_at)
+                VALUES($node,$artwork,$now)
+                ON CONFLICT(node_id) DO UPDATE SET preferred_artwork_id=excluded.preferred_artwork_id,
+                    updated_at=excluded.updated_at;
+                """;
+            command.Parameters.AddWithValue("$node", initial.Id.ToString("D"));
+            command.Parameters.AddWithValue("$artwork", tmdbId.ToString("D"));
+            command.Parameters.AddWithValue("$now", now.ToString("O"));
+            await command.ExecuteNonQueryAsync(ct);
+        }
+
+        await repository.UpsertArtworkCandidateAsync(
+            assetId, VideoMetadataMediaKind.Anime, anidb with { Ordinal = 7 }, anidbPath,
+            "\"anidb-v2\"", now.AddDays(1), downloadAttempted: false, ct: ct);
+        var refreshed = (await repository.GetSnapshotAsync(ct)).Nodes.Single();
+        refreshed.PosterPath.Should().Be(tmdbPath, "an explicit user preference must survive refresh");
+        refreshed.ArtworkCandidates.Single(item => item.ProviderId == "anidb").IsSelected.Should().BeTrue();
+        refreshed.ArtworkCandidates.Single(item => item.ProviderId == "tmdb").IsUserPreferred.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ArtworkCandidateCompatibility_AddsColumnsWithoutReplacingExistingRows()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "video_library.sqlite3");
+        var legacy = Path.Combine(temp.Path, "video_library.json");
+        var mediaPath = Path.Combine(temp.Path, "Show.mkv");
+        var now = new DateTimeOffset(2026, 8, 23, 12, 0, 0, TimeSpan.Zero);
+        Guid nodeId;
+        Guid artworkId;
+        await using (var repository = Create(database, legacy))
+        {
+            await repository.InitializeAsync(ct);
+            await repository.UpsertAssetAsync(new VideoCatalogAssetUpsert(
+                mediaPath, VideoMediaAssetKind.LocalFile, mediaPath, "Show", temp.Path,
+                1, now, now, now, VideoMediaAvailability.Available), ct);
+            var snapshot = await repository.GetSnapshotAsync(ct);
+            nodeId = snapshot.Nodes.Single().Id;
+            artworkId = Guid.NewGuid();
+        }
+
+        await using (var connection = new SqliteConnection($"Data Source={database};Pooling=False"))
+        {
+            await connection.OpenAsync(ct);
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                DROP INDEX IF EXISTS ux_artwork_identity_nullsafe;
+                ALTER TABLE artwork RENAME TO artwork_with_candidate_state;
+                CREATE TABLE artwork(
+                    id TEXT PRIMARY KEY, node_id TEXT NOT NULL REFERENCES catalog_nodes(id) ON DELETE CASCADE,
+                    provider_id TEXT NOT NULL, kind TEXT NOT NULL, remote_url TEXT NULL, local_path TEXT NULL,
+                    etag TEXT NULL, last_modified TEXT NULL, selected INTEGER NOT NULL DEFAULT 0,
+                    ordinal INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
+                    UNIQUE(node_id,provider_id,kind,local_path,remote_url));
+                INSERT INTO artwork(id,node_id,provider_id,kind,remote_url,local_path,selected,ordinal,created_at)
+                VALUES($id,$node,'anidb','poster','https://cdn.anidb.net/images/main/legacy.jpg',
+                    $path,1,3,$now);
+                DROP TABLE artwork_with_candidate_state;
+                """;
+            command.Parameters.AddWithValue("$id", artworkId.ToString("D"));
+            command.Parameters.AddWithValue("$node", nodeId.ToString("D"));
+            command.Parameters.AddWithValue("$path", Path.Combine(temp.Path, "legacy.jpg"));
+            command.Parameters.AddWithValue("$now", now.ToString("O"));
+            await command.ExecuteNonQueryAsync(ct);
+        }
+
+        await using var reopened = Create(database, legacy);
+        var migrated = await reopened.InitializeAsync(ct);
+
+        var artwork = migrated.Snapshot.Nodes.Single().ArtworkCandidates.Should().ContainSingle().Subject;
+        artwork.Id.Should().Be(artworkId);
+        artwork.IsSelected.Should().BeTrue();
+        artwork.IsPreferred.Should().BeTrue("legacy selected artwork becomes the stable preferred candidate");
+        artwork.IsEnabled.Should().BeTrue();
+        artwork.IsDesired.Should().BeTrue();
+        artwork.Ordinal.Should().Be(3);
+        artwork.DownloadAttempts.Should().Be(0);
     }
 
     [Fact]
@@ -361,6 +551,451 @@ public sealed class SQLiteVideoCatalogRepositoryTests
         series.Studios.Should().BeEmpty();
         series.People.Should().BeEmpty();
         series.RelatedItems.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AnimeMetadata_KeepsAniDbAsLockedIdentityWhileTmdbEnrichesDetails()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var mediaPath = Path.Combine(temp.Path, "Re Zero - 01 [anidbid-11370].mkv");
+        await File.WriteAllBytesAsync(mediaPath, [1], ct);
+        await using var repository = Create(
+            Path.Combine(temp.Path, "video_library.sqlite3"),
+            Path.Combine(temp.Path, "video_library.json"));
+        await repository.InitializeAsync(ct);
+        var now = DateTimeOffset.UtcNow;
+        await repository.UpsertAssetAsync(new VideoCatalogAssetUpsert(
+            mediaPath, VideoMediaAssetKind.LocalFile, mediaPath, "Re Zero", temp.Path,
+            1, now, now, now, VideoMediaAvailability.Available, EpisodeStart: 1, EpisodeEnd: 1), ct);
+        var assetId = (await repository.GetSnapshotAsync(ct)).Assets.Single().Id;
+        var aniDb = new VideoMetadataCandidate(
+            "anidb", "11370", VideoMetadataMediaKind.Anime,
+            "Re:Zero kara Hajimeru Isekai Seikatsu", "Re:ゼロから始める異世界生活", 2016,
+            null, 1, 1, ["Re:ゼロから始める異世界生活"],
+            System.Collections.Immutable.ImmutableDictionary<string, string>.Empty.Add("anidb", "11370"),
+            "https://anidb.net/anime/11370");
+        var tmdbDetails = new VideoMetadataDetails(
+            "tmdb", "65942", VideoMetadataMediaKind.Anime,
+            "Re:ゼロから始める異世界生活", "Re:ゼロから始める異世界生活", null,
+            "TMDB overview", 2016, null, null, null,
+            ["Re:Zero − Starting Life in Another World"], ["Animation"], [],
+            System.Collections.Immutable.ImmutableDictionary<string, string>.Empty.Add("tmdb", "65942"),
+            "https://www.themoviedb.org/tv/65942", now, now.AddDays(30));
+
+        await repository.ApplyMetadataMatchAsync(
+            assetId, aniDb, tmdbDetails, lockIdentity: true, preserveExistingHierarchy: false, ct);
+
+        var series = (await repository.GetSnapshotAsync(ct)).Nodes
+            .Single(node => node.Kind == VideoCatalogNodeKind.Series);
+        series.PrimaryTitle.Should().Be("Re:ゼロから始める異世界生活");
+        series.Overview.Should().Be("TMDB overview");
+        series.ExternalIds.Should().Contain("anidb", "11370");
+        series.ExternalIds.Should().Contain("tmdb", "65942");
+        series.IdentityLockedProviders.Should().BeEquivalentTo("anidb");
+    }
+
+    [Fact]
+    public async Task AnimeMetadata_KeepsDistinctAniDbAnimeSeriesWhenTmdbCrossReferenceIsShared()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        await using var repository = Create(
+            Path.Combine(temp.Path, "video_library.sqlite3"),
+            Path.Combine(temp.Path, "video_library.json"));
+        await repository.InitializeAsync(ct);
+        var now = DateTimeOffset.UtcNow;
+        var firstPath = Path.Combine(temp.Path, "Re Zero - 01 [anidbid-11370].mkv");
+        var secondPath = Path.Combine(temp.Path, "Re Zero Season 2 - 01 [anidbid-15632].mkv");
+        await File.WriteAllBytesAsync(firstPath, [1], ct);
+        await File.WriteAllBytesAsync(secondPath, [2], ct);
+
+        foreach (var (path, title) in new[]
+                 {
+                     (firstPath, "Re Zero"),
+                     (secondPath, "Re Zero Season 2"),
+                 })
+        {
+            await repository.UpsertAssetAsync(new VideoCatalogAssetUpsert(
+                path, VideoMediaAssetKind.LocalFile, path, title, temp.Path,
+                1, now, now, now, VideoMediaAvailability.Available,
+                EpisodeStart: 1, EpisodeEnd: 1), ct);
+        }
+
+        var assets = (await repository.GetSnapshotAsync(ct)).Assets
+            .ToDictionary(asset => asset.Location, StringComparer.OrdinalIgnoreCase);
+        foreach (var (path, aniDbId, title, year) in new[]
+                 {
+                     (firstPath, "11370", "Re:ゼロから始める異世界生活", 2016),
+                     (secondPath, "15632", "Re:ゼロから始める異世界生活 2nd season", 2020),
+                 })
+        {
+            var candidate = new VideoMetadataCandidate(
+                "anidb", aniDbId, VideoMetadataMediaKind.Anime, title, title, year,
+                null, 1, 1, [title],
+                System.Collections.Immutable.ImmutableDictionary<string, string>.Empty.Add("anidb", aniDbId),
+                $"https://anidb.net/anime/{aniDbId}");
+            var richDetails = new VideoMetadataDetails(
+                "tmdb", "65942", VideoMetadataMediaKind.Anime, title, title, null,
+                null, year, null, null, null, [title], [], [],
+                System.Collections.Immutable.ImmutableDictionary<string, string>.Empty.Add("tmdb", "65942"),
+                "https://www.themoviedb.org/tv/65942", now, now.AddDays(30));
+            await repository.ApplyMetadataMatchAsync(
+                assets[path].Id, candidate, richDetails,
+                lockIdentity: true, preserveExistingHierarchy: false, ct);
+        }
+
+        var series = (await repository.GetSnapshotAsync(ct)).Nodes
+            .Where(node => node.Kind == VideoCatalogNodeKind.Series)
+            .ToArray();
+        series.Should().HaveCount(2, "each AniDB AID is a Shoko-style AnimeSeries identity");
+        series.Select(node => node.ExternalIds["anidb"])
+            .Should().BeEquivalentTo("11370", "15632");
+        series.Should().OnlyContain(node => node.ExternalIds["tmdb"] == "65942");
+        series.Should().OnlyContain(node =>
+            node.IdentityLockedProviders.SetEquals(new[] { "anidb" }));
+    }
+
+    [Fact]
+    public async Task AniDbIdentity_DoesNotClaimSiblingAssetsFromSharedScannerSeries()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var sourcePath = Directory.CreateDirectory(Path.Combine(temp.Path, "Anime")).FullName;
+        var firstPath = Path.Combine(sourcePath, "Shared Scanner Show S01E01.mkv");
+        var secondPath = Path.Combine(sourcePath, "Shared Scanner Show S01E02.mkv");
+        var independentPath = Path.Combine(sourcePath, "Independent Scanner Show S01E01.mkv");
+        await File.WriteAllBytesAsync(firstPath, [1], ct);
+        await File.WriteAllBytesAsync(secondPath, [2], ct);
+        await File.WriteAllBytesAsync(independentPath, [3], ct);
+        var now = new DateTimeOffset(2026, 8, 23, 18, 0, 0, TimeSpan.Zero);
+        var sourceId = Guid.NewGuid();
+        await using var repository = Create(
+            Path.Combine(temp.Path, "video_library.sqlite3"),
+            Path.Combine(temp.Path, "video_library.json"));
+        await repository.InitializeAsync(ct);
+        await repository.UpsertSourceAsync(new VideoLibrarySource
+        {
+            Id = sourceId.ToString("D"),
+            Name = "Anime",
+            FolderPath = sourcePath,
+            MediaType = VideoLibraryMediaType.Auto,
+        }, ct);
+
+        var paths = new[] { firstPath, secondPath, independentPath };
+        var parsedByPath = VideoScanBundleClassifier.Parse(
+            paths, sourcePath, VideoLibraryMediaType.Auto, new VideoFileNameParser());
+        var generation = await repository.BeginSourceScanAsync(
+            sourceId, VideoCatalogJobKind.FullScan, ct);
+        var scanAssets = paths.Select(path =>
+        {
+            var parsed = parsedByPath[path];
+            return new VideoScanAsset(
+                new VideoCatalogAssetUpsert(
+                    path, VideoMediaAssetKind.LocalFile, path, parsed.NormalizedTitle,
+                    sourcePath, 1, now, now, now, VideoMediaAvailability.Available,
+                    sourceId, parsed.EpisodeStart, parsed.EpisodeEnd),
+                parsed);
+        }).ToArray();
+        (await repository.ApplyScanBatchAsync(new VideoScanBatch(
+            sourceId, generation, now, scanAssets, true), ct)).Should().BeTrue();
+
+        static VideoCatalogNodeSnapshot OwnerFor(VideoCatalogSnapshot snapshot, string path)
+        {
+            var asset = snapshot.Assets.Single(item =>
+                string.Equals(item.Location, path, StringComparison.OrdinalIgnoreCase));
+            var node = snapshot.Nodes.Single(item => item.Id == asset.NodeIds.Single());
+            while (node.Kind != VideoCatalogNodeKind.Series)
+            {
+                node.ParentId.Should().HaveValue();
+                node = snapshot.Nodes.Single(item => item.Id == node.ParentId.Value);
+            }
+            return node;
+        }
+
+        var scanned = await repository.GetSnapshotAsync(ct);
+        scanned.Nodes.Count(node => node.Kind == VideoCatalogNodeKind.Series).Should().Be(2);
+        var sharedScannerSeriesId = OwnerFor(scanned, firstPath).Id;
+        OwnerFor(scanned, secondPath).Id.Should().Be(sharedScannerSeriesId);
+        var independentScannerSeriesId = OwnerFor(scanned, independentPath).Id;
+        independentScannerSeriesId.Should().NotBe(sharedScannerSeriesId);
+        var assetsByPath = scanned.Assets.ToDictionary(
+            asset => asset.Location, StringComparer.OrdinalIgnoreCase);
+
+        await repository.ApplyAniDbIdentityAsync(
+            assetsByPath[firstPath].Id,
+            CreateAniDbProjection(101, 1001, 1, now, "shared-scanner-group"),
+            ct);
+
+        var firstProjected = await repository.GetSnapshotAsync(ct);
+        var aid101Owner = OwnerFor(firstProjected, firstPath);
+        var untouchedOwner = OwnerFor(firstProjected, secondPath);
+        aid101Owner.Id.Should().NotBe(sharedScannerSeriesId);
+        aid101Owner.ExternalIds.Should().Contain("anidb", "101");
+        untouchedOwner.Id.Should().Be(sharedScannerSeriesId);
+        untouchedOwner.ExternalIds.Should().NotContainKey("anidb");
+
+        await repository.ApplyAniDbIdentityAsync(
+            assetsByPath[secondPath].Id,
+            CreateAniDbProjection(202, 2002, 2, now, "shared-scanner-group"),
+            ct);
+        await repository.ApplyAniDbIdentityAsync(
+            assetsByPath[independentPath].Id,
+            CreateAniDbProjection(303, 3003, 1, now, "independent-scanner-group"),
+            ct);
+
+        var projected = await repository.GetSnapshotAsync(ct);
+        aid101Owner = OwnerFor(projected, firstPath);
+        var aid202Owner = OwnerFor(projected, secondPath);
+        var aid303Owner = OwnerFor(projected, independentPath);
+        aid101Owner.Id.Should().NotBe(aid202Owner.Id);
+        aid101Owner.ExternalIds.Should().Contain("anidb", "101")
+            .And.Contain("anidb-group", "shared-scanner-group");
+        aid202Owner.ExternalIds.Should().Contain("anidb", "202")
+            .And.Contain("anidb-group", "shared-scanner-group");
+        aid303Owner.Id.Should().Be(independentScannerSeriesId,
+            "other series in the same source must not prevent single-asset hierarchy reuse");
+        aid303Owner.ExternalIds.Should().Contain("anidb", "303")
+            .And.Contain("anidb-group", "independent-scanner-group");
+    }
+
+    [Fact]
+    public async Task AniDbIdentity_ProjectsEveryEidUnderItsAuthoritativeAid()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        await using var repository = Create(
+            Path.Combine(temp.Path, "video_library.sqlite3"),
+            Path.Combine(temp.Path, "video_library.json"));
+        await repository.InitializeAsync(ct);
+        var now = DateTimeOffset.UtcNow;
+        var mediaPath = Path.Combine(temp.Path, "Combined Episodes 01-02.mkv");
+        await File.WriteAllBytesAsync(mediaPath, [1], ct);
+        await repository.UpsertAssetAsync(new VideoCatalogAssetUpsert(
+            mediaPath, VideoMediaAssetKind.LocalFile, mediaPath, "Combined Episodes 01-02", temp.Path,
+            1, now, now, now, VideoMediaAvailability.Available,
+            EpisodeStart: 1, EpisodeEnd: 2), ct);
+        var assetId = (await repository.GetSnapshotAsync(ct)).Assets.Single().Id;
+        var details = new VideoMetadataDetails(
+            "anidb", "123", VideoMetadataMediaKind.Anime, "Series", "シリーズ", null,
+            "Overview", 2024, null, null, null, ["Series"], [], [],
+            System.Collections.Immutable.ImmutableDictionary<string, string>.Empty
+                .Add("anidb", "123")
+                .Add("tmdb", "456"),
+            "https://anidb.net/anime/123", now, now.AddDays(30));
+        var otherDetails = new VideoMetadataDetails(
+            "anidb", "456", VideoMetadataMediaKind.Anime, "Other Series", "別作品", null,
+            "Other overview", 2025, null, null, null, ["Other Series"], [], [],
+            System.Collections.Immutable.ImmutableDictionary<string, string>.Empty.Add("anidb", "456"),
+            "https://anidb.net/anime/456", now, now.AddDays(30));
+        var projection = new VideoAniDbIdentityProjection(
+            123,
+            789,
+            "group-stable",
+            details,
+            [
+                new VideoAniDbEpisodeProjection(
+                    1001, 1, 1, "Episode 1", "第1話", null, 0, 50, false,
+                    new DateOnly(2024, 1, 1)),
+                new VideoAniDbEpisodeProjection(
+                    1002, 1, 2, "Episode 2", "第2話", null, 1, 50, true,
+                    new DateOnly(2024, 1, 8))
+                {
+                    AnimeId = 456,
+                    AnimeGroupId = "group-other",
+                    AnimeMetadata = otherDetails,
+                },
+            ]);
+
+        await repository.ApplyAniDbIdentityAsync(assetId, projection, ct);
+
+        var snapshot = await repository.GetSnapshotAsync(ct);
+        snapshot.Nodes.Count(node => node.Kind == VideoCatalogNodeKind.Series).Should().Be(2);
+        var series = snapshot.Nodes.Single(node =>
+            node.Kind == VideoCatalogNodeKind.Series
+            && node.ExternalIds.GetValueOrDefault("anidb") == "123");
+        series.ExternalIds.Should().Contain("anidb", "123");
+        series.ExternalIds.Should().Contain("anidb-group", "group-stable");
+        series.ExternalIds.Should().Contain("tmdb", "456");
+        series.ExternalIds.Should().NotContainKey("anidb-file");
+        series.ExternalIds.Should().NotContainKey("anidb-episode");
+        series.IdentityLockedProviders.Should().BeEquivalentTo("anidb");
+
+        var episodes = snapshot.Nodes
+            .Where(node => node.Kind == VideoCatalogNodeKind.Episode)
+            .OrderBy(node => node.EpisodeNumber)
+            .ToArray();
+        episodes.Should().HaveCount(2);
+        episodes.Select(node => node.ExternalIds["anidb-episode"])
+            .Should().Equal("1001", "1002");
+        episodes.Single(node => node.ExternalIds["anidb-episode"] == "1001")
+            .ExternalIds.Should().Contain("anidb", "123");
+        episodes.Single(node => node.ExternalIds["anidb-episode"] == "1002")
+            .ExternalIds.Should().Contain("anidb", "456").And.Contain("anidb-group", "group-other");
+        episodes.Should().OnlyContain(node =>
+            node.IdentityLockedProviders.SetEquals(new[] { "anidb-episode" }));
+        snapshot.Assets.Single().NodeIds.Should().BeEquivalentTo(episodes.Select(node => node.Id));
+    }
+
+    [Fact]
+    public async Task MetadataSnapshot_ProjectsPersistedSeasonOrderingAfterRepositoryRestart()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "video_library.sqlite3");
+        var legacyPath = Path.Combine(temp.Path, "video_library.json");
+        var mediaPath = Path.Combine(temp.Path, "Show S01E01.mkv");
+        await File.WriteAllBytesAsync(mediaPath, [1], ct);
+        var now = DateTimeOffset.UtcNow;
+        await using (var repository = Create(databasePath, legacyPath))
+        {
+            await repository.InitializeAsync(ct);
+            await repository.UpsertAssetAsync(new VideoCatalogAssetUpsert(
+                mediaPath, VideoMediaAssetKind.LocalFile, mediaPath, "Show", temp.Path,
+                1, now, now, now, VideoMediaAvailability.Available,
+                EpisodeStart: 1, EpisodeEnd: 1), ct);
+            var assetId = (await repository.GetSnapshotAsync(ct)).Assets.Single().Id;
+            var candidate = new VideoMetadataCandidate(
+                "tmdb", "77", VideoMetadataMediaKind.Series, "Show", "Show", 2024,
+                null, null, null, ["Show"],
+                System.Collections.Immutable.ImmutableDictionary<string, string>.Empty.Add("tmdb", "77"),
+                "https://www.themoviedb.org/tv/77");
+            var details = new VideoMetadataDetails(
+                "tmdb", "77", VideoMetadataMediaKind.Series, "Show", "Show", null,
+                "Overview", 2024, null, null, null, ["Show"], [], [], candidate.ExternalIds,
+                candidate.SourceUrl, now, now.AddDays(30),
+                Seasons:
+                [
+                    new VideoMetadataSeason(1, "Season 1", null, null, 1, null,
+                        [new VideoMetadataEpisode(1, "One", null, null, null, null, null, null)]),
+                    new VideoMetadataSeason(2, "Season 2", null, null, 2, null,
+                        [
+                            new VideoMetadataEpisode(1, "One", null, null, null, null, null, null),
+                            new VideoMetadataEpisode(2, "Two", null, null, null, null, null, null),
+                        ]),
+                ]);
+            await repository.ApplyMetadataMatchAsync(
+                assetId, candidate, details, lockIdentity: true, preserveExistingHierarchy: false, ct);
+        }
+
+        await using var reopened = Create(databasePath, legacyPath);
+        await reopened.InitializeAsync(ct);
+        var series = (await reopened.GetSnapshotAsync(ct)).Nodes
+            .Single(node => node.Kind == VideoCatalogNodeKind.Series);
+        series.Seasons.Select(season => season.SeasonNumber).Should().Equal(1, 2);
+        series.Seasons[1].Episodes.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task TmdbCrossReferences_PersistTypedOrderingWithoutReplacingAniDbIdentity()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "video_library.sqlite3");
+        var legacyPath = Path.Combine(temp.Path, "video_library.json");
+        var mediaPath = Path.Combine(temp.Path, "Show - 01.mkv");
+        await File.WriteAllBytesAsync(mediaPath, [1], ct);
+        var now = DateTimeOffset.UtcNow;
+
+        await using (var repository = Create(databasePath, legacyPath))
+        {
+            await repository.InitializeAsync(ct);
+            await repository.UpsertAssetAsync(new VideoCatalogAssetUpsert(
+                mediaPath, VideoMediaAssetKind.LocalFile, mediaPath, "Show", temp.Path,
+                1, now, now, now, VideoMediaAvailability.Available,
+                EpisodeStart: 1, EpisodeEnd: 1), ct);
+            var assetId = (await repository.GetSnapshotAsync(ct)).Assets.Single().Id;
+            var aniDbDetails = new VideoMetadataDetails(
+                "anidb", "123", VideoMetadataMediaKind.Anime, "Show", "Show", null,
+                "AniDB overview", 2024, null, null, null, ["Show"], [], [],
+                System.Collections.Immutable.ImmutableDictionary<string, string>.Empty.Add("anidb", "123"),
+                "https://anidb.net/anime/123", now, now.AddDays(30));
+            await repository.ApplyAniDbIdentityAsync(
+                assetId,
+                new VideoAniDbIdentityProjection(
+                    123,
+                    456,
+                    "group-123",
+                    aniDbDetails,
+                    [new VideoAniDbEpisodeProjection(
+                        1001, 1, 1, "One", "One", null, 0, 100, false,
+                        new DateOnly(2024, 1, 1)) { AnimeId = 123 }]),
+                ct);
+
+            var acceptedAniDb = new VideoMetadataCandidate(
+                "anidb", "123", VideoMetadataMediaKind.Anime, "Show", "Show", 2024,
+                1, 1, 1, ["Show"],
+                System.Collections.Immutable.ImmutableDictionary<string, string>.Empty.Add("anidb", "123"),
+                "https://anidb.net/anime/123");
+            var tmdbDetails = new VideoMetadataDetails(
+                "tmdb", "65942", VideoMetadataMediaKind.Anime, "Show", "Show", null,
+                "TMDB overview", 2024, 1, 1, 1, ["Show"], [], [],
+                System.Collections.Immutable.ImmutableDictionary<string, string>.Empty
+                    .Add("anidb", "123").Add("tmdb", "65942"),
+                "https://www.themoviedb.org/tv/65942", now, now.AddDays(30),
+                Seasons:
+                [
+                    new VideoMetadataSeason(1, "Season 1", null, "2024-01-01", 1, null,
+                        [new VideoMetadataEpisode(
+                            1, "One", "One", null, "2024-01-01", 24, null,
+                            "https://www.themoviedb.org/tv/65942/season/1/episode/1")
+                        {
+                            TmdbShowId = 65942,
+                            TmdbEpisodeId = 7001,
+                            TmdbOrderingId = "tv-order",
+                            TmdbEpisodeGroupId = "tv-season-1",
+                            Ordinal = 0,
+                        }])
+                    {
+                        TmdbShowId = 65942,
+                        TmdbOrderingId = "tv-order",
+                        TmdbEpisodeGroupId = "tv-season-1",
+                        TmdbOrderingType = VideoTmdbOrderingType.Tv,
+                        Ordinal = 0,
+                    },
+                ],
+                TmdbOrdering: new VideoTmdbOrdering(
+                    65942, "tv-order", VideoTmdbOrderingType.Tv, IsPreferred: true));
+            (await repository.ApplyMetadataMatchAsync(
+                assetId, acceptedAniDb, tmdbDetails, true, true, ct)).Should().BeTrue();
+        }
+
+        await using var reopened = Create(databasePath, legacyPath);
+        await reopened.InitializeAsync(ct);
+        var snapshot = await reopened.GetSnapshotAsync(ct);
+        var series = snapshot.Nodes.Single(node => node.Kind == VideoCatalogNodeKind.Series);
+        series.ExternalIds.Should().Contain("anidb", "123");
+        series.IdentityLockedProviders.Should().Contain("anidb");
+        series.TmdbShowCrossReferences.Should().ContainSingle().Which.Should().BeEquivalentTo(
+            new
+            {
+                AniDbAnimeId = 123,
+                TmdbShowId = 65942,
+                ChosenOrderingId = "tv-order",
+                ChosenOrderingType = VideoTmdbOrderingType.Tv,
+                MatchRating = VideoMetadataMatchRating.FirstAvailable,
+            });
+        series.TmdbOrderings.Should().ContainSingle(ordering =>
+            ordering.OrderingId == "tv-order"
+            && ordering.Type == VideoTmdbOrderingType.Tv
+            && ordering.IsPreferred);
+
+        var episode = snapshot.Nodes.Single(node => node.Kind == VideoCatalogNodeKind.Episode);
+        episode.ExternalIds.Should().Contain("anidb-episode", "1001");
+        episode.TmdbEpisodeCrossReferences.Should().ContainSingle().Which.Should().BeEquivalentTo(
+            new
+            {
+                AniDbAnimeId = 123,
+                AniDbEpisodeId = 1001,
+                TmdbShowId = 65942,
+                TmdbEpisodeId = 7001,
+                OrderingId = "tv-order",
+                SeasonId = "tv-season-1",
+                SeasonNumber = 1,
+                EpisodeNumber = 1,
+                Ordinal = 0,
+                MatchRating = VideoMetadataMatchRating.DateAndTitleKindaMatches,
+            });
     }
 
     [Fact]
@@ -1281,6 +1916,79 @@ public sealed class SQLiteVideoCatalogRepositoryTests
     }
 
     [Fact]
+    public async Task CompatibilityRepairV12_DeduplicatesNullRemoteArtworkAndRemapsPreference()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "video_library.sqlite3");
+        var legacy = Path.Combine(temp.Path, "video_library.json");
+        var mediaPath = Path.Combine(temp.Path, "Show S01E01.mkv");
+        var posterPath = Path.Combine(temp.Path, "poster.jpg");
+        var nodeId = Guid.NewGuid();
+        var discardedArtworkId = Guid.NewGuid();
+        var keptArtworkId = Guid.NewGuid();
+        var now = new DateTimeOffset(2026, 8, 23, 12, 0, 0, TimeSpan.Zero);
+        await File.WriteAllBytesAsync(mediaPath, [1], ct);
+        await File.WriteAllBytesAsync(posterPath, [1], ct);
+        await using (var repository = Create(database, legacy))
+        {
+            await repository.InitializeAsync(ct);
+            await repository.UpsertAssetAsync(new VideoCatalogAssetUpsert(
+                mediaPath, VideoMediaAssetKind.LocalFile, mediaPath, "Show", "fixture", 1,
+                now, now, now, VideoMediaAvailability.Available), ct);
+        }
+
+        await using (var connection = new SqliteConnection($"Data Source={database};Pooling=False"))
+        {
+            await connection.OpenAsync(ct);
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                DROP INDEX ux_artwork_identity_nullsafe;
+                DELETE FROM migration_audit WHERE category='local-sidecar-scopes-v12';
+                INSERT INTO catalog_nodes(id,kind,primary_title,is_special,identity_locked,created_at,updated_at)
+                VALUES($node,'series','Show',0,0,$now,$now);
+                INSERT INTO artwork(id,node_id,provider_id,kind,local_path,selected,ordinal,created_at)
+                VALUES($discarded,$node,'local','poster',$poster,0,0,$now),
+                      ($kept,$node,'local','poster',$poster,1,1,$now);
+                INSERT INTO node_user_data(node_id,preferred_artwork_id,updated_at)
+                VALUES($node,$discarded,$now);
+                """;
+            command.Parameters.AddWithValue("$node", nodeId.ToString("D"));
+            command.Parameters.AddWithValue("$discarded", discardedArtworkId.ToString("D"));
+            command.Parameters.AddWithValue("$kept", keptArtworkId.ToString("D"));
+            command.Parameters.AddWithValue("$poster", posterPath);
+            command.Parameters.AddWithValue("$now", now.ToString("O"));
+            await command.ExecuteNonQueryAsync(ct);
+        }
+
+        await using (var reopened = Create(database, legacy))
+            await reopened.InitializeAsync(ct);
+
+        await using var verify = new SqliteConnection($"Data Source={database};Pooling=False");
+        await verify.OpenAsync(ct);
+        using var verifyCommand = verify.CreateCommand();
+        verifyCommand.CommandText =
+            "SELECT COUNT(*) FROM artwork WHERE node_id=$node AND provider_id='local' AND kind='poster' AND local_path=$poster;";
+        verifyCommand.Parameters.AddWithValue("$node", nodeId.ToString("D"));
+        verifyCommand.Parameters.AddWithValue("$poster", posterPath);
+        (await verifyCommand.ExecuteScalarAsync(ct)).Should().Be(1L);
+        verifyCommand.CommandText =
+            "SELECT preferred_artwork_id FROM node_user_data WHERE node_id=$node;";
+        (await verifyCommand.ExecuteScalarAsync(ct)).Should().Be(keptArtworkId.ToString("D"));
+        verifyCommand.CommandText =
+            "SELECT modified_at FROM media_assets WHERE identity_key=$media;";
+        verifyCommand.Parameters.AddWithValue("$media", mediaPath);
+        (await verifyCommand.ExecuteScalarAsync(ct)).Should().Be(DBNull.Value);
+        verifyCommand.CommandText =
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='ux_artwork_identity_nullsafe';";
+        (await verifyCommand.ExecuteScalarAsync(ct)).Should().Be(1L);
+        verifyCommand.CommandText =
+            "SELECT COUNT(*) FROM migration_audit WHERE category='local-sidecar-scopes-v12';";
+        (await verifyCommand.ExecuteScalarAsync(ct)).Should().Be(1L);
+    }
+
+    [Fact]
     public async Task CompatibilityRepairV9_DoesNotCascadeProtectedDescendantMetadata()
     {
         var ct = TestContext.Current.CancellationToken;
@@ -1347,8 +2055,8 @@ public sealed class SQLiteVideoCatalogRepositoryTests
         await verify.OpenAsync(ct);
         using var command = verify.CreateCommand();
         command.CommandText =
-            "SELECT COUNT(*) FROM migration_audit WHERE category IN ('anilist-null-id-search-v9','jellyfin-folder-hierarchy-v11');";
-        (await command.ExecuteScalarAsync(ct)).Should().Be(2L);
+            "SELECT COUNT(*) FROM migration_audit WHERE category IN ('anilist-null-id-search-v9','jellyfin-folder-hierarchy-v11','local-sidecar-scopes-v12');";
+        (await command.ExecuteScalarAsync(ct)).Should().Be(3L);
     }
 
     [Fact]
@@ -1609,6 +2317,1109 @@ public sealed class SQLiteVideoCatalogRepositoryTests
                                                      && person.LocalImagePath == personPath);
         node.RelatedItems.Should().ContainSingle(item => item.ProviderItemId == "99"
                                                            && item.LocalPosterPath == relatedPath);
+    }
+
+    [Fact]
+    public async Task ClearAllScrapeRecords_ResetsCatalogToUnmatchedAndPreservesMediaAndUserState()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "video_library.sqlite3");
+        var sourcePath = Directory.CreateDirectory(Path.Combine(temp.Path, "Anime")).FullName;
+        var mediaPath = Path.Combine(sourcePath, "Show S01E01.mkv");
+        var localPosterPath = Path.Combine(sourcePath, "poster.jpg");
+        var remotePosterPath = Path.Combine(temp.Path, "cached-tmdb-poster.jpg");
+        await File.WriteAllBytesAsync(mediaPath, [1, 2, 3], ct);
+        await File.WriteAllBytesAsync(localPosterPath, [4, 5, 6], ct);
+        await File.WriteAllBytesAsync(remotePosterPath, [7, 8, 9], ct);
+        var sourceId = Guid.NewGuid();
+        var now = new DateTimeOffset(2026, 8, 23, 12, 0, 0, TimeSpan.Zero);
+        await using var repository = Create(database, Path.Combine(temp.Path, "video_library.json"));
+        await repository.InitializeAsync(ct);
+        await repository.UpsertSourceAsync(new VideoLibrarySource
+        {
+            Id = sourceId.ToString("D"),
+            Name = "Anime",
+            FolderPath = sourcePath,
+            MediaType = VideoLibraryMediaType.Anime,
+        }, ct);
+
+        var parser = new VideoFileNameParser();
+        var parsed = parser.Parse(mediaPath, sourcePath, VideoLibraryMediaType.Anime);
+        var generation = await repository.BeginSourceScanAsync(
+            sourceId, VideoCatalogJobKind.FullScan, ct);
+        (await repository.ApplyScanBatchAsync(new VideoScanBatch(
+            sourceId,
+            generation,
+            now,
+            [new VideoScanAsset(new VideoCatalogAssetUpsert(
+                mediaPath,
+                VideoMediaAssetKind.LocalFile,
+                mediaPath,
+                "Show S01E01",
+                sourcePath,
+                3,
+                now,
+                now,
+                now,
+                VideoMediaAvailability.Available,
+                sourceId,
+                1,
+                1), parsed)],
+            true), ct)).Should().BeTrue();
+
+        var seeded = await repository.GetSnapshotAsync(ct);
+        var asset = seeded.Assets.Should().ContainSingle().Subject;
+        var series = seeded.Nodes.Single(node => node.Kind == VideoCatalogNodeKind.Series);
+        var episode = seeded.Nodes.Single(node => node.Kind == VideoCatalogNodeKind.Episode);
+        var metadataJob = await repository.BeginMetadataRefreshAsync(sourceId, 1, ct);
+        await repository.UpdateMetadataRefreshAsync(
+            metadataJob, VideoCatalogJobState.Completed, 1, null, ct);
+        await repository.UpsertProviderCacheAsync(new VideoProviderCacheEntry(
+            "tmdb:test",
+            "tmdb",
+            "\"etag\"",
+            now,
+            [1, 2, 3],
+            "application/json",
+            now,
+            now.AddDays(30)), ct);
+
+        var localArtworkId = Guid.NewGuid();
+        var remoteArtworkId = Guid.NewGuid();
+        await using (var connection = new SqliteConnection($"Data Source={database};Pooling=False"))
+        {
+            await connection.OpenAsync(ct);
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                UPDATE catalog_nodes
+                SET primary_title='Remote title',overview='Remote overview',year=2024,identity_locked=1
+                WHERE id=$series;
+                INSERT INTO metadata_snapshots(
+                    id,node_id,provider_id,provider_item_id,payload_json,source_url,
+                    fetched_at,expires_at)
+                VALUES($snapshot,$series,'tmdb','202','{}','https://www.themoviedb.org/tv/202',$now,$expires);
+                INSERT OR REPLACE INTO metadata_field_values(
+                    node_id,field,value,provider_id,priority,is_locked,updated_at)
+                VALUES
+                    ($series,'title','Local title','local',300,0,$now),
+                    ($series,'externalIds','{"anidb":"101"}','local',300,0,$now),
+                    ($series,'title','Remote title','tmdb',200,1,$now),
+                    ($series,'overview','Remote overview','tmdb',200,0,$now);
+                INSERT INTO artwork(
+                    id,node_id,provider_id,kind,local_path,selected,ordinal,created_at,updated_at)
+                VALUES
+                    ($localArtwork,$series,'local','poster',$localPoster,1,0,$now,$now),
+                    ($remoteArtwork,$series,'tmdb','poster',$remotePoster,1,0,$now,$now);
+                INSERT OR REPLACE INTO external_ids(
+                    node_id,provider_id,external_id,is_identity_locked)
+                VALUES
+                    ($series,'anidb','101',1),
+                    ($series,'tmdb','202',1);
+                INSERT OR REPLACE INTO catalog_aliases(
+                    node_id,provider_id,alias,normalized_alias)
+                VALUES
+                    ($series,'filename','Show','show'),
+                    ($series,'local','Local alias','localalias'),
+                    ($series,'tmdb','Remote alias','remotealias');
+                INSERT INTO match_candidates(
+                    id,asset_id,provider_id,provider_item_id,title,score,title_score,
+                    evidence,hard_conflict,created_at)
+                VALUES($candidate,$asset,'tmdb','202','Remote title',0.95,0.95,'title',0,$now);
+                INSERT INTO tmdb_show_xrefs(
+                    series_node_id,anidb_anime_id,tmdb_show_id,chosen_ordering_id,
+                    chosen_ordering_type,match_rating,created_at,updated_at)
+                VALUES($series,101,202,'order',7,0,$now,$now);
+                INSERT INTO tmdb_orderings(
+                    series_node_id,tmdb_show_id,ordering_id,ordering_type,is_preferred,
+                    is_user_preferred,created_at,updated_at)
+                VALUES($series,202,'order',7,1,1,$now,$now);
+                INSERT INTO tmdb_episode_xrefs(
+                    episode_node_id,series_node_id,anidb_anime_id,anidb_episode_id,
+                    tmdb_show_id,tmdb_episode_id,ordering_id,season_id,season_number,
+                    episode_number,ordinal,match_rating,created_at,updated_at)
+                VALUES($episode,$series,101,1001,202,2001,'order','season-1',1,1,0,0,$now,$now);
+                INSERT INTO node_user_data(
+                    node_id,is_favorite,preferred_artwork_id,updated_at)
+                VALUES($series,1,$remoteArtwork,$now);
+                """;
+            command.Parameters.AddWithValue("$series", series.Id.ToString("D"));
+            command.Parameters.AddWithValue("$episode", episode.Id.ToString("D"));
+            command.Parameters.AddWithValue("$asset", asset.Id.ToString("D"));
+            command.Parameters.AddWithValue("$snapshot", Guid.NewGuid().ToString("D"));
+            command.Parameters.AddWithValue("$candidate", Guid.NewGuid().ToString("D"));
+            command.Parameters.AddWithValue("$localArtwork", localArtworkId.ToString("D"));
+            command.Parameters.AddWithValue("$remoteArtwork", remoteArtworkId.ToString("D"));
+            command.Parameters.AddWithValue("$localPoster", localPosterPath);
+            command.Parameters.AddWithValue("$remotePoster", remotePosterPath);
+            command.Parameters.AddWithValue("$now", now.ToString("O"));
+            command.Parameters.AddWithValue("$expires", now.AddDays(30).ToString("O"));
+            await command.ExecuteNonQueryAsync(ct);
+        }
+
+        await repository.ClearAllScrapeRecordsAsync(ct);
+
+        var cleared = await repository.GetSnapshotAsync(ct);
+        cleared.Sources.Should().ContainSingle(source => source.Id == sourceId);
+        var clearedAsset = cleared.Assets.Should().ContainSingle(item =>
+            item.Id == asset.Id && item.Location == mediaPath && item.Availability == VideoMediaAvailability.Available);
+        clearedAsset.Subject.IsFavorite.Should().BeTrue(
+            "favorite state on deleted catalog ancestry is migrated to the media asset");
+        clearedAsset.Subject.SourceIds.Should().Equal(sourceId);
+        var unmatched = AssertResetToDistinctRootUnmatched(cleared, asset.Id);
+        unmatched.Id.Should().NotBe(series.Id).And.NotBe(episode.Id);
+        unmatched.PrimaryTitle.Should().Be(clearedAsset.Subject.Title,
+            "the reset node starts from source media identity, not any catalog field projection");
+        unmatched.Overview.Should().BeNull();
+        unmatched.Year.Should().BeNull();
+        unmatched.IdentityLocked.Should().BeFalse();
+        unmatched.ExternalIds.Should().BeEmpty(
+            "manual and automatic node identities are cleared with the catalog projection");
+        unmatched.IdentityLockedProviders.Should().BeEmpty();
+        unmatched.Aliases.Should().BeEmpty("filename and Local aliases are catalog projections too");
+        unmatched.ArtworkCandidates.Should().BeEmpty("Local and online artwork projections are reset together");
+        unmatched.TmdbShowCrossReferences.Should().BeEmpty();
+        unmatched.TmdbEpisodeCrossReferences.Should().BeEmpty();
+        unmatched.TmdbOrderings.Should().BeEmpty();
+        cleared.Nodes.Select(node => node.Id).Should().NotContain([series.Id, episode.Id]);
+        cleared.Nodes.Should().NotContain(node =>
+            node.Kind == VideoCatalogNodeKind.Series
+            || node.Kind == VideoCatalogNodeKind.Season
+            || node.Kind == VideoCatalogNodeKind.Episode
+            || node.Kind == VideoCatalogNodeKind.Movie);
+        cleared.MatchCandidates.Should().BeEmpty();
+        cleared.Jobs.Should().NotContain(job => job.Kind == VideoCatalogJobKind.MetadataRefresh);
+        cleared.Jobs.Should().Contain(job => job.Kind == VideoCatalogJobKind.FullScan);
+        (await repository.GetProviderCacheAsync("tmdb:test", ct)).Should().BeNull();
+
+        await using (var connection = new SqliteConnection($"Data Source={database};Pooling=False"))
+        {
+            await connection.OpenAsync(ct);
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT COUNT(*) FROM library_sources;";
+            (await command.ExecuteScalarAsync(ct)).Should().Be(1L);
+            command.CommandText = "SELECT COUNT(*) FROM media_assets;";
+            (await command.ExecuteScalarAsync(ct)).Should().Be(1L);
+            command.CommandText = "SELECT COUNT(*) FROM source_assets;";
+            (await command.ExecuteScalarAsync(ct)).Should().Be(1L);
+            command.CommandText = "SELECT COUNT(*) FROM asset_user_data WHERE asset_id=$asset;";
+            command.Parameters.AddWithValue("$asset", asset.Id.ToString("D"));
+            (await command.ExecuteScalarAsync(ct)).Should().Be(1L);
+            command.CommandText = "SELECT COUNT(*) FROM metadata_snapshots;";
+            (await command.ExecuteScalarAsync(ct)).Should().Be(0L);
+            command.CommandText = "SELECT COUNT(*) FROM metadata_field_values;";
+            (await command.ExecuteScalarAsync(ct)).Should().Be(0L);
+            command.CommandText = "SELECT COUNT(*) FROM external_ids;";
+            (await command.ExecuteScalarAsync(ct)).Should().Be(0L);
+            command.CommandText = "SELECT COUNT(*) FROM artwork;";
+            (await command.ExecuteScalarAsync(ct)).Should().Be(0L);
+            command.CommandText = "SELECT COUNT(*) FROM catalog_aliases;";
+            (await command.ExecuteScalarAsync(ct)).Should().Be(0L);
+            command.CommandText = "SELECT COUNT(*) FROM match_candidates;";
+            (await command.ExecuteScalarAsync(ct)).Should().Be(0L);
+            command.CommandText = "SELECT COUNT(*) FROM tmdb_show_xrefs;";
+            (await command.ExecuteScalarAsync(ct)).Should().Be(0L);
+            command.CommandText = "SELECT COUNT(*) FROM tmdb_orderings;";
+            (await command.ExecuteScalarAsync(ct)).Should().Be(0L);
+            command.CommandText = "SELECT COUNT(*) FROM tmdb_episode_xrefs;";
+            (await command.ExecuteScalarAsync(ct)).Should().Be(0L);
+            command.CommandText = "SELECT COUNT(*) FROM node_user_data;";
+            (await command.ExecuteScalarAsync(ct)).Should().Be(0L);
+        }
+
+        File.Exists(mediaPath).Should().BeTrue();
+        File.Exists(localPosterPath).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ClearAllScrapeRecords_CollapsesAutomaticTopologyAndPreservesAssetState()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "video_library.sqlite3");
+        var sourcePath = Directory.CreateDirectory(Path.Combine(temp.Path, "Anime")).FullName;
+        var mediaPath = Path.Combine(sourcePath, "Show S01E01.mkv");
+        await File.WriteAllBytesAsync(mediaPath, [1, 2, 3, 4], ct);
+        var mediaHash = SHA256.HashData(await File.ReadAllBytesAsync(mediaPath, ct));
+        var sourceId = Guid.NewGuid();
+        var collectionId = Guid.NewGuid();
+        var now = new DateTimeOffset(2026, 8, 23, 12, 0, 0, TimeSpan.Zero);
+        await using var repository = Create(database, Path.Combine(temp.Path, "video_library.json"));
+        await repository.InitializeAsync(ct);
+        await repository.UpsertSourceAsync(new VideoLibrarySource
+        {
+            Id = sourceId.ToString("D"),
+            Name = "Anime",
+            FolderPath = sourcePath,
+            MediaType = VideoLibraryMediaType.Anime,
+        }, ct);
+        var parsed = new VideoFileNameParser().Parse(
+            mediaPath, sourcePath, VideoLibraryMediaType.Anime);
+        var generation = await repository.BeginSourceScanAsync(
+            sourceId, VideoCatalogJobKind.FullScan, ct);
+        (await repository.ApplyScanBatchAsync(new VideoScanBatch(
+            sourceId,
+            generation,
+            now,
+            [new VideoScanAsset(new VideoCatalogAssetUpsert(
+                mediaPath,
+                VideoMediaAssetKind.LocalFile,
+                mediaPath,
+                parsed.NormalizedTitle,
+                sourcePath,
+                4,
+                now,
+                now,
+                now,
+                VideoMediaAvailability.Available,
+                sourceId,
+                parsed.EpisodeStart,
+                parsed.EpisodeEnd), parsed)],
+            true), ct)).Should().BeTrue();
+        await repository.UpsertCollectionAsync(new VideoCollection
+        {
+            Id = collectionId.ToString("D"),
+            Name = "Keep collection",
+            Kind = VideoCollectionKind.Manual,
+        }, ct);
+        await repository.SetCollectionAssetsAsync(collectionId, [mediaPath], ct);
+        var assetId = (await repository.GetSnapshotAsync(ct)).Assets.Single().Id;
+        var remoteSeriesId = Guid.NewGuid();
+        var remoteSeasonId = Guid.NewGuid();
+        var remoteEpisodeId = Guid.NewGuid();
+        var remoteArtworkId = Guid.NewGuid();
+        var tagId = Guid.NewGuid();
+
+        await using (var connection = new SqliteConnection($"Data Source={database};Pooling=False"))
+        {
+            await connection.OpenAsync(ct);
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                DELETE FROM node_assets WHERE asset_id=$asset;
+                UPDATE asset_user_data
+                SET display_title='Keep display title',is_favorite=1,profile_id='profile',updated_at=$now
+                WHERE asset_id=$asset;
+                INSERT INTO tags(id,name,normalized_name) VALUES($tag,'keep-tag','keeptag');
+                INSERT INTO asset_tags(asset_id,tag_id) VALUES($asset,$tag);
+                INSERT INTO catalog_nodes(
+                    id,parent_id,kind,primary_title,is_special,identity_locked,created_at,updated_at)
+                VALUES($series,NULL,'series','Remote Show',0,0,$now,$now);
+                INSERT INTO catalog_nodes(
+                    id,parent_id,kind,primary_title,season_number,is_special,identity_locked,created_at,updated_at)
+                VALUES($season,$series,'season','Remote Season',99,0,0,$now,$now);
+                INSERT INTO catalog_nodes(
+                    id,parent_id,kind,primary_title,season_number,episode_number,is_special,
+                    identity_locked,created_at,updated_at)
+                VALUES($episode,$season,'episode','Remote Episode',99,8,0,0,$now,$now);
+                INSERT INTO node_assets(node_id,asset_id,is_preferred,ordinal)
+                VALUES($episode,$asset,1,0);
+                INSERT INTO metadata_field_values(
+                    node_id,field,value,provider_id,priority,is_locked,updated_at)
+                VALUES($series,'title','Remote Show','tmdb',200,0,$now);
+                INSERT INTO external_ids(node_id,provider_id,external_id,is_identity_locked)
+                VALUES($series,'tmdb','999',0);
+                INSERT INTO artwork(
+                    id,node_id,provider_id,kind,remote_url,local_path,selected,ordinal,created_at,updated_at)
+                VALUES($artwork,$series,'tmdb','poster','https://image.tmdb.org/remote.jpg',
+                       $cachePath,1,0,$now,$now);
+                INSERT INTO node_user_data(node_id,preferred_artwork_id,updated_at)
+                VALUES($series,$artwork,$now);
+                """;
+            command.Parameters.AddWithValue("$asset", assetId.ToString("D"));
+            command.Parameters.AddWithValue("$series", remoteSeriesId.ToString("D"));
+            command.Parameters.AddWithValue("$season", remoteSeasonId.ToString("D"));
+            command.Parameters.AddWithValue("$episode", remoteEpisodeId.ToString("D"));
+            command.Parameters.AddWithValue("$artwork", remoteArtworkId.ToString("D"));
+            command.Parameters.AddWithValue("$tag", tagId.ToString("D"));
+            command.Parameters.AddWithValue("$cachePath", Path.Combine(temp.Path, "remote.jpg"));
+            command.Parameters.AddWithValue("$now", now.ToString("O"));
+            await command.ExecuteNonQueryAsync(ct);
+        }
+
+        await repository.ClearAllScrapeRecordsAsync(ct);
+
+        var cleared = await repository.GetSnapshotAsync(ct);
+        cleared.Sources.Should().ContainSingle(source => source.Id == sourceId);
+        var clearedAsset = cleared.Assets.Should().ContainSingle().Subject;
+        clearedAsset.Id.Should().Be(assetId);
+        clearedAsset.Location.Should().Be(mediaPath);
+        clearedAsset.DisplayTitle.Should().Be("Keep display title");
+        clearedAsset.IsFavorite.Should().BeTrue();
+        clearedAsset.Tags.Should().Equal("keep-tag");
+        clearedAsset.CollectionIds.Should().Equal(collectionId);
+        cleared.Collections.Should().ContainSingle(collection =>
+            collection.Id == collectionId && collection.AssetIds.Contains(assetId));
+        cleared.Nodes.Select(node => node.Id).Should().NotContain(
+            [remoteSeriesId, remoteSeasonId, remoteEpisodeId]);
+        var unmatched = AssertResetToDistinctRootUnmatched(cleared, assetId);
+        unmatched.PrimaryTitle.Should().Be("Keep display title");
+        unmatched.ExternalIds.Should().BeEmpty();
+        unmatched.IdentityLockedProviders.Should().BeEmpty();
+        unmatched.Aliases.Should().BeEmpty();
+        unmatched.ArtworkCandidates.Should().BeEmpty();
+        SHA256.HashData(await File.ReadAllBytesAsync(mediaPath, ct)).Should().Equal(mediaHash);
+
+        await using var verification = new SqliteConnection($"Data Source={database};Pooling=False");
+        await verification.OpenAsync(ct);
+        using var verify = verification.CreateCommand();
+        verify.CommandText = "SELECT COUNT(*) FROM node_user_data WHERE node_id=$series;";
+        verify.Parameters.AddWithValue("$series", remoteSeriesId.ToString("D"));
+        (await verify.ExecuteScalarAsync(ct)).Should().Be(0L,
+            "an empty row left by deleted remote artwork must not protect automatic topology");
+        verify.CommandText = "SELECT COUNT(*) FROM source_assets WHERE asset_id=$asset;";
+        verify.Parameters.AddWithValue("$asset", assetId.ToString("D"));
+        (await verify.ExecuteScalarAsync(ct)).Should().Be(1L);
+        verify.CommandText = "SELECT COUNT(*) FROM asset_user_data WHERE asset_id=$asset;";
+        (await verify.ExecuteScalarAsync(ct)).Should().Be(1L);
+        verify.CommandText = "SELECT COUNT(*) FROM asset_tags WHERE asset_id=$asset;";
+        (await verify.ExecuteScalarAsync(ct)).Should().Be(1L);
+        verify.CommandText = "SELECT COUNT(*) FROM collection_assets WHERE asset_id=$asset;";
+        (await verify.ExecuteScalarAsync(ct)).Should().Be(1L);
+        verify.CommandText = "SELECT COUNT(*) FROM metadata_field_values;";
+        (await verify.ExecuteScalarAsync(ct)).Should().Be(0L);
+        verify.CommandText = "SELECT COUNT(*) FROM external_ids;";
+        (await verify.ExecuteScalarAsync(ct)).Should().Be(0L);
+        verify.CommandText = "SELECT COUNT(*) FROM artwork;";
+        (await verify.ExecuteScalarAsync(ct)).Should().Be(0L);
+    }
+
+    [Fact]
+    public async Task ClearAllScrapeRecords_PersistsResetMarkerUntilExplicitFullScan()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "video_library.sqlite3");
+        var legacy = Path.Combine(temp.Path, "video_library.json");
+        var sourcePath = Directory.CreateDirectory(Path.Combine(temp.Path, "Anime")).FullName;
+        var mediaPath = Path.Combine(sourcePath, "Marker Show S01E01.mkv");
+        var newMediaPath = Path.Combine(sourcePath, "Marker Show S01E02.mkv");
+        await File.WriteAllBytesAsync(mediaPath, [3, 1, 4], ct);
+        var sourceId = Guid.NewGuid();
+        var now = new DateTimeOffset(2026, 8, 23, 17, 0, 0, TimeSpan.Zero);
+        var parsed = new VideoFileNameParser().Parse(
+            mediaPath, sourcePath, VideoLibraryMediaType.Anime);
+        var scanAsset = new VideoScanAsset(new VideoCatalogAssetUpsert(
+            mediaPath, VideoMediaAssetKind.LocalFile, mediaPath, parsed.NormalizedTitle,
+            sourcePath, 3, now, now, now, VideoMediaAvailability.Available, sourceId,
+            parsed.EpisodeStart, parsed.EpisodeEnd), parsed);
+        Guid assetId;
+        Guid newAssetId;
+        VideoScanAsset newScanAsset;
+
+        await using (var repository = Create(database, legacy))
+        {
+            await repository.InitializeAsync(ct);
+            await repository.UpsertSourceAsync(new VideoLibrarySource
+            {
+                Id = sourceId.ToString("D"),
+                Name = "Anime",
+                FolderPath = sourcePath,
+                MediaType = VideoLibraryMediaType.Anime,
+            }, ct);
+            var fullGeneration = await repository.BeginSourceScanAsync(
+                sourceId, VideoCatalogJobKind.FullScan, ct);
+            (await repository.ApplyScanBatchAsync(new VideoScanBatch(
+                sourceId, fullGeneration, now, [scanAsset], true), ct)).Should().BeTrue();
+            assetId = (await repository.GetSnapshotAsync(ct)).Assets.Single().Id;
+
+            await repository.ClearAllScrapeRecordsAsync(ct);
+            var reset = await repository.GetSnapshotAsync(ct);
+            AssertResetToDistinctRootUnmatched(reset, assetId);
+            reset.Assets.Single(asset => asset.Id == assetId).CatalogResetPending.Should().BeTrue();
+
+            await File.WriteAllBytesAsync(newMediaPath, [1, 5, 9], ct);
+            var newParsed = new VideoFileNameParser().Parse(
+                newMediaPath, sourcePath, VideoLibraryMediaType.Anime);
+            newScanAsset = new VideoScanAsset(new VideoCatalogAssetUpsert(
+                newMediaPath, VideoMediaAssetKind.LocalFile, newMediaPath,
+                newParsed.NormalizedTitle, sourcePath, 3, now, now, now,
+                VideoMediaAvailability.Available, sourceId,
+                newParsed.EpisodeStart, newParsed.EpisodeEnd), newParsed);
+
+            var incrementalGeneration = await repository.BeginSourceScanAsync(
+                sourceId, VideoCatalogJobKind.IncrementalScan, ct);
+            (await repository.ApplyScanBatchAsync(new VideoScanBatch(
+                sourceId, incrementalGeneration, now.AddMinutes(1),
+                [scanAsset, newScanAsset], true), ct)).Should().BeTrue();
+            var afterIncremental = await repository.GetSnapshotAsync(ct);
+            newAssetId = afterIncremental.Assets.Single(asset =>
+                string.Equals(asset.Location, newMediaPath, StringComparison.OrdinalIgnoreCase)).Id;
+            AssertResetToDistinctRootUnmatched(afterIncremental, assetId);
+            AssertResetToDistinctRootUnmatched(afterIncremental, newAssetId);
+            afterIncremental.Assets.Should().OnlyContain(asset => asset.CatalogResetPending,
+                "the source-level marker also covers files first seen after the clear");
+        }
+
+        await using (var reopened = Create(database, legacy))
+        {
+            await reopened.InitializeAsync(ct);
+            var incrementalGeneration = await reopened.BeginSourceScanAsync(
+                sourceId, VideoCatalogJobKind.IncrementalScan, ct);
+            (await reopened.ApplyScanBatchAsync(new VideoScanBatch(
+                sourceId, incrementalGeneration, now.AddMinutes(2),
+                [scanAsset, newScanAsset], true), ct)).Should().BeTrue();
+            var afterReopenedIncremental = await reopened.GetSnapshotAsync(ct);
+            AssertResetToDistinctRootUnmatched(afterReopenedIncremental, assetId);
+            AssertResetToDistinctRootUnmatched(afterReopenedIncremental, newAssetId);
+            afterReopenedIncremental.Assets.Should().OnlyContain(asset => asset.CatalogResetPending,
+                "both asset and source reset markers persist in SQLite");
+
+            var fullGeneration = await reopened.BeginSourceScanAsync(
+                sourceId, VideoCatalogJobKind.FullScan, ct);
+            (await reopened.ApplyScanBatchAsync(new VideoScanBatch(
+                sourceId, fullGeneration, now.AddMinutes(3),
+                [scanAsset, newScanAsset], true), ct)).Should().BeTrue();
+            var rebuilt = await reopened.GetSnapshotAsync(ct);
+            rebuilt.Assets.Should().OnlyContain(asset => !asset.CatalogResetPending);
+            var series = rebuilt.Nodes.Should().ContainSingle(node =>
+                node.Kind == VideoCatalogNodeKind.Series).Subject;
+            var season = rebuilt.Nodes.Should().ContainSingle(node =>
+                node.Kind == VideoCatalogNodeKind.Season && node.ParentId == series.Id).Subject;
+            var episodes = rebuilt.Nodes.Where(node =>
+                    node.Kind == VideoCatalogNodeKind.Episode && node.ParentId == season.Id)
+                .OrderBy(node => node.EpisodeNumber)
+                .ToArray();
+            episodes.Should().HaveCount(2);
+            episodes.Select(node => node.EpisodeNumber).Should().Equal(1, 2);
+            rebuilt.Assets.Single(asset => asset.Id == assetId).NodeIds.Should().Equal(episodes[0].Id);
+            rebuilt.Assets.Single(asset => asset.Id == newAssetId).NodeIds.Should().Equal(episodes[1].Id);
+        }
+    }
+
+    [Fact]
+    public async Task PausedFullScan_IsStillFullAndClearsCatalogResetMarker()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var sourcePath = Directory.CreateDirectory(Path.Combine(temp.Path, "Anime")).FullName;
+        var mediaPath = Path.Combine(sourcePath, "Paused Show S01E01.mkv");
+        await File.WriteAllBytesAsync(mediaPath, [2, 7, 1], ct);
+        var sourceId = Guid.NewGuid();
+        var now = new DateTimeOffset(2026, 8, 23, 18, 0, 0, TimeSpan.Zero);
+        var parsed = new VideoFileNameParser().Parse(
+            mediaPath, sourcePath, VideoLibraryMediaType.Anime);
+        var scanAsset = new VideoScanAsset(new VideoCatalogAssetUpsert(
+            mediaPath, VideoMediaAssetKind.LocalFile, mediaPath, parsed.NormalizedTitle,
+            sourcePath, 3, now, now, now, VideoMediaAvailability.Available, sourceId,
+            parsed.EpisodeStart, parsed.EpisodeEnd), parsed);
+        await using var repository = Create(
+            Path.Combine(temp.Path, "video_library.sqlite3"),
+            Path.Combine(temp.Path, "video_library.json"));
+        await repository.InitializeAsync(ct);
+        await repository.UpsertSourceAsync(new VideoLibrarySource
+        {
+            Id = sourceId.ToString("D"),
+            Name = "Anime",
+            FolderPath = sourcePath,
+            MediaType = VideoLibraryMediaType.Anime,
+        }, ct);
+        var initialGeneration = await repository.BeginSourceScanAsync(
+            sourceId, VideoCatalogJobKind.FullScan, ct);
+        (await repository.ApplyScanBatchAsync(new VideoScanBatch(
+            sourceId, initialGeneration, now, [scanAsset], true), ct)).Should().BeTrue();
+        var assetId = (await repository.GetSnapshotAsync(ct)).Assets.Single().Id;
+        await repository.ClearAllScrapeRecordsAsync(ct);
+        (await repository.GetSnapshotAsync(ct)).Assets.Single().CatalogResetPending.Should().BeTrue();
+
+        var rebuildGeneration = await repository.BeginSourceScanAsync(
+            sourceId, VideoCatalogJobKind.FullScan, ct);
+        await repository.SetSourceScanPausedAsync(sourceId, true, ct);
+        (await repository.ApplyScanBatchAsync(new VideoScanBatch(
+            sourceId, rebuildGeneration, now.AddMinutes(1), [scanAsset], false,
+            IsFinal: false, TotalCount: 1), ct)).Should().BeTrue();
+
+        var rebuilt = await repository.GetSnapshotAsync(ct);
+        rebuilt.Assets.Single(asset => asset.Id == assetId).CatalogResetPending.Should().BeFalse();
+        rebuilt.Nodes.Should().ContainSingle(node => node.Kind == VideoCatalogNodeKind.Series);
+        rebuilt.Nodes.Should().ContainSingle(node => node.Kind == VideoCatalogNodeKind.Season);
+        rebuilt.Nodes.Should().ContainSingle(node => node.Kind == VideoCatalogNodeKind.Episode);
+        rebuilt.Jobs.Should().ContainSingle(job =>
+            job.Generation == rebuildGeneration && job.State == VideoCatalogJobState.Paused);
+    }
+
+    [Fact]
+    public async Task ClearAllScrapeRecords_RemovesAutomaticAniDbAidAndEidLocks()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "video_library.sqlite3");
+        var sourcePath = Directory.CreateDirectory(Path.Combine(temp.Path, "Anime")).FullName;
+        var mediaPath = Path.Combine(sourcePath, "Automatic Show S01E01.mkv");
+        await File.WriteAllBytesAsync(mediaPath, [4, 2], ct);
+        var sourceId = Guid.NewGuid();
+        var now = new DateTimeOffset(2026, 8, 23, 15, 0, 0, TimeSpan.Zero);
+        await using var repository = Create(database, Path.Combine(temp.Path, "video_library.json"));
+        await repository.InitializeAsync(ct);
+        await repository.UpsertSourceAsync(new VideoLibrarySource
+        {
+            Id = sourceId.ToString("D"), Name = "Anime", FolderPath = sourcePath,
+            MediaType = VideoLibraryMediaType.Anime,
+        }, ct);
+        var parsed = new VideoFileNameParser().Parse(
+            mediaPath, sourcePath, VideoLibraryMediaType.Anime);
+        var generation = await repository.BeginSourceScanAsync(
+            sourceId, VideoCatalogJobKind.FullScan, ct);
+        (await repository.ApplyScanBatchAsync(new VideoScanBatch(
+            sourceId,
+            generation,
+            now,
+            [new VideoScanAsset(new VideoCatalogAssetUpsert(
+                mediaPath, VideoMediaAssetKind.LocalFile, mediaPath, parsed.NormalizedTitle,
+                sourcePath, 2, now, now, now, VideoMediaAvailability.Available, sourceId,
+                parsed.EpisodeStart, parsed.EpisodeEnd), parsed)],
+            true), ct)).Should().BeTrue();
+        var assetId = (await repository.GetSnapshotAsync(ct)).Assets.Single().Id;
+        await repository.ApplyAniDbIdentityAsync(
+            assetId, CreateAniDbProjection(101, 1001, 1, now), ct);
+        var projected = await repository.GetSnapshotAsync(ct);
+        projected.Nodes.Should().Contain(node =>
+            node.ExternalIds.GetValueOrDefault("anidb") == "101"
+            && node.IdentityLockedProviders.Contains("anidb"));
+        projected.Nodes.Should().Contain(node =>
+            node.ExternalIds.GetValueOrDefault("anidb-episode") == "1001"
+            && node.IdentityLockedProviders.Contains("anidb-episode"));
+
+        await repository.ClearAllScrapeRecordsAsync(ct);
+
+        var cleared = await repository.GetSnapshotAsync(ct);
+        var unmatched = AssertResetToDistinctRootUnmatched(cleared, assetId);
+        unmatched.ExternalIds.Should().NotContainKey("anidb")
+            .And.NotContainKey("anidb-episode");
+        unmatched.IdentityLocked.Should().BeFalse();
+        unmatched.IdentityLockedProviders.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ClearAllScrapeRecords_DoesNotProjectManualAniDbWhitelistIntoResetCatalog()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "video_library.sqlite3");
+        var sourcePath = Directory.CreateDirectory(Path.Combine(temp.Path, "Anime")).FullName;
+        var mediaPath = Path.Combine(sourcePath, "Changed Manual Show S01E01.mkv");
+        await File.WriteAllBytesAsync(mediaPath, [5], ct);
+        var sourceId = Guid.NewGuid();
+        var now = new DateTimeOffset(2026, 8, 23, 15, 30, 0, TimeSpan.Zero);
+        await using var repository = Create(database, Path.Combine(temp.Path, "video_library.json"));
+        await repository.InitializeAsync(ct);
+        await repository.UpsertSourceAsync(new VideoLibrarySource
+        {
+            Id = sourceId.ToString("D"), Name = "Anime", FolderPath = sourcePath,
+            MediaType = VideoLibraryMediaType.Anime,
+        }, ct);
+        var parsed = new VideoFileNameParser().Parse(
+            mediaPath, sourcePath, VideoLibraryMediaType.Anime);
+        var generation = await repository.BeginSourceScanAsync(
+            sourceId, VideoCatalogJobKind.FullScan, ct);
+        (await repository.ApplyScanBatchAsync(new VideoScanBatch(
+            sourceId,
+            generation,
+            now,
+            [new VideoScanAsset(new VideoCatalogAssetUpsert(
+                mediaPath, VideoMediaAssetKind.LocalFile, mediaPath, parsed.NormalizedTitle,
+                sourcePath, 1, now, now, now, VideoMediaAvailability.Available, sourceId,
+                parsed.EpisodeStart, parsed.EpisodeEnd), parsed)],
+            true), ct)).Should().BeTrue();
+        var assetId = (await repository.GetSnapshotAsync(ct)).Assets.Single().Id;
+        await repository.ApplyAniDbIdentityAsync(
+            assetId, CreateAniDbProjection(101, 1001, 1, now), ct);
+
+        await repository.ClearAllScrapeRecordsAsync(
+            [new VideoManualAniDbIdentity(
+                assetId,
+                System.Collections.Immutable.ImmutableHashSet.Create(202),
+                System.Collections.Immutable.ImmutableHashSet.Create(2002))],
+            ct);
+
+        var cleared = await repository.GetSnapshotAsync(ct);
+        var unmatched = AssertResetToDistinctRootUnmatched(cleared, assetId);
+        unmatched.ExternalIds.Should().BeEmpty(
+            "the manual whitelist remains authoritative in the independent AniDB store only");
+        unmatched.IdentityLocked.Should().BeFalse();
+        unmatched.IdentityLockedProviders.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ClearAllScrapeRecords_DoesNotCarryExactManualAidOrStaleEidIntoUnmatched()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var mediaPath = Path.Combine(temp.Path, "Mixed Identity S01E01.mkv");
+        await File.WriteAllBytesAsync(mediaPath, [7], ct);
+        var now = new DateTimeOffset(2026, 8, 23, 15, 45, 0, TimeSpan.Zero);
+        await using var repository = Create(
+            Path.Combine(temp.Path, "video_library.sqlite3"),
+            Path.Combine(temp.Path, "video_library.json"));
+        await repository.InitializeAsync(ct);
+        await repository.UpsertAssetAsync(new VideoCatalogAssetUpsert(
+            mediaPath,
+            VideoMediaAssetKind.LocalFile,
+            mediaPath,
+            "Mixed Identity",
+            temp.Path,
+            1,
+            now,
+            now,
+            now,
+            VideoMediaAvailability.Available,
+            EpisodeStart: 1,
+            EpisodeEnd: 1), ct);
+        var assetId = (await repository.GetSnapshotAsync(ct)).Assets.Single().Id;
+        await repository.ApplyAniDbIdentityAsync(
+            assetId, CreateAniDbProjection(101, 1001, 1, now), ct);
+        var projectedEpisode = (await repository.GetSnapshotAsync(ct)).Nodes.Single(node =>
+            node.ExternalIds.GetValueOrDefault("anidb-episode") == "1001");
+        projectedEpisode.ExternalIds.Should().Contain("anidb", "101");
+
+        await repository.ClearAllScrapeRecordsAsync(
+            [new VideoManualAniDbIdentity(
+                assetId,
+                System.Collections.Immutable.ImmutableHashSet.Create(101),
+                System.Collections.Immutable.ImmutableHashSet.Create(2002))],
+            ct);
+
+        var cleared = await repository.GetSnapshotAsync(ct);
+        var unmatched = AssertResetToDistinctRootUnmatched(cleared, assetId);
+        unmatched.ExternalIds.Should().BeEmpty();
+        unmatched.IdentityLocked.Should().BeFalse();
+        unmatched.IdentityLockedProviders.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ClearAllScrapeRecords_LeavesBothManualAndAutomaticAniDbAssetsUnmatchedAndUnprojected()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "video_library.sqlite3");
+        var sourcePath = Directory.CreateDirectory(Path.Combine(temp.Path, "Anime")).FullName;
+        var manualPath = Path.Combine(sourcePath, "Shared Show S01E01.mkv");
+        var automaticPath = Path.Combine(sourcePath, "Shared Show S01E02.mkv");
+        await File.WriteAllBytesAsync(manualPath, [1], ct);
+        await File.WriteAllBytesAsync(automaticPath, [2], ct);
+        var sourceId = Guid.NewGuid();
+        var now = new DateTimeOffset(2026, 8, 23, 16, 0, 0, TimeSpan.Zero);
+        await using var repository = Create(database, Path.Combine(temp.Path, "video_library.json"));
+        await repository.InitializeAsync(ct);
+        await repository.UpsertSourceAsync(new VideoLibrarySource
+        {
+            Id = sourceId.ToString("D"), Name = "Anime", FolderPath = sourcePath,
+            MediaType = VideoLibraryMediaType.Anime,
+        }, ct);
+        var parsedByPath = VideoScanBundleClassifier.Parse(
+            [manualPath, automaticPath], sourcePath, VideoLibraryMediaType.Anime,
+            new VideoFileNameParser());
+        var generation = await repository.BeginSourceScanAsync(
+            sourceId, VideoCatalogJobKind.FullScan, ct);
+        var scanAssets = new[] { manualPath, automaticPath }
+            .Select(path => new VideoScanAsset(new VideoCatalogAssetUpsert(
+                    path, VideoMediaAssetKind.LocalFile, path,
+                    parsedByPath[path].NormalizedTitle, sourcePath, 1, now, now, now,
+                    VideoMediaAvailability.Available, sourceId,
+                    parsedByPath[path].EpisodeStart, parsedByPath[path].EpisodeEnd),
+                parsedByPath[path]))
+            .ToArray();
+        (await repository.ApplyScanBatchAsync(new VideoScanBatch(
+            sourceId, generation, now, scanAssets, true), ct)).Should().BeTrue();
+        var assets = (await repository.GetSnapshotAsync(ct)).Assets
+            .ToDictionary(asset => asset.Location, StringComparer.OrdinalIgnoreCase);
+        var manualAssetId = assets[manualPath].Id;
+        var automaticAssetId = assets[automaticPath].Id;
+        await repository.ApplyAniDbIdentityAsync(
+            manualAssetId, CreateAniDbProjection(101, 1001, 1, now), ct);
+        await repository.ApplyAniDbIdentityAsync(
+            automaticAssetId, CreateAniDbProjection(101, 1002, 2, now), ct);
+
+        await repository.ClearAllScrapeRecordsAsync(
+            [new VideoManualAniDbIdentity(
+                manualAssetId,
+                System.Collections.Immutable.ImmutableHashSet.Create(101),
+                System.Collections.Immutable.ImmutableHashSet.Create(1001))],
+            ct);
+
+        var cleared = await repository.GetSnapshotAsync(ct);
+        var manualUnmatched = AssertResetToDistinctRootUnmatched(cleared, manualAssetId);
+        manualUnmatched.ExternalIds.Should().BeEmpty(
+            "manual AniDB identity survives only in the separate AniDB store until explicit re-projection");
+        manualUnmatched.IdentityLocked.Should().BeFalse();
+        manualUnmatched.IdentityLockedProviders.Should().BeEmpty();
+
+        var automaticUnmatched = AssertResetToDistinctRootUnmatched(cleared, automaticAssetId);
+        automaticUnmatched.Id.Should().NotBe(manualUnmatched.Id);
+        automaticUnmatched.ExternalIds.Should().NotContainKey("anidb")
+            .And.NotContainKey("anidb-episode");
+        automaticUnmatched.IdentityLockedProviders.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ClearAllScrapeRecords_ClearsPersistedLocalNfoProjectionAndPreservesSidecarFile()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "video_library.sqlite3");
+        var sourcePath = Directory.CreateDirectory(Path.Combine(temp.Path, "Anime")).FullName;
+        var mediaPath = Path.Combine(sourcePath, "Show S01E01.mkv");
+        var sidecarPath = Path.Combine(sourcePath, "Show S01E01.nfo");
+        await File.WriteAllBytesAsync(mediaPath, [9, 8, 7, 6, 5], ct);
+        await File.WriteAllBytesAsync(sidecarPath, [6, 7, 8, 9], ct);
+        var mediaHash = SHA256.HashData(await File.ReadAllBytesAsync(mediaPath, ct));
+        var sourceId = Guid.NewGuid();
+        var now = new DateTimeOffset(2026, 8, 23, 13, 0, 0, TimeSpan.Zero);
+        await using var repository = Create(database, Path.Combine(temp.Path, "video_library.json"));
+        await repository.InitializeAsync(ct);
+        await repository.UpsertSourceAsync(new VideoLibrarySource
+        {
+            Id = sourceId.ToString("D"),
+            Name = "Anime",
+            FolderPath = sourcePath,
+            MediaType = VideoLibraryMediaType.Anime,
+        }, ct);
+        var parsed = new VideoFileNameParser().Parse(
+            mediaPath, sourcePath, VideoLibraryMediaType.Anime);
+        var local = LocalVideoMetadata.Empty with
+        {
+            Title = "Local Show",
+            SeasonNumber = 4,
+            EpisodeNumber = 7,
+            AbsoluteEpisodeNumber = 42,
+            ContainerMetadata = LocalVideoMetadataValues.Empty with { Title = "Local Show" },
+            SeasonMetadata = LocalVideoMetadataValues.Empty with
+            {
+                Title = "Local Season 4",
+                SeasonNumber = 4,
+            },
+            EpisodeMetadata = LocalVideoMetadataValues.Empty with
+            {
+                Title = "Local Episode 7",
+                SeasonNumber = 4,
+                EpisodeNumber = 7,
+                AbsoluteEpisodeNumber = 42,
+            },
+        };
+        var generation = await repository.BeginSourceScanAsync(
+            sourceId, VideoCatalogJobKind.FullScan, ct);
+        (await repository.ApplyScanBatchAsync(new VideoScanBatch(
+            sourceId,
+            generation,
+            now,
+            [new VideoScanAsset(new VideoCatalogAssetUpsert(
+                mediaPath,
+                VideoMediaAssetKind.LocalFile,
+                mediaPath,
+                parsed.NormalizedTitle,
+                sourcePath,
+                5,
+                now,
+                now,
+                now,
+                VideoMediaAvailability.Available,
+                sourceId,
+                parsed.EpisodeStart,
+                parsed.EpisodeEnd), parsed, local)],
+            true), ct)).Should().BeTrue();
+        var before = await repository.GetSnapshotAsync(ct);
+        var seasonId = before.Nodes.Single(node =>
+            node.Kind == VideoCatalogNodeKind.Season && node.SeasonNumber == 4).Id;
+        var episodeId = before.Nodes.Single(node =>
+            node.Kind == VideoCatalogNodeKind.Episode && node.EpisodeNumber == 7).Id;
+
+        await using (var connection = new SqliteConnection($"Data Source={database};Pooling=False"))
+        {
+            await connection.OpenAsync(ct);
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                SELECT value FROM metadata_field_values
+                WHERE node_id=$episode AND provider_id='local' AND field='localScope';
+                """;
+            command.Parameters.AddWithValue("$episode", episodeId.ToString("D"));
+            (await command.ExecuteScalarAsync(ct)).Should().Be("episode");
+            command.CommandText =
+                """
+                SELECT value FROM metadata_field_values
+                WHERE node_id=$episode AND provider_id='local' AND field='seasonNumber';
+                """;
+            (await command.ExecuteScalarAsync(ct)).Should().Be("4");
+            command.CommandText =
+                """
+                SELECT value FROM metadata_field_values
+                WHERE node_id=$episode AND provider_id='local' AND field='episodeNumber';
+                """;
+            (await command.ExecuteScalarAsync(ct)).Should().Be("7");
+            command.CommandText =
+                """
+                SELECT value FROM metadata_field_values
+                WHERE node_id=$episode AND provider_id='local' AND field='absoluteEpisodeNumber';
+                """;
+            (await command.ExecuteScalarAsync(ct)).Should().Be("42");
+
+            command.CommandText =
+                """
+                UPDATE catalog_nodes SET season_number=99,is_special=0 WHERE id=$season;
+                UPDATE catalog_nodes
+                SET season_number=99,episode_number=8,absolute_episode_number=88,is_special=0
+                WHERE id=$episode;
+                """;
+            command.Parameters.AddWithValue("$season", seasonId.ToString("D"));
+            await command.ExecuteNonQueryAsync(ct);
+        }
+
+        await repository.ClearAllScrapeRecordsAsync(ct);
+
+        var cleared = await repository.GetSnapshotAsync(ct);
+        var clearedAsset = cleared.Assets.Should().ContainSingle().Subject;
+        clearedAsset.Location.Should().Be(mediaPath);
+        var unmatched = AssertResetToDistinctRootUnmatched(cleared, clearedAsset.Id);
+        unmatched.Id.Should().NotBe(seasonId).And.NotBe(episodeId);
+        unmatched.PrimaryTitle.Should().Be(clearedAsset.Title)
+            .And.NotBe("Local Show")
+            .And.NotBe("Local Episode 7");
+        unmatched.SeasonNumber.Should().BeNull();
+        unmatched.EpisodeNumber.Should().BeNull();
+        unmatched.AbsoluteEpisodeNumber.Should().BeNull();
+        unmatched.Aliases.Should().BeEmpty();
+        unmatched.ExternalIds.Should().BeEmpty();
+
+        await using (var connection = new SqliteConnection($"Data Source={database};Pooling=False"))
+        {
+            await connection.OpenAsync(ct);
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT COUNT(*) FROM metadata_field_values WHERE provider_id='local';";
+            (await command.ExecuteScalarAsync(ct)).Should().Be(0L,
+                "Local NFO values are rebuildable catalog projections");
+        }
+
+        SHA256.HashData(await File.ReadAllBytesAsync(mediaPath, ct)).Should().Equal(mediaHash);
+        (await File.ReadAllBytesAsync(sidecarPath, ct)).Should().Equal(6, 7, 8, 9);
+    }
+
+    [Fact]
+    public async Task ClearAllScrapeRecords_ClearsTitleOnlyLocalNfoProjectionWithoutRebuildingHierarchy()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "video_library.sqlite3");
+        var sourcePath = Directory.CreateDirectory(Path.Combine(temp.Path, "Anime")).FullName;
+        var mediaPath = Path.Combine(sourcePath, "Title Only Show S01E01.mkv");
+        await File.WriteAllBytesAsync(mediaPath, [2, 4, 6], ct);
+        var sourceId = Guid.NewGuid();
+        var now = new DateTimeOffset(2026, 8, 23, 13, 30, 0, TimeSpan.Zero);
+        await using var repository = Create(database, Path.Combine(temp.Path, "video_library.json"));
+        await repository.InitializeAsync(ct);
+        await repository.UpsertSourceAsync(new VideoLibrarySource
+        {
+            Id = sourceId.ToString("D"), Name = "Anime", FolderPath = sourcePath,
+            MediaType = VideoLibraryMediaType.Anime,
+        }, ct);
+        var parsed = new VideoFileNameParser().Parse(
+            mediaPath, sourcePath, VideoLibraryMediaType.Anime);
+        var local = LocalVideoMetadata.Empty with
+        {
+            Title = "Local Episode Title",
+            EpisodeMetadata = LocalVideoMetadataValues.Empty with
+            {
+                Title = "Local Episode Title",
+            },
+        };
+        var generation = await repository.BeginSourceScanAsync(
+            sourceId, VideoCatalogJobKind.FullScan, ct);
+        (await repository.ApplyScanBatchAsync(new VideoScanBatch(
+            sourceId,
+            generation,
+            now,
+            [new VideoScanAsset(new VideoCatalogAssetUpsert(
+                mediaPath, VideoMediaAssetKind.LocalFile, mediaPath, parsed.NormalizedTitle,
+                sourcePath, 3, now, now, now, VideoMediaAvailability.Available, sourceId,
+                parsed.EpisodeStart, parsed.EpisodeEnd), parsed, local)],
+            true), ct)).Should().BeTrue();
+
+        var before = await repository.GetSnapshotAsync(ct);
+        var seasonId = before.Nodes.Single(node =>
+            node.Kind == VideoCatalogNodeKind.Season).Id;
+        var episodeId = before.Nodes.Single(node =>
+            node.Kind == VideoCatalogNodeKind.Episode).Id;
+        await using (var connection = new SqliteConnection($"Data Source={database};Pooling=False"))
+        {
+            await connection.OpenAsync(ct);
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                UPDATE catalog_nodes SET season_number=9,is_special=1 WHERE id=$season;
+                UPDATE catalog_nodes
+                SET season_number=9,episode_number=8,absolute_episode_number=88,is_special=1
+                WHERE id=$episode;
+                """;
+            command.Parameters.AddWithValue("$season", seasonId.ToString("D"));
+            command.Parameters.AddWithValue("$episode", episodeId.ToString("D"));
+            await command.ExecuteNonQueryAsync(ct);
+
+            command.CommandText =
+                """
+                SELECT COUNT(*) FROM metadata_field_values
+                WHERE node_id=$episode AND provider_id='local' AND field='localScope'
+                  AND value='episode';
+                """;
+            (await command.ExecuteScalarAsync(ct)).Should().Be(1L);
+            command.CommandText =
+                """
+                SELECT COUNT(*) FROM metadata_field_values
+                WHERE node_id=$episode AND provider_id='local'
+                  AND field IN ('seasonNumber','episodeNumber','absoluteEpisodeNumber','isSpecial');
+                """;
+            (await command.ExecuteScalarAsync(ct)).Should().Be(0L,
+                "a title-only NFO must not persist current remote node numbers as Local structure");
+        }
+
+        await repository.ClearAllScrapeRecordsAsync(ct);
+
+        var cleared = await repository.GetSnapshotAsync(ct);
+        var clearedAsset = cleared.Assets.Should().ContainSingle().Subject;
+        var unmatched = AssertResetToDistinctRootUnmatched(cleared, clearedAsset.Id);
+        unmatched.Id.Should().NotBe(seasonId).And.NotBe(episodeId);
+        unmatched.PrimaryTitle.Should().Be(clearedAsset.Title)
+            .And.NotBe("Local Episode Title");
+        unmatched.SeasonNumber.Should().BeNull();
+        unmatched.EpisodeNumber.Should().BeNull();
+        unmatched.AbsoluteEpisodeNumber.Should().BeNull();
+        unmatched.IsSpecial.Should().BeFalse();
+
+        await using (var connection = new SqliteConnection($"Data Source={database};Pooling=False"))
+        {
+            await connection.OpenAsync(ct);
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT COUNT(*) FROM metadata_field_values WHERE provider_id='local';";
+            (await command.ExecuteScalarAsync(ct)).Should().Be(0L);
+        }
+
+        (await File.ReadAllBytesAsync(mediaPath, ct)).Should().Equal(2, 4, 6);
+    }
+
+    [Fact]
+    public async Task ClearAllScrapeRecords_ClearsLegacyLocalProjectionWithoutKeepingItsHierarchy()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "video_library.sqlite3");
+        var sourcePath = Directory.CreateDirectory(Path.Combine(temp.Path, "Anime")).FullName;
+        var mediaPath = Path.Combine(sourcePath, "Legacy Show S01E01.mkv");
+        await File.WriteAllBytesAsync(mediaPath, [1, 3, 5], ct);
+        var sourceId = Guid.NewGuid();
+        var now = new DateTimeOffset(2026, 8, 23, 14, 0, 0, TimeSpan.Zero);
+        await using var repository = Create(database, Path.Combine(temp.Path, "video_library.json"));
+        await repository.InitializeAsync(ct);
+        await repository.UpsertSourceAsync(new VideoLibrarySource
+        {
+            Id = sourceId.ToString("D"), Name = "Anime", FolderPath = sourcePath,
+            MediaType = VideoLibraryMediaType.Anime,
+        }, ct);
+        var parsed = new VideoFileNameParser().Parse(
+            mediaPath, sourcePath, VideoLibraryMediaType.Anime);
+        var local = LocalVideoMetadata.Empty with
+        {
+            Title = "Legacy Local Show",
+            SeasonNumber = 3,
+            EpisodeNumber = 6,
+            AbsoluteEpisodeNumber = 30,
+            ContainerMetadata = LocalVideoMetadataValues.Empty with { Title = "Legacy Local Show" },
+            SeasonMetadata = LocalVideoMetadataValues.Empty with { Title = "Legacy Season", SeasonNumber = 3 },
+            EpisodeMetadata = LocalVideoMetadataValues.Empty with
+            {
+                Title = "Legacy Episode", SeasonNumber = 3, EpisodeNumber = 6,
+                AbsoluteEpisodeNumber = 30,
+            },
+        };
+        var generation = await repository.BeginSourceScanAsync(
+            sourceId, VideoCatalogJobKind.FullScan, ct);
+        (await repository.ApplyScanBatchAsync(new VideoScanBatch(
+            sourceId,
+            generation,
+            now,
+            [new VideoScanAsset(new VideoCatalogAssetUpsert(
+                mediaPath, VideoMediaAssetKind.LocalFile, mediaPath, parsed.NormalizedTitle,
+                sourcePath, 3, now, now, now, VideoMediaAvailability.Available, sourceId,
+                parsed.EpisodeStart, parsed.EpisodeEnd), parsed, local)],
+            true), ct)).Should().BeTrue();
+
+        await using (var connection = new SqliteConnection($"Data Source={database};Pooling=False"))
+        {
+            await connection.OpenAsync(ct);
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                DELETE FROM metadata_field_values
+                WHERE provider_id='local'
+                  AND field IN ('localScope','seasonNumber','episodeNumber',
+                                'absoluteEpisodeNumber','isSpecial');
+                """;
+            await command.ExecuteNonQueryAsync(ct);
+        }
+
+        await repository.ClearAllScrapeRecordsAsync(ct);
+
+        var cleared = await repository.GetSnapshotAsync(ct);
+        var clearedAsset = cleared.Assets.Should().ContainSingle().Subject;
+        var unmatched = AssertResetToDistinctRootUnmatched(cleared, clearedAsset.Id);
+        unmatched.PrimaryTitle.Should().Be(clearedAsset.Title)
+            .And.NotBe("Legacy Local Show")
+            .And.NotBe("Legacy Episode");
+        unmatched.SeasonNumber.Should().BeNull();
+        unmatched.EpisodeNumber.Should().BeNull();
+        unmatched.AbsoluteEpisodeNumber.Should().BeNull();
+
+        await using (var connection = new SqliteConnection($"Data Source={database};Pooling=False"))
+        {
+            await connection.OpenAsync(ct);
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT COUNT(*) FROM metadata_field_values WHERE provider_id='local';";
+            (await command.ExecuteScalarAsync(ct)).Should().Be(0L);
+        }
+
+        (await File.ReadAllBytesAsync(mediaPath, ct)).Should().Equal(1, 3, 5);
+    }
+
+    private static VideoAniDbIdentityProjection CreateAniDbProjection(
+        int animeId,
+        int episodeId,
+        int episodeNumber,
+        DateTimeOffset now,
+        string? groupId = null)
+    {
+        var animeIdText = animeId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var details = new VideoMetadataDetails(
+            "anidb", animeIdText, VideoMetadataMediaKind.Anime,
+            "Shared Show", "Shared Show", null, "AniDB overview", 2026,
+            null, null, null, ["Shared Show"], [], [],
+            System.Collections.Immutable.ImmutableDictionary<string, string>.Empty
+                .Add("anidb", animeIdText),
+            $"https://anidb.net/anime/{animeIdText}", now, now.AddDays(30));
+        return new VideoAniDbIdentityProjection(
+            animeId,
+            animeId * 100 + episodeNumber,
+            groupId ?? $"group-{animeIdText}",
+            details,
+            [new VideoAniDbEpisodeProjection(
+                episodeId, 1, episodeNumber, $"Episode {episodeNumber}",
+                $"Episode {episodeNumber}", null, 0, 100, false,
+                new DateOnly(2026, 1, episodeNumber))
+            {
+                AnimeId = animeId,
+            }]);
+    }
+
+    private static VideoCatalogNodeSnapshot AssertResetToDistinctRootUnmatched(
+        VideoCatalogSnapshot snapshot,
+        Guid assetId)
+    {
+        snapshot.Nodes.Should().HaveCount(snapshot.Assets.Length);
+        snapshot.Nodes.Should().OnlyContain(node =>
+            node.Kind == VideoCatalogNodeKind.Unmatched && node.ParentId == null);
+        snapshot.Assets.Should().OnlyContain(asset => asset.NodeIds.Length == 1);
+        snapshot.Assets.SelectMany(asset => asset.NodeIds).Distinct()
+            .Should().HaveCount(snapshot.Assets.Length);
+
+        var asset = snapshot.Assets.Single(item => item.Id == assetId);
+        return snapshot.Nodes.Single(node => node.Id == asset.NodeIds.Single());
     }
 
     private static SQLiteVideoCatalogRepository Create(string database, string legacy) =>

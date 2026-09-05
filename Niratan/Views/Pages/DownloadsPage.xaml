@@ -5,7 +5,7 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:components="using:Niratan.ViewModels.Components"
       xmlns:converters="using:Niratan.Helpers.UI.Converters"
-      xmlns:nyaa="using:Niratan.Models.Nyaa"
+      xmlns:viewModels="using:Niratan.ViewModels.Pages"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       mc:Ignorable="d">
@@ -65,11 +65,18 @@
                                     AutomationProperties.AutomationId="DownloadsDiscoveryTab"
                                     Content="Discover"
                                     Tag="discovery" />
-                <NavigationViewItem x:Uid="DownloadsTasksTab"
+                <NavigationViewItem x:Name="DownloadsTasksNavItem"
+                                    x:Uid="DownloadsTasksTab"
                                     AutomationProperties.AutomationId="DownloadsTasksTab"
                                     Content="Tasks"
                                     Tag="tasks" />
-                <NavigationViewItem x:Uid="DownloadsSettingsTab"
+                <NavigationViewItem x:Name="DownloadsSubscriptionsNavItem"
+                                    x:Uid="DownloadsSubscriptionsTab"
+                                    AutomationProperties.AutomationId="DownloadsSubscriptionsTab"
+                                    Content="Subscriptions"
+                                    Tag="subscriptions" />
+                <NavigationViewItem x:Name="DownloadsSettingsNavItem"
+                                    x:Uid="DownloadsSettingsTab"
                                     AutomationProperties.AutomationId="DownloadsSettingsTab"
                                     Content="Download settings"
                                     Tag="settings" />
@@ -163,8 +170,7 @@
               Margin="20,12,0,0"
               Visibility="{x:Bind ViewModel.IsTasksVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
             <Grid RowDefinitions="Auto,Auto,*" RowSpacing="10">
-                <TextBlock x:Uid="DownloadsTaskStatusText"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            Text="{x:Bind ViewModel.TaskStatusText, Mode=OneWay}"
                            TextWrapping="Wrap" />
                 <InfoBar Grid.Row="1"
@@ -258,16 +264,16 @@
                         </Style>
                     </ListView.ItemContainerStyle>
                     <ListView.ItemTemplate>
-                        <DataTemplate x:DataType="nyaa:NyaaDownloadTaskSnapshot">
+                        <DataTemplate x:DataType="viewModels:NyaaDownloadTaskItemViewModel">
                             <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto" ColumnSpacing="12" RowSpacing="6" Padding="4,8">
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="{x:Bind Item.Title}"
                                                TextTrimming="CharacterEllipsis"
                                                Style="{StaticResource BodyStrongTextBlockStyle}" />
                                     <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                               Text="{x:Bind StateText}" />
+                                               Text="{x:Bind StateText, Mode=OneWay}" />
                                     <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                               Text="{x:Bind Status}"
+                                               Text="{x:Bind Status, Mode=OneWay}"
                                                TextWrapping="Wrap" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
@@ -326,6 +332,116 @@
             </Grid>
         </Grid>
 
+        <Grid Grid.Row="2"
+              Margin="20,12,0,0"
+              Visibility="{x:Bind ViewModel.IsSubscriptionsVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+            <Grid RowDefinitions="Auto,Auto,*" RowSpacing="10">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <StackPanel Spacing="3">
+                        <TextBlock x:Uid="DownloadsSubscriptionsHeading"
+                                   Text="Video subscriptions"
+                                   Style="{StaticResource SubtitleTextBlockStyle}" />
+                        <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Text="{x:Bind ViewModel.SubscriptionStatusText, Mode=OneWay}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Button Grid.Column="1"
+                            x:Uid="DownloadsCheckAllSubscriptionsButton"
+                            AutomationProperties.AutomationId="DownloadsCheckAllSubscriptionsButton"
+                            Command="{x:Bind ViewModel.CheckAllSubscriptionsCommand}"
+                            Content="Check all"
+                            IsEnabled="{x:Bind ViewModel.CanCheckAllSubscriptions, Mode=OneWay}" />
+                </Grid>
+                <InfoBar Grid.Row="1"
+                         IsClosable="False"
+                         IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}"
+                         Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
+                         Severity="Warning" />
+                <Grid Grid.Row="2">
+                    <TextBlock x:Uid="DownloadsSubscriptionsEmptyText"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="Create a subscription from a Video discovery detail page."
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               Visibility="{x:Bind ViewModel.IsSubscriptionEmpty, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                    <ListView AutomationProperties.AutomationId="DownloadsSubscriptionsList"
+                              ItemsSource="{x:Bind ViewModel.Subscriptions, Mode=OneWay}"
+                              SelectionMode="None"
+                              ScrollViewer.VerticalScrollBarVisibility="Auto">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Padding" Value="4,6" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="viewModels:NyaaSubscriptionItemViewModel">
+                                <Border Padding="12"
+                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="8">
+                                    <Grid ColumnDefinitions="40,*,Auto" ColumnSpacing="10">
+                                        <Border Width="40"
+                                                Height="60"
+                                                Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                                CornerRadius="5">
+                                            <Grid>
+                                                <FontIcon HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center"
+                                                          FontSize="18"
+                                                          Glyph="&#xE8A1;" />
+                                                <Image Source="{x:Bind PosterImage, Mode=OneTime}"
+                                                       Stretch="UniformToFill" />
+                                            </Grid>
+                                        </Border>
+                                        <StackPanel Grid.Column="1" Spacing="4">
+                                            <TextBlock Text="{x:Bind Title}"
+                                                       Style="{StaticResource BodyStrongTextBlockStyle}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                                       Text="{x:Bind StateText}" />
+                                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       Text="{x:Bind RulesText}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       Text="{x:Bind BackendText}" />
+                                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       Text="{x:Bind LastCheckedText}" />
+                                            <TextBlock Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                                       Text="{x:Bind LastError}"
+                                                       TextWrapping="Wrap"
+                                                       Visibility="{x:Bind HasError, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2"
+                                                    Orientation="Horizontal"
+                                                    Spacing="6"
+                                                    VerticalAlignment="Top">
+                                            <Button Command="{Binding ViewModel.ToggleSubscriptionCommand, ElementName=ThisPage}"
+                                                    CommandParameter="{x:Bind}"
+                                                    Content="{x:Bind ToggleButtonText}"
+                                                    IsEnabled="{x:Bind CanToggle, Mode=OneWay}" />
+                                            <Button x:Uid="DownloadsCheckSubscriptionButton"
+                                                    Command="{Binding ViewModel.CheckSubscriptionCommand, ElementName=ThisPage}"
+                                                    CommandParameter="{x:Bind}"
+                                                    Content="Check now"
+                                                    IsEnabled="{x:Bind CanCheck, Mode=OneWay}" />
+                                            <Button x:Uid="DownloadsRemoveSubscriptionButton"
+                                                    Command="{Binding ViewModel.RemoveSubscriptionCommand, ElementName=ThisPage}"
+                                                    CommandParameter="{x:Bind}"
+                                                    Content="Remove" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+            </Grid>
+        </Grid>
+
         <ScrollViewer Grid.Row="2"
                       Margin="20,12,0,0"
                       Visibility="{x:Bind ViewModel.IsSettingsVisible, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
@@ -339,57 +455,163 @@
                 <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            Text="{x:Bind ViewModel.BackendDescription, Mode=OneWay}"
                            TextWrapping="Wrap" />
-                <InfoBar x:Uid="DownloadsSettingsNotice"
-                         IsClosable="False"
-                         IsOpen="True"
-                         Severity="Informational"
-                         Title="qBittorrent WebUI"
-                         Message="Use a local HTTP endpoint or an HTTPS remote endpoint. Passwords and API keys are stored in Windows Credential Manager." />
-                <TextBox x:Uid="DownloadsServerUrlBox"
-                         AutomationProperties.AutomationId="DownloadsServerUrlBox"
-                         Header="Server URL"
-                         Text="{x:Bind ViewModel.ServerUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                <TextBox x:Uid="DownloadsUsernameBox"
-                         AutomationProperties.AutomationId="DownloadsUsernameBox"
-                         Header="Username"
-                         Text="{x:Bind ViewModel.Username, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                <PasswordBox x:Name="PasswordBox"
-                             x:Uid="DownloadsPasswordBox"
-                             AutomationProperties.AutomationId="DownloadsPasswordBox"
-                             Header="WebUI password"
-                             PasswordChanged="PasswordBox_PasswordChanged" />
-                <PasswordBox x:Name="ApiKeyBox"
-                             x:Uid="DownloadsApiKeyBox"
-                             AutomationProperties.AutomationId="DownloadsApiKeyBox"
-                             Header="API key (qBittorrent 5.2+)"
-                             PasswordChanged="ApiKeyBox_PasswordChanged" />
-                <TextBox x:Uid="DownloadsSavePathBox"
-                         AutomationProperties.AutomationId="DownloadsSavePathBox"
-                         Header="Default save path"
-                         Text="{x:Bind ViewModel.DefaultSavePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                <TextBox x:Uid="DownloadsCategoryBoxSettings"
-                         AutomationProperties.AutomationId="DownloadsCategoryBoxSettings"
-                         Header="Default category"
-                         Text="{x:Bind ViewModel.DefaultCategory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                <CheckBox x:Uid="DownloadsAddPausedCheckBox"
-                          Content="Add torrents paused"
-                          IsChecked="{x:Bind ViewModel.AddPaused, Mode=TwoWay}" />
-                <TextBlock x:Uid="DownloadsCredentialStatus"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                           Text="{x:Bind ViewModel.CredentialStatusText, Mode=OneWay}" />
+                <StackPanel Spacing="12"
+                            Visibility="{x:Bind ViewModel.IsBuiltInBackend, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                    <InfoBar x:Uid="DownloadsMonoTorrentSettingsNotice"
+                             IsClosable="False"
+                             IsOpen="True"
+                             Severity="Informational" />
+                    <TextBox x:Uid="DownloadsMonoTorrentDownloadRootBox"
+                             AutomationProperties.AutomationId="DownloadsMonoTorrentDownloadRootBox"
+                             Text="{x:Bind ViewModel.MonoTorrentDownloadRootPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button x:Uid="DownloadsMonoTorrentBrowseDownloadRootButton"
+                                AutomationProperties.AutomationId="DownloadsMonoTorrentBrowseDownloadRootButton"
+                                Command="{x:Bind ViewModel.BrowseMonoTorrentDownloadRootCommand}" />
+                        <Button x:Uid="DownloadsMonoTorrentResetDownloadRootButton"
+                                AutomationProperties.AutomationId="DownloadsMonoTorrentResetDownloadRootButton"
+                                Command="{x:Bind ViewModel.ResetMonoTorrentDownloadRootCommand}" />
+                    </StackPanel>
+                    <TextBlock x:Uid="DownloadsMonoTorrentDownloadRootHint"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap" />
+                    <TextBox x:Uid="DownloadsMonoTorrentTrackersBox"
+                             AutomationProperties.AutomationId="DownloadsMonoTorrentTrackersBox"
+                             AcceptsReturn="True"
+                             MaxLength="65536"
+                             MinHeight="112"
+                             Text="{x:Bind ViewModel.MonoTorrentAdditionalTrackersText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             TextWrapping="Wrap" />
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                        <NumberBox x:Uid="DownloadsMonoTorrentListenPortBox"
+                                   AutomationProperties.AutomationId="DownloadsMonoTorrentListenPortBox"
+                                   Maximum="65535"
+                                   Minimum="0"
+                                   SpinButtonPlacementMode="Compact"
+                                   Value="{x:Bind ViewModel.MonoTorrentListenPort, Mode=TwoWay}" />
+                        <NumberBox Grid.Column="1"
+                                   x:Uid="DownloadsMonoTorrentMaximumConnectionsBox"
+                                   AutomationProperties.AutomationId="DownloadsMonoTorrentMaximumConnectionsBox"
+                                   Maximum="2000"
+                                   Minimum="1"
+                                   SpinButtonPlacementMode="Compact"
+                                   Value="{x:Bind ViewModel.MonoTorrentMaximumConnections, Mode=TwoWay}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                        <NumberBox x:Uid="DownloadsMonoTorrentPerTorrentConnectionsBox"
+                                   AutomationProperties.AutomationId="DownloadsMonoTorrentPerTorrentConnectionsBox"
+                                   Maximum="2000"
+                                   Minimum="1"
+                                   SpinButtonPlacementMode="Compact"
+                                   Value="{x:Bind ViewModel.MonoTorrentMaximumConnectionsPerTorrent, Mode=TwoWay}" />
+                        <NumberBox Grid.Column="1"
+                                   x:Uid="DownloadsMonoTorrentHalfOpenConnectionsBox"
+                                   AutomationProperties.AutomationId="DownloadsMonoTorrentHalfOpenConnectionsBox"
+                                   Maximum="256"
+                                   Minimum="1"
+                                   SpinButtonPlacementMode="Compact"
+                                   Value="{x:Bind ViewModel.MonoTorrentMaximumHalfOpenConnections, Mode=TwoWay}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                        <NumberBox x:Uid="DownloadsMonoTorrentDownloadLimitBox"
+                                   AutomationProperties.AutomationId="DownloadsMonoTorrentDownloadLimitBox"
+                                   Maximum="1000000"
+                                   Minimum="0"
+                                   SpinButtonPlacementMode="Compact"
+                                   Value="{x:Bind ViewModel.MonoTorrentDownloadRateLimitKiB, Mode=TwoWay}" />
+                        <NumberBox Grid.Column="1"
+                                   x:Uid="DownloadsMonoTorrentUploadLimitBox"
+                                   AutomationProperties.AutomationId="DownloadsMonoTorrentUploadLimitBox"
+                                   Maximum="1000000"
+                                   Minimum="0"
+                                   SpinButtonPlacementMode="Compact"
+                                   Value="{x:Bind ViewModel.MonoTorrentUploadRateLimitKiB, Mode=TwoWay}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                        <NumberBox x:Uid="DownloadsMonoTorrentOpenFilesBox"
+                                   AutomationProperties.AutomationId="DownloadsMonoTorrentOpenFilesBox"
+                                   Maximum="1024"
+                                   Minimum="1"
+                                   SpinButtonPlacementMode="Compact"
+                                   Value="{x:Bind ViewModel.MonoTorrentMaximumOpenFiles, Mode=TwoWay}" />
+                        <NumberBox Grid.Column="1"
+                                   x:Uid="DownloadsMonoTorrentUploadSlotsBox"
+                                   AutomationProperties.AutomationId="DownloadsMonoTorrentUploadSlotsBox"
+                                   Maximum="128"
+                                   Minimum="1"
+                                   SpinButtonPlacementMode="Compact"
+                                   Value="{x:Bind ViewModel.MonoTorrentUploadSlotsPerTorrent, Mode=TwoWay}" />
+                    </Grid>
+                    <StackPanel Spacing="4">
+                        <CheckBox x:Uid="DownloadsMonoTorrentPortForwardingCheckBox"
+                                  AutomationProperties.AutomationId="DownloadsMonoTorrentPortForwardingCheckBox"
+                                  IsChecked="{x:Bind ViewModel.MonoTorrentPortForwardingEnabled, Mode=TwoWay}" />
+                        <CheckBox x:Uid="DownloadsMonoTorrentDhtCheckBox"
+                                  AutomationProperties.AutomationId="DownloadsMonoTorrentDhtCheckBox"
+                                  IsChecked="{x:Bind ViewModel.MonoTorrentDhtEnabled, Mode=TwoWay}" />
+                        <CheckBox x:Uid="DownloadsMonoTorrentPeerExchangeCheckBox"
+                                  AutomationProperties.AutomationId="DownloadsMonoTorrentPeerExchangeCheckBox"
+                                  IsChecked="{x:Bind ViewModel.MonoTorrentPeerExchangeEnabled, Mode=TwoWay}" />
+                        <CheckBox x:Uid="DownloadsMonoTorrentLocalPeerDiscoveryCheckBox"
+                                  AutomationProperties.AutomationId="DownloadsMonoTorrentLocalPeerDiscoveryCheckBox"
+                                  IsChecked="{x:Bind ViewModel.MonoTorrentLocalPeerDiscoveryEnabled, Mode=TwoWay}" />
+                    </StackPanel>
+                </StackPanel>
+                <StackPanel Spacing="12"
+                            Visibility="{x:Bind ViewModel.IsQbittorrentBackend, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                    <InfoBar x:Uid="DownloadsSettingsNotice"
+                             IsClosable="False"
+                             IsOpen="True"
+                             Severity="Informational"
+                             Title="qBittorrent WebUI"
+                             Message="Use a local HTTP endpoint or an HTTPS remote endpoint. Passwords and API keys are stored in Windows Credential Manager." />
+                    <TextBox x:Uid="DownloadsServerUrlBox"
+                             AutomationProperties.AutomationId="DownloadsServerUrlBox"
+                             Header="Server URL"
+                             Text="{x:Bind ViewModel.ServerUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBox x:Uid="DownloadsUsernameBox"
+                             AutomationProperties.AutomationId="DownloadsUsernameBox"
+                             Header="Username"
+                             Text="{x:Bind ViewModel.Username, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <PasswordBox x:Name="PasswordBox"
+                                 x:Uid="DownloadsPasswordBox"
+                                 AutomationProperties.AutomationId="DownloadsPasswordBox"
+                                 Header="WebUI password"
+                                 PasswordChanged="PasswordBox_PasswordChanged" />
+                    <PasswordBox x:Name="ApiKeyBox"
+                                 x:Uid="DownloadsApiKeyBox"
+                                 AutomationProperties.AutomationId="DownloadsApiKeyBox"
+                                 Header="API key (qBittorrent 5.2+)"
+                                 PasswordChanged="ApiKeyBox_PasswordChanged" />
+                    <TextBox x:Uid="DownloadsSavePathBox"
+                             AutomationProperties.AutomationId="DownloadsSavePathBox"
+                             Header="Default save path"
+                             Text="{x:Bind ViewModel.DefaultSavePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBox x:Uid="DownloadsCategoryBoxSettings"
+                             AutomationProperties.AutomationId="DownloadsCategoryBoxSettings"
+                             Header="Default category"
+                             Text="{x:Bind ViewModel.DefaultCategory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <CheckBox x:Uid="DownloadsAddPausedCheckBox"
+                              Content="Add torrents paused"
+                              IsChecked="{x:Bind ViewModel.AddPaused, Mode=TwoWay}" />
+                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="{x:Bind ViewModel.CredentialStatusText, Mode=OneWay}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button x:Uid="DownloadsTestConnectionButton"
+                                AutomationProperties.AutomationId="DownloadsTestConnectionButton"
+                                Command="{x:Bind ViewModel.TestConnectionCommand}"
+                                Content="Test connection" />
+                        <Button x:Uid="DownloadsClearCredentialsButton"
+                                AutomationProperties.AutomationId="DownloadsClearCredentialsButton"
+                                Command="{x:Bind ViewModel.ClearCredentialsCommand}"
+                                Content="Clear credentials" />
+                    </StackPanel>
+                </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button x:Uid="DownloadsSaveSettingsButton"
                             AutomationProperties.AutomationId="DownloadsSaveSettingsButton"
                             Command="{x:Bind ViewModel.SaveSettingsCommand}"
                             Content="Save settings" />
-                    <Button x:Uid="DownloadsTestConnectionButton"
-                            AutomationProperties.AutomationId="DownloadsTestConnectionButton"
-                            Command="{x:Bind ViewModel.TestConnectionCommand}"
-                            Content="Test connection" />
-                    <Button x:Uid="DownloadsClearCredentialsButton"
-                            AutomationProperties.AutomationId="DownloadsClearCredentialsButton"
-                            Command="{x:Bind ViewModel.ClearCredentialsCommand}"
-                            Content="Clear credentials" />
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>
@@ -510,8 +732,7 @@
                                         IsEnabled="{x:Bind ViewModel.CanImportSelectedTask, Mode=OneWay}"
                                         Style="{StaticResource AccentButtonStyle}" />
                             </StackPanel>
-                            <TextBlock x:Uid="DownloadsImportStatus"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                        Text="{x:Bind ViewModel.ImportStatusText, Mode=OneWay}"
                                        TextWrapping="Wrap" />
                         </StackPanel>

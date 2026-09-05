@@ -89,14 +89,50 @@ public sealed class GalHookDiagnosticFunctionsTests
 
         header.Should().Contain("kDiagUnityIl2CppClipCaptured = 0x00000004u");
         header.Should().Contain("kDiagKirikiriVoiceStreamDumped = 0x00080000u");
-        GalHookDiagnosticBits.Explain(0x00000004u, 0x00080000u, 0x00000080u)
+        GalHookDiagnosticBits.Explain(
+                0x00000004u,
+                0x00080000u,
+                0x00000080u,
+                0x00080000u,
+                0x00010068u)
             .Should().Equal(
                 "kDiagUnityIl2CppClipCaptured",
                 "kDiagKirikiriVoiceStreamDumped",
-                "kDiagQlieVorbisPcmCaptured");
+                "kDiagQlieVorbisPcmCaptured",
+                "kXAudioDiagGameResourcePublished",
+                "kXAudioDiag2LeafProfileUnmatched",
+                "kXAudioDiag2LeafVoiceArchivesMissing",
+                "kXAudioDiag2LeafIdentityHashMatched",
+                "kXAudioDiag2LeafExecutableUnmeasurable");
         GalHookDiagnosticBits.HasResourceEvidence(0x00000004u, 0, 0).Should().BeTrue();
         GalHookDiagnosticBits.HasResourceEvidence(0, 0x00080000u, 0).Should().BeTrue();
         GalHookDiagnosticBits.HasResourceEvidence(0, 0, 0x00000080u).Should().BeTrue();
+        GalHookDiagnosticBits.HasResourceEvidence(0, 0, 0, 0x00080000u).Should().BeTrue();
+    }
+
+    [Fact]
+    public void XAudioDiagnosticNames_AreMirroredInTheManagedStatusProjection()
+    {
+        var header = File.ReadAllText(Path.Combine(
+            ProjectRoot,
+            "native",
+            "galgame_hook",
+            "include",
+            "voice_hook_ipc.h"));
+        var managed = File.ReadAllText(Path.Combine(
+            ProjectRoot,
+            "Niratan",
+            "Models",
+            "Games",
+            "GalHookDiagnostics.cs"));
+        var names = System.Text.RegularExpressions.Regex
+            .Matches(header, @"constexpr\s+uint32_t\s+(kXAudioDiag(?:2)?[A-Za-z0-9]+)\s*=")
+            .Select(match => match.Groups[1].Value)
+            .ToArray();
+
+        names.Should().HaveCountGreaterThanOrEqualTo(49);
+        foreach (var name in names)
+            managed.Should().Contain($"\"{name}\"");
     }
 
     private static GalGameIpcSnapshot Snapshot(

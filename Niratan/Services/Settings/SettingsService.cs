@@ -63,13 +63,17 @@ internal class SettingsService : ISettingsService
             var json = await File.ReadAllTextAsync(_filePath);
             _current =
                 JsonSerializer.Deserialize<AppSettings>(json, _jsonOptions) ?? new AppSettings();
-            if (NeedsAniListArtworkMigration(json))
+            var artworkPolicyVersion = GetArtworkPolicyVersion(json);
+            if (artworkPolicyVersion < VideoMetadataSettings.CurrentArtworkPolicyVersion)
             {
                 var metadata = _current.VideoSettings.Metadata;
                 metadata.ArtworkEnabled ??=
                     new System.Collections.Generic.Dictionary<string, bool>(
                         StringComparer.OrdinalIgnoreCase);
-                metadata.ArtworkEnabled["anilist"] = true;
+                if (artworkPolicyVersion < 1)
+                    metadata.ArtworkEnabled["anilist"] = true;
+                if (artworkPolicyVersion < 2)
+                    metadata.ArtworkEnabled["anidb"] = true;
                 metadata.ArtworkPolicyVersion = VideoMetadataSettings.CurrentArtworkPolicyVersion;
                 await SaveAsync();
             }
@@ -152,7 +156,7 @@ internal class SettingsService : ISettingsService
 
     public void Reset() => _current = new AppSettings();
 
-    private static bool NeedsAniListArtworkMigration(string json)
+    private static int GetArtworkPolicyVersion(string json)
     {
         using var document = JsonDocument.Parse(json);
         if (!document.RootElement.TryGetProperty(nameof(AppSettings.VideoSettings), out var video)
@@ -161,7 +165,7 @@ internal class SettingsService : ISettingsService
                 nameof(VideoMetadataSettings.ArtworkPolicyVersion),
                 out var version)
             || !version.TryGetInt32(out var value))
-            return true;
-        return value < VideoMetadataSettings.CurrentArtworkPolicyVersion;
+            return 0;
+        return Math.Max(0, value);
     }
 }

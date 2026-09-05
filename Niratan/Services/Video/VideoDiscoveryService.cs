@@ -5,6 +5,7 @@ using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Niratan.Helpers;
@@ -21,13 +22,9 @@ internal sealed class VideoDiscoveryService : IVideoDiscoveryService
     private const int SecondaryArtworkConcurrency = 4;
     private const string SearchLanguage = "en-US";
     private const string SearchRegion = "US";
-    private static readonly string[] LibrarySearchProviderOrder = [
-        "tmdb",
-        "anilist",
-        "bangumi",
-        "tvmaze",
-        "anidb",
-    ];
+    private static readonly string[] AggregatedSearchProviderOrder = ["anilist", "tmdb"];
+    private static readonly string[] AnimeLibrarySearchProviderOrder = ["anidb", "tmdb"];
+    private static readonly string[] GeneralLibrarySearchProviderOrder = ["tmdb", "tvmaze"];
     private readonly IReadOnlyDictionary<string, IVideoDiscoveryProvider> _providers;
     private readonly IReadOnlyDictionary<string, IVideoMetadataSearchProvider> _searchProviders;
     private readonly IReadOnlyDictionary<string, IVideoMetadataDetailsProvider> _detailsProviders;
@@ -120,6 +117,318 @@ internal sealed class VideoDiscoveryService : IVideoDiscoveryService
         }
     }
 
+    public async Task<Result<VideoDiscoveryPage>> GetAggregatedPageAsync(
+        IReadOnlyList<string> enabledProviderIds,
+        VideoDiscoveryAggregateRequest request,
+        CancellationToken ct = default)
+    {
+        if (!_settings.Current.VideoSettings.Metadata.OnlineConsentAccepted)
+            return Result<VideoDiscoveryPage>.Failure(
+                ResourceStringHelper.GetString(
+                    "DiscoverOnlineConsentRequired",
+                    "Enable online video metadata in Video settings before using Discovery."),
+                ResourceStringHelper.GetString(
+                    "DiscoverConsentTitle",
+                    "Online metadata permission required"));
+
+        var enabled = new HashSet<string>(
+            enabledProviderIds ?? [],
+            StringComparer.OrdinalIgnoreCase);
+        var normalizedRequest = request with
+        {
+            Page = Math.Max(1, request.Page),
+            // TMDB fixes its remote page at 20 items. Keeping the aggregate
+            // window at or below that size prevents gaps when only one source
+            // is enabled; the cumulative-prefix load below handles AniList's
+            // different 24-item page size.
+            PageSize = Math.Clamp(request.PageSize, 1, 20),
+        };
+        var providerJobs = AggregatedSearchProviderOrder
+            .Where(providerId => enabled.Contains(providerId)
+                                 && _providers.ContainsKey(providerId))
+            .Select(providerId => CreateAggregateBrowseJob(providerId, normalizedRequest))
+            .Where(job => job is not null)
+            .Cast<AggregateBrowseJob>()
+            .ToArray();
+        if (providerJobs.Length == 0)
+            return Result<VideoDiscoveryPage>.Failure(
+                ResourceStringHelper.GetString(
+                    "DiscoverBrowseNoSources",
+                    "No enabled source is available for video discovery."),
+                ResourceStringHelper.GetString(
+                    "DiscoverBrowseFailedTitle",
+                    "Video discovery failed"));
+
+        try
+        {
+            // Providers start together, but Task.WhenAll preserves the stable
+            // AniList -> TMDB input order consumed by the round-robin below.
+            var responses = await Task.WhenAll(providerJobs.Select(job =>
+                LoadAggregateBrowseProviderWindowAsync(job, normalizedRequest.Page, ct)));
+            ct.ThrowIfCancellationRequested();
+
+            var failedProviders = responses
+                .Where(response => response.FailedStreams > 0)
+                .Select(response => _providers.TryGetValue(response.ProviderId, out var provider)
+                    ? provider.DisplayName
+                    : response.ProviderId)
+                .Distinct(StringComparer.CurrentCultureIgnoreCase)
+                .ToArray();
+            if (responses.All(response => response.SuccessfulStreams == 0))
+                return Result<VideoDiscoveryPage>.Failure(
+                    ResourceStringHelper.FormatString(
+                        "DiscoverBrowseAllSourcesFailed",
+                        "Every available discovery source failed ({0}).",
+                        string.Join(", ", failedProviders)),
+                    ResourceStringHelper.GetString(
+                        "DiscoverBrowseFailedTitle",
+                        "Video discovery failed"));
+
+            // Match Fushi's pagination contract. Rebuilding each provider's
+            // cumulative 1..N prefix is necessary because a page-N-only merge
+            // would permanently drop the unconsumed tail of page N-1.
+            var interleaved = RoundRobin(responses
+                .Where(response => response.SuccessfulStreams > 0)
+                .Select(response => (IReadOnlyList<VideoDiscoveryItem>)response.Items)
+                .ToArray());
+            var mergedWindow = MergeAggregatedItems(interleaved);
+            var offset = (normalizedRequest.Page - 1) * normalizedRequest.PageSize;
+            var pageEnd = offset + normalizedRequest.PageSize;
+            var items = mergedWindow
+                .Skip(offset)
+                .Take(normalizedRequest.PageSize)
+                .ToImmutableArray();
+            var hasMore = responses.Any(response => response.HasMore)
+                          || mergedWindow.Length > pageEnd;
+            var warning = failedProviders.Length == 0
+                ? null
+                : ResourceStringHelper.FormatString(
+                    "DiscoverBrowsePartialWarning",
+                    "Some sources failed ({0}). Results from the other sources are still shown.",
+                    string.Join(", ", failedProviders));
+
+            return Result<VideoDiscoveryPage>.Success(new VideoDiscoveryPage(
+                "aggregate",
+                AggregateFeedId(normalizedRequest.Feed),
+                normalizedRequest.Page,
+                hasMore ? normalizedRequest.Page + 1 : normalizedRequest.Page,
+                items,
+                warning));
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return Result<VideoDiscoveryPage>.Cancelled();
+        }
+        catch (Exception ex)
+        {
+            return Result<VideoDiscoveryPage>.Failure(
+                ex.Message,
+                ResourceStringHelper.GetString(
+                    "DiscoverBrowseFailedTitle",
+                    "Video discovery failed"));
+        }
+    }
+
+    public async Task<Result<IReadOnlyList<VideoDiscoveryPage>>> GetAggregatedRecommendationsAsync(
+        IReadOnlyList<string> enabledProviderIds,
+        CancellationToken ct = default)
+    {
+        var feeds = new[]
+        {
+            VideoDiscoveryAggregateFeed.Trending,
+            VideoDiscoveryAggregateFeed.Seasonal,
+            VideoDiscoveryAggregateFeed.Popular,
+        };
+        var results = await Task.WhenAll(feeds.Select(feed => GetAggregatedPageAsync(
+            enabledProviderIds,
+            new VideoDiscoveryAggregateRequest(Feed: feed),
+            ct)));
+        ct.ThrowIfCancellationRequested();
+
+        var loadedPages = results
+            .Where(result => result.IsSuccess && result.Value is not null)
+            .Select(result => result.Value!)
+            .ToArray();
+        if (loadedPages.Length > 0)
+        {
+            // A title can trend on TMDB while appearing only in AniList's
+            // seasonal or popular shelf. Resolve one canonical identity across
+            // all three loaded windows, then project it back into each shelf so
+            // every occurrence carries the same romaji/native title and xrefs.
+            var canonicalItems = MergeAggregatedItems(
+                loadedPages.SelectMany(page => page.Items));
+            var pages = loadedPages.Select(page => page with
+            {
+                Items = page.Items.Select(item =>
+                        canonicalItems.FirstOrDefault(canonical =>
+                            CanMergeAggregatedItem([canonical], item))
+                        ?? item)
+                    .ToImmutableArray(),
+            }).ToArray();
+            return Result<IReadOnlyList<VideoDiscoveryPage>>.Success(pages);
+        }
+        if (results.Any(result => result.IsCancelled))
+            return Result<IReadOnlyList<VideoDiscoveryPage>>.Cancelled();
+
+        var errors = results
+            .Select(result => result.Error)
+            .Where(error => !string.IsNullOrWhiteSpace(error))
+            .Distinct(StringComparer.CurrentCultureIgnoreCase);
+        return Result<IReadOnlyList<VideoDiscoveryPage>>.Failure(
+            string.Join(Environment.NewLine, errors),
+            ResourceStringHelper.GetString(
+                "DiscoverRecommendationsFailedTitle",
+                "Recommendations unavailable"));
+    }
+
+    private static AggregateBrowseJob? CreateAggregateBrowseJob(
+        string providerId,
+        VideoDiscoveryAggregateRequest request)
+    {
+        if (providerId.Equals("anilist", StringComparison.OrdinalIgnoreCase))
+        {
+            var feedId = request.Feed switch
+            {
+                VideoDiscoveryAggregateFeed.Trending => "trending",
+                VideoDiscoveryAggregateFeed.Seasonal => "seasonal",
+                _ => "popular",
+            };
+            return new AggregateBrowseJob(
+                "anilist",
+                [new VideoDiscoveryRequest(
+                    feedId,
+                    VideoMetadataMediaKind.Anime,
+                    Year: request.Year,
+                    GenreId: request.GenreId,
+                    SortBy: request.SortBy,
+                    Language: request.Language,
+                    Region: request.Region)]);
+        }
+
+        if (!providerId.Equals("tmdb", StringComparison.OrdinalIgnoreCase))
+            return null;
+        if (request.Feed == VideoDiscoveryAggregateFeed.Seasonal)
+            return null;
+
+        if (request.Feed == VideoDiscoveryAggregateFeed.Trending)
+        {
+            return new AggregateBrowseJob(
+                "tmdb",
+                [
+                    new VideoDiscoveryRequest(
+                        "trending-movie",
+                        VideoMetadataMediaKind.Movie,
+                        TimeWindow: "week",
+                        Language: request.Language,
+                        Region: request.Region),
+                    new VideoDiscoveryRequest(
+                        "trending-tv",
+                        VideoMetadataMediaKind.Series,
+                        TimeWindow: "week",
+                        Language: request.Language,
+                        Region: request.Region),
+                ]);
+        }
+
+        var useDiscoverFeeds = request.Year is not null
+                               || !string.IsNullOrWhiteSpace(request.GenreId)
+                               || !string.IsNullOrWhiteSpace(request.SortBy)
+                               && !request.SortBy.Equals("popularity.desc", StringComparison.OrdinalIgnoreCase);
+        var movieSort = NormalizeTmdbAggregateSort(request.SortBy, VideoMetadataMediaKind.Movie);
+        var seriesSort = NormalizeTmdbAggregateSort(request.SortBy, VideoMetadataMediaKind.Series);
+        return new AggregateBrowseJob(
+            "tmdb",
+            [
+                new VideoDiscoveryRequest(
+                    useDiscoverFeeds ? "discover-movie" : "popular-movie",
+                    VideoMetadataMediaKind.Movie,
+                    Year: request.Year,
+                    GenreId: request.GenreId,
+                    SortBy: movieSort,
+                    Language: request.Language,
+                    Region: request.Region),
+                new VideoDiscoveryRequest(
+                    useDiscoverFeeds ? "discover-tv" : "popular-tv",
+                    VideoMetadataMediaKind.Series,
+                    Year: request.Year,
+                    GenreId: request.GenreId,
+                    SortBy: seriesSort,
+                    Language: request.Language,
+                    Region: request.Region),
+            ]);
+    }
+
+    private static string AggregateFeedId(VideoDiscoveryAggregateFeed feed) => feed switch
+    {
+        VideoDiscoveryAggregateFeed.Trending => "trending",
+        VideoDiscoveryAggregateFeed.Seasonal => "seasonal",
+        _ => "popular",
+    };
+
+    private static string NormalizeTmdbAggregateSort(
+        string? sortBy,
+        VideoMetadataMediaKind kind) => sortBy?.ToLowerInvariant() switch
+    {
+        "vote_average.desc" => "vote_average.desc",
+        "release_date.desc" or "primary_release_date.desc" or "first_air_date.desc" =>
+            kind == VideoMetadataMediaKind.Movie
+                ? "primary_release_date.desc"
+                : "first_air_date.desc",
+        _ => "popularity.desc",
+    };
+
+    private async Task<AggregateBrowseResponse> LoadAggregateBrowseProviderWindowAsync(
+        AggregateBrowseJob job,
+        int requestedPage,
+        CancellationToken ct)
+    {
+        var streams = await Task.WhenAll(job.Requests.Select(request =>
+            LoadAggregateBrowseStreamWindowAsync(job.ProviderId, request, requestedPage, ct)));
+        ct.ThrowIfCancellationRequested();
+        return new AggregateBrowseResponse(
+            job.ProviderId,
+            streams.Count(stream => stream.SuccessfulPages > 0),
+            streams.Count(stream => stream.FailedPages > 0),
+            streams.Any(stream => stream.HasMore),
+            RoundRobin(streams
+                    .Where(stream => stream.SuccessfulPages > 0)
+                    .Select(stream => (IReadOnlyList<VideoDiscoveryItem>)stream.Items)
+                    .ToArray())
+                .ToImmutableArray());
+    }
+
+    private async Task<AggregateBrowseStreamWindow> LoadAggregateBrowseStreamWindowAsync(
+        string providerId,
+        VideoDiscoveryRequest baseRequest,
+        int requestedPage,
+        CancellationToken ct)
+    {
+        var pages = new List<VideoDiscoveryPage>();
+        var failedPages = 0;
+        var hasMore = false;
+        for (var page = 1; page <= requestedPage; page++)
+        {
+            var result = await GetPageAsync(providerId, baseRequest with { Page = page }, ct);
+            ct.ThrowIfCancellationRequested();
+            if (!result.IsSuccess || result.Value is null)
+            {
+                failedPages++;
+                break;
+            }
+
+            pages.Add(result.Value);
+            hasMore = result.Value.HasMore;
+            if (!hasMore)
+                break;
+        }
+
+        return new AggregateBrowseStreamWindow(
+            pages.Count,
+            failedPages,
+            hasMore,
+            pages.SelectMany(page => page.Items).ToImmutableArray());
+    }
+
     public async Task<Result<VideoDiscoveryPage>> SearchAsync(
         string providerId,
         string query,
@@ -159,11 +468,10 @@ internal sealed class VideoDiscoveryService : IVideoDiscoveryService
                             null,
                             null,
                             null,
-                            null,
-                            null))
+                            candidate.PosterUrl,
+                            candidate.BackdropUrl))
                         .ToImmutableArray();
-                    return await CacheSearchArtworkAsync(
-                        providerId,
+                    return await CachePageArtworkAsync(
                         new VideoDiscoveryPage(providerId, "search", 1, 1, items),
                         token);
                 },
@@ -191,6 +499,142 @@ internal sealed class VideoDiscoveryService : IVideoDiscoveryService
         }
     }
 
+    public async Task<Result<VideoDiscoveryPage>> SearchAggregatedAsync(
+        IReadOnlyList<string> enabledProviderIds,
+        string query,
+        VideoDiscoverySearchCategory category,
+        CancellationToken ct = default)
+    {
+        if (!_settings.Current.VideoSettings.Metadata.OnlineConsentAccepted)
+            return Result<VideoDiscoveryPage>.Failure(
+                ResourceStringHelper.GetString(
+                    "DiscoverOnlineConsentRequired",
+                    "Enable online video metadata in Video settings before using Discovery."),
+                ResourceStringHelper.GetString(
+                    "DiscoverConsentTitle",
+                    "Online metadata permission required"));
+
+        if (string.IsNullOrWhiteSpace(query))
+            return Result<VideoDiscoveryPage>.Failure(
+                ResourceStringHelper.GetString(
+                    "DiscoverSearchQueryRequired",
+                    "Enter a title before searching."),
+                ResourceStringHelper.GetString(
+                    "DiscoverSearchFailedTitle",
+                    "Video search failed"));
+        var normalizedQuery = query.Trim();
+
+        var enabled = new HashSet<string>(
+            enabledProviderIds ?? [],
+            StringComparer.OrdinalIgnoreCase);
+        var providerJobs = AggregatedSearchProviderOrder
+            .Where(providerId => enabled.Contains(providerId)
+                                 && _searchProviders.ContainsKey(providerId))
+            .Select(providerId => new AggregateSearchJob(
+                providerId,
+                AggregateSearchKinds(providerId, category)))
+            .Where(job => !job.MediaKinds.IsDefaultOrEmpty)
+            .ToArray();
+        if (providerJobs.Length == 0)
+            return Result<VideoDiscoveryPage>.Failure(
+                ResourceStringHelper.GetString(
+                    "DiscoverSearchNoSources",
+                    "No enabled discovery source supports this search type."),
+                ResourceStringHelper.GetString(
+                    "DiscoverSearchFailedTitle",
+                    "Video search failed"));
+
+        try
+        {
+            // Preserve Fushi's provider priority and TMDB movie/series ordering:
+            // Task.WhenAll starts every source concurrently but returns responses
+            // in the stable input order used by the round-robin below.
+            var responses = await Task.WhenAll(providerJobs.Select(job =>
+                SearchAggregateProviderAsync(job, normalizedQuery, ct)));
+            ct.ThrowIfCancellationRequested();
+
+            var failedProviders = responses
+                .Where(response => response.FailedKinds > 0)
+                .Select(response => _searchProviders.TryGetValue(response.ProviderId, out var provider)
+                    ? provider.DisplayName
+                    : response.ProviderId)
+                .Distinct(StringComparer.CurrentCultureIgnoreCase)
+                .ToArray();
+
+            if (responses.All(response => response.SuccessfulKinds == 0))
+                return Result<VideoDiscoveryPage>.Failure(
+                    ResourceStringHelper.FormatString(
+                        "DiscoverSearchAllSourcesFailed",
+                        "Every available discovery source failed to complete the search ({0}).",
+                        string.Join(", ", failedProviders)),
+                    ResourceStringHelper.GetString(
+                        "DiscoverSearchFailedTitle",
+                        "Video search failed"));
+
+            var interleaved = RoundRobin(responses
+                .Where(response => response.SuccessfulKinds > 0)
+                .Select(response => (IReadOnlyList<VideoDiscoveryItem>)response.Items)
+                .ToArray());
+            var merged = MergeAggregatedItems(interleaved);
+            var warning = failedProviders.Length == 0
+                ? null
+                : ResourceStringHelper.FormatString(
+                    "DiscoverSearchPartialWarning",
+                    "Some sources failed ({0}). Results from the other sources are still shown.",
+                    string.Join(", ", failedProviders));
+
+            return Result<VideoDiscoveryPage>.Success(new VideoDiscoveryPage(
+                "aggregate",
+                "search",
+                1,
+                1,
+                merged,
+                warning));
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return Result<VideoDiscoveryPage>.Cancelled();
+        }
+    }
+
+    private async Task<AggregateSearchResponse> SearchAggregateProviderAsync(
+        AggregateSearchJob job,
+        string query,
+        CancellationToken ct)
+    {
+        var results = await Task.WhenAll(job.MediaKinds.Select(mediaKind =>
+            SearchAsync(job.ProviderId, query, mediaKind, ct)));
+        ct.ThrowIfCancellationRequested();
+
+        var successfulPages = results
+            .Where(result => result.IsSuccess && result.Value is not null)
+            .Select(result => result.Value!)
+            .ToArray();
+        return new AggregateSearchResponse(
+            job.ProviderId,
+            successfulPages.Length,
+            results.Count(result => !result.IsSuccess),
+            RoundRobin(successfulPages
+                    .Select(page => (IReadOnlyList<VideoDiscoveryItem>)page.Items)
+                    .ToArray())
+                .ToImmutableArray());
+    }
+
+    private static ImmutableArray<VideoMetadataMediaKind> AggregateSearchKinds(
+        string providerId,
+        VideoDiscoverySearchCategory category) => providerId.ToLowerInvariant() switch
+    {
+        "anilist" when category is VideoDiscoverySearchCategory.All
+            or VideoDiscoverySearchCategory.Anime => [VideoMetadataMediaKind.Anime],
+        "tmdb" when category == VideoDiscoverySearchCategory.All =>
+            [VideoMetadataMediaKind.Movie, VideoMetadataMediaKind.Series],
+        "tmdb" when category == VideoDiscoverySearchCategory.Movie =>
+            [VideoMetadataMediaKind.Movie],
+        "tmdb" when category == VideoDiscoverySearchCategory.Series =>
+            [VideoMetadataMediaKind.Series],
+        _ => [],
+    };
+
     public async Task<Result<VideoDiscoveryDetails>> GetDetailsAsync(
         VideoMetadataCandidate identity,
         CancellationToken ct = default)
@@ -203,46 +647,30 @@ internal sealed class VideoDiscoveryService : IVideoDiscoveryService
                 ResourceStringHelper.GetString(
                     "DiscoverConsentTitle",
                     "Online metadata permission required"));
-        if (!_detailsProviders.TryGetValue(identity.ProviderId, out var provider))
+        if (!_detailsProviders.ContainsKey(identity.ProviderId))
             return Result<VideoDiscoveryDetails>.Failure("The metadata provider is not available.", "Details unavailable");
 
         try
         {
-            var cached = await GetCachedDetailsAsync(
-                new DetailsCacheKey(identity.ProviderId, identity.ProviderItemId, "ja-JP", "JP"),
-                async token =>
-                {
-                    // The metadata response contains the detail text, cast and related
-                    // identities. Fetch primary and bounded secondary artwork before
-                    // projection so the detail view only receives local image paths.
-                    var detailsTask = provider.GetDetailsAsync(identity, "ja-JP", "JP", token);
-                    var artworkTask = GetArtworkAsync(identity, token);
-                    await Task.WhenAll(detailsTask, artworkTask);
+            var supplementalIdentity = CreateSupplementalDetailsIdentity(identity);
+            var primaryTask = GetProviderDetailsAsync(identity, ct);
+            var supplementalTask = supplementalIdentity is null
+                ? Task.FromResult<VideoDiscoveryDetails?>(null)
+                : GetSupplementalProviderDetailsAsync(supplementalIdentity, ct);
+            await Task.WhenAll(primaryTask, supplementalTask);
 
-                    var details = detailsTask.Result;
-                    if (details is null)
-                        return null;
+            var primary = primaryTask.Result;
+            if (primary is null)
+            {
+                return Result<VideoDiscoveryDetails>.Failure(
+                    "No details were returned for this title.",
+                    "Details unavailable");
+            }
 
-                    details = details.WithInitializedCollections();
-                    var artwork = artworkTask.Result;
-                    var mainArtworkUrls = new[]
-                    {
-                        artwork.FirstOrDefault(item => item.Kind.Equals("poster", StringComparison.OrdinalIgnoreCase))?.Url,
-                        artwork.FirstOrDefault(item => item.Kind.Equals("backdrop", StringComparison.OrdinalIgnoreCase))?.Url,
-                        artwork.FirstOrDefault(item => item.Kind.Equals("logo", StringComparison.OrdinalIgnoreCase))?.Url,
-                    };
-                    var mainArtworkPaths = await Task.WhenAll(
-                        mainArtworkUrls.Select(url => CacheArtworkAsync(url, token)));
-                    var mainArtwork = new VideoDiscoveryArtwork(
-                        mainArtworkPaths[0], mainArtworkPaths[1], mainArtworkPaths[2]);
-                    details = await CacheSecondaryArtworkAsync(details, token);
-                    var seasons = await CacheSeasonArtworkAsync(details.Seasons, token);
-                    return new VideoDiscoveryDetails(details, mainArtwork, seasons);
-                },
-                ct);
-            return cached is null
-                ? Result<VideoDiscoveryDetails>.Failure("No details were returned for this title.", "Details unavailable")
-                : Result<VideoDiscoveryDetails>.Success(cached);
+            var merged = MergeIdentityIntoDetails(primary, identity);
+            if (supplementalTask.Result is { } supplemental)
+                merged = MergeSupplementalDetails(merged, supplemental);
+            return Result<VideoDiscoveryDetails>.Success(merged);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -252,6 +680,128 @@ internal sealed class VideoDiscoveryService : IVideoDiscoveryService
         {
             return Result<VideoDiscoveryDetails>.Failure(ex.Message, "Loading video details failed");
         }
+    }
+
+    private async Task<VideoDiscoveryDetails?> GetProviderDetailsAsync(
+        VideoMetadataCandidate identity,
+        CancellationToken ct)
+    {
+        if (!_detailsProviders.TryGetValue(identity.ProviderId, out var provider))
+            return null;
+        var providerIdentity = identity with
+        {
+            // Keep cached provider payloads independent from transient aggregate
+            // cross-references. The current navigation identity is merged into the
+            // returned value after every cache lookup, so a corrected mapping is
+            // visible immediately without poisoning the provider-local cache.
+            ExternalIds = ImmutableDictionary.Create<string, string>(
+                    StringComparer.OrdinalIgnoreCase)
+                .Add(identity.ProviderId, identity.ProviderItemId),
+        };
+
+        return await GetCachedDetailsAsync(
+            new DetailsCacheKey(
+                identity.ProviderId,
+                identity.ProviderItemId,
+                identity.MediaKind,
+                "ja-JP",
+                "JP"),
+            async token =>
+            {
+                // Fetch the provider text and artwork together. Each provider keeps
+                // its own cache entry so an optional Fushi-style detail supplement
+                // cannot replace the navigation identity owned by the primary source.
+                var detailsTask = provider.GetDetailsAsync(providerIdentity, "ja-JP", "JP", token);
+                var artworkTask = GetArtworkAsync(providerIdentity, token);
+                await Task.WhenAll(detailsTask, artworkTask);
+
+                var details = detailsTask.Result;
+                if (details is null)
+                    return null;
+
+                details = details.WithInitializedCollections();
+                var artwork = artworkTask.Result;
+                var mainArtworkUrls = new[]
+                {
+                    artwork.FirstOrDefault(item => item.Kind.Equals("poster", StringComparison.OrdinalIgnoreCase))?.Url,
+                    artwork.FirstOrDefault(item => item.Kind.Equals("backdrop", StringComparison.OrdinalIgnoreCase))?.Url,
+                    artwork.FirstOrDefault(item => item.Kind.Equals("logo", StringComparison.OrdinalIgnoreCase))?.Url,
+                };
+                var mainArtworkPaths = await Task.WhenAll(
+                    mainArtworkUrls.Select(url => CacheArtworkAsync(url, token)));
+                var mainArtwork = new VideoDiscoveryArtwork(
+                    mainArtworkPaths[0], mainArtworkPaths[1], mainArtworkPaths[2]);
+                details = await CacheSecondaryArtworkAsync(details, token);
+                var seasons = await CacheSeasonArtworkAsync(details.Seasons, token);
+                return new VideoDiscoveryDetails(details, mainArtwork, seasons);
+            },
+            ct);
+    }
+
+    private async Task<VideoDiscoveryDetails?> GetSupplementalProviderDetailsAsync(
+        VideoMetadataCandidate identity,
+        CancellationToken ct)
+    {
+        try
+        {
+            return await GetProviderDetailsAsync(identity, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private VideoMetadataCandidate? CreateSupplementalDetailsIdentity(
+        VideoMetadataCandidate identity)
+    {
+        if (identity.ProviderId.Equals("anilist", StringComparison.OrdinalIgnoreCase)
+            && _settings.Current.VideoSettings.Metadata.TmdbEnabled
+            && TryGetExternalId(identity.ExternalIds, "tmdb", out var tmdbId)
+            && _detailsProviders.ContainsKey("tmdb"))
+        {
+            return identity with
+            {
+                ProviderId = "tmdb",
+                ProviderItemId = tmdbId,
+                MediaKind = identity.MediaKind == VideoMetadataMediaKind.Movie
+                    ? VideoMetadataMediaKind.Movie
+                    : VideoMetadataMediaKind.Series,
+                SourceUrl = null,
+            };
+        }
+
+        if (identity.ProviderId.Equals("tmdb", StringComparison.OrdinalIgnoreCase)
+            && _settings.Current.VideoSettings.Metadata.AniListEnabled
+            && TryGetExternalId(identity.ExternalIds, "anilist", out var aniListId)
+            && _detailsProviders.ContainsKey("anilist"))
+        {
+            return identity with
+            {
+                ProviderId = "anilist",
+                ProviderItemId = aniListId,
+                MediaKind = VideoMetadataMediaKind.Anime,
+                SourceUrl = null,
+            };
+        }
+
+        return null;
+    }
+
+    private static bool TryGetExternalId(
+        IReadOnlyDictionary<string, string>? externalIds,
+        string key,
+        out string id)
+    {
+        id = externalIds?
+            .FirstOrDefault(pair => pair.Key.Equals(key, StringComparison.OrdinalIgnoreCase))
+            .Value?
+            .Trim() ?? string.Empty;
+        return id.Length > 0;
     }
 
     public async Task<Result<VideoDiscoveryDetails>> GetDetailsByTitleAsync(
@@ -268,9 +818,12 @@ internal sealed class VideoDiscoveryService : IVideoDiscoveryService
         if (searchTitles.Length == 0)
             return Result<VideoDiscoveryDetails>.Failure("No title is available for metadata search.", "Details unavailable");
 
+        var providerOrder = mediaKind == VideoMetadataMediaKind.Anime
+            ? AnimeLibrarySearchProviderOrder
+            : GeneralLibrarySearchProviderOrder;
         VideoDiscoveryDetails? fallbackDetails = null;
         VideoDiscoveryDetails? richestSeasonDetails = null;
-        foreach (var providerId in LibrarySearchProviderOrder)
+        foreach (var providerId in providerOrder)
         {
             if (!_searchProviders.TryGetValue(providerId, out var provider)
                 || !_detailsProviders.ContainsKey(providerId))
@@ -309,7 +862,7 @@ internal sealed class VideoDiscoveryService : IVideoDiscoveryService
                     .Select(candidate => (Candidate: candidate, Score: ScoreLibraryCandidate(candidate, searchTitles, year)))
                     .Where(item => item.Score > 0)
                     .OrderByDescending(item => item.Score)
-                    .ThenBy(item => ProviderPriority(item.Candidate.ProviderId))
+                    .ThenBy(item => ProviderPriority(item.Candidate.ProviderId, providerOrder))
                     .Select(item => item.Candidate)
                     .DistinctBy(candidate => (candidate.ProviderId, candidate.ProviderItemId));
                 foreach (var candidate in orderedCandidates)
@@ -358,10 +911,10 @@ internal sealed class VideoDiscoveryService : IVideoDiscoveryService
                     ? 0
                     : season.Episodes.Length));
 
-    private static int ProviderPriority(string providerId) =>
-        Array.IndexOf(LibrarySearchProviderOrder, providerId.ToLowerInvariant()) switch
+    private static int ProviderPriority(string providerId, string[] providerOrder) =>
+        Array.IndexOf(providerOrder, providerId.ToLowerInvariant()) switch
         {
-            < 0 => LibrarySearchProviderOrder.Length,
+            < 0 => providerOrder.Length,
             var value => value,
         };
 
@@ -435,6 +988,474 @@ internal sealed class VideoDiscoveryService : IVideoDiscoveryService
 
     private static string NormalizeTitle(string title) =>
         new string(title.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+
+    private static IReadOnlyList<T> RoundRobin<T>(IReadOnlyList<IReadOnlyList<T>> sources)
+    {
+        var result = new List<T>();
+        for (var index = 0; sources.Any(source => index < source.Count); index++)
+        {
+            foreach (var source in sources)
+            {
+                if (index < source.Count)
+                    result.Add(source[index]);
+            }
+        }
+        return result;
+    }
+
+    private static ImmutableArray<VideoDiscoveryItem> MergeAggregatedItems(
+        IEnumerable<VideoDiscoveryItem> items)
+    {
+        var groups = new List<List<VideoDiscoveryItem>>();
+        foreach (var item in items)
+        {
+            var group = groups.FirstOrDefault(existing => CanMergeAggregatedItem(existing, item));
+            if (group is null)
+                groups.Add([item]);
+            else
+                group.Add(item);
+        }
+
+        return groups.Select(MergeAggregatedGroup).ToImmutableArray();
+    }
+
+    private static bool CanMergeAggregatedItem(
+        IReadOnlyList<VideoDiscoveryItem> existingItems,
+        VideoDiscoveryItem candidate)
+    {
+        var right = StrongIdentities(candidate.Identity);
+        var lefts = existingItems
+            .Select(item => StrongIdentities(item.Identity))
+            .ToArray();
+
+        // A conflicting value in any shared strong namespace vetoes the whole
+        // group, so a transitive title match cannot bridge two distinct works.
+        if (lefts.Any(left => HasStrongIdentityConflict(left, right)))
+            return false;
+        if (lefts.Any(left => left.Any(pair =>
+                right.TryGetValue(pair.Key, out var value)
+                && value.Equals(pair.Value, StringComparison.Ordinal))))
+        {
+            return true;
+        }
+
+        if (existingItems.Any(existing => AggregationKindsConflict(
+                existing.Identity.MediaKind,
+                candidate.Identity.MediaKind)))
+        {
+            return false;
+        }
+
+        var candidateTitles = NormalizedCandidateTitles(candidate.Identity);
+        if (candidateTitles.Count == 0 || candidate.Identity.Year is not int candidateYear)
+            return false;
+        return existingItems.Any(existing =>
+            existing.Identity.Year == candidateYear
+            && NormalizedCandidateTitles(existing.Identity).Overlaps(candidateTitles));
+    }
+
+    private static Dictionary<string, string> StrongIdentities(VideoMetadataCandidate identity)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        void Add(string rawNamespace, string? rawValue)
+        {
+            var value = rawValue?.Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(value))
+                return;
+            var identityNamespace = rawNamespace.Trim().ToLowerInvariant();
+            if (identityNamespace == "tmdb")
+                identityNamespace = $"tmdb-{identity.MediaKind.ToString().ToLowerInvariant()}";
+            result[identityNamespace] = value;
+        }
+
+        foreach (var pair in identity.ExternalIds ?? ImmutableDictionary<string, string>.Empty)
+            Add(pair.Key, pair.Value);
+        Add(
+            $"{identity.ProviderId}-{identity.MediaKind.ToString().ToLowerInvariant()}",
+            identity.ProviderItemId);
+        return result;
+    }
+
+    private static bool HasStrongIdentityConflict(
+        IReadOnlyDictionary<string, string> left,
+        IReadOnlyDictionary<string, string> right) => left.Any(pair =>
+        right.TryGetValue(pair.Key, out var value)
+        && !value.Equals(pair.Value, StringComparison.Ordinal));
+
+    private static bool AggregationKindsConflict(
+        VideoMetadataMediaKind left,
+        VideoMetadataMediaKind right)
+    {
+        // AniList search summaries do not expose a reliable movie-vs-series
+        // aggregation kind. Match Fushi by treating Anime as unknown here; only
+        // an explicit Movie/Series disagreement vetoes the weak title match.
+        if (left == VideoMetadataMediaKind.Anime || right == VideoMetadataMediaKind.Anime)
+            return false;
+        return left != right;
+    }
+
+    private static HashSet<string> NormalizedCandidateTitles(VideoMetadataCandidate identity) =>
+        new[] { identity.Title, identity.OriginalTitle }
+            .Concat(identity.Aliases.IsDefault ? [] : identity.Aliases)
+            .Where(title => !string.IsNullOrWhiteSpace(title))
+            .Select(title => NormalizeAggregatedTitle(title!))
+            .Where(title => title.Length > 0)
+            .ToHashSet(StringComparer.Ordinal);
+
+    private static string NormalizeAggregatedTitle(string title)
+    {
+        var normalized = title.Normalize(NormalizationForm.FormKC).ToLowerInvariant();
+        var result = new StringBuilder(normalized.Length);
+        var separatorPending = false;
+        foreach (var character in normalized)
+        {
+            if (char.IsLetterOrDigit(character))
+            {
+                if (separatorPending && result.Length > 0)
+                    result.Append(' ');
+                result.Append(character);
+                separatorPending = false;
+            }
+            else
+            {
+                separatorPending = true;
+            }
+        }
+        return result.ToString();
+    }
+
+    private static VideoDiscoveryItem MergeAggregatedGroup(IReadOnlyList<VideoDiscoveryItem> group)
+    {
+        if (group.Count == 1)
+            return group[0];
+
+        var hasMovie = group.Any(item => item.Identity.MediaKind == VideoMetadataMediaKind.Movie);
+        var hasAnime = group.Any(item =>
+            item.Identity.MediaKind == VideoMetadataMediaKind.Anime
+            || item.Identity.ProviderId.Equals("anilist", StringComparison.OrdinalIgnoreCase));
+        var ranked = group
+            .Select((item, index) => (Item: item, Index: index))
+            .OrderBy(entry => hasMovie && entry.Item.Identity.MediaKind != VideoMetadataMediaKind.Movie ? 1 : 0)
+            .ThenBy(entry => AggregatedPrimaryRank(entry.Item.Identity.ProviderId, hasAnime))
+            .ThenBy(entry => entry.Index)
+            .Select(entry => entry.Item)
+            .ToArray();
+        var primary = ranked[0];
+
+        var externalIds = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.OrdinalIgnoreCase);
+        var aliases = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
+        foreach (var item in ranked)
+        {
+            foreach (var pair in item.Identity.ExternalIds ?? ImmutableDictionary<string, string>.Empty)
+            {
+                if (!string.IsNullOrWhiteSpace(pair.Key) && !string.IsNullOrWhiteSpace(pair.Value))
+                    externalIds.TryAdd(pair.Key.Trim(), pair.Value.Trim());
+            }
+            if (!string.IsNullOrWhiteSpace(item.Identity.ProviderId)
+                && !string.IsNullOrWhiteSpace(item.Identity.ProviderItemId))
+            {
+                externalIds.TryAdd(item.Identity.ProviderId, item.Identity.ProviderItemId);
+            }
+            AddAlias(aliases, item.Identity.Title);
+            AddAlias(aliases, item.Identity.OriginalTitle);
+            if (!item.Identity.Aliases.IsDefault)
+            {
+                foreach (var alias in item.Identity.Aliases)
+                    AddAlias(aliases, alias);
+            }
+        }
+
+        var posterUrl = FirstNonEmpty(ranked.Select(item => item.Identity.PosterUrl))
+                        ?? FirstNonEmpty(ranked.Select(item => item.PosterUrl));
+        var backdropUrl = FirstNonEmpty(ranked.Select(item => item.Identity.BackdropUrl))
+                          ?? FirstNonEmpty(ranked.Select(item => item.BackdropUrl));
+        var aniListTitleItem = hasAnime
+            ? ranked.FirstOrDefault(item =>
+                item.Identity.ProviderId.Equals("anilist", StringComparison.OrdinalIgnoreCase))
+            : null;
+        var displayTitle = aniListTitleItem?.Identity.Title ?? primary.Identity.Title;
+        var originalTitle = aniListTitleItem?.Identity.OriginalTitle
+                            ?? primary.Identity.OriginalTitle
+                            ?? FirstNonEmpty(ranked.Select(item => item.Identity.OriginalTitle));
+        var identity = primary.Identity with
+        {
+            Title = displayTitle,
+            OriginalTitle = originalTitle,
+            Year = primary.Identity.Year
+                   ?? ranked.Select(item => item.Identity.Year).FirstOrDefault(year => year.HasValue),
+            Aliases = aliases
+                .Where(alias => !alias.Equals(displayTitle, StringComparison.CurrentCultureIgnoreCase))
+                .ToImmutableArray(),
+            ExternalIds = externalIds.ToImmutable(),
+            PosterUrl = posterUrl,
+            BackdropUrl = backdropUrl,
+        };
+        return primary with
+        {
+            Identity = identity,
+            Overview = primary.Overview ?? FirstNonEmpty(ranked.Select(item => item.Overview)),
+            CommunityRating = primary.CommunityRating
+                              ?? ranked.Select(item => item.CommunityRating).FirstOrDefault(value => value.HasValue),
+            VoteCount = primary.VoteCount
+                        ?? ranked.Select(item => item.VoteCount).FirstOrDefault(value => value.HasValue),
+            PosterUrl = posterUrl,
+            BackdropUrl = backdropUrl,
+            LocalPosterPath = primary.LocalPosterPath
+                              ?? FirstNonEmpty(ranked.Select(item => item.LocalPosterPath)),
+            LocalBackdropPath = primary.LocalBackdropPath
+                                ?? FirstNonEmpty(ranked.Select(item => item.LocalBackdropPath)),
+        };
+    }
+
+    private static int AggregatedPrimaryRank(string providerId, bool anime) =>
+        providerId.ToLowerInvariant() switch
+        {
+            "anilist" when anime => 0,
+            "tmdb" when !anime => 0,
+            "tmdb" => 2,
+            "anilist" => 2,
+            _ => 10,
+        };
+
+    private static void AddAlias(ISet<string> aliases, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+            aliases.Add(value.Trim());
+    }
+
+    private static string? FirstNonEmpty(IEnumerable<string?> values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+    private static VideoDiscoveryDetails MergeIdentityIntoDetails(
+        VideoDiscoveryDetails details,
+        VideoMetadataCandidate identity)
+    {
+        var metadata = details.Metadata.WithInitializedCollections();
+        var externalIds = metadata.ExternalIds.ToBuilder();
+        foreach (var pair in identity.ExternalIds ?? ImmutableDictionary<string, string>.Empty)
+        {
+            if (string.IsNullOrWhiteSpace(pair.Key) || string.IsNullOrWhiteSpace(pair.Value))
+                continue;
+
+            var key = pair.Key.Trim();
+            if (!externalIds.ContainsKey(key))
+                externalIds[key] = pair.Value.Trim();
+        }
+        if (!string.IsNullOrWhiteSpace(identity.ProviderId)
+            && !string.IsNullOrWhiteSpace(identity.ProviderItemId)
+            && !externalIds.ContainsKey(identity.ProviderId))
+        {
+            externalIds[identity.ProviderId] = identity.ProviderItemId;
+        }
+
+        var aliases = new HashSet<string>(
+            metadata.Aliases,
+            StringComparer.CurrentCultureIgnoreCase);
+        AddAlias(aliases, identity.Title);
+        AddAlias(aliases, identity.OriginalTitle);
+        if (!identity.Aliases.IsDefault)
+        {
+            foreach (var alias in identity.Aliases)
+                AddAlias(aliases, alias);
+        }
+
+        var keepCanonicalAnimeTitle = identity.ProviderId.Equals(
+            "tmdb",
+            StringComparison.OrdinalIgnoreCase)
+            && TryGetExternalId(identity.ExternalIds, "anilist", out _);
+        var displayTitle = keepCanonicalAnimeTitle
+            ? PreferText(identity.Title, metadata.Title) ?? string.Empty
+            : metadata.Title;
+        var originalTitle = keepCanonicalAnimeTitle
+            ? PreferText(identity.OriginalTitle, metadata.OriginalTitle)
+            : metadata.OriginalTitle ?? identity.OriginalTitle;
+        AddAlias(aliases, metadata.Title);
+        AddAlias(aliases, metadata.OriginalTitle);
+
+        return details with
+        {
+            Metadata = metadata with
+            {
+                Title = displayTitle,
+                OriginalTitle = originalTitle,
+                Year = metadata.Year ?? identity.Year,
+                Aliases = aliases
+                    .Where(alias => !alias.Equals(displayTitle, StringComparison.CurrentCultureIgnoreCase))
+                    .ToImmutableArray(),
+                ExternalIds = externalIds.ToImmutable(),
+                SourceUrl = metadata.SourceUrl ?? identity.SourceUrl,
+            },
+        };
+    }
+
+    private static VideoDiscoveryDetails MergeSupplementalDetails(
+        VideoDiscoveryDetails primary,
+        VideoDiscoveryDetails supplemental)
+    {
+        var primaryMetadata = primary.Metadata.WithInitializedCollections();
+        var supplementalMetadata = supplemental.Metadata.WithInitializedCollections();
+        var externalIds = primaryMetadata.ExternalIds.ToBuilder();
+        foreach (var pair in supplementalMetadata.ExternalIds)
+        {
+            if (!string.IsNullOrWhiteSpace(pair.Key)
+                && !string.IsNullOrWhiteSpace(pair.Value)
+                && !externalIds.ContainsKey(pair.Key.Trim()))
+            {
+                externalIds[pair.Key.Trim()] = pair.Value.Trim();
+            }
+        }
+
+        var aniListMetadata = primaryMetadata.ProviderId.Equals(
+            "anilist",
+            StringComparison.OrdinalIgnoreCase)
+            ? primaryMetadata
+            : supplementalMetadata.ProviderId.Equals("anilist", StringComparison.OrdinalIgnoreCase)
+                ? supplementalMetadata
+                : null;
+        var fallbackTitle = PreferText(primaryMetadata.Title, supplementalMetadata.Title);
+        var displayTitle = aniListMetadata is null
+            ? fallbackTitle
+            : PreferText(aniListMetadata.Title, fallbackTitle);
+        var fallbackOriginalTitle = PreferText(
+            primaryMetadata.OriginalTitle,
+            supplementalMetadata.OriginalTitle);
+        var originalTitle = aniListMetadata is null
+            ? fallbackOriginalTitle
+            : PreferText(aniListMetadata.OriginalTitle, fallbackOriginalTitle);
+        var aliases = new HashSet<string>(
+            MergeTextValues(primaryMetadata.Aliases, supplementalMetadata.Aliases),
+            StringComparer.CurrentCultureIgnoreCase);
+        AddAlias(aliases, primaryMetadata.Title);
+        AddAlias(aliases, primaryMetadata.OriginalTitle);
+        AddAlias(aliases, supplementalMetadata.Title);
+        AddAlias(aliases, supplementalMetadata.OriginalTitle);
+
+        var metadata = primaryMetadata with
+        {
+            Title = displayTitle ?? string.Empty,
+            OriginalTitle = originalTitle,
+            Subtitle = PreferText(primaryMetadata.Subtitle, supplementalMetadata.Subtitle),
+            Overview = PreferText(primaryMetadata.Overview, supplementalMetadata.Overview),
+            Year = primaryMetadata.Year ?? supplementalMetadata.Year,
+            SeasonNumber = primaryMetadata.SeasonNumber ?? supplementalMetadata.SeasonNumber,
+            EpisodeNumber = primaryMetadata.EpisodeNumber ?? supplementalMetadata.EpisodeNumber,
+            AbsoluteEpisodeNumber = primaryMetadata.AbsoluteEpisodeNumber
+                                    ?? supplementalMetadata.AbsoluteEpisodeNumber,
+            Aliases = aliases
+                .Where(alias => !alias.Equals(
+                    displayTitle,
+                    StringComparison.CurrentCultureIgnoreCase))
+                .ToImmutableArray(),
+            Genres = MergeTextValues(primaryMetadata.Genres, supplementalMetadata.Genres),
+            Actors = MergeTextValues(primaryMetadata.Actors, supplementalMetadata.Actors),
+            ExternalIds = externalIds.ToImmutable(),
+            SourceUrl = PreferText(primaryMetadata.SourceUrl, supplementalMetadata.SourceUrl),
+            Tagline = PreferText(primaryMetadata.Tagline, supplementalMetadata.Tagline),
+            OfficialRating = PreferText(
+                primaryMetadata.OfficialRating,
+                supplementalMetadata.OfficialRating),
+            CommunityRating = primaryMetadata.CommunityRating
+                              ?? supplementalMetadata.CommunityRating,
+            EndYear = primaryMetadata.EndYear ?? supplementalMetadata.EndYear,
+            Status = PreferText(primaryMetadata.Status, supplementalMetadata.Status),
+            Tags = MergeTextValues(primaryMetadata.Tags, supplementalMetadata.Tags),
+            Studios = MergeTextValues(primaryMetadata.Studios, supplementalMetadata.Studios),
+            People = MergePeople(primaryMetadata.People, supplementalMetadata.People),
+            RelatedItems = MergeRelatedItems(
+                primaryMetadata.RelatedItems,
+                supplementalMetadata.RelatedItems),
+            Seasons = primaryMetadata.Seasons.IsDefaultOrEmpty
+                ? supplementalMetadata.Seasons
+                : primaryMetadata.Seasons,
+            TmdbOrdering = primaryMetadata.TmdbOrdering ?? supplementalMetadata.TmdbOrdering,
+        };
+
+        return primary with
+        {
+            Metadata = metadata,
+            Artwork = new VideoDiscoveryArtwork(
+                primary.Artwork.PosterPath ?? supplemental.Artwork.PosterPath,
+                primary.Artwork.BackdropPath ?? supplemental.Artwork.BackdropPath,
+                primary.Artwork.LogoPath ?? supplemental.Artwork.LogoPath),
+            Seasons = primary.Seasons.IsDefaultOrEmpty
+                ? supplemental.Seasons
+                : primary.Seasons,
+        };
+    }
+
+    private static string? PreferText(string? primary, string? supplemental) =>
+        string.IsNullOrWhiteSpace(primary) ? supplemental : primary;
+
+    private static ImmutableArray<string> MergeTextValues(
+        ImmutableArray<string> primary,
+        ImmutableArray<string> supplemental) =>
+        (primary.IsDefault ? [] : primary)
+        .Concat(supplemental.IsDefault ? [] : supplemental)
+        .Where(value => !string.IsNullOrWhiteSpace(value))
+        .Select(value => value.Trim())
+        .Distinct(StringComparer.CurrentCultureIgnoreCase)
+        .ToImmutableArray();
+
+    private static ImmutableArray<VideoPersonCredit> MergePeople(
+        ImmutableArray<VideoPersonCredit> primary,
+        ImmutableArray<VideoPersonCredit> supplemental)
+    {
+        var merged = (primary.IsDefault ? [] : primary).ToList();
+        foreach (var person in supplemental.IsDefault ? [] : supplemental)
+        {
+            var index = merged.FindIndex(existing =>
+                existing.Name.Equals(person.Name, StringComparison.CurrentCultureIgnoreCase)
+                && string.Equals(existing.Role, person.Role, StringComparison.CurrentCultureIgnoreCase)
+                && existing.Type.Equals(person.Type, StringComparison.OrdinalIgnoreCase));
+            if (index < 0)
+            {
+                merged.Add(person);
+                continue;
+            }
+
+            var existing = merged[index];
+            merged[index] = existing with
+            {
+                ImageUrl = existing.ImageUrl ?? person.ImageUrl,
+                LocalImagePath = existing.LocalImagePath ?? person.LocalImagePath,
+            };
+        }
+        return merged.ToImmutableArray();
+    }
+
+    private static ImmutableArray<VideoRelatedItem> MergeRelatedItems(
+        ImmutableArray<VideoRelatedItem> primary,
+        ImmutableArray<VideoRelatedItem> supplemental)
+    {
+        var merged = (primary.IsDefault ? [] : primary).ToList();
+        foreach (var item in supplemental.IsDefault ? [] : supplemental)
+        {
+            var index = merged.FindIndex(existing =>
+                existing.ProviderId.Equals(item.ProviderId, StringComparison.OrdinalIgnoreCase)
+                && existing.ProviderItemId.Equals(
+                    item.ProviderItemId,
+                    StringComparison.OrdinalIgnoreCase));
+            if (index < 0)
+            {
+                merged.Add(item);
+                continue;
+            }
+
+            var existing = merged[index];
+            merged[index] = existing with
+            {
+                OriginalTitle = PreferText(existing.OriginalTitle, item.OriginalTitle),
+                Year = existing.Year ?? item.Year,
+                PosterUrl = existing.PosterUrl ?? item.PosterUrl,
+                BackdropUrl = existing.BackdropUrl ?? item.BackdropUrl,
+                SourceUrl = PreferText(existing.SourceUrl, item.SourceUrl),
+                LocalPosterPath = existing.LocalPosterPath ?? item.LocalPosterPath,
+                LocalBackdropPath = existing.LocalBackdropPath ?? item.LocalBackdropPath,
+                Aliases = MergeTextValues(existing.Aliases, item.Aliases),
+            };
+        }
+        return merged.ToImmutableArray();
+    }
 
     private async Task<VideoDiscoveryPage> GetCachedPageAsync(
         PageCacheKey key,
@@ -552,41 +1573,6 @@ internal sealed class VideoDiscoveryService : IVideoDiscoveryService
         return page with { Items = (await Task.WhenAll(tasks)).ToImmutableArray() };
     }
 
-    private async Task<VideoDiscoveryPage> CacheSearchArtworkAsync(
-        string providerId,
-        VideoDiscoveryPage page,
-        CancellationToken ct)
-    {
-        if (!_artworkProviders.ContainsKey(providerId))
-            return page;
-
-        using var gate = new SemaphoreSlim(SecondaryArtworkConcurrency, SecondaryArtworkConcurrency);
-        var tasks = page.Items.Select(async item =>
-        {
-            await gate.WaitAsync(ct);
-            try
-            {
-                var artwork = await GetArtworkAsync(item.Identity, ct);
-                var posterUrl = artwork.FirstOrDefault(candidate =>
-                    candidate.Kind.Equals("poster", StringComparison.OrdinalIgnoreCase))?.Url;
-                var backdropUrl = artwork.FirstOrDefault(candidate =>
-                    candidate.Kind.Equals("backdrop", StringComparison.OrdinalIgnoreCase))?.Url;
-                return item with
-                {
-                    PosterUrl = item.PosterUrl ?? posterUrl,
-                    BackdropUrl = item.BackdropUrl ?? backdropUrl,
-                };
-            }
-            finally
-            {
-                gate.Release();
-            }
-        });
-
-        var pageWithUrls = page with { Items = (await Task.WhenAll(tasks)).ToImmutableArray() };
-        return await CachePageArtworkAsync(pageWithUrls, ct);
-    }
-
     private async Task<IReadOnlyList<VideoArtworkCandidate>> GetArtworkAsync(
         VideoMetadataCandidate identity,
         CancellationToken ct)
@@ -689,7 +1675,8 @@ internal sealed class VideoDiscoveryService : IVideoDiscoveryService
                     episode.RuntimeMinutes,
                     episode.ThumbnailUrl,
                     episode.SourceUrl,
-                    LocalThumbnailPath: await CacheWithGateAsync(episode.ThumbnailUrl)))
+                    LocalThumbnailPath: await CacheWithGateAsync(episode.ThumbnailUrl),
+                    DisplayNumber: episode.DisplayNumber))
                 .ToArray();
             var localEpisodes = await Task.WhenAll(episodeTasks);
             var localPoster = await localPosterTask;
@@ -786,11 +1773,14 @@ internal sealed class VideoDiscoveryService : IVideoDiscoveryService
         }
     }
 
+    public Task<string?> ResolveArtworkAsync(
+        string? url,
+        CancellationToken ct = default) => CacheArtworkAsync(url, ct);
+
     private static string ArtworkProviderId(Uri uri) => uri.IdnHost.ToLowerInvariant() switch
     {
         "image.tmdb.org" => "tmdb",
         "s4.anilist.co" => "anilist",
-        "lain.bgm.tv" => "bangumi",
         "static.tvmaze.com" => "tvmaze",
         "artworks.thetvdb.com" => "tvdb",
         _ => throw new HttpRequestException("Artwork host is not allowed."),
@@ -809,8 +1799,36 @@ internal sealed class VideoDiscoveryService : IVideoDiscoveryService
     private sealed record DetailsCacheKey(
         string ProviderId,
         string ProviderItemId,
+        VideoMetadataMediaKind MediaKind,
         string Language,
         string Region);
+
+    private sealed record AggregateSearchJob(
+        string ProviderId,
+        ImmutableArray<VideoMetadataMediaKind> MediaKinds);
+
+    private sealed record AggregateSearchResponse(
+        string ProviderId,
+        int SuccessfulKinds,
+        int FailedKinds,
+        ImmutableArray<VideoDiscoveryItem> Items);
+
+    private sealed record AggregateBrowseJob(
+        string ProviderId,
+        ImmutableArray<VideoDiscoveryRequest> Requests);
+
+    private sealed record AggregateBrowseResponse(
+        string ProviderId,
+        int SuccessfulStreams,
+        int FailedStreams,
+        bool HasMore,
+        ImmutableArray<VideoDiscoveryItem> Items);
+
+    private sealed record AggregateBrowseStreamWindow(
+        int SuccessfulPages,
+        int FailedPages,
+        bool HasMore,
+        ImmutableArray<VideoDiscoveryItem> Items);
 
     private sealed record DetailsCacheEntry(
         VideoDiscoveryDetails Details,

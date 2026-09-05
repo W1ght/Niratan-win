@@ -84,7 +84,7 @@ public sealed class NyaaDownloadManager : INyaaDownloadManager, IDisposable
         }
 
         RaiseTasksChanged();
-        _ = RunTaskAsync(entry);
+        StartTask(entry);
         return entry.Snapshot.TaskId;
     }
 
@@ -164,7 +164,7 @@ public sealed class NyaaDownloadManager : INyaaDownloadManager, IDisposable
         }
 
         RaiseTasksChanged();
-        _ = RunTaskAsync(entry);
+        StartTask(entry);
     }
 
     public void Remove(string taskId)
@@ -276,6 +276,11 @@ public sealed class NyaaDownloadManager : INyaaDownloadManager, IDisposable
             SetFailed(entry, ex.Message);
         }
     }
+
+    // Enqueue is called by UI-facing flows. Keep torrent engine initialization and
+    // the synchronous prefix of DownloadAsync outside that caller's context.
+    private void StartTask(TaskEntry entry) =>
+        _ = Task.Run(() => RunTaskAsync(entry));
 
     private static string BuildImportSummary(ResourcePackageImportResult result)
     {

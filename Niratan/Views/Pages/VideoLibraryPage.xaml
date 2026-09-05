@@ -251,18 +251,13 @@
         </DataTemplate>
 
         <DataTemplate x:Key="VideoPosterItemTemplate" x:DataType="vmc:VideoItemViewModel">
-            <Grid Width="300"
-                  MaxWidth="300"
-                  Margin="0,0,12,0">
-            <Button Width="300"
-                    MaxWidth="300"
-                    Padding="0"
-                    HorizontalContentAlignment="Stretch"
-                    VerticalContentAlignment="Stretch"
+            <Grid Width="{StaticResource VideoLandscapeCardWidth}"
+                  Height="{StaticResource VideoLandscapeCardHeight}"
+                  MaxWidth="{StaticResource VideoLandscapeCardWidth}"
+                  Margin="0,0,12,12">
+            <Button Style="{StaticResource VideoLandscapeCardButtonStyle}"
                     AutomationProperties.AutomationId="{x:Bind AutomationId, Mode=OneTime}"
                     AutomationProperties.Name="{x:Bind Video.Title, Mode=OneTime}"
-                    Background="Transparent"
-                    BorderThickness="0"
                     Click="VideoButton_Click">
                 <Button.ContextFlyout>
                     <MenuFlyout>
@@ -312,15 +307,15 @@
                                         CommandParameter="{x:Bind}" />
                     </MenuFlyout>
                 </Button.ContextFlyout>
-                <StackPanel Width="300"
-                            MaxWidth="300"
+                <StackPanel Width="{StaticResource VideoLandscapeCardWidth}"
+                            MaxWidth="{StaticResource VideoLandscapeCardWidth}"
                             Spacing="8">
-                    <Border Width="300"
-                            Height="169"
+                    <Border Width="{StaticResource VideoLandscapeCardWidth}"
+                            Height="{StaticResource VideoLandscapeArtworkHeight}"
                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                             CornerRadius="8">
                         <Grid>
-                            <Image Stretch="UniformToFill"
+                            <Image Style="{StaticResource VideoPosterArtworkImageStyle}"
                                    Source="{x:Bind LandscapeArtworkImage, Mode=OneWay}"
                                    Visibility="{x:Bind HasLandscapeArtwork, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
                             <FontIcon FontSize="44"
@@ -331,8 +326,8 @@
                                       Visibility="{x:Bind HasLandscapeArtwork, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}" />
                         </Grid>
                     </Border>
-                    <StackPanel Width="300"
-                                MaxWidth="300"
+                    <StackPanel Width="{StaticResource VideoLandscapeCardWidth}"
+                                MaxWidth="{StaticResource VideoLandscapeCardWidth}"
                                 Spacing="5">
                         <Grid ColumnDefinitions="*,Auto"
                               ColumnSpacing="8">
@@ -343,21 +338,17 @@
                                          Value="{x:Bind OverallProgressPercent, Mode=OneWay}" />
                             <TextBlock Grid.Column="1"
                                        Text="{x:Bind ProgressText, Mode=OneWay}"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                       Style="{StaticResource VideoCardMetadataTextBlockStyle}" />
                         </Grid>
                         <TextBlock x:Name="VideoPosterTitleText"
-                                   Width="300"
-                                   MaxWidth="300"
+                                   Width="{StaticResource VideoLandscapeCardWidth}"
+                                   MaxWidth="{StaticResource VideoLandscapeCardWidth}"
                                    Text="{x:Bind Video.Title, Mode=OneTime}"
-                                   TextWrapping="WrapWholeWords"
-                                   TextTrimming="CharacterEllipsis"
-                                   MaxLines="2"
-                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                   Style="{StaticResource VideoCardTitleTextBlockStyle}" />
                         <TextBlock Text="{x:Bind FolderName, Mode=OneWay}"
-                                   TextTrimming="CharacterEllipsis"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                   Style="{StaticResource VideoCardMetadataTextBlockStyle}" />
                         <TextBlock Text="{x:Bind WatchStatusText, Mode=OneWay}"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                   Style="{StaticResource VideoCardMetadataTextBlockStyle}" />
                     </StackPanel>
                 </StackPanel>
             </Button>
@@ -507,6 +498,14 @@
                                 <FontIcon Glyph="&#xE774;" />
                             </AppBarButton.Icon>
                         </AppBarButton>
+                        <AppBarButton x:Uid="VideoLibraryClearAllScrapeRecordsButton"
+                                      Label="Clear all scrape records"
+                                      AutomationProperties.AutomationId="VideoLibraryClearAllScrapeRecordsButton"
+                                      Command="{x:Bind ViewModel.ClearAllScrapeRecordsCommand}">
+                            <AppBarButton.Icon>
+                                <FontIcon Glyph="&#xE74D;" />
+                            </AppBarButton.Icon>
+                        </AppBarButton>
                         <AppBarButton x:Uid="VideoLibraryMetadataTasksButton"
                                       Label="Background tasks"
                                       AutomationProperties.AutomationId="VideoLibraryMetadataTasksButton"
@@ -518,7 +517,10 @@
                     </CommandBar>
                 </Grid>
 
-                <StackPanel Grid.Row="1" Margin="20,0,28,10" Spacing="8">
+                <StackPanel Grid.Row="1"
+                            Margin="20,0,28,10"
+                            Spacing="8"
+                            Visibility="{x:Bind ViewModel.IsSourcesView, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
                     <Grid RowDefinitions="Auto,Auto"
                           RowSpacing="5"
                           Visibility="{x:Bind ViewModel.HasActiveScan, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
@@ -629,6 +631,46 @@
                     <StackPanel Grid.Row="0"
                                 Margin="20,0,28,4"
                                 Spacing="8">
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="8"
+                                    Visibility="{x:Bind ViewModel.IsAllVideosFilterView, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
+                            <ToggleButton x:Uid="VideoLibraryAllFilterButton"
+                                          AutomationProperties.AutomationId="VideoLibraryAllFilterButton"
+                                          Command="{x:Bind ViewModel.SelectLibraryViewCommand}"
+                                          CommandParameter="All"
+                                          Content="All"
+                                          IsChecked="{x:Bind ViewModel.IsAllVideosView, Mode=OneWay}" />
+                            <ToggleButton x:Uid="VideoLibraryMoviesFilterButton"
+                                          AutomationProperties.AutomationId="VideoLibraryMoviesFilterButton"
+                                          Command="{x:Bind ViewModel.SelectLibraryViewCommand}"
+                                          CommandParameter="Movies"
+                                          Content="Movies"
+                                          IsChecked="{x:Bind ViewModel.IsMoviesView, Mode=OneWay}" />
+                            <ToggleButton x:Uid="VideoLibraryAnimeFilterButton"
+                                          AutomationProperties.AutomationId="VideoLibraryAnimeFilterButton"
+                                          Command="{x:Bind ViewModel.SelectLibraryViewCommand}"
+                                          CommandParameter="Anime"
+                                          Content="Anime"
+                                          IsChecked="{x:Bind ViewModel.IsAnimeView, Mode=OneWay}" />
+                            <ToggleButton x:Uid="VideoLibraryFoldersFilterButton"
+                                          AutomationProperties.AutomationId="VideoLibraryFoldersFilterButton"
+                                          Command="{x:Bind ViewModel.SelectLibraryViewCommand}"
+                                          CommandParameter="Folders"
+                                          Content="Folders"
+                                          IsChecked="{x:Bind ViewModel.IsFoldersView, Mode=OneWay}" />
+                            <ToggleButton x:Uid="VideoLibraryCollectionsFilterButton"
+                                          AutomationProperties.AutomationId="VideoLibraryCollectionsFilterButton"
+                                          Command="{x:Bind ViewModel.SelectLibraryViewCommand}"
+                                          CommandParameter="Collections"
+                                          Content="Collections"
+                                          IsChecked="{x:Bind ViewModel.IsCollectionsView, Mode=OneWay}" />
+                            <ToggleButton x:Uid="VideoLibraryTagsFilterButton"
+                                          AutomationProperties.AutomationId="VideoLibraryTagsFilterButton"
+                                          Command="{x:Bind ViewModel.SelectLibraryViewCommand}"
+                                          CommandParameter="Tags"
+                                          Content="Tags"
+                                          IsChecked="{x:Bind ViewModel.IsTagsView, Mode=OneWay}" />
+                        </StackPanel>
                         <ItemsControl x:Name="VideoLibraryFolderFilters"
                                       AutomationProperties.AutomationId="VideoLibraryFolderFilters"
                                       ItemTemplate="{StaticResource FolderFilterTemplate}"
@@ -705,8 +747,8 @@
                             <GridView.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <ItemsWrapGrid Orientation="Horizontal"
-                                                   ItemWidth="300"
-                                                   ItemHeight="320" />
+                                                   ItemWidth="{StaticResource VideoLandscapeCardSlotWidth}"
+                                                   ItemHeight="{StaticResource VideoLandscapeCardSlotHeight}" />
                                 </ItemsPanelTemplate>
                             </GridView.ItemsPanel>
                         </GridView>
@@ -870,23 +912,23 @@
                                   ItemsSource="{x:Bind ViewModel.SeriesCards, Mode=OneWay}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <ItemsWrapGrid Orientation="Horizontal" ItemWidth="190" ItemHeight="350" />
+                                <ItemsWrapGrid Orientation="Horizontal"
+                                               ItemWidth="{StaticResource VideoPortraitCardSlotWidth}"
+                                               ItemHeight="{StaticResource VideoPortraitCardSlotHeight}" />
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vmc:VideoSeriesViewModel">
-                                <Button Width="176" Padding="0" Margin="0,0,14,18"
-                                        HorizontalContentAlignment="Stretch"
-                                        VerticalContentAlignment="Stretch"
-                                        Background="Transparent" BorderThickness="0"
+                                <Button Style="{StaticResource VideoPortraitCardButtonStyle}"
                                         Command="{Binding ViewModel.SelectSeriesCommand, ElementName=ThisPage}"
                                         CommandParameter="{x:Bind}">
-                                    <StackPanel Spacing="8">
-                                        <Border Height="264" CornerRadius="8"
+                                    <StackPanel Width="{StaticResource VideoPortraitCardWidth}"
+                                                Spacing="8">
+                                        <Border Height="{StaticResource VideoPortraitArtworkHeight}" CornerRadius="8"
                                                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                                             <Grid>
                                                 <Image Source="{x:Bind PosterImage, Mode=OneTime}"
-                                                       Stretch="UniformToFill"
+                                                       Style="{StaticResource VideoPosterArtworkImageStyle}"
                                                        Visibility="{x:Bind HasPoster, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneTime}" />
                                                 <FontIcon Glyph="&#xE8D2;" FontSize="44" Opacity="0.35"
                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -894,11 +936,9 @@
                                             </Grid>
                                         </Border>
                                         <TextBlock Text="{x:Bind Title, Mode=OneTime}"
-                                                   Style="{StaticResource BodyStrongTextBlockStyle}"
-                                                   TextTrimming="CharacterEllipsis" MaxLines="2" TextWrapping="Wrap" />
+                                                   Style="{StaticResource VideoCardTitleTextBlockStyle}" />
                                         <TextBlock Text="{x:Bind FactsText, Mode=OneTime}"
-                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                   TextTrimming="CharacterEllipsis" />
+                                                   Style="{StaticResource VideoCardMetadataTextBlockStyle}" />
                                     </StackPanel>
                                 </Button>
                             </DataTemplate>
@@ -990,23 +1030,22 @@
                                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><ItemsStackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vmc:VideoSeasonViewModel">
-                                            <ToggleButton Width="128"
-                                                          Margin="0,0,12,0"
-                                                          Padding="0"
-                                                          HorizontalContentAlignment="Stretch"
-                                                          VerticalContentAlignment="Stretch"
-                                                          AutomationProperties.AutomationId="{x:Bind AutomationId, Mode=OneTime}"
-                                                          IsChecked="{x:Bind IsSelected, Mode=OneWay}"
-                                                          Command="{Binding ViewModel.SelectSeriesSeasonCommand, ElementName=ThisPage}"
-                                                          CommandParameter="{x:Bind}">
-                                                <StackPanel Spacing="6">
-                                                    <Border Height="192" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-                                                        <Image Source="{x:Bind PosterImage, Mode=OneTime}" Stretch="UniformToFill" />
+                                            <Button Style="{StaticResource VideoSeasonCardButtonStyle}"
+                                                    AutomationProperties.AutomationId="{x:Bind AutomationId, Mode=OneTime}"
+                                                    Command="{Binding ViewModel.SelectSeriesSeasonCommand, ElementName=ThisPage}"
+                                                    CommandParameter="{x:Bind}">
+                                                <StackPanel Width="{StaticResource VideoSeasonCardWidth}"
+                                                            Spacing="6">
+                                                    <Border Height="{StaticResource VideoSeasonArtworkHeight}" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                                                        <Image Source="{x:Bind PosterImage, Mode=OneTime}"
+                                                               Style="{StaticResource VideoPosterArtworkImageStyle}" />
                                                     </Border>
-                                                    <TextBlock Text="{x:Bind Title, Mode=OneTime}" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                                    <TextBlock Text="{x:Bind EpisodeCountText, Mode=OneTime}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                    <TextBlock Text="{x:Bind Title, Mode=OneTime}"
+                                                               Style="{StaticResource VideoSeasonCardTitleTextBlockStyle}" />
+                                                    <TextBlock Text="{x:Bind EpisodeCountText, Mode=OneTime}"
+                                                               Style="{StaticResource VideoCardMetadataTextBlockStyle}" />
                                                 </StackPanel>
-                                            </ToggleButton>
+                                            </Button>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
@@ -1054,7 +1093,7 @@
                                                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                                               Visibility="{x:Bind HasArtwork, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}" />
                                                     <Image Source="{x:Bind ArtworkImage, Mode=OneWay}"
-                                                           Stretch="UniformToFill"
+                                                           Style="{StaticResource VideoEpisodeArtworkImageStyle}"
                                                            Visibility="{x:Bind HasArtwork, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}" />
                                                 </Grid>
                                                 <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto" RowSpacing="6">
@@ -1152,23 +1191,26 @@
                                     Visibility="{x:Bind ViewModel.SelectedSeries.HasRelatedItems, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
                             <TextBlock x:Uid="VideoLibraryMoreLikeThisHeading" Text="More like this" Style="{StaticResource SubtitleTextBlockStyle}" />
                             <ItemsControl ItemsSource="{x:Bind ViewModel.SelectedSeries.RelatedItems, Mode=OneWay}">
-                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><ItemsWrapGrid Orientation="Horizontal" ItemWidth="190" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><ItemsWrapGrid Orientation="Horizontal" ItemWidth="{StaticResource VideoPortraitCardSlotWidth}" ItemHeight="{StaticResource VideoPortraitCardSlotHeight}" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vmc:VideoRelatedItemViewModel">
-                                        <Border Width="176" MinHeight="326" Padding="0" Margin="0,0,14,14"
-                                                CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-                                            <StackPanel Spacing="5">
-                                                <Grid Height="264">
+                                        <Border Style="{StaticResource VideoPortraitCardBorderStyle}">
+                                            <StackPanel Width="{StaticResource VideoPortraitCardWidth}"
+                                                        Spacing="5">
+                                                <Grid Width="{StaticResource VideoPortraitCardWidth}"
+                                                      Height="{StaticResource VideoPortraitArtworkHeight}">
                                                     <FontIcon Glyph="&#xE7FC;" FontSize="42"
+                                                              HorizontalAlignment="Center"
+                                                              VerticalAlignment="Center"
                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                                    <Image Source="{x:Bind Image, Mode=OneTime}" Stretch="UniformToFill" />
+                                                    <Image Source="{x:Bind Image, Mode=OneTime}"
+                                                           Style="{StaticResource VideoPosterArtworkImageStyle}" />
                                                 </Grid>
                                                 <StackPanel Padding="10,2,10,10" Spacing="4">
-                                                <TextBlock Text="{x:Bind Title}" Style="{StaticResource BodyStrongTextBlockStyle}"
-                                                           TextWrapping="Wrap" MaxLines="3" />
+                                                <TextBlock Text="{x:Bind Title}"
+                                                           Style="{StaticResource VideoCardTitleTextBlockStyle}" />
                                                 <TextBlock Text="{x:Bind OriginalTitle}"
-                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                           TextTrimming="CharacterEllipsis" />
+                                                           Style="{StaticResource VideoCardMetadataTextBlockStyle}" />
                                                 </StackPanel>
                                             </StackPanel>
                                         </Border>
@@ -1194,57 +1236,6 @@
                                 AutomationProperties.AutomationId="VideoLibraryHomeSections"
                                 Margin="20,0,28,28"
                                 Spacing="22">
-                        <StackPanel Spacing="10">
-                            <TextBlock x:Uid="VideoLibraryHomeMyMediaHeading"
-                                       Text="My media"
-                                       Style="{StaticResource SubtitleTextBlockStyle}" />
-                            <ScrollViewer HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Auto"
-                                          VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Hidden">
-                            <StackPanel Orientation="Horizontal" Spacing="12">
-                                <Button Width="250" Command="{x:Bind ViewModel.SelectLibraryViewCommand}"
-                                        CommandParameter="Movies" HorizontalContentAlignment="Stretch" Padding="16">
-                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                                        <FontIcon Glyph="&#xE8B2;" FontSize="26" />
-                                        <StackPanel Grid.Column="1">
-                                            <TextBlock x:Uid="VideoLibraryHomeMoviesTile" Text="Movies" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                            <TextBlock Text="{x:Bind ViewModel.HomeMoviesCountText, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                        </StackPanel>
-                                    </Grid>
-                                </Button>
-                                <Button Width="250" Command="{x:Bind ViewModel.SelectLibraryViewCommand}"
-                                        CommandParameter="Series" HorizontalContentAlignment="Stretch" Padding="16">
-                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                                        <FontIcon Glyph="&#xE8D2;" FontSize="26" />
-                                        <StackPanel Grid.Column="1">
-                                            <TextBlock x:Uid="VideoLibraryHomeSeriesTile" Text="Series" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                            <TextBlock Text="{x:Bind ViewModel.HomeSeriesCountText, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                        </StackPanel>
-                                    </Grid>
-                                </Button>
-                                <Button Width="250" Command="{x:Bind ViewModel.SelectLibraryViewCommand}"
-                                        CommandParameter="Anime" HorizontalContentAlignment="Stretch" Padding="16">
-                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                                        <FontIcon Glyph="&#xE7FC;" FontSize="26" />
-                                        <StackPanel Grid.Column="1">
-                                            <TextBlock x:Uid="VideoLibraryHomeAnimeTile" Text="Anime" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                            <TextBlock Text="{x:Bind ViewModel.HomeAnimeCountText, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                        </StackPanel>
-                                    </Grid>
-                                </Button>
-                                <Button Width="250" Command="{x:Bind ViewModel.SelectLibraryViewCommand}"
-                                        CommandParameter="Collections" HorizontalContentAlignment="Stretch" Padding="16">
-                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                                        <FontIcon Glyph="&#xE8F1;" FontSize="26" />
-                                        <StackPanel Grid.Column="1">
-                                            <TextBlock x:Uid="VideoLibraryHomeCollectionsTile" Text="Collections" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                            <TextBlock Text="{x:Bind ViewModel.HomeCollectionsCountText, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                        </StackPanel>
-                                    </Grid>
-                                </Button>
-                            </StackPanel>
-                            </ScrollViewer>
-                        </StackPanel>
-
                         <StackPanel Spacing="8"
                                     Visibility="{x:Bind ViewModel.HasHomeContinueWatching, Converter={StaticResource BooleanToVisibilityConverter}, Mode=OneWay}">
                             <TextBlock x:Uid="VideoLibraryHomeContinueWatchingHeading"

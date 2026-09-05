@@ -65,6 +65,7 @@ public class VideoItem
     public IReadOnlyList<string> Studios { get; set; } = Array.Empty<string>();
     public IReadOnlyList<VideoPersonCredit> People { get; set; } = Array.Empty<VideoPersonCredit>();
     public IReadOnlyList<VideoRelatedItem> RelatedItems { get; set; } = Array.Empty<VideoRelatedItem>();
+    public IReadOnlyList<VideoDiscoverySeason> CatalogSeriesSeasons { get; set; } = Array.Empty<VideoDiscoverySeason>();
     public string GenresText => string.Join(" · ", Genres);
     public string ActorsText => string.Join(" · ", Actors);
     public bool HasGenres => Genres.Count > 0;

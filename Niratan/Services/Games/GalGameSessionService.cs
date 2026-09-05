@@ -4,9 +4,11 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Niratan.Helpers;
 using Niratan.Models.Games;
 
 namespace Niratan.Services.Games;
@@ -16,12 +18,17 @@ internal sealed class GalGameSessionService : IGalGameSessionService
     private const int QueryLimitedInformation = 0x1000;
     private const ushort ImageFileMachineI386 = 0x014c;
     private const ushort ImageFileMachineUnknown = 0;
+    private static readonly TimeSpan InjectorReadyTimeout = TimeSpan.FromSeconds(32);
+    private static readonly TimeSpan IpcOpenTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan CapabilityTimeout = TimeSpan.FromSeconds(5);
 
     private readonly GalGameHookRuntimeStage _runtimeStage;
     private readonly GalGameIpcReader _ipcReader;
     private readonly ILogger<GalGameSessionService> _logger;
     private readonly SemaphoreSlim _operationGate = new(1, 1);
     private Process? _injectorProcess;
+    private Task? _stdoutDrainTask;
+    private Task? _stderrDrainTask;
     private GalHookSessionState _state = new();
     private ulong _textCursor;
     private bool _disposed;
@@ -172,7 +179,7 @@ internal sealed class GalGameSessionService : IGalGameSessionService
         try
         {
             if (_injectorProcess is { HasExited: false })
-                _injectorProcess.Kill(entireProcessTree: true);
+                _injectorProcess.Kill();
         }
         catch (InvalidOperationException) { }
         catch (System.ComponentModel.Win32Exception) { }
@@ -219,6 +226,15 @@ internal sealed class GalGameSessionService : IGalGameSessionService
                     GalHookFailureReason.HelperMissing,
                     $"No {architecture} voice_hook runtime is bundled with this build.");
 
+            if (!await SupportsRequiredProtocolAsync(injector, ct))
+            {
+                return Failure(
+                    GalHookFailureReason.HelperMissing,
+                    ResourceStringHelper.GetString(
+                        "GamesHookProtocolMismatch",
+                        "The bundled capture helper is incompatible with this build."));
+            }
+
             var arguments = BuildInjectorArguments(
                 launchExe,
                 game,
@@ -232,6 +248,8 @@ internal sealed class GalGameSessionService : IGalGameSessionService
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
             };
             foreach (var argument in arguments)
                 startInfo.ArgumentList.Add(argument);
@@ -240,7 +258,13 @@ internal sealed class GalGameSessionService : IGalGameSessionService
             if (_injectorProcess is null)
                 return Failure(GalHookFailureReason.InjectionFailed, "The voice_hook injector could not be started.");
 
-            _ = _injectorProcess.StandardError.ReadToEndAsync();
+            var protocol = new GalGameInjectorProtocol();
+            _stdoutDrainTask = DrainOutputAsync(
+                _injectorProcess.StandardOutput,
+                protocol.ObserveStandardOutput);
+            _stderrDrainTask = DrainOutputAsync(
+                _injectorProcess.StandardError,
+                protocol.ObserveStandardError);
 
             SetState(_state with
             {
@@ -248,23 +272,23 @@ internal sealed class GalGameSessionService : IGalGameSessionService
                 InjectorPath = injector,
             });
 
-            int? targetPid;
-            if (attachProcessId is not null)
+            var handshake = await WaitForInjectorReadyAsync(
+                _injectorProcess,
+                protocol,
+                attachProcessId,
+                ct);
+            if (!handshake.Success)
             {
-                _ = _injectorProcess.StandardOutput.ReadToEndAsync();
-                targetPid = attachProcessId;
-            }
-            else
-            {
-                targetPid = await ReadLaunchedProcessIdAsync(_injectorProcess, ct);
-            }
-            if (targetPid is null || targetPid <= 0)
-            {
+                var launchedPid = protocol.LaunchedProcessId;
                 await StopResourcesAsync();
+                if (launchedPid is > 0)
+                    SetState(_state with { GamePid = launchedPid });
                 return Failure(
                     GalHookFailureReason.InjectionFailed,
-                    "The injector did not report a target process id.");
+                    handshake.Detail);
             }
+
+            var targetPid = handshake.ProcessId;
 
             SetState(_state with
             {
@@ -272,13 +296,15 @@ internal sealed class GalGameSessionService : IGalGameSessionService
                 Phase = GalHookSessionPhase.OpeningIpc,
             });
 
-            var snapshot = await WaitForIpcAsync(targetPid.Value, ct);
+            var snapshot = await WaitForIpcAsync(targetPid, ct);
             if (snapshot is null)
             {
                 await StopResourcesAsync();
                 return Failure(
                     GalHookFailureReason.IpcUnavailable,
-                    "The voice_hook shared memory was not created or has an incompatible version.");
+                    ResourceStringHelper.GetString(
+                        "GamesHookIpcUnavailable",
+                        "The capture helper reported ready, but its shared channel could not be opened."));
             }
 
             SetState(_state with
@@ -316,39 +342,69 @@ internal sealed class GalGameSessionService : IGalGameSessionService
         }
     }
 
-    private async Task<int?> ReadLaunchedProcessIdAsync(Process injector, CancellationToken ct)
+    private async Task<(bool Success, int ProcessId, string Detail)> WaitForInjectorReadyAsync(
+        Process injector,
+        GalGameInjectorProtocol protocol,
+        int? expectedAttachProcessId,
+        CancellationToken ct)
     {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(30));
-        while (true)
-        {
-            var line = await injector.StandardOutput.ReadLineAsync(timeout.Token);
-            if (line is null)
-                return null;
+        var outputDrain = Task.WhenAll(new[] { _stdoutDrainTask, _stderrDrainTask }
+            .Where(task => task is not null)
+            .Cast<Task>());
+        var wait = await GalGameInjectorProtocol.WaitForReadyAsync(
+            injector,
+            protocol,
+            outputDrain,
+            InjectorReadyTimeout,
+            ct);
+        if (wait.Outcome == GalGameInjectorWaitOutcome.Ready)
+            return ValidateHookedProcessId(wait.ProcessId, expectedAttachProcessId);
 
-            var marker = line.IndexOf("LAUNCH pid=", StringComparison.OrdinalIgnoreCase);
-            if (marker < 0)
-                continue;
-            var value = line[(marker + "LAUNCH pid=".Length)..].Trim();
-            var separator = value.IndexOfAny([' ', '\t']);
-            if (separator >= 0)
-                value = value[..separator];
-            if (int.TryParse(value, out var pid) && pid > 0)
-                return pid;
+        if (wait.Outcome == GalGameInjectorWaitOutcome.TimedOut)
+        {
+            return (false, 0, BuildInjectorFailureDetail(
+                protocol,
+                null,
+                ResourceStringHelper.GetString(
+                    "GamesHookReadyTimeout",
+                    "The capture helper did not report ready within 32 seconds.")));
         }
+
+        return (false, 0, BuildInjectorFailureDetail(
+            protocol,
+            wait.ExitCode,
+            ResourceStringHelper.GetString(
+                "GamesHookExitedEarly",
+                "The capture helper exited before it reported ready.")));
+    }
+
+    private static (bool Success, int ProcessId, string Detail) ValidateHookedProcessId(
+        int processId,
+        int? expectedAttachProcessId)
+    {
+        if (expectedAttachProcessId is > 0 && processId != expectedAttachProcessId.Value)
+        {
+            return (false, 0, ResourceStringHelper.FormatString(
+                "GamesHookWrongProcess",
+                "The capture helper attached to PID {0}, but PID {1} was requested.",
+                processId,
+                expectedAttachProcessId.Value));
+        }
+        return (true, processId, string.Empty);
     }
 
     private async Task<GalGameIpcSnapshot?> WaitForIpcAsync(int processId, CancellationToken ct)
     {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(30));
-        while (true)
+        var deadline = DateTime.UtcNow + IpcOpenTimeout;
+        while (DateTime.UtcNow < deadline)
         {
+            ct.ThrowIfCancellationRequested();
             var snapshot = _ipcReader.TryRead(processId);
             if (snapshot?.IsCompatible == true)
                 return snapshot;
-            await Task.Delay(TimeSpan.FromMilliseconds(250), timeout.Token);
+            await Task.Delay(TimeSpan.FromMilliseconds(100), ct);
         }
+        return null;
     }
 
     private void RefreshIpcSnapshot(int processId)
@@ -367,7 +423,7 @@ internal sealed class GalGameSessionService : IGalGameSessionService
         });
     }
 
-    private static IReadOnlyList<string> BuildInjectorArguments(
+    internal static IReadOnlyList<string> BuildInjectorArguments(
         string? launchExe,
         GalGameEntry? game,
         int? attachProcessId,
@@ -407,7 +463,158 @@ internal sealed class GalGameSessionService : IGalGameSessionService
             arguments.Add("--wait-ms");
             arguments.Add("30000");
         }
+        arguments.Add("--native-loopback-policy");
+        arguments.Add("deny");
         return arguments;
+    }
+
+    private static async Task DrainOutputAsync(StreamReader reader, Action<string> observer)
+    {
+        try
+        {
+            while (await reader.ReadLineAsync() is { } line)
+                observer(line);
+        }
+        catch (IOException)
+        {
+            // The process can be terminated while an async pipe read is pending.
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
+    private async Task<bool> SupportsRequiredProtocolAsync(string injector, CancellationToken ct)
+    {
+        using var probe = Process.Start(new ProcessStartInfo
+        {
+            FileName = injector,
+            WorkingDirectory = Path.GetDirectoryName(injector) ?? AppContext.BaseDirectory,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
+            ArgumentList = { "--capabilities" },
+        });
+        if (probe is null)
+            return false;
+        try
+        {
+            var stdoutTask = probe.StandardOutput.ReadToEndAsync(ct);
+            var stderrTask = probe.StandardError.ReadToEndAsync(ct);
+            await probe.WaitForExitAsync(ct).WaitAsync(CapabilityTimeout, ct);
+            var stdout = (await stdoutTask).Trim();
+            _ = await stderrTask;
+            return probe.ExitCode == 0
+                && string.Equals(
+                    stdout,
+                    GalGameInjectorProtocol.CapabilityToken,
+                    StringComparison.Ordinal);
+        }
+        catch (TimeoutException)
+        {
+            try { if (!probe.HasExited) probe.Kill(); }
+            catch (InvalidOperationException) { }
+            catch (System.ComponentModel.Win32Exception) { }
+            return false;
+        }
+    }
+
+    private string BuildInjectorFailureDetail(
+        GalGameInjectorProtocol protocol,
+        int? exitCode,
+        string fallback)
+    {
+        var reason = InjectorFailureReasonText(protocol.FailureToken, protocol.DiagnosticTail)
+            ?? fallback;
+        var evidence = LastDiagnosticLine(protocol.DiagnosticTail);
+        var suffix = string.Join(" · ", new[]
+        {
+            exitCode is null ? null : $"exit={exitCode.Value}",
+            string.IsNullOrWhiteSpace(evidence) ? null : evidence,
+        }.Where(value => value is not null));
+        var detail = suffix.Length == 0 ? reason : $"{reason} ({suffix})";
+        _logger.LogWarning(
+            "Galgame injector failed: token={FailureToken}, exit={ExitCode}, diagnostics={Diagnostics}",
+            protocol.FailureToken,
+            exitCode,
+            protocol.DiagnosticTail);
+        return detail;
+    }
+
+    private static string? InjectorFailureReasonText(string? token, string diagnostics)
+    {
+        token ??= diagnostics switch
+        {
+            var value when value.Contains("OpenProcess(", StringComparison.Ordinal) => "accessDenied",
+            var value when value.Contains("位数不匹配", StringComparison.Ordinal) => "bitnessMismatch",
+            var value when value.Contains("hook DLL not found", StringComparison.Ordinal) => "hookDllMissing",
+            var value when value.Contains("未收到就绪信号", StringComparison.Ordinal) => "readyTimeout",
+            _ => null,
+        };
+        return token?.ToLowerInvariant() switch
+        {
+            "accessdenied" => ResourceStringHelper.GetString(
+                "GamesHookAccessDenied",
+                "The game is running with higher privileges. Start Niratan as administrator and try again."),
+            "bitnessmismatch" => ResourceStringHelper.GetString(
+                "GamesHookBitnessMismatch",
+                "The capture helper architecture does not match the game."),
+            "hookdllmissing" => ResourceStringHelper.GetString(
+                "GamesHookDllMissing",
+                "The bundled capture helper is incomplete."),
+            "gameexemissing" => ResourceStringHelper.GetString(
+                "GamesHookGameMissing",
+                "The game executable no longer exists."),
+            "stalesession" => ResourceStringHelper.GetString(
+                "GamesHookStaleSession",
+                "The previous capture session has not been released yet. Try again in a moment."),
+            "residenthookmismatch" => ResourceStringHelper.GetString(
+                "GamesHookResidentMismatch",
+                "A previous capture component is still loaded in the game. Restart the game once."),
+            "readytimeout" => ResourceStringHelper.GetString(
+                "GamesHookNativeReadyTimeout",
+                "The hook library did not finish loading in time. Antivirus scanning may be the cause."),
+            "injectionfailed" or "guardedhookfailed" => ResourceStringHelper.GetString(
+                "GamesHookInjectionBlocked",
+                "Injection into the game was blocked. Check antivirus exclusions for Niratan and the game."),
+            "resumefailed" => ResourceStringHelper.GetString(
+                "GamesHookResumeFailed",
+                "The launched game could not be resumed and was stopped. Launch it again."),
+            "steamtimeout" => ResourceStringHelper.GetString(
+                "GamesHookSteamTimeout",
+                "Steam accepted the request, but the game process did not appear in time."),
+            "createprocessfailed" => ResourceStringHelper.GetString(
+                "GamesHookCreateProcessFailed",
+                "Windows could not start the game process."),
+            "elevationrequired" => ResourceStringHelper.GetString(
+                "GamesHookElevationRequired",
+                "Windows requires administrator permission to start this game."),
+            _ => null,
+        };
+    }
+
+    private static string LastDiagnosticLine(string diagnostics)
+    {
+        var line = diagnostics
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .LastOrDefault() ?? string.Empty;
+        const int maxLength = 200;
+        return line.Length <= maxLength ? line : $"…{line[^maxLength..]}";
+    }
+
+    private async Task AwaitOutputDrainAsync()
+    {
+        var tasks = new[] { _stdoutDrainTask, _stderrDrainTask }
+            .Where(task => task is not null)
+            .Cast<Task>()
+            .ToArray();
+        if (tasks.Length == 0)
+            return;
+        try { await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(1)); }
+        catch (TimeoutException) { }
     }
 
     private async Task StopResourcesAsync()
@@ -419,7 +626,7 @@ internal sealed class GalGameSessionService : IGalGameSessionService
         try
         {
             if (!process.HasExited)
-                process.Kill(entireProcessTree: true);
+                process.Kill();
             await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(2));
         }
         catch (InvalidOperationException) { }
@@ -427,6 +634,9 @@ internal sealed class GalGameSessionService : IGalGameSessionService
         catch (TimeoutException) { }
         finally
         {
+            await AwaitOutputDrainAsync();
+            _stdoutDrainTask = null;
+            _stderrDrainTask = null;
             process.Dispose();
         }
     }

@@ -1,7 +1,9 @@
 using System.Linq.Expressions;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using FluentAssertions;
+using Niratan.Messages;
 using Niratan.Models.Sasayaki;
 using Niratan.Models.Settings;
 using Niratan.Models.Sync;
@@ -62,7 +64,8 @@ public sealed class TtuSyncSettingsPageViewModelTests
             new FakeCredentialStore(),
             new GoogleDriveSyncCache(),
             new RecordingCoverCache(),
-            Mock.Of<IDialogService>())
+            Mock.Of<IDialogService>(),
+            new WeakReferenceMessenger())
         {
             EnableSync = true,
             SelectedSyncMode = TtuSettingsSyncMode.Manual,
@@ -123,6 +126,36 @@ public sealed class TtuSyncSettingsPageViewModelTests
         viewModel.GoogleClientSecret.Should().Be("saved-client-secret");
         viewModel.IsGoogleDriveConnected.Should().BeTrue();
         viewModel.CanEditGoogleDriveCredentials.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WhenSavedAuthorizationExpired_ShowsReconnectState()
+    {
+        var store = new FakeCredentialStore
+        {
+            Credentials = new GoogleDriveCredentials(
+                "expired-access",
+                "revoked-refresh",
+                "saved-client-id",
+                DateTimeOffset.UtcNow.AddMinutes(-5),
+                GoogleDriveTokenClient.DriveFileScope,
+                "saved-client-secret"),
+        };
+        var auth = new FakeGoogleDriveAuthService
+        {
+            HasCredentials = true,
+            AccessTokenException = new GoogleDriveReauthenticationRequiredException(
+                new InvalidOperationException("invalid_grant")),
+        };
+        var viewModel = CreateViewModel(auth, credentialStore: store);
+
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+
+        viewModel.IsGoogleDriveConnected.Should().BeFalse();
+        viewModel.IsGoogleDriveDisconnected.Should().BeTrue();
+        viewModel.CanEditGoogleDriveCredentials.Should().BeTrue();
+        viewModel.GoogleClientSecret.Should().BeEmpty();
+        viewModel.GoogleDriveConnectionStatus.Should().NotBeNullOrWhiteSpace();
     }
 
     [Fact]
@@ -249,13 +282,34 @@ public sealed class TtuSyncSettingsPageViewModelTests
         viewModel.GoogleDriveConnectionStatus.Should().NotBeNullOrWhiteSpace();
     }
 
+    [Fact]
+    public void InvalidatedAuthorizationMessage_ImmediatelyProjectsDisconnectedState()
+    {
+        var messenger = new WeakReferenceMessenger();
+        var viewModel = CreateViewModel(
+            new FakeGoogleDriveAuthService { HasCredentials = true },
+            messenger: messenger);
+        viewModel.GoogleClientSecret = "revoked-secret";
+
+        messenger.Send(new GoogleDriveConnectionStateChangedMessage(
+            IsConnected: false,
+            RequiresReconnect: true));
+
+        viewModel.IsGoogleDriveConnected.Should().BeFalse();
+        viewModel.IsGoogleDriveDisconnected.Should().BeTrue();
+        viewModel.CanEditGoogleDriveCredentials.Should().BeTrue();
+        viewModel.GoogleClientSecret.Should().BeEmpty();
+        viewModel.GoogleDriveConnectionStatus.Should().NotBeNullOrWhiteSpace();
+    }
+
     private static TtuSyncSettingsPageViewModel CreateViewModel(
         IGoogleDriveAuthService authService,
         IGoogleDriveSyncCache? cache = null,
         AppSettings? appSettings = null,
         IGoogleDriveCredentialStore? credentialStore = null,
         IDialogService? dialogService = null,
-        IGoogleDriveCoverCacheService? coverCache = null)
+        IGoogleDriveCoverCacheService? coverCache = null,
+        IMessenger? messenger = null)
     {
         var settings = appSettings ?? new AppSettings();
         var settingsService = new Mock<ISettingsService>();
@@ -291,7 +345,8 @@ public sealed class TtuSyncSettingsPageViewModelTests
             credentialStore ?? new FakeCredentialStore(),
             cache ?? new GoogleDriveSyncCache(),
             coverCache ?? new RecordingCoverCache(),
-            dialogService ?? defaultDialog.Object);
+            dialogService ?? defaultDialog.Object,
+            messenger ?? new WeakReferenceMessenger());
     }
 
     private sealed class FakeCredentialStore : IGoogleDriveCredentialStore
@@ -339,6 +394,7 @@ public sealed class TtuSyncSettingsPageViewModelTests
         public string? AuthenticatedClientId { get; private set; }
         public string? AuthenticatedClientSecret { get; private set; }
         public Exception? AuthenticationException { get; init; }
+        public Exception? AccessTokenException { get; init; }
 
         public Task AuthenticateAsync(
             string clientId,
@@ -354,8 +410,16 @@ public sealed class TtuSyncSettingsPageViewModelTests
             return Task.CompletedTask;
         }
 
-        public Task<string> GetAccessTokenAsync(CancellationToken ct = default) =>
-            Task.FromResult("token");
+        public Task<string> GetAccessTokenAsync(CancellationToken ct = default)
+        {
+            if (AccessTokenException != null)
+            {
+                HasCredentials = false;
+                return Task.FromException<string>(AccessTokenException);
+            }
+
+            return Task.FromResult("token");
+        }
 
         public Task SignOutAsync(CancellationToken ct = default)
         {

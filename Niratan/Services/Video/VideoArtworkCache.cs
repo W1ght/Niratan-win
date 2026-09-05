@@ -123,6 +123,23 @@ internal sealed class VideoArtworkCache : IVideoArtworkCache
         }
     }
 
+    public async Task ClearAsync(CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            foreach (var path in Directory.EnumerateFiles(_root))
+            {
+                ct.ThrowIfCancellationRequested();
+                File.Delete(path);
+            }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     private async Task TrimCoreAsync(CancellationToken ct)
     {
         var entries = new List<(string MetadataPath, CacheMetadata Metadata)>();

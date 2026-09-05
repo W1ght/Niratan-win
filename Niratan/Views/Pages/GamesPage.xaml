@@ -2,10 +2,17 @@
 <Page x:Class="Niratan.Views.Pages.GamesPage"
       x:Name="ThisPage"
       NavigationCacheMode="Required"
+      AllowDrop="True"
+      DragOver="GamesPage_DragOver"
+      Drop="GamesPage_Drop"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:games="using:Niratan.Models.Games"
-      xmlns:viewModels="using:Niratan.ViewModels.Pages">
+      xmlns:converters="using:Niratan.Helpers.UI.Converters">
+    <Page.Resources>
+        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </Page.Resources>
+
     <Grid x:Name="RootGrid" Background="Transparent" Padding="0,32,0,0">
         <NavigationView x:Name="GamesSectionNavigation"
                         AlwaysShowHeader="False"
@@ -23,245 +30,244 @@
             <NavigationView.MenuItems>
                 <NavigationViewItem x:Name="GamesLibraryNavigationItem" x:Uid="GamesLibrarySection" Content="Library" Tag="0" />
                 <NavigationViewItem x:Name="GamesWorkbenchNavigationItem" x:Uid="GamesWorkbenchSection" Content="Workbench" Tag="1" />
-                <NavigationViewItem x:Name="GamesDiagnosticsNavigationItem" x:Uid="GamesDiagnosticsSection" Content="Diagnostics" Tag="2" />
+                <NavigationViewItem x:Name="GamesImportNavigationItem" x:Uid="GamesImportSection" Content="Import" Tag="2" />
+                <NavigationViewItem x:Name="GamesSettingsNavigationItem" x:Uid="GamesSettingsSection" Content="Settings" Tag="3" />
             </NavigationView.MenuItems>
-        <ScrollViewer x:Name="ContentScrollViewer"
-                      HorizontalScrollBarVisibility="Disabled"
-                      VerticalScrollBarVisibility="Auto">
-            <Grid Padding="24,12,32,28">
+
+            <ScrollViewer x:Name="ContentScrollViewer"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <Grid Padding="24,12,32,28">
                     <Grid>
-                    <Grid x:Name="GamesLibrarySectionPanel">
-                        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="12" Padding="0,4,0,0">
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                <TextBox x:Name="GamePathBox" x:Uid="GamesPathBox" AutomationProperties.AutomationId="GamesPathBox" Header="Game executable" PlaceholderText="C:\Games\Game.exe" Text="{x:Bind ViewModel.GamePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                <Button Grid.Column="1" x:Uid="GamesAddButton" AutomationProperties.AutomationId="GamesAddButton" Command="{x:Bind ViewModel.AddGameCommand}" CommandParameter="{Binding Text, ElementName=GamePathBox}" Content="Add" Style="{StaticResource AccentButtonStyle}" VerticalAlignment="Bottom" />
-                            </Grid>
-                            <InfoBar Grid.Row="1" x:Uid="GamesErrorInfoBar" IsClosable="False" IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}" Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}" Severity="Warning" />
-                            <ListView Grid.Row="2" x:Uid="GamesList" AutomationProperties.AutomationId="GamesList" ItemsSource="{x:Bind ViewModel.Games, Mode=OneWay}" SelectedItem="{x:Bind ViewModel.SelectedGame, Mode=TwoWay}" SelectionMode="Single">
-                                <ListView.ItemTemplate>
-                                    <DataTemplate x:DataType="games:GalGameEntry">
-                                        <Border Padding="14" Margin="0,0,0,8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="12">
-                                            <Grid ColumnDefinitions="100,*,Auto" ColumnSpacing="16">
-                                                <Border Width="100" Height="136" CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
-                                                    <Grid>
-                                                        <FontIcon Glyph="&#xE8B9;" FontSize="30" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                        <Image Loaded="GameCoverImageLoaded" Tag="{x:Bind}" Stretch="UniformToFill" />
+                        <Grid x:Name="GamesLibrarySectionPanel">
+                            <Grid RowDefinitions="Auto,Auto,Auto,*" RowSpacing="12" Padding="0,4,0,0">
+                                <Button HorizontalContentAlignment="Stretch"
+                                        Click="OpenWorkbenchClick"
+                                        Style="{StaticResource DefaultButtonStyle}">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Padding="4,2">
+                                        <FontIcon Glyph="&#xE7F4;" />
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock x:Uid="GamesCaptureStatusTitle" Text="Capture status" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                            <TextBlock Text="{x:Bind ViewModel.SessionStatusText, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <FontIcon Grid.Column="2" Glyph="&#xE76C;" VerticalAlignment="Center" />
+                                    </Grid>
+                                </Button>
+
+                                <Grid Grid.Row="1" ColumnDefinitions="*,190,190,Auto" ColumnSpacing="8">
+                                    <TextBox x:Uid="GamesLibrarySearchBox"
+                                             AutomationProperties.AutomationId="GamesLibrarySearchBox"
+                                             PlaceholderText="Search games"
+                                             Text="{x:Bind ViewModel.LibrarySearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                                        <TextBox.Header>
+                                            <StackPanel Orientation="Horizontal" Spacing="6"><FontIcon Glyph="&#xE721;" /><TextBlock x:Uid="GamesLibrarySearchHeader" Text="Search" /></StackPanel>
+                                        </TextBox.Header>
+                                    </TextBox>
+                                    <ComboBox Grid.Column="1"
+                                              x:Uid="GamesLibrarySortBox"
+                                              Header="Sort"
+                                              ItemsSource="{x:Bind ViewModel.LibrarySortOptions}"
+                                              SelectedIndex="{x:Bind ViewModel.LibrarySortIndex, Mode=TwoWay}" />
+                                    <ComboBox Grid.Column="2"
+                                              x:Uid="GamesLibraryFilterBox"
+                                              Header="Status"
+                                              ItemsSource="{x:Bind ViewModel.LibraryStatusFilterOptions}"
+                                              SelectedIndex="{x:Bind ViewModel.LibraryStatusFilterIndex, Mode=TwoWay}" />
+                                    <Button Grid.Column="3"
+                                            x:Uid="GamesLibraryImportButton"
+                                            Content="Import"
+                                            Click="OpenImportClick"
+                                            Style="{StaticResource AccentButtonStyle}"
+                                            VerticalAlignment="Bottom" />
+                                </Grid>
+
+                                <InfoBar Grid.Row="2" x:Uid="GamesErrorInfoBar" IsClosable="False" IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}" Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}" Severity="Warning" />
+
+                                <Grid Grid.Row="3" MinHeight="420">
+                                    <GridView x:Uid="GamesList"
+                                              AutomationProperties.AutomationId="GamesList"
+                                              ItemsSource="{x:Bind ViewModel.VisibleGames, Mode=OneWay}"
+                                              SelectedItem="{x:Bind ViewModel.SelectedGame, Mode=TwoWay}"
+                                              SelectionMode="Single"
+                                              IsItemClickEnabled="False"
+                                              HorizontalContentAlignment="Stretch">
+                                        <GridView.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <ItemsWrapGrid Orientation="Horizontal" MaximumRowsOrColumns="0" ItemWidth="286" ItemHeight="374" />
+                                            </ItemsPanelTemplate>
+                                        </GridView.ItemsPanel>
+                                        <GridView.ItemTemplate>
+                                            <DataTemplate x:DataType="games:GalGameEntry">
+                                                <Border Width="270" Height="358" Padding="12" Margin="0,0,10,10" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="12">
+                                                    <Grid RowDefinitions="218,Auto,*,Auto" RowSpacing="8">
+                                                        <Border CornerRadius="8" Background="{ThemeResource SubtleFillColorSecondaryBrush}">
+                                                            <Grid>
+                                                                <FontIcon Glyph="&#xE8B9;" FontSize="38" Foreground="{ThemeResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                                <Image Loaded="GameCoverImageLoaded" Tag="{x:Bind}" Stretch="UniformToFill" />
+                                                            </Grid>
+                                                        </Border>
+                                                        <TextBlock Grid.Row="1" Text="{x:Bind DisplayName}" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="2" />
+                                                        <StackPanel Grid.Row="2" Spacing="3">
+                                                            <TextBlock Text="{x:Bind ExePath}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" FontSize="12" />
+                                                        </StackPanel>
+                                                        <Grid Grid.Row="3" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                            <Button x:Uid="GamesLaunchButton" Command="{Binding ViewModel.LaunchCommand, ElementName=ThisPage}" CommandParameter="{x:Bind}" Content="Launch and capture" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" />
+                                                            <Button Grid.Column="1" x:Uid="GamesRemoveButton" Command="{Binding ViewModel.RemoveCommand, ElementName=ThisPage}" CommandParameter="{x:Bind}" Content="Remove" />
+                                                        </Grid>
                                                     </Grid>
                                                 </Border>
-                                                <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
-                                                    <TextBlock Text="{x:Bind DisplayName}" Style="{StaticResource SubtitleTextBlockStyle}" TextWrapping="Wrap" />
-                                                    <TextBlock Text="{x:Bind ExePath}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock x:Uid="GamesCardHint" Text="Select this game, then switch to Workbench to inspect live text." Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
-                                                </StackPanel>
-                                                <StackPanel Grid.Column="2" Spacing="8" VerticalAlignment="Center">
-                                                    <Button x:Uid="GamesLaunchButton" AutomationProperties.AutomationId="GamesLaunchButton" Command="{Binding ViewModel.LaunchCommand, ElementName=ThisPage}" CommandParameter="{x:Bind}" Content="Launch and capture" Style="{StaticResource AccentButtonStyle}" />
-                                                    <Button x:Uid="GamesRemoveButton" AutomationProperties.AutomationId="GamesRemoveButton" Command="{Binding ViewModel.RemoveCommand, ElementName=ThisPage}" CommandParameter="{x:Bind}" Content="Remove" />
-                                                </StackPanel>
-                                            </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                </ListView.ItemTemplate>
-                            </ListView>
-                        </Grid>
-                    </Grid>
+                                            </DataTemplate>
+                                        </GridView.ItemTemplate>
+                                    </GridView>
 
-                    <Grid x:Name="GamesWorkbenchSectionPanel" Visibility="Collapsed">
-                        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="12" Padding="0,4,0,0">
-                            <!-- Match Fushi's top-right workbench toolbar. Session status is
-                                 already represented by the KPI and readiness content below. -->
-                            <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                                          VerticalScrollBarVisibility="Disabled"
-                                          HorizontalAlignment="Right">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <Button AutomationProperties.AutomationId="GamesWorkbenchLaunchButton"
-                                            Command="{x:Bind ViewModel.LaunchCommand}"
-                                            CommandParameter="{x:Bind ViewModel.SelectedGame}">
-                                        <StackPanel Orientation="Horizontal" Spacing="8"><FontIcon Glyph="&#xE768;" /><TextBlock x:Uid="GamesToolbarLaunchLabel" Text="Launch and capture" /></StackPanel>
-                                    </Button>
-                                    <Button AutomationProperties.AutomationId="GamesAttachProcessButton"
-                                            Click="AttachCaptureClick">
-                                        <StackPanel Orientation="Horizontal" Spacing="8"><FontIcon Glyph="&#xE703;" /><TextBlock x:Uid="GamesToolbarAttachLabel" Text="Attach and capture" /></StackPanel>
-                                    </Button>
-                                    <Button AutomationProperties.AutomationId="GamesClearButton"
-                                            Command="{x:Bind ViewModel.ClearCaptureCommand}">
-                                        <StackPanel Orientation="Horizontal" Spacing="8"><FontIcon Glyph="&#xE74D;" /><TextBlock x:Uid="GamesToolbarClearLabel" Text="Clear" /></StackPanel>
-                                    </Button>
-                                    <Button x:Uid="GamesAudioFallbackButton"
-                                            AutomationProperties.AutomationId="GamesAudioFallbackButton"
-                                            Click="ShowAudioPolicyClick"
-                                            ToolTipService.ToolTip="Audio fallback policy">
-                                        <FontIcon Glyph="&#xE9D9;" FontSize="21" />
-                                    </Button>
-                                    <Button x:Uid="GamesToolbarHealthButton"
-                                            AutomationProperties.AutomationId="GamesHealthButton"
-                                            Click="ShowDiagnosticsClick"
-                                            ToolTipService.ToolTip="Health">
-                                        <FontIcon Glyph="&#xE95E;" FontSize="21" />
-                                    </Button>
-                                    <Button x:Uid="GamesToolbarShowWindowButton"
-                                            AutomationProperties.AutomationId="GamesShowWindowButton"
-                                            Click="ShowCaptureWindowClick"
-                                            ToolTipService.ToolTip="Show hook text window">
-                                        <FontIcon Glyph="&#xE7F4;" FontSize="21" />
-                                    </Button>
-                                    <ToggleButton x:Uid="GamesExternalWindowModeButton"
-                                                  AutomationProperties.AutomationId="GamesExternalWindowModeButton"
-                                                  IsChecked="True"
-                                                  IsEnabled="False"
-                                                  ToolTipService.ToolTip="External-window mining is enabled">
-                                        <FontIcon Glyph="&#xE8A7;" FontSize="21" />
-                                    </ToggleButton>
-                                </StackPanel>
-                            </ScrollViewer>
-
-                            <InfoBar Grid.Row="1" x:Uid="GamesExperimentalInfoBar" IsOpen="True" IsClosable="False" Severity="Informational" />
-
-                            <Grid Grid.Row="2" MinHeight="560" ColumnDefinitions="7*,4*" ColumnSpacing="12">
-                                <Border Padding="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="12">
-                                    <Grid RowDefinitions="Auto,Auto,Auto,*" RowSpacing="10">
-                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                            <StackPanel Orientation="Horizontal" Spacing="6"><FontIcon Glyph="&#xE8BD;" FontSize="22" /><TextBlock x:Uid="GamesLiveLinesTitle" Text="Live lines" Style="{StaticResource SubtitleTextBlockStyle}" /><TextBlock Text="·" /><TextBlock Text="{x:Bind ViewModel.CapturedLines.Count, Mode=OneWay}" Style="{StaticResource SubtitleTextBlockStyle}" /></StackPanel>
-                                            <CheckBox Grid.Column="1" x:Uid="GamesFollowLiveCheckBox" Content="Follow live" IsChecked="True" />
-                                        </Grid>
-                                        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                                <ToggleButton x:Uid="GamesFilterAllButton" Content="All" IsChecked="True" />
-                                                <ToggleButton x:Uid="GamesFilterAudioButton" Content="Audio" IsEnabled="False" />
-                                                <ToggleButton x:Uid="GamesFilterMinedButton" Content="Mined" IsEnabled="False" />
-                                                <ToggleButton x:Uid="GamesFilterFavoriteButton" Content="Favorites" IsEnabled="False" />
-                                            </StackPanel>
-                                        </ScrollViewer>
-                                        <StackPanel Grid.Row="2" Spacing="5">
-                                            <ComboBox x:Name="ThreadSelector"
-                                                      x:Uid="GamesThreadSelector"
-                                                      AutomationProperties.AutomationId="GamesThreadSelector"
-                                                      ItemsSource="{x:Bind ViewModel.ThreadPreviews, Mode=OneWay}"
-                                                      SelectionChanged="ThreadSelectorSelectionChanged"
-                                                      PlaceholderText="Select a capture thread"
-                                                      HorizontalAlignment="Stretch"
-                                                      HorizontalContentAlignment="Stretch"
-                                                      MaxDropDownHeight="560">
-                                                <ComboBox.ItemTemplate>
-                                                    <DataTemplate x:DataType="games:GalGameThreadPreview">
-                                                        <Grid MinHeight="58" MinWidth="620" ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="2,4">
-                                                            <StackPanel Spacing="2">
-                                                                <TextBlock Text="{x:Bind DisplayName}" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                                                <TextBlock Text="{x:Bind PreviewText}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3" />
-                                                            </StackPanel>
-                                                            <StackPanel Grid.Column="1" Spacing="2" HorizontalAlignment="Right">
-                                                                <TextBlock TextAlignment="Right"><Run x:Uid="GamesThreadLinesLabel" Text="Lines" /><Run Text=" "/><Run Text="{x:Bind LineCount}" /></TextBlock>
-                                                                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextAlignment="Right"><Run x:Uid="GamesThreadArtifactsLabel" Text="Artifacts" /><Run Text=" "/><Run Text="{x:Bind ArtifactCount}" /></TextBlock>
-                                                            </StackPanel>
-                                                        </Grid>
-                                                    </DataTemplate>
-                                                </ComboBox.ItemTemplate>
-                                            </ComboBox>
-                                            <TextBlock x:Uid="GamesThreadSelectorHint" Text="Choose the clean dialogue thread, as in Luna Translator." Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
-                                        </StackPanel>
-                                        <ListView Grid.Row="3" ItemsSource="{x:Bind ViewModel.CapturedLines, Mode=OneWay}" SelectionMode="None">
-                                            <ListView.ItemTemplate>
-                                                <DataTemplate x:DataType="games:GalGameTextLine">
-                                                    <Border Margin="0,0,0,8" Padding="10" Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
-                                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                                            <StackPanel Spacing="4">
-                                                                <TextBlock Text="{x:Bind SourceLabel}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                                        <RichTextBlock Tag="{Binding}" IsTextSelectionEnabled="True" TextWrapping="Wrap" PointerPressed="CapturedLineTextPointerPressed" SelectionChanged="CapturedLineTextSelectionChanged">
-                                                            <Paragraph>
-                                                                <Run Text="{x:Bind Text, Mode=OneWay}" />
-                                                            </Paragraph>
-                                                        </RichTextBlock>
-                                                            </StackPanel>
-                                                            <Button Grid.Column="1" x:Uid="GamesOverlayLookupButton" Content="Look up" Tag="{Binding}" Click="CapturedLineLookupClick" Style="{StaticResource AccentButtonStyle}" VerticalAlignment="Center" />
-                                                        </Grid>
-                                                    </Border>
-                                                </DataTemplate>
-                                            </ListView.ItemTemplate>
-                                        </ListView>
-                                    </Grid>
-                                </Border>
-                                <Border Grid.Column="1" Padding="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="12">
-                                    <StackPanel Spacing="12">
-                                        <StackPanel Orientation="Horizontal" Spacing="8"><FontIcon Glyph="&#xE720;" FontSize="22" /><TextBlock x:Uid="GamesLineAudioTitle" Text="Current line audio" Style="{StaticResource SubtitleTextBlockStyle}" /></StackPanel>
-                                        <TextBlock x:Uid="GamesLineAudioHint" Text="Select a line to inspect its audio status." Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
-                                        <Border Padding="12" Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="8">
-                                            <StackPanel Spacing="4"><TextBlock x:Name="SelectedLineSource" Text="" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" /><TextBlock x:Name="SelectedLineText" x:Uid="GamesSelectedLinePlaceholder" Text="No line selected." TextWrapping="Wrap" /></StackPanel>
-                                        </Border>
-                                        <Button x:Name="SelectedLineLookupButton" x:Uid="GamesOverlayLookupButton" Content="Look up" Click="SelectedLineLookupClick" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Left" />
-                                        <ProgressRing IsActive="{x:Bind ViewModel.IsPolling, Mode=OneWay}" Width="20" Height="20" HorizontalAlignment="Left" />
+                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10"
+                                                Visibility="{x:Bind ViewModel.HasVisibleGames, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert, Mode=OneWay}">
+                                        <FontIcon Glyph="&#xE8B9;" FontSize="42" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        <TextBlock x:Uid="GamesLibraryEmptyTitle" Text="No games found" Style="{StaticResource SubtitleTextBlockStyle}" HorizontalAlignment="Center" />
+                                        <TextBlock x:Uid="GamesLibraryEmptyHint" Text="Import a game executable, or adjust the current search and status filter." Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="480" />
+                                        <Button x:Uid="GamesLibraryEmptyImportButton" Content="Import a game" Click="OpenImportClick" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Center" />
                                     </StackPanel>
-                                </Border>
+                                </Grid>
                             </Grid>
                         </Grid>
-                    </Grid>
 
-                    <Grid x:Name="GamesDiagnosticsSectionPanel" Visibility="Collapsed">
-                        <Grid Margin="0,4,0,0" RowDefinitions="Auto,Auto" ColumnDefinitions="5*,4*" RowSpacing="12" ColumnSpacing="12">
-                            <Border Padding="18" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="12">
-                                <StackPanel Spacing="14">
-                                    <StackPanel Spacing="4">
-                                        <TextBlock x:Uid="GamesDiagnosticsPipelineTitle" Text="Capture pipeline" Style="{StaticResource SubtitleTextBlockStyle}" />
-                                        <TextBlock Text="{x:Bind ViewModel.DiagnosticSummary, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
-                                    </StackPanel>
-                                    <ItemsControl ItemsSource="{x:Bind ViewModel.Diagnostics, Mode=OneWay}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="viewModels:GalGameDiagnosticDisplayItem">
-                                                <Grid Padding="0,8" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-                                                    <FontIcon Glyph="{x:Bind Glyph}" FontSize="17" VerticalAlignment="Top" />
-                                                    <StackPanel Grid.Column="1" Spacing="2">
-                                                        <TextBlock Text="{x:Bind Label}" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                                        <TextBlock Text="{x:Bind Evidence}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
-                                                    </StackPanel>
-                                                    <TextBlock Grid.Column="2" Text="{x:Bind Status}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextAlignment="Right" />
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </Border>
-
-                            <Border Grid.Column="1" Padding="18" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="12">
-                                <StackPanel Spacing="14">
-                                    <TextBlock x:Uid="GamesDiagnosticsSnapshotTitle" Text="Runtime snapshot" Style="{StaticResource SubtitleTextBlockStyle}" />
-                                    <StackPanel Spacing="4">
-                                        <TextBlock x:Uid="GamesDiagnosticsIdentityLabel" Text="Target identity" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                        <TextBlock Text="{x:Bind ViewModel.DiagnosticIdentity, Mode=OneWay}" TextWrapping="Wrap" />
-                                    </StackPanel>
-                                    <StackPanel Spacing="4">
-                                        <TextBlock x:Uid="GamesDiagnosticsCountersLabel" Text="Observed counters" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                        <TextBlock Text="{x:Bind ViewModel.DiagnosticCounters, Mode=OneWay}" TextWrapping="Wrap" />
-                                    </StackPanel>
-                                    <StackPanel Spacing="4">
-                                        <TextBlock x:Uid="GamesDiagnosticsFlagsLabel" Text="Symbolic diagnostics" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                        <TextBox Text="{x:Bind ViewModel.DiagnosticFlags, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="96" />
-                                    </StackPanel>
-                                    <InfoBar x:Uid="GamesDiagnosticsEvidenceNotice" IsOpen="True" IsClosable="False" Severity="Informational" Message="Only directly observed runtime evidence is marked as observed." />
-                                </StackPanel>
-                            </Border>
-
-                            <Border Grid.Row="1" Grid.ColumnSpan="2" Padding="18" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="12">
-                                <StackPanel Spacing="12">
-                                    <Grid ColumnDefinitions="*,Auto">
-                                        <TextBlock x:Uid="GamesDiagnosticsEventsTitle" Text="Session timeline" Style="{StaticResource SubtitleTextBlockStyle}" />
-                                        <Button Grid.Column="1" x:Uid="GamesRefreshButton" Click="RefreshCaptureClick" Content="Refresh" />
+                        <Grid x:Name="GamesWorkbenchSectionPanel" Visibility="Collapsed">
+                            <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="12" Padding="0,4,0,0">
+                                <Border Padding="14,10" Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="10">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                        <FontIcon Glyph="&#xE7F4;" VerticalAlignment="Center" />
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock Text="{x:Bind ViewModel.SessionStatusText, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap" />
+                                            <TextBlock Text="{x:Bind ViewModel.DiagnosticSummary, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="2" Text="{x:Bind ViewModel.VoiceStatusText, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
                                     </Grid>
-                                    <ItemsControl ItemsSource="{x:Bind ViewModel.DiagnosticEvents, Mode=OneWay}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="viewModels:GalGameDiagnosticEventDisplayItem">
-                                                <Grid Padding="0,7" ColumnDefinitions="72,220,*" ColumnSpacing="12">
-                                                    <TextBlock Text="{x:Bind Time}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                                    <TextBlock Grid.Column="1" Text="{x:Bind Phase}" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                                    <TextBlock Grid.Column="2" Text="{x:Bind Detail}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
+                                </Border>
+
+                                <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalAlignment="Right">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Button AutomationProperties.AutomationId="GamesWorkbenchLaunchButton" Command="{x:Bind ViewModel.LaunchCommand}" CommandParameter="{x:Bind ViewModel.SelectedGame}"><StackPanel Orientation="Horizontal" Spacing="8"><FontIcon Glyph="&#xE768;" /><TextBlock x:Uid="GamesToolbarLaunchLabel" Text="Launch and capture" /></StackPanel></Button>
+                                        <Button AutomationProperties.AutomationId="GamesAttachProcessButton" Click="AttachCaptureClick"><StackPanel Orientation="Horizontal" Spacing="8"><FontIcon Glyph="&#xE703;" /><TextBlock x:Uid="GamesToolbarAttachLabel" Text="Attach and capture" /></StackPanel></Button>
+                                        <Button AutomationProperties.AutomationId="GamesClearButton" Command="{x:Bind ViewModel.ClearCaptureCommand}"><StackPanel Orientation="Horizontal" Spacing="8"><FontIcon Glyph="&#xE74D;" /><TextBlock x:Uid="GamesToolbarClearLabel" Text="Clear" /></StackPanel></Button>
+                                        <Button x:Uid="GamesAudioFallbackButton" Click="ShowAudioPolicyClick" ToolTipService.ToolTip="Audio fallback policy"><FontIcon Glyph="&#xE9D9;" FontSize="21" /></Button>
+                                        <Button x:Uid="GamesToolbarShowWindowButton" Click="ShowCaptureWindowClick" ToolTipService.ToolTip="Show hook text window"><FontIcon Glyph="&#xE7F4;" FontSize="21" /></Button>
+                                        <Button x:Uid="GamesToolbarAppearanceButton" Click="OpenSettingsClick" ToolTipService.ToolTip="Overlay appearance"><FontIcon Glyph="&#xE790;" FontSize="21" /></Button>
+                                        <ToggleButton x:Uid="GamesExternalWindowModeButton" IsChecked="True" IsEnabled="False" ToolTipService.ToolTip="External-window mining is enabled"><FontIcon Glyph="&#xE8A7;" FontSize="21" /></ToggleButton>
+                                    </StackPanel>
+                                </ScrollViewer>
+
+                                <InfoBar Grid.Row="2" x:Uid="GamesExperimentalInfoBar" IsOpen="True" IsClosable="False" Severity="Informational" />
+
+                                <Grid Grid.Row="3" MinHeight="560" ColumnDefinitions="7*,4*" ColumnSpacing="12">
+                                    <Border Padding="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="12">
+                                        <Grid RowDefinitions="Auto,Auto,Auto,*" RowSpacing="10">
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                <StackPanel Orientation="Horizontal" Spacing="6"><FontIcon Glyph="&#xE8BD;" FontSize="22" /><TextBlock x:Uid="GamesLiveLinesTitle" Text="Live lines" Style="{StaticResource SubtitleTextBlockStyle}" /><TextBlock Text="·" /><TextBlock Text="{x:Bind ViewModel.CapturedLines.Count, Mode=OneWay}" Style="{StaticResource SubtitleTextBlockStyle}" /></StackPanel>
+                                                <CheckBox Grid.Column="1" x:Uid="GamesFollowLiveCheckBox" Content="Follow live" IsChecked="True" />
+                                            </Grid>
+                                            <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <ToggleButton x:Uid="GamesFilterAllButton" Content="All" IsChecked="True" />
+                                                    <ToggleButton x:Uid="GamesFilterAudioButton" Content="Audio" IsEnabled="False" />
+                                                    <ToggleButton x:Uid="GamesFilterMinedButton" Content="Mined" IsEnabled="False" />
+                                                    <ToggleButton x:Uid="GamesFilterFavoriteButton" Content="Favorites" IsEnabled="False" />
+                                                </StackPanel>
+                                            </ScrollViewer>
+                                            <StackPanel Grid.Row="2" Spacing="5">
+                                                <ComboBox x:Name="ThreadSelector" x:Uid="GamesThreadSelector" ItemsSource="{x:Bind ViewModel.ThreadPreviews, Mode=OneWay}" SelectionChanged="ThreadSelectorSelectionChanged" PlaceholderText="Select a capture thread" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" MaxDropDownHeight="560">
+                                                    <ComboBox.ItemTemplate>
+                                                        <DataTemplate x:DataType="games:GalGameThreadPreview">
+                                                            <Grid MinHeight="58" MinWidth="620" ColumnDefinitions="*,Auto" ColumnSpacing="12" Padding="2,4">
+                                                                <StackPanel Spacing="2"><TextBlock Text="{x:Bind DisplayName}" Style="{StaticResource BodyStrongTextBlockStyle}" /><TextBlock Text="{x:Bind PreviewText}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="3" /></StackPanel>
+                                                                <StackPanel Grid.Column="1" Spacing="2" HorizontalAlignment="Right"><TextBlock TextAlignment="Right"><Run x:Uid="GamesThreadLinesLabel" Text="Lines" /><Run Text=" "/><Run Text="{x:Bind LineCount}" /></TextBlock><TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextAlignment="Right"><Run x:Uid="GamesThreadArtifactsLabel" Text="Artifacts" /><Run Text=" "/><Run Text="{x:Bind ArtifactCount}" /></TextBlock></StackPanel>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ComboBox.ItemTemplate>
+                                                </ComboBox>
+                                                <TextBlock x:Uid="GamesThreadSelectorHint" Text="Choose the clean dialogue thread, as in Luna Translator." Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <ListView Grid.Row="3" ItemsSource="{x:Bind ViewModel.CapturedLines, Mode=OneWay}" SelectionMode="None">
+                                                <ListView.ItemTemplate>
+                                                    <DataTemplate x:DataType="games:GalGameTextLine">
+                                                        <Border Margin="0,0,0,8" Padding="10" Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8">
+                                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                                                <StackPanel Spacing="4"><TextBlock Text="{x:Bind SourceLabel}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" /><RichTextBlock Tag="{Binding}" IsTextSelectionEnabled="True" TextWrapping="Wrap" PointerPressed="CapturedLineTextPointerPressed" SelectionChanged="CapturedLineTextSelectionChanged"><Paragraph><Run Text="{x:Bind Text, Mode=OneWay}" /></Paragraph></RichTextBlock></StackPanel>
+                                                                <Button Grid.Column="1" x:Uid="GamesOverlayLookupButton" Content="Look up" Tag="{Binding}" Click="CapturedLineLookupClick" Style="{StaticResource AccentButtonStyle}" VerticalAlignment="Center" />
+                                                            </Grid>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ListView.ItemTemplate>
+                                            </ListView>
+                                        </Grid>
+                                    </Border>
+                                    <Border Grid.Column="1" Padding="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="12">
+                                        <StackPanel Spacing="12">
+                                            <StackPanel Orientation="Horizontal" Spacing="8"><FontIcon Glyph="&#xE720;" FontSize="22" /><TextBlock x:Uid="GamesLineAudioTitle" Text="Current line audio" Style="{StaticResource SubtitleTextBlockStyle}" /></StackPanel>
+                                            <TextBlock x:Uid="GamesLineAudioHint" Text="Select a line to inspect its audio status." Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                                            <Border Padding="12" Background="{ThemeResource SubtleFillColorSecondaryBrush}" CornerRadius="8"><StackPanel Spacing="4"><TextBlock x:Name="SelectedLineSource" Text="" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12" /><TextBlock x:Name="SelectedLineText" x:Uid="GamesSelectedLinePlaceholder" Text="No line selected." TextWrapping="Wrap" /></StackPanel></Border>
+                                            <Button x:Name="SelectedLineLookupButton" x:Uid="GamesOverlayLookupButton" Content="Look up" Click="SelectedLineLookupClick" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Left" />
+                                            <ProgressRing IsActive="{x:Bind ViewModel.IsPolling, Mode=OneWay}" Width="20" Height="20" HorizontalAlignment="Left" />
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </Grid>
+                        </Grid>
+
+                        <Grid x:Name="GamesImportSectionPanel" Visibility="Collapsed">
+                            <StackPanel Spacing="16" Padding="0,4,0,0" MaxWidth="920" HorizontalAlignment="Stretch">
+                                <StackPanel Spacing="4">
+                                    <TextBlock x:Uid="GamesImportTitle" Text="Import games" Style="{StaticResource TitleTextBlockStyle}" />
+                                    <TextBlock x:Uid="GamesImportSubtitle" Text="Choose a game executable or drop one or more .exe files anywhere on this page. Source files are indexed in place and are never moved or modified." Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
                                 </StackPanel>
-                            </Border>
+                                <Border Padding="32" MinHeight="220" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="14">
+                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+                                        <FontIcon Glyph="&#xE7C3;" FontSize="44" />
+                                        <TextBlock x:Uid="GamesImportDropTitle" Text="Drop .exe files here" Style="{StaticResource SubtitleTextBlockStyle}" />
+                                        <TextBlock x:Uid="GamesImportDropHint" Text="You can import multiple executables at once. Duplicate paths are ignored." Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextAlignment="Center" TextWrapping="Wrap" />
+                                        <Button x:Uid="GamesImportPickerButton" Content="Choose executable" Click="ChooseGameExecutablesClick" Style="{StaticResource AccentButtonStyle}" />
+                                    </StackPanel>
+                                </Border>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBox x:Name="GamePathBox" x:Uid="GamesPathBox" AutomationProperties.AutomationId="GamesPathBox" Header="Game executable" PlaceholderText="C:\Games\Game.exe" Text="{x:Bind ViewModel.GamePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    <Button Grid.Column="1" x:Uid="GamesAddButton" Command="{x:Bind ViewModel.AddGameCommand}" CommandParameter="{Binding Text, ElementName=GamePathBox}" Content="Add" Style="{StaticResource AccentButtonStyle}" VerticalAlignment="Bottom" />
+                                </Grid>
+                                <InfoBar x:Uid="GamesErrorInfoBar" IsClosable="False" IsOpen="{x:Bind ViewModel.HasError, Mode=OneWay}" Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}" Severity="Warning" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid x:Name="GamesSettingsSectionPanel" Visibility="Collapsed">
+                            <StackPanel Spacing="16" Padding="0,4,0,0" MaxWidth="980" HorizontalAlignment="Stretch">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <StackPanel Spacing="4"><TextBlock x:Uid="GamesAppearanceTitle" Text="Caption overlay appearance" Style="{StaticResource TitleTextBlockStyle}" /><TextBlock x:Uid="GamesAppearanceSubtitle" Text="Changes are saved immediately and applied to the open overlay." Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" /></StackPanel>
+                                    <Button Grid.Column="1" x:Uid="GamesAppearanceResetButton" Content="Reset" Command="{x:Bind ViewModel.ResetOverlayAppearanceCommand}" VerticalAlignment="Center" />
+                                </Grid>
+                                <Border Padding="18" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="12">
+                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="24" RowSpacing="14" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                                        <TextBox x:Uid="GamesOverlayFontFamilyBox" Header="Font family" Text="{x:Bind ViewModel.OverlayFontFamily, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        <StackPanel Grid.Column="1" Spacing="4"><TextBlock x:Uid="GamesOverlayFontSizeLabel" Text="Font size" /><Slider Minimum="12" Maximum="72" StepFrequency="1" Value="{x:Bind ViewModel.OverlayFontSize, Mode=TwoWay}" /><TextBlock Text="{x:Bind ViewModel.OverlayFontSize, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" /></StackPanel>
+                                        <StackPanel Grid.Row="1" Spacing="4"><TextBlock x:Uid="GamesOverlayLetterSpacingLabel" Text="Letter spacing" /><Slider Minimum="-2" Maximum="12" StepFrequency="0.5" Value="{x:Bind ViewModel.OverlayLetterSpacing, Mode=TwoWay}" /></StackPanel>
+                                        <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4"><TextBlock x:Uid="GamesOverlayLineHeightLabel" Text="Line height" /><Slider Minimum="0.8" Maximum="2" StepFrequency="0.05" Value="{x:Bind ViewModel.OverlayLineHeight, Mode=TwoWay}" /></StackPanel>
+                                        <ToggleSwitch Grid.Row="2" x:Uid="GamesOverlayBoldSwitch" Header="Bold" IsOn="{x:Bind ViewModel.OverlayBold, Mode=TwoWay}" />
+                                        <Grid Grid.Row="2" Grid.Column="1" ColumnDefinitions="*,*" ColumnSpacing="8"><ComboBox x:Uid="GamesOverlayHorizontalAlignmentBox" Header="Horizontal alignment" ItemsSource="{x:Bind ViewModel.OverlayHorizontalAlignmentOptions}" SelectedIndex="{x:Bind ViewModel.OverlayHorizontalAlignmentIndex, Mode=TwoWay}" /><ComboBox Grid.Column="1" x:Uid="GamesOverlayVerticalAlignmentBox" Header="Vertical alignment" ItemsSource="{x:Bind ViewModel.OverlayVerticalAlignmentOptions}" SelectedIndex="{x:Bind ViewModel.OverlayVerticalAlignmentIndex, Mode=TwoWay}" /></Grid>
+                                        <TextBox Grid.Row="3" x:Uid="GamesOverlayTextColorBox" Header="Text color (ARGB)" Text="{x:Bind ViewModel.OverlayTextColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        <TextBox Grid.Row="3" Grid.Column="1" x:Uid="GamesOverlayBackgroundColorBox" Header="Background color (ARGB)" Text="{x:Bind ViewModel.OverlayBackgroundColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        <StackPanel Grid.Row="4" Spacing="4"><TextBlock x:Uid="GamesOverlayBackgroundOpacityLabel" Text="Background opacity" /><Slider Minimum="0" Maximum="1" StepFrequency="0.05" Value="{x:Bind ViewModel.OverlayBackgroundOpacity, Mode=TwoWay}" /></StackPanel>
+                                        <TextBox Grid.Row="4" Grid.Column="1" x:Uid="GamesOverlayOutlineColorBox" Header="Outline color (ARGB)" Text="{x:Bind ViewModel.OverlayOutlineColor, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                </Border>
+                                <Border Padding="18" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="12">
+                                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="20">
+                                        <StackPanel Spacing="4"><TextBlock x:Uid="GamesOverlayOutlineWidthLabel" Text="Outline width" /><Slider Minimum="0" Maximum="6" StepFrequency="0.25" Value="{x:Bind ViewModel.OverlayOutlineWidth, Mode=TwoWay}" /></StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="4"><TextBlock x:Uid="GamesOverlayPaddingLabel" Text="Text padding" /><Slider Minimum="0" Maximum="80" StepFrequency="2" Value="{x:Bind ViewModel.OverlayPadding, Mode=TwoWay}" /></StackPanel>
+                                        <StackPanel Grid.Column="2" Spacing="4"><TextBlock x:Uid="GamesOverlayCornerRadiusLabel" Text="Corner radius" /><Slider Minimum="0" Maximum="40" StepFrequency="1" Value="{x:Bind ViewModel.OverlayCornerRadius, Mode=TwoWay}" /></StackPanel>
+                                    </Grid>
+                                </Border>
+                                <Button x:Uid="GamesAppearanceShowOverlayButton" Content="Show overlay preview" Click="ShowCaptureWindowClick" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Left" />
+                            </StackPanel>
                         </Grid>
                     </Grid>
-                    </Grid>
-            </Grid>
-        </ScrollViewer>
+                </Grid>
+            </ScrollViewer>
         </NavigationView>
     </Grid>
 </Page>

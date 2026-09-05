@@ -132,8 +132,9 @@
                             PointerCanceled="DragRegionPointerCanceled" />
                 </Grid>
 
-                <Grid Grid.Row="1"
-                      Margin="24,0,24,12">
+                <Grid x:Name="CurrentTextHost"
+                      Grid.Row="1"
+                      Margin="20,0,20,12">
                     <win2d:CanvasControl x:Name="CurrentTextCanvas"
                                          HorizontalAlignment="Stretch"
                                          VerticalAlignment="Stretch"

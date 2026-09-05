@@ -955,6 +955,8 @@
   <data name="TtuSyncModeManual" xml:space="preserve"><value>手动</value></data>
   <data name="TtuSyncStatusConnected" xml:space="preserve"><value>已连接</value></data>
   <data name="TtuSyncStatusNotConnected" xml:space="preserve"><value>未连接</value></data>
+  <data name="TtuSyncStatusAuthorizationExpired" xml:space="preserve"><value>登录已失效或被撤销，请重新连接 Google Drive。</value></data>
+  <data name="TtuSyncStatusConnectionCheckFailedFormat" xml:space="preserve"><value>暂时无法验证 Google Drive 连接：{0}</value></data>
   <data name="TtuSyncStatusConnecting" xml:space="preserve"><value>连接中...</value></data>
   <data name="TtuSyncClientIdRequiredStatus" xml:space="preserve"><value>请先输入客户端 ID。</value></data>
   <data name="TtuSyncClientSecretRequiredStatus" xml:space="preserve"><value>请先输入客户端密钥。</value></data>
@@ -1664,12 +1666,10 @@
   <data name="VideoMetadataTmdbToggleLabel.Text" xml:space="preserve"><value>TMDB — 电影、日剧与主流动画</value></data>
   <data name="VideoMetadataTvMazeToggle.Header" xml:space="preserve"><value>TVmaze — 电视补充（CC BY-SA）</value></data>
   <data name="VideoMetadataTvMazeToggleLabel.Text" xml:space="preserve"><value>TVmaze — 电视补充（CC BY-SA）</value></data>
-  <data name="VideoMetadataAniListToggle.Header" xml:space="preserve"><value>AniList — 动画身份、别名与标签</value></data>
-  <data name="VideoMetadataAniListToggleLabel.Text" xml:space="preserve"><value>AniList — 动画身份、别名与标签</value></data>
-  <data name="VideoMetadataAniDbToggle.Header" xml:space="preserve"><value>AniDB — 每周官方标题索引</value></data>
-  <data name="VideoMetadataAniDbToggleLabel.Text" xml:space="preserve"><value>AniDB — 每周官方标题索引</value></data>
-  <data name="VideoMetadataBangumiToggle.Header" xml:space="preserve"><value>Bangumi — 动画与日剧补充</value></data>
-  <data name="VideoMetadataBangumiToggleLabel.Text" xml:space="preserve"><value>Bangumi — 动画与日剧补充</value></data>
+  <data name="VideoMetadataAniListToggle.Header" xml:space="preserve"><value>AniList — 仅用于动画发现与推荐</value></data>
+  <data name="VideoMetadataAniListToggleLabel.Text" xml:space="preserve"><value>AniList — 仅用于动画发现与推荐</value></data>
+  <data name="VideoMetadataAniDbToggle.Header" xml:space="preserve"><value>AniDB — 对齐 Shoko 的动画身份与 MyList</value></data>
+  <data name="VideoMetadataAniDbToggleLabel.Text" xml:space="preserve"><value>AniDB — 对齐 Shoko 的动画身份与 MyList</value></data>
   <data name="VideoMetadataTvDbDisabledText.Text" xml:space="preserve"><value>TheTVDB：等待 Niratan 获得批准的项目授权</value></data>
   <data name="VideoMetadataTmdbCredentialCard.Header" xml:space="preserve"><value>TMDB 凭据</value></data>
   <data name="VideoMetadataTmdbCredentialCard.Description" xml:space="preserve"><value>仅保存在 Windows 凭据管理器。本产品使用 TMDB API，但不受 TMDB 认可或认证。</value></data>
@@ -1677,11 +1677,12 @@
   <data name="VideoMetadataSaveTmdbTokenButton.Content" xml:space="preserve"><value>保存 Token</value></data>
   <data name="VideoMetadataClearTmdbTokenButton.Content" xml:space="preserve"><value>清除</value></data>
   <data name="VideoMetadataTmdbAttributionLink.Content" xml:space="preserve"><value>TMDB 来源</value></data>
-  <data name="VideoMetadataBangumiCredentialCard.Header" xml:space="preserve"><value>Bangumi 凭据</value></data>
-  <data name="VideoMetadataBangumiCredentialCard.Description" xml:space="preserve"><value>可选 Token，仅保存在 Windows 凭据管理器。</value></data>
-  <data name="VideoMetadataBangumiTokenBox.PlaceholderText" xml:space="preserve"><value>可选 Bangumi Token</value></data>
-  <data name="VideoMetadataSaveBangumiTokenButton.Content" xml:space="preserve"><value>保存 Token</value></data>
-  <data name="VideoMetadataClearBangumiTokenButton.Content" xml:space="preserve"><value>清除</value></data>
+  <data name="VideoJimakuCredentialCard.Header" xml:space="preserve"><value>Jimaku 字幕</value></data>
+  <data name="VideoJimakuCredentialCard.Description" xml:space="preserve"><value>用于 Jimaku 字幕搜索和下载的 API 密钥，仅保存在 Windows 凭据管理器。</value></data>
+  <data name="VideoJimakuTokenBox.PlaceholderText" xml:space="preserve"><value>Jimaku API 密钥</value></data>
+  <data name="VideoSaveJimakuTokenButton.Content" xml:space="preserve"><value>保存 API 密钥</value></data>
+  <data name="VideoClearJimakuTokenButton.Content" xml:space="preserve"><value>清除</value></data>
+  <data name="VideoJimakuAttributionLink.Content" xml:space="preserve"><value>Jimaku</value></data>
   <data name="VideoMetadataProviderTermsLink.Content" xml:space="preserve"><value>提供器条款</value></data>
   <data name="VideoMetadataCredentialConfigured" xml:space="preserve"><value>已配置</value></data>
   <data name="VideoMetadataCredentialMissing" xml:space="preserve"><value>未配置</value></data>
@@ -1720,6 +1721,12 @@
   <data name="VideoLibraryHomeContinueWatchingHeading.Text" xml:space="preserve"><value>继续观看</value></data>
   <data name="VideoLibraryHomeNextEpisodeHeading.Text" xml:space="preserve"><value>接下来播放</value></data>
   <data name="VideoLibraryHomeRecentlyAddedHeading.Text" xml:space="preserve"><value>最近添加的媒体</value></data>
+  <data name="VideoLibraryAllFilterButton.Content" xml:space="preserve"><value>全部</value></data>
+  <data name="VideoLibraryMoviesFilterButton.Content" xml:space="preserve"><value>电影</value></data>
+  <data name="VideoLibraryAnimeFilterButton.Content" xml:space="preserve"><value>动画</value></data>
+  <data name="VideoLibraryFoldersFilterButton.Content" xml:space="preserve"><value>文件夹</value></data>
+  <data name="VideoLibraryCollectionsFilterButton.Content" xml:space="preserve"><value>集合</value></data>
+  <data name="VideoLibraryTagsFilterButton.Content" xml:space="preserve"><value>标签</value></data>
   <data name="VideoLibraryInvalidProviderOrderTitle" xml:space="preserve"><value>提供器顺序无效</value></data>
   <data name="VideoLibraryInvalidProviderOrderMessage" xml:space="preserve"><value>未知的元数据提供器：{0}</value></data>
   <data name="VideoLibrarySourceRegionBox.Header" xml:space="preserve"><value>区域</value></data>
@@ -1731,7 +1738,6 @@
   <data name="VideoMetadataTvMazeLink.Content" xml:space="preserve"><value>TVmaze</value></data>
   <data name="VideoMetadataAniListLink.Content" xml:space="preserve"><value>AniList</value></data>
   <data name="VideoMetadataAniDbLink.Content" xml:space="preserve"><value>AniDB</value></data>
-  <data name="VideoMetadataBangumiLink.Content" xml:space="preserve"><value>Bangumi</value></data>
   <data name="VideoMetadataTvDbLink.Content" xml:space="preserve"><value>TheTVDB</value></data>
   <data name="VideoLibraryFullScanSourceButton.ToolTipService.ToolTip" xml:space="preserve"><value>完整扫描</value></data>
   <data name="VideoLibraryPauseSourceScanButton.ToolTipService.ToolTip" xml:space="preserve"><value>暂停扫描</value></data>
@@ -1782,6 +1788,15 @@
   <data name="VideoLibrarySourceNeverScraped" xml:space="preserve"><value>尚未刮削</value></data>
   <data name="VideoLibraryScrapeAllButton.Label" xml:space="preserve"><value>重新刮削</value></data>
   <data name="VideoLibraryScrapeAllButton.ToolTipService.ToolTip" xml:space="preserve"><value>重新刮削全部来源的元数据</value></data>
+  <data name="VideoLibraryClearAllScrapeRecordsButton.Label" xml:space="preserve"><value>清理全部刮削记录</value></data>
+  <data name="VideoLibraryClearAllScrapeRecordsButton.ToolTipService.ToolTip" xml:space="preserve"><value>清除全部刮削目录、元数据、匹配、缓存与任务记录</value></data>
+  <data name="VideoLibraryClearAllScrapeRecordsDialogTitle" xml:space="preserve"><value>清理全部刮削记录？</value></data>
+  <data name="VideoLibraryClearAllScrapeRecordsDialogMessage" xml:space="preserve"><value>将停止当前刮削，并清除系列、季、集、电影等刮削目录，以及已导入的本地与在线元数据、匹配、候选、任务历史、Provider 缓存、AniDB 投影、TMDB 映射和在线海报缓存。每个视频会回到“全部视频”中的未匹配状态。源视频和本地 NFO/图片文件、来源、播放进度、收藏、标签、集合、AniDB MyList、账号、凭据及 AniDB 独立库中的人工匹配会保留。此操作无法撤销。</value></data>
+  <data name="VideoLibraryClearAllScrapeRecordsDialogPrimary" xml:space="preserve"><value>全部清理</value></data>
+  <data name="VideoLibraryClearAllScrapeRecordsDialogCancel" xml:space="preserve"><value>取消</value></data>
+  <data name="VideoLibraryClearAllScrapeRecordsSuccessMessage" xml:space="preserve"><value>全部刮削记录已清理。</value></data>
+  <data name="VideoLibraryClearAllScrapeRecordsSuccessTitle" xml:space="preserve"><value>刮削记录已清理</value></data>
+  <data name="VideoLibraryClearAllScrapeRecordsFailedTitle" xml:space="preserve"><value>无法清理刮削记录</value></data>
   <data name="VideoLibraryMetadataTasksButton.Label" xml:space="preserve"><value>后台任务</value></data>
   <data name="VideoLibraryMetadataTasksButton.ToolTipService.ToolTip" xml:space="preserve"><value>打开后台任务</value></data>
   <data name="VideoLibraryMetadataTasksHeading.Text" xml:space="preserve"><value>后台任务</value></data>
@@ -1804,11 +1819,6 @@
   <data name="VideoMetadataTaskUpdatedFormat" xml:space="preserve"><value>更新于 {0:g}</value></data>
   <data name="VideoMetadataTaskCountFormat" xml:space="preserve"><value>{0} 个后台任务</value></data>
   <data name="VideoMetadataTaskLoadFailedTitle" xml:space="preserve"><value>后台任务不可用</value></data>
-  <data name="VideoLibraryHomeMyMediaHeading.Text" xml:space="preserve"><value>我的媒体</value></data>
-  <data name="VideoLibraryHomeMoviesTile.Text" xml:space="preserve"><value>电影</value></data>
-  <data name="VideoLibraryHomeSeriesTile.Text" xml:space="preserve"><value>系列</value></data>
-  <data name="VideoLibraryHomeAnimeTile.Text" xml:space="preserve"><value>动画</value></data>
-  <data name="VideoLibraryHomeCollectionsTile.Text" xml:space="preserve"><value>集合</value></data>
   <data name="VideoLibraryDetailsHeading.Text" xml:space="preserve"><value>视频详情</value></data>
   <data name="VideoLibraryDetailsPlayButton.Content" xml:space="preserve"><value>播放</value></data>
   <data name="VideoLibraryDetailsPlayFromBeginningButton.Content" xml:space="preserve"><value>从头播放</value></data>
@@ -1834,14 +1844,66 @@
   <data name="DownloadsRefreshButton.Label" xml:space="preserve"><value>刷新</value></data>
   <data name="DownloadsDiscoveryTab.Content" xml:space="preserve"><value>发现</value></data>
   <data name="DownloadsTasksTab.Content" xml:space="preserve"><value>下载任务</value></data>
+  <data name="DownloadsSubscriptionsTab.Content" xml:space="preserve"><value>订阅</value></data>
   <data name="DownloadsSettingsTab.Content" xml:space="preserve"><value>下载设置</value></data>
+  <data name="DownloadsSubscriptionsHeading.Text" xml:space="preserve"><value>视频订阅</value></data>
+  <data name="DownloadsCheckAllSubscriptionsButton.Content" xml:space="preserve"><value>全部检查</value></data>
+  <data name="DownloadsSubscriptionsEmptyText.Text" xml:space="preserve"><value>请从视频发现详情页创建订阅。</value></data>
+  <data name="DownloadsCheckSubscriptionButton.Content" xml:space="preserve"><value>立即检查</value></data>
+  <data name="DownloadsRemoveSubscriptionButton.Content" xml:space="preserve"><value>移除</value></data>
+  <data name="DownloadsSubscriptionEnabled" xml:space="preserve"><value>已启用</value></data>
+  <data name="DownloadsSubscriptionDisabled" xml:space="preserve"><value>已暂停</value></data>
+  <data name="DownloadsSubscriptionDisableButton" xml:space="preserve"><value>暂停</value></data>
+  <data name="DownloadsSubscriptionEnableButton" xml:space="preserve"><value>启用</value></data>
+  <data name="DownloadsSubscriptionTrusted" xml:space="preserve"><value>可信发布</value></data>
+  <data name="DownloadsSubscriptionUntrusted" xml:space="preserve"><value>非可信发布</value></data>
+  <data name="DownloadsSubscriptionStartsFromEpisode" xml:space="preserve"><value>从第 {0} 集开始</value></data>
+  <data name="DownloadsSubscriptionNeedsSetup" xml:space="preserve"><value>需要设置发布规则</value></data>
+  <data name="DownloadsSubscriptionNeedsSetupButton" xml:space="preserve"><value>需要设置</value></data>
+  <data name="DownloadsSubscriptionLegacyBackend" xml:space="preserve"><value>尚未选择下载后端</value></data>
+  <data name="DownloadsSubscriptionLegacyRule" xml:space="preserve"><value>请从视频发现重新订阅，并选择发布规则。</value></data>
+  <data name="DownloadsSubscriptionLastChecked" xml:space="preserve"><value>上次检查：{0}</value></data>
+  <data name="DownloadsSubscriptionNeverChecked" xml:space="preserve"><value>尚未检查</value></data>
+  <data name="DownloadsSubscriptionsInitialStatus" xml:space="preserve"><value>启用的订阅每 30 分钟检查一次。</value></data>
+  <data name="DownloadsSubscriptionsChecked" xml:space="preserve"><value>已完成所有启用订阅的检查。</value></data>
+  <data name="DownloadsSubscriptionCheckResult" xml:space="preserve"><value>已将 {0} 个新版本加入队列。</value></data>
+  <data name="DownloadsSubscriptionCheckFailed" xml:space="preserve"><value>订阅检查失败。</value></data>
+  <data name="DownloadsSubscriptionPausedStatus" xml:space="preserve"><value>订阅已暂停；现有下载未被更改。</value></data>
+  <data name="DownloadsSubscriptionEnabledStatus" xml:space="preserve"><value>订阅已启用。</value></data>
+  <data name="DownloadsRemoveSubscriptionTitle" xml:space="preserve"><value>移除订阅？</value></data>
+  <data name="DownloadsRemoveSubscriptionMessage" xml:space="preserve"><value>停止订阅“{0}”吗？现有下载任务和已下载文件会保留。</value></data>
+  <data name="DownloadsRemoveSubscriptionConfirmButton" xml:space="preserve"><value>移除</value></data>
+  <data name="DownloadsSubscriptionRemovedStatus" xml:space="preserve"><value>订阅已移除；现有下载已保留。</value></data>
+  <data name="DownloadsSubscriptionsEmptyStatus" xml:space="preserve"><value>从视频发现创建的订阅会显示在这里。</value></data>
+  <data name="DownloadsSubscriptionsCount" xml:space="preserve"><value>共有 {0} 个视频订阅。</value></data>
   <data name="DownloadsLegalNotice.Title" xml:space="preserve"><value>请仅下载你有权获取的资源</value></data>
   <data name="DownloadsLegalNotice.Message" xml:space="preserve"><value>搜索结果来自 Nyaa RSS。发送到 qBittorrent 前请核对发布内容。</value></data>
   <data name="DownloadsSearchBox.PlaceholderText" xml:space="preserve"><value>标题、发布组或关键词</value></data>
+  <data name="DownloadsCategoryBox.AutomationProperties.Name" xml:space="preserve"><value>Nyaa 分类</value></data>
   <data name="DownloadsSearchButton.Content" xml:space="preserve"><value>搜索</value></data>
   <data name="DownloadsAddButton.Content" xml:space="preserve"><value>使用所选后端</value></data>
   <data name="DownloadsSettingsNotice.Title" xml:space="preserve"><value>下载后端设置</value></data>
   <data name="DownloadsSettingsNotice.Message" xml:space="preserve"><value>可选择内置 MonoTorrent 或 qBittorrent。qBittorrent 凭据只保存在 Windows 凭据管理器。</value></data>
+  <data name="DownloadsMonoTorrentSettingsNotice.Title" xml:space="preserve"><value>内置 MonoTorrent</value></data>
+  <data name="DownloadsMonoTorrentSettingsNotice.Message" xml:space="preserve"><value>改动只对之后新加入的内置任务生效，已有任务保留原目录。附加 Tracker URL 保存在 settings.json；私有种子仍只使用自身的 Tracker 列表。</value></data>
+  <data name="DownloadsMonoTorrentDownloadRootBox.Header" xml:space="preserve"><value>下载目录</value></data>
+  <data name="DownloadsMonoTorrentBrowseDownloadRootButton.Content" xml:space="preserve"><value>选择目录</value></data>
+  <data name="DownloadsMonoTorrentResetDownloadRootButton.Content" xml:space="preserve"><value>恢复默认</value></data>
+  <data name="DownloadsMonoTorrentDownloadRootHint.Text" xml:space="preserve"><value>新任务会保存到这里；更改目录不会移动正在下载或已经完成的内容。</value></data>
+  <data name="DownloadsMonoTorrentTrackersBox.Header" xml:space="preserve"><value>附加 Tracker（每行一个 HTTP、HTTPS 或 UDP URL）</value></data>
+  <data name="DownloadsMonoTorrentTrackersBox.PlaceholderText" xml:space="preserve"><value>udp://tracker.example:6969/announce</value></data>
+  <data name="DownloadsMonoTorrentListenPortBox.Header" xml:space="preserve"><value>监听端口（0 = 随机）</value></data>
+  <data name="DownloadsMonoTorrentMaximumConnectionsBox.Header" xml:space="preserve"><value>最大连接数</value></data>
+  <data name="DownloadsMonoTorrentPerTorrentConnectionsBox.Header" xml:space="preserve"><value>每个种子的连接数</value></data>
+  <data name="DownloadsMonoTorrentHalfOpenConnectionsBox.Header" xml:space="preserve"><value>并发连接尝试数</value></data>
+  <data name="DownloadsMonoTorrentDownloadLimitBox.Header" xml:space="preserve"><value>下载限速（KiB/s，0 = 不限速）</value></data>
+  <data name="DownloadsMonoTorrentUploadLimitBox.Header" xml:space="preserve"><value>上传限速（KiB/s，0 = 不限速）</value></data>
+  <data name="DownloadsMonoTorrentOpenFilesBox.Header" xml:space="preserve"><value>最大打开文件数</value></data>
+  <data name="DownloadsMonoTorrentUploadSlotsBox.Header" xml:space="preserve"><value>每个种子的上传槽位</value></data>
+  <data name="DownloadsMonoTorrentPortForwardingCheckBox.Content" xml:space="preserve"><value>自动 UPnP / NAT-PMP 端口映射</value></data>
+  <data name="DownloadsMonoTorrentDhtCheckBox.Content" xml:space="preserve"><value>分布式哈希表（DHT）</value></data>
+  <data name="DownloadsMonoTorrentPeerExchangeCheckBox.Content" xml:space="preserve"><value>节点交换（PEX）</value></data>
+  <data name="DownloadsMonoTorrentLocalPeerDiscoveryCheckBox.Content" xml:space="preserve"><value>本地节点发现（LPD）</value></data>
   <data name="DownloadsServerUrlBox.Header" xml:space="preserve"><value>服务器地址</value></data>
   <data name="DownloadsUsernameBox.Header" xml:space="preserve"><value>用户名</value></data>
   <data name="DownloadsPasswordBox.Header" xml:space="preserve"><value>WebUI 密码</value></data>
@@ -1867,6 +1929,11 @@
   <data name="DownloadsAddedTaskStatus" xml:space="preserve"><value>种子已添加到 qBittorrent。</value></data>
   <data name="DownloadsAddFailedStatus" xml:space="preserve"><value>无法添加种子。</value></data>
   <data name="DownloadsSettingsSaved" xml:space="preserve"><value>下载设置已保存。</value></data>
+  <data name="DownloadsMonoTorrentTooManyTrackers" xml:space="preserve"><value>附加 Tracker 不能超过 {0} 个。</value></data>
+  <data name="DownloadsMonoTorrentInvalidTracker" xml:space="preserve"><value>Tracker URL 无效：{0}</value></data>
+  <data name="DownloadsMonoTorrentDownloadRootNotAbsolute" xml:space="preserve"><value>请选择绝对路径的下载目录。</value></data>
+  <data name="DownloadsMonoTorrentDownloadRootCreateFailed" xml:space="preserve"><value>无法创建下载目录，请检查磁盘和权限。</value></data>
+  <data name="DownloadsMonoTorrentDownloadRootNotWritable" xml:space="preserve"><value>下载目录不可写入。</value></data>
   <data name="DownloadsConnectionSuccess" xml:space="preserve"><value>已连接 qBittorrent {0}（WebAPI {1}）。</value></data>
   <data name="DownloadsConnectionFailed" xml:space="preserve"><value>qBittorrent 连接失败。</value></data>
   <data name="DownloadsTaskCount" xml:space="preserve"><value>qBittorrent 中有 {0} 个任务。</value></data>
@@ -1940,9 +2007,11 @@
   <data name="DiscoverNavigationItem.Content" xml:space="preserve"><value>视频</value></data>
   <data name="DiscoverPageTitleText.Text" xml:space="preserve"><value>视频</value></data>
   <data name="DiscoverRefreshButton.Label" xml:space="preserve"><value>刷新</value></data>
+  <data name="DiscoverOpenDownloadsButton.Label" xml:space="preserve"><value>下载</value></data>
+  <data name="DiscoverOpenSubscriptionsButton.Label" xml:space="preserve"><value>订阅</value></data>
   <data name="DiscoverExploreTab.Content" xml:space="preserve"><value>探索</value></data>
   <data name="DiscoverRecommendationsTab.Content" xml:space="preserve"><value>推荐</value></data>
-  <data name="DiscoverProviderBox.Header" xml:space="preserve"><value>来源</value></data>
+  <data name="DiscoverProviderBox.Header" xml:space="preserve"><value>浏览来源</value></data>
   <data name="DiscoverFeedBox.Header" xml:space="preserve"><value>内容</value></data>
   <data name="DiscoverMediaKindBox.Header" xml:space="preserve"><value>类型</value></data>
   <data name="DiscoverYearBox.Header" xml:space="preserve"><value>年份</value></data>
@@ -1960,22 +2029,85 @@
   <data name="DiscoverOverviewHeading.Text" xml:space="preserve"><value>总览</value></data>
   <data name="DiscoverDetailsBannerText.Text" xml:space="preserve"><value>影片详情</value></data>
   <data name="DiscoverDetailsLoadingText.Text" xml:space="preserve"><value>正在加载详情…</value></data>
+  <data name="VideoDiscoveryDetailPageTitleText.Text" xml:space="preserve"><value>视频详情</value></data>
+  <data name="VideoDiscoveryDetailBackButton.Label" xml:space="preserve"><value>返回</value></data>
+  <data name="VideoDiscoveryDetailSearchResourcesButton.Content" xml:space="preserve"><value>搜索资源</value></data>
+  <data name="VideoDiscoveryDetailSearchSubtitlesButton.Content" xml:space="preserve"><value>搜索字幕</value></data>
+  <data name="VideoDiscoveryResourceBackButton.Label" xml:space="preserve"><value>返回</value></data>
+  <data name="VideoDiscoverySubscriptionReleaseGroupLabel.Text" xml:space="preserve"><value>发布组</value></data>
+  <data name="VideoDiscoverySubscriptionResolutionLabel.Text" xml:space="preserve"><value>分辨率</value></data>
+  <data name="VideoDiscoverySubscriptionStartFromLabel.Text" xml:space="preserve"><value>从此集开始</value></data>
+  <data name="VideoDiscoverySubtitlePageTitleText.Text" xml:space="preserve"><value>搜索 Jimaku 字幕</value></data>
+  <data name="VideoDiscoverySubtitleBackButton.Label" xml:space="preserve"><value>返回</value></data>
+  <data name="VideoDiscoverySubtitleQueryBox.PlaceholderText" xml:space="preserve"><value>标题、原题或别名</value></data>
+  <data name="VideoDiscoverySubtitleSearchButton.Content" xml:space="preserve"><value>搜索字幕</value></data>
+  <data name="VideoDiscoverySubtitleDestinationBox.Header" xml:space="preserve"><value>保存位置</value></data>
+  <data name="VideoDiscoverySubtitlePickTargetButton.Content" xml:space="preserve"><value>选择…</value></data>
+  <data name="VideoDiscoverySubtitleSaveButton.Content" xml:space="preserve"><value>保存</value></data>
   <data name="DiscoverBackButton.Content" xml:space="preserve"><value>返回</value></data>
   <data name="DiscoverResourceHeading.Text" xml:space="preserve"><value>搜索 Nyaa 资源</value></data>
   <data name="DiscoverResourceQueryBox.PlaceholderText" xml:space="preserve"><value>标题、原题、年份或季号</value></data>
+  <data name="DiscoverResourceCategoryBox.AutomationProperties.Name" xml:space="preserve"><value>Nyaa 分类</value></data>
   <data name="DiscoverSearchNyaaButton.Content" xml:space="preserve"><value>搜索 Nyaa</value></data>
   <data name="DiscoverSearchResourcesButton" xml:space="preserve"><value>搜索资源</value></data>
   <data name="DiscoverSearchSubtitlesButton" xml:space="preserve"><value>搜索字幕</value></data>
   <data name="DiscoverSubscribeButton" xml:space="preserve"><value>订阅</value></data>
   <data name="DiscoverUnsubscribeButton" xml:space="preserve"><value>取消订阅</value></data>
-  <data name="DiscoverSubtitleHeading" xml:space="preserve"><value>搜索字幕</value></data>
+  <data name="DiscoverSubscriptionManageButton" xml:space="preserve"><value>管理订阅</value></data>
+  <data name="DiscoverDownloadAndSubscribeButton" xml:space="preserve"><value>下载并订阅</value></data>
+  <data name="DiscoverSubscriptionMovieStart" xml:space="preserve"><value>电影</value></data>
+  <data name="DiscoverSubtitleHeading" xml:space="preserve"><value>搜索 Jimaku 字幕</value></data>
+  <data name="DiscoverSubtitleSaveAs" xml:space="preserve"><value>另存为</value></data>
+  <data name="DiscoverSubtitleSaveAsHint" xml:space="preserve"><value>保存时选择文件名。</value></data>
+  <data name="DiscoverSubtitleNextToVideo" xml:space="preserve"><value>保存到已有视频旁</value></data>
+  <data name="DiscoverSubtitleSaveToDirectory" xml:space="preserve"><value>保存到文件夹</value></data>
+  <data name="DiscoverSubtitleChooseVideoHint" xml:space="preserve"><value>请选择已有视频。</value></data>
+  <data name="DiscoverSubtitleChooseDirectoryHint" xml:space="preserve"><value>请选择目标文件夹。</value></data>
+  <data name="DiscoverSubtitleFileType" xml:space="preserve"><value>字幕文件</value></data>
+  <data name="DiscoverSubtitleInvalidDestination" xml:space="preserve"><value>字幕保存位置无效。</value></data>
+  <data name="DiscoverSubtitleNoUniqueFileName" xml:space="preserve"><value>无法生成未被占用的字幕文件名。</value></data>
+  <data name="DiscoverSubtitleVideoMissing" xml:space="preserve"><value>所选视频已不存在。</value></data>
+  <data name="DiscoverSubtitleDirectoryMissing" xml:space="preserve"><value>所选字幕文件夹已不存在。</value></data>
+  <data name="JimakuTitle" xml:space="preserve"><value>Jimaku 字幕</value></data>
+  <data name="JimakuApiKeyRequired" xml:space="preserve"><value>请先在视频设置中配置 Jimaku API Key，再搜索字幕。</value></data>
+  <data name="JimakuApiKeyMissing" xml:space="preserve"><value>Jimaku API Key 已不再配置。</value></data>
+  <data name="JimakuApiKeyRejected" xml:space="preserve"><value>Jimaku 拒绝了此 API Key。</value></data>
+  <data name="JimakuUntrustedUrl" xml:space="preserve"><value>Jimaku 返回了不受信任的字幕地址。</value></data>
+  <data name="JimakuUnsupportedExtension" xml:space="preserve"><value>仅支持 SRT、ASS、SSA 和 VTT 字幕文件。</value></data>
+  <data name="JimakuEmptySubtitle" xml:space="preserve"><value>Jimaku 返回了空字幕文件。</value></data>
+  <data name="JimakuInvalidSearchResponse" xml:space="preserve"><value>Jimaku 返回的搜索响应无效。</value></data>
+  <data name="JimakuInvalidFileList" xml:space="preserve"><value>Jimaku 返回的字幕文件列表无效。</value></data>
+  <data name="JimakuResponseTooLarge" xml:space="preserve"><value>Jimaku 响应超过大小限制。</value></data>
+  <data name="JimakuOperationDownload" xml:space="preserve"><value>下载字幕</value></data>
+  <data name="JimakuOperationSearch" xml:space="preserve"><value>搜索条目</value></data>
+  <data name="JimakuOperationListFiles" xml:space="preserve"><value>列出字幕文件</value></data>
+  <data name="JimakuRedirectRejected" xml:space="preserve"><value>Jimaku 拒绝执行“{0}”：不信任重定向。</value></data>
+  <data name="JimakuRequestFailed" xml:space="preserve"><value>Jimaku 无法执行“{0}”（HTTP {1}）。</value></data>
+  <data name="JimakuUnknownLanguage" xml:space="preserve"><value>语言未知</value></data>
+  <data name="DiscoverSubscriptionHeading" xml:space="preserve"><value>选择要订阅的 Nyaa 发布版本</value></data>
+  <data name="NyaaSubscriptionTitle" xml:space="preserve"><value>Nyaa 订阅</value></data>
+  <data name="NyaaSubscriptionReleaseRuleRequired" xml:space="preserve"><value>请选择标题同时包含发布组与分辨率的 Nyaa 版本（例如 [Group] 和 1080p）。</value></data>
+  <data name="NyaaSubscriptionNegativeEpisode" xml:space="preserve"><value>起始集数不能为负数。</value></data>
+  <data name="NyaaSubscriptionEpisodeRequired" xml:space="preserve"><value>请选择标题中含有可识别集数的 Nyaa 版本，或提供起始集数。</value></data>
+  <data name="NyaaSubscriptionIdentityMismatch" xml:space="preserve"><value>所选 Nyaa 版本与当前作品或季度不匹配。</value></data>
+  <data name="NyaaSubscriptionSearchFailed" xml:space="preserve"><value>Nyaa 搜索失败。</value></data>
+  <data name="NyaaSubscriptionQbRejected" xml:space="preserve"><value>qBittorrent 未接受此订阅版本。</value></data>
+  <data name="NyaaSubscriptionSingleOriginalRequired" xml:space="preserve"><value>请选择单集的原始发布版本；合集和重制版本不能用于创建订阅。</value></data>
+  <data name="DiscoverNyaaSubscribeReleaseButton.Content" xml:space="preserve"><value>用于订阅</value></data>
+  <data name="DiscoverJimakuDownloadButton.Content" xml:space="preserve"><value>下载字幕</value></data>
+  <data name="DiscoverSubscriptionRemoved" xml:space="preserve"><value>已移除 Nyaa 订阅。</value></data>
+  <data name="DiscoverSubscriptionChooseRelease" xml:space="preserve"><value>请选择要持续跟踪的 Nyaa 发布组和分辨率。</value></data>
+  <data name="DiscoverSubscriptionCreated" xml:space="preserve"><value>已下载所选版本并创建订阅；新建了 {0} 个下载任务。</value></data>
+  <data name="DiscoverSubtitleSaved" xml:space="preserve"><value>字幕已保存。</value></data>
   <data name="DiscoverNyaaDownloadButton.Content" xml:space="preserve"><value>下载并导入</value></data>
   <data name="DiscoverAddToQbButton.Content" xml:space="preserve"><value>添加到 qBittorrent</value></data>
   <data name="DiscoverMovie" xml:space="preserve"><value>电影</value></data>
   <data name="DiscoverSeries" xml:space="preserve"><value>剧集</value></data>
   <data name="DiscoverAnime" xml:space="preserve"><value>动画</value></data>
+  <data name="DiscoverAll" xml:space="preserve"><value>全部</value></data>
   <data name="DiscoverSortPopularity" xml:space="preserve"><value>热度</value></data>
   <data name="DiscoverSortRating" xml:space="preserve"><value>评分</value></data>
+  <data name="DiscoverSortRelease" xml:space="preserve"><value>发布日期</value></data>
   <data name="DiscoverSortMovieRelease" xml:space="preserve"><value>电影上映日期</value></data>
   <data name="DiscoverSortSeriesAir" xml:space="preserve"><value>剧集首播日期</value></data>
   <data name="DiscoverSortRevenue" xml:space="preserve"><value>收入</value></data>
@@ -1987,6 +2119,16 @@
   <data name="DiscoverConsentTitle" xml:space="preserve"><value>需要允许在线元数据</value></data>
   <data name="DiscoverProviderFailedTitle" xml:space="preserve"><value>发现来源失败</value></data>
   <data name="DiscoverSearchFailedTitle" xml:space="preserve"><value>影片搜索失败</value></data>
+  <data name="DiscoverSearchQueryRequired" xml:space="preserve"><value>请输入标题后再搜索。</value></data>
+  <data name="DiscoverSearchNoSources" xml:space="preserve"><value>没有可用于影片搜索的已启用来源。</value></data>
+  <data name="DiscoverSearchAllSourcesFailed" xml:space="preserve"><value>所有可用的发现来源都未能完成搜索（{0}）。</value></data>
+  <data name="DiscoverSearchPartialWarning" xml:space="preserve"><value>部分来源失败（{0}），仍显示其他来源的结果。</value></data>
+  <data name="DiscoverBrowseFailedTitle" xml:space="preserve"><value>影片发现失败</value></data>
+  <data name="DiscoverBrowseNoSources" xml:space="preserve"><value>没有可用于影片发现的已启用来源。</value></data>
+  <data name="DiscoverBrowseAllSourcesFailed" xml:space="preserve"><value>所有可用的发现来源均失败（{0}）。</value></data>
+  <data name="DiscoverBrowsePartialWarning" xml:space="preserve"><value>部分来源失败（{0}），仍显示其他来源的结果。</value></data>
+  <data name="DiscoverSearchResultsHeadingText" xml:space="preserve"><value>搜索结果</value></data>
+  <data name="DiscoverExploreResultsHeadingText" xml:space="preserve"><value>发现</value></data>
   <data name="DiscoverTmdbCredentialInvalid" xml:space="preserve"><value>TMDB 认证失败。请填写 TMDB v4 Read Token 或 v3 API Key，然后刷新。</value></data>
   <data name="DiscoverOpenSettingsButton.Content" xml:space="preserve"><value>打开视频设置</value></data>
   <data name="VideoLibraryEpisodesLoadingText.Text" xml:space="preserve"><value>正在加载集数…</value></data>
@@ -1996,7 +2138,7 @@
   <data name="VideoEpisodeSearchingResources" xml:space="preserve"><value>正在搜索资源…</value></data>
   <data name="VideoEpisodeResourceNotFound" xml:space="preserve"><value>没有找到匹配的资源。</value></data>
   <data name="VideoEpisodeDownloadQueued" xml:space="preserve"><value>已加入下载</value></data>
-  <data name="DownloadsImportHeading" xml:space="preserve"><value>导入已完成下载</value></data>
+  <data name="DownloadsImportHeading.Text" xml:space="preserve"><value>导入已完成下载</value></data>
   <data name="DownloadsImportSourceBox.Header" xml:space="preserve"><value>视频来源</value></data>
   <data name="DownloadsImportButton.Content" xml:space="preserve"><value>确认只读扫描</value></data>
   <data name="DownloadsImportStatus" xml:space="preserve"><value></value></data>
@@ -2008,15 +2150,12 @@
   <data name="DownloadsImportFailed" xml:space="preserve"><value>视频来源扫描失败。</value></data>
   <data name="VideoDiscoverySettingsCard.Header" xml:space="preserve"><value>发现分组</value></data>
   <data name="VideoDiscoveryProviderOrderBox.Header" xml:space="preserve"><value>探索来源顺序</value></data>
-  <data name="VideoDiscoveryProviderOrderBox.PlaceholderText" xml:space="preserve"><value>tmdb,bangumi,anilist</value></data>
+  <data name="VideoDiscoveryProviderOrderBox.PlaceholderText" xml:space="preserve"><value>tmdb,anilist</value></data>
   <data name="VideoDiscoveryTmdbRecommendationsToggle.OnContent" xml:space="preserve"><value>TMDB 推荐分组</value></data>
   <data name="VideoDiscoveryTmdbRecommendationsToggle.OffContent" xml:space="preserve"><value>TMDB 推荐分组</value></data>
-  <data name="VideoDiscoveryBangumiCalendarToggle.OnContent" xml:space="preserve"><value>Bangumi 放送日历</value></data>
-  <data name="VideoDiscoveryBangumiCalendarToggle.OffContent" xml:space="preserve"><value>Bangumi 放送日历</value></data>
   <data name="VideoDiscoveryAniListRecommendationsToggle.OnContent" xml:space="preserve"><value>AniList 推荐分组</value></data>
   <data name="VideoDiscoveryAniListRecommendationsToggle.OffContent" xml:space="preserve"><value>AniList 推荐分组</value></data>
   <data name="VideoDiscoveryTmdbRecommendationsLabel.Text" xml:space="preserve"><value>TMDB 推荐分组</value></data>
-  <data name="VideoDiscoveryBangumiCalendarLabel.Text" xml:space="preserve"><value>Bangumi 放送日历</value></data>
   <data name="VideoDiscoveryAniListRecommendationsLabel.Text" xml:space="preserve"><value>AniList 推荐分组</value></data>
   <data name="DiscoverFeed_tmdb_discover-movie" xml:space="preserve"><value>探索电影</value></data>
   <data name="DiscoverFeed_tmdb_discover-tv" xml:space="preserve"><value>探索剧集</value></data>
@@ -2029,11 +2168,12 @@
   <data name="DiscoverFeed_tmdb_now-playing" xml:space="preserve"><value>正在上映</value></data>
   <data name="DiscoverFeed_tmdb_upcoming" xml:space="preserve"><value>即将上映</value></data>
   <data name="DiscoverFeed_tmdb_on-air" xml:space="preserve"><value>正在播出</value></data>
-  <data name="DiscoverFeed_bangumi_subjects" xml:space="preserve"><value>浏览动画</value></data>
-  <data name="DiscoverFeed_bangumi_calendar" xml:space="preserve"><value>放送日历</value></data>
   <data name="DiscoverFeed_anilist_trending" xml:space="preserve"><value>动画趋势</value></data>
   <data name="DiscoverFeed_anilist_popular" xml:space="preserve"><value>热门动画</value></data>
   <data name="DiscoverFeed_anilist_seasonal" xml:space="preserve"><value>本季动画</value></data>
+  <data name="DiscoverFeed_aggregate_trending" xml:space="preserve"><value>趋势</value></data>
+  <data name="DiscoverFeed_aggregate_seasonal" xml:space="preserve"><value>本季</value></data>
+  <data name="DiscoverFeed_aggregate_popular" xml:space="preserve"><value>全部作品</value></data>
   <data name="GamesNavItem.Content" xml:space="preserve"><value>游戏</value></data>
   <data name="GamesPageTitle.Text" xml:space="preserve"><value>Galgame</value></data>
   <data name="GamesPathBox.Header" xml:space="preserve"><value>游戏可执行文件</value></data>
@@ -2068,6 +2208,23 @@
   <data name="GamesSessionDegraded" xml:space="preserve"><value>游戏正在运行，但 hook 信号不完整。</value></data>
   <data name="GamesSessionStopping" xml:space="preserve"><value>正在停止捕获…</value></data>
   <data name="GamesSessionError" xml:space="preserve"><value>捕获会话失败。</value></data>
+  <data name="GamesHookProtocolMismatch" xml:space="preserve"><value>内置捕获组件与当前版本不兼容。</value></data>
+  <data name="GamesHookIpcUnavailable" xml:space="preserve"><value>捕获组件已报告就绪，但无法打开它的共享通道。</value></data>
+  <data name="GamesHookWrongProcess" xml:space="preserve"><value>捕获组件附着到了 PID {0}，但请求的是 PID {1}。</value></data>
+  <data name="GamesHookReadyTimeout" xml:space="preserve"><value>捕获组件在 32 秒内没有报告就绪。</value></data>
+  <data name="GamesHookExitedEarly" xml:space="preserve"><value>捕获组件在报告就绪前已退出。</value></data>
+  <data name="GamesHookAccessDenied" xml:space="preserve"><value>游戏以更高权限运行，请以管理员身份启动 Niratan 后重试。</value></data>
+  <data name="GamesHookBitnessMismatch" xml:space="preserve"><value>捕获组件位数与游戏不匹配（32 位 / 64 位）。</value></data>
+  <data name="GamesHookDllMissing" xml:space="preserve"><value>内置捕获组件不完整，缺少 hook 库。</value></data>
+  <data name="GamesHookGameMissing" xml:space="preserve"><value>游戏可执行文件已不存在。</value></data>
+  <data name="GamesHookStaleSession" xml:space="preserve"><value>上一次捕获会话还未释放，请稍后再试。</value></data>
+  <data name="GamesHookResidentMismatch" xml:space="preserve"><value>游戏里还残留上一次的捕获组件，请重启一次游戏。</value></data>
+  <data name="GamesHookNativeReadyTimeout" xml:space="preserve"><value>hook 库未能在超时内加载完成，杀毒软件扫描可能是原因。</value></data>
+  <data name="GamesHookInjectionBlocked" xml:space="preserve"><value>注入游戏被拦截，请检查 Niratan 与该游戏的杀毒软件白名单。</value></data>
+  <data name="GamesHookResumeFailed" xml:space="preserve"><value>已启动的游戏无法恢复运行并被结束，请重新启动。</value></data>
+  <data name="GamesHookSteamTimeout" xml:space="preserve"><value>Steam 已接受启动请求，但游戏进程未在时限内出现。</value></data>
+  <data name="GamesHookCreateProcessFailed" xml:space="preserve"><value>Windows 无法启动游戏进程。</value></data>
+  <data name="GamesHookElevationRequired" xml:space="preserve"><value>Windows 要求使用管理员权限启动这个游戏。</value></data>
   <data name="GamesInvalidExecutable" xml:space="preserve"><value>请选择一个已存在的 .exe 文件。</value></data>
   <data name="GamesDuplicateExecutable" xml:space="preserve"><value>这个可执行文件已经在游戏库中。</value></data>
   <data name="GamesInvalidProcessId" xml:space="preserve"><value>请输入有效的运行中进程 ID。</value></data>
@@ -2168,4 +2325,87 @@
   <data name="DownloadsMonoTorrentTaskCount" xml:space="preserve"><value>MonoTorrent 中有 {0} 个任务。</value></data>
   <data name="DownloadsDeleteBuiltInTaskMessage" xml:space="preserve"><value>要从 MonoTorrent 任务列表移除“{0}”吗？已下载文件会保留。</value></data>
   <data name="DownloadsBuiltInLocationUnavailable" xml:space="preserve"><value>MonoTorrent 下载目录不可用。</value></data>
+  <data name="VideoAniDbClientCard.Header" xml:space="preserve"><value>AniDB 客户端</value></data>
+  <data name="VideoAniDbClientCard.Description" xml:space="preserve"><value>AniDB 分别注册 UDP 与 HTTP API 客户端：UDP 用于 ED2K 文件识别和 MyList，HTTP 用于动画、分集与关系元数据。账号密码只保存在 Windows 凭据管理器；留空 HTTP 客户端 ID 时会兼容使用 UDP 客户端 ID 与版本。</value></data>
+  <data name="VideoAniDbUsernameBox.Header" xml:space="preserve"><value>AniDB 用户名</value></data>
+  <data name="VideoAniDbPasswordBox.Header" xml:space="preserve"><value>AniDB 密码</value></data>
+  <data name="VideoAniDbClientIdBox.Header" xml:space="preserve"><value>UDP API 客户端 ID</value></data>
+  <data name="VideoAniDbClientVersionLabel.Text" xml:space="preserve"><value>UDP 客户端版本</value></data>
+  <data name="VideoAniDbHttpClientIdBox.Header" xml:space="preserve"><value>HTTP API 客户端 ID</value></data>
+  <data name="VideoAniDbUdpServerHostBox.Header" xml:space="preserve"><value>UDP 服务器地址</value></data>
+  <data name="VideoAniDbUdpServerPortLabel.Text" xml:space="preserve"><value>UDP 服务器端口</value></data>
+  <data name="VideoAniDbUdpBindAddressBox.Header" xml:space="preserve"><value>本地 IPv4 绑定地址（留空使用系统选路）</value></data>
+  <data name="VideoAniDbUdpLocalPortLabel.Text" xml:space="preserve"><value>本地 UDP 端口</value></data>
+  <data name="VideoAniDbHttpClientVersionLabel.Text" xml:space="preserve"><value>HTTP 客户端版本</value></data>
+  <data name="VideoAniDbHashMatchingLabel.Text" xml:space="preserve"><value>扫描后计算 ED2K 并匹配 AniDB 文件</value></data>
+  <data name="VideoAniDbMyListSyncLabel.Text" xml:space="preserve"><value>同步 AniDB MyList 与观看状态</value></data>
+  <data name="VideoAniDbAutoAddLabel.Text" xml:space="preserve"><value>已识别文件自动加入 MyList</value></data>
+  <data name="VideoAniDbReadWatchedLabel.Text" xml:space="preserve"><value>从 AniDB 导入已看状态</value></data>
+  <data name="VideoAniDbReadUnwatchedLabel.Text" xml:space="preserve"><value>从 AniDB 导入未看状态</value></data>
+  <data name="VideoAniDbSetWatchedLabel.Text" xml:space="preserve"><value>向 AniDB 提交已看状态</value></data>
+  <data name="VideoAniDbSetUnwatchedLabel.Text" xml:space="preserve"><value>向 AniDB 提交未看状态</value></data>
+  <data name="VideoAniDbRelationDepthLabel.Text" xml:space="preserve"><value>关联动画递归深度</value></data>
+  <data name="VideoAniDbSaveCredentialsButton.Content" xml:space="preserve"><value>保存账号</value></data>
+  <data name="VideoAniDbClearCredentialsButton.Content" xml:space="preserve"><value>清除账号</value></data>
+  <data name="VideoAniDbTestLoginButton.Content" xml:space="preserve"><value>验证 UDP 与 HTTP</value></data>
+  <data name="VideoAniDbSyncMyListButton.Content" xml:space="preserve"><value>同步 MyList</value></data>
+  <data name="VideoAniDbRegistrationLink.Content" xml:space="preserve"><value>AniDB API 注册说明</value></data>
+  <data name="VideoAniDbLoginSucceeded" xml:space="preserve"><value>AniDB 账号、UDP 与 HTTP API 客户端验证成功</value></data>
+  <data name="VideoAniDbLoginFailed" xml:space="preserve"><value>AniDB 登录失败</value></data>
+  <data name="VideoAniDbHttpClientInvalid" xml:space="preserve"><value>AniDB HTTP API 客户端 ID/版本未注册或无效。请填写在 AniDB 为 HTTP API 注册的客户端 ID 与版本后重试。</value></data>
+  <data name="VideoAniDbMyListSynced" xml:space="preserve"><value>AniDB MyList 已同步</value></data>
+  <data name="GamesImportSection.Content" xml:space="preserve"><value>导入</value></data>
+  <data name="GamesSettingsSection.Content" xml:space="preserve"><value>设置</value></data>
+  <data name="GamesCaptureStatusTitle.Text" xml:space="preserve"><value>捕获状态</value></data>
+  <data name="GamesLibrarySearchBox.PlaceholderText" xml:space="preserve"><value>搜索游戏</value></data>
+  <data name="GamesLibrarySearchHeader.Text" xml:space="preserve"><value>搜索</value></data>
+  <data name="GamesLibrarySortBox.Header" xml:space="preserve"><value>排序</value></data>
+  <data name="GamesLibraryFilterBox.Header" xml:space="preserve"><value>状态</value></data>
+  <data name="GamesLibraryImportButton.Content" xml:space="preserve"><value>导入</value></data>
+  <data name="GamesLibraryEmptyTitle.Text" xml:space="preserve"><value>没有找到游戏</value></data>
+  <data name="GamesLibraryEmptyHint.Text" xml:space="preserve"><value>导入游戏可执行文件，或调整当前搜索和状态筛选。</value></data>
+  <data name="GamesLibraryEmptyImportButton.Content" xml:space="preserve"><value>导入游戏</value></data>
+  <data name="GamesToolbarAppearanceButton.ToolTipService.ToolTip" xml:space="preserve"><value>浮窗外观</value></data>
+  <data name="GamesImportTitle.Text" xml:space="preserve"><value>导入游戏</value></data>
+  <data name="GamesImportSubtitle.Text" xml:space="preserve"><value>选择游戏可执行文件，或把一个或多个 .exe 拖到本页任意位置。源文件只会原地建立索引，不会被移动或修改。</value></data>
+  <data name="GamesImportDropTitle.Text" xml:space="preserve"><value>把 .exe 拖到这里</value></data>
+  <data name="GamesImportDropHint.Text" xml:space="preserve"><value>可以一次导入多个可执行文件；重复路径会被忽略。</value></data>
+  <data name="GamesImportPickerButton.Content" xml:space="preserve"><value>选择可执行文件</value></data>
+  <data name="GamesImportDropCaption" xml:space="preserve"><value>导入游戏可执行文件</value></data>
+  <data name="GamesNoNewExecutables" xml:space="preserve"><value>没有找到新的 .exe 文件。</value></data>
+  <data name="GamesAppearanceTitle.Text" xml:space="preserve"><value>台词浮窗外观</value></data>
+  <data name="GamesAppearanceSubtitle.Text" xml:space="preserve"><value>改动会立即保存并应用到已经打开的浮窗。</value></data>
+  <data name="GamesAppearanceResetButton.Content" xml:space="preserve"><value>恢复默认</value></data>
+  <data name="GamesAppearanceShowOverlayButton.Content" xml:space="preserve"><value>显示浮窗预览</value></data>
+  <data name="GamesOverlayFontFamilyBox.Header" xml:space="preserve"><value>字体</value></data>
+  <data name="GamesOverlayFontSizeLabel.Text" xml:space="preserve"><value>字号</value></data>
+  <data name="GamesOverlayLetterSpacingLabel.Text" xml:space="preserve"><value>字距</value></data>
+  <data name="GamesOverlayLineHeightLabel.Text" xml:space="preserve"><value>行高</value></data>
+  <data name="GamesOverlayBoldSwitch.Header" xml:space="preserve"><value>粗体</value></data>
+  <data name="GamesOverlayHorizontalAlignmentBox.Header" xml:space="preserve"><value>水平对齐</value></data>
+  <data name="GamesOverlayVerticalAlignmentBox.Header" xml:space="preserve"><value>垂直对齐</value></data>
+  <data name="GamesOverlayTextColorBox.Header" xml:space="preserve"><value>文字颜色（ARGB）</value></data>
+  <data name="GamesOverlayBackgroundColorBox.Header" xml:space="preserve"><value>背景颜色（ARGB）</value></data>
+  <data name="GamesOverlayBackgroundOpacityLabel.Text" xml:space="preserve"><value>背景透明度</value></data>
+  <data name="GamesOverlayOutlineColorBox.Header" xml:space="preserve"><value>描边颜色（ARGB）</value></data>
+  <data name="GamesOverlayOutlineWidthLabel.Text" xml:space="preserve"><value>描边宽度</value></data>
+  <data name="GamesOverlayPaddingLabel.Text" xml:space="preserve"><value>文字内边距</value></data>
+  <data name="GamesOverlayCornerRadiusLabel.Text" xml:space="preserve"><value>窗口圆角</value></data>
+  <data name="GamesSortName" xml:space="preserve"><value>名称</value></data>
+  <data name="GamesSortAdded" xml:space="preserve"><value>最近添加</value></data>
+  <data name="GamesSortPlayed" xml:space="preserve"><value>最近游玩</value></data>
+  <data name="GamesSortStatus" xml:space="preserve"><value>游玩状态</value></data>
+  <data name="GamesSortDuration" xml:space="preserve"><value>游玩时长</value></data>
+  <data name="GamesStatusAll" xml:space="preserve"><value>全部状态</value></data>
+  <data name="GamesStatusWant" xml:space="preserve"><value>想玩</value></data>
+  <data name="GamesStatusPlaying" xml:space="preserve"><value>在玩</value></data>
+  <data name="GamesStatusPlayed" xml:space="preserve"><value>已玩</value></data>
+  <data name="GamesStatusOnHold" xml:space="preserve"><value>搁置</value></data>
+  <data name="GamesStatusDropped" xml:space="preserve"><value>弃坑</value></data>
+  <data name="GamesStatusUnset" xml:space="preserve"><value>未设置</value></data>
+  <data name="GamesOverlayAlignCenter" xml:space="preserve"><value>居中</value></data>
+  <data name="GamesOverlayAlignLeft" xml:space="preserve"><value>左对齐</value></data>
+  <data name="GamesOverlayAlignMiddle" xml:space="preserve"><value>垂直居中</value></data>
+  <data name="GamesOverlayAlignTop" xml:space="preserve"><value>顶部</value></data>
+  <data name="GamesTextSourceKirikiriTextRender" xml:space="preserve"><value>KiriKiri TextRender</value></data>
 </root>

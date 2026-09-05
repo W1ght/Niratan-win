@@ -484,7 +484,7 @@
                             </Grid>
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                 <TextBlock x:Uid="VideoMetadataAniListToggleLabel"
-                                           Text="AniList — anime identity, aliases, and tags"
+                                           Text="AniList — anime discovery and recommendations"
                                            TextWrapping="Wrap"
                                            VerticalAlignment="Center" />
                                 <ToggleSwitch Grid.Column="1"
@@ -502,16 +502,6 @@
                                               HorizontalAlignment="Right"
                                               IsOn="{x:Bind ViewModel.AniDbMetadataEnabled, Mode=TwoWay}" />
                             </Grid>
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
-                                <TextBlock x:Uid="VideoMetadataBangumiToggleLabel"
-                                           Text="Bangumi — anime and Japanese television supplement"
-                                           TextWrapping="Wrap"
-                                           VerticalAlignment="Center" />
-                                <ToggleSwitch Grid.Column="1"
-                                              AutomationProperties.AutomationId="VideoMetadataBangumiToggle"
-                                              HorizontalAlignment="Right"
-                                              IsOn="{x:Bind ViewModel.BangumiMetadataEnabled, Mode=TwoWay}" />
-                            </Grid>
                             <TextBlock x:Uid="VideoMetadataTvDbDisabledText"
                                        Text="TheTVDB: waiting for project authorization"
                                        TextWrapping="Wrap" />
@@ -523,7 +513,6 @@
                                 <HyperlinkButton x:Uid="VideoMetadataTvMazeLink" NavigateUri="https://www.tvmaze.com/api" />
                                 <HyperlinkButton x:Uid="VideoMetadataAniListLink" NavigateUri="https://anilist.co/" />
                                 <HyperlinkButton x:Uid="VideoMetadataAniDbLink" NavigateUri="https://anidb.net/" />
-                                <HyperlinkButton x:Uid="VideoMetadataBangumiLink" NavigateUri="https://bgm.tv/" />
                                 <HyperlinkButton x:Uid="VideoMetadataTvDbLink" NavigateUri="https://thetvdb.com/" />
                             </StackPanel>
                         </StackPanel>
@@ -549,16 +538,6 @@
                                               IsOn="{x:Bind ViewModel.TmdbRecommendationsEnabled, Mode=TwoWay}" />
                             </Grid>
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
-                                <TextBlock x:Uid="VideoDiscoveryBangumiCalendarLabel"
-                                           Text="Bangumi broadcast calendar"
-                                           TextWrapping="Wrap"
-                                           VerticalAlignment="Center" />
-                                <ToggleSwitch Grid.Column="1"
-                                              AutomationProperties.AutomationId="VideoDiscoveryBangumiCalendarToggle"
-                                              HorizontalAlignment="Right"
-                                              IsOn="{x:Bind ViewModel.BangumiCalendarEnabled, Mode=TwoWay}" />
-                            </Grid>
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                                 <TextBlock x:Uid="VideoDiscoveryAniListRecommendationsLabel"
                                            Text="AniList recommendation groups"
                                            TextWrapping="Wrap"
@@ -568,6 +547,96 @@
                                               HorizontalAlignment="Right"
                                               IsOn="{x:Bind ViewModel.AniListRecommendationsEnabled, Mode=TwoWay}" />
                             </Grid>
+                        </StackPanel>
+                    </toolkit:SettingsCard>
+
+                    <toolkit:SettingsCard x:Uid="VideoAniDbClientCard"
+                                          HorizontalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          HeaderIcon="{ui:FontIcon Glyph=&#xE8D7;}">
+                        <StackPanel Width="560" Spacing="8">
+                            <TextBlock Text="{x:Bind ViewModel.AniDbCredentialStatusText, Mode=OneWay}" />
+                            <TextBox x:Name="AniDbUsernameBox"
+                                     x:Uid="VideoAniDbUsernameBox"
+                                     AutomationProperties.AutomationId="VideoAniDbUsernameBox" />
+                            <PasswordBox x:Name="AniDbPasswordBox"
+                                         x:Uid="VideoAniDbPasswordBox"
+                                         AutomationProperties.AutomationId="VideoAniDbPasswordBox" />
+                            <TextBox x:Uid="VideoAniDbClientIdBox"
+                                     AutomationProperties.AutomationId="VideoAniDbClientIdBox"
+                                     Text="{x:Bind ViewModel.AniDbClientId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoAniDbClientVersionLabel" VerticalAlignment="Center" />
+                                <NumberBox Grid.Column="1" Width="120" Minimum="1" Maximum="999"
+                                           Value="{x:Bind ViewModel.AniDbClientVersion, Mode=TwoWay}" />
+                            </Grid>
+                            <TextBox x:Uid="VideoAniDbHttpClientIdBox"
+                                     AutomationProperties.AutomationId="VideoAniDbHttpClientIdBox"
+                                     Text="{x:Bind ViewModel.AniDbHttpClientId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoAniDbHttpClientVersionLabel" VerticalAlignment="Center" />
+                                <NumberBox Grid.Column="1" Width="120" Minimum="1" Maximum="999"
+                                           Value="{x:Bind ViewModel.AniDbHttpClientVersion, Mode=TwoWay}" />
+                            </Grid>
+                            <TextBox x:Uid="VideoAniDbUdpServerHostBox"
+                                     AutomationProperties.AutomationId="VideoAniDbUdpServerHostBox"
+                                     Text="{x:Bind ViewModel.AniDbUdpServerHost, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoAniDbUdpServerPortLabel" VerticalAlignment="Center" />
+                                <NumberBox Grid.Column="1" Width="120" Minimum="1" Maximum="65535"
+                                           Value="{x:Bind ViewModel.AniDbUdpServerPort, Mode=TwoWay}" />
+                            </Grid>
+                            <TextBox x:Uid="VideoAniDbUdpBindAddressBox"
+                                     AutomationProperties.AutomationId="VideoAniDbUdpBindAddressBox"
+                                     Text="{x:Bind ViewModel.AniDbUdpBindAddress, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoAniDbUdpLocalPortLabel" VerticalAlignment="Center" />
+                                <NumberBox Grid.Column="1" Width="120" Minimum="1024" Maximum="65535"
+                                           Value="{x:Bind ViewModel.AniDbUdpLocalPort, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoAniDbHashMatchingLabel" VerticalAlignment="Center" />
+                                <ToggleSwitch Grid.Column="1" IsOn="{x:Bind ViewModel.AniDbHashMatchingEnabled, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoAniDbMyListSyncLabel" VerticalAlignment="Center" />
+                                <ToggleSwitch Grid.Column="1" IsOn="{x:Bind ViewModel.AniDbMyListSyncEnabled, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoAniDbAutoAddLabel" VerticalAlignment="Center" />
+                                <ToggleSwitch Grid.Column="1" IsOn="{x:Bind ViewModel.AniDbAutoAddToMyList, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoAniDbReadWatchedLabel" VerticalAlignment="Center" />
+                                <ToggleSwitch Grid.Column="1" IsOn="{x:Bind ViewModel.AniDbMyListReadWatched, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoAniDbReadUnwatchedLabel" VerticalAlignment="Center" />
+                                <ToggleSwitch Grid.Column="1" IsOn="{x:Bind ViewModel.AniDbMyListReadUnwatched, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoAniDbSetWatchedLabel" VerticalAlignment="Center" />
+                                <ToggleSwitch Grid.Column="1" IsOn="{x:Bind ViewModel.AniDbMyListSetWatched, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoAniDbSetUnwatchedLabel" VerticalAlignment="Center" />
+                                <ToggleSwitch Grid.Column="1" IsOn="{x:Bind ViewModel.AniDbMyListSetUnwatched, Mode=TwoWay}" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <TextBlock x:Uid="VideoAniDbRelationDepthLabel" VerticalAlignment="Center" />
+                                <NumberBox Grid.Column="1" Width="120" Minimum="0" Maximum="5"
+                                           Value="{x:Bind ViewModel.AniDbRelationDepth, Mode=TwoWay}" />
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button x:Uid="VideoAniDbSaveCredentialsButton" Click="SaveAniDbCredentialsButton_Click" />
+                                <Button x:Uid="VideoAniDbClearCredentialsButton" Click="ClearAniDbCredentialsButton_Click" />
+                                <Button x:Uid="VideoAniDbTestLoginButton" Click="TestAniDbLoginButton_Click" />
+                                <Button x:Uid="VideoAniDbSyncMyListButton" Click="SyncAniDbMyListButton_Click" />
+                                <HyperlinkButton x:Uid="VideoAniDbRegistrationLink"
+                                                 NavigateUri="https://wiki.anidb.net/API" />
+                            </StackPanel>
+                            <TextBlock Text="{x:Bind ViewModel.AniDbConnectionStatusText, Mode=OneWay}"
+                                       TextWrapping="Wrap" />
                         </StackPanel>
                     </toolkit:SettingsCard>
 
@@ -591,22 +660,22 @@
                         </StackPanel>
                     </toolkit:SettingsCard>
 
-                    <toolkit:SettingsCard x:Uid="VideoMetadataBangumiCredentialCard"
+                    <toolkit:SettingsCard x:Uid="VideoJimakuCredentialCard"
                                           HorizontalAlignment="Stretch"
                                           HorizontalContentAlignment="Stretch"
                                           HeaderIcon="{ui:FontIcon Glyph=&#xE8D7;}">
                         <StackPanel Width="420" Spacing="8">
-                            <TextBlock Text="{x:Bind ViewModel.BangumiCredentialStatusText, Mode=OneWay}" />
-                            <PasswordBox x:Name="BangumiTokenBox"
-                                         x:Uid="VideoMetadataBangumiTokenBox"
-                                         AutomationProperties.AutomationId="VideoMetadataBangumiTokenBox" />
+                            <TextBlock Text="{x:Bind ViewModel.JimakuCredentialStatusText, Mode=OneWay}" />
+                            <PasswordBox x:Name="JimakuTokenBox"
+                                         x:Uid="VideoJimakuTokenBox"
+                                         AutomationProperties.AutomationId="VideoJimakuTokenBox" />
                             <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button x:Uid="VideoMetadataSaveBangumiTokenButton"
-                                        Click="SaveBangumiTokenButton_Click" />
-                                <Button x:Uid="VideoMetadataClearBangumiTokenButton"
-                                        Click="ClearBangumiTokenButton_Click" />
-                                <HyperlinkButton x:Uid="VideoMetadataProviderTermsLink"
-                                                 NavigateUri="https://www.tvmaze.com/api" />
+                                <Button x:Uid="VideoSaveJimakuTokenButton"
+                                        Click="SaveJimakuTokenButton_Click" />
+                                <Button x:Uid="VideoClearJimakuTokenButton"
+                                        Click="ClearJimakuTokenButton_Click" />
+                                <HyperlinkButton x:Uid="VideoJimakuAttributionLink"
+                                                 NavigateUri="https://jimaku.cc/" />
                             </StackPanel>
                         </StackPanel>
                     </toolkit:SettingsCard>

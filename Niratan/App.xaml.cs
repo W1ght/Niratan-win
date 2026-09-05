@@ -170,6 +170,9 @@ public partial class App : Application
         services.AddTransient<GamesPageViewModel>();
         services.AddTransient<DownloadsPageViewModel>();
         services.AddTransient<DiscoverPageViewModel>();
+        services.AddTransient<VideoDiscoveryDetailPageViewModel>();
+        services.AddTransient<VideoDiscoveryResourceSearchPageViewModel>();
+        services.AddTransient<VideoDiscoverySubtitleSearchPageViewModel>();
         services.AddTransient<NovelLookupPageViewModel>();
         services.AddTransient<ReaderNavigationTransactionCoordinator>();
         services.AddTransient<NovelReaderPageViewModel>();
@@ -204,7 +207,15 @@ public partial class App : Application
         services.AddSingleton<IGalGameSessionService, GalGameSessionService>();
         services.AddSingleton<INiratanJsonFileStore, NiratanJsonFileStore>();
         services.AddSingleton<IVideoCatalogRepository, SQLiteVideoCatalogRepository>();
-        services.AddSingleton<IVideoPlaybackHistoryStore, VideoPlaybackHistoryStore>();
+        services.AddSingleton<VideoPlaybackHistoryStore>();
+        services.AddSingleton<IAniDbCatalogStore, AniDbCatalogStore>();
+        services.AddSingleton<IAniDbConfigurationProvider, AniDbConfigurationProvider>();
+        services.AddSingleton<IAniDbEd2kHasher, AniDbEd2kHasher>();
+        services.AddSingleton<IAniDbUdpTransport, AniDbUdpSocketTransport>();
+        services.AddSingleton<IAniDbUdpClient, AniDbUdpClient>();
+        services.AddSingleton<IAniDbHttpClient, AniDbHttpClient>();
+        services.AddSingleton<IAniDbImportService, AniDbImportService>();
+        services.AddSingleton<IVideoPlaybackHistoryStore, AniDbSyncingVideoPlaybackHistoryStore>();
         services.AddSingleton<IVideoFileNameParser, VideoFileNameParser>();
         services.AddSingleton<LocalVideoMetadataProvider>();
         services.AddSingleton<ILocalVideoMetadataProvider>(provider =>
@@ -221,41 +232,37 @@ public partial class App : Application
         services.AddSingleton<TvMazeVideoMetadataProvider>();
         services.AddSingleton<AniListVideoMetadataProvider>();
         services.AddSingleton<AniDbTitleIndexProvider>();
-        services.AddSingleton<BangumiVideoMetadataProvider>();
         services.AddSingleton<TvDbLicenseGatedProvider>();
         services.AddSingleton<IVideoMetadataProvider>(provider => provider.GetRequiredService<TmdbVideoMetadataProvider>());
         services.AddSingleton<IVideoMetadataProvider>(provider => provider.GetRequiredService<TvMazeVideoMetadataProvider>());
         services.AddSingleton<IVideoMetadataProvider>(provider => provider.GetRequiredService<AniListVideoMetadataProvider>());
         services.AddSingleton<IVideoMetadataProvider>(provider => provider.GetRequiredService<AniDbTitleIndexProvider>());
-        services.AddSingleton<IVideoMetadataProvider>(provider => provider.GetRequiredService<BangumiVideoMetadataProvider>());
         services.AddSingleton<IVideoMetadataProvider>(provider => provider.GetRequiredService<TvDbLicenseGatedProvider>());
         services.AddSingleton<IVideoMetadataSearchProvider>(provider => provider.GetRequiredService<TmdbVideoMetadataProvider>());
         services.AddSingleton<IVideoMetadataSearchProvider>(provider => provider.GetRequiredService<TvMazeVideoMetadataProvider>());
         services.AddSingleton<IVideoMetadataSearchProvider>(provider => provider.GetRequiredService<AniListVideoMetadataProvider>());
         services.AddSingleton<IVideoMetadataSearchProvider>(provider => provider.GetRequiredService<AniDbTitleIndexProvider>());
-        services.AddSingleton<IVideoMetadataSearchProvider>(provider => provider.GetRequiredService<BangumiVideoMetadataProvider>());
         services.AddSingleton<IVideoMetadataSearchProvider>(provider => provider.GetRequiredService<TvDbLicenseGatedProvider>());
         services.AddSingleton<IVideoMetadataDetailsProvider>(provider => provider.GetRequiredService<TmdbVideoMetadataProvider>());
         services.AddSingleton<IVideoMetadataDetailsProvider>(provider => provider.GetRequiredService<TvMazeVideoMetadataProvider>());
         services.AddSingleton<IVideoMetadataDetailsProvider>(provider => provider.GetRequiredService<AniListVideoMetadataProvider>());
-        services.AddSingleton<IVideoMetadataDetailsProvider>(provider => provider.GetRequiredService<BangumiVideoMetadataProvider>());
+        services.AddSingleton<IVideoMetadataDetailsProvider>(provider => provider.GetRequiredService<AniDbTitleIndexProvider>());
         services.AddSingleton<IVideoMetadataDetailsProvider>(provider => provider.GetRequiredService<TvDbLicenseGatedProvider>());
         services.AddSingleton<IVideoArtworkProvider>(provider => provider.GetRequiredService<TmdbVideoMetadataProvider>());
         services.AddSingleton<IVideoArtworkProvider>(provider => provider.GetRequiredService<TvMazeVideoMetadataProvider>());
         services.AddSingleton<IVideoArtworkProvider>(provider => provider.GetRequiredService<AniListVideoMetadataProvider>());
-        services.AddSingleton<IVideoArtworkProvider>(provider => provider.GetRequiredService<BangumiVideoMetadataProvider>());
+        services.AddSingleton<IVideoArtworkProvider>(provider => provider.GetRequiredService<AniDbTitleIndexProvider>());
         services.AddSingleton<IVideoArtworkProvider>(provider => provider.GetRequiredService<TvDbLicenseGatedProvider>());
         services.AddSingleton<TmdbVideoDiscoveryProvider>();
-        services.AddSingleton<BangumiVideoDiscoveryProvider>();
         services.AddSingleton<AniListVideoDiscoveryProvider>();
         services.AddSingleton<IVideoDiscoveryProvider>(provider =>
             provider.GetRequiredService<TmdbVideoDiscoveryProvider>());
         services.AddSingleton<IVideoDiscoveryProvider>(provider =>
-            provider.GetRequiredService<BangumiVideoDiscoveryProvider>());
-        services.AddSingleton<IVideoDiscoveryProvider>(provider =>
             provider.GetRequiredService<AniListVideoDiscoveryProvider>());
         services.AddSingleton<IVideoDiscoveryService, VideoDiscoveryService>();
         services.AddSingleton<IVideoResourceSearchService, VideoResourceSearchService>();
+        services.AddSingleton<IJimakuSubtitleService, JimakuSubtitleService>();
+        services.AddSingleton<INyaaSubscriptionService, NyaaSubscriptionService>();
         services.AddSingleton<IVideoDataService, VideoDataService>();
         services.AddSingleton<INovelBookStorageService, NovelBookStorageService>();
         services.AddSingleton<INovelShelfService, NovelShelfService>();
@@ -359,9 +366,12 @@ public partial class App : Application
         services.AddSingleton<IGlobalLookupHotKeyRegistrar, Win32GlobalLookupHotKeyRegistrar>();
         services.AddSingleton<UIAutomationSelectedTextReader>();
         services.AddSingleton<Win32FocusedEditSelectedTextReader>();
+        services.AddSingleton<IClipboardSelectionPlatform, Win32ClipboardSelectionPlatform>();
+        services.AddSingleton<ClipboardCopySelectedTextReader>();
         services.AddSingleton<ISelectedTextReader>(provider => new CascadingSelectedTextReader(
             provider.GetRequiredService<UIAutomationSelectedTextReader>(),
-            provider.GetRequiredService<Win32FocusedEditSelectedTextReader>()));
+            provider.GetRequiredService<Win32FocusedEditSelectedTextReader>(),
+            provider.GetRequiredService<ClipboardCopySelectedTextReader>()));
         services.AddSingleton<ILogReaderService, LogReaderService>();
         services.AddSingleton<IAudioService, AudioService>();
         services.AddSingleton<IAnkiService, AnkiService>();
@@ -417,6 +427,36 @@ public partial class App : Application
             }
 
             await InitializeAppAsync();
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await GetService<INyaaSubscriptionService>().CheckAllAsync();
+                    Log.Information("Nyaa discovery subscriptions checked");
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "Nyaa discovery subscription check failed");
+                }
+            });
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await GetService<IAniDbCatalogStore>().InitializeAsync();
+                    // Persistent AniDB work must resume independently of which page the
+                    // user opens. Resolving the singleton starts its durable import/MyList
+                    // workers after the catalog has recovered interrupted jobs.
+                    _ = GetService<IAniDbImportService>();
+                    Log.Information("AniDB catalog initialized");
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "AniDB startup synchronization failed");
+                }
+            });
 
             _ = Task.Run(async () =>
             {

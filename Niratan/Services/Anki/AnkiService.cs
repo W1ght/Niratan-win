@@ -805,8 +805,9 @@ public sealed class AnkiService : IAnkiService, IDisposable
             deck,
             noteType,
             [new Dictionary<string, string> { [firstField] = expression }],
-            settings);
-        if (canAdd.Count > 0 && canAdd[0])
+            DuplicateCheckSettings(settings));
+        var ankiCanAdd = canAdd.Count > 0 && canAdd[0];
+        if (ankiCanAdd && FirstFieldChecksExpression(noteType, settings))
         {
             var notDuplicate = AnkiDuplicateLookupResult.NotDuplicate();
             CacheDuplicateLookup(expression, notDuplicate, settingsGeneration);
@@ -821,6 +822,13 @@ public sealed class AnkiService : IAnkiService, IDisposable
                 .Distinct()
                 .ToArray()
             : [];
+        if (ankiCanAdd && noteIds.Length == 0)
+        {
+            var notDuplicate = AnkiDuplicateLookupResult.NotDuplicate();
+            CacheDuplicateLookup(expression, notDuplicate, settingsGeneration);
+            return notDuplicate;
+        }
+
         var duplicate = AnkiDuplicateLookupResult.Duplicate(noteIds);
         SaveDuplicateLookup(expression, noteIds, settingsGeneration);
         CacheDuplicateLookup(expression, duplicate, settingsGeneration);
@@ -836,9 +844,14 @@ public sealed class AnkiService : IAnkiService, IDisposable
             return;
 
         SaveDuplicateLookup(expression, [addedNoteId], settingsGeneration);
+
+        // Cache the merged set, not just the note that was added. The popup forces a
+        // duplicate re-check right after mining, and caching only the new id would drop the
+        // notes the earlier scan found so the magnifier could only jump to the last card.
+        var merged = SavedDuplicateLookup(expression, settingsGeneration);
         CacheDuplicateLookup(
             expression,
-            AnkiDuplicateLookupResult.Duplicate([addedNoteId]),
+            merged.IsDuplicate ? merged : AnkiDuplicateLookupResult.Duplicate([addedNoteId]),
             settingsGeneration);
     }
 
@@ -941,12 +954,21 @@ public sealed class AnkiService : IAnkiService, IDisposable
                     [firstField] = expression,
                 })
                 .ToArray();
-            var canAdd = await client!.CanAddNotesAsync(deck, noteType, fields, settings);
-            var duplicateExpressions = missing
-                .Where((_, index) => index >= canAdd.Count || !canAdd[index])
+            var canAdd = await client!.CanAddNotesAsync(
+                deck,
+                noteType,
+                fields,
+                DuplicateCheckSettings(settings));
+
+            // Anki only compares the note type's first field. When that field is not the
+            // one the configured mapping fills with the expression, canAddNotes can never
+            // report a duplicate, so every candidate has to be probed by field search.
+            var trustCanAdd = FirstFieldChecksExpression(noteType, settings);
+            var searchIndices = Enumerable.Range(0, missing.Length)
+                .Where(index => !trustCanAdd || index >= canAdd.Count || !canAdd[index])
                 .ToArray();
-            var duplicateQueries = duplicateExpressions
-                .Select(expression => BuildDuplicateSearchQuery(expression, deck, noteType, settings))
+            var duplicateQueries = searchIndices
+                .Select(index => BuildDuplicateSearchQuery(missing[index], deck, noteType, settings))
                 .ToArray();
             var duplicateNoteIds = await client.FindNotesAsync(duplicateQueries);
 
@@ -956,23 +978,28 @@ public sealed class AnkiService : IAnkiService, IDisposable
             if (settingsGeneration != Volatile.Read(ref _settingsGeneration))
                 return BuildCurrentSavedDuplicateLookupResults(uniqueExpressions);
 
-            var duplicateIndex = 0;
+            var searchedNoteIds = new Dictionary<int, long[]>();
+            for (var searchIndex = 0; searchIndex < searchIndices.Length; searchIndex++)
+            {
+                searchedNoteIds[searchIndices[searchIndex]] = searchIndex < duplicateNoteIds.Count
+                    ? duplicateNoteIds[searchIndex]
+                        .Where(noteId => noteId > 0)
+                        .Distinct()
+                        .ToArray()
+                    : [];
+            }
+
             for (var index = 0; index < missing.Length; index++)
             {
+                var noteIds = searchedNoteIds.TryGetValue(index, out var found) ? found : [];
+                var ankiCanAdd = index < canAdd.Count && canAdd[index];
                 AnkiDuplicateLookupResult result;
-                if (index < canAdd.Count && canAdd[index])
+                if (ankiCanAdd && noteIds.Length == 0)
                 {
                     result = AnkiDuplicateLookupResult.NotDuplicate();
                 }
                 else
                 {
-                    var noteIds = duplicateIndex < duplicateNoteIds.Count
-                        ? duplicateNoteIds[duplicateIndex]
-                            .Where(noteId => noteId > 0)
-                            .Distinct()
-                            .ToArray()
-                        : [];
-                    duplicateIndex++;
                     SaveDuplicateLookup(missing[index], noteIds, settingsGeneration);
                     result = AnkiDuplicateLookupResult.Duplicate(noteIds);
                 }
@@ -1149,27 +1176,20 @@ public sealed class AnkiService : IAnkiService, IDisposable
         var terms = new List<string>();
         if (settings.DuplicateScope == AnkiDuplicateScope.Deck)
         {
-            terms.Add(QuoteAnkiSearchTerm($"deck:{deck.Name}"));
+            terms.Add(QuoteAnkiSearchTerm($"deck:{EscapeAnkiSearchName(deck.Name)}"));
         }
         else if (settings.DuplicateScope == AnkiDuplicateScope.DeckRoot)
         {
             var rootDeck = deck.Name.Split("::", 2, StringSplitOptions.None)[0];
-            terms.Add(QuoteAnkiSearchTerm($"deck:{rootDeck}"));
+            terms.Add(QuoteAnkiSearchTerm($"deck:{EscapeAnkiSearchName(rootDeck)}"));
         }
 
         if (!settings.CheckDuplicatesAcrossAllModels)
-            terms.Add(QuoteAnkiSearchTerm($"note:{noteType.Name}"));
+            terms.Add(QuoteAnkiSearchTerm($"note:{EscapeAnkiSearchName(noteType.Name)}"));
 
-        var firstFields = settings.CheckDuplicatesAcrossAllModels
-            ? settings.AvailableNoteTypes
-                .Select(candidate => candidate.Fields.FirstOrDefault())
-                .Where(field => !string.IsNullOrWhiteSpace(field))
-                .Cast<string>()
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray()
-            : [noteType.Fields.First()];
-        var fieldTerms = firstFields
-            .Select(field => QuoteAnkiSearchTerm($"{field.ToLowerInvariant()}:{expression}"))
+        var searchValue = EscapeAnkiSearchValue(expression);
+        var fieldTerms = ResolveDuplicateSearchFields(noteType, settings)
+            .Select(field => QuoteAnkiSearchTerm($"{field.ToLowerInvariant()}:{searchValue}"))
             .ToArray();
         if (fieldTerms.Length == 1)
             terms.Add(fieldTerms[0]);
@@ -1179,8 +1199,117 @@ public sealed class AnkiService : IAnkiService, IDisposable
         return string.Join(' ', terms);
     }
 
+    /// <summary>
+    /// Fields a duplicate search has to cover: the note type's first field (what Anki's own
+    /// duplicate check compares) plus every field the configured mapping fills with
+    /// <c>{expression}</c>, so custom note types that keep the expression out of the first
+    /// field are still matched.
+    /// </summary>
+    internal static IReadOnlyList<string> ResolveDuplicateSearchFields(
+        AnkiNoteType noteType,
+        AnkiSettings settings)
+    {
+        var fields = new List<string>();
+
+        void Add(string? field)
+        {
+            if (!string.IsNullOrWhiteSpace(field)
+                && !fields.Contains(field, StringComparer.OrdinalIgnoreCase))
+            {
+                fields.Add(field);
+            }
+        }
+
+        if (settings.CheckDuplicatesAcrossAllModels)
+        {
+            foreach (var candidate in settings.AvailableNoteTypes)
+            {
+                Add(candidate.Fields.FirstOrDefault());
+                foreach (var field in ExpressionFields(candidate, settings.FieldMappings))
+                    Add(field);
+            }
+        }
+
+        Add(noteType.Fields.FirstOrDefault());
+        foreach (var field in ExpressionFields(noteType, settings.FieldMappings))
+            Add(field);
+
+        return fields;
+    }
+
+    /// <summary>
+    /// True when Anki's built-in duplicate check (which only ever compares the first field)
+    /// is looking at the expression, so its <c>canAddNotes</c> verdict can be trusted on its own.
+    /// </summary>
+    private static bool FirstFieldChecksExpression(AnkiNoteType noteType, AnkiSettings settings)
+    {
+        var firstField = noteType.Fields.FirstOrDefault();
+        return !string.IsNullOrWhiteSpace(firstField)
+               && ExpressionFields(noteType, settings.FieldMappings)
+                   .Contains(firstField, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static IEnumerable<string> ExpressionFields(
+        AnkiNoteType noteType,
+        Dictionary<string, string> savedMappings)
+    {
+        var mappings = LapisPreset.AutofillDefaults(noteType, savedMappings);
+        foreach (var field in noteType.Fields)
+        {
+            if (mappings.TryGetValue(field, out var template)
+                && string.Equals(
+                    template?.Trim(),
+                    "{expression}",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                yield return field;
+            }
+        }
+    }
+
     private static string QuoteAnkiSearchTerm(string term) =>
-        $"\"{term.Replace("\"", "", StringComparison.Ordinal)}\"";
+        $"\"{term}\"";
+
+    /// <summary>
+    /// Escapes the characters Anki treats as search syntax so the expression is matched
+    /// literally instead of being read as a wildcard or a field separator.
+    /// </summary>
+    private static string EscapeAnkiSearchValue(string value)
+    {
+        var escaped = new System.Text.StringBuilder(value.Length);
+        foreach (var character in value)
+        {
+            if (character is '\\' or '"' or '*' or '_' or ':')
+                escaped.Append('\\');
+            escaped.Append(character);
+        }
+
+        return escaped.ToString();
+    }
+
+    /// <summary>
+    /// Escapes a deck or note type name. Colons are left alone because they carry the
+    /// <c>::</c> deck hierarchy separator.
+    /// </summary>
+    private static string EscapeAnkiSearchName(string name)
+    {
+        var escaped = new System.Text.StringBuilder(name.Length);
+        foreach (var character in name)
+        {
+            if (character is '\\' or '"' or '*' or '_')
+                escaped.Append('\\');
+            escaped.Append(character);
+        }
+
+        return escaped.ToString();
+    }
+
+    private static AnkiSettings DuplicateCheckSettings(AnkiSettings settings)
+    {
+        var duplicateCheckSettings = AnkiSettings.Clone(settings);
+        duplicateCheckSettings.AllowDupes = false;
+        return duplicateCheckSettings;
+    }
 
     public Task<string?> GetWritableMediaDirectoryAsync()
     {

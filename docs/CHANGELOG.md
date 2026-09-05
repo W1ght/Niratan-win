@@ -1,8 +1,70 @@
 # Changelog
 
+## 2026-09-05 — Anki 查重字段对齐、模板字段持久化与视频库卡片栅格
+
+**根因**：查词 popup 的重复检测始终把表达式塞进笔记类型的**第一个字段**去问 AnkiConnect。Anki 自身的查重只比较第一字段，因此当用户的字段映射把 `{expression}` 放在非第一字段（自定义笔记类型常见的 `Key`/`Front` 首字段映射到 `{furigana-plain}` 或句子）时，`canAddNotes` 永远不会报重复，而 `findNotes` 又只在 `canAddNotes` 已判定重复后才执行——Lapis/Kiku/Senren 用户正常，自定义笔记类型用户则完全查不出重复。Anki 设置页的字段模板下拉框直接双向绑定到行 ViewModel，没有任何监听，`SaveSettings()` 只在 `OnNavigatedFrom` 触发，因此修改既不落盘也不进入 `AnkiService`，制卡继续使用旧映射；`SaveSettings` 又就地修改 `Current.AnkiSettings` 这一 `AnkiService` 正持有的同一实例，改动绕过了用于失效查重缓存的 settings generation。视频库海报栅格的 `ItemsWrapGrid` 单元格按卡片宽高（300×320）设定，而卡片模板自带 12px 右外边距，312 宽的内容被排进 300 的单元格，每张卡右侧被裁掉 12px、列也对不齐。
+
+放大镜「在 Anki 中查看」的多重复项跳转也退化为单条：底层 `guiBrowse` 早已支持 `nid:a,b,c`、`_openableAnkiNotes` 白名单存 `long[]`、popup 的 `dataset.noteIds` 也是列表，但制卡结果 `AnkiMiningResult.NoteId` 只有单值，制卡路径两处 `FirstOrDefault` 把重复集合砍成一条，回传后又**覆盖**了查词渲染时写入的完整白名单；更糟的是 `HandleOpenAnkiNote` 用 `SequenceEqual` 校验，前端若仍留有多条 id 会与单条白名单不匹配而被整个拒绝，放大镜点了没反应。制卡成功后 `CacheSuccessfulMiningResult` 又把查重缓存覆盖为只含新笔记，popup 随后强制重查会拿到这条单元素缓存，再次退化。
+
+**解决**：查重范围改为「第一字段 + 所有映射为 `{expression}` 的字段」；当第一字段并非表达式字段时不再单独采信 `canAddNotes`，每个候选都补一次字段精确搜索，命中即判定为重复，popup 批量查重与 `MineEntryAsync` 提交前的最终闸门共用该逻辑，第一字段本就是表达式字段的笔记类型请求次数不变。表达式中的 `* _ : " \` 改为按 Anki 搜索语法转义而非静默剥除，牌组/笔记类型名单独转义并保留 `::` 层级。旧版 AnkiConnect 不支持 `canAddNotesWithErrorDetail` 时回退到 `canAddNotes`，不再因异常静默判定为不重复。字段模板改动现在由行 ViewModel 的属性变更触发保存，写入 `AnkiSettings` 副本以正确推进 settings generation 并即时刷新 `AnkiService`；handlebar 选项列表内容未变时不再清空重建，避免重置绑定的下拉选中项而清空已保存映射。视频库海报栅格新增 `VideoLandscapeCardSlot*` 槽位尺寸（含卡片自身留白），卡片补上行间距；「更多类似作品」栅格改用共享的竖版槽位并居中占位图标。`AnkiMiningResult` 改为携带完整笔记集合，制卡结果不再裁剪重复项；白名单与下发给 popup 的数组由宿主统一计算为同一份（相加而非覆盖），`SequenceEqual` 校验因此不会再误拒；制卡成功后写入的是合并集合而非仅新笔记，放大镜恢复为跳转到该词的全部重复卡片。用户的 Anki 牌组、笔记、字段映射与视频库 catalog 均未迁移或改写。
+
+## 2026-09-03 — KiriKiri TextRender 与游戏内查词恢复
+
+KiriKiri/KAGEX 的游戏内查词传感器现在把已经完成消息槽归属的 `TextRender.getCharacters()` 精确整句发布为独立文本线程，并按逻辑消息槽区分正文、姓名等捕获面，不再依赖 Luna 是否恰好识别到原生 `TextRender` 地址。游戏工作台的后台 IPC 轮询状态事件会先切回 WinUI 调度队列再更新属性和集合，避免启用查词后跨线程异常中断后续命中消费与 popup 帧发布。
+
+## 2026-09-02 — Fushi 式游戏库、工作台与双架构捕获层
+
+游戏模块移除面向用户的诊断页，重组为游戏库、工作台、导入和设置：资料库增加卡片、搜索、排序与游玩状态筛选；导入支持多选 `.exe`、整页拖放和手动路径，始终只建立索引，不移动或改写源游戏；工作台集中启动/附着、文本线程、实时台词、音频、清空和浮窗操作。
+
+浮窗补齐字体、字号、字距、行高、粗体、水平/垂直对齐、文字/背景/描边颜色、背景透明度、描边宽度、内边距与圆角，并即时应用、合并持久化写入。游戏 C++ 捕获层与 Fushi 参考同步到 IPC v21，加入 Leaf/Aquaplus、HUNEX GGE、SGRE adapter、通用输入屏蔽/几何 provider，以及更新后的 Siglus/RenPy 游戏内查词链路；C# reader 同步完整 header 布局和 native-only 查词准入，x86/x64 helper 均从同一源码生成带校验的 Release 包。`engine-support.yaml` 中的真机证据等级原样保留，未验证实现不会因代码移植或离线测试被宣称为已验证支持。
+
+## 2026-09-01 — Google Drive 登录失效状态实时修正
+
+Google Drive 刷新令牌返回 `invalid_grant` 时，应用现在会立即作废并清理已撤销的 OAuth 凭据，正在显示的 ッツ Sync 设置页同步切换为“登录已失效，请重新连接”，恢复客户端字段和连接按钮；重新进入页面也会验证需要刷新的令牌，不再因为 Credential Manager 中仍有旧记录而继续显示“已连接”。token endpoint 错误改为结构化分类，用户提示不再直接拼接远端原始响应；临时网络或服务端错误只提示暂时无法验证，不会误删有效登录。
+
+## 2026-09-01 — 补齐内置 MonoTorrent 下载设置
+
+下载设置现在会随所选后端切换显示内置 MonoTorrent 或 qBittorrent 的专属配置。MonoTorrent 可持久配置附加 HTTP(S)/UDP Tracker、监听端口、UPnP/NAT-PMP、DHT、PEX、LPD、全局与单任务连接上限、并发连接尝试、打开文件数、上传槽位和上下行 KiB/s 限速；改动从下一个内置任务开始生效。Tracker 会去重并在保存前校验 scheme、credentials、fragment、长度和数量，只追加到公开 torrent，私有 torrent 保持自身 announce 列表。下载目录、路径边界、取消清理和完成即停止做种的既有安全语义不变。
+
+## 2026-08-25 — Fushi 式聚合视频搜索
+
+动画发现卡、在线详情和 AniList 相关推荐现统一使用 AniList 罗马音主标题与日文原题，英文仅作别名；动画电影仍保留 TMDB Movie 身份和路由，但不再让 TMDB 英文标题覆盖罗马音。精确 AniList/TMDB 详情补充也只改变动画展示标题，不替换主 provider/item 或回退到跨源模糊搜索。
+
+默认推荐区也改为 Fushi 式“趋势 / 本季 / 全部作品”概念架：趋势与全部作品在各架内聚合 AniList + TMDB，本季使用 AniList，不再按来源拆成电影、剧集、动画架。三架已加载的候选还会共享 canonical 合并结果，因此 TMDB 趋势中的动画可复用 AniList 热门/本季窗口已取得的罗马音与精确身份，不增加详情标题模糊搜索。
+
+Video 发现页不再显示来源、Feed/内容或电影/剧集/动画选择器：标题搜索固定为 `All`，筛选浏览固定聚合 AniList + TMDB，不受旧来源顺序或隐藏首项影响；TVmaze/AniDB/TVDB、Nyaa/Torznab 等资源索引器和 Jimaku/OpenSubtitles 字幕源不会混入作品卡。每次搜索并发请求 AniList Anime、TMDB Movie 与 TMDB Series，结果固定按 AniList→TMDB、TMDB 内 Movie→Series 公平轮询，使用强 ID 与同年规范化标题合并重复作品，并保留双方别名、external ID 与图片兜底；强 ID 冲突、电影/剧集冲突和缺失年份不会弱合并。筛选浏览每页固定 20 项，第 N 页先累积各来源第 1..N 页形成稳定聚合前缀，再按全局偏移切片，避免只读取来源第 N 页时丢失前页尾部。部分来源失败时继续显示可用结果和来源警告，全部失败才显示错误；快速重复搜索、筛选或分页的迟到响应不会覆盖当前结果。聚合身份继续传入独立详情、资源、字幕和订阅页；在线详情只凭聚合卡中的精确 AniList/TMDB ID 并发补充缺失文本、演职员、季表与图片，补充来源失败仍保留主详情，且不会替换主 provider/item 身份或回退到跨源标题搜索。已缓存详情再次携带聚合 ID 打开时会加法补齐来源身份，TMDB Movie/Series 同数字 ID 也不会串用详情缓存。
+
+## 2026-08-25 — Fushi 式视频获取页与封面订阅管理
+
+视频发现卡现在先进入独立详情页，资源搜索、Jimaku 字幕搜索和 Nyaa 订阅分别在独立页面完成；下载模块新增“订阅”区。订阅从用户选择的单集原始发布版开始（包含该集），创建时立即发送到固定的下载后端；后续严格锁定作品、季度、发布组、分辨率、可信状态和分类，排除 batch/remake，并按逻辑季度与集号防止同集换 torrent ID 后重复下载。订阅持久保存检查状态及封面 URL/受控缓存引用，缓存被清理后可经发现图片管线重建；卡片始终保持 40×60 封面位，无图时显示同尺寸占位。旧 `SubscribedVideoKeys` 会作为禁用且待重新配置规则的条目显示。暂停或移除会取消在途检查，移除规则不会取消任务或删除文件；MonoTorrent 只在任务完成后标记版本已见，qBittorrent 只在远端接受后标记。字幕可另存为、保存到视频旁或指定目录，重名自动生成新文件名且底层拒绝覆盖已有文件。
+
+## 2026-08-23 — AniDB 完整客户端基础与 Shoko 式文件识别/MyList
+
+新增标准 ED2K/CRC32/MD5/SHA1 单次读取、AniDB UDP 会话与 FILE/MYLIST/EPISODE 命令、安全 HTTP Anime 与完整 MyList 快照、Anime/Episode/Relation/Tag/Creator/FID/EID/AID 专用 SQLite catalog、持久识别/MyList 任务、关系分组、跨 AID 多集投影、播放观看状态双向同步，以及 Windows 凭据管理器中的 AniDB 账号入口。release 状态按 `ED2K + size` 区分未查询、未识别、自动匹配、人工匹配和忽略，并提供权威 manual link/unlink/ignore；负结果的下一次重试和禁止重扫状态跨重启保留。必须配置 Niratan 自己获批的 AniDB client ID/version；不会借用或冒充 Shoko client。持续请求会从 2.1 秒降速到 6 秒，过载和 ban gate 不消耗持久任务重试次数。源视频、NFO、海报和现有 catalog 始终只读/保留，网络或封禁失败不会阻断本地扫描。
+
+动画在线链路收敛为 Shoko 式 `AniDB -> TMDB`：AniDB 负责文件、AID/EID 和关系组身份，TMDB 只补充展示资料与图片。AniList 仅保留为独立发现源；Bangumi 从视频刮削、视频发现、设置、凭据和网络策略中移除。升级时只读保留历史 NFO/catalog 中已经存在的 Bangumi ID，不再用它联网或合并动画身份；漫画模块的 Bangumi 发现不受影响。
+
+系列季表与 TMDB alternate episode order 不再只是详情页的 30 分钟内存状态，而是从 metadata snapshot 投影到 catalog，再随 `VideoItem` 重建。AniDB AID/EID 到 TMDB show/order/episode 的映射改为有类型、可多值的持久 xref，保留匹配等级、首选顺序和用户已验证选择。播放窗口关闭、重新进入详情或重启后优先使用同一持久季表；进入详情不会在已有季表时重新按标题刮削。海报保存为 AniDB/TMDB 有界候选集，包含人物、关联作品、季和集图片以及语言、尺寸、选择顺序、下载次数和错误；在线图片仍只进入 AppData cache。
+
+修复 Windows 代理/TUN fake-IP 环境中 AniDB UDP 被错误路由后所有 FILE 任务静止的问题：UDP server、port、本地 IPv4 bind 和 local port 现可显式配置，本地超时只限流重试一次且不再伪装成服务端过载触发全局退避。持久 import/MyList worker 在 App 启动并恢复 catalog 后立即运行，不再依赖用户先打开某个视频页面；缺少独立 HTTP client identity 时后台直接投影受限 UDP metadata，不为每个文件串行等待无效 HTTP 重试。旧设置自动启用 AniDB artwork；同一 relation group 中各 AID 按开播日期得到独立展示季号、标题和 owner 海报，详情页会聚合所有 AID 的季 metadata。完整 XML、角色、制作人员和完整关系图仍要求单独注册并验证 AniDB HTTP client identity。
+
+修复 AniDB `S1/C1/T1/P1/O1` 被压成同一个整数集号后，系列详情在构建 Season 0 时因重复 key 崩溃、全部分集退回通用占位的问题。分集投影现保留 RawNumber 与 EID，多个 AID 的同号特别内容按 EID 合并而不静默丢失；常规重号优先本地精确 EID，再按资料完整度和稳定顺序选择。Credits、Trailer、Parody 与 Other 可见但不会伪造 `S00E01` 下载任务，本地特别篇也按 EID 恢复已下载状态。
+
+## Re:Zero 多季被第四季身份与 TMDB 合并季覆盖
+
+**根因**：同一动画的多个 provider 季度节点合并时，系列卡会按文件数量和最近导入时间选择代表节点，导致独立第四季覆盖 2016 根系列的标题、简介、年份和刮削身份；TMDB 65942 的默认季表又把正篇压成“第1期～第4期”一个 season，而详情解析只读取默认季表。动画 route 同时把 TMDB 当作 catalog 主身份，显式 AniDB AID 也可能在丰富详情时被替换，无法表达 Shoko 的“每个 AniDB Anime 是独立 AnimeSeries，再在 AnimeGroup 聚合”结构。
+
+**解决**：系列聚合改为 Shoko 式持久 relation group，播放状态刷新不再把详情身份切换到后续季度。动画 provider route 固定为 `AniDB -> TMDB`；Shoko 重命名、NFO 或 FILE 响应给出的 AID 直接成为主身份，不再经过模糊搜索。每个 AID 保持独立 AnimeSeries，只有 verified 强关系连接到同一持久 group 时才在 UI 聚合；共享 TMDB ID 或标题不再自动合组。TMDB 仅作展示补充：默认只有一个 regular season、但提供 type 7 `TV` episode group 时自动采用该多季顺序，保留 Specials，并把每组重新编号为独立 S1–S4；接口缺失或异常时安全回退默认顺序。AniList 只保留为发现源，Bangumi 已退出视频链路。源视频、NFO、海报、catalog 绑定和播放历史都不迁移、不改写；不读取 Shoko catalog，也不冒充注册 client 实现 AniDB UDP/MyList。
+
 ## 发布依赖安全更新
 
 **解决**：更新 `Microsoft.Data.Sqlite` 与 `YoutubeExplode` 的补丁版本，移除构建时报告的 SQLitePCLRaw 高危和 AngleSharp 中危依赖链。
+
+## 视频本地 NFO / 海报重复且层级错位
+
+**根因**：Local artwork 的旧唯一约束包含可空 `remote_url`，SQLite 会允许多个 `NULL` 通过，完整扫描因而持续累积同一图片；扫描器又只检查视频所在目录并把大部分图片当作 poster，无法正确使用 Jellyfin 的 `Show/tvshow.nfo + Season/season.nfo + episode.nfo` 层级，也不会在 sidecar 删除后清理旧投影。
+
+**解决**：Local provider 现在向上发现系列/季目录，按 series/season/episode/movie 分域读取 NFO 并识别 poster/backdrop/thumb/logo/banner；媒体目录仍严格只读。catalog 用 null-safe 唯一索引和 v12 兼容修复去重 artwork、重映射首选图片并触发一次安全重解析，后续扫描同步新增、更新和删除的 Local 字段及图片引用。在线 metadata 继续只写 `%APPDATA%\Niratan\Data\video_library.sqlite3`，在线图片只写 `%APPDATA%\Niratan\Cache\VideoMetadataArtwork`。
 
 ## 视频资料库升级为 SQLite 与日系 metadata 核心
 

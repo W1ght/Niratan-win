@@ -2118,9 +2118,9 @@ public class NovelReaderWebAssetTests
         projectCode.Should().Contain("Microsoft.WindowsDesktop.App");
         appCode.Should().Contain("UIAutomationSelectedTextReader");
         appCode.Should().Contain("Win32FocusedEditSelectedTextReader");
+        appCode.Should().Contain("ClipboardCopySelectedTextReader");
+        appCode.Should().Contain("Win32ClipboardSelectionPlatform");
         appCode.Should().Contain("CascadingSelectedTextReader");
-        appCode.Should().NotContain("ClipboardFallbackSelectedTextReader");
-        appCode.Should().NotContain("ICopyShortcutSender");
         var normalizedAppCode = appCode.Replace("\r\n", "\n");
         normalizedAppCode.Should().Contain(
             "MainWindow.NavigateToShell();\n            await GetService<IGlobalSelectionLookupService>().InitializeAsync();");
@@ -2163,6 +2163,18 @@ public class NovelReaderWebAssetTests
         globalLookupServiceCode.Should().Contain("SendMessageTimeout");
         globalLookupServiceCode.Should().NotContain("ClipboardFallbackSelectedTextReader");
         globalLookupServiceCode.Should().NotContain("keybd_event");
+        var clipboardReaderCode = File.ReadAllText(
+            Path.Combine(ProjectRoot, "Services", "Dictionary", "ClipboardCopySelectedTextReader.cs")
+        );
+        clipboardReaderCode.Should().Contain("class ClipboardCopySelectedTextReader");
+        clipboardReaderCode.Should().Contain("CaptureClipboard()");
+        clipboardReaderCode.Should().Contain("SendCleanCopyShortcut()");
+        clipboardReaderCode.Should().Contain("GetClipboardSequenceNumber()");
+        clipboardReaderCode.Should().Contain("OleGetClipboard");
+        clipboardReaderCode.Should().Contain("OleSetClipboard");
+        clipboardReaderCode.Should().Contain("OleFlushClipboard");
+        clipboardReaderCode.Should().Contain("SendInput");
+        clipboardReaderCode.Should().NotContain("keybd_event");
         File.ReadAllText(
                 Path.Combine(ProjectRoot, "Services", "Dictionary", "GlobalLookupPopupService.cs")
             )

@@ -48,11 +48,23 @@ public sealed partial class MangaPageView : UserControl
     private Point _rightStart;
     private Point _rightPrevious;
     private bool _rightDragging;
+    private HorizontalAlignment _pageHorizontalAlignment = HorizontalAlignment.Center;
 
     public MangaReaderPageItemViewModel? Page
     {
         get => (MangaReaderPageItemViewModel?)GetValue(PageProperty);
         set => SetValue(PageProperty, value);
+    }
+
+    public HorizontalAlignment PageHorizontalAlignment
+    {
+        get => _pageHorizontalAlignment;
+        set
+        {
+            _pageHorizontalAlignment = value;
+            UpdateImageLayout();
+            RenderTextRegions();
+        }
     }
 
     public event EventHandler<MangaTextLookupRequestedEventArgs>? LookupRequested;
@@ -91,6 +103,7 @@ public sealed partial class MangaPageView : UserControl
     private void UpdatePage()
     {
         PageImage.Source = Page?.Image;
+        UpdateImageLayout();
         LoadingIndicator.IsActive = Page?.IsLoading == true;
         LoadingIndicator.Visibility = Page?.IsLoading == true
             ? Visibility.Visible
@@ -99,9 +112,36 @@ public sealed partial class MangaPageView : UserControl
         RenderTextRegions();
     }
 
-    private void PageImage_ImageOpened(object sender, RoutedEventArgs e) => RenderTextRegions();
+    private void PageImage_ImageOpened(object sender, RoutedEventArgs e)
+    {
+        UpdateImageLayout();
+        RenderTextRegions();
+    }
 
-    private void PageRoot_SizeChanged(object sender, SizeChangedEventArgs e) => RenderTextRegions();
+    private void PageRoot_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateImageLayout();
+        RenderTextRegions();
+    }
+
+    private void UpdateImageLayout()
+    {
+        PageImage.HorizontalAlignment = PageHorizontalAlignment;
+        if (Page?.Image is not { PixelWidth: > 0, PixelHeight: > 0 } image
+            || PageRoot.ActualWidth <= 0
+            || PageRoot.ActualHeight <= 0)
+        {
+            PageImage.ClearValue(WidthProperty);
+            PageImage.ClearValue(HeightProperty);
+            return;
+        }
+
+        var scale = Math.Min(
+            PageRoot.ActualWidth / image.PixelWidth,
+            PageRoot.ActualHeight / image.PixelHeight);
+        PageImage.Width = image.PixelWidth * scale;
+        PageImage.Height = image.PixelHeight * scale;
+    }
 
     private void RenderTextRegions()
     {
@@ -123,7 +163,12 @@ public sealed partial class MangaPageView : UserControl
             PageRoot.ActualHeight / image.PixelHeight);
         var renderedWidth = image.PixelWidth * scale;
         var renderedHeight = image.PixelHeight * scale;
-        var offsetX = (PageRoot.ActualWidth - renderedWidth) / 2;
+        var offsetX = PageHorizontalAlignment switch
+        {
+            HorizontalAlignment.Left => 0,
+            HorizontalAlignment.Right => PageRoot.ActualWidth - renderedWidth,
+            _ => (PageRoot.ActualWidth - renderedWidth) / 2,
+        };
         var offsetY = (PageRoot.ActualHeight - renderedHeight) / 2;
 
         foreach (var region in Page.TextRegions)

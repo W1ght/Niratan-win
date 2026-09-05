@@ -23,8 +23,10 @@ using Niratan.Services.Settings;
 using Niratan.ViewModels.Pages;
 using Windows.Foundation;
 using Windows.Graphics;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Windows.Storage.FileProperties;
+using Windows.Storage.Pickers;
 
 namespace Niratan.Views.Pages;
 
@@ -67,7 +69,7 @@ public sealed partial class GamesPage : Page
         if (args.InvokedItemContainer?.Tag is string tag
             && int.TryParse(tag, out var index))
         {
-            ViewModel.SelectedSectionIndex = Math.Clamp(index, 0, 2);
+            ViewModel.SelectedSectionIndex = Math.Clamp(index, 0, 3);
             ApplySelectedSection();
         }
     }
@@ -83,14 +85,16 @@ public sealed partial class GamesPage : Page
     {
         if (GamesLibrarySectionPanel is null)
             return;
-        var index = Math.Clamp(ViewModel.SelectedSectionIndex, 0, 2);
+        var index = Math.Clamp(ViewModel.SelectedSectionIndex, 0, 3);
         GamesLibrarySectionPanel.Visibility = index == 0 ? Visibility.Visible : Visibility.Collapsed;
         GamesWorkbenchSectionPanel.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
-        GamesDiagnosticsSectionPanel.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
+        GamesImportSectionPanel.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
+        GamesSettingsSectionPanel.Visibility = index == 3 ? Visibility.Visible : Visibility.Collapsed;
         GamesSectionNavigation.SelectedItem = index switch
         {
             1 => GamesWorkbenchNavigationItem,
-            2 => GamesDiagnosticsNavigationItem,
+            2 => GamesImportNavigationItem,
+            3 => GamesSettingsNavigationItem,
             _ => GamesLibraryNavigationItem,
         };
     }
@@ -445,11 +449,76 @@ public sealed partial class GamesPage : Page
             await ViewModel.SelectThreadFromOverlayAsync(preview);
     }
 
-    private void ShowDiagnosticsClick(object sender, RoutedEventArgs e)
+    private void OpenWorkbenchClick(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        ViewModel.SelectedSectionIndex = 1;
+    }
+
+    private void OpenImportClick(object sender, RoutedEventArgs e)
     {
         _ = sender;
         _ = e;
         ViewModel.SelectedSectionIndex = 2;
+    }
+
+    private void OpenSettingsClick(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        ViewModel.SelectedSectionIndex = 3;
+    }
+
+    private async void ChooseGameExecutablesClick(object sender, RoutedEventArgs e)
+    {
+        _ = sender;
+        _ = e;
+        var picker = new FileOpenPicker
+        {
+            SuggestedStartLocation = PickerLocationId.Desktop,
+            ViewMode = PickerViewMode.List,
+        };
+        picker.FileTypeFilter.Add(".exe");
+        if (App.MainWindow is not null)
+        {
+            WinRT.Interop.InitializeWithWindow.Initialize(
+                picker,
+                WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow));
+        }
+        var files = await picker.PickMultipleFilesAsync();
+        if (files.Count == 0)
+            return;
+        if (await ViewModel.ImportPathsAsync(files.Select(file => file.Path)) > 0)
+            ViewModel.SelectedSectionIndex = 0;
+    }
+
+    private void GamesPage_DragOver(object sender, DragEventArgs e)
+    {
+        _ = sender;
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems))
+            return;
+        e.AcceptedOperation = DataPackageOperation.Copy;
+        e.DragUIOverride.Caption = ResourceStringHelper.GetString(
+            "GamesImportDropCaption",
+            "Import game executable");
+        e.DragUIOverride.IsContentVisible = true;
+    }
+
+    private async void GamesPage_Drop(object sender, DragEventArgs e)
+    {
+        _ = sender;
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems))
+            return;
+        var items = await e.DataView.GetStorageItemsAsync().AsTask();
+        var paths = items.OfType<StorageFile>()
+            .Where(file => string.Equals(file.FileType, ".exe", StringComparison.OrdinalIgnoreCase))
+            .Select(file => file.Path)
+            .ToArray();
+        if (paths.Length == 0)
+            return;
+        if (await ViewModel.ImportPathsAsync(paths) > 0)
+            ViewModel.SelectedSectionIndex = 0;
     }
 
     private async void GameCoverImageLoaded(object sender, RoutedEventArgs e)

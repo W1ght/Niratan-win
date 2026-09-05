@@ -154,16 +154,37 @@ public sealed class AnkiConnectClient : IDisposable
         var notes = fields
             .Select(candidate => BuildNoteObject(deck, noteType, candidate, settings))
             .ToArray();
-        var result = await RequestAsync("canAddNotesWithErrorDetail", new { notes });
-        var response = result.Deserialize<List<CanAddResult>>() ?? [];
-        if (response.Count != fields.Count)
+
+        List<bool> canAdd;
+        try
         {
-            throw new AnkiConnectException(
-                $"AnkiConnect returned {response.Count} canAdd result(s) for {fields.Count} note(s)");
+            var result = await RequestAsync("canAddNotesWithErrorDetail", new { notes });
+            canAdd = (result.Deserialize<List<CanAddResult>>() ?? [])
+                .Select(item => item.CanAdd)
+                .ToList();
+        }
+        catch (AnkiConnectException ex) when (IsUnsupportedActionError(ex))
+        {
+            // AnkiConnect builds older than 23.x only expose the plain canAddNotes action.
+            Log.Debug(
+                ex,
+                "[AnkiConnect] canAddNotesWithErrorDetail unsupported, falling back to canAddNotes");
+            var result = await RequestAsync("canAddNotes", new { notes });
+            canAdd = result.Deserialize<List<bool>>() ?? [];
         }
 
-        return response.Select(item => item.CanAdd).ToArray();
+        if (canAdd.Count != fields.Count)
+        {
+            throw new AnkiConnectException(
+                $"AnkiConnect returned {canAdd.Count} canAdd result(s) for {fields.Count} note(s)");
+        }
+
+        return canAdd;
     }
+
+    private static bool IsUnsupportedActionError(AnkiConnectException exception) =>
+        exception.Message.Contains("unsupported action", StringComparison.OrdinalIgnoreCase)
+        || exception.Message.Contains("unknown action", StringComparison.OrdinalIgnoreCase);
 
     public async Task<List<long>> FindNotesAsync(string query)
     {
