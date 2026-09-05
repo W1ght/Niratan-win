@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
@@ -13,6 +13,13 @@ namespace Niratan.Tests.Services.Video;
 
 public sealed class VideoLibraryScanCoordinatorTests
 {
+    // CI runners do this suite's SQLite work an order of magnitude slower than a dev box:
+    // single repository tests there take 12-15s, which made the old 2s/5s budgets time out
+    // even though the coordinator was still making progress. These waits exist to fail a
+    // deadlock, not to police throughput.
+    private static readonly TimeSpan SignalWait = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan CompletionWait = TimeSpan.FromSeconds(60);
+
     [Fact]
     public async Task Scan_ReportsStagesAndAnalyzesSidecarsWithBoundedConcurrency()
     {
@@ -803,12 +810,12 @@ public sealed class VideoLibraryScanCoordinatorTests
             NullLogger<VideoLibraryScanCoordinator>.Instance);
 
         var scan = coordinator.ScanSourceAsync(sourceId, fullScan: true, ct);
-        await beginEntered.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        await beginEntered.Task.WaitAsync(SignalWait, ct);
         Interlocked.Increment(ref currentGeneration);
         releaseBegin.TrySetResult(true);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => scan.WaitAsync(TimeSpan.FromSeconds(5), ct));
+            () => scan.WaitAsync(CompletionWait, ct));
         repository.Verify(item => item.TryBeginSourceScanAsync(
             sourceId,
             VideoCatalogJobKind.FullScan,
@@ -848,16 +855,16 @@ public sealed class VideoLibraryScanCoordinatorTests
             NullLogger<VideoLibraryScanCoordinator>.Instance);
 
         var firstScan = coordinator.ScanSourceAsync(sourceId, fullScan: true, ct);
-        await local.FirstStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        await local.FirstStarted.Task.WaitAsync(SignalWait, ct);
         var secondScan = coordinator.ScanSourceAsync(sourceId, fullScan: true, ct);
-        await local.SecondStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        await local.SecondStarted.Task.WaitAsync(SignalWait, ct);
         local.ReleaseFirst();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => firstScan.WaitAsync(TimeSpan.FromSeconds(5), ct));
+            () => firstScan.WaitAsync(CompletionWait, ct));
 
         await coordinator.CancelAsync(sourceId, ct);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => secondScan.WaitAsync(TimeSpan.FromSeconds(5), ct));
+            () => secondScan.WaitAsync(CompletionWait, ct));
         var snapshot = await repository.GetSnapshotAsync(ct);
         snapshot.Jobs.Where(job => job.Kind == VideoCatalogJobKind.FullScan)
             .Should().OnlyContain(job => job.State == VideoCatalogJobState.Cancelled);
@@ -1033,12 +1040,12 @@ public sealed class VideoLibraryScanCoordinatorTests
             aniDb.Object);
 
         var scan = coordinator.ScanAllAsync(fullScan: true, ct);
-        await local.Started.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        await local.Started.Task.WaitAsync(SignalWait, ct);
         Interlocked.Exchange(ref resetInProgress, 1);
         Interlocked.Increment(ref scrapeGeneration);
         Interlocked.Exchange(ref resetInProgress, 0);
         local.Release();
-        await scan.WaitAsync(TimeSpan.FromSeconds(5), ct);
+        await scan.WaitAsync(CompletionWait, ct);
 
         aniDb.Verify(item => item.CaptureScrapeAdmission(), Times.Once);
         observedAdmissions.Should().HaveCount(2)
@@ -1096,10 +1103,10 @@ public sealed class VideoLibraryScanCoordinatorTests
             aniDb.Object);
 
         var scan = coordinator.ScanSourceAsync(sourceId, fullScan: true, ct);
-        await local.Started.Task.WaitAsync(TimeSpan.FromSeconds(2), ct);
+        await local.Started.Task.WaitAsync(SignalWait, ct);
         Interlocked.Exchange(ref resetInProgress, 0);
         local.Release();
-        await scan.WaitAsync(TimeSpan.FromSeconds(5), ct);
+        await scan.WaitAsync(CompletionWait, ct);
 
         observedAdmission.Should().Be(new AniDbScrapeAdmissionStamp(1, true));
         admitted.Should().BeFalse();
